@@ -4,7 +4,7 @@
  *
  * $LicenseInfo:firstyear=2001&license=viewerlgpl$
  * Second Life Viewer Source Code
- * Copyright (C) 2010, Linden Research, Inc.
+ * Copyright (C) 2026, Linden Research, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -649,8 +649,9 @@ void LLInventoryPanel::itemChanged(const LLUUID& item_id, U32 mask, const LLInve
             LLInvFVBridge* bridge = (LLInvFVBridge*)view_item->getViewModelItem();
             if(bridge)
             {
-                // Clear the display name first, so it gets properly re-built during refresh()
-                bridge->clearDisplayName();
+                // Clear the searchable name first, so it gets
+                // properly re-built during refresh()
+                bridge->clearSearchableName();
 
                 view_item->refresh();
             }
@@ -1879,7 +1880,7 @@ void LLInventoryPanel::onSelectionChange(const std::deque<LLFolderViewItem*>& it
                     LLFolderBridge* prev_bridge = dynamic_cast<LLFolderBridge*>(prev_folder_item->getViewModelItem());
                     if(prev_bridge)
                     {
-                        prev_bridge->clearDisplayName();
+                        prev_bridge->clearSearchableName();
                         prev_bridge->setShowDescendantsCount(false);
                         prev_folder_item->refresh();
                     }
@@ -1888,7 +1889,7 @@ void LLInventoryPanel::onSelectionChange(const std::deque<LLFolderViewItem*>& it
                 LLFolderBridge* bridge = dynamic_cast<LLFolderBridge*>(folder_item->getViewModelItem());
                 if(bridge)
                 {
-                    bridge->clearDisplayName();
+                    bridge->clearSearchableName();
                     bridge->setShowDescendantsCount(true);
                     folder_item->refresh();
                     mPreviousSelectedFolder = bridge->getUUID();
@@ -1903,7 +1904,7 @@ void LLInventoryPanel::onSelectionChange(const std::deque<LLFolderViewItem*>& it
             LLFolderBridge* prev_bridge = dynamic_cast<LLFolderBridge*>(prev_folder_item->getViewModelItem());
             if(prev_bridge)
             {
-                prev_bridge->clearDisplayName();
+                prev_bridge->clearSearchableName();
                 prev_bridge->setShowDescendantsCount(false);
                 prev_folder_item->refresh();
             }
@@ -1923,7 +1924,7 @@ void LLInventoryPanel::updateFolderLabel(const LLUUID& folder_id)
         LLFolderBridge* bridge = dynamic_cast<LLFolderBridge*>(folder_item->getViewModelItem());
         if(bridge)
         {
-            bridge->clearDisplayName();
+            bridge->clearSearchableName();
             bridge->setShowDescendantsCount(true);
             folder_item->refresh();
         }
