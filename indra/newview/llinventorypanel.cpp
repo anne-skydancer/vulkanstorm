@@ -211,7 +211,6 @@ LLFolderView * LLInventoryPanel::createFolderRoot(LLUUID root_id )
     p.title = getLabel();
     p.rect = LLRect(0, 0, getRect().getWidth(), 0);
     p.parent_panel = this;
-    p.tool_tip = p.name;
     p.listener = mInvFVBridgeBuilder->createBridge( LLAssetType::AT_CATEGORY,
                                                                     LLAssetType::AT_CATEGORY,
                                                                     LLInventoryType::IT_CATEGORY,
@@ -1181,7 +1180,6 @@ LLFolderViewFolder * LLInventoryPanel::createFolderViewFolder(LLInvFVBridge * br
     params.name = bridge->getDisplayName();
     params.root = mFolderRoot.get();
     params.listener = bridge;
-    //  params.tool_tip = params.name; // <ND/> Don't bother with tooltips in inventory
     params.allow_drop = allow_drop;
 
     // <FS:Ansariel> Inventory specials
@@ -1210,7 +1208,6 @@ LLFolderViewItem * LLInventoryPanel::createFolderViewItem(LLInvFVBridge * bridge
     params.root = mFolderRoot.get();
     params.listener = bridge;
     params.rect = LLRect (0, 0, 0, 0);
-    //  params.tool_tip = params.name; // <ND/> Don't bother with tooltips in inventory
 
     // <FS:Ansariel> Inventory specials
     //params.font_color = (bridge->isLibraryItem() ? sLibraryColor : sDefaultColor);
