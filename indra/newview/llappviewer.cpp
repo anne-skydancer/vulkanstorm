@@ -2551,6 +2551,8 @@ bool LLAppViewer::cleanup()
     SUBSYSTEM_CLEANUP(LLProxy);
     LLCore::LLHttp::cleanup();
 
+    LLInventoryModel::waitForPendingCacheWrites();
+
     ll_close_fail_log();
 
     LLError::LLCallStacks::cleanup();
