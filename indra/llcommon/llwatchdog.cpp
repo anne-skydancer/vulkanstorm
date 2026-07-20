@@ -237,6 +237,7 @@ void LLWatchdog::shutdown()
 
 void LLWatchdog::cleanup()
 {
+    LL_PROFILE_ZONE_SCOPED;
     if (mTimer)
     {
         mTimer->stop();
