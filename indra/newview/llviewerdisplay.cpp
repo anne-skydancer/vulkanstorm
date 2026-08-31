@@ -265,6 +265,37 @@ static void gl_reference_capture_tick()
             gl_rect_2d(500, 350, 1100, 850, LLColor4(0, 0, 1, 0.5f));
             gl_rect_2d(400, 550, 1000, 950, LLColor4(0, 1, 0, 0.25f));
             break;
+        case 3: // one textured quad (16x16 checkerboard) — texture + UV path
+        {
+            // Build the same checkerboard as the Vulkan scene and upload it.
+            const int dim = 16;
+            std::vector<uint8_t> cb(dim * dim * 4);
+            for (int yy = 0; yy < dim; ++yy)
+                for (int xx = 0; xx < dim; ++xx)
+                {
+                    uint8_t v = ((xx + yy) & 1) ? 255 : 0;
+                    size_t o = (size_t)(yy * dim + xx) * 4;
+                    cb[o] = v; cb[o + 1] = v; cb[o + 2] = v; cb[o + 3] = 255;
+                }
+            GLuint ctex = 0;
+            glGenTextures(1, &ctex);
+            gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, ctex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, dim, dim, 0, GL_RGBA, GL_UNSIGNED_BYTE, cb.data());
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            // gl_rect_2d_simple_tex draws a textured quad from the origin to
+            // (w,h) in the current projection; translate to the scene rect
+            // (400,300)-(912,556), size 512x256, full uv range. White tint so
+            // the texture shows through unmodified.
+            gGL.color4f(1.f, 1.f, 1.f, 1.f);
+            gGL.pushMatrix();
+            gGL.translatef(400.f, 300.f, 0.f);
+            gl_rect_2d_simple_tex(512, 256);
+            gGL.popMatrix();
+            gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+            glDeleteTextures(1, &ctex);
+            break;
+        }
         case 0: // single solid red rect (regression baseline)
         default:
             gl_rect_2d(200, 150, 520, 390, LLColor4(1, 0, 0, 1));

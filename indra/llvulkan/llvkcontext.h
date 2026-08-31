@@ -79,6 +79,25 @@ public:
     // screenshot-diff harness. Returns false on failure.
     bool readbackSwapchain(std::vector<uint8_t>& out_rgba, uint32_t& out_w, uint32_t& out_h);
 
+    // Create a GPU texture from RGBA8 pixels and return a descriptor set that
+    // binds it for the 2D pipeline (set 0 / binding 0). Caller keeps the
+    // returned texture alive and passes the descriptor to bindTexture2D before
+    // drawing textured quads. destroyTexture() frees it.
+    struct Texture2D
+    {
+        VkImage image = VK_NULL_HANDLE;
+        VmaAllocation alloc = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VkDescriptorSet descriptor = VK_NULL_HANDLE;
+    };
+    bool createTexture2D(const uint8_t* rgba, uint32_t w, uint32_t h, Texture2D& out, std::string& error);
+    void destroyTexture2D(Texture2D& tex);
+    // Bind a texture's descriptor for subsequent 2D draws in the current frame.
+    void bindTexture2D(VkCommandBuffer cmd, VkDescriptorSet descriptor);
+    // The descriptor that solid (untextured) quads should bind: a 1x1 white
+    // texture so the fragment shader outputs just the vertex color.
+    VkDescriptorSet whiteTextureDescriptor() const { return mWhiteTex.descriptor; }
+
     VkCommandBuffer currentCmd() const { return mFrames[mFrameIndex].cmd; }
     VkPipeline pipeline2D() const { return mPipeline2D; }
     VkPipelineLayout pipelineLayout2D() const { return mPipelineLayout2D; }
@@ -141,6 +160,10 @@ private:
     VkPipeline       mPipeline2D = VK_NULL_HANDLE;
     VkShaderModule   mShader2DVert = VK_NULL_HANDLE;
     VkShaderModule   mShader2DFrag = VK_NULL_HANDLE;
+    VkDescriptorSetLayout mDescSetLayout2D = VK_NULL_HANDLE;
+    VkDescriptorPool      mDescPool2D = VK_NULL_HANDLE;
+    VkSampler             mSampler2D = VK_NULL_HANDLE;
+    Texture2D             mWhiteTex;   // 1x1 white, bound for solid quads
     uint32_t         mAcquiredImageIndex = 0;
     uint32_t         mLastPresentedImageIndex = 0;
     bool             mFrameActive = false;

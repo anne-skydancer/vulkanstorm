@@ -76,6 +76,9 @@ namespace
             pushRect(v, 500, 350, 1100, 850, 0, 0, 1, 0.5f);  // blue 50% over red
             pushRect(v, 400, 550, 1000, 950, 0, 1, 0, 0.25f); // green 25% over both
             break;
+        case 3: // one textured quad (checkerboard) — texture upload + UV path
+            pushRect(v, 400, 300, 912, 556, 1, 1, 1, 1); // white tint, uv 0..1
+            break;
         case 0: // single solid red rect (regression baseline)
         default:
             pushRect(v, 200, 150, 520, 390, 1, 0, 0, 1);
@@ -89,6 +92,26 @@ namespace
     VkBuffer      s_test_vbuf = VK_NULL_HANDLE;
     VmaAllocation s_test_vbuf_alloc = VK_NULL_HANDLE;
     uint32_t      s_test_vert_count = 0;
+
+    // The scene's texture (scene 3: a checkerboard). Null for solid scenes.
+    LLVKContext::Texture2D s_scene_tex;
+
+    // 16x16 black/white checkerboard, 1 texel per cell — catches UV, flip, and
+    // filtering bugs precisely.
+    std::vector<uint8_t> makeCheckerboard()
+    {
+        const int dim = 16;
+        std::vector<uint8_t> px(dim * dim * 4);
+        for (int y = 0; y < dim; ++y)
+            for (int x = 0; x < dim; ++x)
+            {
+                bool on = ((x + y) & 1) != 0;
+                uint8_t v = on ? 255 : 0;
+                size_t o = (size_t)(y * dim + x) * 4;
+                px[o] = v; px[o + 1] = v; px[o + 2] = v; px[o + 3] = 255;
+            }
+        return px;
+    }
 
     void queryClientSize(LLWindow* window, uint32_t& width, uint32_t& height)
     {
@@ -162,6 +185,11 @@ namespace
            -1.f,    -1.f,      0.f, 1.f
         };
         vkCmdPushConstants(cmd, ctx->pipelineLayout2D(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ortho), ortho);
+
+        // The fragment shader always samples set 0 / binding 0. Solid quads bind
+        // the 1x1 white texture; the textured scene binds the checkerboard.
+        ctx->bindTexture2D(cmd, (s_scene_tex.descriptor != VK_NULL_HANDLE) ? s_scene_tex.descriptor
+                                                                           : ctx->whiteTextureDescriptor());
 
         VkDeviceSize off = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &s_test_vbuf, &off);
@@ -239,9 +267,21 @@ bool LLVKSession::start(LLWindow* window, bool enable_validation)
         LL_WARNS("Vulkan") << "Session: 2D pipeline creation failed: " << error
                            << " (falling back to clear-only frames)" << LL_ENDL;
     }
-    else if (!createTestRectBuffer())
+    else
     {
-        LL_WARNS("Vulkan") << "Session: test-rect buffer alloc failed (clear-only frames)" << LL_ENDL;
+        // Scene 3 needs the checkerboard texture uploaded before the first frame.
+        if (sceneIndex() == 3)
+        {
+            std::vector<uint8_t> cb = makeCheckerboard();
+            if (!ctx->createTexture2D(cb.data(), 16, 16, s_scene_tex, error))
+            {
+                LL_WARNS("Vulkan") << "Session: checkerboard texture upload failed: " << error << LL_ENDL;
+            }
+        }
+        if (!createTestRectBuffer())
+        {
+            LL_WARNS("Vulkan") << "Session: test-rect buffer alloc failed (clear-only frames)" << LL_ENDL;
+        }
     }
     LL_INFOS("Vulkan") << "Session: Vulkan owns the viewer window ("
                        << s_width << "x" << s_height << ", device: "
@@ -326,8 +366,12 @@ void LLVKSession::stop()
     {
         return;
     }
-    // Free session-owned VMA allocations (the test-rect vertex buffer) BEFORE
-    // the context tears down the allocator, so vkDestroyDevice sees no leaks.
+    // Free session-owned GPU resources (scene texture + test vertex buffer)
+    // BEFORE the context tears down the allocator, so vkDestroyDevice is clean.
+    if (s_scene_tex.image != VK_NULL_HANDLE)
+    {
+        s_context->destroyTexture2D(s_scene_tex);
+    }
     destroyTestRectBuffer();
     // destroy() idles the device and releases the swapchain + surface.
     s_context->destroy();

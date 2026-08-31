@@ -411,10 +411,15 @@ bool LLVKContext::createSwapchain(VkSurfaceKHR surface, uint32_t width, uint32_t
     sci.imageColorSpace = chosen_format.colorSpace;
     sci.imageExtent = extent;
     sci.imageArrayLayers = 1;
-    // Minimal, universally-supported usage for a presented swapchain image. We
-    // clear via a render pass (not vkCmdClearColorImage), which only needs
-    // COLOR_ATTACHMENT — some drivers reject extra usage bits on swapchain images.
-    sci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    // Minimal usage for a presented swapchain image (render via a dynamic
+    // render pass -> COLOR_ATTACHMENT), PLUS TRANSFER_SRC so the diff-harness
+    // readback (vkCmdCopyImageToBuffer) is legal. Guarded by surface support.
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    if (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
+    {
+        usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+    sci.imageUsage = usage;
     uint32_t family_indices[] = { mGraphicsQueueFamily, mPresentQueueFamily };
     if (mGraphicsQueueFamily != mPresentQueueFamily)
     {
@@ -574,10 +579,52 @@ bool LLVKContext::create2DPipeline(std::string& error)
     push.offset = 0;
     push.size = 16 * sizeof(float); // mat4
 
+    // Descriptor set layout + sampler + pool for the texture binding
+    // (set 0 / binding 0). Created once; the pipeline layout references them.
+    if (mSampler2D == VK_NULL_HANDLE)
+    {
+        VkSamplerCreateInfo si{};
+        si.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        si.magFilter = VK_FILTER_NEAREST;
+        si.minFilter = VK_FILTER_NEAREST;
+        si.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        si.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        si.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        LL_VK_CHECK(vkCreateSampler(mDevice, &si, nullptr, &mSampler2D), error, "vkCreateSampler (2D) failed");
+    }
+    if (mDescSetLayout2D == VK_NULL_HANDLE)
+    {
+        VkDescriptorSetLayoutBinding bind0{};
+        bind0.binding = 0;
+        bind0.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        bind0.descriptorCount = 1;
+        bind0.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        VkDescriptorSetLayoutCreateInfo dli{};
+        dli.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        dli.bindingCount = 1;
+        dli.pBindings = &bind0;
+        LL_VK_CHECK(vkCreateDescriptorSetLayout(mDevice, &dli, nullptr, &mDescSetLayout2D), error, "vkCreateDescriptorSetLayout (2D) failed");
+    }
+    if (mDescPool2D == VK_NULL_HANDLE)
+    {
+        VkDescriptorPoolSize ps{};
+        ps.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        ps.descriptorCount = 64;
+        VkDescriptorPoolCreateInfo pi{};
+        pi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pi.maxSets = 64;
+        pi.poolSizeCount = 1;
+        pi.pPoolSizes = &ps;
+        LL_VK_CHECK(vkCreateDescriptorPool(mDevice, &pi, nullptr, &mDescPool2D), error, "vkCreateDescriptorPool (2D) failed");
+    }
+
     if (mPipelineLayout2D == VK_NULL_HANDLE)
     {
         VkPipelineLayoutCreateInfo li{};
         li.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        li.setLayoutCount = 1;
+        li.pSetLayouts = &mDescSetLayout2D;
         li.pushConstantRangeCount = 1;
         li.pPushConstantRanges = &push;
         LL_VK_CHECK(vkCreatePipelineLayout(mDevice, &li, nullptr, &mPipelineLayout2D), error, "vkCreatePipelineLayout (2D) failed");
@@ -679,12 +726,27 @@ bool LLVKContext::create2DPipeline(std::string& error)
     gp.layout = mPipelineLayout2D;
     LL_VK_CHECK(vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &gp, nullptr, &mPipeline2D), error, "vkCreateGraphicsPipelines (2D) failed");
 
+    // 1x1 white texture bound for solid (untextured) quads so the fragment
+    // shader's texture() returns white and the output is just the vertex color.
+    if (mWhiteTex.image == VK_NULL_HANDLE)
+    {
+        const uint8_t white[4] = { 255, 255, 255, 255 };
+        if (!createTexture2D(white, 1, 1, mWhiteTex, error))
+        {
+            return false;
+        }
+    }
+
     LL_INFOS("Vulkan") << "2D UI pipeline created (format=" << (int)mSwapchainFormat << ")" << LL_ENDL;
     return true;
 }
 
 void LLVKContext::destroy2DPipeline()
 {
+    destroyTexture2D(mWhiteTex);
+    if (mDescPool2D != VK_NULL_HANDLE) { vkDestroyDescriptorPool(mDevice, mDescPool2D, nullptr); mDescPool2D = VK_NULL_HANDLE; }
+    if (mDescSetLayout2D != VK_NULL_HANDLE) { vkDestroyDescriptorSetLayout(mDevice, mDescSetLayout2D, nullptr); mDescSetLayout2D = VK_NULL_HANDLE; }
+    if (mSampler2D != VK_NULL_HANDLE) { vkDestroySampler(mDevice, mSampler2D, nullptr); mSampler2D = VK_NULL_HANDLE; }
     if (mPipeline2D != VK_NULL_HANDLE) { vkDestroyPipeline(mDevice, mPipeline2D, nullptr); mPipeline2D = VK_NULL_HANDLE; }
     if (mPipelineLayout2D != VK_NULL_HANDLE) { vkDestroyPipelineLayout(mDevice, mPipelineLayout2D, nullptr); mPipelineLayout2D = VK_NULL_HANDLE; }
     if (mShader2DVert != VK_NULL_HANDLE) { vkDestroyShaderModule(mDevice, mShader2DVert, nullptr); mShader2DVert = VK_NULL_HANDLE; }
@@ -945,6 +1007,163 @@ bool LLVKContext::readbackSwapchain(std::vector<uint8_t>& out_rgba, uint32_t& ou
     vkFreeCommandBuffers(mDevice, mCommandPool, 1, &cmd);
     vmaDestroyBuffer(mAllocator, staging, staging_alloc);
     return ok;
+}
+
+// --- Textures (Phase 3 scene 3) -------------------------------------------
+
+bool LLVKContext::createTexture2D(const uint8_t* rgba, uint32_t w, uint32_t h, Texture2D& out, std::string& error)
+{
+    if (mDevice == VK_NULL_HANDLE || mDescPool2D == VK_NULL_HANDLE || !rgba || w == 0 || h == 0)
+    {
+        error = "createTexture2D: bad state or args";
+        return false;
+    }
+
+    // Staging buffer (host-visible) -> device image.
+    VkDeviceSize size = (VkDeviceSize)w * h * 4;
+    VkBufferCreateInfo bi{};
+    bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bi.size = size;
+    bi.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    VmaAllocationCreateInfo sai{};
+    sai.usage = VMA_MEMORY_USAGE_AUTO;
+    sai.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    VkBuffer staging = VK_NULL_HANDLE;
+    VmaAllocation staging_alloc = VK_NULL_HANDLE;
+    VmaAllocationInfo sinfo{};
+    LL_VK_CHECK(vmaCreateBuffer(mAllocator, &bi, &sai, &staging, &staging_alloc, &sinfo), error, "vmaCreateBuffer (tex staging) failed");
+    memcpy(sinfo.pMappedData, rgba, (size_t)size);
+
+    VkImageCreateInfo ii{};
+    ii.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    ii.imageType = VK_IMAGE_TYPE_2D;
+    ii.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ii.extent = { w, h, 1 };
+    ii.mipLevels = 1;
+    ii.arrayLayers = 1;
+    ii.samples = VK_SAMPLE_COUNT_1_BIT;
+    ii.tiling = VK_IMAGE_TILING_OPTIMAL;
+    ii.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    ii.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    ii.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VmaAllocationCreateInfo iai{};
+    iai.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    if (vmaCreateImage(mAllocator, &ii, &iai, &out.image, &out.alloc, nullptr) != VK_SUCCESS)
+    {
+        vmaDestroyBuffer(mAllocator, staging, staging_alloc);
+        error = "vmaCreateImage failed";
+        return false;
+    }
+
+    // One-shot transfer: UNDEFINED -> TRANSFER_DST -> copy -> SHADER_READ_ONLY.
+    VkCommandBufferAllocateInfo cai{};
+    cai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cai.commandPool = mCommandPool;
+    cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cai.commandBufferCount = 1;
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    vkAllocateCommandBuffers(mDevice, &cai, &cmd);
+    VkCommandBufferBeginInfo begin{};
+    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &begin);
+
+    VkImageMemoryBarrier pre{};
+    pre.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    pre.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    pre.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    pre.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    pre.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    pre.image = out.image;
+    pre.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    pre.subresourceRange.levelCount = 1;
+    pre.subresourceRange.layerCount = 1;
+    pre.srcAccessMask = 0;
+    pre.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &pre);
+
+    VkBufferImageCopy region{};
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.layerCount = 1;
+    region.imageExtent = { w, h, 1 };
+    vkCmdCopyBufferToImage(cmd, staging, out.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    VkImageMemoryBarrier post = pre;
+    post.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    post.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    post.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    post.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &post);
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fi{};
+    fi.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    VkFence fence = VK_NULL_HANDLE;
+    vkCreateFence(mDevice, &fi, nullptr, &fence);
+    VkSubmitInfo submit{};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &cmd;
+    bool ok = (vkQueueSubmit(mGraphicsQueue, 1, &submit, fence) == VK_SUCCESS) &&
+              (vkWaitForFences(mDevice, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS);
+    vkDestroyFence(mDevice, fence, nullptr);
+    vkFreeCommandBuffers(mDevice, mCommandPool, 1, &cmd);
+    vmaDestroyBuffer(mAllocator, staging, staging_alloc);
+    if (!ok)
+    {
+        vmaDestroyImage(mAllocator, out.image, out.alloc);
+        out.image = VK_NULL_HANDLE; out.alloc = VK_NULL_HANDLE;
+        error = "texture upload submit failed";
+        return false;
+    }
+
+    VkImageViewCreateInfo vi{};
+    vi.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    vi.image = out.image;
+    vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    vi.format = VK_FORMAT_R8G8B8A8_UNORM;
+    vi.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    vi.subresourceRange.levelCount = 1;
+    vi.subresourceRange.layerCount = 1;
+    LL_VK_CHECK(vkCreateImageView(mDevice, &vi, nullptr, &out.view), error, "vkCreateImageView (tex) failed");
+
+    // Allocate + write the descriptor set.
+    VkDescriptorSetAllocateInfo dai{};
+    dai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    dai.descriptorPool = mDescPool2D;
+    dai.descriptorSetCount = 1;
+    dai.pSetLayouts = &mDescSetLayout2D;
+    LL_VK_CHECK(vkAllocateDescriptorSets(mDevice, &dai, &out.descriptor), error, "vkAllocateDescriptorSets failed");
+
+    VkDescriptorImageInfo dii{};
+    dii.sampler = mSampler2D;
+    dii.imageView = out.view;
+    dii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = out.descriptor;
+    write.dstBinding = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.pImageInfo = &dii;
+    vkUpdateDescriptorSets(mDevice, 1, &write, 0, nullptr);
+
+    return true;
+}
+
+void LLVKContext::destroyTexture2D(Texture2D& tex)
+{
+    if (mDevice == VK_NULL_HANDLE) return;
+    if (tex.view != VK_NULL_HANDLE) { vkDestroyImageView(mDevice, tex.view, nullptr); tex.view = VK_NULL_HANDLE; }
+    if (tex.image != VK_NULL_HANDLE) { vmaDestroyImage(mAllocator, tex.image, tex.alloc); tex.image = VK_NULL_HANDLE; tex.alloc = VK_NULL_HANDLE; }
+    // Descriptor sets free with the pool.
+    tex.descriptor = VK_NULL_HANDLE;
+}
+
+void LLVKContext::bindTexture2D(VkCommandBuffer cmd, VkDescriptorSet descriptor)
+{
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout2D, 0, 1, &descriptor, 0, nullptr);
 }
 
 bool LLVKContext::createFrameResources()
