@@ -31,14 +31,27 @@ def load(path):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description=(
+            "Per-pixel diff of two RGBA8 frame captures. Parity policy: opaque "
+            "content must be byte-exact (--max-delta 0); alpha-blended content may "
+            "differ by up to 1 per channel (--mode alpha) because the GL and Vulkan "
+            "fixed-function blend units round fixed-point blends differently."
+        ))
     ap.add_argument("a")
     ap.add_argument("b")
-    ap.add_argument("--max-delta", type=int, default=0,
-                    help="max per-channel delta tolerated (default 0 = byte-exact)")
+    ap.add_argument("--mode", choices=["opaque", "alpha"], default="opaque",
+                    help="parity policy: 'opaque' = byte-exact (tol 0); "
+                         "'alpha' = blended content (tol 1). Sets --max-delta.")
+    ap.add_argument("--max-delta", type=int, default=None,
+                    help="max per-channel delta tolerated (overrides --mode)")
     ap.add_argument("--write-diff", metavar="PNG", default=None,
                     help="write a heatmap PNG of per-pixel deltas (requires Pillow)")
     args = ap.parse_args()
+
+    # Resolve tolerance: explicit --max-delta wins; otherwise the mode's policy.
+    if args.max_delta is None:
+        args.max_delta = 0 if args.mode == "opaque" else 1
 
     try:
         aw, ah, a = load(args.a)
@@ -86,7 +99,7 @@ def main():
     print(f"identical:         {identical}")
     print(f"differing:         {diff_count} ({pct:.4f}%)")
     print(f"max channel delta: {max_delta}")
-    print(f"tolerance:         {args.max_delta} -> {'PASS' if within else 'FAIL'}")
+    print(f"tolerance:         {args.max_delta} (mode={args.mode}) -> {'PASS' if within else 'FAIL'}")
     if samples:
         print("first differing pixels (A=first file, B=second file):")
         for s in samples:
