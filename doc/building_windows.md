@@ -167,7 +167,7 @@ git clone https://github.com/FirestormViewer/phoenix-firestorm.git
 
 ## Prepare third party libraries
 
-Most third party libraries needed to build the viewer will be automatically downloaded for you and installed into the build directory within your source tree during compilation. Some need to be manually prepared and are not normally required when using an open source configuration (ReleaseFS_open). Some libraries like Kakadu or Havok requires you to purchase a license and you will need to figure out yourself how to build and use them.
+Most third party libraries needed to build the viewer will be automatically downloaded for you and installed into the build directory within your source tree during compilation. Some need to be manually prepared and are not normally required when using an open source configuration (ReleaseVS_open). Some libraries like Kakadu or Havok requires you to purchase a license and you will need to figure out yourself how to build and use them.
 
 > [!IMPORTANT]
 > If you are manually building the third party libraries, you will have to build the correct version (32bit libraries for a 32bit viewer, 64bit versions for a 64bit viewer)!
@@ -242,7 +242,7 @@ Then enter:
 ```
 c:
 cd \firestorm\phoenix-firestorm
-autobuild configure -A 64 -c ReleaseFS_open
+autobuild configure -A 64 -c ReleaseVS_open
 ```
 
 This will configure Firestorm to be built with all defaults and without third party libraries.
@@ -250,19 +250,19 @@ This will configure Firestorm to be built with all defaults and without third pa
 Available premade firestorm-specific build targets:
 
 ```
-ReleaseFS             (with KDU, with FMOD,   no OpenSim)
-ReleaseFS_AVX         (with KDU, with FMOD,   no OpenSim, optimized for AVX-enabled CPUs)
-ReleaseFS_AVX2        (with KDU, with FMOD,   no OpenSim, optimized for AVX2-enabled CPUs)
-ReleaseFS_open        (  no KDU,   no FMOD,   no OpenSim)
+ReleaseVS             (with KDU, with FMOD,   no OpenSim)
+ReleaseVS_AVX         (with KDU, with FMOD,   no OpenSim, optimized for AVX-enabled CPUs)
+ReleaseVS_AVX2        (with KDU, with FMOD,   no OpenSim, optimized for AVX2-enabled CPUs)
+ReleaseVS_open        (  no KDU,   no FMOD,   no OpenSim)
 ReleaseOS             (  no KDU,   no FMOD, with OpenSim)
-RelWithDebInfoFS      (with KDU, with FMOD,   no OpenSim, with debug info)
-RelWithDebInfoFS_open (  no KDU,   no FMOD,   no OpenSim, with debug info)
+RelWithDebInfoVS      (with KDU, with FMOD,   no OpenSim, with debug info)
+RelWithDebInfoVS_open (  no KDU,   no FMOD,   no OpenSim, with debug info)
 RelWithDebInfoOS      (  no KDU,   no FMOD, with OpenSim, with debug info)
 ```
 
 > [!TIP]
 > Configuring the viewer for the first time will take some time to download all the required third-party libraries. The download progress is hidden by default. If you want to watch the download progress, you can use the verbose option to display a more detailed output:
-> `autobuild configure -A 64 -v -c ReleaseFS_open`
+> `autobuild configure -A 64 -v -c ReleaseVS_open`
 
 ### Configuration switches
 
@@ -284,10 +284,10 @@ There are a number of switches you can use to modify the configuration process. 
 ### Examples: ###
 
 - To build a 64bit viewer with FMOD Studio and to create an installer package, run this command in the Windows command window:
-`autobuild configure -A 64 -c ReleaseFS_open -- --fmodstudio --package --chan MyViewer -DLL_TESTS:BOOL=FALSE`
+`autobuild configure -A 64 -c ReleaseVS_open -- --fmodstudio --package --chan MyViewer -DLL_TESTS:BOOL=FALSE`
 
 - To build a 64bit viewer without FMOD Studio and without installer package, run this command:
-`autobuild configure -A 64 -c ReleaseFS_open -- --chan MyViewer -DLL_TESTS:BOOL=FALSE`
+`autobuild configure -A 64 -c ReleaseVS_open -- --chan MyViewer -DLL_TESTS:BOOL=FALSE`
 
 ## Building the viewer
 
@@ -303,7 +303,7 @@ If you are building with FMOD Studio and have followed the previous FMOD Studio 
 
 Then run the Autobuild build command. Make sure you include the same architecture parameter you used while [configuring the viewer](#configuring-the-viewer):
 
-`autobuild build -A 64 -c ReleaseFS_open --no-configure`
+`autobuild build -A 64 -c ReleaseVS_open --no-configure`
 
 Compiling will take quite a bit of time.
 

@@ -75,9 +75,9 @@ If you want to use licensed FMOD Studio API or KDU (short for Kakadu) build libr
 
 If you're a community builder, you'll need to build these libraries yourself, then change your autobuild.xml file to point to your own versions, or create a different autobuild.xml with your customizations, and use this with autobuild instead of our default autobuild.xml. There are some examples of how to build FMOD Studio on the LL Wiki and opensource-dev mailing list.
 
-We've created a non-KDU build target to make this easier. Everywhere you see "ReleaseFS" below, use "ReleaseFS_open" instead. This will perform the same build, using openjpeg instead of KDU and omitting FMOD Studio.
+We've created a non-KDU build target to make this easier. Everywhere you see "ReleaseVS" below, use "ReleaseVS_open" instead. This will perform the same build, using openjpeg instead of KDU and omitting FMOD Studio.
 
-You will probably want to have FMOD enabled and no Kakadu, in that case, you can use the ReleaseFS_open target with the --fmodstudio switch.
+You will probably want to have FMOD enabled and no Kakadu, in that case, you can use the ReleaseVS_open target with the --fmodstudio switch.
 
 ##  Set up your source code tree
 
@@ -111,32 +111,32 @@ export AUTOBUILD_VARIABLES_FILE=~/firestorm/fs-build-variables/variables
 Available premade firestorm-specific build targets:
 
 ```
-ReleaseFS             (with KDU, with FMOD,   no OpenSim)
-ReleaseFS_open        (  no KDU,   no FMOD,   no OpenSim)
+ReleaseVS             (with KDU, with FMOD,   no OpenSim)
+ReleaseVS_open        (  no KDU,   no FMOD,   no OpenSim)
 ReleaseOS             (  no KDU,   no FMOD, with OpenSim)
-RelWithDebInfoFS      (with KDU, with FMOD,   no OpenSim, with debug info)
-RelWithDebInfoFS_open (  no KDU,   no FMOD,   no OpenSim, with debug info)
+RelWithDebInfoVS      (with KDU, with FMOD,   no OpenSim, with debug info)
+RelWithDebInfoVS_open (  no KDU,   no FMOD,   no OpenSim, with debug info)
 RelWithDebInfoOS      (  no KDU,   no FMOD, with OpenSim, with debug info)
 ```
 
 To build firestorm:
 
 ```
-autobuild build -c ReleaseFS                        
+autobuild build -c ReleaseVS                        
 ```
 
 Other examples:
 
 ```
-autobuild configure -c ReleaseFS                              # basic configuration step, don't build, just configure
-autobuild configure -c ReleaseFS -- --clean                   # clean the output area first, then configure
-autobuild configure -c ReleaseFS -- --chan Private-Yourname   # configure with a custom channel
+autobuild configure -c ReleaseVS                              # basic configuration step, don't build, just configure
+autobuild configure -c ReleaseVS -- --clean                   # clean the output area first, then configure
+autobuild configure -c ReleaseVS -- --chan Private-Yourname   # configure with a custom channel
 
-autobuild build -c ReleaseFS --no-configure                   # default quick rebuild
-autobuild build -c ReleaseFS --no-configure -- --clean        # Clean rebuild
+autobuild build -c ReleaseVS --no-configure                   # default quick rebuild
+autobuild build -c ReleaseVS --no-configure -- --clean        # Clean rebuild
 
-autobuild configure -c ReleaseFS_open --                      # configure with no third-party libraries
-autobuild configure -c ReleaseFS_open -- --fmodstudio         # configure with FMOD Studio but no KDU
+autobuild configure -c ReleaseVS_open --                      # configure with no third-party libraries
+autobuild configure -c ReleaseVS_open -- --fmodstudio         # configure with FMOD Studio but no KDU
 ```
 
 Any of the configure options can also be used (and do the same thing) with the build options. Typical LL autobuild configure options should also work, as long as they don't duplicate configuration we are already doing.
@@ -147,7 +147,7 @@ Output: Look for output in `build-darwin-x86_64/newview/Release`.
 
 ##  Prepare third party libraries
 
-Most third party libraries needed to build the viewer will be automatically downloaded for you and installed into the build directory within your source tree during compilation. Some need to be manually prepared and are not normally required when using an open source configuration (ReleaseFS_open).
+Most third party libraries needed to build the viewer will be automatically downloaded for you and installed into the build directory within your source tree during compilation. Some need to be manually prepared and are not normally required when using an open source configuration (ReleaseVS_open).
 
 ### FMOD Studio using autobuild 
 
@@ -204,7 +204,7 @@ autobuild installables edit fmodstudio platform=darwin64 hash=3b0d38f2a17ff1b73c
 The following is all still done from within the terminal window:
 ```
 cd ~/firestorm/phoenix-firestorm
-autobuild configure -A 64 -c ReleaseFS_open
+autobuild configure -A 64 -c ReleaseVS_open
 ```
 
 This will configure the viewer for compiling with all defaults and without third party libraries.
@@ -227,10 +227,10 @@ There are a number of switches you can use to modify the configuration process. 
 ### Example: ###
 
 ```
-autobuild configure -A 64 -c ReleaseFS_open -- -DLL_TESTS:BOOL=FALSE -DFMODSTUDIO:BOOL=TRUE
+autobuild configure -A 64 -c ReleaseVS_open -- -DLL_TESTS:BOOL=FALSE -DFMODSTUDIO:BOOL=TRUE
 ```
 ```
-autobuild configure -A 64 -c ReleaseFS_open
+autobuild configure -A 64 -c ReleaseVS_open
 ```
 
 > [!IMPORTANT]
@@ -242,13 +242,13 @@ To compile the code into an app that can be used on your computer, run the follo
 
 ```
 cd ~/firestorm/phoenix-firestorm
-autobuild build -A 64 -c ReleaseFS_open --no-configure
+autobuild build -A 64 -c ReleaseVS_open --no-configure
 ```
 
 Compiling may take quite a bit of time, depending on how fast your machine is and how much else you're doing.
 
 > [!NOTE]
-> It is possible to use autobuild to do both the configure step (only needed once) and the build step with one command (`autobuild build -A 64 -c ReleaseFS[_open] [-- config options]`). Some find it is clearer if these steps are done separately, but can save a bit of time if done together.
+> It is possible to use autobuild to do both the configure step (only needed once) and the build step with one command (`autobuild build -A 64 -c ReleaseVS[_open] [-- config options]`). Some find it is clearer if these steps are done separately, but can save a bit of time if done together.
 
 ## Launching the viewer
 
@@ -272,7 +272,7 @@ If you want to update your self-compiled viewer, you don't have to go through th
 - If you are using a custom autobuild.xml file, then run the following in the terminal window, otherwise skip this step: `export AUTOBUILD_CONFIG_FILE=my_autobuild.xml`
 - Now, to pull down any new code, run the following in the terminal window: `git pull`
 - If you are using a custom autobuild.xml file, compare my_autobuild.xml to autobuild.xml to see if anything has been updated and update your custom file accordingly.
-- After any new code is downloaded, it needs to be reconfigured. Run the following in the terminal window: `autobuild configure -A 64 -c ReleaseFS_open`
-- Finally, re-compile the viewer with the new changes. Again, in the terminal window, run: `autobuild build -A 64 -c ReleaseFS_open --no-configure`
+- After any new code is downloaded, it needs to be reconfigured. Run the following in the terminal window: `autobuild configure -A 64 -c ReleaseVS_open`
+- Finally, re-compile the viewer with the new changes. Again, in the terminal window, run: `autobuild build -A 64 -c ReleaseVS_open --no-configure`
 
 Finally, follow the instructions in [Launching the viewer](#launching-the-viewer) to run your freshly updated viewer.

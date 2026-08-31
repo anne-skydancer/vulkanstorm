@@ -161,7 +161,7 @@ You can add that to `~/.bashrc` or `~/.profile` so they execute automatically, o
 
 ```
 cd ~/src/phoenix-firestorm
-autobuild configure -A 64 -c ReleaseFS_open
+autobuild configure -A 64 -c ReleaseVS_open
 ```
 
 This will set up to compile with all defaults and without non-default libraries. It will fetch any additional necessary libraries.
@@ -169,13 +169,13 @@ This will set up to compile with all defaults and without non-default libraries.
 Available premade firestorm-specific build targets:
 
 ```
-ReleaseFS             (with KDU, with FMOD,   no OpenSim)
-ReleaseFS_AVX         (with KDU, with FMOD,   no OpenSim, optimized for AVX-enabled CPUs)
-ReleaseFS_AVX2        (with KDU, with FMOD,   no OpenSim, optimized for AVX2-enabled CPUs)
-ReleaseFS_open        (  no KDU,   no FMOD,   no OpenSim)
+ReleaseVS             (with KDU, with FMOD,   no OpenSim)
+ReleaseVS_AVX         (with KDU, with FMOD,   no OpenSim, optimized for AVX-enabled CPUs)
+ReleaseVS_AVX2        (with KDU, with FMOD,   no OpenSim, optimized for AVX2-enabled CPUs)
+ReleaseVS_open        (  no KDU,   no FMOD,   no OpenSim)
 ReleaseOS             (  no KDU,   no FMOD, with OpenSim)
-RelWithDebInfoFS      (with KDU, with FMOD,   no OpenSim, with debug info)
-RelWithDebInfoFS_open (  no KDU,   no FMOD,   no OpenSim, with debug info)
+RelWithDebInfoVS      (with KDU, with FMOD,   no OpenSim, with debug info)
+RelWithDebInfoVS_open (  no KDU,   no FMOD,   no OpenSim, with debug info)
 RelWithDebInfoOS      (  no KDU,   no FMOD, with OpenSim, with debug info)
 ```
 
@@ -201,10 +201,10 @@ Most switches start with a double-dash (\--). And if you use any switches you mu
 ### Examples: ###
 
 ```
-autobuild configure -A 64 -c ReleaseFS_open -- -DLL_TESTS:BOOL=FALSE
-autobuild configure -A 64 -c ReleaseFS_open -- --clean
-autobuild configure -A 64 -c ReleaseFS_open -- --fmodstudio
-autobuild configure -A 64 -c ReleaseFS_open -- --chan="MyBuild"
+autobuild configure -A 64 -c ReleaseVS_open -- -DLL_TESTS:BOOL=FALSE
+autobuild configure -A 64 -c ReleaseVS_open -- --clean
+autobuild configure -A 64 -c ReleaseVS_open -- --fmodstudio
+autobuild configure -A 64 -c ReleaseVS_open -- --chan="MyBuild"
 ```
 
 In the last example, the channel and resulting viewer name would be "Firestorm-MyBuild". 
@@ -214,7 +214,7 @@ The first time you configure, several additional files will be downloaded from F
 ## Compiling the viewer
 
 ```
-autobuild build -A 64 -c ReleaseFS_open
+autobuild build -A 64 -c ReleaseVS_open
 ```
 
 Be sure to use the fmodstudio and chan switches again.
@@ -222,13 +222,13 @@ Be sure to use the fmodstudio and chan switches again.
 Compiling can take quite a bit of time depending on your computer's processing power.
 
 > [!NOTE]
-> It is possible to use autobuild to do both the configure step (only needed once) and the build step with one command (`autobuild build -A 64 -c ReleaseFS_open -- --clean [more switches]`). For clarity, they are mentioned separately.
+> It is possible to use autobuild to do both the configure step (only needed once) and the build step with one command (`autobuild build -A 64 -c ReleaseVS_open -- --clean [more switches]`). For clarity, they are mentioned separately.
 
 > [!TIP]
 > When using the --package switch you can set the XZ_DEFAULTS variable to -T0 to use all available CPU cores to create the .tar.xz file. This can significantly reduce the time needed to create the archive, but it will use a lot more memory. For example:
 > ```
 > export XZ_DEFAULTS="-T0"
-> autobuild build -A64 -c ReleaseFS_open -- --package
+> autobuild build -A64 -c ReleaseVS_open -- --package
 > ```
 
 ### Copy out of the guest
