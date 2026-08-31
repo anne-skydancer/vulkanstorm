@@ -21,7 +21,9 @@
 #ifndef LLVKSESSION_H
 #define LLVKSESSION_H
 
+#include <cstdint>
 #include <string>
+#include <vector>
 
 class LLWindow;
 
@@ -49,6 +51,11 @@ public:
     // Idle the device and tear down surface/swapchain/device. Call BEFORE the
     // window is destroyed. No-op when not running.
     static void stop();
+
+    // Read the most recently presented swapchain image back into out_rgba
+    // (row-major RGBA8, out_w x out_h). Used by the GL<->Vulkan screenshot-diff
+    // harness. Returns false on failure or when not running.
+    static bool captureRGBA(std::vector<uint8_t>& out_rgba, uint32_t& out_w, uint32_t& out_h);
 
     static std::string deviceName();
 };

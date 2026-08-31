@@ -56,12 +56,42 @@ public:
     // color and presents it. Returns false on failure.
     bool renderClearFrame(float r, float g, float b, float a);
 
+    // --- Phase 3 (2D/UI) -------------------------------------------------
+    // Create the 2D quad pipeline (solid-color + textured), dynamic
+    // viewport/scissor, alpha blending. Call once after createDevice. The
+    // pipeline is rebuilt against the swapchain format on each createSwapchain.
+    bool create2DPipeline(std::string& error);
+    void destroy2DPipeline();
+
+    // Begin a 2D frame: acquire the next swapchain image, begin the command
+    // buffer, and start dynamic rendering (color attachment = the swapchain
+    // image, loadOp per clear). Returns the frame's command buffer, or
+    // VK_NULL_HANDLE if the swapchain is out of date (caller should recreate).
+    // After issuing 2D draws, call end2DFrame() to close + present.
+    VkCommandBuffer begin2DFrame(float clear_r, float clear_g, float clear_b, float clear_a);
+
+    // Close the current 2D frame (end rendering, transition to present, submit,
+    // present). Returns false on failure.
+    bool end2DFrame();
+
+    // Read the most recently presented swapchain image back into out_rgba
+    // (row-major RGBA8, extent().width x extent().height). For the GL<->Vulkan
+    // screenshot-diff harness. Returns false on failure.
+    bool readbackSwapchain(std::vector<uint8_t>& out_rgba, uint32_t& out_w, uint32_t& out_h);
+
+    VkCommandBuffer currentCmd() const { return mFrames[mFrameIndex].cmd; }
+    VkPipeline pipeline2D() const { return mPipeline2D; }
+    VkPipelineLayout pipelineLayout2D() const { return mPipelineLayout2D; }
+    const VkExtent2D& swapchainExtent() const { return mSwapchainExtent; }
+
     void destroy();
 
     bool isValid() const { return mDevice != VK_NULL_HANDLE; }
     VkInstance instance() const { return mInstance; }
     VkDevice device() const { return mDevice; }
     VkPhysicalDevice physicalDevice() const { return mPhysicalDevice; }
+    VmaAllocator allocator() const { return mAllocator; }
+    VkQueue graphicsQueue() const { return mGraphicsQueue; }
     const std::string& deviceName() const { return mDeviceName; }
 
 private:
@@ -105,6 +135,15 @@ private:
     // (fixes the swapchain-semaphore-reuse validation warning). Sized to the
     // swapchain image count; created/destroyed with the swapchain.
     std::vector<VkSemaphore> mImagePresentSem;
+
+    // --- Phase 3 (2D/UI) -------------------------------------------------
+    VkPipelineLayout mPipelineLayout2D = VK_NULL_HANDLE;
+    VkPipeline       mPipeline2D = VK_NULL_HANDLE;
+    VkShaderModule   mShader2DVert = VK_NULL_HANDLE;
+    VkShaderModule   mShader2DFrag = VK_NULL_HANDLE;
+    uint32_t         mAcquiredImageIndex = 0;
+    uint32_t         mLastPresentedImageIndex = 0;
+    bool             mFrameActive = false;
 
     bool        mValidation = false;
     std::string mDeviceName;

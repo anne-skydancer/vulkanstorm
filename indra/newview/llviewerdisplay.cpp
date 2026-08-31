@@ -161,6 +161,34 @@ void render_disconnected_background();
 void getProfileStatsContext(boost::json::object& stats);
 std::string getProfileStatsFilename();
 
+#if LL_WINDOWS
+// <VulkanStorm> One-shot Vulkan frame capture for the GL<->Vulkan diff
+// harness. After a settle delay, dump the presented frame to a raw RGBA8 file
+// (8-byte header: width, height LE). Call once per frame while the session runs.
+static void vulkan_capture_tick()
+{
+    // Bring-up toggle via env var (avoids settings-registration friction for a
+    // one-shot diagnostic). Set VULKANSTORM_CAPTURE=1 to capture one frame.
+    static const bool s_want_capture = (getenv("VULKANSTORM_CAPTURE") != nullptr);
+    if (!s_want_capture) return;
+    static S32 s_capture_countdown = -1;
+    if (s_capture_countdown < 0) s_capture_countdown = 90; // ~1.5s settle
+    if (--s_capture_countdown != 0) return;
+    s_capture_countdown = S32_MAX; // one-shot: never fire again
+    std::vector<uint8_t> rgba; uint32_t w = 0, h = 0;
+    if (!LLVKSession::captureRGBA(rgba, w, h)) return;
+    std::string path = gDirUtilp->getExpandedFilename(LL_PATH_LOGS, "vulkan_capture.rgba");
+    LLFILE* f = LLFile::fopen(path, "wb");
+    if (!f) return;
+    uint32_t hdr[2] = { w, h };
+    fwrite(hdr, 1, sizeof(hdr), f);
+    fwrite(rgba.data(), 1, rgba.size(), f);
+    LLFile::close(f);
+    LL_INFOS("Vulkan") << "Captured Vulkan frame: " << w << "x" << h << " -> " << path << LL_ENDL;
+}
+// </VulkanStorm>
+#endif
+
 void display_startup()
 {
     if (   !gViewerWindow
@@ -179,6 +207,7 @@ void display_startup()
     {
         LLVKSession::resizeIfNeeded(gViewerWindow->getWindow());
         LLVKSession::renderFrame();
+        vulkan_capture_tick();
         return;
     }
     // </VulkanStorm>
@@ -530,6 +559,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
     {
         LLVKSession::resizeIfNeeded(gViewerWindow->getWindow());
         LLVKSession::renderFrame();
+        vulkan_capture_tick();
         return;
     }
     // </VulkanStorm>
