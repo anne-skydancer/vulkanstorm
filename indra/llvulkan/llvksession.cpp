@@ -107,12 +107,13 @@ namespace
         const float H = (float)ctx->swapchainExtent().height;
 
         // Ortho projection: pixel coords (top-left origin, y down) -> NDC.
-        // Column-major mat4, matching GLSL's default layout.
+        // The negative-height viewport already flips NDC y, so this matches the
+        // viewer's gl_rect_2d / GL ortho output exactly. Column-major mat4.
         float ortho[16] = {
             2.f / W, 0.f,      0.f, 0.f,
-            0.f,    -2.f / H,  0.f, 0.f,
+            0.f,     2.f / H,  0.f, 0.f,
             0.f,     0.f,     -1.f, 0.f,
-           -1.f,     1.f,      0.f, 1.f
+           -1.f,    -1.f,      0.f, 1.f
         };
         vkCmdPushConstants(cmd, ctx->pipelineLayout2D(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ortho), ortho);
 

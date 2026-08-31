@@ -60,6 +60,7 @@
 #include "llperfstats.h"
 #include "llpostprocess.h"
 #include "llrender.h"
+#include "llrender2dutils.h"
 #include "llscenemonitor.h"
 #include "llsdjson.h"
 #include "llselectmgr.h"
@@ -186,6 +187,102 @@ static void vulkan_capture_tick()
     LLFile::close(f);
     LL_INFOS("Vulkan") << "Captured Vulkan frame: " << w << "x" << h << " -> " << path << LL_ENDL;
 }
+
+// GL reference capture for the diff harness: render the SAME known primitive
+// (teal clear + a solid red rect at (200,150)-(520,390)) into an OFFSCREEN
+// framebuffer (never the visible window), read it back with glReadPixels, and
+// dump it in the same format as the Vulkan capture for per-pixel diffing.
+static void gl_reference_capture_tick()
+{
+#if LL_WINDOWS
+    static const bool s_want = (getenv("VULKANSTORM_CAPTURE_GL") != nullptr);
+    if (!s_want) return;
+    static S32 s_countdown = -1;
+    if (s_countdown < 0) s_countdown = 90; // ~1.5s settle (GL context + window sized)
+    if (--s_countdown != 0) return;
+    s_countdown = S32_MAX; // one-shot
+
+    LLCoordWindow ws;
+    gViewerWindow->getWindow()->getSize(&ws);
+    const S32 w = ws.mX, h = ws.mY;
+    if (w <= 0 || h <= 0) return;
+
+    // Offscreen render target so the visible UI is never touched.
+    GLuint fbo = 0, tex = 0;
+    glGenFramebuffers(1, &fbo);
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteTextures(1, &tex);
+        glDeleteFramebuffers(1, &fbo);
+        LL_WARNS("Vulkan") << "GL reference FBO incomplete" << LL_ENDL;
+        return;
+    }
+
+    // Draw the known primitive through the viewer's OWN 2D path (gGL /
+    // gl_rect_2d), which works on the core profile. Teal clear + the same red
+    // rect at (200,150)-(520,390) in the top-left-origin UI space. Save the
+    // default-framebuffer viewport + clear color first so the live UI frame is
+    // byte-identical to a run without this hook.
+    GLint saved_viewport[4];
+    GLfloat saved_clear[4];
+    glGetIntegerv(GL_VIEWPORT, saved_viewport);
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, saved_clear);
+    {
+        LLGLSDefault gls_default;
+        LLGLSUIDefault gls_ui;
+        gViewerWindow->setup2DRender();           // sets the top-left ortho projection
+        glViewport(0, 0, w, h);
+        gGL.setColorMask(true, true);
+        gGL.setSceneBlendType(LLRender::BT_REPLACE);
+        gUIProgram.bind();                         // gl_rect_2d needs a bound UI shader
+        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        glClearColor(0.f, 0.5f, 0.5f, 1.f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        gl_rect_2d(200, 150, 520, 390, LLColor4(1.f, 0.f, 0.f, 1.f));
+        gGL.flush();
+        gUIProgram.unbind();
+    }
+
+    std::vector<uint8_t> rgba((size_t)w * h * 4);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+
+    // Restore the default framebuffer + all state we touched so the live UI is
+    // unaffected (no teal band, no viewport/projection drift).
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glEnable(GL_TEXTURE_2D);
+    glViewport(saved_viewport[0], saved_viewport[1], saved_viewport[2], saved_viewport[3]);
+    glClearColor(saved_clear[0], saved_clear[1], saved_clear[2], saved_clear[3]);
+    glDeleteTextures(1, &tex);
+    glDeleteFramebuffers(1, &fbo);
+
+    // glReadPixels is bottom-up; flip to top-down to match the Vulkan capture.
+    std::vector<uint8_t> flipped((size_t)w * h * 4);
+    const size_t row = (size_t)w * 4;
+    for (S32 y = 0; y < h; ++y)
+    {
+        memcpy(flipped.data() + (size_t)(h - 1 - y) * row, rgba.data() + (size_t)y * row, row);
+    }
+
+    std::string path = gDirUtilp->getExpandedFilename(LL_PATH_LOGS, "gl_reference_capture.rgba");
+    LLFILE* f = LLFile::fopen(path, "wb");
+    if (!f) return;
+    uint32_t hdr[2] = { (uint32_t)w, (uint32_t)h };
+    fwrite(hdr, 1, sizeof(hdr), f);
+    fwrite(flipped.data(), 1, flipped.size(), f);
+    LLFile::close(f);
+    LL_INFOS("Vulkan") << "Captured GL reference frame: " << w << "x" << h << " -> " << path << LL_ENDL;
+#endif
+}
 // </VulkanStorm>
 #endif
 
@@ -210,6 +307,13 @@ void display_startup()
         vulkan_capture_tick();
         return;
     }
+    // </VulkanStorm>
+#endif
+
+#if LL_WINDOWS
+    // <VulkanStorm> GL reference capture (diff harness): draws the same known
+    // primitive via immediate GL and dumps it for comparison against Vulkan.
+    gl_reference_capture_tick();
     // </VulkanStorm>
 #endif
 
