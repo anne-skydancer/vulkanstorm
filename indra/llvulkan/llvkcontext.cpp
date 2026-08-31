@@ -634,13 +634,15 @@ bool LLVKContext::create2DPipeline(std::string& error)
     ds.depthTestEnable = VK_FALSE;
     ds.depthWriteEnable = VK_FALSE;
 
-    // Standard alpha blending to match GL's GL_SRC_ALPHA/GL_ONE_MINUS_SRC_ALPHA.
+    // Match GL's BT_ALPHA: glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    // applies the SAME factors to both color and alpha. Using SRC_ALPHA for the
+    // alpha source factor (not ONE) reproduces GL's alpha accumulation exactly.
     VkPipelineColorBlendAttachmentState blend_att{};
     blend_att.blendEnable = VK_TRUE;
     blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     blend_att.colorBlendOp = VK_BLEND_OP_ADD;
-    blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     blend_att.alphaBlendOp = VK_BLEND_OP_ADD;
     blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;

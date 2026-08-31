@@ -18,7 +18,9 @@
 #include "llvkcontext.h"
 #include "llwindow.h"
 
+#include <cstdlib>
 #include <cstring>
+#include <vector>
 
 namespace
 {
@@ -34,10 +36,59 @@ namespace
     constexpr float kClearB = 0.5f;
     constexpr float kClearA = 1.0f;
 
-    // Persistent vertex buffer for the 2D test rect (bring-up; a real batching
-    // buffer lands in 3a-2).
+    // --- Primitive battery (Phase 3a-2) -----------------------------------
+    // One interleaved quad vertex: pixel pos (top-left origin), uv, RGBA.
+    struct QuadVert { float x, y, u, v, r, g, b, a; };
+
+    // Scene selection for the GL<->Vulkan diff harness (VULKANSTORM_SCENE=n).
+    int sceneIndex()
+    {
+        const char* s = getenv("VULKANSTORM_SCENE");
+        return s ? atoi(s) : 0;
+    }
+
+    void pushRect(std::vector<QuadVert>& out, float x0, float y0, float x1, float y1,
+                  float r, float g, float b, float a)
+    {
+        out.push_back({ x0, y0, 0, 0, r, g, b, a });
+        out.push_back({ x1, y0, 1, 0, r, g, b, a });
+        out.push_back({ x1, y1, 1, 1, r, g, b, a });
+        out.push_back({ x0, y0, 0, 0, r, g, b, a });
+        out.push_back({ x1, y1, 1, 1, r, g, b, a });
+        out.push_back({ x0, y1, 0, 1, r, g, b, a });
+    }
+
+    // Build the vertex list for the selected scene. Must match the GL
+    // reference scene in llviewerdisplay.cpp exactly.
+    std::vector<QuadVert> buildScene(int scene)
+    {
+        std::vector<QuadVert> v;
+        switch (scene)
+        {
+        case 1: // several opaque rects, distinct colors (batching + ordering)
+            pushRect(v, 200, 150, 520, 390, 1, 0, 0, 1);   // red
+            pushRect(v, 600, 150, 920, 390, 0, 1, 0, 1);   // green
+            pushRect(v, 1000, 150, 1320, 390, 0, 0, 1, 1); // blue
+            pushRect(v, 400, 500, 720, 740, 1, 1, 0, 1);   // yellow
+            break;
+        case 2: // overlapping alpha-blended rects (blending math)
+            pushRect(v, 300, 250, 900, 750, 1, 0, 0, 0.5f);   // red 50%
+            pushRect(v, 500, 350, 1100, 850, 0, 0, 1, 0.5f);  // blue 50% over red
+            pushRect(v, 400, 550, 1000, 950, 0, 1, 0, 0.25f); // green 25% over both
+            break;
+        case 0: // single solid red rect (regression baseline)
+        default:
+            pushRect(v, 200, 150, 520, 390, 1, 0, 0, 1);
+            break;
+        }
+        return v;
+    }
+
+    // Persistent vertex buffer holding the current scene's quads, plus its
+    // vertex count for the draw call.
     VkBuffer      s_test_vbuf = VK_NULL_HANDLE;
     VmaAllocation s_test_vbuf_alloc = VK_NULL_HANDLE;
+    uint32_t      s_test_vert_count = 0;
 
     void queryClientSize(LLWindow* window, uint32_t& width, uint32_t& height)
     {
@@ -54,25 +105,20 @@ namespace
         }
     }
 
-    // Build the persistent vertex buffer holding the known test rect. Rect is
-    // in pixel coords with the viewer's top-left origin, solid red.
+    // Build the persistent vertex buffer for the selected scene's quads.
     bool createTestRectBuffer()
     {
-        const float x0 = 200.f, y0 = 150.f, x1 = 520.f, y1 = 390.f;
-        const float r = 1.f, g = 0.f, b = 0.f, a = 1.f;
-        struct Vtx { float x, y, u, v, cr, cg, cb, ca; };
-        Vtx verts[6] = {
-            { x0, y0, 0, 0, r, g, b, a },
-            { x1, y0, 1, 0, r, g, b, a },
-            { x1, y1, 1, 1, r, g, b, a },
-            { x0, y0, 0, 0, r, g, b, a },
-            { x1, y1, 1, 1, r, g, b, a },
-            { x0, y1, 0, 1, r, g, b, a },
-        };
+        std::vector<QuadVert> verts = buildScene(sceneIndex());
+        if (verts.empty())
+        {
+            LL_WARNS("Vulkan") << "Test scene: no vertices" << LL_ENDL;
+            return false;
+        }
+        s_test_vert_count = (uint32_t)verts.size();
 
         VkBufferCreateInfo bi{};
         bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bi.size = sizeof(verts);
+        bi.size = verts.size() * sizeof(QuadVert);
         bi.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         VmaAllocationCreateInfo ai{};
@@ -81,10 +127,10 @@ namespace
         VmaAllocationInfo vinfo{};
         if (vmaCreateBuffer(s_context->allocator(), &bi, &ai, &s_test_vbuf, &s_test_vbuf_alloc, &vinfo) != VK_SUCCESS)
         {
-            LL_WARNS("Vulkan") << "Test rect: vertex buffer alloc failed" << LL_ENDL;
+            LL_WARNS("Vulkan") << "Test scene: vertex buffer alloc failed" << LL_ENDL;
             return false;
         }
-        memcpy(vinfo.pMappedData, verts, sizeof(verts));
+        memcpy(vinfo.pMappedData, verts.data(), bi.size);
         return true;
     }
 
@@ -98,10 +144,10 @@ namespace
         s_test_vbuf_alloc = VK_NULL_HANDLE;
     }
 
-    // Draw the known test rect through the 2D pipeline.
+    // Draw the current scene's quads through the 2D pipeline.
     void drawTestRect(VkCommandBuffer cmd)
     {
-        if (s_test_vbuf == VK_NULL_HANDLE) return;
+        if (s_test_vbuf == VK_NULL_HANDLE || s_test_vert_count == 0) return;
         LLVKContext* ctx = s_context;
         const float W = (float)ctx->swapchainExtent().width;
         const float H = (float)ctx->swapchainExtent().height;
@@ -119,7 +165,7 @@ namespace
 
         VkDeviceSize off = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &s_test_vbuf, &off);
-        vkCmdDraw(cmd, 6, 1, 0, 0);
+        vkCmdDraw(cmd, s_test_vert_count, 1, 0, 0);
     }
 }
 

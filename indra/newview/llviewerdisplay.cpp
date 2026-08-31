@@ -236,6 +236,10 @@ static void gl_reference_capture_tick()
     glGetIntegerv(GL_VIEWPORT, saved_viewport);
     glGetFloatv(GL_COLOR_CLEAR_VALUE, saved_clear);
     {
+        // Scene selection matches the Vulkan side (llvksession.cpp buildScene).
+        const char* s = getenv("VULKANSTORM_SCENE");
+        const int scene = s ? atoi(s) : 0;
+
         LLGLSDefault gls_default;
         LLGLSUIDefault gls_ui;
         gViewerWindow->setup2DRender();           // sets the top-left ortho projection
@@ -246,7 +250,26 @@ static void gl_reference_capture_tick()
         gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
         glClearColor(0.f, 0.5f, 0.5f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT);
-        gl_rect_2d(200, 150, 520, 390, LLColor4(1.f, 0.f, 0.f, 1.f));
+
+        switch (scene)
+        {
+        case 1: // several opaque rects, distinct colors
+            gl_rect_2d(200, 150, 520, 390, LLColor4(1, 0, 0, 1));
+            gl_rect_2d(600, 150, 920, 390, LLColor4(0, 1, 0, 1));
+            gl_rect_2d(1000, 150, 1320, 390, LLColor4(0, 0, 1, 1));
+            gl_rect_2d(400, 500, 720, 740, LLColor4(1, 1, 0, 1));
+            break;
+        case 2: // overlapping alpha-blended rects over the teal clear
+            gGL.setSceneBlendType(LLRender::BT_ALPHA);
+            gl_rect_2d(300, 250, 900, 750, LLColor4(1, 0, 0, 0.5f));
+            gl_rect_2d(500, 350, 1100, 850, LLColor4(0, 0, 1, 0.5f));
+            gl_rect_2d(400, 550, 1000, 950, LLColor4(0, 1, 0, 0.25f));
+            break;
+        case 0: // single solid red rect (regression baseline)
+        default:
+            gl_rect_2d(200, 150, 520, 390, LLColor4(1, 0, 0, 1));
+            break;
+        }
         gGL.flush();
         gUIProgram.unbind();
     }
