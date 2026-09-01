@@ -210,6 +210,20 @@ void LLVKUI2D::rawTris(const float* xy, const float* rgba, int count)
     }
 }
 
+void LLVKUI2D::texturedBatchPreTransformed(const float* xy, const float* uv, const float* rgba, int count)
+{
+    if (!isActive() || count < 3 || (count % 3) != 0) return;
+    if (mTopo != VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) { flushRun(); mTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; }
+    // Positions are already screen-space (the caller baked the UI transform), so
+    // NO transform is applied here — matching LLRender::vertexBatchPreTransformed.
+    for (int i = 0; i < count; ++i)
+    {
+        mVerts.push_back({ xy[i * 2], xy[i * 2 + 1],
+                           uv[i * 2], uv[i * 2 + 1],
+                           rgba[i * 4 + 0], rgba[i * 4 + 1], rgba[i * 4 + 2], rgba[i * 4 + 3] });
+    }
+}
+
 void LLVKUI2D::flushRun()
 {
     if (!isActive() || mVerts.empty() || !mCtx)

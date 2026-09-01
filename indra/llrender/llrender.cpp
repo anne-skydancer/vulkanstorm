@@ -226,6 +226,20 @@ bool LLTexUnit::bind(LLTexture* texture, bool for_rendering, bool forceBind)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     stop_glerror();
+
+    // <VulkanStorm> On the Vulkan UI path there is no GL texture to bind. Route
+    // unit-0 texture selection to the sink via the funnel hook (which resolves
+    // the LLTexture through the Vulkan UI texture cache) and skip the GL bind.
+    if (LLRender::isVulkanUIActive() && mIndex == 0)
+    {
+        if (g_ui_funnel_hook && g_ui_funnel_hook->bindTexture)
+        {
+            g_ui_funnel_hook->bindTexture(texture);
+        }
+        return true;
+    }
+    // </VulkanStorm>
+
     if (mIndex >= 0)
     {
         gGL.flush();
@@ -423,6 +437,18 @@ void LLTexUnit::unbind(eTextureType type)
     stop_glerror();
 
     if (mIndex < 0) return;
+
+    // <VulkanStorm> On the Vulkan UI path, unbinding unit 0 = back to the white
+    // (solid) texture on the sink; skip the GL bind.
+    if (LLRender::isVulkanUIActive() && mIndex == 0)
+    {
+        if (g_ui_funnel_hook && g_ui_funnel_hook->bindTexture)
+        {
+            g_ui_funnel_hook->bindTexture(nullptr);
+        }
+        return;
+    }
+    // </VulkanStorm>
 
     //always flush and activate for consistency
     //   some code paths assume unbind always flushes and sets the active texture
@@ -1896,6 +1922,17 @@ void LLRender::vertexBatchPreTransformed(LLVector4a* verts, S32 vert_count)
 
 void LLRender::vertexBatchPreTransformed(LLVector4a* verts, LLVector2* uvs, S32 vert_count)
 {
+    // <VulkanStorm> Route the pre-transformed batch (images/9-slice) to the sink
+    // with the tracked current color. The verts are already screen-space.
+    if (sVulkanUIActive)
+    {
+        if (g_ui_funnel_hook && g_ui_funnel_hook->vertexBatchTex)
+        {
+            g_ui_funnel_hook->vertexBatchTex(verts, uvs, vert_count);
+        }
+        return;
+    }
+    // </VulkanStorm>
     if (mCount + vert_count > 4094)
     {
         //  LL_WARNS() << "GL immediate mode overflow.  Some geometry not drawn." << LL_ENDL;

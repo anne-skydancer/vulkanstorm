@@ -32,7 +32,12 @@
 #include "llvkselftest.h"
 #include "llvksession.h"
 #include "llvkui2d.h"
+#include "llvkuicache.h"
 #include "llrender2dutils.h"
+#include "llviewertexture.h"   // <VulkanStorm> LLViewerTexture::getRawImage (image funnel)
+#include "llimage.h"           // <VulkanStorm> LLImageRaw (image funnel)
+#include "llvector4a.h"        // <VulkanStorm> LLVector4a (vertex batch funnel)
+#include "v2math.h"            // <VulkanStorm> LLVector2 (vertex batch funnel)
 #include "fsyspath.h"
 #include "hexdump.h"
 #include "llagent.h"
@@ -295,6 +300,112 @@ static void vk_funnel_drop_shadow(S32 left, S32 top, S32 right, S32 bottom, cons
 
     LLVKUI2DSink::get().rawTris(xy, rgba, nv);
 }
+
+// <VulkanStorm> M2 image funnel ------------------------------------------------
+// Place a UI raw image's content into a buffer sized to the texture's FULL
+// (power-of-2 padded) dims — the texel space the GL texture uses and the frame
+// the UV clip region was normalized against. Content goes to bottom-left
+// (LLImageRaw row 0 = bottom = v0), padding zero-filled top/right, exactly
+// replicating LLImageRaw::scale(..., false) from preCreateTexture.
+static bool vk_blit_ui_texture(const LLImageRaw* raw, uint32_t full_w, uint32_t full_h,
+                               std::vector<uint8_t>& out)
+{
+    if (!raw || full_w == 0 || full_h == 0) return false;
+    const U8* data = raw->getData();
+    const uint32_t raw_w = raw->getWidth();
+    const uint32_t raw_h = raw->getHeight();
+    const S32 comp = raw->getComponents();
+    if (!data || raw_w == 0 || raw_h == 0 || comp < 1 || comp > 4) return false;
+    if (raw_w > full_w || raw_h > full_h) return false;
+
+    out.assign((size_t)full_w * full_h * 4, 0); // zero-fill the padding
+    for (uint32_t y = 0; y < raw_h; ++y)         // content rows (bottom-up)
+    {
+        for (uint32_t x = 0; x < raw_w; ++x)
+        {
+            const size_t s = ((size_t)y * raw_w + x) * comp;
+            const size_t d = ((size_t)y * full_w + x) * 4;
+            uint8_t r, g, b, a;
+            switch (comp)
+            {
+            case 1: r = g = b = data[s]; a = 255; break;
+            case 2: r = g = b = data[s + 0]; a = data[s + 1]; break;
+            case 3: r = data[s + 0]; g = data[s + 1]; b = data[s + 2]; a = 255; break;
+            default: r = data[s + 0]; g = data[s + 1]; b = data[s + 2]; a = data[s + 3]; break;
+            }
+            out[d + 0] = r; out[d + 1] = g; out[d + 2] = b; out[d + 3] = a;
+        }
+    }
+    return true;
+}
+
+static VkDescriptorSet vk_resolve_ui_texture(LLTexture* image)
+{
+    if (!image) return VK_NULL_HANDLE;
+    // UI images are LLViewerFetchedTexture (pinned, decoded); getRawImage lives
+    // on that subclass, not the LLViewerTexture base.
+    LLViewerFetchedTexture* vt = dynamic_cast<LLViewerFetchedTexture*>(image);
+    if (!vt) return VK_NULL_HANDLE;
+    // Cached? Resolve without re-reading pixels.
+    if (LLVKUITexture::get().contains(image))
+    {
+        return LLVKUITexture::get().resolve(LLVKSession::getContext(), image, nullptr, 0, 0);
+    }
+    const LLImageRaw* raw = vt->getRawImage();
+    if (!raw) return VK_NULL_HANDLE; // not decoded yet; retry next frame
+
+    // The GL texture is the PADDED (power-of-2) image; the UV clip region is
+    // normalized against those full dims. Upload at full dims with content at
+    // bottom-left so the uv_rect samples identically to GL. Only cache once the
+    // raw matches the full dims (a smaller raw is a pre-padding/partial frame —
+    // retry rather than freeze a wrong-size texture).
+    const uint32_t full_w = (uint32_t)vt->getFullWidth();
+    const uint32_t full_h = (uint32_t)vt->getFullHeight();
+    if (full_w == 0 || full_h == 0) return VK_NULL_HANDLE;
+    if ((uint32_t)raw->getWidth() != full_w || (uint32_t)raw->getHeight() != full_h)
+    {
+        return VK_NULL_HANDLE; // raw not yet at the padded dims; retry next frame
+    }
+
+    std::vector<uint8_t> rgba;
+    if (!vk_blit_ui_texture(raw, full_w, full_h, rgba)) return VK_NULL_HANDLE;
+    return LLVKUITexture::get().resolve(LLVKSession::getContext(), image, rgba.data(), full_w, full_h);
+}
+
+// L2 texture bind: resolve the LLTexture via the cache and select it on the
+// sink (white/solid when null). Returns true (handled).
+static bool vk_funnel_bind_texture(LLTexture* image)
+{
+    VkDescriptorSet tex = (image != nullptr) ? vk_resolve_ui_texture(image) : VK_NULL_HANDLE;
+    LLVKUI2DSink::get().setTexture(tex); // VK_NULL_HANDLE -> white (solid) texture
+    return true;
+}
+
+// Pre-transformed textured batch (images + 9-slice converge here). The verts
+// are LLVector4a (screen-space pos) + LLVector2 (uv); color = the tracked
+// current UI color (set by the widget's color4fv just before). Emits to the
+// sink with NO additional transform (positions are already screen-space).
+static bool vk_funnel_vertex_batch_tex(const void* pos_p, const void* uv_p, int vert_count)
+{
+    if (!pos_p || !uv_p || vert_count < 3) return true;
+    const LLVector4a* pos = (const LLVector4a*)pos_p;
+    const LLVector2* uv = (const LLVector2*)uv_p;
+    const LLColor4U& cc = LLRender::sVulkanUICurrentColor;
+    const float cr = cc.mV[VRED] / 255.f, cg = cc.mV[VGREEN] / 255.f,
+                cb = cc.mV[VBLUE] / 255.f, ca = cc.mV[VALPHA] / 255.f;
+
+    std::vector<float> xy((size_t)vert_count * 2), uvv((size_t)vert_count * 2), rgba((size_t)vert_count * 4);
+    for (int i = 0; i < vert_count; ++i)
+    {
+        xy[i*2+0] = pos[i][VX]; xy[i*2+1] = pos[i][VY];
+        uvv[i*2+0] = uv[i].mV[VX]; uvv[i*2+1] = uv[i].mV[VY];
+        rgba[i*4+0]=cr; rgba[i*4+1]=cg; rgba[i*4+2]=cb; rgba[i*4+3]=ca;
+    }
+    LLVKUI2DSink::get().texturedBatchPreTransformed(xy.data(), uvv.data(), rgba.data(), vert_count);
+    return true;
+}
+// </VulkanStorm>
+
 static LLUIFunnelHook s_vk_funnel_hook = {
     &vk_funnel_rect,
     &vk_funnel_set_color,
@@ -302,7 +413,9 @@ static LLUIFunnelHook s_vk_funnel_hook = {
     &vk_funnel_set_scissor,
     &vk_funnel_line_rect,
     &vk_funnel_line2d,
-    &vk_funnel_drop_shadow
+    &vk_funnel_drop_shadow,
+    &vk_funnel_bind_texture,
+    &vk_funnel_vertex_batch_tex
 };
 
 // Run one Vulkan UI frame: begin the 2D pass + sink, run the real widget tree

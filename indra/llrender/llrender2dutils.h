@@ -40,6 +40,7 @@ class LLVector3;
 class LLVector2;
 class LLUIImage;
 class LLUUID;
+class LLTexture;
 
 extern const LLColor4 UI_VERTEX_COLOR;
 
@@ -72,6 +73,14 @@ struct LLUIFunnelHook
     void (*line2d)(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4& color);
     // Per-vertex-alpha drop-shadow gradient triangles -> sink.rawTris.
     void (*dropShadow)(S32 left, S32 top, S32 right, S32 bottom, const LLColor4& start_color, S32 lines);
+    // Texture-unit-0 bind (L2): the hook impl resolves the LLTexture via the
+    // cache and calls sink.setTexture. Returns true if it handled the bind.
+    bool (*bindTexture)(LLTexture* image);
+    // Pre-transformed vertex batch (fonts/images converge here) -> sink batch.
+    // pos = LLVector4a[vert_count], uv = LLVector2[vert_count]; color comes from
+    // the tracked current color. count = vertices. Only called when Vulkan-UI
+    // is active. Returns true if handled.
+    bool (*vertexBatchTex)(const void* pos, const void* uv, int vert_count);
 };
 extern LLUIFunnelHook* g_ui_funnel_hook;
 // </VulkanStorm>

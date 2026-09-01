@@ -459,6 +459,11 @@ std::string LLVKSession::deviceName()
     return s_context ? s_context->deviceName() : std::string();
 }
 
+LLVKContext* LLVKSession::getContext()
+{
+    return s_context;
+}
+
 #else // !LL_WINDOWS
 
 bool LLVKSession::start(LLWindow* window, bool enable_validation)
@@ -475,5 +480,6 @@ void LLVKSession::resizeIfNeeded(LLWindow* window) {}
 void LLVKSession::stop() {}
 bool LLVKSession::captureRGBA(std::vector<uint8_t>& out_rgba, uint32_t& out_w, uint32_t& out_h) { return false; }
 std::string LLVKSession::deviceName() { return std::string(); }
+LLVKContext* LLVKSession::getContext() { return nullptr; }
 
 #endif // LL_WINDOWS

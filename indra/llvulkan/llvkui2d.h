@@ -77,6 +77,11 @@ public:
     // 2 floats per vertex (local UI coords, transform applied at emit), rgba =
     // 4 floats per vertex. count = number of vertices (must be a multiple of 3).
     void rawTris(const float* xy, const float* rgba, int count);
+    // Pre-transformed textured triangles (M2 image path: gl_draw_scaled_rotated_image
+    // bakes the UI translation into the verts itself). xy = 2 floats/vert
+    // (already screen-space — NO transform applied), uv = 2 floats/vert, rgba =
+    // 4 floats/vert (per-vertex tint, usually uniform). count = vertices (mult of 3).
+    void texturedBatchPreTransformed(const float* xy, const float* uv, const float* rgba, int count);
 
 private:
     void flushRun();

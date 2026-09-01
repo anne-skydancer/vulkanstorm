@@ -26,6 +26,7 @@
 #include <vector>
 
 class LLWindow;
+class LLVKContext;
 
 class LLVKSession
 {
@@ -66,6 +67,10 @@ public:
     static bool captureRGBA(std::vector<uint8_t>& out_rgba, uint32_t& out_w, uint32_t& out_h);
 
     static std::string deviceName();
+
+    // The live context (null when not running). Used by the UI texture cache to
+    // upload/destroy images. Treat as read-only outside llvulkan.
+    static LLVKContext* getContext();
 };
 
 #endif // LLVKSESSION_H

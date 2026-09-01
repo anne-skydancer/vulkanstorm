@@ -447,10 +447,13 @@ void gl_draw_scaled_image_with_border(S32 x, S32 y, S32 width, S32 height, LLTex
         return;
     }
 
-    if (solid_color)
+    // <VulkanStorm> gSolidColorProgram.bind() calls glUseProgram; skip on the
+    // Vulkan UI path (no GL context). The sink's pipeline handles the draw.
+    if (solid_color && !LLRender::isVulkanUIActive())
     {
         gSolidColorProgram.bind();
     }
+    // </VulkanStorm>
 
     if (center_rect.mLeft == 0.f
         && center_rect.mRight == 1.f
@@ -774,10 +777,12 @@ void gl_draw_scaled_image_with_border(S32 x, S32 y, S32 width, S32 height, LLTex
         gGL.end();
     }
 
-    if (solid_color)
+    // <VulkanStorm> gUIProgram.bind() calls glUseProgram; skip on Vulkan.
+    if (solid_color && !LLRender::isVulkanUIActive())
     {
         gUIProgram.bind();
     }
+    // </VulkanStorm>
 }
 
 void gl_draw_rotated_image(S32 x, S32 y, F32 degrees, LLTexture* image, const LLColor4& color, const LLRectf& uv_rect)
@@ -792,6 +797,14 @@ void gl_draw_scaled_rotated_image(S32 x, S32 y, S32 width, S32 height, F32 degre
         LL_WARNS() << "image == NULL; aborting function" << LL_ENDL;
         return;
     }
+
+    // <VulkanStorm> On the Vulkan UI path, the texture bind (LLTexUnit::bind)
+    // and the geometry (vertexBatchPreTransformed) are each routed to the sink
+    // at their own interception points, so the widget draws unchanged. No
+    // call-site interception needed here — and the GL bind below must not run
+    // (no GL context). The bind() interception handles the texture; the verts
+    // route through vertexBatchPreTransformed.
+    // </VulkanStorm>
 
     if(image != NULL)
     {
