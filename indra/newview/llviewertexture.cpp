@@ -1634,6 +1634,19 @@ bool LLViewerFetchedTexture::createTexture(S32 usename/*= 0*/)
         return false;
     }
 
+    // <VulkanStorm> On the Vulkan path there is no GL texture to upload. Bypass
+    // the GL upload (createGLTexture would hit a null GL PFN) but keep the CPU
+    // bookkeeping so the texture reports a real discard level — that lets the
+    // onUIImageLoaded callback run and set the UI UV clip/scale regions. The
+    // Vulkan pipe reads the staged CPU pixels from the cache (vk_stage_texture).
+    if (LLWindow::getSkipGLContext())
+    {
+        mGLTexturep->setSize(mRawImage->getWidth(), mRawImage->getHeight(), mRawImage->getComponents());
+        mGLTexturep->setDiscardLevel(mRawDiscardLevel);
+        return true;
+    }
+    // </VulkanStorm>
+
     bool res = mGLTexturep->createGLTexture(mRawDiscardLevel, mRawImage, usename, true, mBoostLevel);
 
     return res;

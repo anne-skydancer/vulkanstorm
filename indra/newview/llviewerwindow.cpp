@@ -2165,6 +2165,19 @@ LLViewerWindow::LLViewerWindow(const Params& p)
         LLViewerTextureManager::init() ;
         gBumpImageList.init();
     }
+    else
+    {
+        // <VulkanStorm> Vulkan path (no GL context): the texture LIST must still
+        // init so UI textures are created, fetched, and decoded to CPU pixels for
+        // the Vulkan cache. Without this, mInitialized stays false and every
+        // texture factory returns NULL (no UI textures are ever made). Keep
+        // LLImageGL::initClass skipped — it calls glGenBuffers (null PFN crash).
+        // The GL texture UPLOAD is bypassed separately (LLViewerFetchedTexture::
+        // createTexture on the Vulkan path).
+        gTextureList.init();
+        LLViewerTextureManager::init();
+        // </VulkanStorm>
+    }
 
     // Create container for all sub-views
     LLView::Params rvp;
