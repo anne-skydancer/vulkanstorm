@@ -102,8 +102,10 @@ public:
     VkDescriptorSet whiteTextureDescriptor() const { return mWhiteTex.descriptor; }
 
     VkCommandBuffer currentCmd() const { return mFrames[mFrameIndex].cmd; }
-    // The 2D pipeline for a given blend mode (see Blend2D).
-    VkPipeline pipeline2D(Blend2D blend) const { return mPipeline2D[(int)blend]; }
+    // The 2D pipeline for a given blend mode (see Blend2D). line=true selects the
+    // line-strip topology variant (the pipeline's input assembly is fixed at
+    // creation, so lines need their own pipeline — topology is not dynamic here).
+    VkPipeline pipeline2D(Blend2D blend, bool line = false) const { return mPipeline2D[(int)blend][line ? 1 : 0]; }
     VkPipelineLayout pipelineLayout2D() const { return mPipelineLayout2D; }
     const VkExtent2D& swapchainExtent() const { return mSwapchainExtent; }
 
@@ -161,7 +163,8 @@ private:
 
     // --- Phase 3 (2D/UI) -------------------------------------------------
     VkPipelineLayout mPipelineLayout2D = VK_NULL_HANDLE;
-    VkPipeline       mPipeline2D[(int)Blend2D::Count] = {};
+    // [blend][topology]: topology 0 = TRIANGLE_LIST, 1 = LINE_STRIP.
+    VkPipeline       mPipeline2D[(int)Blend2D::Count][2] = {};
     VkShaderModule   mShader2DVert = VK_NULL_HANDLE;
     VkShaderModule   mShader2DFrag = VK_NULL_HANDLE;
     VkDescriptorSetLayout mDescSetLayout2D = VK_NULL_HANDLE;

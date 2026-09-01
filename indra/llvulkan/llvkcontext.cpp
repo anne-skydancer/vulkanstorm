@@ -561,7 +561,10 @@ bool LLVKContext::create2DPipeline(std::string& error)
     // (Re)create the graphics pipelines against the current swapchain format.
     for (int i = 0; i < (int)Blend2D::Count; ++i)
     {
-        if (mPipeline2D[i] != VK_NULL_HANDLE) { vkDestroyPipeline(mDevice, mPipeline2D[i], nullptr); mPipeline2D[i] = VK_NULL_HANDLE; }
+        for (int t = 0; t < 2; ++t)
+        {
+            if (mPipeline2D[i][t] != VK_NULL_HANDLE) { vkDestroyPipeline(mDevice, mPipeline2D[i][t], nullptr); mPipeline2D[i][t] = VK_NULL_HANDLE; }
+        }
     }
 
     // Shader modules are loaded once (not per swapchain recreate).
@@ -748,7 +751,6 @@ bool LLVKContext::create2DPipeline(std::string& error)
         gp.stageCount = 2;
         gp.pStages = stages;
         gp.pVertexInputState = &vi;
-        gp.pInputAssemblyState = &ia;
         gp.pViewportState = &vp;
         gp.pRasterizationState = &rs;
         gp.pMultisampleState = &ms;
@@ -756,7 +758,15 @@ bool LLVKContext::create2DPipeline(std::string& error)
         gp.pColorBlendState = &cb;
         gp.pDynamicState = &dyn;
         gp.layout = mPipelineLayout2D;
-        LL_VK_CHECK(vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &gp, nullptr, &mPipeline2D[b]), error, "vkCreateGraphicsPipelines (2D) failed");
+        // Create both topology variants (triangle list + line strip). Topology is
+        // fixed at pipeline creation (not a dynamic state here), so lines need
+        // their own pipeline or they'd rasterize as garbage triangles.
+        for (int topo = 0; topo < 2; ++topo)
+        {
+            ia.topology = (topo == 0) ? VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST : VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+            gp.pInputAssemblyState = &ia;
+            LL_VK_CHECK(vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &gp, nullptr, &mPipeline2D[b][topo]), error, "vkCreateGraphicsPipelines (2D) failed");
+        }
     }
 
     // 1x1 white texture bound for solid (untextured) quads so the fragment
@@ -782,7 +792,10 @@ void LLVKContext::destroy2DPipeline()
     if (mSampler2D != VK_NULL_HANDLE) { vkDestroySampler(mDevice, mSampler2D, nullptr); mSampler2D = VK_NULL_HANDLE; }
     for (int i = 0; i < (int)Blend2D::Count; ++i)
     {
-        if (mPipeline2D[i] != VK_NULL_HANDLE) { vkDestroyPipeline(mDevice, mPipeline2D[i], nullptr); mPipeline2D[i] = VK_NULL_HANDLE; }
+        for (int t = 0; t < 2; ++t)
+        {
+            if (mPipeline2D[i][t] != VK_NULL_HANDLE) { vkDestroyPipeline(mDevice, mPipeline2D[i][t], nullptr); mPipeline2D[i][t] = VK_NULL_HANDLE; }
+        }
     }
     if (mPipelineLayout2D != VK_NULL_HANDLE) { vkDestroyPipelineLayout(mDevice, mPipelineLayout2D, nullptr); mPipelineLayout2D = VK_NULL_HANDLE; }
     if (mShader2DVert != VK_NULL_HANDLE) { vkDestroyShaderModule(mDevice, mShader2DVert, nullptr); mShader2DVert = VK_NULL_HANDLE; }
@@ -791,7 +804,7 @@ void LLVKContext::destroy2DPipeline()
 
 VkCommandBuffer LLVKContext::begin2DFrame(float clear_r, float clear_g, float clear_b, float clear_a)
 {
-    if (mDevice == VK_NULL_HANDLE || mSwapchain == VK_NULL_HANDLE || mPipeline2D[(int)Blend2D::Alpha] == VK_NULL_HANDLE) return VK_NULL_HANDLE;
+    if (mDevice == VK_NULL_HANDLE || mSwapchain == VK_NULL_HANDLE || mPipeline2D[(int)Blend2D::Alpha][0] == VK_NULL_HANDLE) return VK_NULL_HANDLE;
 
     // Degenerate extent (window not yet sized / minimized): nothing valid to
     // render into; skip the frame. Avoids the VUID renderArea>0 violation.
@@ -859,7 +872,7 @@ VkCommandBuffer LLVKContext::begin2DFrame(float clear_r, float clear_g, float cl
     VkRect2D scissor{ { 0, 0 }, mSwapchainExtent };
     vkCmdSetScissor(f.cmd, 0, 1, &scissor);
 
-    vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline2D[(int)Blend2D::Alpha]);
+    vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline2D[(int)Blend2D::Alpha][0]);
     mFrameActive = true;
     return f.cmd;
 }

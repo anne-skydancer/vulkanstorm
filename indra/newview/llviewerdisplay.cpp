@@ -351,6 +351,13 @@ static VkDescriptorSet vk_resolve_ui_texture(LLTexture* image)
     {
         return LLVKUITexture::get().resolve(LLVKSession::getContext(), image, nullptr, 0, 0);
     }
+    // Staged pixels from the load-complete snapshot (onUIImageLoaded) survive the
+    // source raw being freed after GL upload. Prefer those; the resolver uploads
+    // them to the GPU. (This is the normal path — getRawImage() is null at bind.)
+    if (LLVKUITexture::get().hasPixels(image))
+    {
+        return LLVKUITexture::get().resolve(LLVKSession::getContext(), image, nullptr, 0, 0);
+    }
     const LLImageRaw* raw = vt->getRawImage();
     if (!raw) return VK_NULL_HANDLE; // not decoded yet; retry next frame
 

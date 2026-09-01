@@ -14,6 +14,7 @@
 #include "llvkcontext.h"
 
 #include <unordered_map>
+#include <vector>
 
 class LLVKUITextureCache
 {
@@ -28,6 +29,13 @@ public:
     // True when the key is already cached (no upload needed this frame).
     bool contains(const void* key) const { return mMap.find(key) != mMap.end(); }
 
+    // Snapshot pre-expanded RGBA8 pixels for a key WITHOUT uploading (CPU-only,
+    // safe to call off the render thread). The resolver uploads from this store
+    // on the next bind, so the pixels survive the source raw image being freed.
+    void storePixels(const void* key, const uint8_t* rgba, uint32_t w, uint32_t h);
+    // True when pixels are staged for a key (waiting to upload).
+    bool hasPixels(const void* key) const { return mPending.find(key) != mPending.end(); }
+
     // Drop a cached entry (e.g. when the source texture is discarded).
     void invalidate(const void* key);
 
@@ -35,7 +43,9 @@ public:
     void clear(LLVKContext* ctx);
 
 private:
+    struct StagedPixels { std::vector<uint8_t> rgba; uint32_t w = 0, h = 0; };
     std::unordered_map<const void*, LLVKContext::Texture2D> mMap;
+    std::unordered_map<const void*, StagedPixels> mPending;
 };
 
 namespace LLVKUITexture

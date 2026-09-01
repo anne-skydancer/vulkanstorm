@@ -63,6 +63,13 @@
 #include "llviewerwindow.h"
 #include "llprogressview.h"
 
+// <VulkanStorm> M2: snapshot UI texture pixels at load-complete so the Vulkan
+// texture cache has them after the source raw image is freed.
+#include "llrender.h"        // LLRender::isVulkanUIActive is frame-scoped; use session
+#include "llvksession.h"
+#include "llvkuicache.h"
+// </VulkanStorm>
+
 ////////////////////////////////////////////////////////////////////////////
 
 void (*LLViewerTextureList::sUUIDCallback)(void **, const LLUUID&) = NULL;
@@ -1907,10 +1914,57 @@ LLUIImagePtr LLUIImageList::preloadUIImage(const std::string& name, const std::s
     return loadUIImageByName(name, filename, use_mips, scale_rect, clip_rect, LLGLTexture::BOOST_UI, scale_style);
 }
 
+// <VulkanStorm> M2: expand a UI raw image into a full-dims RGBA8 buffer and
+// stage it in the Vulkan texture cache (CPU-only; the resolver uploads on the
+// next bind). The content goes to bottom-left, padding zero-filled, matching the
+// GL texture's padded texel space the UV clip region references. Only stages
+// when the raw already matches the full (padded) dims.
+static void vk_stage_ui_texture(LLViewerFetchedTexture* src_vi, const LLImageRaw* raw)
+{
+    if (!src_vi || !raw) return;
+    const uint32_t full_w = (uint32_t)src_vi->getFullWidth();
+    const uint32_t full_h = (uint32_t)src_vi->getFullHeight();
+    const uint32_t raw_w = (uint32_t)raw->getWidth();
+    const uint32_t raw_h = (uint32_t)raw->getHeight();
+    const S32 comp = raw->getComponents();
+    const U8* data = raw->getData();
+    if (full_w == 0 || full_h == 0 || raw_w == 0 || raw_h == 0 || !data || comp < 1 || comp > 4) return;
+    if (raw_w != full_w || raw_h != full_h) return; // not yet at padded dims
+
+    std::vector<uint8_t> out((size_t)full_w * full_h * 4, 0);
+    for (uint32_t y = 0; y < raw_h; ++y)
+    {
+        for (uint32_t x = 0; x < raw_w; ++x)
+        {
+            const size_t s = ((size_t)y * raw_w + x) * comp;
+            const size_t d = ((size_t)y * full_w + x) * 4;
+            uint8_t r, g, b, a;
+            switch (comp)
+            {
+            case 1: r = g = b = data[s]; a = 255; break;
+            case 2: r = g = b = data[s + 0]; a = data[s + 1]; break;
+            case 3: r = data[s + 0]; g = data[s + 1]; b = data[s + 2]; a = 255; break;
+            default: r = data[s + 0]; g = data[s + 1]; b = data[s + 2]; a = data[s + 3]; break;
+            }
+            out[d + 0] = r; out[d + 1] = g; out[d + 2] = b; out[d + 3] = a;
+        }
+    }
+    LLVKUITexture::get().storePixels(src_vi, out.data(), full_w, full_h);
+}
+// </VulkanStorm>
+
 //static
 void LLUIImageList::onUIImageLoaded( bool success, LLViewerFetchedTexture *src_vi, LLImageRaw* src, LLImageRaw* src_aux, S32 discard_level, bool final, void* user_data )
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
+    // <VulkanStorm> Snapshot the UI texture into the Vulkan cache while the raw
+    // image is still available (it is freed after GL upload). Main-thread-safe:
+    // storePixels is CPU-only; the actual Vulkan upload happens at bind time.
+    if (success && final && src_vi && src && LLVKSession::isRunning())
+    {
+        vk_stage_ui_texture(src_vi, src);
+    }
+    // </VulkanStorm>
     if(!success || !user_data)
     {
         return;

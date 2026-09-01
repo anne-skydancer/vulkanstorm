@@ -188,13 +188,20 @@ void LLVKUI2D::texturedQuad(float left, float top, float right, float bottom,
 void LLVKUI2D::lineStrip(const float* xy, int count, float r, float g, float b, float a)
 {
     if (!isActive() || count < 2) return;
-    if (mTopo != VK_PRIMITIVE_TOPOLOGY_LINE_STRIP) { flushRun(); mTopo = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; }
+    // Each lineStrip is an INDEPENDENT polyline (GL draws each outline as its own
+    // begin/end). A shared LINE_STRIP run would connect consecutive strips with a
+    // spurious diagonal, so flush any pending work, emit this strip, and flush it
+    // immediately as its own draw. (UI outlines are few; correctness first.)
+    flushRun();
+    if (mTopo != VK_PRIMITIVE_TOPOLOGY_LINE_STRIP) { mTopo = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; }
     for (int i = 0; i < count; ++i)
     {
         const float x = (xy[i * 2] + mOffX) * mScaleX;
         const float y = (xy[i * 2 + 1] + mOffY) * mScaleY;
         mVerts.push_back({ x, y, 0, 0, r, g, b, a });
     }
+    flushRun();
+    mTopo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 }
 
 void LLVKUI2D::rawTris(const float* xy, const float* rgba, int count)
@@ -312,9 +319,10 @@ void LLVKUI2D::flushRun()
     }
     vkCmdSetScissor(mCmd, 0, 1, &scissor);
 
-    // Bind the pipeline for the current blend mode, and the texture (white when
-    // untextured).
-    vkCmdBindPipeline(mCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mCtx->pipeline2D(toContextBlend(mBlend)));
+    // Bind the pipeline for the current blend mode AND topology (lines use the
+    // line-strip variant; topology is baked into the pipeline, not dynamic).
+    const bool isLine = (mTopo == VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
+    vkCmdBindPipeline(mCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mCtx->pipeline2D(toContextBlend(mBlend), isLine));
     VkDescriptorSet tex = (mTexture != VK_NULL_HANDLE) ? mTexture : mCtx->whiteTextureDescriptor();
     mCtx->bindTexture2D(mCmd, tex);
 
