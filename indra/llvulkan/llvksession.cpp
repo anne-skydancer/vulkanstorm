@@ -79,6 +79,9 @@ namespace
         case 3: // one textured quad (checkerboard) — texture upload + UV path
             pushRect(v, 400, 300, 912, 556, 1, 1, 1, 1); // white tint, uv 0..1
             break;
+        case 4: // alpha-gradient textured quad (the text mechanism), blended
+            pushRect(v, 400, 300, 912, 556, 1, 0, 0, 1); // red tint * white ramp
+            break;
         case 0: // single solid red rect (regression baseline)
         default:
             pushRect(v, 200, 150, 520, 390, 1, 0, 0, 1);
@@ -109,6 +112,24 @@ namespace
                 uint8_t v = on ? 255 : 0;
                 size_t o = (size_t)(y * dim + x) * 4;
                 px[o] = v; px[o + 1] = v; px[o + 2] = v; px[o + 3] = 255;
+            }
+        return px;
+    }
+
+    // A white texture with a vertical alpha ramp (top row a=0 -> bottom a=255),
+    // exercising the same path text uses (textured quad + alpha blend). RGB is
+    // pure white so the tint/vertex color shows through.
+    std::vector<uint8_t> makeAlphaRamp()
+    {
+        const int dim = 16;
+        std::vector<uint8_t> px(dim * dim * 4);
+        for (int y = 0; y < dim; ++y)
+            for (int x = 0; x < dim; ++x)
+            {
+                // Map row to alpha 0..255 across the ramp (top transparent).
+                uint8_t a = (uint8_t)((y * 255) / (dim - 1));
+                size_t o = (size_t)(y * dim + x) * 4;
+                px[o] = 255; px[o + 1] = 255; px[o + 2] = 255; px[o + 3] = a;
             }
         return px;
     }
@@ -269,13 +290,13 @@ bool LLVKSession::start(LLWindow* window, bool enable_validation)
     }
     else
     {
-        // Scene 3 needs the checkerboard texture uploaded before the first frame.
-        if (sceneIndex() == 3)
+        // Scenes 3/4 need their texture uploaded before the first frame.
+        if (sceneIndex() == 3 || sceneIndex() == 4)
         {
-            std::vector<uint8_t> cb = makeCheckerboard();
-            if (!ctx->createTexture2D(cb.data(), 16, 16, s_scene_tex, error))
+            std::vector<uint8_t> tex = (sceneIndex() == 3) ? makeCheckerboard() : makeAlphaRamp();
+            if (!ctx->createTexture2D(tex.data(), 16, 16, s_scene_tex, error))
             {
-                LL_WARNS("Vulkan") << "Session: checkerboard texture upload failed: " << error << LL_ENDL;
+                LL_WARNS("Vulkan") << "Session: scene texture upload failed: " << error << LL_ENDL;
             }
         }
         if (!createTestRectBuffer())

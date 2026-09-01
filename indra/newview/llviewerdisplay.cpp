@@ -296,6 +296,36 @@ static void gl_reference_capture_tick()
             glDeleteTextures(1, &ctex);
             break;
         }
+        case 4: // alpha-gradient textured quad (the text mechanism), blended
+        {
+            // Same vertical alpha ramp as the Vulkan scene: white RGB, alpha
+            // 0 (top) -> 255 (bottom), 16x16, one texel per row.
+            const int dim = 16;
+            std::vector<uint8_t> ramp(dim * dim * 4);
+            for (int yy = 0; yy < dim; ++yy)
+                for (int xx = 0; xx < dim; ++xx)
+                {
+                    uint8_t a = (uint8_t)((yy * 255) / (dim - 1));
+                    size_t o = (size_t)(yy * dim + xx) * 4;
+                    ramp[o] = 255; ramp[o + 1] = 255; ramp[o + 2] = 255; ramp[o + 3] = a;
+                }
+            GLuint rtex = 0;
+            glGenTextures(1, &rtex);
+            gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, rtex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, dim, dim, 0, GL_RGBA, GL_UNSIGNED_BYTE, ramp.data());
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            // Alpha-blend over the teal clear; red tint * white ramp -> red text-like.
+            gGL.setSceneBlendType(LLRender::BT_ALPHA);
+            gGL.color4f(1.f, 0.f, 0.f, 1.f);
+            gGL.pushMatrix();
+            gGL.translatef(400.f, 300.f, 0.f);
+            gl_rect_2d_simple_tex(512, 256);
+            gGL.popMatrix();
+            gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+            glDeleteTextures(1, &rtex);
+            break;
+        }
         case 0: // single solid red rect (regression baseline)
         default:
             gl_rect_2d(200, 150, 520, 390, LLColor4(1, 0, 0, 1));
