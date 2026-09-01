@@ -77,14 +77,37 @@ alpha, FT_KERNING_UNFITTED + the lsb/rsb ±1px threshold, ll_round(cur_x) after
 every advance (integral pen positions), glyph origins pixel-snapped. Parity
 means NOT applying the dead italic slant.
 
-## The emission interface
+## The split point (agent-informed): Seam A extended to the state surface
 
-The view tree traversal (LLView::drawChildren) is backend-neutral except that
-widget draw() calls gGL. The Vulkan pipe provides an emission interface the
-traversal calls per widget: solid rect, line, textured quad, glyph run, with
-the current transform + scissor + blend + texture. Widgets expose their
-geometry through it on the Vulkan path. (This is the part that replaces the
-reverted "call gGL anyway" approach.)
+The view tree's widget draw() methods call a small set of funnel primitives.
+The split is at those funnels PLUS the state functions they depend on — a
+backend-dispatch layer. Widgets run unchanged on both backends; on Vulkan the
+funnels dispatch to a Vulkan sink instead of gGL. gGL is never entered on the
+Vulkan path, so the backends stay independent (no shared gGL state, no null-GL
+faults).
+
+Geometry emission points (the funnels): gl_rect_2d family, gl_drop_shadow,
+gl_draw_scaled_rotated_image, the 9-slice batch, LLFontGL::render/drawGlyph,
+LLUIImage inlines. Plus the state surface they read: setSceneBlendType/blendFunc,
+texunit-0 bind/unbind, LLScreenClipRect, the UI matrix stack, color4f, and the
+gUIProgram/gSolidColorProgram bind. On Vulkan these update pending batcher state
+with flush-before-mutate; on GL they behave exactly as today.
+
+LLRender::flush()'s contract (read-state-at-flush, bake-transform-at-emit) is
+the written SPECIFICATION for the Vulkan batcher — reused as a spec, not shared
+as an implementation.
+
+Frame entry: LLViewerWindow::draw()'s GL preamble (gUIProgram.bind, ortho) is
+replaced by the Vulkan frame setup on the Vulkan path; the view-tree traversal
+(LLView::drawChildren) runs unchanged and its funnel calls dispatch to Vulkan.
+
+Rejected seams (from the analysis): flush()-reroute shares gGL mutable state
+(fatal coupling); backend-virtual widget draw() is ~237 override sites;
+a frame-level separate walker duplicates per-widget appearance logic (drift).
+
+Trickiest correctness issue: interleaved texture switches inside a font batch —
+the atlas page re-binds mid-string and flushes first, so the Vulkan batcher must
+split draws at exactly the same points with the same accumulated state.
 
 ## What stays the same
 
