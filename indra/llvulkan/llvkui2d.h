@@ -73,6 +73,10 @@ public:
                       float r, float g, float b, float a);
     // Line strip (outline). n points.
     void lineStrip(const float* xy, int count, float r, float g, float b, float a);
+    // Raw triangles with PER-VERTEX color (e.g. gl_drop_shadow gradients). xy =
+    // 2 floats per vertex (local UI coords, transform applied at emit), rgba =
+    // 4 floats per vertex. count = number of vertices (must be a multiple of 3).
+    void rawTris(const float* xy, const float* rgba, int count);
 
 private:
     void flushRun();
@@ -94,6 +98,16 @@ private:
     VkBuffer       mVBuf = VK_NULL_HANDLE;
     VmaAllocation  mVBufAlloc = VK_NULL_HANDLE;
     VkDeviceSize   mVBufCapacity = 0;
+    // Retired buffers from mid-stream grows; destroyed at end() after the
+    // frame's draws are submitted (they may still be referenced by the
+    // in-flight command buffer, so destruction must not wait-idle mid-pass).
+    std::vector<std::pair<VkBuffer, VmaAllocation>> mRetiredBufs;
+    // Per-frame draw stats (diagnostic).
+    int    mFrameFlushes = 0;
+    size_t mFrameVerts = 0;
+    // Running vertex offset into mVBuf for this frame (appended per flush so
+    // deferred draws don't overwrite each other).
+    size_t mFrameVertOffset = 0;
 };
 
 // The process-wide UI sink. The funnel primitives route here when the Vulkan

@@ -2567,6 +2567,9 @@ void LLGLState::setEnabled(S32 enabled)
     {
         return;
     }
+    // <VulkanStorm> No GL context on the Vulkan UI path: update the tracked
+    // state but skip the raw glEnable/glDisable (null PFN).
+    const bool vk_ui = LLRender::isVulkanUIActive();
     if (enabled == CURRENT_STATE)
     {
         enabled = sStateMap[mState] == GL_TRUE ? ENABLED_STATE : DISABLED_STATE;
@@ -2574,13 +2577,13 @@ void LLGLState::setEnabled(S32 enabled)
     else if (enabled == ENABLED_STATE && sStateMap[mState] != GL_TRUE)
     {
         gGL.flush();
-        glEnable(mState);
+        if (!vk_ui) glEnable(mState);
         sStateMap[mState] = GL_TRUE;
     }
     else if (enabled == DISABLED_STATE && sStateMap[mState] != GL_FALSE)
     {
         gGL.flush();
-        glDisable(mState);
+        if (!vk_ui) glDisable(mState);
         sStateMap[mState] = GL_FALSE;
     }
     mIsEnabled = enabled;
@@ -2609,14 +2612,15 @@ LLGLState::~LLGLState()
         if (mIsEnabled != mWasEnabled)
         {
             gGL.flush();
+            const bool vk_ui = LLRender::isVulkanUIActive(); // <VulkanStorm>
             if (mWasEnabled)
             {
-                glEnable(mState);
+                if (!vk_ui) glEnable(mState);
                 sStateMap[mState] = GL_TRUE;
             }
             else
             {
-                glDisable(mState);
+                if (!vk_ui) glDisable(mState);
                 sStateMap[mState] = GL_FALSE;
             }
         }

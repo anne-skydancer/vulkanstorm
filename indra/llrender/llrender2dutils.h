@@ -43,6 +43,13 @@ class LLUUID;
 
 extern const LLColor4 UI_VERTEX_COLOR;
 
+// <VulkanStorm> Milestone gates (VULKANSTORM_UI_GATE) ------------------------
+// Comma-separated subset of: text, images, media. Applied at the funnel entry
+// points on BOTH backends so each milestone diffs a gated-Vulkan frame against
+// an identically-gated GL frame. Empty (unset) = nothing gated.
+bool ll_ui_gate_active(const char* feature); // "text" | "images" | "media"
+// </VulkanStorm>
+
 // <VulkanStorm> Funnel-dispatch hook -----------------------------------------
 // When the Vulkan UI pipe owns the frame, the 2D funnel primitives in this
 // module route through this hook instead of the immediate-mode GL path, so the
@@ -54,6 +61,17 @@ struct LLUIFunnelHook
     void (*rect)(S32 left, S32 top, S32 right, S32 bottom, const LLColor4& color);
     // Current draw color set via gGL.color4f (the sink needs it for untinted prims).
     void (*setColor)(const LLColor4& color);
+    // Blend-mode change (LLRender::eBlendType as int) -> sink.setBlend.
+    void (*setBlend)(int blend_type);
+    // Scissor (device pixels, GL bottom-left origin as computed by the clip
+    // rects) -> sink.setScissor. w<=0 or h<=0 clears the scissor.
+    void (*setScissor)(S32 x, S32 y, S32 w, S32 h);
+    // Unfilled rect outline (line strip) -> sink.lineStrip.
+    void (*lineRect)(S32 left, S32 top, S32 right, S32 bottom, const LLColor4& color);
+    // 2-point line -> sink.lineStrip.
+    void (*line2d)(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4& color);
+    // Per-vertex-alpha drop-shadow gradient triangles -> sink.rawTris.
+    void (*dropShadow)(S32 left, S32 top, S32 right, S32 bottom, const LLColor4& start_color, S32 lines);
 };
 extern LLUIFunnelHook* g_ui_funnel_hook;
 // </VulkanStorm>

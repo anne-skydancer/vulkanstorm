@@ -37,6 +37,9 @@
 #include "lltexture.h"
 #include "llfasttimer.h"
 
+#include <cstring> // <VulkanStorm> strstr (milestone gates)
+#include <cstdlib> // <VulkanStorm> getenv (milestone gates)
+
 // Project includes
 #include "llrender2dutils.h"
 #include "lluiimage.h"
@@ -49,6 +52,18 @@ const LLColor4 UI_VERTEX_COLOR(1.f, 1.f, 1.f, 1.f);
 
 // <VulkanStorm> Funnel-dispatch hook (see llrender2dutils.h).
 LLUIFunnelHook* g_ui_funnel_hook = nullptr;
+
+// Milestone gates (VULKANSTORM_UI_GATE=text,images,media). Applied on BOTH
+// backends at the funnel entry so gated-Vulkan diffs against gated-GL.
+bool ll_ui_gate_active(const char* feature)
+{
+    static const char* s_gate = getenv("VULKANSTORM_UI_GATE");
+    if (!s_gate || !*s_gate)
+    {
+        return false;
+    }
+    return strstr(s_gate, feature) != nullptr;
+}
 // </VulkanStorm>
 
 //
@@ -121,6 +136,23 @@ void gl_rect_2d_offset_local( S32 left, S32 top, S32 right, S32 bottom, S32 pixe
 
 void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, bool filled )
 {
+    // <VulkanStorm> Route the no-color overload to the sink using the current
+    // tracked UI color (replaces the mColorsp strider read on the GL path).
+    if (g_ui_funnel_hook)
+    {
+        const LLColor4U& cc = LLRender::sVulkanUICurrentColor;
+        LLColor4 col(cc);
+        if (filled && g_ui_funnel_hook->rect)
+        {
+            g_ui_funnel_hook->rect(left, top, right, bottom, col);
+        }
+        else if (!filled && g_ui_funnel_hook->lineRect)
+        {
+            g_ui_funnel_hook->lineRect(left, top, right, bottom, col);
+        }
+        return;
+    }
+    // </VulkanStorm>
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     // Counterclockwise quad will face the viewer
@@ -176,6 +208,15 @@ void gl_rect_2d( const LLRect& rect, const LLColor4& color, bool filled )
 void gl_drop_shadow(S32 left, S32 top, S32 right, S32 bottom, const LLColor4 &start_color, S32 lines)
 {
     stop_glerror();
+
+    // <VulkanStorm> Route the per-vertex-alpha gradient tris to the sink.
+    if (g_ui_funnel_hook && g_ui_funnel_hook->dropShadow)
+    {
+        g_ui_funnel_hook->dropShadow(left, top, right, bottom, start_color, lines);
+        return;
+    }
+    // </VulkanStorm>
+
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     // HACK: Overlap with the rectangle by a single pixel.
@@ -257,6 +298,14 @@ void gl_drop_shadow(S32 left, S32 top, S32 right, S32 bottom, const LLColor4 &st
 
 void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2 )
 {
+    // <VulkanStorm> Route to the sink with the tracked current color.
+    if (g_ui_funnel_hook && g_ui_funnel_hook->line2d)
+    {
+        const LLColor4U& cc = LLRender::sVulkanUICurrentColor;
+        g_ui_funnel_hook->line2d(x1, y1, x2, y2, LLColor4(cc));
+        return;
+    }
+    // </VulkanStorm>
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     gGL.begin(LLRender::LINES);
@@ -267,6 +316,13 @@ void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2 )
 
 void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4 &color )
 {
+    // <VulkanStorm> Route to the sink.
+    if (g_ui_funnel_hook && g_ui_funnel_hook->line2d)
+    {
+        g_ui_funnel_hook->line2d(x1, y1, x2, y2, color);
+        return;
+    }
+    // </VulkanStorm>
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     gGL.color4fv( color.mV );
@@ -375,6 +431,15 @@ void gl_draw_scaled_image_with_border(S32 x, S32 y, S32 border_width, S32 border
 void gl_draw_scaled_image_with_border(S32 x, S32 y, S32 width, S32 height, LLTexture* image, const LLColor4& color, bool solid_color, const LLRectf& uv_outer_rect, const LLRectf& center_rect, bool scale_inner)
 {
     stop_glerror();
+
+    // <VulkanStorm> Milestone gate: images are a no-op when "images" is gated
+    // (applied on BOTH backends so the diff harness compares gated frames).
+    // The Vulkan image funnel (texture cache + texturedQuad) lands in M2.
+    if (ll_ui_gate_active("images"))
+    {
+        return;
+    }
+    // </VulkanStorm>
 
     if (NULL == image)
     {

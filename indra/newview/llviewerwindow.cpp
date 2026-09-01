@@ -2978,7 +2978,14 @@ void LLViewerWindow::draw()
 //#endif
     stop_glerror();
 
-    LLUI::setLineWidth(1.f);
+    // <VulkanStorm> setLineWidth calls glLineWidth; skip it when the Vulkan UI
+    // pipe owns the frame (no GL context). Line width is irrelevant to the
+    // sink's 1px line primitive.
+    if (!LLRender::isVulkanUIActive())
+    {
+        LLUI::setLineWidth(1.f);
+    }
+    // </VulkanStorm>
 
     // Reset any left-over transforms
     gGL.matrixMode(LLRender::MM_MODELVIEW);
@@ -2995,7 +3002,9 @@ void LLViewerWindow::draw()
     // HACK for timecode debugging
     //if (gSavedSettings.getBOOL("DisplayTimecode"))
     static LLCachedControl<bool> displayTimecode(gSavedSettings, "DisplayTimecode");
-    if (displayTimecode)
+    // <VulkanStorm> DisplayTimecode renders text via LLFontGL; gate it off on
+    // the Vulkan path until the font funnel exists (it is also default-off).
+    if (displayTimecode && !LLRender::isVulkanUIActive())
     {
         // draw timecode block
         std::string text;
@@ -3014,7 +3023,13 @@ void LLViewerWindow::draw()
     // Draw all nested UI views.
     // No translation needed, this view is glued to 0,0
 
-    gUIProgram.bind();
+    // <VulkanStorm> gUIProgram.bind() calls glUseProgram; skip on the Vulkan
+    // path. The color4f resets the tracked UI color (sink) instead.
+    if (!LLRender::isVulkanUIActive())
+    {
+        gUIProgram.bind();
+    }
+    // </VulkanStorm>
     gGL.color4f(1, 1, 1, 1);
 
     gGL.pushMatrix();
@@ -3044,12 +3059,20 @@ void LLViewerWindow::draw()
         }
 
         // Draw tool specific overlay on world
-        LLToolMgr::getInstance()->getCurrentTool()->draw();
+        // <VulkanStorm> The tool overlay issues raw GL; gate it off on the
+        // Vulkan path (it is also unreachable at the login screen).
+        if (!LLRender::isVulkanUIActive())
+        {
+            LLToolMgr::getInstance()->getCurrentTool()->draw();
+        }
+        // </VulkanStorm>
 
         // <exodus> Draw HUD stuff.
         bool inMouselook = gAgentCamera.cameraMouselook();
         static LLCachedControl<bool> fsMouselookCombatFeatures(gSavedSettings, "FSMouselookCombatFeatures", true);
-        if (inMouselook && fsMouselookCombatFeatures)
+        // <VulkanStorm> The mouselook HUD block issues raw GL + font renders;
+        // gate it off on the Vulkan path (also unreachable at login).
+        if (inMouselook && fsMouselookCombatFeatures && !LLRender::isVulkanUIActive())
         {
             S32 windowWidth = gViewerWindow->getWorldViewRectScaled().getWidth();
             S32 windowHeight = gViewerWindow->getWorldViewRectScaled().getHeight();
@@ -3144,7 +3167,8 @@ void LLViewerWindow::draw()
 
         // Only show Mouselookinstructions if FSShowMouselookInstruction is true
         static LLCachedControl<bool> fsShowMouselookInstructions(gSavedSettings, "FSShowMouselookInstructions");
-        if( fsShowMouselookInstructions && (gAgentCamera.cameraMouselook() || LLFloaterCamera::inFreeCameraMode()) )
+        // <VulkanStorm> Gate the mouselook instructions (font + GL) on Vulkan.
+        if( fsShowMouselookInstructions && !LLRender::isVulkanUIActive() && (gAgentCamera.cameraMouselook() || LLFloaterCamera::inFreeCameraMode()) )
         {
             drawMouselookInstructions();
             stop_glerror();
@@ -3154,7 +3178,8 @@ void LLViewerWindow::draw()
         // No translation needed, this view is glued to 0,0
         mRootView->draw();
 
-        if (LLView::sDebugRects)
+        // <VulkanStorm> Debug rects draw via GL; default off. Gate on Vulkan.
+        if (LLView::sDebugRects && !LLRender::isVulkanUIActive())
         {
             gToolTipView->drawStickyRect();
         }
@@ -3174,7 +3199,7 @@ void LLViewerWindow::draw()
         }
 
 
-        if( gShowOverlayTitle && !mOverlayTitle.empty() )
+        if( gShowOverlayTitle && !mOverlayTitle.empty() && !LLRender::isVulkanUIActive() )
         {
             // Used for special titles such as "Second Life - Special E3 2003 Beta"
             const S32 DIST_FROM_TOP = 20;
@@ -3191,7 +3216,12 @@ void LLViewerWindow::draw()
     LLUI::popMatrix();
     gGL.popMatrix();
 
-    gUIProgram.unbind();
+    // <VulkanStorm> gUIProgram.unbind() calls glUseProgram(0); skip on Vulkan.
+    if (!LLRender::isVulkanUIActive())
+    {
+        gUIProgram.unbind();
+    }
+    // </VulkanStorm>
 
     LLView::sIsDrawing = false;
 }

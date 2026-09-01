@@ -35,6 +35,8 @@
 #include "llrendertarget.h"
 #include "lltexture.h"
 #include "llshadermgr.h"
+#include "llrender2dutils.h" // <VulkanStorm> g_ui_funnel_hook
+#include "llerror.h"         // <VulkanStorm> LLError::LLStacktrace (missed-funnel guard)
 #include "hbxxh.h"
 #include "glm/gtc/type_ptr.hpp"
 
@@ -71,6 +73,10 @@ bool LLRender::sGLCoreProfile = false;
 bool LLRender::sNsightDebugSupport = false;
 LLVector2 LLRender::sUIGLScaleFactor = LLVector2(1.f, 1.f);
 bool LLRender::sClassicMode = false;
+// <VulkanStorm> Phase 3c/M1
+bool LLRender::sVulkanUIActive = false;
+LLColor4U LLRender::sVulkanUICurrentColor(255, 255, 255, 255);
+// </VulkanStorm>
 
 struct LLVBCache
 {
@@ -1406,6 +1412,16 @@ void LLRender::setColorMask(bool writeColorR, bool writeColorG, bool writeColorB
 
 void LLRender::setSceneBlendType(eBlendType type)
 {
+    // <VulkanStorm> Route the blend change to the sink; skip the GL call.
+    if (sVulkanUIActive)
+    {
+        if (g_ui_funnel_hook && g_ui_funnel_hook->setBlend)
+        {
+            g_ui_funnel_hook->setBlend((int)type);
+        }
+        return;
+    }
+    // </VulkanStorm>
     switch (type)
     {
         case BT_ALPHA:
@@ -1811,6 +1827,17 @@ void LLRender::resetStriders(S32 count)
 
 void LLRender::vertex3f(const GLfloat& x, const GLfloat& y, const GLfloat& z)
 {
+    // <VulkanStorm> No immediate-mode geometry is permitted while the Vulkan UI
+    // pipe owns the frame: the striders are invalid (mBuffer is null). Any path
+    // reaching here is a missed funnel. Log a stack trace to identify the caller
+    // before the fatal error.
+    if (sVulkanUIActive)
+    {
+        LL_WARNS("Vulkan") << "Missed funnel at vertex3f. Stack:" << LLError::LLStacktrace() << LL_ENDL;
+        LL_ERRS() << "Vulkan UI active: immediate vertex3f reached (missed funnel)" << LL_ENDL;
+        return;
+    }
+    // </VulkanStorm>
     //the range of mVerticesp, mColorsp and mTexcoordsp is [0, 4095]
     if (mCount > 2048)
     { //break when buffer gets reasonably full to keep GL command buffers happy and avoid overflow below
@@ -1893,6 +1920,15 @@ void LLRender::vertexBatchPreTransformed(LLVector4a* verts, LLVector2* uvs, S32 
 
 void LLRender::vertexBatchPreTransformed(LLVector4a* verts, LLVector2* uvs, LLColor4U* colors, S32 vert_count)
 {
+    // <VulkanStorm> Missed-funnel guard (see vertex3f). Fonts/images must route
+    // to the sink's batch primitive before reaching here on the Vulkan path.
+    if (sVulkanUIActive)
+    {
+        LL_WARNS("Vulkan") << "Missed funnel at vertexBatchPreTransformed. Stack:" << LLError::LLStacktrace() << LL_ENDL;
+        LL_ERRS() << "Vulkan UI active: vertexBatchPreTransformed reached (missed funnel)" << LL_ENDL;
+        return;
+    }
+    // </VulkanStorm>
     if (mCount + vert_count > 4094)
     {
         //  LL_WARNS() << "GL immediate mode overflow.  Some geometry not drawn." << LL_ENDL;
@@ -1953,6 +1989,14 @@ void LLRender::texCoord2fv(const GLfloat* tc)
 
 void LLRender::color4ub(const GLubyte& r, const GLubyte& g, const GLubyte& b, const GLubyte& a)
 {
+    // <VulkanStorm> On the Vulkan UI path the color strider is invalid; track
+    // the color for the sink instead. All color* variants funnel through here.
+    if (sVulkanUIActive)
+    {
+        sVulkanUICurrentColor = LLColor4U(r, g, b, a);
+        return;
+    }
+    // </VulkanStorm>
     if (!LLGLSLShader::sCurBoundShaderPtr || LLGLSLShader::sCurBoundShaderPtr->mAttributeMask & LLVertexBuffer::MAP_COLOR)
     {
         mColorsp[mCount] = LLColor4U(r,g,b,a);

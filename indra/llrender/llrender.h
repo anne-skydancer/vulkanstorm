@@ -458,6 +458,21 @@ public:
     void setColorMask(bool writeColorR, bool writeColorG, bool writeColorB, bool writeAlpha);
     void setSceneBlendType(eBlendType type);
 
+    // <VulkanStorm> Phase 3c/M1: when the Vulkan UI pipe owns the frame, the
+    // 2D funnel primitives route to the LLVKUI2D sink and LLRender's immediate
+    // striders (mVerticesp/mColorsp/...) are INVALID (gGL.init was skipped, so
+    // mBuffer is null). This flag diverts color + blend state changes to the
+    // sink instead of touching GL, and a fail-fast guard catches any immediate
+    // vertex emission that would dereference the null striders.
+    static void setVulkanUIActive(bool active) { sVulkanUIActive = active; }
+    static bool isVulkanUIActive() { return sVulkanUIActive; }
+    // Current UI draw color tracked while the Vulkan pipe is active (replaces
+    // the mColorsp strider). Read by the no-color gl_rect_2d funnel.
+    static LLColor4U sVulkanUICurrentColor;
+    static void setVulkanUICurrentColor(const LLColor4U& c) { sVulkanUICurrentColor = c; }
+    static bool sVulkanUIActive;
+    // </VulkanStorm>
+
     // applies blend func to both color and alpha
     void blendFunc(eBlendFactor sfactor, eBlendFactor dfactor);
     // applies separate blend functions to color and alpha

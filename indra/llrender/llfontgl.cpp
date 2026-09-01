@@ -158,6 +158,18 @@ S32 LLFontGL::render(const LLWString &wstr, S32 begin_offset, F32 x, F32 y, cons
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_UI;
 
+    // <VulkanStorm> Milestone gate: text is a no-op when "text" is gated
+    // (applied on BOTH backends). Returning the full length keeps the advance
+    // contract so callers don't loop; no glyph/texture/GL state is touched.
+    // The Vulkan font funnel (atlas cache + glyph quads) lands in M3.
+    extern bool ll_ui_gate_active(const char* feature);
+    if (ll_ui_gate_active("text"))
+    {
+        if (right_x) { *right_x = x; }
+        return static_cast<S32>(wstr.length()) - begin_offset;
+    }
+    // </VulkanStorm>
+
     if(!sDisplayFont) //do not display texts
     {
         return static_cast<S32>(wstr.length());

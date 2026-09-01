@@ -836,6 +836,16 @@ LLPluginClassMedia* LLMediaCtrl::getMediaPlugin()
 //
 void LLMediaCtrl::draw()
 {
+    // <VulkanStorm> Milestone gate: the media surface is a textured quad + a
+    // per-frame dynamic-texture upload; gate it off when "media" is gated
+    // (applied on BOTH backends). The Vulkan media path lands in M4.
+    extern bool ll_ui_gate_active(const char* feature);
+    if (ll_ui_gate_active("media"))
+    {
+        return;
+    }
+    // </VulkanStorm>
+
     F32 alpha = getDrawContext().mAlpha;
 
     if ( gRestoreGL == 1 || mUpdateScrolls)

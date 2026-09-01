@@ -350,7 +350,22 @@ void LLVKSession::renderFrame()
         VkCommandBuffer cmd = s_context->begin2DFrame(kClearR, kClearG, kClearB, kClearA);
         if (cmd != VK_NULL_HANDLE)
         {
-            drawTestRect(cmd);
+            // <VulkanStorm> Scene 5: draw the known red rect THROUGH the LLVKUI2D
+            // sink (not drawTestRect) to isolate sink-vs-harness in the SAME
+            // begin/end2DFrame path. If this renders, the sink is fine and the
+            // M1 bug is in beginUIFrame/vulkan_ui_frame; if not, the sink's
+            // flushRun is broken.
+            if (sceneIndex() == 5)
+            {
+                LLVKUI2DSink::get().begin(s_context, cmd);
+                LLVKUI2DSink::get().rect(200.f, 150.f, 520.f, 390.f, 1.f, 0.f, 0.f, 1.f);
+                LLVKUI2DSink::get().end();
+            }
+            else
+            {
+                drawTestRect(cmd);
+            }
+            // </VulkanStorm>
             s_context->end2DFrame();
         }
         return;
@@ -384,7 +399,11 @@ void LLVKSession::endUIFrame()
         return;
     }
     LLVKUI2DSink::get().end();
-    s_context->end2DFrame();
+    bool presented = s_context->end2DFrame();
+    // <VulkanStorm> M1 diagnostic: confirm the UI frame presents with content.
+    static bool s_dbg = getenv("VULKANSTORM_UI_DEBUG") != nullptr;
+    if (s_dbg) { static int s_n = 0; if ((s_n++ % 120) == 0) { LL_INFOS("Vulkan") << "endUIFrame: presented=" << (presented ? "yes" : "NO") << LL_ENDL; } }
+    // </VulkanStorm>
 }
 
 void LLVKSession::resizeIfNeeded(LLWindow* window)

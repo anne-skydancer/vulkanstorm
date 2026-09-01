@@ -29,6 +29,9 @@
 #include "llfontgl.h"
 #include "llui.h"
 
+#include "llrender.h"          // <VulkanStorm> LLRender::isVulkanUIActive
+#include "llrender2dutils.h"   // <VulkanStorm> g_ui_funnel_hook
+
 /*static*/ std::stack<LLRect> LLScreenClipRect::sClipRectStack;
 
 
@@ -80,7 +83,19 @@ void LLScreenClipRect::popClipRect()
 //static
 void LLScreenClipRect::updateScissorRegion()
 {
-    if (sClipRectStack.empty()) return;
+    // <VulkanStorm> When the clip stack empties, the scissor must be CLEARED on
+    // the Vulkan path (otherwise the last scissor sticks and clips all later
+    // drawing). GL handles this via the mScissorState LLGLState dtor disabling
+    // GL_SCISSOR_TEST; the sink needs an explicit clearScissor.
+    if (sClipRectStack.empty())
+    {
+        if (LLRender::isVulkanUIActive() && g_ui_funnel_hook && g_ui_funnel_hook->setScissor)
+        {
+            g_ui_funnel_hook->setScissor(0, 0, 0, 0); // hook clears on empty extent
+        }
+        return;
+    }
+    // </VulkanStorm>
 
     // finish any deferred calls in the old clipping region
     gGL.flush();
@@ -92,6 +107,17 @@ void LLScreenClipRect::updateScissorRegion()
     y = llfloor(rect.mBottom * LLUI::getScaleFactor().mV[VY]);
     w = llmax(0, llceil(rect.getWidth() * LLUI::getScaleFactor().mV[VX])) + 1;
     h = llmax(0, llceil(rect.getHeight() * LLUI::getScaleFactor().mV[VY])) + 1;
+    // <VulkanStorm> Route the scissor to the sink (hook does the bottom-left ->
+    // top-left conversion); skip glScissor when the Vulkan UI pipe is active.
+    if (LLRender::isVulkanUIActive())
+    {
+        if (g_ui_funnel_hook && g_ui_funnel_hook->setScissor)
+        {
+            g_ui_funnel_hook->setScissor(x, y, w, h);
+        }
+        return;
+    }
+    // </VulkanStorm>
     glScissor( x,y,w,h );
     stop_glerror();
 }

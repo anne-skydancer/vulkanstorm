@@ -165,45 +165,182 @@ void getProfileStatsContext(boost::json::object& stats);
 std::string getProfileStatsFilename();
 
 #if LL_WINDOWS
-// <VulkanStorm> Funnel-dispatch hook implementation (Phase 3b v2) ------------
+// <VulkanStorm> Funnel-dispatch hook implementation (Phase 3b v2 / 3c M1) ----
 // Routes the 2D funnel primitives (gl_rect_2d & friends) into the LLVKUI2D
 // sink while the Vulkan backend owns the frame. Installed around the UI draw
-// by vulkan_ui_frame(); cleared afterward. Reads the current GL UI transform
-// (offset + scale + the GL scale factor) so emitted coords match what the GL
-// matrix would have produced.
-static void vk_funnel_rect(S32 left, S32 top, S32 right, S32 bottom, const LLColor4& color)
+// by vulkan_ui_frame(); cleared afterward.
+//
+// Transform contract: LLRender::vertex3f bakes (in + mUIOffset) * mUIScale at
+// emit. The sink's rect() applies the same (left + offX) * scaleX, so the hook
+// passes the CURRENT UI stacks RAW (getUITranslation/getUIScale). Do NOT fold
+// in sUIGLScaleFactor here: the funnel call sites that need it (e.g.
+// gl_rect_2d_offset_local) have already applied it to the coords they pass.
+static void vk_push_ui_transform()
 {
-    LLVKUI2D& sink = LLVKUI2DSink::get();
     const LLVector3 off = gGL.getUITranslation();
     const LLVector3 sc = gGL.getUIScale();
-    const F32 gsx = LLRender::sUIGLScaleFactor.mV[VX];
-    const F32 gsy = LLRender::sUIGLScaleFactor.mV[VY];
-    // Combined: window = (ui * scale + offset) * glscale  ==  ui*(scale*glscale) + offset*glscale
-    sink.setTransform(off.mV[VX] * gsx, off.mV[VY] * gsy, sc.mV[VX] * gsx, sc.mV[VY] * gsy);
-    sink.rect((F32)left, (F32)top, (F32)right, (F32)bottom,
+    LLVKUI2DSink::get().setTransform(off.mV[VX], off.mV[VY], sc.mV[VX], sc.mV[VY]);
+}
+static void vk_funnel_rect(S32 left, S32 top, S32 right, S32 bottom, const LLColor4& color)
+{
+    vk_push_ui_transform();
+    LLVKUI2DSink::get().rect((F32)left, (F32)top, (F32)right, (F32)bottom,
+              color.mV[VRED], color.mV[VGREEN], color.mV[VBLUE], color.mV[VALPHA]);
+}
+static void vk_funnel_line_rect(S32 left, S32 top, S32 right, S32 bottom, const LLColor4& color)
+{
+    vk_push_ui_transform();
+    // Match gl_rect_2d's outline winding: inset top/right by one pixel, closed strip.
+    const F32 l = (F32)left, t = (F32)(top - 1), r = (F32)(right - 1), b = (F32)bottom;
+    const float xy[10] = { l, t,  l, b,  r, b,  r, t,  l, t };
+    LLVKUI2DSink::get().lineStrip(xy, 5,
+              color.mV[VRED], color.mV[VGREEN], color.mV[VBLUE], color.mV[VALPHA]);
+}
+static void vk_funnel_line2d(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4& color)
+{
+    vk_push_ui_transform();
+    const float xy[4] = { (F32)x1, (F32)y1, (F32)x2, (F32)y2 };
+    LLVKUI2DSink::get().lineStrip(xy, 2,
               color.mV[VRED], color.mV[VGREEN], color.mV[VBLUE], color.mV[VALPHA]);
 }
 static void vk_funnel_set_color(const LLColor4& color)
 {
-    // The sink carries color per-primitive; untinted prims use the tracked color.
-    // Wired in a later milestone when the no-color gl_rect_2d overload is routed.
+    // Color is tracked in LLRender::sVulkanUICurrentColor (via color4ub); the
+    // funnels read it directly. Nothing to push to the sink here.
     (void)color;
 }
-static LLUIFunnelHook s_vk_funnel_hook = { &vk_funnel_rect, &vk_funnel_set_color };
+static void vk_funnel_set_blend(int blend_type)
+{
+    // Map LLRender::eBlendType (int) onto the sink's LLVKBlend subset.
+    switch ((LLRender::eBlendType)blend_type)
+    {
+    case LLRender::BT_ALPHA:          LLVKUI2DSink::get().setBlend(LLVKBlend::Alpha); break;
+    case LLRender::BT_REPLACE:        LLVKUI2DSink::get().setBlend(LLVKBlend::Replace); break;
+    case LLRender::BT_ADD_WITH_ALPHA: LLVKUI2DSink::get().setBlend(LLVKBlend::AddWithAlpha); break;
+    case LLRender::BT_ADD:            LLVKUI2DSink::get().setBlend(LLVKBlend::Add); break;
+    default:
+        LL_WARNS("Vulkan") << "UI funnel: unsupported blend type " << blend_type << " (using Alpha)" << LL_ENDL;
+        LLVKUI2DSink::get().setBlend(LLVKBlend::Alpha);
+        break;
+    }
+}
+static void vk_funnel_set_scissor(S32 x, S32 y, S32 w, S32 h)
+{
+    // Incoming rect is in GL bottom-left-origin device pixels (as the clip
+    // rects compute it). Convert to the sink's top-left-origin device pixels.
+    if (w <= 0 || h <= 0)
+    {
+        LLVKUI2DSink::get().clearScissor();
+        return;
+    }
+    LLCoordWindow ws;
+    if (!gViewerWindow || !gViewerWindow->getWindow() || !gViewerWindow->getWindow()->getSize(&ws) || ws.mY <= 0)
+    {
+        LLVKUI2DSink::get().clearScissor();
+        return;
+    }
+    const S32 device_h = ws.mY;
+    const S32 vk_y = device_h - (y + h);
+    LLVKUI2DSink::get().setScissor(x, vk_y, w, h);
+}
 
-// Run one Vulkan UI frame: begin the 2D pass + sink, run the UI funnel emitters
-// through the hook, flush + present. Returns false when the frame was skipped.
+// Drop-shadow gradient: reproduce gl_drop_shadow's geometry with per-vertex
+// alpha. Same four quads (right edge, bottom edge, two corners), start_color at
+// the panel edge fading to alpha 0 at the outer edge.
+static void vk_funnel_drop_shadow(S32 left, S32 top, S32 right, S32 bottom, const LLColor4& start_color, S32 lines)
+{
+    vk_push_ui_transform();
+    right--;
+    bottom++;
+    lines++;
+
+    const float sr = start_color.mV[VRED], sg = start_color.mV[VGREEN],
+                sb = start_color.mV[VBLUE], sa = start_color.mV[VALPHA];
+    const float sc[4] = { sr, sg, sb, sa };   // start (opaque) color
+    const float ec[4] = { sr, sg, sb, 0.f };  // end (transparent) color
+
+    // Interleaved per-vertex: xy pairs + rgba quads, matching gl_drop_shadow order.
+    float xy[64];
+    float rgba[128];
+    int nv = 0;
+    auto tri = [&](float x0, float y0, const float* c0,
+                   float x1, float y1, const float* c1,
+                   float x2, float y2, const float* c2)
+    {
+        const float xs[3] = { x0, x1, x2 };
+        const float ys[3] = { y0, y1, y2 };
+        const float* cs[3] = { c0, c1, c2 };
+        for (int k = 0; k < 3; ++k)
+        {
+            xy[nv * 2] = xs[k]; xy[nv * 2 + 1] = ys[k];
+            rgba[nv * 4] = cs[k][0]; rgba[nv * 4 + 1] = cs[k][1];
+            rgba[nv * 4 + 2] = cs[k][2]; rgba[nv * 4 + 3] = cs[k][3];
+            ++nv;
+        }
+    };
+
+    const float L = (F32)left, T = (F32)top, R = (F32)right, B = (F32)bottom, n = (F32)lines;
+    // Right edge
+    tri(R, T - n, sc,  R, B, sc,  R + n, B, ec);
+    tri(R, T - n, sc,  R + n, B, ec,  R + n, T - n, ec);
+    // Bottom edge
+    tri(R, B, sc,  L + n, B, sc,  L + n, B - n, ec);
+    tri(R, B, sc,  L + n, B - n, ec,  R, B - n, ec);
+    // Bottom-left corner
+    tri(L + n, B, sc,  L, B, ec,  L + 1, B - n + 1, ec);
+    tri(L + n, B, sc,  L + 1, B - n + 1, ec,  L + n, B - n, ec);
+    // Bottom-right corner
+    tri(R, B, sc,  R, B - n, ec,  R + n - 1, B - n + 1, ec);
+    tri(R, B, sc,  R + n - 1, B - n + 1, ec,  R + n, B - n, ec);
+
+    LLVKUI2DSink::get().rawTris(xy, rgba, nv);
+}
+static LLUIFunnelHook s_vk_funnel_hook = {
+    &vk_funnel_rect,
+    &vk_funnel_set_color,
+    &vk_funnel_set_blend,
+    &vk_funnel_set_scissor,
+    &vk_funnel_line_rect,
+    &vk_funnel_line2d,
+    &vk_funnel_drop_shadow
+};
+
+// Run one Vulkan UI frame: begin the 2D pass + sink, run the real widget tree
+// (mRootView->draw) through the funnel hook, flush + present. Returns false
+// when the frame was skipped. Text/images/media are force-gated (M1) via
+// VULKANSTORM_UI_GATE until their funnels land (M2/M3/M4).
 static bool vulkan_ui_frame()
 {
     if (!LLVKSession::beginUIFrame())
     {
         return false;
     }
+    // <VulkanStorm> M1 diagnostic: confirm the UI frame runs each frame.
+    static int s_frame = 0;
+    if (getenv("VULKANSTORM_UI_DEBUG") && (s_frame++ % 120) == 0)
+    {
+        LL_INFOS("Vulkan") << "vulkan_ui_frame running (frame " << s_frame << ")" << LL_ENDL;
+    }
+    // </VulkanStorm>
     g_ui_funnel_hook = &s_vk_funnel_hook;
-    // Milestone 1 smoke test: emit a known solid panel through the real sink.
-    // (The live widget tree is wired once fonts/images are funneled.)
-    LLVKUI2DSink::get().rect(200.f, 150.f, 520.f, 390.f, 1.f, 0.f, 0.f, 1.f);
+    LLRender::setVulkanUIActive(true);
+    if (gViewerWindow)
+    {
+        // Draws the live 2D widget tree; rect/line/scissor funnels route to the
+        // sink, gated primitives no-op, and the raw-GL sections are gated off.
+        gViewerWindow->draw();
+    }
+    LLRender::setVulkanUIActive(false);
     g_ui_funnel_hook = nullptr;
+    // <VulkanStorm> M1 diagnostic: emit a known red rect DIRECTLY to the sink
+    // (bypassing the widget tree) to isolate whether the sink renders at all in
+    // the UI-frame path. Set VULKANSTORM_UI_DEBUG=direct.
+    static bool s_direct = getenv("VULKANSTORM_UI_DEBUG") && std::string(getenv("VULKANSTORM_UI_DEBUG")) == "direct";
+    if (s_direct)
+    {
+        LLVKUI2DSink::get().rect(200.f, 150.f, 520.f, 390.f, 1.f, 0.f, 0.f, 1.f);
+    }
+    // </VulkanStorm>
     LLVKSession::endUIFrame();
     return true;
 }
@@ -233,6 +370,7 @@ static void vulkan_capture_tick()
     LLFile::close(f);
     LL_INFOS("Vulkan") << "Captured Vulkan frame: " << w << "x" << h << " -> " << path << LL_ENDL;
 }
+#endif // LL_WINDOWS (funnel hook + vulkan_capture_tick block)
 
 // GL reference capture for the diff harness: render the SAME known primitive
 // (teal clear + a solid red rect at (200,150)-(520,390)) into an OFFSCREEN
@@ -241,7 +379,10 @@ static void vulkan_capture_tick()
 static void gl_reference_capture_tick()
 {
 #if LL_WINDOWS
-    static const bool s_want = (getenv("VULKANSTORM_CAPTURE_GL") != nullptr);
+    // Scene-screenshot mode only. When no VULKANSTORM_SCENE is set the
+    // real-tree capture (gl_real_tree_capture_tick) owns gl_reference_capture.rgba.
+    static const bool s_want = (getenv("VULKANSTORM_CAPTURE_GL") != nullptr) &&
+                               (getenv("VULKANSTORM_SCENE") != nullptr);
     if (!s_want) return;
     static S32 s_countdown = -1;
     if (s_countdown < 0) s_countdown = 90; // ~1.5s settle (GL context + window sized)
@@ -414,6 +555,54 @@ static void gl_reference_capture_tick()
 #endif
 }
 // </VulkanStorm>
+
+#if LL_WINDOWS
+// <VulkanStorm> Real-tree GL reference capture (Phase 3c/M1 diff) ------------
+// When VULKANSTORM_CAPTURE_GL is set AND no VULKANSTORM_SCENE is selected, the
+// GL run captures the ACTUAL gated UI tree (same VULKANSTORM_UI_GATE as the
+// Vulkan run) by reading the back buffer right after the login draw(). The
+// readback is bottom-up; it is written BOTTOM-ORIGIN to match the Vulkan
+// capture's convention, so the two files diff directly. One-shot after settle.
+static void gl_real_tree_capture_tick()
+{
+    static const bool s_want = (getenv("VULKANSTORM_CAPTURE_GL") != nullptr) &&
+                               (getenv("VULKANSTORM_SCENE") == nullptr);
+    if (!s_want) return;
+    static S32 s_countdown = -1;
+    if (s_countdown < 0) s_countdown = 90; // ~1.5s settle, matches Vulkan capture
+    if (--s_countdown != 0) return;
+    s_countdown = S32_MAX; // one-shot
+
+    LLCoordWindow ws;
+    if (!gViewerWindow || !gViewerWindow->getWindow() || !gViewerWindow->getWindow()->getSize(&ws)) return;
+    const S32 w = ws.mX, h = ws.mY;
+    if (w <= 0 || h <= 0) return;
+
+    std::vector<uint8_t> rgba((size_t)w * h * 4);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0); // back buffer
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data()); // bottom-origin
+
+    // glReadPixels is bottom-up; flip to top-down to match the Vulkan capture's
+    // convention (the Vulkan swapchain readback writes top-down, as does the
+    // scene-reference capture above), so the files diff directly.
+    std::vector<uint8_t> flipped((size_t)w * h * 4);
+    const size_t row = (size_t)w * 4;
+    for (S32 y = 0; y < h; ++y)
+    {
+        memcpy(flipped.data() + (size_t)(h - 1 - y) * row, rgba.data() + (size_t)y * row, row);
+    }
+
+    std::string path = gDirUtilp->getExpandedFilename(LL_PATH_LOGS, "gl_reference_capture.rgba");
+    LLFILE* f = LLFile::fopen(path, "wb");
+    if (!f) return;
+    uint32_t hdr[2] = { (uint32_t)w, (uint32_t)h };
+    fwrite(hdr, 1, sizeof(hdr), f);
+    fwrite(flipped.data(), 1, flipped.size(), f); // top-down, matching the Vulkan capture
+    LLFile::close(f);
+    LL_INFOS("Vulkan") << "Captured GL real-tree reference frame: " << w << "x" << h << " -> " << path << LL_ENDL;
+}
+// </VulkanStorm>
 #endif
 
 void display_startup()
@@ -491,6 +680,14 @@ void display_startup()
     if (gViewerWindow)
     gViewerWindow->draw();
     gGL.flush();
+
+#if LL_WINDOWS
+    // <VulkanStorm> Phase 3c/M1: capture the real gated UI tree (back buffer)
+    // for the byte-exact diff against the Vulkan login frame. No-op unless
+    // VULKANSTORM_CAPTURE_GL is set with no VULKANSTORM_SCENE.
+    gl_real_tree_capture_tick();
+    // </VulkanStorm>
+#endif
 
     LLVertexBuffer::unbind();
 
