@@ -54,6 +54,13 @@
 #include "pipeline.h"
 #include "llappviewer.h"
 #include "llface.h"
+// <VulkanStorm> M2: stage UI texture pixels into the Vulkan cache at the point
+// the padded raw image exists (scheduleCreateTexture, after preCreateTexture).
+#include "llvksession.h"
+#include "llvkuicache.h"
+#include <string>
+#include <cstdlib>
+// </VulkanStorm>
 #include "llviewercamera.h"
 #include "lltextureentry.h"
 #include "lltexturemanagerbridge.h"
@@ -1665,6 +1672,53 @@ void LLViewerFetchedTexture::postCreateTexture()
     mNeedsCreateTexture = false;
 }
 
+// <VulkanStorm> M2: stage a texture's pixels into the Vulkan UI cache. Called
+// from scheduleCreateTexture AFTER preCreateTexture() has power-of-2 padded the
+// raw in place — the padded image is the GL texture's texel space and the frame
+// the UI UV clip region references. CPU-only (storePixels); the GPU upload
+// happens lazily at bind time. Keyed on BOOST_UI so only UI textures are staged.
+static void vk_stage_texture(LLViewerFetchedTexture* tex)
+{
+    // <VulkanStorm> Stage UI texture pixels regardless of whether the Vulkan
+    // session is up yet — textures load/create/free their CPU pixels during
+    // startup, possibly BEFORE LLVKSession::start(). storePixels is CPU-only;
+    // the GPU upload happens at bind time (when the session is running).
+    // </VulkanStorm>
+    if (!tex) return;
+    if (tex->getBoostLevel() != LLGLTexture::BOOST_UI) return;
+    const LLImageRaw* raw = tex->getRawImage();
+    if (!raw) return;
+    const uint32_t full_w = (uint32_t)tex->getFullWidth();
+    const uint32_t full_h = (uint32_t)tex->getFullHeight();
+    const uint32_t raw_w = (uint32_t)raw->getWidth();
+    const uint32_t raw_h = (uint32_t)raw->getHeight();
+    const S32 comp = raw->getComponents();
+    const U8* data = raw->getData();
+    if (full_w == 0 || full_h == 0 || raw_w == 0 || raw_h == 0 || !data || comp < 1 || comp > 4) return;
+    if (raw_w != full_w || raw_h != full_h) return; // not yet at the padded dims
+
+    std::vector<uint8_t> out((size_t)full_w * full_h * 4, 0);
+    for (uint32_t y = 0; y < raw_h; ++y)
+    {
+        for (uint32_t x = 0; x < raw_w; ++x)
+        {
+            const size_t s = ((size_t)y * raw_w + x) * comp;
+            const size_t d = ((size_t)y * full_w + x) * 4;
+            uint8_t r, g, b, a;
+            switch (comp)
+            {
+            case 1: r = g = b = data[s]; a = 255; break;
+            case 2: r = g = b = data[s + 0]; a = data[s + 1]; break;
+            case 3: r = data[s + 0]; g = data[s + 1]; b = data[s + 2]; a = 255; break;
+            default: r = data[s + 0]; g = data[s + 1]; b = data[s + 2]; a = data[s + 3]; break;
+            }
+            out[d + 0] = r; out[d + 1] = g; out[d + 2] = b; out[d + 3] = a;
+        }
+    }
+    LLVKUITexture::get().storePixels(tex, out.data(), full_w, full_h);
+}
+// </VulkanStorm>
+
 void LLViewerFetchedTexture::scheduleCreateTexture()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
@@ -1674,6 +1728,11 @@ void LLViewerFetchedTexture::scheduleCreateTexture()
         mNeedsCreateTexture = true;
         if (preCreateTexture())
         {
+            // <VulkanStorm> The raw is now power-of-2 padded; stage it for the
+            // Vulkan UI cache before the CPU pixels are freed (postCreateTexture
+            // -> destroyRawImage).
+            vk_stage_texture(this);
+            // </VulkanStorm>
 #if LL_IMAGEGL_THREAD_CHECK
             //grab a copy of the raw image data to make sure it isn't modified pending texture creation
             U8* data = mRawImage->getData();
