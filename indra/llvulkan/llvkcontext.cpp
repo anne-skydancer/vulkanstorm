@@ -558,8 +558,11 @@ namespace
 
 bool LLVKContext::create2DPipeline(std::string& error)
 {
-    // (Re)create the graphics pipeline against the current swapchain format.
-    if (mPipeline2D != VK_NULL_HANDLE) { vkDestroyPipeline(mDevice, mPipeline2D, nullptr); mPipeline2D = VK_NULL_HANDLE; }
+    // (Re)create the graphics pipelines against the current swapchain format.
+    for (int i = 0; i < (int)Blend2D::Count; ++i)
+    {
+        if (mPipeline2D[i] != VK_NULL_HANDLE) { vkDestroyPipeline(mDevice, mPipeline2D[i], nullptr); mPipeline2D[i] = VK_NULL_HANDLE; }
+    }
 
     // Shader modules are loaded once (not per swapchain recreate).
     if (mShader2DVert == VK_NULL_HANDLE)
@@ -681,23 +684,6 @@ bool LLVKContext::create2DPipeline(std::string& error)
     ds.depthTestEnable = VK_FALSE;
     ds.depthWriteEnable = VK_FALSE;
 
-    // Match GL's BT_ALPHA: glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-    // applies the SAME factors to both color and alpha. Using SRC_ALPHA for the
-    // alpha source factor (not ONE) reproduces GL's alpha accumulation exactly.
-    VkPipelineColorBlendAttachmentState blend_att{};
-    blend_att.blendEnable = VK_TRUE;
-    blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    blend_att.colorBlendOp = VK_BLEND_OP_ADD;
-    blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    blend_att.alphaBlendOp = VK_BLEND_OP_ADD;
-    blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    VkPipelineColorBlendStateCreateInfo cb{};
-    cb.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    cb.attachmentCount = 1;
-    cb.pAttachments = &blend_att;
-
     VkDynamicState dyn_states[2] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
     VkPipelineDynamicStateCreateInfo dyn{};
     dyn.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -710,21 +696,68 @@ bool LLVKContext::create2DPipeline(std::string& error)
     rendering.colorAttachmentCount = 1;
     rendering.pColorAttachmentFormats = &mSwapchainFormat;
 
-    VkGraphicsPipelineCreateInfo gp{};
-    gp.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    gp.pNext = &rendering;
-    gp.stageCount = 2;
-    gp.pStages = stages;
-    gp.pVertexInputState = &vi;
-    gp.pInputAssemblyState = &ia;
-    gp.pViewportState = &vp;
-    gp.pRasterizationState = &rs;
-    gp.pMultisampleState = &ms;
-    gp.pDepthStencilState = &ds;
-    gp.pColorBlendState = &cb;
-    gp.pDynamicState = &dyn;
-    gp.layout = mPipelineLayout2D;
-    LL_VK_CHECK(vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &gp, nullptr, &mPipeline2D), error, "vkCreateGraphicsPipelines (2D) failed");
+    // One pipeline per blend mode. Factors match GL exactly (see
+    // LLRender::setSceneBlendType): BT_ALPHA = SRC_ALPHA/ONE_MINUS_SRC_ALPHA
+    // (both color+alpha), BT_REPLACE = ONE/ZERO (blend off), BT_ADD_WITH_ALPHA
+    // = SRC_ALPHA/ONE, BT_ADD = ONE/ONE.
+    for (int b = 0; b < (int)Blend2D::Count; ++b)
+    {
+        VkPipelineColorBlendAttachmentState blend_att{};
+        blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        Blend2D mode = (Blend2D)b;
+        if (mode == Blend2D::Replace)
+        {
+            blend_att.blendEnable = VK_FALSE;
+        }
+        else
+        {
+            blend_att.blendEnable = VK_TRUE;
+            blend_att.colorBlendOp = VK_BLEND_OP_ADD;
+            blend_att.alphaBlendOp = VK_BLEND_OP_ADD;
+            switch (mode)
+            {
+            case Blend2D::Alpha:
+                blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+                blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+                blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+                blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+                break;
+            case Blend2D::AddWithAlpha:
+                blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+                blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+                blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                break;
+            case Blend2D::Add:
+                blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                break;
+            default: break;
+            }
+        }
+        VkPipelineColorBlendStateCreateInfo cb{};
+        cb.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        cb.attachmentCount = 1;
+        cb.pAttachments = &blend_att;
+
+        VkGraphicsPipelineCreateInfo gp{};
+        gp.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        gp.pNext = &rendering;
+        gp.stageCount = 2;
+        gp.pStages = stages;
+        gp.pVertexInputState = &vi;
+        gp.pInputAssemblyState = &ia;
+        gp.pViewportState = &vp;
+        gp.pRasterizationState = &rs;
+        gp.pMultisampleState = &ms;
+        gp.pDepthStencilState = &ds;
+        gp.pColorBlendState = &cb;
+        gp.pDynamicState = &dyn;
+        gp.layout = mPipelineLayout2D;
+        LL_VK_CHECK(vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &gp, nullptr, &mPipeline2D[b]), error, "vkCreateGraphicsPipelines (2D) failed");
+    }
 
     // 1x1 white texture bound for solid (untextured) quads so the fragment
     // shader's texture() returns white and the output is just the vertex color.
@@ -747,7 +780,10 @@ void LLVKContext::destroy2DPipeline()
     if (mDescPool2D != VK_NULL_HANDLE) { vkDestroyDescriptorPool(mDevice, mDescPool2D, nullptr); mDescPool2D = VK_NULL_HANDLE; }
     if (mDescSetLayout2D != VK_NULL_HANDLE) { vkDestroyDescriptorSetLayout(mDevice, mDescSetLayout2D, nullptr); mDescSetLayout2D = VK_NULL_HANDLE; }
     if (mSampler2D != VK_NULL_HANDLE) { vkDestroySampler(mDevice, mSampler2D, nullptr); mSampler2D = VK_NULL_HANDLE; }
-    if (mPipeline2D != VK_NULL_HANDLE) { vkDestroyPipeline(mDevice, mPipeline2D, nullptr); mPipeline2D = VK_NULL_HANDLE; }
+    for (int i = 0; i < (int)Blend2D::Count; ++i)
+    {
+        if (mPipeline2D[i] != VK_NULL_HANDLE) { vkDestroyPipeline(mDevice, mPipeline2D[i], nullptr); mPipeline2D[i] = VK_NULL_HANDLE; }
+    }
     if (mPipelineLayout2D != VK_NULL_HANDLE) { vkDestroyPipelineLayout(mDevice, mPipelineLayout2D, nullptr); mPipelineLayout2D = VK_NULL_HANDLE; }
     if (mShader2DVert != VK_NULL_HANDLE) { vkDestroyShaderModule(mDevice, mShader2DVert, nullptr); mShader2DVert = VK_NULL_HANDLE; }
     if (mShader2DFrag != VK_NULL_HANDLE) { vkDestroyShaderModule(mDevice, mShader2DFrag, nullptr); mShader2DFrag = VK_NULL_HANDLE; }
@@ -755,7 +791,7 @@ void LLVKContext::destroy2DPipeline()
 
 VkCommandBuffer LLVKContext::begin2DFrame(float clear_r, float clear_g, float clear_b, float clear_a)
 {
-    if (mDevice == VK_NULL_HANDLE || mSwapchain == VK_NULL_HANDLE || mPipeline2D == VK_NULL_HANDLE) return VK_NULL_HANDLE;
+    if (mDevice == VK_NULL_HANDLE || mSwapchain == VK_NULL_HANDLE || mPipeline2D[(int)Blend2D::Alpha] == VK_NULL_HANDLE) return VK_NULL_HANDLE;
 
     // Degenerate extent (window not yet sized / minimized): nothing valid to
     // render into; skip the frame. Avoids the VUID renderArea>0 violation.
@@ -823,7 +859,7 @@ VkCommandBuffer LLVKContext::begin2DFrame(float clear_r, float clear_g, float cl
     VkRect2D scissor{ { 0, 0 }, mSwapchainExtent };
     vkCmdSetScissor(f.cmd, 0, 1, &scissor);
 
-    vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline2D);
+    vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline2D[(int)Blend2D::Alpha]);
     mFrameActive = true;
     return f.cmd;
 }

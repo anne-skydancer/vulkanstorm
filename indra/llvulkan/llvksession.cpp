@@ -338,7 +338,7 @@ void LLVKSession::renderFrame()
     // bring-up teal, then draws a known test rect through the real 2D pipeline
     // (vertex buffer + ortho push-constant matrix). Falls back to the plain
     // clear if the pipeline isn't available.
-    if (s_context->pipeline2D() != VK_NULL_HANDLE)
+    if (s_context->pipeline2D(LLVKContext::Blend2D::Alpha) != VK_NULL_HANDLE)
     {
         VkCommandBuffer cmd = s_context->begin2DFrame(kClearR, kClearG, kClearB, kClearA);
         if (cmd != VK_NULL_HANDLE)

@@ -57,9 +57,12 @@ public:
     bool renderClearFrame(float r, float g, float b, float a);
 
     // --- Phase 3 (2D/UI) -------------------------------------------------
-    // Create the 2D quad pipeline (solid-color + textured), dynamic
-    // viewport/scissor, alpha blending. Call once after createDevice. The
-    // pipeline is rebuilt against the swapchain format on each createSwapchain.
+    // The 2D blend modes the UI uses (subset of LLRender::eBlendType), matching
+    // the GL factors exactly. Order matters (indexes the pipeline array).
+    enum class Blend2D : uint8_t { Alpha = 0, Replace, AddWithAlpha, Add, Count };
+    // Create the 2D quad pipelines (one per Blend2D), dynamic viewport/scissor.
+    // Call once after createDevice. Rebuilt against the swapchain format on each
+    // createSwapchain.
     bool create2DPipeline(std::string& error);
     void destroy2DPipeline();
 
@@ -99,7 +102,8 @@ public:
     VkDescriptorSet whiteTextureDescriptor() const { return mWhiteTex.descriptor; }
 
     VkCommandBuffer currentCmd() const { return mFrames[mFrameIndex].cmd; }
-    VkPipeline pipeline2D() const { return mPipeline2D; }
+    // The 2D pipeline for a given blend mode (see Blend2D).
+    VkPipeline pipeline2D(Blend2D blend) const { return mPipeline2D[(int)blend]; }
     VkPipelineLayout pipelineLayout2D() const { return mPipelineLayout2D; }
     const VkExtent2D& swapchainExtent() const { return mSwapchainExtent; }
 
@@ -157,7 +161,7 @@ private:
 
     // --- Phase 3 (2D/UI) -------------------------------------------------
     VkPipelineLayout mPipelineLayout2D = VK_NULL_HANDLE;
-    VkPipeline       mPipeline2D = VK_NULL_HANDLE;
+    VkPipeline       mPipeline2D[(int)Blend2D::Count] = {};
     VkShaderModule   mShader2DVert = VK_NULL_HANDLE;
     VkShaderModule   mShader2DFrag = VK_NULL_HANDLE;
     VkDescriptorSetLayout mDescSetLayout2D = VK_NULL_HANDLE;
