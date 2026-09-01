@@ -31,6 +31,8 @@
 #include "llvkprobe.h"
 #include "llvkselftest.h"
 #include "llvksession.h"
+#include "llvkui2d.h"
+#include "llrender2dutils.h"
 #include "fsyspath.h"
 #include "hexdump.h"
 #include "llagent.h"
@@ -163,6 +165,50 @@ void getProfileStatsContext(boost::json::object& stats);
 std::string getProfileStatsFilename();
 
 #if LL_WINDOWS
+// <VulkanStorm> Funnel-dispatch hook implementation (Phase 3b v2) ------------
+// Routes the 2D funnel primitives (gl_rect_2d & friends) into the LLVKUI2D
+// sink while the Vulkan backend owns the frame. Installed around the UI draw
+// by vulkan_ui_frame(); cleared afterward. Reads the current GL UI transform
+// (offset + scale + the GL scale factor) so emitted coords match what the GL
+// matrix would have produced.
+static void vk_funnel_rect(S32 left, S32 top, S32 right, S32 bottom, const LLColor4& color)
+{
+    LLVKUI2D& sink = LLVKUI2DSink::get();
+    const LLVector3 off = gGL.getUITranslation();
+    const LLVector3 sc = gGL.getUIScale();
+    const F32 gsx = LLRender::sUIGLScaleFactor.mV[VX];
+    const F32 gsy = LLRender::sUIGLScaleFactor.mV[VY];
+    // Combined: window = (ui * scale + offset) * glscale  ==  ui*(scale*glscale) + offset*glscale
+    sink.setTransform(off.mV[VX] * gsx, off.mV[VY] * gsy, sc.mV[VX] * gsx, sc.mV[VY] * gsy);
+    sink.rect((F32)left, (F32)top, (F32)right, (F32)bottom,
+              color.mV[VRED], color.mV[VGREEN], color.mV[VBLUE], color.mV[VALPHA]);
+}
+static void vk_funnel_set_color(const LLColor4& color)
+{
+    // The sink carries color per-primitive; untinted prims use the tracked color.
+    // Wired in a later milestone when the no-color gl_rect_2d overload is routed.
+    (void)color;
+}
+static LLUIFunnelHook s_vk_funnel_hook = { &vk_funnel_rect, &vk_funnel_set_color };
+
+// Run one Vulkan UI frame: begin the 2D pass + sink, run the UI funnel emitters
+// through the hook, flush + present. Returns false when the frame was skipped.
+static bool vulkan_ui_frame()
+{
+    if (!LLVKSession::beginUIFrame())
+    {
+        return false;
+    }
+    g_ui_funnel_hook = &s_vk_funnel_hook;
+    // Milestone 1 smoke test: emit a known solid panel through the real sink.
+    // (The live widget tree is wired once fonts/images are funneled.)
+    LLVKUI2DSink::get().rect(200.f, 150.f, 520.f, 390.f, 1.f, 0.f, 0.f, 1.f);
+    g_ui_funnel_hook = nullptr;
+    LLVKSession::endUIFrame();
+    return true;
+}
+// </VulkanStorm>
+
 // <VulkanStorm> One-shot Vulkan frame capture for the GL<->Vulkan diff
 // harness. After a settle delay, dump the presented frame to a raw RGBA8 file
 // (8-byte header: width, height LE). Call once per frame while the session runs.
@@ -387,7 +433,14 @@ void display_startup()
     if (LLVKSession::isRunning())
     {
         LLVKSession::resizeIfNeeded(gViewerWindow->getWindow());
-        LLVKSession::renderFrame();
+        if (getenv("VULKANSTORM_SCENE") != nullptr)
+        {
+            LLVKSession::renderFrame();
+        }
+        else
+        {
+            vulkan_ui_frame();
+        }
         vulkan_capture_tick();
         return;
     }
@@ -746,7 +799,14 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
     if (LLVKSession::isRunning())
     {
         LLVKSession::resizeIfNeeded(gViewerWindow->getWindow());
-        LLVKSession::renderFrame();
+        if (getenv("VULKANSTORM_SCENE") != nullptr)
+        {
+            LLVKSession::renderFrame();
+        }
+        else
+        {
+            vulkan_ui_frame();
+        }
         vulkan_capture_tick();
         return;
     }

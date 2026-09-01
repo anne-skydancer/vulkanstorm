@@ -16,6 +16,7 @@
 #if LL_WINDOWS
 
 #include "llvkcontext.h"
+#include "llvkui2d.h"
 #include "llwindow.h"
 
 #include <cstdlib>
@@ -334,10 +335,16 @@ void LLVKSession::renderFrame()
         return;
     }
 
-    // Phase 3: drive a 2D frame when the pipeline is up. Clears to the
-    // bring-up teal, then draws a known test rect through the real 2D pipeline
-    // (vertex buffer + ortho push-constant matrix). Falls back to the plain
-    // clear if the pipeline isn't available.
+    // Harness path: when a scene is selected (VULKANSTORM_SCENE), draw the known
+    // test scene for the diff harness. Otherwise the real UI path (begin/endUIFrame
+    // in llviewerdisplay) drives the frame through the LLVKUI2D sink.
+    if (getenv("VULKANSTORM_SCENE") == nullptr)
+    {
+        return; // real UI path owns the frame
+    }
+
+    // Drive a 2D frame when the pipeline is up: teal clear + the selected test
+    // scene through the 2D pipeline. Falls back to a plain clear.
     if (s_context->pipeline2D(LLVKContext::Blend2D::Alpha) != VK_NULL_HANDLE)
     {
         VkCommandBuffer cmd = s_context->begin2DFrame(kClearR, kClearG, kClearB, kClearA);
@@ -353,6 +360,31 @@ void LLVKSession::renderFrame()
     {
         LL_WARNS("Vulkan") << "Session: renderClearFrame failed" << LL_ENDL;
     }
+}
+
+bool LLVKSession::beginUIFrame()
+{
+    if (!s_context || s_context->pipeline2D(LLVKContext::Blend2D::Alpha) == VK_NULL_HANDLE)
+    {
+        return false;
+    }
+    VkCommandBuffer cmd = s_context->begin2DFrame(kClearR, kClearG, kClearB, kClearA);
+    if (cmd == VK_NULL_HANDLE)
+    {
+        return false;
+    }
+    LLVKUI2DSink::get().begin(s_context, cmd);
+    return true;
+}
+
+void LLVKSession::endUIFrame()
+{
+    if (!s_context)
+    {
+        return;
+    }
+    LLVKUI2DSink::get().end();
+    s_context->end2DFrame();
 }
 
 void LLVKSession::resizeIfNeeded(LLWindow* window)
@@ -418,6 +450,8 @@ bool LLVKSession::start(LLWindow* window, bool enable_validation)
 
 bool LLVKSession::isRunning() { return false; }
 void LLVKSession::renderFrame() {}
+bool LLVKSession::beginUIFrame() { return false; }
+void LLVKSession::endUIFrame() {}
 void LLVKSession::resizeIfNeeded(LLWindow* window) {}
 void LLVKSession::stop() {}
 bool LLVKSession::captureRGBA(std::vector<uint8_t>& out_rgba, uint32_t& out_w, uint32_t& out_h) { return false; }

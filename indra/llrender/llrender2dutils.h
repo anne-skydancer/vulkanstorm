@@ -43,6 +43,21 @@ class LLUUID;
 
 extern const LLColor4 UI_VERTEX_COLOR;
 
+// <VulkanStorm> Funnel-dispatch hook -----------------------------------------
+// When the Vulkan UI pipe owns the frame, the 2D funnel primitives in this
+// module route through this hook instead of the immediate-mode GL path, so the
+// widgets draw unchanged. llrender has no dependency on llvulkan; newview (or
+// llvulkan via newview) installs the hook. When s_hook is null the GL path runs.
+struct LLUIFunnelHook
+{
+    // Solid filled rect in current UI-transformed window coordinates.
+    void (*rect)(S32 left, S32 top, S32 right, S32 bottom, const LLColor4& color);
+    // Current draw color set via gGL.color4f (the sink needs it for untinted prims).
+    void (*setColor)(const LLColor4& color);
+};
+extern LLUIFunnelHook* g_ui_funnel_hook;
+// </VulkanStorm>
+
 bool ui_point_in_rect(S32 x, S32 y, S32 left, S32 top, S32 right, S32 bottom);
 void gl_state_for_2d(S32 width, S32 height);
 

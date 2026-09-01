@@ -44,6 +44,14 @@ public:
     // running.
     static void renderFrame();
 
+    // --- Phase 3b v2: real UI through the LLVKUI2D sink --------------------
+    // Bracket a UI frame: beginUIFrame starts the 2D render pass and the sink;
+    // the UI tree's funnel calls route into the sink; endUIFrame flushes and
+    // presents. beginUIFrame returns false (skip the UI draw this frame) when
+    // the swapchain is out of date or the frame can't start.
+    static bool beginUIFrame();
+    static void endUIFrame();
+
     // Recreate the swapchain if the window's client size changed since the
     // last frame. No-op when not running.
     static void resizeIfNeeded(LLWindow* window);

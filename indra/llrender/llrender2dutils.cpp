@@ -47,6 +47,10 @@
 //
 const LLColor4 UI_VERTEX_COLOR(1.f, 1.f, 1.f, 1.f);
 
+// <VulkanStorm> Funnel-dispatch hook (see llrender2dutils.h).
+LLUIFunnelHook* g_ui_funnel_hook = nullptr;
+// </VulkanStorm>
+
 //
 // Functions
 //
@@ -148,6 +152,13 @@ void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, bool filled )
 
 void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, const LLColor4 &color, bool filled )
 {
+    // <VulkanStorm> Route to the Vulkan sink when the hook is installed.
+    if (g_ui_funnel_hook && g_ui_funnel_hook->rect && filled)
+    {
+        g_ui_funnel_hook->rect(left, top, right, bottom, color);
+        return;
+    }
+    // </VulkanStorm>
     gGL.color4fv( color.mV );
     gl_rect_2d( left, top, right, bottom, filled );
 }
