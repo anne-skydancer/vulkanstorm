@@ -10,14 +10,17 @@
 ; Tokens of the form %%NAME%% are substituted by the manifest.
 ;
 ; Ported from the archived VulkanStorm Inno script: it ships an explicit file
-; list (%%INSTALL_FILES%%) generated from the packaged file_list, so only the
-; intended files are installed (never the intermediate vulkanstorm-bin.exe,
-; stray build-type variants, symbol files, or the installer itself).
+; list generated from the packaged file_list, so only the intended files are
+; installed (never the intermediate vulkanstorm-bin.exe, stray build-type
+; variants, symbol files, or the installer itself).
 
 #define AppName        "%%APP_NAME%%"
 #define AppNameOneWord "%%APP_NAME_ONEWORD%%"
 #define FriendlyAppName "%%FRIENDLY_APP_NAME%%"
 #define AppVersion     "%%VERSION%%"
+; Inno VersionInfoVersion requires 4 numeric components each <= 65535;
+; the viewer build number can exceed that, so use a clamped version for file info.
+#define InfoVersion    "%%VERSION_INFO%%"
 #define ViewerExe      "%%FINAL_EXE%%"
 #define IsOpenSim      %%IS_OPENSIM%%
 #define InstallerFile  "%%INSTALLER_FILE%%"
@@ -65,11 +68,11 @@ CloseApplications=yes
 CloseApplicationsFilter={#ViewerExe}
 RestartApplications=no
 ChangesAssociations=yes
-VersionInfoVersion={#AppVersion}
+VersionInfoVersion={#InfoVersion}
 VersionInfoCompany=The Vulkanstorm Project
 VersionInfoDescription={#AppName} installer
 VersionInfoProductName={#AppName}
-VersionInfoProductVersion={#AppVersion}
+VersionInfoProductVersion={#InfoVersion}
 ; Register an uninstaller entry.
 Uninstallable=yes
 CreateUninstallRegKey=yes
