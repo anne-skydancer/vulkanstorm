@@ -140,6 +140,10 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                 self.path("*.tga")
                 self.path("*.j2c")
                 self.path("*.png")
+                # <FS/> Vulkanstorm: a theme's textures.xml maps its named textures to
+                # files; without it the theme's custom textures (chat/toast/name-tag
+                # backgrounds, hyperlink colors) don't resolve and render magenta.
+                self.path("*.xml")
             # <FS/> Vulkanstorm: the skin registry + per-skin root configs are what
             # actually load a theme's palette/colors.  Without skins.xml and each
             # skin's colors.xml the theme fails to apply and the UI falls back to
