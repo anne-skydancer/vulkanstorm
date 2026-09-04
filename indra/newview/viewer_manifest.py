@@ -104,6 +104,18 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             self.path("*.ini")
             self.path("*.xml")
             self.path("shaders")
+            # <FS/> Vulkanstorm: these content trees are runtime assets, not
+            # packaging-only.  "*.xml" above is non-recursive, so without the
+            # explicit subdirs an unpackaged build-tree exe loses its windlight
+            # skies, image filters, beams, camera presets, poses, and static
+            # assets.
+            self.path("windlight")
+            self.path("filters")
+            self.path("beams")
+            self.path("beamsColors")
+            self.path("camera")
+            self.path("poses")
+            self.path("fs_static_assets")
 
         with self.prefix(src_dst="skins"):
             self.path("*/xui/*/*.xml")
