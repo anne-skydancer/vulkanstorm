@@ -141,7 +141,7 @@
 			<check_box label="Disabilita rilevamento automatico della VRAM" name="FSOverrideVRAMDetection" tool_tip="Consenti la disattivazione del rilevamento automatico della VRAM (da utilizzare con estrema cautela)" />
 			<slider label="Sostituisci VRAM dedicata alla GPU (GB):" name="FSForcedVideoMemory" tool_tip="Importante: usare con estrema cautela. || Sostituisci la VRAM rilevata per la tua scheda grafica. || Non può contenere VRAM 'condivisa', che fa parte della RAM di sistema. || Se non capisci la differenza, lascia stare questa opzione." />
 		</panel>
-		<panel label="Rendering I" name="Rendering">
+		<panel label="Rendering 1" name="Rendering">
 			<text name="World Updating">
 				Caricamento del mondo:
 			</text>
