@@ -275,6 +275,9 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                         self.path("*.tga")
                         self.path("*.j2c")
                         self.path("*.png")
+                        # <FS/> Vulkanstorm: a theme's textures.xml lives at the root of
+                        # its textures/ dir; "*/*.xml" (one level down) misses it.
+                        self.path("*.xml")
                     self.path("*/*.xml")
 
                     # Update: 2017-11-01 CP Now we store app code in the html folder
