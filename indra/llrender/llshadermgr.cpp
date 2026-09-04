@@ -653,6 +653,23 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
         extra_code_text[extra_code_count++] = strdup( "#define IS_AMD_CARD 1\n" );
     }
 
+    // <FS> Vulkanstorm: gate the alpha OIT (per-pixel linked list) capture path in the alpha
+    // fragment shaders on GL >= 4.4, where SSBO + image load/store + atomic counters +
+    // glClearTexImage are all core. On older contexts ALPHA_OIT stays undefined and the alpha
+    // shaders compile the legacy sorted-alpha path (the #extension lines above only warn).
+    if (type == GL_FRAGMENT_SHADER && gGLManager.mGLVersion >= 4.1f)
+    {
+        extra_code_text[extra_code_count++] = strdup("#define ALPHA_DEPTH_PEEL 1\n");
+    }
+
+#if LL_WINDOWS || LL_LINUX
+    if (type == GL_FRAGMENT_SHADER && gGLManager.mGLVersion >= 4.4f)
+    {
+        extra_code_text[extra_code_count++] = strdup("#define ALPHA_OIT 1\n");
+    }
+#endif
+    // </FS>
+
     if (texture_index_channels > 0 && type == GL_FRAGMENT_SHADER)
     {
         //use specified number of texture channels for indexed texture rendering
@@ -1575,6 +1592,12 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("border_thickness");
     mReservedUniforms.push_back("frame_rect");
     // </FS:Beq>
+
+    // <FS> Vulkanstorm bounded depth peeling. Samplers must be registered here:
+    // LLGLSLShader::bindTexture() takes a reserved-uniform index, not a raw
+    // OpenGL uniform location.
+    mReservedUniforms.push_back("alpha_peel_depth");
+    // </FS>
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 
