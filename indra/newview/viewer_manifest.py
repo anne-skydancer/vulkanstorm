@@ -140,6 +140,17 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                 self.path("*.tga")
                 self.path("*.j2c")
                 self.path("*.png")
+            # <FS/> Vulkanstorm: the skin registry + per-skin root configs are what
+            # actually load a theme's palette/colors.  Without skins.xml and each
+            # skin's colors.xml the theme fails to apply and the UI falls back to
+            # the magenta missing-asset placeholder (chat history, pie menu, etc).
+            self.path("skins.xml")
+            self.path("*/colors.xml")
+            self.path("*/settings.xml")
+            self.path("*/toolbars.xml")
+            self.path("*/default_languages.xml")
+            with self.prefix(src_dst="*/html"):
+                self.path("*/*/*.html")
 
         if self.is_packaging_viewer():
             with self.prefix(src_dst="app_settings"):
