@@ -93,15 +93,71 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             self.path("xui")
         # </FS:Ansariel>
 
+        # The executable produced by an ordinary IDE/build-tree build runs from
+        # the configuration directory.  Keep its runtime configuration, shaders,
+        # and XUI in sync with the source tree even when we are not producing an
+        # installer package.  Previously these paths were packaging-only, which
+        # left stale settings and preference panels beside the viewer binary.
+        with self.prefix(src_dst="app_settings"):
+            self.exclude("logcontrol.xml")
+            self.exclude("logcontrol-dev.xml")
+            self.path("*.ini")
+            self.path("*.xml")
+            self.path("shaders")
+            # <FS/> Vulkanstorm: these content trees are runtime assets, not
+            # packaging-only.  "*.xml" above is non-recursive, so without the
+            # explicit subdirs an unpackaged build-tree exe loses its windlight
+            # skies, image filters, beams, camera presets, poses, and static
+            # assets.
+            self.path("windlight")
+            self.path("filters")
+            self.path("beams")
+            self.path("beamsColors")
+            self.path("camera")
+            self.path("poses")
+            self.path("fs_static_assets")
+
+        with self.prefix(src_dst="skins"):
+            self.path("*/xui/*/*.xml")
+            self.path("*/xui/*/widgets/*.xml")
+            # <FS/> Vulkanstorm: the widget/icon/theme images are runtime assets too,
+            # not packaging-only -- an unpackaged build-tree exe renders its UI from
+            # these.  Without them every button/slider/radio texture is missing.
+            with self.prefix(src_dst="*/textures"):
+                self.path("*/*.jpg")
+                self.path("*/*.tga")
+                self.path("*/*.png")
+                self.path("*.tga")
+                self.path("*.j2c")
+                self.path("*.jpg")
+                self.path("*.png")
+                self.path("textures.xml")
+            self.path("*/themes/*/colors.xml")
+            with self.prefix(src_dst="*/themes/*/textures"):
+                self.path("*/*.tga")
+                self.path("*/*.jpg")
+                self.path("*/*.png")
+                self.path("*.tga")
+                self.path("*.j2c")
+                self.path("*.png")
+                # <FS/> Vulkanstorm: a theme's textures.xml maps its named textures to
+                # files; without it the theme's custom textures (chat/toast/name-tag
+                # backgrounds, hyperlink colors) don't resolve and render magenta.
+                self.path("*.xml")
+            # <FS/> Vulkanstorm: the skin registry + per-skin root configs are what
+            # actually load a theme's palette/colors.  Without skins.xml and each
+            # skin's colors.xml the theme fails to apply and the UI falls back to
+            # the magenta missing-asset placeholder (chat history, pie menu, etc).
+            self.path("skins.xml")
+            self.path("*/colors.xml")
+            self.path("*/settings.xml")
+            self.path("*/toolbars.xml")
+            self.path("*/default_languages.xml")
+            with self.prefix(src_dst="*/html"):
+                self.path("*/*/*.html")
+
         if self.is_packaging_viewer():
             with self.prefix(src_dst="app_settings"):
-                self.exclude("logcontrol.xml")
-                self.exclude("logcontrol-dev.xml")
-                self.path("*.ini")
-                self.path("*.xml")
-
-                # include the entire shaders directory recursively
-                self.path("shaders")
                 # include the extracted list of contributors
                 contributions_path = os.path.join(self.args['source'], "..", "..", "doc", "contributions.txt")
                 contributor_names = self.extract_names(contributions_path)
@@ -211,8 +267,6 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                             self.path("*.jpg") # <FS:Ansariel> Needed for Firestorm
                             self.path("*.png")
                             self.path("textures.xml")
-                    self.path("*/xui/*/*.xml")
-                    self.path("*/xui/*/widgets/*.xml")
                     self.path("*/themes/*/colors.xml")
                     with self.prefix(src_dst="*/themes/*/textures"):
                         self.path("*/*.tga")
@@ -221,6 +275,9 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                         self.path("*.tga")
                         self.path("*.j2c")
                         self.path("*.png")
+                        # <FS/> Vulkanstorm: a theme's textures.xml lives at the root of
+                        # its textures/ dir; "*/*.xml" (one level down) misses it.
+                        self.path("*.xml")
                     self.path("*/*.xml")
 
                     # Update: 2017-11-01 CP Now we store app code in the html folder
