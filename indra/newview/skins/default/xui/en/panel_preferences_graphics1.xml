@@ -1811,7 +1811,6 @@ If you do not understand the distinction then leave this control alone."
       </text>
       <radio_group
        control_name="RenderAlphaSortMethod"
-       draw_border="true"
        follows="left|top"
        height="76"
        layout="topleft"

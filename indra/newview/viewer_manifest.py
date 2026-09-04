@@ -108,6 +108,26 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         with self.prefix(src_dst="skins"):
             self.path("*/xui/*/*.xml")
             self.path("*/xui/*/widgets/*.xml")
+            # <FS/> Vulkanstorm: the widget/icon/theme images are runtime assets too,
+            # not packaging-only -- an unpackaged build-tree exe renders its UI from
+            # these.  Without them every button/slider/radio texture is missing.
+            with self.prefix(src_dst="*/textures"):
+                self.path("*/*.jpg")
+                self.path("*/*.tga")
+                self.path("*/*.png")
+                self.path("*.tga")
+                self.path("*.j2c")
+                self.path("*.jpg")
+                self.path("*.png")
+                self.path("textures.xml")
+            self.path("*/themes/*/colors.xml")
+            with self.prefix(src_dst="*/themes/*/textures"):
+                self.path("*/*.tga")
+                self.path("*/*.jpg")
+                self.path("*/*.png")
+                self.path("*.tga")
+                self.path("*.j2c")
+                self.path("*.png")
 
         if self.is_packaging_viewer():
             with self.prefix(src_dst="app_settings"):
