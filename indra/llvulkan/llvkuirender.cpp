@@ -1354,6 +1354,22 @@ namespace
              it != view->getChildList()->rend(); ++it)
         {
             const LLView* child = *it;
+            // <VulkanStorm> An open combo's dropdown list is a registered
+            // popup: LLPopupView re-renders it above everything via
+            // renderOverlaySubtree(). Skip the in-tree copy (which runs under
+            // the combo's parent layout clip and fights the overlay on hover).
+            if (!rc.in_overlay)
+            {
+                if (const LLComboBox* combo = dynamic_cast<const LLComboBox*>(view))
+                {
+                    const LLScrollListCtrl* open_list = combo->getVkList();
+                    if (open_list && child == open_list && open_list->getVisible())
+                    {
+                        continue;
+                    }
+                }
+            }
+            // </VulkanStorm>
             const bool clip_child =
                 has_scroller_clip && child == scrolled_view;
             if (clip_child)
@@ -1435,8 +1451,14 @@ namespace LLVKUIRender
 
         // OpenGL draws a registered popup once in its ordinary hierarchy and
         // again from LLPopupView above the remaining UI. Share the enclosing
-        // Vulkan context so the second traversal has identical state/order.
-        renderView(*s_active_render_ctx, root);
+        // Vulkan context so the second traversal has identical state/order,
+        // and flag it so popup-owned subtrees (a combo's open list) render
+        // here rather than in the in-tree walk.
+        RenderCtx& rc = *s_active_render_ctx;
+        const bool saved = rc.in_overlay;
+        rc.in_overlay = true;
+        renderView(rc, root);
+        rc.in_overlay = saved;
     }
 
     void prepareFrame(LLVKContext* context, LLView* root)

@@ -50,6 +50,10 @@ namespace LLVKUIRenderInternal
         // One-shot widget-tree dump (VULKANSTORM_TREE_DUMP=1)
         bool dump   = false;
         int  depth  = 0;
+        // True while rendering a registered popup via renderOverlaySubtree()
+        // (LLPopupView). A combo's open dropdown list renders only in this
+        // pass; the normal tree walk skips it so the two don't double-draw.
+        bool in_overlay = false;
     };
 
     // Convert a GL bottom-left-origin screen rect (from calcScreenRect) into
