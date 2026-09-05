@@ -101,6 +101,22 @@ public:
 
     void draw() override;
 
+    // <VulkanStorm> GL-free draw state for the Vulkan UI walker (mirrors
+    // draw()): prepareVkDraw() performs the stat sampling + tooltip refresh;
+    // getVkDrawState() returns the computed bar geometry/colors in
+    // widget-LOCAL coordinates.
+    struct VkDrawState
+    {
+        bool     valid = false;
+        LLColor4 bg_color;          // MenuDefaultBgColor fill
+        LLColor4 border_color;      // black outline
+        LLColor4 bar_color;         // threshold color for the current value
+        LLRect   bar_rect;          // filled value bar (local)
+    };
+    void prepareVkDraw();
+    VkDrawState getVkDrawState() const;
+    // </VulkanStorm>
+
 private:
     LLTrace::StatType<LLTrace::CountAccumulator>*   mNewStatFloatp;
 

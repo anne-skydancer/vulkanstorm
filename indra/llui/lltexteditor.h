@@ -236,6 +236,20 @@ public:
 
     LLWString       getConvertedText() const;
 
+    // <VulkanStorm> GL-free equivalents of draw()'s extras for the Vulkan UI
+    // walker: prepareVkDraw() performs draw()'s border focus-highlight update;
+    // getVkPreeditMarkers() reproduces drawPreeditMarker()'s underline
+    // geometry in editor-LOCAL coordinates (empty when no preedit is active).
+    void            prepareVkDraw();
+    struct VkPreeditMarker
+    {
+        LLRect  local_rect;     // editor-local, bottom-left origin
+        bool    standout = false;
+        LLColor4 color;
+    };
+    void            getVkPreeditMarkers(std::vector<VkPreeditMarker>& out) const;
+    // </VulkanStorm>
+
 protected:
     // <FS:Ansariel> FIRE-19933: Open context menu on context menu key press
     //void          showContextMenu(S32 x, S32 y);

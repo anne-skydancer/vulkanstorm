@@ -52,6 +52,18 @@ public:
 
     void draw() override;
 
+    // <VulkanStorm> GL-free state for the Vulkan UI walker (mirrors draw()).
+    struct VkDrawState
+    {
+        F32         percent = 0.f;
+        std::string bar_image;      // empty when not provided
+        std::string fill_image;
+        LLColor4    bar_color;      // background image tint
+        LLColor4    fill_color;     // progress image tint
+    };
+    VkDrawState getVkDrawState(F32 alpha) const;
+    // </VulkanStorm>
+
 private:
     F32 mPercentDone;
 
@@ -61,6 +73,12 @@ private:
     LLUIColor    mColorBackground;
 
     LLPointer<LLUIImage>    mImageFill;
+
+    // <VulkanStorm> XUI image names retained for the GL-free path (the
+    // LLUIImage pointers are null when no GL context exists).
+    std::string mVkImageBarName;
+    std::string mVkImageFillName;
+    // </VulkanStorm>
 };
 
 #endif // LL_LLPROGRESSBAR_H

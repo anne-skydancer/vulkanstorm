@@ -3,9 +3,10 @@
  * @brief LLVKUIImage — a GL-free, Vulkan-native UI-image registry (Phase 3 v2 M2).
  *
  * @details
- * An INDEPENDENT parallel of the viewer's LLUIImageList. It re-parses the same
- * textures.xml data (public llxml) and decodes each image's pixels with the
- * GL-free llimage decoders (PNG/TGA/J2C), then uploads them to the Vulkan
+ * An INDEPENDENT parallel of the viewer's LLUIImageList. It consumes the
+ * shared GL-free declarations parsed once by LLUIImageDecls
+ * (llui/lluiimagedecls.*) and decodes each image's pixels with the GL-free
+ * llimage decoders (PNG/TGA/J2C), then uploads them to the Vulkan
  * device as LLVKContext::Texture2D. It never touches LLImageGL / LLTexture /
  * gGL, and never executes any GL code — it only re-reads the same source data
  * and reproduces the RESULT (which pixels + clip/scale regions + filtering).

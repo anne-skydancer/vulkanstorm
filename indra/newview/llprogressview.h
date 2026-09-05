@@ -55,6 +55,38 @@ public:
     void drawStartTexture(F32 alpha);
     void drawLogos(F32 alpha);
 
+    // <VulkanStorm> GL-free description of everything LLProgressView::draw()
+    // paints itself (fade state, aspect-corrected start texture, 3p logos);
+    // children are provided by the normal view walk. Pure state reads.
+    struct VkDrawState
+    {
+        struct VkLogo
+        {
+            LLRect rect;            // screen space (draw rect + logos label offset)
+            LLRectf clip_rect;
+            LLRectf offset_rect;
+            LLColor4 color;
+            std::string image_name; // source file name; logos are local files
+                                    // with no UI image registry name
+            LLUUID texture_id;      // null when the GL-backed texture is unavailable
+            const LLImageRaw* raw = nullptr;  // CPU pixels (null-safe, GL-free)
+        };
+        bool fading_from_login = false; // mFadeFromLoginTimer running
+        bool fading_to_world = false;   // mFadeToWorldTimer running
+        F32 fade_elapsed = 0.f;         // elapsed seconds on the active fade timer
+        F32 alpha = 1.f;                // the alpha draw() pushes via LLViewDrawContext
+        bool media_ctrl_visible = false;// fade-from-login skips the start texture when true
+        bool draw_start_texture = false;// false => draw() paints a solid black rect
+        LLUUID start_texture_id;        // null when gStartTexture is unavailable
+        const LLImageRaw* start_raw = nullptr;  // CPU pixels of gStartTexture
+        S32 start_image_width = 0;      // gStartImageWidth/Height (raw image aspect)
+        S32 start_image_height = 0;
+        LLRect start_texture_rect;      // screen space, aspect-corrected like drawStartTexture()
+        std::vector<VkLogo> logos;
+    };
+    VkDrawState getVkDrawState() const;
+    // </VulkanStorm>
+
     /*virtual*/ bool handleHover(S32 x, S32 y, MASK mask);
     /*virtual*/ bool handleKeyHere(KEY key, MASK mask);
     /*virtual*/ void setVisible(bool visible);
@@ -131,6 +163,13 @@ private:
         LLRect mDrawRect;
         LLRectf mClipRect;
         LLRectf mOffsetRect;
+        // <VulkanStorm> source file name, retained for the GL-free Vulkan path
+        // (local textures have no UI image name to recover at draw time).
+        std::string mVkImageName;
+        // <VulkanStorm> the decoded pixels, retained for the Vulkan upload
+        // bridge (local textures do not keep their raw image once uploaded).
+        LLPointer<LLImageRaw> mRawImage;
+        // </VulkanStorm>
     };
     std::vector<TextureData> mLogosList;
 };

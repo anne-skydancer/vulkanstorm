@@ -222,6 +222,13 @@ public:
     virtual void draw();
     virtual void deleteAllChildren();
 
+    // <VulkanStorm> The root folder's draw() performs per-frame state
+    // reconciliation (auto-open close, search-string timeout, empty-status
+    // textbox, renamer bounds) instead of the item/folder chrome. The
+    // GL-free Vulkan walker calls this hook in place of draw().
+    virtual void prepareVkDraw();
+    // </VulkanStorm>
+
     void stopAutoScollining() {mNeedsScroll = false;}
     void scrollToShowSelection();
     void scrollToShowItem(LLFolderViewItem* item, const LLRect& constraint_rect);

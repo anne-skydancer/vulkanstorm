@@ -580,6 +580,44 @@ void LLScrollContainer::prepareVkDraw()
         updateScroll();
     }
 }
+
+bool LLScrollContainer::getVkScrolledClipRect(LLRect& screen_rect) const
+{
+    // Mirrors the LLLocalClipRect scope in draw(): the scrolled content is
+    // clipped to the inner rect minus the currently-visible scrollbar strips.
+    if (!getRect().isValid() || !mScrolledView)
+    {
+        return false;
+    }
+    static LLUICachedControl<S32> scrollbar_size_control("UIScrollbarSize", 0);
+    const S32 scrollbar_size = (mSize == -1 ? scrollbar_size_control : mSize);
+
+    S32 visible_width = 0;
+    S32 visible_height = 0;
+    bool show_h_scrollbar = false;
+    bool show_v_scrollbar = false;
+    calcVisibleSize(&visible_width, &visible_height, &show_h_scrollbar, &show_v_scrollbar);
+
+    const LLRect local(mInnerRect.mLeft,
+                       mInnerRect.mBottom + (show_h_scrollbar ? scrollbar_size : 0) + visible_height,
+                       mInnerRect.mRight - (show_v_scrollbar ? scrollbar_size : 0),
+                       mInnerRect.mBottom + (show_h_scrollbar ? scrollbar_size : 0));
+    localRectToScreen(local, &screen_rect);
+    return screen_rect.notEmpty();
+}
+
+LLScrollContainer::VkBackground LLScrollContainer::getVkBackground(F32 alpha) const
+{
+    // Mirrors the mIsOpaque branch of draw().
+    VkBackground out;
+    out.bg_visible = mIsOpaque && getRect().isValid();
+    if (out.bg_visible)
+    {
+        localRectToScreen(mInnerRect, &out.inner_rect);
+        out.bg_color = mBackgroundColor.get() % alpha;
+    }
+    return out;
+}
 // </VulkanStorm>
 
 bool LLScrollContainer::addChild(LLView* view, S32 tab_group)

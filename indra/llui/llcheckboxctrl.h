@@ -136,6 +136,12 @@ public:
         return mCheckSignal.connect(cb);
     }
 
+    // <VulkanStorm> GL-free access to the embedded check button so the Vulkan
+    // UI walker can draw embedded checkboxes (e.g. LLScrollListCheck cells,
+    // which are NOT part of the view tree) from their state.
+    const LLButton*     getVkButton() const { return mButton; }
+    // </VulkanStorm>
+
 private:
     enable_signal_t mCheckSignal;
 // </FS:Ansariel>

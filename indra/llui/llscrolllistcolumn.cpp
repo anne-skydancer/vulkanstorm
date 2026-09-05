@@ -73,6 +73,18 @@ LLScrollColumnHeader::~LLScrollColumnHeader()
 
 void LLScrollColumnHeader::draw()
 {
+    // <VulkanStorm> the overlay-selection half moved to prepareVkDraw() so
+    // the GL-free Vulkan walker can run it without entering draw().
+    prepareVkDraw();
+    // </VulkanStorm>
+
+    // Draw children
+    LLButton::draw();
+}
+
+// <VulkanStorm>
+void LLScrollColumnHeader::prepareVkDraw()
+{
     std::string sort_column = mColumn->mParentCtrl->getSortColumnName();
     bool draw_arrow = !mColumn->mLabel.empty()
             && mColumn->mParentCtrl->isSorted()
@@ -88,10 +100,8 @@ void LLScrollColumnHeader::draw()
     {
         setImageOverlay(LLUUID::null);
     }
-
-    // Draw children
-    LLButton::draw();
 }
+// </VulkanStorm>
 
 bool LLScrollColumnHeader::handleDoubleClick(S32 x, S32 y, MASK mask)
 {

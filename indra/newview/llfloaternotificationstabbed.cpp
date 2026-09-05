@@ -189,7 +189,9 @@ void LLFloaterNotificationsTabbed::setVisible(bool visible)
     }
     if (visible)
     {
-        if (NULL == getDockControl() && getDockTongue().notNull())
+        // <VulkanStorm> under the Vulkan backend the GL tongue image is null
+        // by design; the retained name carries the same information.
+        if (NULL == getDockControl() && (getDockTongue().notNull() || !getVkDockTongueName().empty()))
         {
             // <FS:Ansariel> Group notices, IMs and chiclets position
             //setDockControl(new LLDockControl(

@@ -56,6 +56,12 @@ protected:
 public:
     void draw() override;
 
+    // <VulkanStorm> The state-sync half of draw() (toggle-state propagation,
+    // label clearing), without any rendering; the Vulkan UI walker calls this
+    // before walking children.
+    void prepareVkDraw();
+    // </VulkanStorm>
+
     bool postBuild() override;
 
     void setToggleState(bool state);

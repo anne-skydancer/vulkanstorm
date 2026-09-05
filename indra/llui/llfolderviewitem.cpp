@@ -70,6 +70,13 @@ LLFontGL* LLFolderViewItem::sSuffixFont = nullptr;
 LLUIColor LLFolderViewItem::sFavoriteColor;
 bool LLFolderViewItem::sColorSetInitialized = false;
 
+// <VulkanStorm>
+std::string LLFolderViewItem::sVkFolderArrowImgName;
+std::string LLFolderViewItem::sVkSelectionImgName;
+std::string LLFolderViewItem::sVkFavoriteImgName;
+std::string LLFolderViewItem::sVkFavoriteContentImgName;
+// </VulkanStorm>
+
 // only integers can be initialized in header
 const F32 LLFolderViewItem::FOLDER_CLOSE_TIME_CONSTANT = 0.02f;
 const F32 LLFolderViewItem::FOLDER_OPEN_TIME_CONSTANT = 0.03f;
@@ -117,6 +124,19 @@ void LLFolderViewItem::initClass()
     sFavoriteContentImg = default_params.favorite_content_image;
     sSuffixFont = getLabelFontForStyle(LLFontGL::NORMAL);
 
+    // <VulkanStorm> Retain the raw XUI names so the GL-free Vulkan renderer
+    // can resolve these images through LLVKUIImage even when the GL image
+    // provider is unavailable (the LLUIImagePtrs above may be null).
+    sVkFolderArrowImgName = default_params.folder_arrow_image.vk_image_name.isProvided()
+        ? default_params.folder_arrow_image.vk_image_name() : LLStringUtil::null;
+    sVkSelectionImgName = default_params.selection_image.vk_image_name.isProvided()
+        ? default_params.selection_image.vk_image_name() : LLStringUtil::null;
+    sVkFavoriteImgName = default_params.favorite_image.vk_image_name.isProvided()
+        ? default_params.favorite_image.vk_image_name() : LLStringUtil::null;
+    sVkFavoriteContentImgName = default_params.favorite_content_image.vk_image_name.isProvided()
+        ? default_params.favorite_content_image.vk_image_name() : LLStringUtil::null;
+    // </VulkanStorm>
+
     // <FS:Ansariel> Make inventory selection color independent from menu color
     //sFgColor = LLUIColorTable::instance().getColor("MenuItemEnabledColor", DEFAULT_WHITE);
     //sHighlightBgColor = LLUIColorTable::instance().getColor("MenuItemHighlightBgColor", DEFAULT_WHITE);
@@ -146,6 +166,12 @@ void LLFolderViewItem::cleanupClass()
     sFavoriteImg = nullptr;
     sFavoriteContentImg = nullptr;
     sSuffixFont = nullptr;
+    // <VulkanStorm>
+    sVkFolderArrowImgName.clear();
+    sVkSelectionImgName.clear();
+    sVkFavoriteImgName.clear();
+    sVkFavoriteContentImgName.clear();
+    // </VulkanStorm>
 }
 
 
@@ -387,6 +413,14 @@ void LLFolderViewItem::refresh()
     mIconOpen = vmi.getIconOpen();
     mIconOverlay = vmi.getIconOverlay();
 
+    // <VulkanStorm> Cache the icon names for the GL-free renderer; the
+    // model's name-table lookup keeps them valid even when the GL image
+    // provider returns null images (Vulkan path).
+    mVkIconName = vmi.getVkIconName();
+    mVkIconOpenName = vmi.getVkIconOpenName();
+    mVkIconOverlayName = vmi.getVkIconOverlayName();
+    // </VulkanStorm>
+
     if (mRoot->useLabelSuffix())
     {
         // Very Expensive!
@@ -413,6 +447,12 @@ void LLFolderViewItem::refreshSuffix()
     mIcon = vmi->getIcon();
     mIconOpen = vmi->getIconOpen();
     mIconOverlay = vmi->getIconOverlay();
+
+    // <VulkanStorm>
+    mVkIconName = vmi->getVkIconName();
+    mVkIconOpenName = vmi->getVkIconOpenName();
+    mVkIconOverlayName = vmi->getVkIconOverlayName();
+    // </VulkanStorm>
 
     mIsFavorite = vmi->isFavorite() && !vmi->isItemInTrash();
 
@@ -1249,6 +1289,419 @@ void LLFolderViewItem::draw()
     //be distorted...oddly. I initially added this in but didn't need it after all. So removing to prevent unnecessary bug.
     //LLView::draw();
 }
+
+// <VulkanStorm>
+std::string LLFolderViewItem::getVkIconName() const
+{
+    return mIcon.notNull() ? mIcon->getName() : mVkIconName;
+}
+
+std::string LLFolderViewItem::getVkIconOpenName() const
+{
+    return mIconOpen.notNull() ? mIconOpen->getName() : mVkIconOpenName;
+}
+
+std::string LLFolderViewItem::getVkIconOverlayName() const
+{
+    return mIconOverlay.notNull() ? mIconOverlay->getName() : mVkIconOverlayName;
+}
+
+void LLFolderViewItem::prepareVkDraw()
+{
+    // LLFolderViewItem::draw() refreshes the model-side filter state every
+    // frame; the Vulkan walker never calls draw().
+    if (getViewModelItem())
+    {
+        getViewModelItem()->update();
+    }
+}
+
+void LLFolderViewItem::vkPostDraw()
+{
+    // drawHighlight() consumes the drag-and-drop target flag after drawing.
+    mDragAndDropTarget = false;
+}
+
+void LLFolderViewItem::getVkDrawState(F32 alpha, VkDrawState& out)
+{
+    out = VkDrawState();
+
+    LLFolderView* root = getRoot();
+    if (!root)
+    {
+        return;
+    }
+
+    const S32 rect_height = getRect().getHeight();
+    const S32 rect_width = getRect().getWidth();
+    out.item_rect = calcScreenRect();
+
+    auto mod_alpha = [alpha](const LLColor4& c)
+    {
+        LLColor4 result(c);
+        result.mV[VALPHA] *= alpha;
+        return result;
+    };
+    auto to_screen = [this](const LLRect& local, LLRect& screen)
+    {
+        localRectToScreen(local, &screen);
+    };
+    auto push_op = [&out, &to_screen, &mod_alpha](const LLRect& local, const LLColor4& color, bool filled)
+    {
+        VkDrawState::RectOp op;
+        to_screen(local, op.rect);
+        op.color = mod_alpha(color);
+        op.filled = filled;
+        out.highlight_ops.push_back(op);
+    };
+
+    //--------------------------------------------------------------------------------//
+    // Highlight (mirrors draw()+drawHighlight(): colors, filled/outline choice,
+    // open-folder body, mouse-over and drag-and-drop target; GL emission order)
+    //
+    const bool show_context = root->getShowSelectionContext();
+    // If the parent panel has keyboard focus, draw selection filled
+    const bool filled = show_context || (root->getParentPanel() && root->getParentPanel()->hasFocus());
+
+    const S32 focus_top = rect_height;
+    const S32 focus_bottom = rect_height - mItemHeight;
+    const bool folder_open = (rect_height > mItemHeight + 4);
+    const S32 FOCUS_LEFT = 1;
+
+    const LLColor4 bg_color = isFlashing() ? sFlashBgColor.get() : sHighlightBgColor.get();
+    const LLRect row_local(FOCUS_LEFT, focus_top, rect_width - 2, focus_bottom);
+    const LLRect body_local(FOCUS_LEFT, focus_bottom + 1, rect_width - 2, 0);
+
+    if (isHighlightAllowed())
+    {
+        // Highlight for selected but not current items (time-based fade)
+        if (!isHighlightActive() && !isFlashing())
+        {
+            LLColor4 fade_color = bg_color;
+            F32 fade_time = root->getSelectionFadeElapsedTime();
+            if (root->getShowSingleSelection())
+            {
+                // fading out
+                fade_color.mV[VALPHA] = clamp_rescale(fade_time, 0.f, 0.4f, fade_color.mV[VALPHA], 0.f);
+            }
+            else
+            {
+                // fading in
+                fade_color.mV[VALPHA] = clamp_rescale(fade_time, 0.f, 0.4f, 0.f, fade_color.mV[VALPHA]);
+            }
+            push_op(row_local, fade_color, filled);
+        }
+
+        // Highlight for currently selected or flashing item
+        if (isHighlightActive())
+        {
+            push_op(row_local, bg_color, true);
+            push_op(row_local, sFocusOutlineColor.get(), false);
+        }
+
+        if (folder_open)
+        {
+            push_op(body_local, sFocusOutlineColor.get(), false);
+            if (show_context && !isFlashing())
+            {
+                push_op(body_local, bg_color, true);
+            }
+        }
+    }
+    else if (mIsMouseOverTitle)
+    {
+        push_op(row_local, sMouseOverColor.get(), false);
+    }
+
+    // DragNDrop highlight
+    if (mDragAndDropTarget)
+    {
+        push_op(row_local, bg_color, true);
+        if (folder_open)
+        {
+            push_op(body_local, bg_color, true);
+        }
+    }
+
+    //--------------------------------------------------------------------------------//
+    // Open folder arrow (drawOpenFolderArrow; gated on single-folder mode by
+    // draw()). NOTE: gl_draw_scaled_rotated_image rotates the arrow by
+    // mControlLabelRotation; the sink has no rotated-quad helper, so the
+    // Vulkan pass draws the arrow axis-aligned and only exposes the angle.
+    //
+    if (!mSingleFolderMode && (hasVisibleChildren() || !isFolderComplete()))
+    {
+        const S32 arrow_bottom = rect_height - mArrowSize - mArrowPadTop - mItemTopPad;
+        out.arrow_visible = true;
+        to_screen(LLRect(mIndentation, arrow_bottom + mArrowSize,
+                         mIndentation + mArrowSize, arrow_bottom),
+                  out.arrow_rect);
+        out.arrow_image = sFolderArrowImg.notNull() ? sFolderArrowImg->getName() : sVkFolderArrowImgName;
+        out.arrow_rotation = mControlLabelRotation;
+        out.arrow_color = mod_alpha(sFgColor.get());
+    }
+
+    //--------------------------------------------------------------------------------//
+    // Favorite star (drawFavoriteIcon)
+    //
+    static LLUICachedControl<bool> draw_star("InventoryFavoritesUseStar", true);
+    static LLUICachedControl<bool> draw_hollow_star("InventoryFavoritesUseHollowStar", true);
+
+    std::string favorite_name;
+    if (draw_star && mIsFavorite)
+    {
+        favorite_name = sFavoriteImg.notNull() ? sFavoriteImg->getName() : sVkFavoriteImgName;
+    }
+    else if (draw_hollow_star && mHasFavorites && !isOpen())
+    {
+        favorite_name = sFavoriteContentImg.notNull() ? sFavoriteContentImg->getName() : sVkFavoriteContentImgName;
+    }
+    if (!favorite_name.empty())
+    {
+        S32 x_offset = 0;
+        LLScrollContainer* scroll = root->getScrollContainer();
+        if (scroll)
+        {
+            x_offset = scroll->getVisibleContentRect().getWidth() + scroll->getDocPosHorizontal();
+        }
+        else
+        {
+            x_offset = rect_width;
+        }
+        out.favorite_visible = true;
+        to_screen(LLRect(x_offset - FAVORITE_IMAGE_SIZE - FAVORITE_IMAGE_PAD,
+                         rect_height - mItemHeight + FAVORITE_IMAGE_PAD + FAVORITE_IMAGE_SIZE,
+                         x_offset - FAVORITE_IMAGE_PAD,
+                         rect_height - mItemHeight + FAVORITE_IMAGE_PAD),
+                  out.favorite_rect);
+        out.favorite_image = favorite_name;
+        out.favorite_color = mod_alpha(sFgColor.get());
+    }
+
+    //--------------------------------------------------------------------------------//
+    // Item icon + link overlay. Geometry comes from setVkIconMetrics()
+    // (LLVKUIImage::getSize) because LLUIImage::getWidth()/getHeight() deref
+    // the GL texture.
+    //
+    const S32 icon_x = mIndentation + mArrowSize + mTextPad;
+    const std::string icon_name = getVkIconName();
+    const std::string open_name = getVkIconOpenName();
+    S32 icon_w = 0, icon_h = 0;
+    if (!open_name.empty() && (llabs(mControlLabelRotation) > 80)) // For open folders
+    {
+        out.icon_image = open_name;
+        icon_w = mVkIconMetrics.open_w;
+        icon_h = mVkIconMetrics.open_h;
+    }
+    else if (!icon_name.empty())
+    {
+        out.icon_image = icon_name;
+        icon_w = mVkIconMetrics.icon_w;
+        icon_h = mVkIconMetrics.icon_h;
+    }
+    if (!out.icon_image.empty() && icon_w > 0 && icon_h > 0)
+    {
+        const S32 icon_bottom = rect_height - icon_h - mItemTopPad + 1;
+        out.icon_visible = true;
+        to_screen(LLRect(icon_x, icon_bottom + icon_h, icon_x + icon_w, icon_bottom),
+                  out.icon_rect);
+    }
+
+    const std::string overlay_name = getVkIconOverlayName();
+    if (!overlay_name.empty() && root->showItemLinkOverlays()
+        && mVkIconMetrics.overlay_w > 0 && mVkIconMetrics.overlay_h > 0)
+    {
+        // GL positions the overlay using the (closed) icon's height.
+        const S32 overlay_bottom = rect_height - mVkIconMetrics.icon_h - mItemTopPad + 1;
+        out.overlay_visible = true;
+        to_screen(LLRect(icon_x, overlay_bottom + mVkIconMetrics.overlay_h,
+                         icon_x + mVkIconMetrics.overlay_w, overlay_bottom),
+                  out.overlay_rect);
+        out.overlay_image = overlay_name;
+    }
+
+    //--------------------------------------------------------------------------------//
+    // Exit if no label to draw (matches draw()'s early out)
+    //
+    if (mLabel.empty())
+    {
+        return;
+    }
+
+    const LLFontGL* font = getLabelFont();
+    if (!font)
+    {
+        return;
+    }
+    const S32 line_height = font->getLineHeight();
+
+    S32 filter_string_length = mViewModelItem->hasFilterStringMatch() ? (S32)mViewModelItem->getFilterStringSize() : 0;
+    const S32 filter_offset = static_cast<S32>(mViewModelItem->getFilterStringOffset());
+    const F32 y = (F32)rect_height - (F32)line_height - (F32)mTextPadTop - (F32)mItemTopPad;
+    const F32 text_left = (F32)getLabelXPos();
+    const LLWString combined_string = mLabel + mLabelSuffix;
+
+    auto add_run = [this, &out, &mod_alpha](const LLFontGL* run_font, const LLWString& text,
+                                            F32 x, F32 run_y, const LLColor4& color,
+                                            S32 max_pixels, bool ellipses)
+    {
+        S32 screen_x = 0, screen_y = 0;
+        localPointToScreen(ll_round(x), ll_round(run_y), &screen_x, &screen_y);
+        VkTextRun run;
+        run.font = run_font;
+        run.text = text;
+        run.x = (F32)screen_x;
+        run.y = (F32)screen_y;
+        run.color = mod_alpha(color);
+        run.max_pixels = max_pixels;
+        run.ellipses = ellipses;
+        out.text_runs.push_back(run);
+    };
+
+    //--------------------------------------------------------------------------------//
+    // Filter-match background boxes (drawn before the label, as in draw())
+    //
+    out.selection_image = sSelectionImg.notNull() ? sSelectionImg->getName() : sVkSelectionImgName;
+    out.filter_bg_color = mod_alpha(sFilterBGColor.get());
+    if (filter_string_length > 0)
+    {
+        const S32 bottom = rect_height - line_height - 3 - mItemTopPad;
+        const S32 top = rect_height - mItemTopPad;
+        if (mLabelSuffix.empty() || (font == sSuffixFont))
+        {
+            S32 left = ll_round(text_left) + font->getWidth(combined_string.c_str(), 0, filter_offset) - 2;
+            S32 right = left + font->getWidth(combined_string.c_str(), filter_offset, filter_string_length) + 2;
+            LLRect box;
+            to_screen(LLRect(left, top, right, bottom), box);
+            out.filter_boxes.push_back(box);
+        }
+        else
+        {
+            const S32 label_filter_length = llmin((S32)mLabel.size() - filter_offset, (S32)filter_string_length);
+            if (label_filter_length > 0)
+            {
+                S32 left = (S32)(ll_round(text_left) + font->getWidthF32(mLabel.c_str(), 0, llmin(filter_offset, (S32)mLabel.size()))) - 2;
+                S32 right = left + (S32)font->getWidthF32(mLabel.c_str(), filter_offset, label_filter_length) + 2;
+                LLRect box;
+                to_screen(LLRect(left, top, right, bottom), box);
+                out.filter_boxes.push_back(box);
+            }
+            const S32 suffix_filter_length = label_filter_length > 0 ? filter_string_length - label_filter_length : filter_string_length;
+            if (suffix_filter_length > 0)
+            {
+                const S32 suffix_offset = llmax(0, filter_offset - (S32)mLabel.size());
+                S32 left = (S32)(ll_round(text_left) + font->getWidthF32(mLabel.c_str(), 0, static_cast<S32>(mLabel.size())) + sSuffixFont->getWidthF32(mLabelSuffix.c_str(), 0, suffix_offset)) - 2;
+                S32 right = left + (S32)sSuffixFont->getWidthF32(mLabelSuffix.c_str(), suffix_offset, suffix_filter_length) + 2;
+                LLRect box;
+                to_screen(LLRect(left, top, right, bottom), box);
+                out.filter_boxes.push_back(box);
+            }
+        }
+    }
+
+    //--------------------------------------------------------------------------------//
+    // Label text (drawLabel)
+    //
+    static LLUICachedControl<bool> highlight_color("InventoryFavoritesColorText", true);
+    LLColor4 color;
+    if (mIsSelected && filled)
+    {
+        color = mFontHighlightColor.get();
+    }
+    else if (mIsFavorite && highlight_color)
+    {
+        color = sFavoriteColor.get();
+    }
+    else
+    {
+        color = mFontColor.get();
+    }
+
+    const bool fade_item = isFadeItem();
+    if (fade_item)
+    {
+        // Fade out item color to indicate it's being cut
+        color.mV[VALPHA] *= 0.5f;
+    }
+
+    const S32 label_max_pixels = rect_width - (S32)text_left - mLabelPaddingRight;
+    add_run(font, mLabel, text_left, y, color, label_max_pixels, /*use_ellipses*/true);
+
+    // Approximate drawLabel's right_x output (exact width after ellipses
+    // truncation is only known at raster time; clamp to the pixel budget).
+    F32 right_x = text_left + llmin(font->getWidthF32(mLabel.c_str(), 0, (S32)mLabel.size()),
+                                    (F32)llmax(0, label_max_pixels));
+
+    // <FS:Ansariel> Special for locked items
+    if (mViewModelItem->isLocked())
+    {
+        static const std::string locked_string = " (" + LLTrans::getString("LockedFolder") + ") ";
+        const LLWString locked_wstring = utf8str_to_wstring(locked_string);
+        add_run(font, locked_wstring, right_x, y, sProtectedColor.get(), S32_MAX, false);
+        right_x += font->getWidthF32(locked_wstring.c_str(), 0, (S32)locked_wstring.size());
+    }
+    // </FS:Ansariel>
+
+    // <FS:Ansariel> FIRE-29342: Protect folder option
+    if (mViewModelItem->isProtected())
+    {
+        static const std::string protected_string = " (" + LLTrans::getString("ProtectedFolder") + ") ";
+        const LLWString protected_wstring = utf8str_to_wstring(protected_string);
+        add_run(font, protected_wstring, right_x, y, sProtectedColor.get(), S32_MAX, false);
+        right_x += font->getWidthF32(protected_wstring.c_str(), 0, (S32)protected_wstring.size());
+    }
+    // </FS:Ansariel>
+
+    //--------------------------------------------------------------------------------//
+    // Label suffix
+    //
+    if (!mLabelSuffix.empty() && sSuffixFont)
+    {
+        add_run(sSuffixFont, mLabelSuffix, right_x, y,
+                fade_item ? color : sSuffixColor.get(), S32_MAX, false);
+    }
+
+    //--------------------------------------------------------------------------------//
+    // Highlight string match (the matching substring re-rendered in the
+    // filter text color over the background boxes above)
+    //
+    if (filter_string_length > 0)
+    {
+        const LLColor4 filter_text_color = sFilterTextColor.get();
+        const S32 combined_length = (S32)combined_string.size();
+        if (mLabelSuffix.empty() || (font == sSuffixFont))
+        {
+            F32 match_string_left = text_left + font->getWidthF32(combined_string.c_str(), 0, filter_offset);
+            add_run(font,
+                    combined_string.substr(llmin(filter_offset, combined_length), filter_string_length),
+                    match_string_left, y, filter_text_color, S32_MAX, false);
+        }
+        else
+        {
+            const S32 label_length = (S32)mLabel.size();
+            const S32 label_filter_length = llmin(label_length - filter_offset, (S32)filter_string_length);
+            if (label_filter_length > 0)
+            {
+                F32 match_string_left = text_left + font->getWidthF32(mLabel.c_str(), 0, llmin(filter_offset, label_length));
+                add_run(font, mLabel.substr(filter_offset, label_filter_length),
+                        match_string_left, y, filter_text_color, S32_MAX, false);
+            }
+
+            const S32 suffix_filter_length = label_filter_length > 0 ? filter_string_length - label_filter_length : filter_string_length;
+            if (suffix_filter_length > 0 && sSuffixFont)
+            {
+                const S32 suffix_offset = llmax(0, filter_offset - label_length);
+                F32 match_string_left = text_left + font->getWidthF32(mLabel.c_str(), 0, label_length)
+                    + sSuffixFont->getWidthF32(mLabelSuffix.c_str(), 0, suffix_offset);
+                const F32 suffix_y = (F32)rect_height - (F32)sSuffixFont->getLineHeight() - (F32)mTextPadTop - (F32)mItemTopPad;
+                add_run(sSuffixFont,
+                        mLabelSuffix.substr(llmin(suffix_offset, (S32)mLabelSuffix.size()), suffix_filter_length),
+                        match_string_left, suffix_y, filter_text_color, S32_MAX, false);
+            }
+        }
+    }
+}
+// </VulkanStorm>
 
 const LLFolderViewModelInterface* LLFolderViewItem::getFolderViewModel( void ) const
 {
@@ -2538,6 +2991,46 @@ void LLFolderViewFolder::draw()
 
     mExpanderHighlighted = false;
 }
+
+// <VulkanStorm>
+void LLFolderViewFolder::prepareVkDraw()
+{
+    LLFolderViewItem::prepareVkDraw();
+
+    // LLFolderViewFolder::draw() advances the arrow animation every frame.
+    updateLabelRotation();
+
+    // GL draws children only for the root folder, open folders, and folders
+    // animating closed (LLFolderViewFolder::draw()); the view tree keeps
+    // collapsed children getVisible()==true (arrange() only touches child
+    // visibility while open), so mirror the GL child-skip for the Vulkan
+    // walker here. arrange() restores visibility per-filter when the folder
+    // opens (via setOpen()->requestArrange()).
+    if (getRoot() != this && !isOpen() && mCurHeight == mTargetHeight)
+    {
+        for (folders_t::iterator fit = mFolders.begin(); fit != mFolders.end(); ++fit)
+        {
+            if ((*fit)->getVisible())
+            {
+                (*fit)->setVisible(false);
+            }
+        }
+        for (items_t::iterator iit = mItems.begin(); iit != mItems.end(); ++iit)
+        {
+            if ((*iit)->getVisible())
+            {
+                (*iit)->setVisible(false);
+            }
+        }
+    }
+}
+
+void LLFolderViewFolder::vkPostDraw()
+{
+    LLFolderViewItem::vkPostDraw();
+    mExpanderHighlighted = false;
+}
+// </VulkanStorm>
 
 // this does prefix traversal, as folders are listed above their contents
 LLFolderViewItem* LLFolderViewFolder::getNextFromChild( LLFolderViewItem* item, bool include_children )

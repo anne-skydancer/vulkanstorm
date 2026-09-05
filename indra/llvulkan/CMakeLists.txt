@@ -28,6 +28,8 @@ set(llvulkan_SOURCE_FILES
     llvkui2d.cpp
     llvkuiimage.cpp
     llvkuirender.cpp
+    llvkuiwidgets.cpp
+    llvkuifolder.cpp
     llvktext.cpp
     llvkuitestscene.cpp
     ${VULKAN_SDK_VOLK_SOURCE}
@@ -44,6 +46,9 @@ set(llvulkan_HEADER_FILES
     llvkui2d.h
     llvkuiimage.h
     llvkuirender.h
+    llvkuirenderinternal.h
+    llvkuiwidgets.h
+    llvkuifolder.h
     llvktext.h
     llvkuitestscene.h
     )

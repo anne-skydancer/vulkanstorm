@@ -48,6 +48,11 @@ public:
 
     void draw() override;
 
+    // <VulkanStorm> GL-free: the subtree fade alpha draw() pushes via
+    // LLViewDrawContext (1.0 unless the auto-close hover timer is fading).
+    F32 getVkDrawAlpha() const;
+    // </VulkanStorm>
+
 protected:
     LLFrameTimer mHoverTimer;
 };

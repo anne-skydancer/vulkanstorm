@@ -154,6 +154,28 @@ public:
     virtual LLPointer<LLUIImage> getIconOpen() const { return getIcon(); }
     virtual LLPointer<LLUIImage> getIconOverlay() const { return NULL; }
 
+    // <VulkanStorm> GL-free icon identity for the Vulkan UI renderer: the
+    // skinned-image NAME, available even when the GL image provider returns
+    // null pointers. The default derives from getIcon(); subclasses whose
+    // icon comes from a name table (e.g. inventory bridges) override to stay
+    // name-correct without GL images.
+    virtual std::string getVkIconName() const
+    {
+        LLPointer<LLUIImage> icon = getIcon();
+        return icon.notNull() ? icon->getName() : std::string();
+    }
+    virtual std::string getVkIconOpenName() const
+    {
+        LLPointer<LLUIImage> icon = getIconOpen();
+        return icon.notNull() ? icon->getName() : getVkIconName();
+    }
+    virtual std::string getVkIconOverlayName() const
+    {
+        LLPointer<LLUIImage> icon = getIconOverlay();
+        return icon.notNull() ? icon->getName() : std::string();
+    }
+    // </VulkanStorm>
+
     virtual LLFontGL::StyleFlags getLabelStyle() const = 0;
     virtual std::string getLabelSuffix() const = 0;
 

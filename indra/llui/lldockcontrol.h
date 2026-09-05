@@ -72,8 +72,23 @@ public:
     // gets a rect that bounds possible positions for a dockable control (EXT-1111)
     void getAllowedRect(LLRect& rect);
 
-    S32 getTongueWidth() const { return mDockTongue->getWidth(); }
-    S32 getTongueHeight() const { return mDockTongue->getHeight(); }
+    S32 getTongueWidth() const
+    {
+        // <VulkanStorm> null-safe: no GL images exist on the Vulkan path;
+        // the walker feeds the decoded size via setVkTongueSize().
+        return mDockTongue ? mDockTongue->getWidth() : mVkTongueWidth;
+    }
+    S32 getTongueHeight() const
+    {
+        return mDockTongue ? mDockTongue->getHeight() : mVkTongueHeight;
+    }
+
+    // <VulkanStorm> GL-free tongue state for the Vulkan UI walker (mirrors
+    // drawToungue()): false when the tongue should not draw; otherwise the
+    // image name + the same coordinates draw() passes to LLUIImage::draw().
+    void setVkTongueSize(S32 width, S32 height);
+    bool getVkTongueState(std::string& image, S32& x, S32& y) const;
+    // </VulkanStorm>
 
 private:
     virtual void moveDockable();
@@ -92,6 +107,10 @@ private:
     LLUIImagePtr mDockTongue;
     S32 mDockTongueX;
     S32 mDockTongueY;
+    // <VulkanStorm> decoded tongue size for the GL-free path
+    S32 mVkTongueWidth = 0;
+    S32 mVkTongueHeight = 0;
+    // </VulkanStorm>
 };
 
 #endif /* LL_DOCKCONTROL_H */

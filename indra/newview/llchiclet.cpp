@@ -1679,6 +1679,20 @@ void LLChicletPanel::showScrollButtonsIfNeeded()
     mRightScrollButton->setVisible(show_scroll_buttons);
 }
 
+// <VulkanStorm> GL-free clip rect accessor; read-only.
+bool LLChicletPanel::getVkScrollClipRect(LLRect& screen_rect) const
+{
+    if (!mScrollArea)
+    {
+        return false;
+    }
+    // mScrollArea is a direct child: its rect is in this panel's local space,
+    // which is the space the LLLocalClipRect in draw() is constructed in.
+    localRectToScreen(mScrollArea->getRect(), &screen_rect);
+    return true;
+}
+// </VulkanStorm>
+
 void LLChicletPanel::draw()
 {
     child_list_const_iter_t it = getChildList()->begin();

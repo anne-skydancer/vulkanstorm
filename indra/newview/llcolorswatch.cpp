@@ -65,6 +65,9 @@ LLColorSwatchCtrl::LLColorSwatchCtrl(const Params& p)
     mColor(p.color()),
     mCanApplyImmediately(p.can_apply_immediately),
     mAlphaGradientImage(p.alpha_background_image),
+    // <VulkanStorm> raw XUI name for the GL-free Vulkan path
+    mVkAlphaGradientImageName(p.alpha_background_image.vk_image_name.isProvided() ? p.alpha_background_image.vk_image_name() : ""),
+    // </VulkanStorm>
     mOnCancelCallback(p.cancel_callback()),
     mOnSelectCallback(p.select_callback()),
     mBorderColor(p.border_color()),
@@ -200,6 +203,57 @@ bool LLColorSwatchCtrl::handleMouseUp(S32 x, S32 y, MASK mask)
 }
 
 // assumes GL state is set for 2D
+// <VulkanStorm> GL-free replica of draw()'s geometry and branch decisions.
+// The caller passes the draw alpha (draw() derives it from the transparency
+// type itself); no GL, no side effects (does not touch mBorder/mCaption).
+LLColorSwatchCtrl::VkDrawState LLColorSwatchCtrl::getVkDrawState(F32 alpha) const
+{
+    VkDrawState state;
+    state.valid = mValid;
+
+    LLRect gl_border(0, getRect().getHeight(), getRect().getWidth(), mLabelHeight);
+    LLRect interior = gl_border;
+    interior.stretch(-1);
+    localRectToScreen(gl_border, &state.border_rect);
+    localRectToScreen(interior, &state.interior);
+
+    state.color = mColor % alpha;
+    state.border_color = mBorderColor.get();
+    state.fallback_tint = LLColor4::white % alpha;
+
+    if (mValid)
+    {
+        if (!mColor.isOpaque())
+        {
+            state.draw_checkerboard = true;
+            // draw() only paints the gradient overlay when the image exists
+            state.draw_alpha_gradient = mAlphaGradientImage.notNull() || !mVkAlphaGradientImageName.empty();
+            state.alpha_gradient_image = mAlphaGradientImage.notNull()
+                ? mAlphaGradientImage->getName() : mVkAlphaGradientImageName;
+        }
+    }
+    else
+    {
+        std::string fallback_name = mFallbackImage.notNull()
+            ? mFallbackImage->getName() : mVkFallbackImageName;
+        if (!fallback_name.empty())
+        {
+            state.use_fallback_image = true;
+            state.fallback_image = fallback_name;
+            state.border_color = LLUIColorTable::instance().getColor("ColorSwatchBorderColorGray").get();
+            state.border_ctrl_visible = false;
+        }
+        else
+        {
+            state.draw_grey_x = true;
+        }
+    }
+    state.border_color.mV[VALPHA] *= alpha;
+
+    return state;
+}
+// </VulkanStorm>
+
 void LLColorSwatchCtrl::draw()
 {
     // If we're in a focused floater, don't apply the floater's alpha to the color swatch (STORM-676).

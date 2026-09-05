@@ -64,14 +64,24 @@ void LLFlyoutButton::onActionButtonClick(const LLSD& data)
 
 void LLFlyoutButton::draw()
 {
+    // <VulkanStorm> the state-sync half moved to prepareVkDraw() so the
+    // GL-free Vulkan walker can run it without entering draw().
+    prepareVkDraw();
+    // </VulkanStorm>
+    LLComboBox::draw();
+}
+
+// <VulkanStorm>
+void LLFlyoutButton::prepareVkDraw()
+{
     mActionButton->setToggleState(mToggleState);
     mButton->setToggleState(mToggleState);
 
     //FIXME: this should be an attribute of comboboxes, whether they have a distinct label or
     // the label reflects the last selected item, for now we have to manually remove the label
     setLabel(LLStringUtil::null);
-    LLComboBox::draw();
 }
+// </VulkanStorm>
 
 void LLFlyoutButton::setToggleState(bool state)
 {

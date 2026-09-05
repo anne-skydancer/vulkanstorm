@@ -62,6 +62,11 @@ public:
 
     virtual void    draw();
     virtual void    onCommit();
+
+    // <VulkanStorm> The expansion half of draw() (reflow + auto-resize),
+    // without any rendering; the Vulkan UI walker calls this before walking.
+    void            prepareVkDraw();
+    // </VulkanStorm>
     /*virtual*/ void    onFocusReceived();
     /*virtual*/ void    onFocusLost();
 

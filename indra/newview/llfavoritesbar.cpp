@@ -545,6 +545,9 @@ LLFavoritesBarCtrl::LLFavoritesBarCtrl(const LLFavoritesBarCtrl::Params& p)
     mOverflowMenuHandle(),
     mContextMenuHandle(),
     mImageDragIndication(p.image_drag_indication),
+    // <VulkanStorm> raw XUI name for the GL-free Vulkan path
+    mVkImageDragIndication(p.image_drag_indication.vk_image_name.isProvided() ? p.image_drag_indication.vk_image_name() : ""),
+    // </VulkanStorm>
     mShowDragMarker(false),
     mLandingTab(NULL),
     mLastTab(NULL),
@@ -971,6 +974,59 @@ void LLFavoritesBarCtrl::reshape(S32 width, S32 height, bool called_from_parent)
     LLUICtrl::reshape(width, height, called_from_parent);
     updateButtons(force_update);
 }
+
+// <VulkanStorm> GL-free drag-marker state; read-only (does not consume the
+// marker like draw() does).
+LLFavoritesBarCtrl::VkDrawState LLFavoritesBarCtrl::getVkDrawState() const
+{
+    VkDrawState state;
+    state.show_drag_marker = mShowDragMarker;
+
+    // Null-safe image identity: prefer the GL-backed image's registry name,
+    // fall back to the raw XUI name captured at construction.
+    if (mImageDragIndication)
+    {
+        state.drag_image = mImageDragIndication->getName();
+        state.image_width = mImageDragIndication->getWidth();
+        state.image_height = mImageDragIndication->getHeight();
+    }
+    if (state.drag_image.empty())
+    {
+        state.drag_image = mVkImageDragIndication;
+    }
+
+    if (!mShowDragMarker)
+    {
+        return state;
+    }
+
+    // Same anchor logic as draw(): landing tab if hovered, else last tab.
+    S32 local_x = 0;
+    if (mLandingTab)
+    {
+        LLRect rect = mLandingTab->getRect();
+        localRectToScreen(rect, &state.target_rect);
+        local_x = rect.mLeft;
+        state.has_target = true;
+    }
+    else if (mLastTab)
+    {
+        LLRect rect = mLastTab->getRect();
+        localRectToScreen(rect, &state.target_rect);
+        local_x = rect.mRight;
+        state.has_target = true;
+    }
+
+    if (state.has_target)
+    {
+        // draw() uses rect.getHeight() (tab height) as the local y anchor.
+        S32 local_y = state.target_rect.getHeight();
+        localPointToScreen(local_x, local_y, &state.marker_x, &state.marker_y);
+    }
+
+    return state;
+}
+// </VulkanStorm>
 
 void LLFavoritesBarCtrl::draw()
 {

@@ -143,6 +143,15 @@ private:
     std::string mSizeControlName;
     LLSD mSavedSizes;
     // </FS:Zi>
+
+public:
+    // <VulkanStorm> GL-free description of LLLayoutStack::draw()'s per-panel
+    // clip for the Vulkan UI walker. draw() clips each LLLayoutPanel child to
+    // its (possibly animation-shrunk) layout rect; the walker reproduces that
+    // with the clip stack. Returns the panel's clip rect in GL SCREEN space,
+    // or false when the panel should not be clipped (not a layout panel).
+    bool getVkPanelClipRect(const LLView* panel, LLRect& screen_rect) const;
+    // </VulkanStorm>
 }; // end class LLLayoutStack
 
 

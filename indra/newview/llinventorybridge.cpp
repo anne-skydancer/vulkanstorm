@@ -2274,6 +2274,27 @@ LLUIImagePtr LLItemBridge::getIcon() const
     return LLInventoryIcon::getIcon(LLInventoryType::ICONNAME_OBJECT);
 }
 
+// <VulkanStorm> GL-free name variant: identical mapping, no GL image needed.
+std::string LLItemBridge::getVkIconName() const
+{
+    if (LLInventoryObject* obj = getInventoryObject())
+    {
+        return LLInventoryIcon::getIconName(obj->getType(), LLInventoryType::IT_NONE, mIsLink);
+    }
+
+    return LLInventoryIcon::getIconName(LLInventoryType::ICONNAME_OBJECT);
+}
+
+std::string LLItemBridge::getVkIconOverlayName() const
+{
+    if (getItem() && getItem()->getIsLinkType())
+    {
+        return "Inv_Link";
+    }
+    return LLStringUtil::null;
+}
+// </VulkanStorm>
+
 // virtual
 LLUIImagePtr LLItemBridge::getIconOverlay() const
 {
@@ -4377,6 +4398,18 @@ LLUIImagePtr LLFolderBridge::getFolderIcon(bool is_open) const
     LLFolderType::EType preferred_type = getPreferredType();
     return LLUI::getUIImage(LLViewerFolderType::lookupIconName(preferred_type, is_open));
 }
+
+// <VulkanStorm> GL-free name variants (identical mapping, no GL image).
+std::string LLFolderBridge::getVkIconName() const
+{
+    return LLViewerFolderType::lookupIconName(getPreferredType(), false);
+}
+
+std::string LLFolderBridge::getVkIconOpenName() const
+{
+    return LLViewerFolderType::lookupIconName(getPreferredType(), true);
+}
+// </VulkanStorm>
 
 // static : use by LLLinkFolderBridge to get the closed type icons
 LLUIImagePtr LLFolderBridge::getIcon(LLFolderType::EType preferred_type)

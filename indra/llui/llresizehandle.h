@@ -57,6 +57,16 @@ public:
 
     void            setResizeLimits( S32 min_width, S32 min_height ) { mMinWidth = min_width; mMinHeight = min_height; }
 
+    // <VulkanStorm> GL-free state for the Vulkan UI walker (mirrors draw()):
+    // the resize corner image, drawn unscaled at the widget's bottom-left.
+    struct VkDrawState
+    {
+        bool        draw_image = false;     // image present && RIGHT_BOTTOM
+        std::string image;                  // skinned image name
+    };
+    VkDrawState getVkDrawState() const;
+    // </VulkanStorm>
+
 private:
     bool            pointInHandle( S32 x, S32 y );
 

@@ -36,12 +36,15 @@
 #include "llworldmap.h"
 #include "v4color.h"
 
+#include <vector>
+
 const S32 DEFAULT_TRACKING_ARROW_SIZE = 16;
 
 class LLUUID;
 class LLVector3d;
 class LLVector3;
 class LLTextBox;
+class LLViewerFetchedTexture;
 
 
 class LLWorldMapView : public LLPanel
@@ -136,6 +139,24 @@ public:
     // if the view changes, download additional sim info as needed
     void            updateVisibleBlocks();
 
+    // <VulkanStorm> GL-free state for the Vulkan UI world-map hook
+    // (indra/newview/llvkuimaps.cpp). The Vulkan frame never runs draw(), so
+    // prepareVkDraw() performs draw()'s non-GL mutations (pan/zoom animation,
+    // visible-region bookkeeping, mipmap tile fetching) and caches the tile
+    // draw list; the accessors below expose the readable state the render
+    // hook emits from.
+    struct VkMapTile
+    {
+        LLPointer<LLViewerFetchedTexture> image;    // null => known-missing tile (skip)
+        F32 left = 0.f, bottom = 0.f, right = 0.f, top = 0.f; // view-local, GL bottom-left origin
+    };
+    void            prepareVkDraw();
+    F32             getVkMapScale() const   { return mMapScale; }
+    F32             getVkMapRatio() const   { return mMapRatio; }
+    LLVector3       vkGlobalPosToView(const LLVector3d& global_pos); // == globalPosToView (public, for the hook)
+    const std::vector<VkMapTile>& getVkMapTiles() const { return mVkMapTiles; }
+    // </VulkanStorm>
+
 protected:
     void            setDirectionPos( LLTextBox* text_box, F32 rotation );
     void            updateDirections();
@@ -202,6 +223,14 @@ public:
 
 private:
     void drawTileOutline(S32 level, F32 top, F32 left, F32 bottom, F32 right);
+
+    // <VulkanStorm> drawMipmapLevel() equivalent for the Vulkan UI path:
+    // same iteration + fetch side effects, but collects VkMapTile entries
+    // instead of emitting GL, and treats an available CPU raw image (not
+    // hasGLTexture()) as "loaded".
+    bool vkCollectMipmapLevel(S32 width, S32 height, S32 level, bool load = true);
+    std::vector<VkMapTile> mVkMapTiles;
+    // </VulkanStorm>
 
     void setScale(F32 scale, bool snap = true);
 

@@ -2036,6 +2036,76 @@ LLLineEditor::VkTextState LLLineEditor::getVkTextState(F32 alpha) const
     }
     return out;
 }
+
+void LLLineEditor::getVkPreeditMarkers(F32 alpha, std::vector<VkPreeditMarker>& out) const
+{
+    // Mirrors draw()'s hasPreeditString() block, emitting editor-LOCAL rects
+    // instead of GL calls. Only meaningful while an IME preedit is active.
+    static LLUICachedControl<F32> preedit_marker_brightness ("UIPreeditMarkerBrightness", 0);
+    static LLUICachedControl<S32> preedit_marker_gap ("UIPreeditMarkerGap", 0);
+    static LLUICachedControl<S32> preedit_marker_position ("UIPreeditMarkerPosition", 0);
+    static LLUICachedControl<S32> preedit_marker_thickness ("UIPreeditMarkerThickness", 0);
+    static LLUICachedControl<F32> preedit_standout_brightness ("UIPreeditStandoutBrightness", 0);
+    static LLUICachedControl<S32> preedit_standout_gap ("UIPreeditStandoutGap", 0);
+    static LLUICachedControl<S32> preedit_standout_position ("UIPreeditStandoutPosition", 0);
+    static LLUICachedControl<S32> preedit_standout_thickness ("UIPreeditStandoutThickness", 0);
+
+    out.clear();
+    if (!hasPreeditString())
+    {
+        return;
+    }
+
+    LLRect background( 0, getRect().getHeight(), getRect().getWidth(), 0 );
+    background.stretch( -mBorderThickness );
+
+    LLColor4 text_color;
+    if (!mReadOnly)
+    {
+        text_color = !getTentative() ? mFgColor.get() : mTentativeFgColor.get();
+    }
+    else
+    {
+        text_color = mReadOnlyFgColor.get();
+    }
+    text_color.setAlpha(alpha);
+
+    for (U32 i = 0; i < mPreeditStandouts.size(); i++)
+    {
+        const S32 preedit_left = mPreeditPositions[i];
+        const S32 preedit_right = mPreeditPositions[i + 1];
+        if (preedit_right > mScrollHPos)
+        {
+            S32 preedit_pixels_left = findPixelNearestPos(llmax(preedit_left, mScrollHPos) - getCursor());
+            S32 preedit_pixels_right = llmin(findPixelNearestPos(preedit_right - getCursor()), background.mRight);
+            if (preedit_pixels_left >= background.mRight)
+            {
+                break;
+            }
+
+            VkPreeditMarker marker;
+            if (mPreeditStandouts[i])
+            {
+                marker.local_rect.set(preedit_pixels_left + preedit_standout_gap,
+                    background.mBottom + preedit_standout_position,
+                    preedit_pixels_right - preedit_standout_gap - 1,
+                    background.mBottom + preedit_standout_position - preedit_standout_thickness);
+                marker.color = (text_color * preedit_standout_brightness
+                                + mPreeditBgColor.get() * (1 - preedit_standout_brightness)).setAlpha(alpha);
+            }
+            else
+            {
+                marker.local_rect.set(preedit_pixels_left + preedit_marker_gap,
+                    background.mBottom + preedit_marker_position,
+                    preedit_pixels_right - preedit_marker_gap - 1,
+                    background.mBottom + preedit_marker_position - preedit_marker_thickness);
+                marker.color = (text_color * preedit_marker_brightness
+                                + mPreeditBgColor.get() * (1 - preedit_marker_brightness)).setAlpha(alpha);
+            }
+            out.push_back(marker);
+        }
+    }
+}
 // </VulkanStorm>
 
 //virtual

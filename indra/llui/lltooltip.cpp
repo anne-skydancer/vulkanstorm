@@ -400,6 +400,29 @@ F32 LLToolTip::getVisibleTime() const
     return mVisibleTimer.getStarted() ? mVisibleTimer.getElapsedTimeF32() : 0.f;
 }
 
+// <VulkanStorm>
+F32 LLToolTip::getVkDrawAlpha() const
+{
+    // Mirrors draw(): fade out over ToolTipFadeTime once mFadeTimer starts.
+    if (mFadeTimer.getStarted())
+    {
+        static LLCachedControl<F32> tool_tip_fade_time(*LLUI::getInstance()->mSettingGroups["config"], "ToolTipFadeTime", 0.2f);
+        return clamp_rescale(mFadeTimer.getElapsedTimeF32(), 0.f, tool_tip_fade_time(), 1.f, 0.f);
+    }
+    return 1.f;
+}
+
+void LLToolTip::prepareVkDraw()
+{
+    // The state-mutating half of draw(): an expired fade hides the tooltip.
+    if (mFadeTimer.getStarted() && getVkDrawAlpha() == 0.f)
+    {
+        mFadeTimer.stop();
+        LLPanel::setVisible(false);
+    }
+}
+// </VulkanStorm>
+
 bool LLToolTip::hasClickCallback() const
 {
     return mHasClickCallback;

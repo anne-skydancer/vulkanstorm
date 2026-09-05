@@ -853,6 +853,7 @@ set(viewer_SOURCE_FILES
     llviewerwindow.cpp
     llviewerwindowlistener.cpp
     llvisualeffect.cpp
+    llvkuimaps.cpp
     llvlcomposition.cpp
     llvlmanager.cpp
     llvoavatar.cpp
@@ -1711,6 +1712,7 @@ set(viewer_HEADER_FILES
     llviewerwindow.h
     llviewerwindowlistener.h
     llvisualeffect.h
+    llvkuimaps.h
     llvlcomposition.h
     llvlmanager.h
     llvoavatar.h

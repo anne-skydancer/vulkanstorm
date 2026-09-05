@@ -89,7 +89,28 @@ public:
     void            setOnCancelCallback(commit_callback_t cb) { mOnCancelCallback = cb; }
     void            setOnSelectCallback(commit_callback_t cb) { mOnSelectCallback = cb; }
     void            setPreviewCallback(commit_callback_t cb) { mPreviewCallback = cb; }
-    void            setFallbackImage(LLPointer<LLUIImage> image) { mFallbackImage = image; }
+    void            setFallbackImage(LLPointer<LLUIImage> image) { mFallbackImage = image; mVkFallbackImageName = image.notNull() ? image->getName() : ""; } // <VulkanStorm> retain name for GL-free path
+
+    // <VulkanStorm> GL-free description of what draw() paints: border rect,
+    // interior, checkerboard/color/alpha-gradient or fallback/grey-X content.
+    struct VkDrawState
+    {
+        bool valid = true;              // mValid
+        LLColor4 color;                 // mColor % alpha
+        LLColor4 border_color;          // mBorderColor, or gray when fallback shows
+        LLRect border_rect;             // screen space (full width, above label)
+        LLRect interior;                // screen space, border_rect stretched -1
+        bool border_ctrl_visible = true;// draw() sets mBorder visible to this
+        bool draw_checkerboard = false; // valid && color not opaque
+        bool draw_alpha_gradient = false; // valid && not opaque && image known
+        std::string alpha_gradient_image;
+        bool use_fallback_image = false;// !valid && fallback known
+        std::string fallback_image;
+        bool draw_grey_x = false;       // !valid && no fallback image
+        LLColor4 fallback_tint;         // LLColor4::white % alpha
+    };
+    VkDrawState getVkDrawState(F32 alpha) const;
+    // </VulkanStorm>
 
     void            showPicker(bool take_focus);
 
@@ -125,6 +146,13 @@ protected:
 
     LLPointer<LLUIImage> mAlphaGradientImage;
     LLPointer<LLUIImage> mFallbackImage;
+
+    // <VulkanStorm> raw image names for the GL-free Vulkan path; the
+    // GL-backed LLUIImage pointers above may be null there. The fallback
+    // image is set programmatically, so its name is captured at set time.
+    std::string             mVkAlphaGradientImageName;
+    std::string             mVkFallbackImageName;
+    // </VulkanStorm>
 
     LLUIColor               mTextEnabledColor;      // <FS:Zi> Add label/caption colors
     LLUIColor               mTextDisabledColor;     // <FS:Zi> Add label/caption colors

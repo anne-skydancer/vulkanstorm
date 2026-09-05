@@ -105,6 +105,10 @@ LLBadge::LLBadge(const LLBadge::Params& p)
     , mPaddingVert(p.padding_vert)
     , mParentScroller(NULL)
     , mDrawAtParentTop(false)
+    // <VulkanStorm> retain the XUI names for the GL-free Vulkan path
+    , mVkImageName(p.image.vk_image_name.isProvided() ? p.image.vk_image_name() : "")
+    , mVkBorderImageName(p.border_image.vk_image_name.isProvided() ? p.border_image.vk_image_name() : "")
+    // </VulkanStorm>
 {
     if (mImage.isNull())
     {
@@ -177,6 +181,111 @@ bool LLBadge::addToView(LLView * view)
 
     return child_added;
 }
+
+// <VulkanStorm>
+void LLBadge::getVkDrawState(F32 alpha, VkDrawState& out) const
+{
+    // Mirrors draw(): same size/position math, without the GL emission.
+    out = VkDrawState();
+    if (mLabel.empty()) return;
+
+    LLView* owner_view = mOwner.get();
+    if (!owner_view || !owner_view->isInVisibleChain()) return;
+
+    const S32 badge_label_begin_offset = 0;
+    const S32 badge_char_length = S32_MAX;
+
+    const F32 badge_width = (2.0f * mPaddingHoriz) +
+        mGLFont->getWidthF32(mLabel.getWString().c_str(), badge_label_begin_offset, badge_char_length);
+    const F32 badge_height = (2.0f * mPaddingVert) + mGLFont->getLineHeight();
+
+    LLRect owner_rect;
+    owner_view->localRectToOtherView(owner_view->getLocalRect(), &owner_rect, const_cast<LLBadge*>(this));
+
+    S32 location_offset_horiz = mLocationOffsetHCenter;
+    S32 location_offset_vert = mLocationOffsetVCenter;
+
+    if (mParentScroller != NULL)
+    {
+        LLRect visibleRect = mParentScroller->getVisibleContentRect();
+
+        if (mLocationOffsetHCenter != BADGE_OFFSET_NOT_SPECIFIED)
+        {
+            if (LLRelPos::IsRight(mLocation))
+            {
+                location_offset_horiz += visibleRect.mRight;
+            }
+            else if (LLRelPos::IsLeft(mLocation))
+            {
+                location_offset_horiz += visibleRect.mLeft;
+            }
+            else
+            {
+                location_offset_horiz += (visibleRect.mLeft + visibleRect.mRight) / 2;
+            }
+        }
+
+        if (mLocationOffsetVCenter != BADGE_OFFSET_NOT_SPECIFIED)
+        {
+            if (LLRelPos::IsTop(mLocation))
+            {
+                location_offset_vert += visibleRect.mTop;
+            }
+            else if (LLRelPos::IsBottom(mLocation))
+            {
+                location_offset_vert += visibleRect.mBottom;
+            }
+            else
+            {
+                location_offset_vert += (visibleRect.mBottom + visibleRect.mTop) / 2;
+            }
+        }
+    }
+
+    F32 badge_center_x;
+    F32 badge_center_y;
+
+    if (mLocationOffsetHCenter == BADGE_OFFSET_NOT_SPECIFIED)
+    {
+        badge_center_x = owner_rect.mLeft + owner_rect.getWidth() * mLocationPercentHCenter;
+    }
+    else
+    {
+        badge_center_x = (F32)location_offset_horiz;
+    }
+
+    if (mLocationOffsetVCenter == BADGE_OFFSET_NOT_SPECIFIED)
+    {
+        if (mDrawAtParentTop)
+        {
+            badge_center_y = owner_rect.mTop - badge_height * 0.5f - 1;
+        }
+        else
+        {
+            badge_center_y = owner_rect.mBottom + owner_rect.getHeight() * mLocationPercentVCenter;
+        }
+    }
+    else
+    {
+        badge_center_y = (F32)location_offset_vert;
+    }
+
+    out.visible = true;
+    const F32 badge_x = badge_center_x - badge_width * 0.5f;
+    const F32 badge_y = badge_center_y - badge_height * 0.5f;
+    out.badge_rect.set(ll_round(badge_x), ll_round(badge_y + badge_height),
+                       ll_round(badge_x + badge_width), ll_round(badge_y));
+    out.image = mImage.notNull() ? mImage->getName() : mVkImageName;
+    out.border_image = mBorderImage.notNull() ? mBorderImage->getName() : mVkBorderImageName;
+    out.image_color = mImageColor % alpha;
+    out.border_color = mBorderColor % alpha;
+    out.font = mGLFont;
+    out.label = mLabel.getWString();
+    out.label_x = badge_center_x + mLabelOffsetHoriz;
+    out.label_y = badge_center_y + mLabelOffsetVert;
+    out.label_color = mLabelColor % alpha;
+}
+// </VulkanStorm>
 
 void LLBadge::setLabel(const LLStringExplicit& label)
 {

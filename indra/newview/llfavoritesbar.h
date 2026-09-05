@@ -77,6 +77,25 @@ public:
     void showDragMarker(bool show) { mShowDragMarker = show; }
     void setLandingTab(LLUICtrl* tab) { mLandingTab = tab; }
 
+    // <VulkanStorm> GL-free drag-marker state for the Vulkan UI renderer.
+    // Mirrors what draw() paints when mShowDragMarker is set: the
+    // drag-indication image anchored to the landing tab (or last tab) rect.
+    // NOTE: the GL draw() consumes the marker (mShowDragMarker = false after
+    // drawing); this accessor is read-only and does NOT consume it.
+    struct VkDrawState
+    {
+        bool show_drag_marker = false;
+        bool has_target = false;        // landing or last tab exists
+        LLRect target_rect;             // screen-space rect of mLandingTab/mLastTab
+        S32 marker_x = 0;               // screen-space draw position of the marker
+        S32 marker_y = 0;
+        std::string drag_image;         // drag-indication image name
+        S32 image_width = 0;            // native marker size; 0 if GL image unavailable
+        S32 image_height = 0;
+    };
+    VkDrawState getVkDrawState() const;
+    // </VulkanStorm>
+
 protected:
     void updateButtons(bool force_update = false);
     LLButton* createButton(const LLPointer<LLViewerInventoryItem> item, const LLButton::Params& button_params, S32 x_offset );
@@ -116,6 +135,10 @@ protected:
     LLUUID mSelectedItemID;
     LLFrameTimer mItemsChangedTimer;
     LLUIImage* mImageDragIndication;
+    // <VulkanStorm> raw XUI name of image_drag_indication, retained for the
+    // GL-free Vulkan path (mImageDragIndication may be null there).
+    std::string mVkImageDragIndication;
+    // </VulkanStorm>
 
 private:
     /*

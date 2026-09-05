@@ -253,6 +253,33 @@ public:
 
     LLViewerFetchedTexture* getTexture() { return mTexturep; }
 
+    // <VulkanStorm> GL-free description of what draw() paints, for the Vulkan
+    // UI renderer. NOTE: draw() re-resolves the preview texture from
+    // mImageAssetID every frame (and fetches/uploads via GL); this accessor
+    // is read-only and reports the LAST resolved pointers. A Vulkan hook
+    // should treat image_asset_id as authoritative and perform its own
+    // dynamic upload/fetch of that asset id.
+    struct VkDrawState
+    {
+        LLUUID image_asset_id;          // mImageAssetID (authoritative selection)
+        bool valid = true;              // mValid; invalid => no preview
+        bool has_texture = false;       // a preview texture is currently resolved
+        LLUUID texture_id;              // resolved preview id (texture or GLTF preview)
+        S32 texture_components = 0;     // 4 => checkerboard drawn behind image
+        bool texture_fully_loaded = true;
+        bool is_material_preview = false; // preview came from mGLTFPreview
+        bool masked = false;            // mIsMasked: grey overlay + X over image
+        bool draw_fallback = false;     // no preview, fallback image shown
+        std::string fallback_image;     // fallback image name
+        bool draw_grey_x = false;       // no preview and no fallback image
+        LLColor4 border_color;          // mBorderColor
+        LLRect border_rect;             // screen space (above caption area)
+        LLRect interior;                // screen space, border_rect stretched -1
+        bool show_loading_placeholder = false; // "Loading..." label would show
+    };
+    VkDrawState getVkDrawState(F32 alpha) const;
+    // </VulkanStorm>
+
     void setBakeTextureEnabled(bool enabled);
     bool getBakeTextureEnabled() const { return mBakeTextureEnabled; }
 
@@ -293,6 +320,10 @@ private:
     LLUUID                      mBlankImageAssetID;
     LLUUID                      mLocalTrackingID;
     LLUIImagePtr                mFallbackImage;
+    // <VulkanStorm> raw XUI name of fallback_image, retained for the GL-free
+    // Vulkan path (mFallbackImage may be null there).
+    std::string                 mVkFallbackImageName;
+    // </VulkanStorm>
     std::string                 mDefaultImageName;
     LLHandle<LLFloater>         mFloaterHandle;
     LLTextBox*                  mTentativeLabel;

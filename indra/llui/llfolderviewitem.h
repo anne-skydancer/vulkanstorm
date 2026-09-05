@@ -31,6 +31,11 @@
 #include "lluiimage.h"
 #include "llfontvertexbuffer.h"
 
+// <VulkanStorm>
+#include <string>
+#include <vector>
+// </VulkanStorm>
+
 class LLFolderView;
 class LLFolderViewModelItem;
 class LLFolderViewFolder;
@@ -324,6 +329,85 @@ public:
     void drawFavoriteIcon();
     void drawHighlight(bool showContent, bool hasKeyboardFocus, const LLUIColor& selectColor, const LLUIColor& flashColor, const LLUIColor& outlineColor, const LLUIColor& mouseOverColor);
     void drawLabel(const LLFontGL* font, const F32 x, const F32 y, const LLColor4& color, F32 &right_x);
+
+    // <VulkanStorm> GL-free description of the chrome emitted by draw(). The
+    // Vulkan UI walker (llvkuifolder.cpp) reads this state instead of running
+    // the GL draw() path. Icon geometry arrives via setVkIconMetrics() because
+    // llui cannot query the Vulkan-native LLVKUIImage registry itself, and the
+    // LLUIImage pointers may be null when the GL image provider is off (only
+    // the cached name strings survive).
+    struct VkIconMetrics
+    {
+        S32 icon_w = 0, icon_h = 0;
+        S32 open_w = 0, open_h = 0;
+        S32 overlay_w = 0, overlay_h = 0;
+    };
+    struct VkTextRun
+    {
+        const LLFontGL* font = nullptr;
+        LLWString text;
+        F32 x = 0.f;                    // GL-space screen position (baseline)
+        F32 y = 0.f;
+        LLColor4 color;
+        S32 max_pixels = S32_MAX;
+        bool ellipses = false;
+    };
+    struct VkDrawState
+    {
+        // One gl_rect_2d() from drawHighlight(), in GL emission order.
+        struct RectOp
+        {
+            LLRect rect;                // GL-space screen rect
+            LLColor4 color;
+            bool filled = true;
+        };
+        LLRect item_rect;               // GL-space screen rect of the item
+        std::vector<RectOp> highlight_ops;
+        // Disclosure arrow. arrow_rotation is informational: the 2D sink has
+        // no rotated-quad helper yet, so the consumer draws it axis-aligned.
+        bool arrow_visible = false;
+        LLRect arrow_rect;
+        std::string arrow_image;
+        F32 arrow_rotation = 0.f;
+        LLColor4 arrow_color;
+        // Favorite star
+        bool favorite_visible = false;
+        LLRect favorite_rect;
+        std::string favorite_image;
+        LLColor4 favorite_color;
+        // Item icon + link overlay
+        bool icon_visible = false;
+        LLRect icon_rect;
+        std::string icon_image;
+        bool overlay_visible = false;
+        LLRect overlay_rect;
+        std::string overlay_image;
+        // Filter-match background boxes (drawn under the label text)
+        std::string selection_image;
+        LLColor4 filter_bg_color;
+        std::vector<LLRect> filter_boxes;
+        // Text runs in GL emission order: label, locked/protected markers,
+        // suffix, filter-match substrings.
+        std::vector<VkTextRun> text_runs;
+    };
+    // Draw-time mutations from draw() (model filter-state refresh; folders
+    // also advance the arrow rotation and reconcile collapsed-children
+    // visibility to match LLFolderViewFolder::draw()'s child-skip).
+    virtual void prepareVkDraw();
+    // Snapshot the chrome state. Pure with respect to the per-frame consumed
+    // flags (see vkPostDraw); safe to call from both the prepare and the
+    // render walks.
+    void getVkDrawState(F32 alpha, VkDrawState& out);
+    // Per-frame flags consumed by draw() (drag-and-drop target, expander
+    // highlight). Called by the Vulkan pass after emission, mirroring the
+    // clears at the end of draw()/drawHighlight().
+    virtual void vkPostDraw();
+    std::string getVkIconName() const;
+    std::string getVkIconOpenName() const;
+    std::string getVkIconOverlayName() const;
+    void setVkIconMetrics(const VkIconMetrics& metrics) { mVkIconMetrics = metrics; }
+    // </VulkanStorm>
+
     virtual bool handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,
                                     EDragAndDropType cargo_type,
                                     void* cargo_data,
@@ -347,6 +431,20 @@ private:
     LLFontVertexBuffer mLabelFontBuffer;
     LLFontVertexBuffer mSuffixFontBuffer;
     LLFontGL* pLabelFont{nullptr};
+
+    // <VulkanStorm> Cached icon names/metrics for the GL-free renderer; the
+    // names survive even when the GL image provider returns null LLUIImages.
+    std::string mVkIconName;
+    std::string mVkIconOpenName;
+    std::string mVkIconOverlayName;
+    VkIconMetrics mVkIconMetrics;
+    // Raw XUI names for the class-static skinned images (same fallback role
+    // as LLScrollbar::mVkThumbImageV etc.).
+    static std::string sVkFolderArrowImgName;
+    static std::string sVkSelectionImgName;
+    static std::string sVkFavoriteImgName;
+    static std::string sVkFavoriteContentImgName;
+    // </VulkanStorm>
 };
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -514,6 +612,12 @@ public:
                                        EAcceptance* accept,
                                        std::string& tooltip_msg);
     virtual void draw();
+
+    // <VulkanStorm> Folders advance the arrow rotation in draw() and only
+    // draw children while open/animating; prepareVkDraw() reproduces both.
+    virtual void prepareVkDraw();
+    virtual void vkPostDraw();
+    // </VulkanStorm>
 
     folders_t::iterator getFoldersBegin() { return mFolders.begin(); }
     folders_t::iterator getFoldersEnd() { return mFolders.end(); }

@@ -293,7 +293,22 @@ namespace LLVKText
         // rendering starts. Queue submission here would occur inside the
         // swapchain render pass and can make later UI text disappear.
         if (font->dirty || font->texture.descriptor == VK_NULL_HANDLE)
+        {
+            // <VulkanStorm> diagnostic: VULKANSTORM_TEXT_DEBUG=1 logs text
+            // that is dropped because the atlas isn't uploaded/ready.
+            static const bool s_dbg = getenv("VULKANSTORM_TEXT_DEBUG") != nullptr;
+            static int s_dbg_n = 0;
+            if (s_dbg && s_dbg_n < 24)
+            {
+                ++s_dbg_n;
+                LL_INFOS("Vulkan") << "VKTEXT-DROP dirty=" << (font->dirty ? 1 : 0)
+                                   << " desc=" << (font->texture.descriptor != VK_NULL_HANDLE ? 1 : 0)
+                                   << " x=" << x << " y=" << y
+                                   << " text='" << wstring_to_utf8str(text) << "'" << LL_ENDL;
+            }
+            // </VulkanStorm>
             return 0;
+        }
 
         F32 px = x * sx;
         F32 py = y * sy;

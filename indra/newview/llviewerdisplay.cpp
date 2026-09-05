@@ -33,10 +33,25 @@
 #include "llvksession.h"
 #include "llvkuirender.h"
 #include "llvkuiimage.h"
+#include "llvkui2d.h"
 #include "llvkuitestscene.h"
 // <VulkanStorm> UI A/B harness GL emitters (gl_render_ui_test_scene).
 #include "llrender2dutils.h"
 #include "lluiimage.h"
+// </VulkanStorm>
+// <VulkanStorm> widgets with Vulkan view hooks (registered below).
+#include "llprogressview.h"
+#include "lloutputmonitorctrl.h"
+#include "llfavoritesbar.h"
+#include "lltoolbarview.h"
+#include "lljoystickbutton.h"
+#include "llcolorswatch.h"
+#include "lltexturectrl.h"
+#include "llthumbnailctrl.h"
+#include "llfloaterprofiletexture.h"
+#include "llpanelpulldown.h"
+#include "llchiclet.h"
+#include "llvkuimaps.h"         // vk_register_map_hooks (minimap + world map)
 // </VulkanStorm>
 #include "llrootview.h"
 #include "fsyspath.h"
@@ -79,6 +94,7 @@
 #include "llstartup.h"
 #include "llstartup.h"
 #include "lltoastalertpanel.h"
+#include "lltoast.h"
 #include "lltooldraganddrop.h"
 #include "lltoolfocus.h"
 #include "lltoolmgr.h"
@@ -430,6 +446,568 @@ static void vk_render_popup_view(const LLView* view, unsigned, float, float)
     }
 }
 
+// <VulkanStorm> Remaining newview widget hooks.
+
+// Upload a viewer texture's CPU pixels to the Vulkan UI registry, keyed by
+// asset id. Reads the live raw image (or the saved copy) without touching GL;
+// returns false when no CPU pixels are available (fetch still pending).
+static bool vk_upload_viewer_texture(const LLUUID& id, const LLViewerFetchedTexture* tex)
+{
+    if (!tex || id.isNull()) return false;
+    const LLImageRaw* raw = tex->isRawImageValid() ? tex->getRawImage()
+                                                   : tex->getSavedRawImage();
+    if (!raw || !raw->getData() || raw->getDataSize() <= 0) return false;
+    // Static-content serial: re-upload only when the pixels buffer changes.
+    const uint64_t serial = ((uint64_t)raw->getWidth() << 40)
+                          ^ ((uint64_t)raw->getHeight() << 20)
+                          ^ (uint64_t)raw->getComponents()
+                          ^ (uint64_t)(uintptr_t)raw->getData();
+    return LLVKUIImage::updateDynamic(std::string("tex:") + id.asString(),
+                                      raw->getData(), raw->getWidth(),
+                                      raw->getHeight(), raw->getComponents(),
+                                      false, serial);
+}
+
+// Raw-pointer variant for local (non-fetched) textures, keyed by an explicit
+// string (splash screen, 3p logos).
+static bool vk_upload_raw_image(const std::string& key, const LLImageRaw* raw)
+{
+    if (!raw || !raw->getData() || raw->getDataSize() <= 0) return false;
+    const uint64_t serial = ((uint64_t)raw->getWidth() << 40)
+                          ^ ((uint64_t)raw->getHeight() << 20)
+                          ^ (uint64_t)raw->getComponents()
+                          ^ (uint64_t)(uintptr_t)raw->getData();
+    return LLVKUIImage::updateDynamic(key, raw->getData(), raw->getWidth(),
+                                      raw->getHeight(), raw->getComponents(),
+                                      false, serial);
+}
+
+// Draw an uploaded viewer texture over a GL-space screen rect.
+static void vk_draw_viewer_texture(const LLUUID& id, const LLRect& screen,
+                                   unsigned device_height, float ui_scale_y,
+                                   const LLColor4& color)
+{
+    const F32 ui_h = (F32)device_height / ui_scale_y;
+    LLVKUIImage::drawDynamic(std::string("tex:") + id.asString(),
+                             (F32)screen.mLeft, ui_h - (F32)screen.mTop,
+                             (F32)screen.mRight, ui_h - (F32)screen.mBottom,
+                             1.f, 1.f, true, color);
+}
+
+static void vk_draw_raw_image(const std::string& key, const LLRect& screen,
+                              unsigned device_height, float ui_scale_y,
+                              const LLColor4& color)
+{
+    const F32 ui_h = (F32)device_height / ui_scale_y;
+    LLVKUIImage::drawDynamic(key, (F32)screen.mLeft, ui_h - (F32)screen.mTop,
+                             (F32)screen.mRight, ui_h - (F32)screen.mBottom,
+                             1.f, 1.f, true, color);
+}
+
+static void vk_render_progress_view(const LLView* view, unsigned device_height,
+                                    float ui_scale_y, float alpha)
+{
+    const LLProgressView* progress =
+        static_cast<const LLProgressView*>(view);
+    const LLProgressView::VkDrawState state = progress->getVkDrawState();
+
+    // drawStartTexture(): the aspect-corrected splash, or solid black.
+    const bool skip_start = state.fading_from_login && state.media_ctrl_visible;
+    if (!skip_start)
+    {
+        if (state.draw_start_texture)
+        {
+            vk_draw_raw_image("progress:start", state.start_texture_rect,
+                              device_height, ui_scale_y,
+                              LLColor4(1.f, 1.f, 1.f, state.alpha));
+        }
+        else
+        {
+            LLVKUIRender::emitScreenRect(view->calcScreenRect(), device_height,
+                                         ui_scale_y,
+                                         LLColor4(0.f, 0.f, 0.f, state.alpha));
+        }
+    }
+    // drawLogos() paints over the children; approximate with the base pass
+    // order (logos registered as a post pass are not supported by the walker,
+    // and the logos sit in a chrome-free corner where overlap is benign).
+    for (size_t i = 0; i < state.logos.size(); ++i)
+    {
+        const LLProgressView::VkDrawState::VkLogo& logo = state.logos[i];
+        vk_draw_raw_image(llformat("progress:logo:%u", (U32)i), logo.rect,
+                          device_height, ui_scale_y, logo.color);
+    }
+}
+
+static void vk_prepare_progress_view(const LLView* view, LLVKContext*)
+{
+    const LLProgressView* progress =
+        static_cast<const LLProgressView*>(view);
+    const LLProgressView::VkDrawState state = progress->getVkDrawState();
+    if (state.draw_start_texture)
+    {
+        // The start screen is a local texture (not in the fetched list);
+        // upload straight from its CPU pixels.
+        vk_upload_raw_image("progress:start", state.start_raw);
+    }
+    for (size_t i = 0; i < state.logos.size(); ++i)
+    {
+        vk_upload_raw_image(llformat("progress:logo:%u", (U32)i),
+                            state.logos[i].raw);
+    }
+}
+
+static float vk_alpha_progress_view(const LLView* view)
+{
+    return static_cast<const LLProgressView*>(view)->getVkDrawState().alpha;
+}
+
+static void vk_render_output_monitor(const LLView* view, unsigned device_height,
+                                     float ui_scale_y, float alpha)
+{
+    const LLOutputMonitorCtrl::VkDrawState state =
+        static_cast<const LLOutputMonitorCtrl*>(view)->getVkDrawState(alpha);
+
+    if (state.draw_border)
+    {
+        // gl_rect_2d(rect, sColorBound, false): 1px outline.
+        const LLRect& r = state.rect;
+        LLVKUIRender::emitScreenRect(LLRect(r.mLeft, r.mBottom + 1, r.mRight, r.mBottom),
+                                     device_height, ui_scale_y, state.border_color);
+        LLVKUIRender::emitScreenRect(LLRect(r.mLeft, r.mTop, r.mRight, r.mTop - 1),
+                                     device_height, ui_scale_y, state.border_color);
+        LLVKUIRender::emitScreenRect(LLRect(r.mLeft, r.mTop, r.mLeft + 1, r.mBottom),
+                                     device_height, ui_scale_y, state.border_color);
+        LLVKUIRender::emitScreenRect(LLRect(r.mRight, r.mTop, r.mRight - 1, r.mBottom),
+                                     device_height, ui_scale_y, state.border_color);
+    }
+    if (!state.icon_image.empty())
+    {
+        // icon->draw(0, 0): native size at the local bottom-left.
+        LLRect icon_screen(state.rect.mLeft,
+                           state.rect.mBottom + state.icon_height,
+                           state.rect.mLeft + state.icon_width,
+                           state.rect.mBottom);
+        LLVKUIRender::emitScreenRect(icon_screen, device_height, ui_scale_y,
+                                     state.icon_image,
+                                     LLColor4(1.f, 1.f, 1.f, alpha));
+    }
+}
+
+static void vk_render_favorites_bar(const LLView* view, unsigned device_height,
+                                    float ui_scale_y, float alpha)
+{
+    const LLFavoritesBarCtrl::VkDrawState state =
+        static_cast<const LLFavoritesBarCtrl*>(view)->getVkDrawState();
+    if (!state.show_drag_marker || !state.has_target || state.drag_image.empty())
+    {
+        return;
+    }
+    S32 w = state.image_width;
+    S32 h = state.image_height;
+    if (w <= 0 || h <= 0)
+    {
+        LLVKUIImage::getSize(state.drag_image, w, h);
+    }
+    if (w <= 0 || h <= 0) return;
+    const LLRect marker_screen(state.marker_x, state.marker_y + h,
+                               state.marker_x + w, state.marker_y);
+    LLVKUIRender::emitScreenRect(marker_screen, device_height, ui_scale_y,
+                                 state.drag_image, LLColor4(1.f, 1.f, 1.f, alpha));
+}
+
+static void vk_render_toolbar_view(const LLView* view, unsigned device_height,
+                                   float ui_scale_y, float alpha)
+{
+    const LLToolBarView::VkDrawState state =
+        static_cast<const LLToolBarView*>(view)->getVkDrawState(alpha);
+    if (!state.tool_dragged) return;
+    for (S32 i = 0; i < LLToolBarEnums::TOOLBAR_COUNT; ++i)
+    {
+        if (state.drop_zone_valid[i])
+        {
+            LLVKUIRender::emitScreenRect(state.drop_zone_rects[i],
+                                         device_height, ui_scale_y,
+                                         state.drop_zone_color);
+        }
+    }
+}
+
+// Rotated quadrant overlay: the sink has no rotated-texture primitive, so the
+// quadrant image is emitted unrotated (the base circle already reads as the
+// control; the active-quadrant tint still shows). Documented deviation.
+static void vk_render_joystick_rotate(const LLView* view, unsigned device_height,
+                                      float ui_scale_y, float)
+{
+    const LLJoystickCameraRotate::VkDrawState state =
+        static_cast<const LLJoystickCameraRotate*>(view)->getVkDrawState(1.f);
+    if (!state.base_image.empty())
+    {
+        LLVKUIRender::emitScreenRect(state.rect, device_height, ui_scale_y,
+                                     state.base_image, state.color);
+    }
+    if (state.in_center && !state.center_image.empty())
+    {
+        LLVKUIRender::emitScreenRect(state.rect, device_height, ui_scale_y,
+                                     state.center_image, state.color);
+    }
+    else if (!state.selected_image.empty() &&
+             (state.in_top || state.in_right || state.in_bottom || state.in_left))
+    {
+        LLVKUIRender::emitScreenRect(state.rect, device_height, ui_scale_y,
+                                     state.selected_image, state.color);
+    }
+}
+
+static void vk_render_joystick_quaternion(const LLView* view, unsigned device_height,
+                                          float ui_scale_y, float)
+{
+    const LLJoystickQuaternion::VkDrawState state =
+        static_cast<const LLJoystickQuaternion*>(view)->getVkDrawState(1.f);
+    LLRect base_rect = state.rect;
+    if (state.base_width > 0 && state.base_height > 0)
+    {
+        // draw() paints the base image at native size, anchored at (0,0).
+        base_rect.mRight = base_rect.mLeft + state.base_width;
+        base_rect.mTop = base_rect.mBottom + state.base_height;
+    }
+    if (!state.base_image.empty())
+    {
+        LLVKUIRender::emitScreenRect(base_rect, device_height, ui_scale_y,
+                                     state.base_image, state.color);
+    }
+    if (!state.selected_image.empty() &&
+        (state.in_top || state.in_right || state.in_bottom || state.in_left))
+    {
+        LLVKUIRender::emitScreenRect(base_rect, device_height, ui_scale_y,
+                                     state.selected_image, state.color);
+    }
+    // Rotation indicator dot (gl_circle_2d, filled when on the far side).
+    const F32 ui_h = (F32)device_height / ui_scale_y;
+    const F32 cx = state.circle_x;
+    const F32 cy = ui_h - state.circle_y;
+    const S32 segments = llmax(8, state.circle_segments);
+    if (state.circle_filled)
+    {
+        std::vector<float> xy(segments * 3 * 2);
+        std::vector<float> rgba(segments * 3 * 4);
+        const LLColor4& c = state.color;
+        int n = 0;
+        for (S32 i = 0; i < segments; ++i)
+        {
+            const F32 a0 = (F32)i / (F32)segments * (F32)F_TWO_PI;
+            const F32 a1 = (F32)(i + 1) / (F32)segments * (F32)F_TWO_PI;
+            const F32 vx[3] = { cx, cx + state.circle_radius * cosf(a0),
+                                cx + state.circle_radius * cosf(a1) };
+            const F32 vy[3] = { cy, cy + state.circle_radius * sinf(a0),
+                                cy + state.circle_radius * sinf(a1) };
+            for (int k = 0; k < 3; ++k)
+            {
+                xy[(n + k) * 2] = vx[k];
+                xy[(n + k) * 2 + 1] = vy[k];
+                rgba[(n + k) * 4] = c.mV[VRED];
+                rgba[(n + k) * 4 + 1] = c.mV[VGREEN];
+                rgba[(n + k) * 4 + 2] = c.mV[VBLUE];
+                rgba[(n + k) * 4 + 3] = c.mV[VALPHA];
+            }
+            n += 3;
+        }
+        LLVKUI2DSink::get().rawTris(xy.data(), rgba.data(), n);
+    }
+    else
+    {
+        std::vector<float> xy((segments + 1) * 2);
+        for (S32 i = 0; i <= segments; ++i)
+        {
+            const F32 a = (F32)i / (F32)segments * (F32)F_TWO_PI;
+            xy[i * 2] = cx + state.circle_radius * cosf(a);
+            xy[i * 2 + 1] = cy + state.circle_radius * sinf(a);
+        }
+        LLVKUI2DSink::get().lineStrip(xy.data(), segments + 1,
+                                      state.color.mV[VRED], state.color.mV[VGREEN],
+                                      state.color.mV[VBLUE], state.color.mV[VALPHA]);
+    }
+}
+
+static void vk_render_color_swatch(const LLView* view, unsigned device_height,
+                                   float ui_scale_y, float alpha)
+{
+    const LLColorSwatchCtrl::VkDrawState state =
+        static_cast<const LLColorSwatchCtrl*>(view)->getVkDrawState(alpha);
+
+    // Border (1px ring via four rects).
+    const LLRect& br = state.border_rect;
+    LLVKUIRender::emitScreenRect(LLRect(br.mLeft, br.mBottom + 1, br.mRight, br.mBottom),
+                                 device_height, ui_scale_y, state.border_color);
+    LLVKUIRender::emitScreenRect(LLRect(br.mLeft, br.mTop, br.mRight, br.mTop - 1),
+                                 device_height, ui_scale_y, state.border_color);
+    LLVKUIRender::emitScreenRect(LLRect(br.mLeft, br.mTop, br.mLeft + 1, br.mBottom),
+                                 device_height, ui_scale_y, state.border_color);
+    LLVKUIRender::emitScreenRect(LLRect(br.mRight, br.mTop, br.mRight - 1, br.mBottom),
+                                 device_height, ui_scale_y, state.border_color);
+
+    if (state.valid)
+    {
+        if (state.draw_checkerboard)
+        {
+            // gl_rect_2d_checkerboard: 8px two-tone squares.
+            const LLRect& in = state.interior;
+            const S32 cell = 8;
+            const LLColor4 light(0.7f, 0.7f, 0.7f, 1.f);
+            const LLColor4 dark(0.4f, 0.4f, 0.4f, 1.f);
+            for (S32 y = in.mBottom; y < in.mTop; y += cell)
+            {
+                for (S32 x = in.mLeft; x < in.mRight; x += cell)
+                {
+                    LLRect sq(x, llmin(y + cell, in.mTop),
+                              llmin(x + cell, in.mRight), y);
+                    LLVKUIRender::emitScreenRect(sq, device_height, ui_scale_y,
+                                                 ((x / cell + y / cell) % 2) ? dark : light);
+                }
+            }
+        }
+        LLVKUIRender::emitScreenRect(state.interior, device_height, ui_scale_y,
+                                     state.color);
+        if (state.draw_alpha_gradient && !state.alpha_gradient_image.empty())
+        {
+            LLVKUIRender::emitScreenRect(state.interior, device_height,
+                                         ui_scale_y, state.alpha_gradient_image,
+                                         LLColor4(1.f, 1.f, 1.f, alpha));
+        }
+    }
+    else if (state.use_fallback_image && !state.fallback_image.empty())
+    {
+        LLVKUIRender::emitScreenRect(state.interior, device_height, ui_scale_y,
+                                     state.fallback_image, state.fallback_tint);
+    }
+    else if (state.draw_grey_x)
+    {
+        LLVKUIRender::emitScreenRect(state.interior, device_height, ui_scale_y,
+                                     LLColor4(0.5f, 0.5f, 0.5f, alpha));
+        // The GL path draws an X across the grey interior.
+        const F32 ui_h = (F32)device_height / ui_scale_y;
+        const LLRect& in = state.interior;
+        const LLColor4 xcolor(0.f, 0.f, 0.f, alpha);
+        const float diag1[4] = { (F32)in.mLeft, ui_h - (F32)in.mBottom,
+                                 (F32)in.mRight, ui_h - (F32)in.mTop };
+        const float diag2[4] = { (F32)in.mLeft, ui_h - (F32)in.mTop,
+                                 (F32)in.mRight, ui_h - (F32)in.mBottom };
+        LLVKUI2DSink::get().lineStrip(diag1, 2, xcolor.mV[VRED], xcolor.mV[VGREEN],
+                                      xcolor.mV[VBLUE], xcolor.mV[VALPHA]);
+        LLVKUI2DSink::get().lineStrip(diag2, 2, xcolor.mV[VRED], xcolor.mV[VGREEN],
+                                      xcolor.mV[VBLUE], xcolor.mV[VALPHA]);
+    }
+}
+
+static void vk_render_texture_ctrl(const LLView* view, unsigned device_height,
+                                   float ui_scale_y, float alpha)
+{
+    const LLTextureCtrl::VkDrawState state =
+        static_cast<const LLTextureCtrl*>(view)->getVkDrawState(alpha);
+
+    // Border ring.
+    const LLRect& br = state.border_rect;
+    LLVKUIRender::emitScreenRect(LLRect(br.mLeft, br.mBottom + 1, br.mRight, br.mBottom),
+                                 device_height, ui_scale_y, state.border_color);
+    LLVKUIRender::emitScreenRect(LLRect(br.mLeft, br.mTop, br.mRight, br.mTop - 1),
+                                 device_height, ui_scale_y, state.border_color);
+    LLVKUIRender::emitScreenRect(LLRect(br.mLeft, br.mTop, br.mLeft + 1, br.mBottom),
+                                 device_height, ui_scale_y, state.border_color);
+    LLVKUIRender::emitScreenRect(LLRect(br.mRight, br.mTop, br.mRight - 1, br.mBottom),
+                                 device_height, ui_scale_y, state.border_color);
+
+    if (state.has_texture && state.texture_id.notNull())
+    {
+        if (state.texture_components == 4)
+        {
+            // Grey backing so alpha regions read correctly.
+            LLVKUIRender::emitScreenRect(state.interior, device_height,
+                                         ui_scale_y, LLColor4(0.5f, 0.5f, 0.5f, 1.f));
+        }
+        vk_draw_viewer_texture(state.texture_id, state.interior,
+                               device_height, ui_scale_y,
+                               LLColor4(1.f, 1.f, 1.f, alpha));
+        if (state.masked)
+        {
+            LLVKUIRender::emitScreenRect(state.interior, device_height,
+                                         ui_scale_y,
+                                         LLColor4(0.5f, 0.5f, 0.5f, 0.5f * alpha));
+        }
+    }
+    else if (state.draw_fallback && !state.fallback_image.empty())
+    {
+        LLVKUIRender::emitScreenRect(state.interior, device_height, ui_scale_y,
+                                     state.fallback_image,
+                                     LLColor4(1.f, 1.f, 1.f, alpha));
+    }
+    else if (state.draw_grey_x)
+    {
+        LLVKUIRender::emitScreenRect(state.interior, device_height, ui_scale_y,
+                                     LLColor4(0.5f, 0.5f, 0.5f, alpha));
+    }
+}
+
+static void vk_prepare_texture_ctrl(const LLView* view, LLVKContext*)
+{
+    const LLTextureCtrl::VkDrawState state =
+        static_cast<const LLTextureCtrl*>(view)->getVkDrawState(1.f);
+    if (state.has_texture && state.texture_id.notNull())
+    {
+        vk_upload_viewer_texture(state.texture_id,
+                                 LLViewerTextureManager::findFetchedTexture(
+                                     state.texture_id, TEX_LIST_STANDARD));
+    }
+    else if (state.valid && state.image_asset_id.notNull())
+    {
+        // draw() normally resolves/fetches every frame; on the Vulkan path it
+        // never runs, so request the fetch here (decode is backend-neutral;
+        // the raw pixels are uploaded once available).
+        LLViewerFetchedTexture* tex =
+            LLViewerTextureManager::getFetchedTexture(state.image_asset_id,
+                                                      FTT_DEFAULT, TRUE,
+                                                      LLGLTexture::BOOST_UI);
+        vk_upload_viewer_texture(state.image_asset_id, tex);
+    }
+}
+
+static void vk_render_thumbnail_ctrl(const LLView* view, unsigned device_height,
+                                     float ui_scale_y, float alpha)
+{
+    const LLThumbnailCtrl::VkDrawState state =
+        static_cast<const LLThumbnailCtrl*>(view)->getVkDrawState(alpha);
+
+    if (state.border_visible)
+    {
+        const LLRect& br = state.border_rect;
+        LLVKUIRender::emitScreenRect(LLRect(br.mLeft, br.mBottom + 1, br.mRight, br.mBottom),
+                                     device_height, ui_scale_y, state.border_color);
+        LLVKUIRender::emitScreenRect(LLRect(br.mLeft, br.mTop, br.mRight, br.mTop - 1),
+                                     device_height, ui_scale_y, state.border_color);
+        LLVKUIRender::emitScreenRect(LLRect(br.mLeft, br.mTop, br.mLeft + 1, br.mBottom),
+                                     device_height, ui_scale_y, state.border_color);
+        LLVKUIRender::emitScreenRect(LLRect(br.mRight, br.mTop, br.mRight - 1, br.mBottom),
+                                     device_height, ui_scale_y, state.border_color);
+    }
+
+    const LLColor4 content_color =
+        LLColor4(1.f, 1.f, 1.f, state.enabled ? alpha : alpha * 0.3f);
+    if (state.has_texture && state.image_asset_id.notNull())
+    {
+        if (state.texture_components == 4)
+        {
+            LLVKUIRender::emitScreenRect(state.draw_rect, device_height,
+                                         ui_scale_y, LLColor4(0.3f, 0.3f, 0.3f, 1.f));
+        }
+        vk_draw_viewer_texture(state.image_asset_id, state.draw_rect,
+                               device_height, ui_scale_y, content_color);
+    }
+    else if (!state.image_name.empty())
+    {
+        LLVKUIRender::emitScreenRect(state.draw_rect, device_height, ui_scale_y,
+                                     state.image_name, content_color);
+    }
+    else if (!state.fallback_image.empty())
+    {
+        LLRect rect = state.draw_rect;
+        if (state.fallback_centered && state.fallback_width > 0)
+        {
+            // draw() centers the fallback at native size.
+            const S32 cx = rect.getCenterX();
+            const S32 cy = rect.getCenterY();
+            rect.set(cx - state.fallback_width / 2, cy + state.fallback_height / 2,
+                     cx + state.fallback_width / 2, cy - state.fallback_height / 2);
+        }
+        LLVKUIRender::emitScreenRect(rect, device_height, ui_scale_y,
+                                     state.fallback_image, content_color);
+    }
+    else if (state.draw_grey_x)
+    {
+        LLVKUIRender::emitScreenRect(state.draw_rect, device_height, ui_scale_y,
+                                     LLColor4(0.5f, 0.5f, 0.5f, alpha));
+    }
+}
+
+static void vk_prepare_thumbnail_ctrl(const LLView* view, LLVKContext*)
+{
+    const LLThumbnailCtrl::VkDrawState state =
+        static_cast<const LLThumbnailCtrl*>(view)->getVkDrawState(1.f);
+    if (state.has_texture && state.image_asset_id.notNull())
+    {
+        vk_upload_viewer_texture(state.image_asset_id,
+                                 LLViewerTextureManager::findFetchedTexture(
+                                     state.image_asset_id, TEX_LIST_STANDARD));
+    }
+    else if (state.image_asset_id.notNull())
+    {
+        LLViewerFetchedTexture* tex =
+            LLViewerTextureManager::getFetchedTexture(state.image_asset_id,
+                                                      FTT_DEFAULT, TRUE,
+                                                      LLGLTexture::BOOST_UI);
+        vk_upload_viewer_texture(state.image_asset_id, tex);
+    }
+}
+
+static void vk_render_profile_image(const LLView* view, unsigned device_height,
+                                    float ui_scale_y, float alpha)
+{
+    const LLProfileImageCtrl::VkDrawState state =
+        static_cast<const LLProfileImageCtrl*>(view)->getVkDrawState();
+    if (!state.image_id.notNull()) return;
+    if (state.loaded)
+    {
+        // LLIconCtrl's draw scales the image over the widget rect.
+        vk_draw_viewer_texture(state.image_id, view->calcScreenRect(),
+                               device_height, ui_scale_y,
+                               LLColor4(1.f, 1.f, 1.f, alpha));
+    }
+    else
+    {
+        LLVKUIRender::emitScreenRect(view->calcScreenRect(), device_height,
+                                     ui_scale_y, LLColor4(0.f, 0.f, 0.f, alpha));
+    }
+}
+
+static void vk_prepare_profile_image(const LLView* view, LLVKContext*)
+{
+    const LLProfileImageCtrl::VkDrawState state =
+        static_cast<const LLProfileImageCtrl*>(view)->getVkDrawState();
+    if (!state.image_id.notNull()) return;
+    LLViewerFetchedTexture* tex =
+        LLViewerTextureManager::getFetchedTexture(state.image_id, FTT_DEFAULT,
+                                                  TRUE, LLGLTexture::BOOST_PREVIEW);
+    if (tex)
+    {
+        tex->setBoostLevel(LLGLTexture::BOOST_PREVIEW);
+    }
+    vk_upload_viewer_texture(state.image_id, tex);
+}
+
+static bool vk_clip_chiclet_panel(const LLView* view, LLRect& gl_screen_rect)
+{
+    return static_cast<const LLChicletPanel*>(view)->getVkScrollClipRect(gl_screen_rect);
+}
+
+// LLToast::draw(): when the floater background is invisible, the wrapper
+// panel gets the drop shadow instead (and the hide button is redrawn over it
+// — in the walker's tree order the button already draws after this hook).
+static void vk_render_toast(const LLView* view, unsigned device_height,
+                           float ui_scale_y, float)
+{
+    const LLNotificationsUI::LLToast* toast =
+        static_cast<const LLNotificationsUI::LLToast*>(view);
+    if (toast->isBackgroundVisible()) return;
+    const LLPanel* wrapper = toast->getVkWrapperPanel();
+    if (!wrapper) return;
+    LLColor4 shadow = LLUIColorTable::instance().getColor("ColorDropShadow").get();
+    LLVKUIRender::emitDropShadow(wrapper->calcScreenRect(), device_height,
+                                 ui_scale_y, shadow, DROP_SHADOW_FLOATER);
+}
+static float vk_alpha_pulldown(const LLView* view)
+{
+    return static_cast<const LLPanelPulldown*>(view)->getVkDrawAlpha();
+}
+// </VulkanStorm>
+
 static void vk_register_ui_hooks()
 {
     static bool s_registered = false;
@@ -441,6 +1019,32 @@ static void vk_register_ui_hooks()
         LLVKUIRender::registerViewHook(typeid(LLMediaCtrl), &vk_render_media_ctrl);
         LLVKUIRender::registerViewHook(typeid(LLToastAlertPanel), &vk_render_toast_alert_panel);
         LLVKUIRender::registerViewHook(typeid(LLPopupView), &vk_render_popup_view);
+        // <VulkanStorm> Remaining newview chrome: progress/splash screen,
+        // voice monitor, favorites drag marker, toolbar drop zones, camera
+        // joysticks, color/texture pickers, chiclet scroll clip, pulldown fade.
+        // VULKANSTORM_NO_NEWVIEW_HOOKS=1 skips these (regression isolation).
+        static const bool s_no_hooks = getenv("VULKANSTORM_NO_NEWVIEW_HOOKS") != nullptr;
+        if (s_no_hooks) return;
+        LLVKUIRender::registerViewPrepareHook(typeid(LLProgressView), &vk_prepare_progress_view);
+        LLVKUIRender::registerViewHook(typeid(LLProgressView), &vk_render_progress_view);
+        LLVKUIRender::registerViewSubtreeAlphaHook(typeid(LLProgressView), &vk_alpha_progress_view);
+        LLVKUIRender::registerViewHook(typeid(LLOutputMonitorCtrl), &vk_render_output_monitor);
+        LLVKUIRender::registerViewHook(typeid(LLFavoritesBarCtrl), &vk_render_favorites_bar);
+        LLVKUIRender::registerViewHook(typeid(LLToolBarView), &vk_render_toolbar_view);
+        LLVKUIRender::registerViewHook(typeid(LLJoystickCameraRotate), &vk_render_joystick_rotate);
+        LLVKUIRender::registerViewHook(typeid(LLJoystickQuaternion), &vk_render_joystick_quaternion);
+        LLVKUIRender::registerViewHook(typeid(LLColorSwatchCtrl), &vk_render_color_swatch);
+        LLVKUIRender::registerViewPrepareHook(typeid(LLTextureCtrl), &vk_prepare_texture_ctrl);
+        LLVKUIRender::registerViewHook(typeid(LLTextureCtrl), &vk_render_texture_ctrl);
+        LLVKUIRender::registerViewPrepareHook(typeid(LLThumbnailCtrl), &vk_prepare_thumbnail_ctrl);
+        LLVKUIRender::registerViewHook(typeid(LLThumbnailCtrl), &vk_render_thumbnail_ctrl);
+        LLVKUIRender::registerViewPrepareHook(typeid(LLProfileImageCtrl), &vk_prepare_profile_image);
+        LLVKUIRender::registerViewHook(typeid(LLProfileImageCtrl), &vk_render_profile_image);
+        LLVKUIRender::registerViewClipHook(typeid(LLChicletPanel), &vk_clip_chiclet_panel);
+        LLVKUIRender::registerViewSubtreeAlphaHook(typeid(LLPanelPulldown), &vk_alpha_pulldown);
+        LLVKUIRender::registerViewHook(typeid(LLNotificationsUI::LLToast), &vk_render_toast);
+        vk_register_map_hooks();
+        // </VulkanStorm>
     }
 }
 // </VulkanStorm>

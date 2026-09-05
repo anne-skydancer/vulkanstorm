@@ -2662,6 +2662,120 @@ void LLTextEditor::draw()
     mBorder->setKeyboardFocusHighlight( hasFocus() );// && !mReadOnly);
 }
 
+// <VulkanStorm>
+void LLTextEditor::prepareVkDraw()
+{
+    // The state half of draw(): border focus highlight (the Vulkan walker
+    // reads the border via LLViewBorder::getVkBorderState()).
+    mBorder->setKeyboardFocusHighlight(hasFocus());
+}
+
+void LLTextEditor::getVkPreeditMarkers(std::vector<VkPreeditMarker>& out) const
+{
+    // Mirrors drawPreeditMarker(), emitting editor-LOCAL rects instead of GL
+    // calls. Only meaningful while an IME preedit string is active.
+    static LLUICachedControl<F32> preedit_marker_brightness ("UIPreeditMarkerBrightness", 0);
+    static LLUICachedControl<S32> preedit_marker_gap ("UIPreeditMarkerGap", 0);
+    static LLUICachedControl<S32> preedit_marker_thickness ("UIPreeditMarkerThickness", 0);
+    static LLUICachedControl<F32> preedit_standout_brightness ("UIPreeditStandoutBrightness", 0);
+    static LLUICachedControl<S32> preedit_standout_gap ("UIPreeditStandoutGap", 0);
+    static LLUICachedControl<S32> preedit_standout_thickness ("UIPreeditStandoutThickness", 0);
+
+    out.clear();
+    if (!hasPreeditString())
+    {
+        return;
+    }
+
+    const LLWString textString(getWText());
+    const llwchar *text = textString.c_str();
+    const S32 text_len = getLength();
+    const S32 num_lines = getLineCount();
+
+    S32 cur_line = getFirstVisibleLine();
+    if (cur_line >= num_lines)
+    {
+        return;
+    }
+
+    const S32 line_height = mFont->getLineHeight();
+
+    S32 line_start = getLineStart(cur_line);
+    S32 line_y = mVisibleTextRect.mTop - line_height;
+    while((mVisibleTextRect.mBottom <= line_y) && (num_lines > cur_line))
+    {
+        S32 next_start = -1;
+        S32 line_end = text_len;
+
+        if ((cur_line + 1) < num_lines)
+        {
+            next_start = getLineStart(cur_line + 1);
+            line_end = next_start;
+        }
+        if ( text[line_end-1] == '\n' )
+        {
+            --line_end;
+        }
+
+        // Does this line contain preedits?
+        if (line_start >= mPreeditPositions.back())
+        {
+            // We have passed the preedits.
+            break;
+        }
+        if (line_end > mPreeditPositions.front())
+        {
+            for (U32 i = 0; i < mPreeditStandouts.size(); i++)
+            {
+                S32 left = mPreeditPositions[i];
+                S32 right = mPreeditPositions[i + 1];
+                if (right <= line_start || left >= line_end)
+                {
+                    continue;
+                }
+
+                const line_info& line = mLineInfoList[cur_line];
+                LLRect text_rect(line.mRect);
+                text_rect.mRight = mDocumentView->getRect().getWidth(); // clamp right edge to document extents
+                text_rect.translate(mDocumentView->getRect().mLeft, mDocumentView->getRect().mBottom); // adjust by scroll position
+
+                S32 preedit_left = text_rect.mLeft;
+                if (left > line_start)
+                {
+                    preedit_left += mFont->getWidth(text, line_start, left - line_start);
+                }
+                S32 preedit_right = text_rect.mLeft;
+                if (right < line_end)
+                {
+                    preedit_right += mFont->getWidth(text, line_start, right - line_start);
+                }
+                else
+                {
+                    preedit_right += mFont->getWidth(text, line_start, line_end - line_start);
+                }
+
+                VkPreeditMarker marker;
+                marker.standout = mPreeditStandouts[i];
+                const S32 gap = marker.standout ? (S32)preedit_standout_gap : (S32)preedit_marker_gap;
+                const S32 thickness = marker.standout ? (S32)preedit_standout_thickness : (S32)preedit_marker_thickness;
+                const F32 brightness = marker.standout ? (F32)preedit_standout_brightness : (F32)preedit_marker_brightness;
+                marker.local_rect.set(preedit_left + gap,
+                                      text_rect.mBottom + (S32)mFont->getDescenderHeight() - 1,
+                                      preedit_right - gap - 1,
+                                      text_rect.mBottom + (S32)mFont->getDescenderHeight() - 1 - thickness);
+                marker.color = (mCursorColor.get() * brightness + mWriteableBgColor.get() * (1 - brightness)).setAlpha(1.0f);
+                out.push_back(marker);
+            }
+        }
+
+        // move down one line
+        line_y -= line_height;
+        line_start = next_start;
+        cur_line++;
+    }
+}
+// </VulkanStorm>
+
 // Start or stop the editor from accepting text-editing keystrokes
 // see also LLLineEditor
 void LLTextEditor::setFocus( bool new_state )

@@ -98,6 +98,21 @@ public:
     static void resetDragTool(LLToolBarButton* toolbarButton);
     LLInventoryObject* getDragItem();
     LLView* getBottomToolbar() { return mBottomToolbarPanel; }
+
+    // <VulkanStorm> GL-free drop-zone state for the Vulkan UI renderer: what
+    // draw() paints when a tool drag is active (one filled drop-zone rect per
+    // toolbar in ToolbarDropZoneColor). Read-only; does not reshape toolbars
+    // like draw() does.
+    struct VkDrawState
+    {
+        bool tool_dragged = false;
+        LLColor4 drop_zone_color;
+        LLRect drop_zone_rects[LLToolBarEnums::TOOLBAR_COUNT];      // screen space
+        bool drop_zone_valid[LLToolBarEnums::TOOLBAR_COUNT] = {};   // toolbar exists
+    };
+    VkDrawState getVkDrawState(F32 alpha) const;
+    // </VulkanStorm>
+
     LLToolBar* getToolbar(LLToolBarEnums::EToolBarLocation toolbar) { return mToolbars[toolbar]; }
     bool isModified() const;
 

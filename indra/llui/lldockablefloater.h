@@ -115,6 +115,13 @@ public:
     bool getUniqueDocking() const { return mUniqueDocking;    }
     bool getUseTongue() const { return mUseTongue; }
 
+    // <VulkanStorm> GL-free path: the retained tongue image name (the GL
+    // LLUIImage is null without a GL context) and the draw()-time dock
+    // repositioning, without rendering.
+    const std::string& getVkDockTongueName() const { return mVkDockTongueImage; }
+    void prepareVkDraw();
+    // </VulkanStorm>
+
     void setUseTongue(bool use_tongue) { mUseTongue = use_tongue;}
 private:
     /**
@@ -135,6 +142,9 @@ protected:
     std::unique_ptr<LLDockControl> mDockControl;
 private: // <FS:Ansariel> Make mDockControl accessible from children because of FIRE-16803
     LLUIImagePtr mDockTongue;
+    // <VulkanStorm> retained tongue image name for the GL-free path
+    std::string mVkDockTongueImage;
+    // </VulkanStorm>
     static LLHandle<LLFloater> sInstanceHandle;
     /**
      * Provides possibility to define that dockable floaters can be docked

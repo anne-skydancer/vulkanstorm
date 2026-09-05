@@ -1901,6 +1901,9 @@ LLTextureCtrl::LLTextureCtrl(const LLTextureCtrl::Params& p)
     mDefaultImageAssetID(p.default_image_id),
     mDefaultImageName(p.default_image_name),
     mFallbackImage(p.fallback_image),
+    // <VulkanStorm> raw XUI name for the GL-free Vulkan path
+    mVkFallbackImageName(p.fallback_image.vk_image_name.isProvided() ? p.fallback_image.vk_image_name() : ""),
+    // </VulkanStorm>
     mTextEnabledColor(p.text_enabled_color),      // <FS:Zi> Add label/caption colors
     mTextDisabledColor(p.text_disabled_color),    // <FS:Zi> Add label/caption colors
     mLabel(p.label),                              // <FS:Zi> FIRE-34300 - Fix label not showing in texture picker floater title
@@ -2490,6 +2493,63 @@ bool LLTextureCtrl::handleDragAndDrop(S32 x, S32 y, MASK mask,
 
     return handled;
 }
+
+// <VulkanStorm> GL-free replica of draw()'s branch decisions; read-only.
+// Does NOT re-resolve the preview from mImageAssetID (that fetches/uploads
+// via GL) - it reports the currently resolved mTexturep/mGLTFPreview and the
+// authoritative mImageAssetID for a dynamic-upload hook.
+LLTextureCtrl::VkDrawState LLTextureCtrl::getVkDrawState(F32 alpha) const
+{
+    VkDrawState state;
+    state.image_asset_id = mImageAssetID;
+    state.valid = mValid;
+    state.border_color = mBorderColor.get();
+    state.border_color.mV[VALPHA] *= alpha;
+    state.masked = mIsMasked;
+
+    // Same geometry as draw(): border above the caption area, inset interior.
+    LLRect border(0, getRect().getHeight(), getRect().getWidth(), mCaptionHeight);
+    LLRect interior = border;
+    interior.stretch(-1);
+    localRectToScreen(border, &state.border_rect);
+    localRectToScreen(interior, &state.interior);
+
+    LLPointer<LLViewerTexture> preview = mTexturep;
+    if (preview.isNull() && mGLTFPreview.notNull())
+    {
+        preview = mGLTFPreview;
+        state.is_material_preview = true;
+    }
+
+    if (mValid && preview.notNull())
+    {
+        state.has_texture = true;
+        state.texture_id = preview->getID();
+        state.texture_components = preview->getComponents();
+        // isFullyLoaded() lives on LLViewerFetchedTexture; local/preview
+        // textures are complete by construction.
+        LLViewerFetchedTexture* fetched = dynamic_cast<LLViewerFetchedTexture*>(preview.get());
+        state.texture_fully_loaded = fetched ? fetched->isFullyLoaded() : true;
+        state.show_loading_placeholder = mShowLoadingPlaceholder && !state.texture_fully_loaded;
+    }
+    else
+    {
+        std::string fallback_name = mFallbackImage.notNull()
+            ? mFallbackImage->getName() : mVkFallbackImageName;
+        if (!fallback_name.empty())
+        {
+            state.draw_fallback = true;
+            state.fallback_image = fallback_name;
+        }
+        else
+        {
+            state.draw_grey_x = true;
+        }
+    }
+
+    return state;
+}
+// </VulkanStorm>
 
 void LLTextureCtrl::draw()
 {

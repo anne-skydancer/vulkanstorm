@@ -82,6 +82,12 @@ public:
     virtual bool    handleMouseDown(S32 x, S32 y, MASK mask);
     virtual bool    handleMouseUp(S32 x, S32 y, MASK mask);
 
+    // <VulkanStorm> The title-colorization half of the subclasses' draw()
+    // (LLDragHandleTop::draw/LLDragHandleLeft::draw), without any rendering;
+    // the Vulkan UI walker calls this before walking children.
+    void            prepareVkDraw();
+    // </VulkanStorm>
+
 protected:
     LLDragHandle(const Params&);
     friend class LLUICtrlFactory;

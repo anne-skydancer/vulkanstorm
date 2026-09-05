@@ -50,6 +50,12 @@ public:
     ~LLScrollColumnHeader();
 
     /*virtual*/ void draw();
+
+    // <VulkanStorm> The sort-arrow overlay selection half of draw(), without
+    // any rendering; the Vulkan UI walker's button pass then draws the arrow
+    // via getVkOverlayState().
+    void prepareVkDraw();
+    // </VulkanStorm>
     /*virtual*/ bool handleDoubleClick(S32 x, S32 y, MASK mask);
 
     /*virtual*/ LLView* findSnapEdge(S32& new_edge_val, const LLCoordGL& mouse_dir, ESnapEdge snap_edge, ESnapType snap_type, S32 threshold, S32 padding);

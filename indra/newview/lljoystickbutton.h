@@ -147,6 +147,26 @@ public:
 
     LLJoystickCameraRotate(const LLJoystickCameraRotate::Params&);
 
+    // <VulkanStorm> GL-free description of what draw() paints: the unselected
+    // base image filling the local rect, then either the center image or the
+    // selected image rotated per active quadrant (top=0, right=1, bottom=2,
+    // left=3 quarter-turns CCW, matching drawRotatedImage()).
+    struct VkDrawState
+    {
+        std::string base_image;     // image_unselected name (never null in draw())
+        std::string selected_image; // image_selected name, quadrant overlays
+        std::string center_image;   // mCenterImageName
+        bool in_center = false;
+        bool in_top = false;
+        bool in_right = false;
+        bool in_bottom = false;
+        bool in_left = false;
+        LLRect rect;                // screen space; images fill/anchor to this
+        LLColor4 color;             // UI_VERTEX_COLOR modulated by alpha
+    };
+    VkDrawState getVkDrawState(F32 alpha) const;
+    // </VulkanStorm>
+
     virtual void    setToggleState( bool left, bool top, bool right, bool bottom );
 
     virtual bool    handleMouseDown(S32 x, S32 y, MASK mask);
@@ -200,6 +220,32 @@ public:
     };
 
     LLJoystickQuaternion(const LLJoystickQuaternion::Params &);
+
+    // <VulkanStorm> GL-free description of what draw() paints: the unselected
+    // base image at native size, the selected image rotated per active
+    // quadrant (top=0, right=1, bottom=2, left=3 quarter-turns CCW, matching
+    // drawRotatedImage()), then the rotation indicator circle.
+    struct VkDrawState
+    {
+        std::string base_image;         // image_unselected name
+        std::string selected_image;     // image_selected name, quadrant overlays
+        bool in_top = false;
+        bool in_right = false;
+        bool in_bottom = false;
+        bool in_left = false;
+        S32 base_width = 0;             // native size (drawn at 0,0); 0 if unknown
+        S32 base_height = 0;
+        LLRect rect;                    // screen space
+        LLColor4 color;                 // UI_VERTEX_COLOR modulated by alpha
+        LLVector3 draw_point;           // indicator position, LOCAL coords
+        F32 circle_x = 0.f;             // indicator position, screen space
+        F32 circle_y = 0.f;
+        F32 circle_radius = 4.f;        // gl_circle_2d(draw_point, 4, 8, filled)
+        S32 circle_segments = 8;
+        bool circle_filled = false;     // draw_point.mV[mZAxisIndex] >= 0
+    };
+    VkDrawState getVkDrawState(F32 alpha) const;
+    // </VulkanStorm>
 
     virtual void    setToggleState(bool left, bool top, bool right, bool bottom);
 

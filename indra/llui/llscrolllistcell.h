@@ -175,6 +175,15 @@ public:
         S32 max_pixels = 0;
     };
     VkTextState getVkTextState(const LLColor4& fallback_color) const;
+
+    // Cell-local highlight rect behind the highlighted substring (draw()'s
+    // mHighlightCount branch); false when nothing is highlighted. Virtual:
+    // LLScrollListIconText's math accounts for the leading icon.
+    virtual bool getVkHighlightRect(LLRect& local_rect) const;
+
+    // Cell-local x offset of the text start (LLScrollListIconText shifts
+    // right by its icon width). Matches draw()'s start_x for LEFT alignment.
+    virtual S32  getVkTextOffset() const { return 1; }
     // </VulkanStorm>
 
 protected:
@@ -213,11 +222,29 @@ public:
     /*virtual*/ void    setValue(const LLSD& value);
     void                setIconSize(S32 size);
 
+    // <VulkanStorm> GL-free icon state for the Vulkan UI walker (mirrors
+    // draw()). image is the skinned-image name (may be empty for UUID-backed
+    // icons when no GL context exists; icon_size 0 means intrinsic size).
+    struct VkIconState
+    {
+        bool            has_icon = false;
+        std::string     image;
+        LLColor4        color;
+        LLFontGL::HAlign alignment = LLFontGL::LEFT;
+        S32             icon_size = 0;
+        S32             cell_width = 0;
+    };
+    VkIconState         getVkIconState() const;
+    // </VulkanStorm>
+
 private:
     LLPointer<LLUIImage>    mIcon;
     LLColor4                mColor;
     LLFontGL::HAlign        mAlignment;
     S32                     mIconSize;
+    // <VulkanStorm> retained name for the GL-free path
+    std::string             mVkIconName;
+    // </VulkanStorm>
 };
 
 
@@ -239,6 +266,16 @@ private:
     S32                         mBottom;
     S32                         mRightPad;
     S32                         mLeftPad;
+
+public:
+    // <VulkanStorm> GL-free bar geometry (mirrors draw()), cell-local.
+    struct VkBarState
+    {
+        LLRect  local_rect;     // the 1px-high bar, cell-local bottom-left
+        LLColor4 color;
+    };
+    VkBarState                  getVkBarState() const;
+    // </VulkanStorm>
 };
 /*
  * An interactive cell containing a check box.
@@ -289,9 +326,19 @@ public:
 
     /*virtual*/ void    setWidth(S32 width);
 
+    // <VulkanStorm> GL-free icon/text state (mirrors draw()).
+    bool            getVkHighlightRect(LLRect& local_rect) const override;
+    S32             getVkTextOffset() const override;
+    // Icon placement: cell-local x and square size (font line height).
+    bool            getVkIcon(std::string& image, S32& icon_x, S32& icon_size) const;
+    // </VulkanStorm>
+
 private:
     LLPointer<LLUIImage>    mIcon;
     S32                     mPad;
+    // <VulkanStorm> retained name for the GL-free path
+    std::string             mVkIconName;
+    // </VulkanStorm>
 };
 
 #endif

@@ -102,6 +102,15 @@ void LLPanelPulldown::onVisibilityChange(bool new_visibility)
     }
 }
 
+// <VulkanStorm> GL-free replica of the alpha draw() computes; read-only.
+F32 LLPanelPulldown::getVkDrawAlpha() const
+{
+    return mHoverTimer.getStarted()
+        ? clamp_rescale(mHoverTimer.getElapsedTimeF32(), AUTO_CLOSE_FADE_TIME_START_SEC, AUTO_CLOSE_FADE_TIME_END_SEC, 1.f, 0.f)
+        : 1.0f;
+}
+// </VulkanStorm>
+
 //virtual
 void LLPanelPulldown::draw()
 {

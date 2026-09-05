@@ -386,3 +386,43 @@ void LLDockControl::drawToungue()
     }
 }
 
+// <VulkanStorm>
+void LLDockControl::setVkTongueSize(S32 width, S32 height)
+{
+    mVkTongueWidth = width;
+    mVkTongueHeight = height;
+}
+
+bool LLDockControl::getVkTongueState(std::string& image, S32& x, S32& y) const
+{
+    // Mirrors drawToungue().
+    bool use_tongue = false;
+    LLDockableFloater* dockable_floater =
+            dynamic_cast<LLDockableFloater*> (mDockableFloater);
+    if (dockable_floater != NULL)
+    {
+        use_tongue = dockable_floater->getUseTongue();
+    }
+    if (!mEnabled || !use_tongue)
+    {
+        return false;
+    }
+
+    if (mDockTongue.notNull())
+    {
+        image = mDockTongue->getName();
+    }
+    else if (dockable_floater != NULL)
+    {
+        image = dockable_floater->getVkDockTongueName();
+    }
+    if (image.empty())
+    {
+        image = "Flyout_Pointer";
+    }
+    x = mDockTongueX;
+    y = mDockTongueY;
+    return true;
+}
+// </VulkanStorm>
+

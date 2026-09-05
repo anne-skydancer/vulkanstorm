@@ -104,6 +104,13 @@ public:
     void setVisible(bool visible) override;
 
     bool isFading() const;
+
+    // <VulkanStorm> GL-free equivalents of draw()'s fade logic for the
+    // Vulkan UI walker: prepareVkDraw() completes an expired fade (hides the
+    // tooltip), getVkDrawAlpha() is the draw-context alpha draw() pushes.
+    void    prepareVkDraw();
+    F32     getVkDrawAlpha() const;
+    // </VulkanStorm>
     F32 getVisibleTime() const;
     bool hasClickCallback() const;
 

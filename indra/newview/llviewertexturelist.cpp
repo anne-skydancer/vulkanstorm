@@ -58,6 +58,9 @@
 #include "pipeline.h"
 #include "llappviewer.h"
 #include "llxuiparser.h"
+// <VulkanStorm> shared, GL-free UI image declaration registry (llui)
+#include "lluiimagedecls.h"
+// </VulkanStorm>
 #include "lltracerecording.h"
 #include "llviewerdisplay.h"
 #include "llviewerwindow.h"
@@ -1965,102 +1968,26 @@ void LLUIImageList::onUIImageLoaded( bool success, LLViewerFetchedTexture *src_v
     }
 }
 
-namespace LLInitParam
-{
-    template<>
-    struct TypeValues<LLUIImage::EScaleStyle> : public TypeValuesHelper<LLUIImage::EScaleStyle>
-    {
-        static void declareValues()
-        {
-            declare("scale_inner",  LLUIImage::SCALE_INNER);
-            declare("scale_outer",  LLUIImage::SCALE_OUTER);
-        }
-    };
-}
-
-struct UIImageDeclaration : public LLInitParam::Block<UIImageDeclaration>
-{
-    Mandatory<std::string>      name;
-    Optional<std::string>       file_name;
-    Optional<bool>              preload;
-    Optional<LLRect>            scale;
-    Optional<LLRect>            clip;
-    Optional<bool>              use_mips;
-    Optional<LLUIImage::EScaleStyle> scale_type;
-
-    UIImageDeclaration()
-    :   name("name"),
-        file_name("file_name"),
-        preload("preload", false),
-        scale("scale"),
-        clip("clip"),
-        use_mips("use_mips", false),
-        scale_type("scale_type", LLUIImage::SCALE_INNER)
-    {}
-};
-
-struct UIImageDeclarations : public LLInitParam::Block<UIImageDeclarations>
-{
-    Mandatory<S32>  version;
-    Multiple<UIImageDeclaration> textures;
-
-    UIImageDeclarations()
-    :   version("version"),
-        textures("texture")
-    {}
-};
+// <VulkanStorm>
+// The textures.xml parse + merge that used to live here (the LLInitParam
+// UIImageDeclaration blocks and the LLXUIParser walk) now lives in the shared
+// GL-free registry LLUIImageDecls (llui/lluiimagedecls.*), which the Vulkan
+// backend consumes as well. The merge result is identical: ALL_SKINS order
+// (generic to specific), a later declaration overwriting only the fields it
+// provides — the same semantics overwriteFrom produced.
+// </VulkanStorm>
 
 bool LLUIImageList::initFromFile()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
-    // Look for textures.xml in all the right places. Pass
-    // constraint=LLDir::ALL_SKINS because we want to overlay textures.xml
-    // from all the skins directories.
-    std::vector<std::string> textures_paths =
-        gDirUtilp->findSkinnedFilenames(LLDir::TEXTURES, "textures.xml", LLDir::ALL_SKINS);
-    std::vector<std::string>::const_iterator pi(textures_paths.begin()), pend(textures_paths.end());
-    if (pi == pend)
+
+    // <VulkanStorm>
+    if (!LLUIImageDecls::load())
     {
-        LL_WARNS() << "No textures.xml found in skins directories" << LL_ENDL;
         return false;
     }
-
-    // The first (most generic) file gets special validations
-    LLXMLNodePtr root;
-    if (!LLXMLNode::parseFile(*pi, root, NULL))
-    {
-        LL_WARNS() << "Unable to parse UI image list file " << *pi << LL_ENDL;
-        return false;
-    }
-    if (!root->hasAttribute("version"))
-    {
-        LL_WARNS() << "No valid version number in UI image list file " << *pi << LL_ENDL;
-        return false;
-    }
-
-    UIImageDeclarations images;
-    LLXUIParser parser;
-    parser.readXUI(root, images, *pi);
-
-    // add components defined in the rest of the skin paths
-    while (++pi != pend)
-    {
-        LLXMLNodePtr update_root;
-        if (LLXMLNode::parseFile(*pi, update_root, NULL))
-        {
-            parser.readXUI(update_root, images, *pi);
-        }
-    }
-
-    if (!images.validateBlock()) return false;
-
-    std::map<std::string, UIImageDeclaration> merged_declarations;
-    for (LLInitParam::ParamIterator<UIImageDeclaration>::const_iterator image_it = images.textures.begin();
-        image_it != images.textures.end();
-        ++image_it)
-    {
-        merged_declarations[image_it->name].overwriteFrom(*image_it);
-    }
+    const LLUIImageDecls::decl_map_t& merged_declarations = LLUIImageDecls::getDecls();
+    // </VulkanStorm>
 
     enum e_decode_pass
     {
@@ -2071,12 +1998,11 @@ bool LLUIImageList::initFromFile()
 
     for (S32 cur_pass = PASS_DECODE_NOW; cur_pass < NUM_PASSES; cur_pass++)
     {
-        for (std::map<std::string, UIImageDeclaration>::const_iterator image_it = merged_declarations.begin();
+        for (LLUIImageDecls::decl_map_t::const_iterator image_it = merged_declarations.begin();
             image_it != merged_declarations.end();
             ++image_it)
         {
-            const UIImageDeclaration& image = image_it->second;
-            std::string file_name = image.file_name.isProvided() ? image.file_name() : image.name();
+            const LLUIImageDecls::Decl& image = image_it->second;
 
             // load high priority textures on first pass (to kick off decode)
             enum e_decode_pass decode_pass = image.preload ? PASS_DECODE_NOW : PASS_DECODE_LATER;
@@ -2084,7 +2010,8 @@ bool LLUIImageList::initFromFile()
             {
                 continue;
             }
-            preloadUIImage(image.name, file_name, image.use_mips, image.scale, image.clip, image.scale_type);
+            preloadUIImage(image.name, image.getFileName(), image.use_mips, image.scale_region, image.clip_region,
+                image.scale_style == LLUIImageDecls::SCALE_OUTER ? LLUIImage::SCALE_OUTER : LLUIImage::SCALE_INNER);
         }
 
         // <FS:PP> Speed optimisation

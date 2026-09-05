@@ -313,6 +313,29 @@ capture harness, per the parity policy: opaque = tol 0, alpha-blended = tol 1.
   *Accept:* media regions match GL.
 - **M5 — Sweep & full-frame.** every widget class; ungated full-frame byte-exact
   diff vs GL across login + a post-login scene.
+  - **M5a (2026-09-05) — the remaining widget classes.** The walker now covers
+    the rest of llui's custom-draw widgets via GL-free `Vk*` state accessors +
+    `llvkuiwidgets.cpp` / `llvkuifolder.cpp` passes: progress bars, tooltips
+    (fade alpha), loading indicators, badges, multi-sliders, accordion chrome
+    (+ clipping), window shades, flyout buttons, drag handles, scroll-list
+    column sort arrows + icon/bar/check/highlight cells, text-editor IME
+    preedit markers (line + multi-line), chat-entry expansion, stat bars/graphs,
+    virtual trackball, XY vector, on-screen console, dock tongues, modal-dialog
+    shadows. The sink gained a **clip stack** (intersecting GL-space screen
+    rects) reproducing `LLScreenClipRect`/`LLLocalClipRect` scoping: scroll
+    containers clip their scrolled child, accordion tabs clip their content
+    panel, newview widgets clip via registered clip hooks (chiclet panel).
+    newview chrome is hooked per class in `llviewerdisplay.cpp`: progress view
+    (splash + fade), output monitor, favorites-bar drag marker, toolbar drop
+    zones, camera joysticks, color swatch, texture/thumbnail/profile-image
+    pickers (via the viewer-texture CPU bridge, `doc/vulkan/shared_assets.md`),
+    toasts' wrapper shadow, pulldown fade, netmap + world map
+    (`llvkuimaps.cpp`). Debug-only overlays (LLFastTimerView, LLDebugView) stay
+    GL-only by design.
+  - Known deliberate deviations: joystick quadrant overlays and the
+    folder-view disclosure arrow are emitted unrotated (the sink has no
+    rotated-texture primitive); UUID-backed scroll-list icons need the
+    viewer-texture fetch bridge (named icons work).
 - **(Parallel) Capability probe** — Vulkan populates device/feature facts from
   `VkPhysicalDeviceProperties` + memory properties before `LLFeatureManager`
   first reads them; bandwidth benchmark gets a Vulkan replacement or static
