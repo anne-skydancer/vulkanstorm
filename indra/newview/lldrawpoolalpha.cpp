@@ -273,6 +273,22 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
             gPipeline.endAlphaOITCapture();
             gPipeline.compositeAlphaOIT();
 
+            // PPLL capture cannot write the shared scene depth: doing so would reject
+            // transparent fragments before the per-pixel resolve can order them. Restore
+            // the legacy rigged depth contribution before residual alpha and emissive
+            // replay. The legacy path establishes this depth while drawing rigged alpha;
+            // without it, avatar-linked glow is tested only against opaque scene depth
+            // and can bloom through nearby geometry as camera-dependent bright sprites.
+            {
+                LLGLDepthTest rigged_depth(GL_TRUE, GL_TRUE);
+                gGL.setColorMask(false, false);
+                renderAlpha(getVertexDataMask() | LLVertexBuffer::MAP_TEXTURE_INDEX |
+                                LLVertexBuffer::MAP_TANGENT | LLVertexBuffer::MAP_TEXCOORD1 |
+                                LLVertexBuffer::MAP_TEXCOORD2,
+                            true, EAlphaStream::RIGGED, ALPHA_OIT_NONE);
+                gGL.setColorMask(true, false);
+            }
+
             // Particles and unsupported blend equations always remain on the stock
             // residual path. Fullbright source-over alpha was captured with lit alpha.
             forwardRender(EAlphaStream::RIGGED, ALPHA_OIT_RESIDUAL);
