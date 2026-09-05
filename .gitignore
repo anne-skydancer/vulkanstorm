@@ -130,3 +130,6 @@ firestorm.code-workspace
 .github/release.yaml
 
 checks.json
+
+# Local agent/tooling scratch (ffmpeg, helper scripts, etc.)
+.codex-tools/
