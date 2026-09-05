@@ -67,6 +67,7 @@
 #include "llmediactrl.h"
 #include "llmemory.h"
 #include "llparcel.h"
+#include "llpopupview.h"
 #include "llperfstats.h"
 #include "llpostprocess.h"
 #include "llrender.h"
@@ -410,6 +411,25 @@ static void vk_render_toast_alert_panel(const LLView* view, unsigned device_heig
                                  LLColor4(1.f, 1.f, 1.f, 1.f));
 }
 
+static void vk_render_popup_view(const LLView* view, unsigned, float, float)
+{
+    LLPopupView* popup_view = const_cast<LLPopupView*>(
+        static_cast<const LLPopupView*>(view));
+    LLPopupView::popup_list_t popups = popup_view->getCurrentPopups();
+
+    // Match LLPopupView::draw(): reverse iteration paints older popups first,
+    // leaving the most recently registered popup on top.
+    for (LLPopupView::popup_list_t::reverse_iterator it = popups.rbegin();
+         it != popups.rend(); ++it)
+    {
+        LLView* popup = it->get();
+        if (popup && popup->getVisible())
+        {
+            LLVKUIRender::renderOverlaySubtree(popup);
+        }
+    }
+}
+
 static void vk_register_ui_hooks()
 {
     static bool s_registered = false;
@@ -420,6 +440,7 @@ static void vk_register_ui_hooks()
         LLVKUIRender::registerViewPrepareHook(typeid(LLToastAlertPanel), &vk_prepare_toast_alert_panel);
         LLVKUIRender::registerViewHook(typeid(LLMediaCtrl), &vk_render_media_ctrl);
         LLVKUIRender::registerViewHook(typeid(LLToastAlertPanel), &vk_render_toast_alert_panel);
+        LLVKUIRender::registerViewHook(typeid(LLPopupView), &vk_render_popup_view);
     }
 }
 // </VulkanStorm>

@@ -60,6 +60,16 @@ namespace
     };
     std::map<std::string, DynamicRec> s_dynamic;
 
+    struct ImageDecl
+    {
+        std::string file_name;
+        LLRect clip;
+        LLRect scale;
+        LLVKUIImage::ScaleStyle style = LLVKUIImage::ScaleStyle::Inner;
+        bool has_clip = false;
+        bool has_scale = false;
+    };
+
     // ---- helpers ----------------------------------------------------------
 
     // Decode a local image file to RGBA8 (bottom-left origin, like GL). Uses
@@ -292,26 +302,24 @@ namespace LLVKUIImage
             return;
         }
 
-        // First-wins merge by name (the most-specific skin path comes first in
-        // the ALL_SKINS list). Track which path supplied each entry so the file
-        // resolves from the SAME skin dir as its declaration.
-        std::map<std::string, std::string> src_dir; // name -> skin textures dir
+        // ALL_SKINS is generic-to-specific. Merge later declarations over
+        // earlier ones just as LLUIImageList does for OpenGL, retaining fields
+        // omitted by a partial skin override.
+        std::map<std::string, ImageDecl> declarations;
         for (const std::string& p : paths)
         {
             LLXMLNodePtr root;
             if (!LLXMLNode::parseFile(p, root, nullptr) || root.isNull()) continue;
-            const std::string dir = gDirUtilp->getDirName(p);
             for (LLXMLNodePtr child = root->getFirstChild(); child.notNull(); child = child->getNextSibling())
             {
                 if (!child->hasName("texture")) continue;
                 std::string name, file_name;
                 if (!child->getAttributeString("name", name) || name.empty()) continue;
-                if (s_images.find(name) != s_images.end()) continue; // first wins
-                if (!child->getAttributeString("file_name", file_name) || file_name.empty())
-                {
-                    file_name = name;
-                }
-                ImageRec rec;
+                ImageDecl& decl = declarations[name];
+                if (decl.file_name.empty()) decl.file_name = name;
+                if (child->getAttributeString("file_name", file_name) && !file_name.empty())
+                    decl.file_name = file_name;
+
                 // clip/scale are pixel rects expressed as dotted sub-attributes
                 // (clip.left/clip.top/clip.right/clip.bottom), NOT a single
                 // string attribute. Read each sub-attribute as S32.
@@ -330,61 +338,62 @@ namespace LLVKUIImage
                 LLRect clip_px, scale_px;
                 const bool has_clip  = rd("clip",  clip_px);
                 const bool has_scale = rd("scale", scale_px);
-                child->getAttributeString("scale_type", scale_type);
-                rec.style = (scale_type == "scale_outer") ? ScaleStyle::Outer : ScaleStyle::Inner;
-
-                // Resolve + decode from the SAME skin dir as the declaration.
-                std::string full = dir;
-                if (!full.empty() && full.back() != '/' && full.back() != '\\') full += gDirUtilp->getDirDelimiter();
-                full += file_name;
-
-                std::vector<uint8_t> rgba; int w = 0, h = 0;
-                if (!decodeFileRGBA(full, rgba, w, h))
-                {
-                    LL_DEBUGS("Vulkan") << "LLVKUIImage: decode failed for " << name << " (" << full << ")" << LL_ENDL;
-                    s_images[name] = rec; // not ok; draw() falls back to solid
-                    continue;
-                }
-                rec.w = w; rec.h = h;
-                // Clip region: GL defaults to full image (0..1); with an
-                // explicit clip rect, normalize against the decoded dims.
-                if (has_clip)
-                {
-                    rec.clip = LLRectf(
-                        llclamp((F32)clip_px.mLeft   / (F32)w, 0.f, 1.f),
-                        llclamp((F32)clip_px.mTop    / (F32)h, 0.f, 1.f),
-                        llclamp((F32)clip_px.mRight  / (F32)w, 0.f, 1.f),
-                        llclamp((F32)clip_px.mBottom / (F32)h, 0.f, 1.f));
-                }
-                else
-                {
-                    rec.clip = LLRectf(0.f, 1.f, 1.f, 0.f);
-                }
-                if (has_scale)
-                {
-                    rec.scale = LLRectf(
-                        llclamp((F32)scale_px.mLeft   / (F32)w, 0.f, 1.f),
-                        llclamp((F32)scale_px.mTop    / (F32)h, 0.f, 1.f),
-                        llclamp((F32)scale_px.mRight  / (F32)w, 0.f, 1.f),
-                        llclamp((F32)scale_px.mBottom / (F32)h, 0.f, 1.f));
-                }
-                else
-                {
-                    rec.scale = LLRectf(0.f, 1.f, 1.f, 0.f);
-                }
-                std::string error;
-                // <VulkanStorm> GL samples UI textures LINEAR (no mips); use the
-                // GL-matched LINEAR sampler so stretched/9-slice images sample
-                // identically (NEAREST diverged on any non-1:1 stretch).
-                if (!ctx->createTexture2D(rgba.data(), (uint32_t)w, (uint32_t)h, rec.tex, error, /*linear=*/true))
-                {
-                    LL_WARNS("Vulkan") << "LLVKUIImage: upload failed for " << name << ": " << error << LL_ENDL;
-                    s_images[name] = rec;
-                    continue;
-                }
-                rec.ok = true;
-                s_images[name] = rec;
+                if (has_clip)  { decl.clip = clip_px; decl.has_clip = true; }
+                if (has_scale) { decl.scale = scale_px; decl.has_scale = true; }
+                if (child->getAttributeString("scale_type", scale_type))
+                    decl.style = (scale_type == "scale_outer") ? ScaleStyle::Outer : ScaleStyle::Inner;
             }
+        }
+
+        for (const auto& entry : declarations)
+        {
+            const std::string& name = entry.first;
+            const ImageDecl& decl = entry.second;
+            ImageRec rec;
+            rec.style = decl.style;
+
+            // OpenGL resolves the merged filename through the current skin
+            // search path, which also permits PNG-only theme overrides.
+            const std::string full =
+                gDirUtilp->findSkinnedFilename(LLDir::TEXTURES, decl.file_name);
+            if (full.empty())
+            {
+                LL_DEBUGS("Vulkan") << "LLVKUIImage: no skinned file for "
+                                    << name << " (" << decl.file_name << ")" << LL_ENDL;
+                s_images[name] = rec;
+                continue;
+            }
+
+            std::vector<uint8_t> rgba; int w = 0, h = 0;
+            if (!decodeFileRGBA(full, rgba, w, h))
+            {
+                LL_DEBUGS("Vulkan") << "LLVKUIImage: decode failed for " << name << " (" << full << ")" << LL_ENDL;
+                s_images[name] = rec;
+                continue;
+            }
+            rec.w = w; rec.h = h;
+            rec.clip = decl.has_clip
+                ? LLRectf(llclamp((F32)decl.clip.mLeft / (F32)w, 0.f, 1.f),
+                          llclamp((F32)decl.clip.mTop / (F32)h, 0.f, 1.f),
+                          llclamp((F32)decl.clip.mRight / (F32)w, 0.f, 1.f),
+                          llclamp((F32)decl.clip.mBottom / (F32)h, 0.f, 1.f))
+                : LLRectf(0.f, 1.f, 1.f, 0.f);
+            rec.scale = decl.has_scale
+                ? LLRectf(llclamp((F32)decl.scale.mLeft / (F32)w, 0.f, 1.f),
+                          llclamp((F32)decl.scale.mTop / (F32)h, 0.f, 1.f),
+                          llclamp((F32)decl.scale.mRight / (F32)w, 0.f, 1.f),
+                          llclamp((F32)decl.scale.mBottom / (F32)h, 0.f, 1.f))
+                : LLRectf(0.f, 1.f, 1.f, 0.f);
+            std::string error;
+            if (!ctx->createTexture2D(rgba.data(), (uint32_t)w, (uint32_t)h,
+                                      rec.tex, error, /*linear=*/true))
+            {
+                LL_WARNS("Vulkan") << "LLVKUIImage: upload failed for " << name << ": " << error << LL_ENDL;
+                s_images[name] = rec;
+                continue;
+            }
+            rec.ok = true;
+            s_images[name] = rec;
         }
         LL_INFOS("Vulkan") << "LLVKUIImage: loaded " << s_images.size() << " UI images" << LL_ENDL;
         s_ready = true;

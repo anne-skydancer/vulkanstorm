@@ -79,9 +79,34 @@ public:
     virtual bool    handleScrollWheel(S32 x, S32 y, S32 clicks);
     virtual void    draw();
 
+    // <VulkanStorm> GL-free slider state.  Native Vulkan intentionally has no
+    // LLUIImage objects, so preserve the XUI aliases and expose the same
+    // geometry/color decisions that draw() uses without entering GL.
+    struct VkDrawState
+    {
+        LLRect control_rect;
+        LLRect thumb_rect;
+        LLRect drag_start_thumb_rect;
+        LLColor4 track_color;
+        LLColor4 thumb_color;
+        LLColor4 ghost_color;
+        std::string track_image;
+        std::string track_highlight_image;
+        std::string thumb_image;
+        bool horizontal = true;
+        bool draw_ghost = false;
+        bool draw_focus = false;
+    };
+    std::string getVkThumbImageName() const;
+    void prepareVkDraw(S32 thumb_width, S32 thumb_height);
+    VkDrawState getVkDrawState(F32 alpha) const;
+    // </VulkanStorm>
+
 private:
     void            setValueAndCommit(F32 value);
     void            updateThumbRect();
+    S32             getThumbWidth() const;
+    S32             getThumbHeight() const;
 
     bool            mVolumeSlider;
     S32             mMouseOffset;
@@ -94,6 +119,20 @@ private:
     LLPointer<LLUIImage>    mTrackImageVertical;
     LLPointer<LLUIImage>    mTrackHighlightHorizontalImage;
     LLPointer<LLUIImage>    mTrackHighlightVerticalImage;
+
+    // <VulkanStorm> XUI aliases survive the GL-free image provider used by
+    // native Vulkan. Cached thumb dimensions also keep hit testing identical
+    // to the independently decoded Vulkan asset.
+    std::string     mVkThumbImage;
+    std::string     mVkThumbImagePressed;
+    std::string     mVkThumbImageDisabled;
+    std::string     mVkTrackImageHorizontal;
+    std::string     mVkTrackImageVertical;
+    std::string     mVkTrackHighlightHorizontalImage;
+    std::string     mVkTrackHighlightVerticalImage;
+    S32             mVkThumbWidth;
+    S32             mVkThumbHeight;
+    // </VulkanStorm>
 
     const EOrientation  mOrientation;
 
