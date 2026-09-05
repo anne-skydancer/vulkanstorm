@@ -268,6 +268,16 @@ namespace LLVKText
         }
     }
 
+    // <VulkanStorm>
+    S32 debugGlyphCount(const LLFontGL* fontp)
+    {
+        if (!ready() || !fontp) return -1;
+        auto found = s_fonts.find(fontp);
+        if (found == s_fonts.end()) return -1;
+        return (S32)found->second->glyphs.size();
+    }
+    // </VulkanStorm>
+
     S32 render(const LLFontGL* fontp, const LLWString& source,
                F32 x, F32 y, const LLColor4& color,
                LLFontGL::HAlign halign, LLFontGL::VAlign valign,

@@ -22,6 +22,11 @@ namespace LLVKText
     void prepare(const LLFontGL* font, const LLWString& text);
     void flushPrepared();
 
+    // <VulkanStorm> diagnostic: glyph count currently in a font's atlas
+    // (catches popups whose text was never prepared before first render).
+    S32 debugGlyphCount(const LLFontGL* font);
+    // </VulkanStorm>
+
     // Coordinates are viewer screen coordinates (GL-style bottom-left origin).
     // Raster dimensions are physical pixels; emission compensates for the
     // active UI scale because LLVKUI2D applies that scale at submission.

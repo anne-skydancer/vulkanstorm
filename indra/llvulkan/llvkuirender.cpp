@@ -1047,6 +1047,8 @@ namespace
                                    << " clip=" << state.clip_rect.mLeft << "," << state.clip_rect.mBottom
                                    << "-" << state.clip_rect.mRight << "," << state.clip_rect.mTop
                                    << " bg=" << (state.background_visible ? 1 : 0)
+                                   << " bgcolor=" << state.background.mV[0] << "," << state.background.mV[1]
+                                   << "," << state.background.mV[2] << "," << state.background.mV[3]
                                    << " vis=" << (view->getVisible() ? 1 : 0) << LL_ENDL;
                 // Log the first few cells' text content + width to catch
                 // empty/zero-width dropdown rows.
@@ -1058,6 +1060,8 @@ namespace
                         if (n++ >= 6) break;
                         LL_INFOS("Vulkan") << "  VKCELL text='" << wstring_to_utf8str(cell.text)
                                            << "' max_px=" << cell.max_pixels
+                                           << " color=" << cell.color.mV[0] << "," << cell.color.mV[1]
+                                           << "," << cell.color.mV[2] << "," << cell.color.mV[3]
                                            << " rect=" << cell.screen_rect.mLeft << "," << cell.screen_rect.mBottom
                                            << "-" << cell.screen_rect.mRight << "," << cell.screen_rect.mTop
                                            << " font=" << (void*)cell.font
@@ -1098,15 +1102,11 @@ namespace
                                          cell.max_pixels);
                         // <VulkanStorm> diagnostic: dump the scissor stack state
                         // at the moment a combo-popup row's text renders.
-                        if (s_dbg_list && !rc.clip_stack.empty())
+                        if (s_dbg_list)
                         {
-                            LLRect clip = rc.clip_stack.front();
-                            for (size_t ci = 1; ci < rc.clip_stack.size(); ++ci)
-                                clip.intersectWith(rc.clip_stack[ci]);
-                            LL_INFOS("Vulkan") << "VKCELL-SCISSOR '" << wstring_to_utf8str(cell.text)
-                                               << "' cell=(" << cell.screen_rect.mLeft << "," << cell.screen_rect.mBottom
-                                               << "-" << cell.screen_rect.mRight << "," << cell.screen_rect.mTop << ")"
-                                               << " clip=(" << clip.mLeft << "," << clip.mBottom << "-" << clip.mRight << "," << clip.mTop << ")"
+                            const S32 glyphs = LLVKText::debugGlyphCount(cell.font);
+                            LL_INFOS("Vulkan") << "VKCELL-GLYPHS '" << wstring_to_utf8str(cell.text)
+                                               << "' font_glyphs=" << glyphs
                                                << " stack=" << rc.clip_stack.size() << LL_ENDL;
                         }
                         // </VulkanStorm>
@@ -1434,19 +1434,7 @@ namespace LLVKUIRender
         // OpenGL draws a registered popup once in its ordinary hierarchy and
         // again from LLPopupView above the remaining UI. Share the enclosing
         // Vulkan context so the second traversal has identical state/order.
-        //
-        // The overlay pass must NOT inherit the clip stack: a combo list is
-        // clipped to its owner's layout rect in-tree, and the popup re-render
-        // would be scissored to that (empty) region, leaving the dropdown
-        // empty. LLPopupView::draw() in GL runs outside any such clip, so the
-        // overlay renders the popup unclipped at its overlay position.
-        RenderCtx& rc = *s_active_render_ctx;
-        std::vector<LLRect> saved_clip;
-        saved_clip.swap(rc.clip_stack);
-        LLVKUI2DSink::get().clearScissor();
-        renderView(rc, root);
-        saved_clip.swap(rc.clip_stack);   // restore the tree's clip stack
-        LLVKUIRenderInternal::applyClip(rc);  // re-assert the active scissor
+        renderView(*s_active_render_ctx, root);
     }
 
     void prepareFrame(LLVKContext* context, LLView* root)
