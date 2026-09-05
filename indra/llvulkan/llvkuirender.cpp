@@ -36,6 +36,7 @@
 #include "lltabcontainer.h"     // GL-free tab layout preparation
 #include "llscrollcontainer.h"  // GL-free scrollbar layout preparation
 #include "llscrollbar.h"       // scrollbar track/thumb state
+#include "llslider.h"          // slider track/thumb state
 #include "llscrolllistctrl.h"  // popup/dropdown row layout and text state
 #include "llcombobox.h"         // editable-combo layout reconciliation
 #include "lliconctrl.h"         // LLIconCtrl (icons)
@@ -95,6 +96,7 @@ namespace
     // <VulkanStorm> Registered per-class hooks (newview-side classes).
     std::map<const std::type_info*, LLVKUIRender::ViewHook> s_hooks;
     std::map<const std::type_info*, LLVKUIRender::ViewPrepareHook> s_prepare_hooks;
+    RenderCtx* s_active_render_ctx = nullptr;
     // </VulkanStorm>
 
     // Emit a panel/floater background. Mirrors LLPanel::draw(): prefer the
@@ -454,6 +456,14 @@ namespace
             tabs->prepareVkDraw();
         if (LLScrollContainer* scroller = dynamic_cast<LLScrollContainer*>(const_cast<LLView*>(view)))
             scroller->prepareVkDraw();
+        if (LLSlider* slider = dynamic_cast<LLSlider*>(const_cast<LLView*>(view)))
+        {
+            int thumb_width = 16;
+            int thumb_height = 16;
+            LLVKUIImage::getSize(slider->getVkThumbImageName(),
+                                 thumb_width, thumb_height);
+            slider->prepareVkDraw(thumb_width, thumb_height);
+        }
         if (LLSearchEditor* search = dynamic_cast<LLSearchEditor*>(const_cast<LLView*>(view)))
             search->prepareVkDraw();
         if (LLScrollListCtrl* list = dynamic_cast<LLScrollListCtrl*>(const_cast<LLView*>(view)))
@@ -606,6 +616,63 @@ namespace
                                              rc.ui_scale_y, state.thumb_color);
             }
             rc.emitted += 2;
+        }
+
+        if (const LLSlider* slider = dynamic_cast<const LLSlider*>(view))
+        {
+            const LLSlider::VkDrawState state =
+                slider->getVkDrawState(rc.parent_alpha);
+            int track_width = 0;
+            int track_height = 0;
+            LLVKUIImage::getSize(state.track_image, track_width, track_height);
+            if (track_width <= 0) track_width = state.horizontal ? 1 : 4;
+            if (track_height <= 0) track_height = state.horizontal ? 4 : 1;
+
+            LLRect track_rect;
+            LLRect highlight_rect;
+            if (state.horizontal)
+            {
+                const S32 cy = state.control_rect.getCenterY();
+                track_rect.set(state.thumb_rect.getWidth() / 2 + state.control_rect.mLeft,
+                               cy + track_height / 2,
+                               state.control_rect.mRight - state.thumb_rect.getWidth() / 2,
+                               cy - track_height / 2);
+                highlight_rect.set(track_rect.mLeft, track_rect.mTop,
+                                   state.thumb_rect.getCenterX(), track_rect.mBottom);
+            }
+            else
+            {
+                const S32 cx = state.control_rect.getCenterX();
+                track_rect.set(cx - track_width / 2, state.control_rect.mTop,
+                               cx + track_width / 2, state.control_rect.mBottom);
+                highlight_rect = track_rect;
+            }
+
+            LLVKUIRender::emitScreenRect(track_rect, rc.dev_h, rc.ui_scale_y,
+                                         state.track_image, state.track_color);
+            LLVKUIRender::emitScreenRect(highlight_rect, rc.dev_h, rc.ui_scale_y,
+                                         state.track_highlight_image,
+                                         state.track_color);
+            if (state.draw_focus)
+            {
+                const LLColor4 focus = gFocusMgr.getFocusColor() % rc.parent_alpha;
+                float l, t, r, b;
+                toSinkRect(rc, state.thumb_rect, l, t, r, b);
+                LLVKUIImage::drawBorder(state.thumb_image, l, t, r, b,
+                                        focus, gFocusMgr.getFocusFlashWidth());
+            }
+            if (state.draw_ghost)
+            {
+                LLVKUIRender::emitScreenRect(state.drag_start_thumb_rect,
+                                             rc.dev_h, rc.ui_scale_y,
+                                             slider->getVkThumbImageName(),
+                                             state.ghost_color);
+            }
+            LLVKUIRender::emitScreenRect(state.thumb_rect, rc.dev_h,
+                                         rc.ui_scale_y, state.thumb_image,
+                                         state.thumb_color);
+            rc.emitted += 3 + (state.draw_focus ? 1 : 0) +
+                          (state.draw_ghost ? 1 : 0);
         }
 
         // <VulkanStorm> M2: button + icon images. These read the widget's
@@ -985,6 +1052,16 @@ namespace LLVKUIRender
         if (hook) s_prepare_hooks[&type] = hook;
     }
 
+    void renderOverlaySubtree(const LLView* root)
+    {
+        if (!root || !s_active_render_ctx) return;
+
+        // OpenGL draws a registered popup once in its ordinary hierarchy and
+        // again from LLPopupView above the remaining UI. Share the enclosing
+        // Vulkan context so the second traversal has identical state/order.
+        renderView(*s_active_render_ctx, root);
+    }
+
     void prepareFrame(LLVKContext* context, LLView* root)
     {
         prepareView(context, root);
@@ -1063,7 +1140,9 @@ namespace LLVKUIRender
         static int  s_dump_frame = 0;
         rc.dump = s_treedump && (++s_dump_frame == 60);
 
+        s_active_render_ctx = &rc;
         renderView(rc, root);
+        s_active_render_ctx = nullptr;
 
         if (rc.dump)
         {

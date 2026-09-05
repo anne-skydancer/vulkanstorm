@@ -56,6 +56,11 @@ namespace LLVKUIRender
     void registerViewHook(const std::type_info& type, ViewHook hook);
     void registerViewPrepareHook(const std::type_info& type, ViewPrepareHook hook);
 
+    // Draw a transient popup subtree using the currently active Vulkan frame
+    // context. LLPopupView owns its popup list in newview, so its registered
+    // hook uses this without introducing an llvulkan -> newview dependency.
+    void renderOverlaySubtree(const LLView* root);
+
     // Update dynamic resources required by viewer-side hooks before the
     // swapchain render pass begins.
     void prepareFrame(LLVKContext* context, LLView* root);

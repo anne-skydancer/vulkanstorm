@@ -747,7 +747,13 @@ void LLFeatureManager::applyFeatures(bool skipFeatures)
 void LLFeatureManager::setGraphicsLevel(U32 level, bool skipFeatures)
 {
     LLViewerShaderMgr::sSkipReload = true;
-    flush_glerror(); // Whatever may have already happened (e.g., to cause us to change), don't let confuse it with new initializations.
+    // <VulkanStorm> Native Vulkan has no GL context. Keep the feature-mask and
+    // saved-setting behavior shared with OpenGL, but do not enter GL error,
+    // shader, or pipeline refresh paths when the Vulkan session owns output.
+    if (!LLVKSession::isRunning())
+    {
+        flush_glerror(); // Whatever may have already happened (e.g., to cause us to change), don't let confuse it with new initializations.
+    }
     applyBaseMasks();
 
     // if we're passed an invalid level, default to "Low"
@@ -758,8 +764,12 @@ void LLFeatureManager::setGraphicsLevel(U32 level, bool skipFeatures)
     applyFeatures(skipFeatures);
 
     LLViewerShaderMgr::sSkipReload = false;
-    LLViewerShaderMgr::instance()->setShaders();
-    gPipeline.refreshCachedSettings();
+    if (!LLVKSession::isRunning())
+    {
+        LLViewerShaderMgr::instance()->setShaders();
+        gPipeline.refreshCachedSettings();
+    }
+    // </VulkanStorm>
 }
 
 void LLFeatureManager::applyBaseMasks()

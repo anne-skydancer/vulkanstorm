@@ -68,6 +68,15 @@ LLSlider::LLSlider(const LLSlider::Params& p)
     mTrackImageVertical(p.track_image_vertical),
     mTrackHighlightHorizontalImage(p.track_highlight_horizontal_image),
     mTrackHighlightVerticalImage(p.track_highlight_vertical_image),
+    mVkThumbImage(p.thumb_image.vk_image_name.isProvided() ? p.thumb_image.vk_image_name() : ""),
+    mVkThumbImagePressed(p.thumb_image_pressed.vk_image_name.isProvided() ? p.thumb_image_pressed.vk_image_name() : ""),
+    mVkThumbImageDisabled(p.thumb_image_disabled.vk_image_name.isProvided() ? p.thumb_image_disabled.vk_image_name() : ""),
+    mVkTrackImageHorizontal(p.track_image_horizontal.vk_image_name.isProvided() ? p.track_image_horizontal.vk_image_name() : ""),
+    mVkTrackImageVertical(p.track_image_vertical.vk_image_name.isProvided() ? p.track_image_vertical.vk_image_name() : ""),
+    mVkTrackHighlightHorizontalImage(p.track_highlight_horizontal_image.vk_image_name.isProvided() ? p.track_highlight_horizontal_image.vk_image_name() : ""),
+    mVkTrackHighlightVerticalImage(p.track_highlight_vertical_image.vk_image_name.isProvided() ? p.track_highlight_vertical_image.vk_image_name() : ""),
+    mVkThumbWidth(16),
+    mVkThumbHeight(16),
     mMouseDownSignal(NULL),
     mMouseUpSignal(NULL)
 {
@@ -114,11 +123,11 @@ void LLSlider::setValue(F32 value, bool from_event)
 
 void LLSlider::updateThumbRect()
 {
-    const S32 DEFAULT_THUMB_SIZE = 16;
-    F32 t = (getValueF32() - mMinValue) / (mMaxValue - mMinValue);
+    F32 range = mMaxValue - mMinValue;
+    F32 t = range != 0.f ? (getValueF32() - mMinValue) / range : 0.f;
 
-    S32 thumb_width = mThumbImage ? mThumbImage->getWidth() : DEFAULT_THUMB_SIZE;
-    S32 thumb_height = mThumbImage ? mThumbImage->getHeight() : DEFAULT_THUMB_SIZE;
+    S32 thumb_width = getThumbWidth();
+    S32 thumb_height = getThumbHeight();
 
     if ( mOrientation == HORIZONTAL )
     {
@@ -144,6 +153,16 @@ void LLSlider::updateThumbRect()
     }
 }
 
+S32 LLSlider::getThumbWidth() const
+{
+    return mThumbImage ? mThumbImage->getWidth() : mVkThumbWidth;
+}
+
+S32 LLSlider::getThumbHeight() const
+{
+    return mThumbImage ? mThumbImage->getHeight() : mVkThumbHeight;
+}
+
 
 void LLSlider::setValueAndCommit(F32 value)
 {
@@ -163,7 +182,7 @@ bool LLSlider::handleHover(S32 x, S32 y, MASK mask)
     {
         if ( mOrientation == HORIZONTAL )
         {
-            S32 thumb_half_width = mThumbImage->getWidth()/2;
+            S32 thumb_half_width = getThumbWidth()/2;
             S32 left_edge = thumb_half_width;
             S32 right_edge = getRect().getWidth() - (thumb_half_width);
 
@@ -175,7 +194,7 @@ bool LLSlider::handleHover(S32 x, S32 y, MASK mask)
         }
         else // mOrientation == VERTICAL
         {
-            S32 thumb_half_height = mThumbImage->getHeight()/2;
+            S32 thumb_half_height = getThumbHeight()/2;
             S32 top_edge = thumb_half_height;
             S32 bottom_edge = getRect().getHeight() - (thumb_half_height);
 
@@ -238,8 +257,8 @@ bool LLSlider::handleMouseDown(S32 x, S32 y, MASK mask)
         if (mThumbRect.pointInRect(x,y))
         {
             mMouseOffset = (mOrientation == HORIZONTAL)
-                ? (mThumbRect.mLeft + mThumbImage->getWidth()/2) - x
-                : (mThumbRect.mBottom + mThumbImage->getHeight()/2) - y;
+                ? (mThumbRect.mLeft + getThumbWidth()/2) - x
+                : (mThumbRect.mBottom + getThumbHeight()/2) - y;
         }
         else
         {
@@ -312,6 +331,14 @@ void LLSlider::draw()
     LLRect track_rect;
     LLRect highlight_rect;
 
+    if (!mThumbImage || !trackImage || !trackHighlightImage)
+    {
+        // Native Vulkan paints from getVkDrawState().  More importantly,
+        // never dereference the deliberately-null GL image provider.
+        LLUICtrl::draw();
+        return;
+    }
+
     if ( mOrientation == HORIZONTAL )
     {
         track_rect.set(mThumbImage->getWidth() / 2,
@@ -368,6 +395,70 @@ void LLSlider::draw()
     }
 
     LLUICtrl::draw();
+}
+
+std::string LLSlider::getVkThumbImageName() const
+{
+    return mThumbImage.notNull() ? mThumbImage->getName() : mVkThumbImage;
+}
+
+void LLSlider::prepareVkDraw(S32 thumb_width, S32 thumb_height)
+{
+    thumb_width = llmax(1, thumb_width);
+    thumb_height = llmax(1, thumb_height);
+    if (mVkThumbWidth == thumb_width && mVkThumbHeight == thumb_height)
+    {
+        return;
+    }
+    mVkThumbWidth = thumb_width;
+    mVkThumbHeight = thumb_height;
+    updateThumbRect();
+}
+
+LLSlider::VkDrawState LLSlider::getVkDrawState(F32 alpha) const
+{
+    VkDrawState state;
+    state.horizontal = mOrientation == HORIZONTAL;
+    state.control_rect = calcScreenRect();
+    localRectToScreen(mThumbRect, &state.thumb_rect);
+    localRectToScreen(mDragStartThumbRect, &state.drag_start_thumb_rect);
+
+    const auto image_name = [](const LLPointer<LLUIImage>& image,
+                               const std::string& retained)
+    {
+        return image.notNull() ? image->getName() : retained;
+    };
+    state.track_image = state.horizontal
+        ? image_name(mTrackImageHorizontal, mVkTrackImageHorizontal)
+        : image_name(mTrackImageVertical, mVkTrackImageVertical);
+    state.track_highlight_image = state.horizontal
+        ? image_name(mTrackHighlightHorizontalImage, mVkTrackHighlightHorizontalImage)
+        : image_name(mTrackHighlightVerticalImage, mVkTrackHighlightVerticalImage);
+
+    const bool mouse_capture = gFocusMgr.getMouseCapture() == this;
+    if (mouse_capture)
+    {
+        state.thumb_image = image_name(mThumbImagePressed, mVkThumbImagePressed);
+        if (state.thumb_image.empty()) state.thumb_image = getVkThumbImageName();
+        state.draw_ghost = true;
+    }
+    else if (!isInEnabledChain())
+    {
+        state.thumb_image = image_name(mThumbImageDisabled, mVkThumbImageDisabled);
+        if (state.thumb_image.empty()) state.thumb_image = getVkThumbImageName();
+    }
+    else
+    {
+        state.thumb_image = getVkThumbImageName();
+    }
+
+    const F32 enabled_alpha = isInEnabledChain() ? alpha : 0.6f * alpha;
+    state.track_color = LLColor4::white % enabled_alpha;
+    state.thumb_color = (mouse_capture ? mThumbOutlineColor.get()
+                                       : mThumbCenterColor.get()) % alpha;
+    state.ghost_color = mThumbCenterColor.get() % (0.3f * alpha);
+    state.draw_focus = hasFocus();
+    return state;
 }
 
 boost::signals2::connection LLSlider::setMouseDownCallback( const commit_signal_t::slot_type& cb )
