@@ -1105,8 +1105,10 @@ namespace
                         if (s_dbg_list)
                         {
                             const S32 glyphs = LLVKText::debugGlyphCount(cell.font);
+                            const F32 adv = LLVKText::debugMeasureAdvance(cell.font, cell.text);
                             LL_INFOS("Vulkan") << "VKCELL-GLYPHS '" << wstring_to_utf8str(cell.text)
                                                << "' font_glyphs=" << glyphs
+                                               << " advance=" << adv
                                                << " stack=" << rc.clip_stack.size() << LL_ENDL;
                         }
                         // </VulkanStorm>

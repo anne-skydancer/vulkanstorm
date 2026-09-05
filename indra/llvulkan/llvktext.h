@@ -22,9 +22,11 @@ namespace LLVKText
     void prepare(const LLFontGL* font, const LLWString& text);
     void flushPrepared();
 
-    // <VulkanStorm> diagnostic: glyph count currently in a font's atlas
-    // (catches popups whose text was never prepared before first render).
+    // <VulkanStorm> diagnostic: glyph count + total advance of a string in a
+    // font's atlas (catches zero-advance / empty-glyph fonts that render as a
+    // collapsed smear).
     S32 debugGlyphCount(const LLFontGL* font);
+    F32 debugMeasureAdvance(const LLFontGL* font, const LLWString& text);
     // </VulkanStorm>
 
     // Coordinates are viewer screen coordinates (GL-style bottom-left origin).
