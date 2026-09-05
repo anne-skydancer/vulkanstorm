@@ -117,6 +117,25 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             self.path("poses")
             self.path("fs_static_assets")
 
+        # <FS/> Vulkanstorm: these are runtime assets for the build-tree exe too
+        # (the font registry needs fonts/fonts.xml; character/*.llm drive mesh
+        # loading; fs_resources carries LSL templates). Previously copied only
+        # when packaging, which left unpackaged builds crashing on startup.
+        with self.prefix(src_dst="character"):
+            self.path("*.llm")
+            self.path("*.xml")
+            self.path("*.tga")
+
+        with self.prefix(src_dst="fonts"):
+            self.path("*.ttf")
+            self.path("*.txt")
+            self.path("*.xml")
+
+        with self.prefix(src_dst="fs_resources"):
+            self.path("*.lsltxt")
+            self.path("*.dae")
+        # </FS/>
+
         with self.prefix(src_dst="skins"):
             self.path("*/xui/*/*.xml")
             self.path("*/xui/*/widgets/*.xml")
@@ -243,16 +262,9 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             # Include our fonts
             # <FS:Ansariel> Don't copy fonts to the source folder
             #with self.prefix(src="../packages/fonts",src_dst="fonts"):
-            with self.prefix(src_dst="fonts"):
-            # </FS:Ansariel>
-                self.path("*.ttf")
-                self.path("*.txt")
-                self.path("*.xml")
-                
-            # <FS:AO> Include firestorm resources
-            with self.prefix(src_dst="fs_resources"):
-                self.path("*.lsltxt")
-                self.path("*.dae") # <FS:Beq> FIRE-30963 - better physics defaults
+            # <FS/> Vulkanstorm: moved out of the packaging gate above (runtime
+            # assets, needed by build-tree exes).
+            # </FS/>
 
             # skins
             with self.prefix(src_dst="skins"):

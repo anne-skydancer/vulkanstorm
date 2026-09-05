@@ -745,6 +745,71 @@ void LLFolderView::draw()
     mDragAndDropThisFrame = false;
 }
 
+// <VulkanStorm>
+void LLFolderView::prepareVkDraw()
+{
+    // Mirror the non-GL state reconciliation LLFolderView::draw() performs;
+    // the greenfield Vulkan walker never calls draw(). The GL-matrix save/
+    // restore around the arrange below only matters for GL child drawing and
+    // is intentionally omitted.
+
+    // if cursor has moved off of me during drag and drop
+    // close all auto opened folders
+    if (!mDragAndDropThisFrame)
+    {
+        closeAutoOpenedFolders();
+    }
+
+    static LLCachedControl<F32> type_ahead_timeout(*LLUI::getInstance()->mSettingGroups["config"], "TypeAheadTimeout", 1.5f);
+    if (mSearchTimer.getElapsedTimeF32() > type_ahead_timeout || !mSearchString.size())
+    {
+        mSearchString.clear();
+    }
+
+    if (hasVisibleChildren())
+    {
+        mStatusTextBox->setVisible( false );
+    }
+    else if (mShowEmptyMessage)
+    {
+        mStatusTextBox->setValue(getFolderViewModel()->getStatusText(mItems.empty() && mFolders.empty()));
+        mStatusTextBox->setVisible( true );
+
+        // firstly reshape message textbox with current size. This is necessary to
+        // LLTextBox::getTextPixelHeight works properly
+        const LLRect local_rect = getLocalRect();
+        mStatusTextBox->setShape(local_rect);
+
+        // get preferable text height...
+        S32 pixel_height = mStatusTextBox->getTextPixelHeight();
+        bool height_changed = (local_rect.getHeight() < pixel_height);
+        if (height_changed)
+        {
+            // ... if it does not match current height, lets rearrange current view.
+            // This will indirectly call ::arrange and reshape of the status textbox.
+            // We should call this method to also notify parent about required rect.
+            // See EXT-7564, EXT-7047.
+            S32 height = 0;
+            S32 width = 0;
+            S32 total_height = arrange( &width, &height );
+            notifyParent(LLSD().with("action", "size_changes").with("height", total_height));
+        }
+    }
+
+    if (mRenameItem
+        && mRenamer
+        && mRenamer->getVisible()
+        && !getVisibleRect().overlaps(mRenamer->getRect()))
+    {
+        // renamer is not connected to the item we are renaming in any form so manage it manually
+        LL_DEBUGS("Inventory") << "Renamer out of bounds, hiding" << LL_ENDL;
+        finishRenamingItem();
+    }
+
+    mDragAndDropThisFrame = false;
+}
+// </VulkanStorm>
+
 void LLFolderView::finishRenamingItem( void )
 {
     if(!mRenamer)

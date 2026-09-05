@@ -376,6 +376,30 @@ public:
         F32 screen_x = 0.f;
         F32 screen_baseline = 0.f;
         S32 max_pixels = 0;
+        // Highlight behind the matched substring (draw()'s mHighlightCount
+        // branch); the color carries the type-ahead animation alpha.
+        bool     highlight_visible = false;
+        LLRect   highlight_rect;        // screen space
+        LLColor4 highlight_color;
+    };
+    // <VulkanStorm> Non-text cell chrome (mirrors the cells' draw()).
+    struct VkIconCellState
+    {
+        LLRect      screen_rect;        // final icon rect (screen space)
+        std::string image;              // skinned image name ("" = no image)
+        LLColor4    color;
+    };
+    struct VkBarCellState
+    {
+        LLRect      screen_rect;        // final 1px bar rect (screen space)
+        LLColor4    color;
+    };
+    struct VkCheckCellState
+    {
+        LLRect      screen_rect;        // checkbox button rect (screen space)
+        std::string image;              // current button state image name
+        LLColor4    color;
+        bool        scale_image = true;
     };
     struct VkRowState
     {
@@ -383,6 +407,9 @@ public:
         LLColor4 background;
         bool background_visible = false;
         std::vector<VkTextCellState> cells;
+        std::vector<VkIconCellState> icons;
+        std::vector<VkBarCellState> bars;
+        std::vector<VkCheckCellState> checks;
     };
     struct VkDrawState
     {

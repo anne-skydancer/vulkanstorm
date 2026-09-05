@@ -79,7 +79,234 @@ LLConsole::LLConsole(const LLConsole::Params& p)
 
     // <FS:Ansariel> Configurable background for different console types
     mBackgroundImage = LLUI::getUIImage(p.background_image);
+    // <VulkanStorm> retain the name for the GL-free Vulkan path
+    mVkBgImageName = p.background_image.isProvided() ? p.background_image() : std::string();
+    // </VulkanStorm>
 }
+
+// <VulkanStorm>
+void LLConsole::prepareVkDraw()
+{
+    // draw()'s paragraph-expiry cleanup (only when session support is off;
+    // with session support update() owns expiry).
+    if (mSessionSupport)
+    {
+        return;
+    }
+
+    const F32 cur_time = mTimer.getElapsedTimeF32();
+    const F32 skip_time = cur_time - mLinePersistTime;
+
+    size_t num_lines{ 0 };
+    paragraph_t::reverse_iterator paragraph_it = mParagraphs.rbegin();
+    auto paragraph_num = mParagraphs.size();
+
+    while (!mParagraphs.empty() && paragraph_it != mParagraphs.rend())
+    {
+        num_lines += (*paragraph_it).mLines.size();
+        if (num_lines > mMaxLines
+            || ((mLinePersistTime > (F32)0.f) && ((*paragraph_it).mAddTime - skip_time) / (mLinePersistTime - mFadeTime) <= (F32)0.f))
+        {
+            for (size_t i = 0; i < paragraph_num; i++)
+            {
+                if (!mParagraphs.empty())
+                    mParagraphs.pop_front();
+            }
+            break;
+        }
+        paragraph_num--;
+        paragraph_it++;
+    }
+}
+
+void LLConsole::getVkDrawState(VkDrawState& out) const
+{
+    // Mirrors draw(): geometry/text in widget-LOCAL coordinates (the console
+    // draws in its own frame; y grows upward from ~10px above the bottom).
+    out = VkDrawState();
+
+    constexpr F32 padding_horizontal = 15;
+    constexpr F32 padding_vertical = 8;
+
+    if (mParagraphs.empty())
+    {
+        return;
+    }
+
+    static LLUICachedControl<bool> showOnscreenConsole("FSShowOnscreenConsole");
+    if (!showOnscreenConsole && this == gConsole)
+    {
+        return;
+    }
+
+    const F32 cur_time = mTimer.getElapsedTimeF32();
+    const F32 skip_time = cur_time - mLinePersistTime;
+    const F32 fade_time = cur_time - mFadeTime;
+
+    out.visible = true;
+    out.font = mFont;
+    out.bg_image = mBackgroundImage.notNull() ? mBackgroundImage->getName() : mVkBgImageName;
+    static LLUICachedControl<F32> consoleBackgroundOpacity("ConsoleBackgroundOpacity");
+    static LLUIColor cbcolor = LLUIColorTable::instance().getColor("ConsoleBackground");
+    out.bg_color = cbcolor.get();
+    out.bg_color.mV[VALPHA] *= llclamp(consoleBackgroundOpacity(), 0.f, 1.f);
+
+    const F32 line_height = (F32)mFont->getLineHeight();
+    static LLUICachedControl<bool> classic_draw_mode("FSConsoleClassicDrawMode");
+
+    F32 y_pos = 10.f;
+
+    if (classic_draw_mode)
+    {
+        constexpr F32 padding_vert = 5.f;
+        S32 total_width = 0;
+        S32 total_height = 0;
+        size_t lines_drawn = 0;
+
+        for (auto paragraph_it = mParagraphs.rbegin(); paragraph_it != mParagraphs.rend(); ++paragraph_it)
+        {
+            if (mSessionSupport)
+            {
+                if (mCurrentSessions.find((*paragraph_it).mSessionID) != mCurrentSessions.end())
+                {
+                    continue;
+                }
+                lines_drawn += (*paragraph_it).mLines.size();
+                if (lines_drawn > mMaxLines)
+                {
+                    break;
+                }
+            }
+            total_height += llfloor((*paragraph_it).mLines.size() * line_height + padding_vert);
+            total_width = llmax(total_width, llfloor((*paragraph_it).mMaxWidth + padding_horizontal));
+        }
+        out.bg_rects.push_back(LLRect(-14, ll_round(y_pos + line_height / 2),
+                                      -14 + total_width,
+                                      ll_round(y_pos + line_height / 2) - total_height - ll_round((line_height - padding_vert) / 2.f)));
+
+        lines_drawn = 0;
+        for (auto paragraph_it = mParagraphs.rbegin(); paragraph_it != mParagraphs.rend(); ++paragraph_it)
+        {
+            if (mSessionSupport)
+            {
+                if (mCurrentSessions.find((*paragraph_it).mSessionID) != mCurrentSessions.end())
+                {
+                    continue;
+                }
+                lines_drawn += (*paragraph_it).mLines.size();
+                if (lines_drawn > mMaxLines)
+                {
+                    break;
+                }
+            }
+
+            F32 y_off = 0;
+            F32 alpha;
+            S32 target_width = llfloor((*paragraph_it).mMaxWidth + padding_horizontal);
+            y_pos += ((*paragraph_it).mLines.size()) * line_height;
+
+            if ((mLinePersistTime > 0.f) && ((*paragraph_it).mAddTime < fade_time))
+            {
+                alpha = ((*paragraph_it).mAddTime - skip_time) / (mLinePersistTime - mFadeTime);
+            }
+            else
+            {
+                alpha = 1.0f;
+            }
+
+            if (alpha > 0.f)
+            {
+                for (auto line_it = (*paragraph_it).mLines.begin();
+                     line_it != (*paragraph_it).mLines.end(); ++line_it)
+                {
+                    for (auto seg_it = (*line_it).mLineColorSegments.begin();
+                         seg_it != (*line_it).mLineColorSegments.end(); ++seg_it)
+                    {
+                        VkTextRun run;
+                        run.text = (*seg_it).mText;
+                        run.x = (*seg_it).mXPosition - 8;
+                        run.y = y_pos - y_off;
+                        run.color = LLColor4((*seg_it).mColor.mV[VRED],
+                                             (*seg_it).mColor.mV[VGREEN],
+                                             (*seg_it).mColor.mV[VBLUE],
+                                             (*seg_it).mColor.mV[VALPHA] * alpha);
+                        run.style = (*line_it).mStyleFlags;
+                        run.max_pixels = target_width;
+                        out.runs.push_back(run);
+                    }
+                    y_off += line_height;
+                }
+            }
+            y_pos += padding_vert;
+        }
+    }
+    else
+    {
+        size_t lines_drawn = 0;
+        for (auto paragraph_it = mParagraphs.rbegin(); paragraph_it != mParagraphs.rend(); ++paragraph_it)
+        {
+            if (mSessionSupport)
+            {
+                if (mCurrentSessions.find((*paragraph_it).mSessionID) != mCurrentSessions.end())
+                {
+                    continue;
+                }
+                lines_drawn += (*paragraph_it).mLines.size();
+                if (lines_drawn > mMaxLines)
+                {
+                    break;
+                }
+            }
+
+            S32 target_height = llfloor((*paragraph_it).mLines.size() * line_height + padding_vertical);
+            S32 target_width = llfloor((*paragraph_it).mMaxWidth + padding_horizontal);
+
+            y_pos += ((*paragraph_it).mLines.size()) * line_height;
+            // mBackgroundImage->drawSolid(-14, y_pos + line_height - target_height, target_width, target_height, color)
+            out.bg_rects.push_back(LLRect(-14, ll_round(y_pos + line_height - target_height) + target_height,
+                                          -14 + target_width,
+                                          ll_round(y_pos + line_height - target_height)));
+
+            F32 y_off = 0;
+            F32 alpha;
+
+            if ((mLinePersistTime > 0.f) && ((*paragraph_it).mAddTime < fade_time))
+            {
+                alpha = ((*paragraph_it).mAddTime - skip_time) / (mLinePersistTime - mFadeTime);
+            }
+            else
+            {
+                alpha = 1.0f;
+            }
+
+            if (alpha > 0.f)
+            {
+                for (auto line_it = (*paragraph_it).mLines.begin();
+                     line_it != (*paragraph_it).mLines.end(); ++line_it)
+                {
+                    for (auto seg_it = (*line_it).mLineColorSegments.begin();
+                         seg_it != (*line_it).mLineColorSegments.end(); ++seg_it)
+                    {
+                        VkTextRun run;
+                        run.text = (*seg_it).mText;
+                        run.x = (*seg_it).mXPosition - 8;
+                        run.y = y_pos - y_off;
+                        run.color = LLColor4((*seg_it).mColor.mV[VRED],
+                                             (*seg_it).mColor.mV[VGREEN],
+                                             (*seg_it).mColor.mV[VBLUE],
+                                             (*seg_it).mColor.mV[VALPHA] * alpha);
+                        run.style = (*line_it).mStyleFlags;
+                        run.max_pixels = target_width;
+                        out.runs.push_back(run);
+                    }
+                    y_off += line_height;
+                }
+            }
+            y_pos += padding_vertical;
+        }
+    }
+}
+// </VulkanStorm>
 
 void LLConsole::setLinePersistTime(F32 seconds)
 {

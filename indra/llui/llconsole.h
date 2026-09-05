@@ -162,6 +162,33 @@ public:
     // Overrides
     /*virtual*/ void    draw();
 
+    // <VulkanStorm> GL-free draw state for the Vulkan UI walker (mirrors
+    // draw(), both classic and per-paragraph background modes). prepareVkDraw()
+    // performs draw()'s paragraph-expiry cleanup; getVkDrawState() exposes
+    // background rects (widget-LOCAL) and text runs (widget-LOCAL baseline
+    // positions) — empty when the console should not draw.
+    struct VkTextRun
+    {
+        LLWString               text;
+        F32                     x = 0.f;
+        F32                     y = 0.f;
+        LLColor4                color;
+        LLFontGL::StyleFlags    style = LLFontGL::NORMAL;
+        S32                     max_pixels = S32_MAX;
+    };
+    struct VkDrawState
+    {
+        bool                    visible = false;
+        const LLFontGL*         font = nullptr;
+        std::string             bg_image;   // drawSolid'd background image name
+        LLColor4                bg_color;
+        std::vector<LLRect>     bg_rects;   // local
+        std::vector<VkTextRun>  runs;       // local baseline coords
+    };
+    void prepareVkDraw();
+    void getVkDrawState(VkDrawState& out) const;
+    // </VulkanStorm>
+
 // <FS:Ansariel> Chat console
     void addConsoleLine(const std::string& utf8line, const LLColor4 &color, const LLUUID& session_id = LLUUID::null, LLFontGL::StyleFlags styleflags = LLFontGL::NORMAL);
     void addConsoleLine(const LLWString& wline, const LLColor4 &color, const LLUUID& session_id = LLUUID::null, LLFontGL::StyleFlags styleflags = LLFontGL::NORMAL);
@@ -189,6 +216,9 @@ private:
     S32         mConsoleHeight;
     bool        mParseUrls; // <FS:Ansariel> If lines should be parsed for URLs
     LLUIImagePtr    mBackgroundImage; // <FS:Ansariel> Configurable background for different console types
+    // <VulkanStorm> retained name for the GL-free path
+    std::string     mVkBgImageName;
+    // </VulkanStorm>
     // <FS:Ansariel> Session support
     std::set<LLUUID>    mCurrentSessions;
     bool        mSessionSupport;

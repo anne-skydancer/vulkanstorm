@@ -155,14 +155,23 @@ void LLWindowShade::initFromParams(const LLWindowShade::Params& params)
 
 void LLWindowShade::draw()
 {
+    // <VulkanStorm> the layout/state half moved to prepareVkDraw() so the
+    // GL-free Vulkan walker can run it without entering draw().
+    prepareVkDraw();
+    // </VulkanStorm>
+
+    LLUICtrl::draw();
+}
+
+// <VulkanStorm>
+void LLWindowShade::prepareVkDraw()
+{
     LLRect message_rect = mNotificationsText->getTextBoundingRect();
 
     mNotificationsArea->reshape(mNotificationsArea->getRect().getWidth(),
         llclamp(message_rect.getHeight() + 15,
                 llmax(mFormHeight, MIN_NOTIFICATION_AREA_HEIGHT),
                 MAX_NOTIFICATION_AREA_HEIGHT));
-
-    LLUICtrl::draw();
 
     while(!mNotifications.empty() && !mNotifications.back()->isActive())
     {
@@ -186,6 +195,7 @@ void LLWindowShade::draw()
         setMouseOpaque(false);
     }
 }
+// </VulkanStorm>
 
 void LLWindowShade::hide()
 {

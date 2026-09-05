@@ -141,6 +141,26 @@ public:
 
     void                setDrawAtParentTop(bool draw_at_top) { mDrawAtParentTop = draw_at_top;}
 
+    // <VulkanStorm> GL-free draw state for the Vulkan UI walker (mirrors
+    // draw()). All geometry is badge-LOCAL (bottom-left origin), matching the
+    // badge's own view frame; the walker converts to screen space.
+    struct VkDrawState
+    {
+        bool            visible = false;        // label set && owner visible
+        LLRect          badge_rect;             // image/background rect (local)
+        std::string     image;                  // badge image name (may be "")
+        std::string     border_image;
+        LLColor4        image_color;
+        LLColor4        border_color;
+        const LLFontGL* font = nullptr;
+        LLWString       label;
+        F32             label_x = 0.f;          // label center (local coords)
+        F32             label_y = 0.f;
+        LLColor4        label_color;
+    };
+    void                getVkDrawState(F32 alpha, VkDrawState& out) const;
+    // </VulkanStorm>
+
 private:
     LLPointer< LLUIImage >  mBorderImage;
     LLUIColor               mBorderColor;
@@ -170,6 +190,11 @@ private:
 
     LLScrollContainer*      mParentScroller;
     bool                    mDrawAtParentTop;
+
+    // <VulkanStorm> XUI image names retained for the GL-free path.
+    std::string             mVkImageName;
+    std::string             mVkBorderImageName;
+    // </VulkanStorm>
 };
 
 // Build time optimization, generate once in .cpp file

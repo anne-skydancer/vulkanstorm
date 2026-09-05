@@ -140,6 +140,10 @@ LLMultiSlider::LLMultiSlider(const LLMultiSlider::Params& p)
     if (p.thumb_image.isProvided())
     {
         mThumbImagep = LLUI::getUIImage(p.thumb_image());
+        // <VulkanStorm> thumb_image is a plain name param — retain it for the
+        // GL-free Vulkan path.
+        mVkThumbImage = p.thumb_image();
+        // </VulkanStorm>
     }
     mThumbHighlightColor = p.thumb_highlight_color.isProvided() ? p.thumb_highlight_color() : static_cast<LLUIColor>(gFocusMgr.getFocusColor());
 }
@@ -325,6 +329,7 @@ void LLMultiSlider::setSliderThumbImage(const std::string &name)
     if (!name.empty())
     {
         mThumbImagep = LLUI::getUIImage(name);
+        mVkThumbImage = name;   // <VulkanStorm/> GL-free name retention
     }
     else
         clearSliderThumbImage();
@@ -333,6 +338,7 @@ void LLMultiSlider::setSliderThumbImage(const std::string &name)
 void LLMultiSlider::clearSliderThumbImage()
 {
     mThumbImagep = NULL;
+    mVkThumbImage.clear();      // <VulkanStorm/>
 }
 
 void LLMultiSlider::resetCurSlider()
@@ -646,6 +652,66 @@ void LLMultiSlider::onMouseLeave(S32 x, S32 y, MASK mask)
     mHoverSlider.clear();
     LLF32UICtrl::onMouseLeave(x, y, mask);
 }
+
+// <VulkanStorm>
+LLMultiSlider::VkDrawState LLMultiSlider::getVkDrawState(F32 alpha) const
+{
+    // draw() does not consume the draw-context alpha (only the enabled
+    // opacity), so alpha is passed through for interface consistency.
+    (void)alpha;
+    VkDrawState state;
+    state.horizontal = (mOrientation == HORIZONTAL);
+    state.enabled = getEnabled();
+    state.has_focus = hasFocus();
+    state.mouse_capture = (gFocusMgr.getMouseCapture() == this);
+    state.cur_slider = mCurSlider;
+    state.hover_slider = mHoverSlider;
+
+    // Track geometry, mirroring draw().
+    static LLUICachedControl<S32> multi_track_height_width("UIMultiTrackHeight", 0);
+    S32 height_offset = 0;
+    S32 width_offset = 0;
+    if (state.horizontal)
+    {
+        height_offset = (getRect().getHeight() - multi_track_height_width) / 2;
+    }
+    else
+    {
+        width_offset = (getRect().getWidth() - multi_track_height_width) / 2;
+    }
+    LLRect track_rect(width_offset, getRect().getHeight() - height_offset,
+                      getRect().getWidth() - width_offset, height_offset);
+    state.draw_track = mDrawTrack && mRoundedSquareImgp.notNull();
+    if (state.draw_track)
+    {
+        track_rect.stretch(-1);
+    }
+    localRectToScreen(track_rect, &state.track_rect);
+
+    localRectToScreen(mDragStartThumbRect, &state.drag_start_thumb_rect);
+
+    state.thumb_image = mThumbImagep.notNull() ? mThumbImagep->getName() : mVkThumbImage;
+    state.rounded_square_image = mRoundedSquareImgp.notNull()
+        ? mRoundedSquareImgp->getName() : std::string("Rounded_Square");
+    state.use_triangle = mUseTriangle;
+
+    state.track_color = mTrackColor.get();
+    state.triangle_color = mTriangleColor.get();
+    state.thumb_center_color = mThumbCenterColor.get();
+    state.thumb_center_selected_color = mThumbCenterSelectedColor.get();
+    state.thumb_highlight_color = mThumbHighlightColor.get();
+
+    state.thumbs.reserve(mThumbRects.size());
+    for (const auto& pair : mThumbRects)
+    {
+        VkThumbState thumb;
+        thumb.name = pair.first;
+        localRectToScreen(pair.second, &thumb.screen_rect);
+        state.thumbs.push_back(thumb);
+    }
+    return state;
+}
+// </VulkanStorm>
 
 void LLMultiSlider::draw()
 {

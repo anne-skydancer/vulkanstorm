@@ -146,6 +146,13 @@ public:
     LLToastLifeTimer* getTimer() { return mTimer.get();}
     //
     virtual void draw();
+
+    // <VulkanStorm> LLToast::draw() calls LLFloater::draw() (never
+    // LLModalDialog::draw()), so opt out of the modal shadow; the wrapper
+    // panel shadow is emitted by the Vulkan toast view hook.
+    bool getVkModalShadow() const override { return false; }
+    const LLPanel* getVkWrapperPanel() const { return mWrapperPanel; }
+    // </VulkanStorm>
     //
     virtual void setVisible(bool show);
 

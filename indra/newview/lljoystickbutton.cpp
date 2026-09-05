@@ -654,6 +654,44 @@ void LLJoystickCameraRotate::draw()
     }
 }
 
+// <VulkanStorm> GL-free replica of draw()'s state; no GL, no side effects.
+LLJoystickCameraRotate::VkDrawState LLJoystickCameraRotate::getVkDrawState(F32 alpha) const
+{
+    VkDrawState state;
+
+    // Null-safe names: GL-backed LLUIImage pointers may be null on the Vulkan
+    // path; fall back to the raw XUI names captured by LLButton.
+    if (mImageUnselected.notNull())
+    {
+        state.base_image = mImageUnselected->getName();
+    }
+    if (state.base_image.empty())
+    {
+        state.base_image = mVkImgNameUnselected;
+    }
+    if (mImageSelected.notNull())
+    {
+        state.selected_image = mImageSelected->getName();
+    }
+    if (state.selected_image.empty())
+    {
+        state.selected_image = mVkImgNameSelected;
+    }
+    state.center_image = mCenterImageName;
+
+    state.in_center = mInCenter;
+    state.in_top = mInTop;
+    state.in_right = mInRight;
+    state.in_bottom = mInBottom;
+    state.in_left = mInLeft;
+
+    localRectToScreen(getLocalRect(), &state.rect);
+    state.color = UI_VERTEX_COLOR % alpha;
+
+    return state;
+}
+// </VulkanStorm>
+
 // Draws image rotated by multiples of 90 degrees
 void LLJoystickCameraRotate::drawRotatedImage( LLPointer<LLUIImage> image, S32 rotations )
 {
@@ -930,6 +968,57 @@ void LLJoystickQuaternion::draw()
         draw_point.mV[mZAxisIndex] >= 0.f);
 
 }
+
+// <VulkanStorm> GL-free replica of draw()'s state, including the rotation
+// indicator circle geometry; no GL, no side effects.
+LLJoystickQuaternion::VkDrawState LLJoystickQuaternion::getVkDrawState(F32 alpha) const
+{
+    VkDrawState state;
+
+    if (mImageUnselected.notNull())
+    {
+        state.base_image = mImageUnselected->getName();
+        state.base_width = mImageUnselected->getWidth();
+        state.base_height = mImageUnselected->getHeight();
+    }
+    if (state.base_image.empty())
+    {
+        state.base_image = mVkImgNameUnselected;
+    }
+    if (mImageSelected.notNull())
+    {
+        state.selected_image = mImageSelected->getName();
+    }
+    if (state.selected_image.empty())
+    {
+        state.selected_image = mVkImgNameSelected;
+    }
+
+    state.in_top = mInTop;
+    state.in_right = mInRight;
+    state.in_bottom = mInBottom;
+    state.in_left = mInLeft;
+
+    localRectToScreen(getLocalRect(), &state.rect);
+    state.color = UI_VERTEX_COLOR % alpha;
+
+    // Same math as draw(): map the rotated zero vector into the widget.
+    LLVector3 draw_point = mVectorZero * mRotation;
+    S32 halfwidth = getRect().getWidth() / 2;
+    S32 halfheight = getRect().getHeight() / 2;
+    draw_point.mV[mXAxisIndex] = (draw_point.mV[mXAxisIndex] + 1.0f) * halfwidth;
+    draw_point.mV[mYAxisIndex] = (draw_point.mV[mYAxisIndex] + 1.0f) * halfheight;
+    state.draw_point = draw_point;
+    state.circle_filled = draw_point.mV[mZAxisIndex] >= 0.f;
+
+    S32 screen_x, screen_y;
+    localPointToScreen((S32)draw_point.mV[mXAxisIndex], (S32)draw_point.mV[mYAxisIndex], &screen_x, &screen_y);
+    state.circle_x = (F32)screen_x;
+    state.circle_y = (F32)screen_y;
+
+    return state;
+}
+// </VulkanStorm>
 
 F32 LLJoystickQuaternion::getOrbitRate()
 {

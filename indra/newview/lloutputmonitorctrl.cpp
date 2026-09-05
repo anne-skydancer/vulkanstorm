@@ -74,6 +74,14 @@ LLOutputMonitorCtrl::LLOutputMonitorCtrl(const LLOutputMonitorCtrl::Params& p)
     mImageLevel3(p.image_level_3),
     mAutoUpdate(p.auto_update),
     mSpeakerId(p.speaker_id),
+    // <VulkanStorm> raw XUI names for the GL-free Vulkan path
+    mVkImageMute(p.image_mute.vk_image_name.isProvided() ? p.image_mute.vk_image_name() : ""),
+    mVkImageOff(p.image_off.vk_image_name.isProvided() ? p.image_off.vk_image_name() : ""),
+    mVkImageOn(p.image_on.vk_image_name.isProvided() ? p.image_on.vk_image_name() : ""),
+    mVkImageLevel1(p.image_level_1.vk_image_name.isProvided() ? p.image_level_1.vk_image_name() : ""),
+    mVkImageLevel2(p.image_level_2.vk_image_name.isProvided() ? p.image_level_2.vk_image_name() : ""),
+    mVkImageLevel3(p.image_level_3.vk_image_name.isProvided() ? p.image_level_3.vk_image_name() : ""),
+    // </VulkanStorm>
     mIsModeratorMuted(false),
     mIsAgentControl(false),
     mIndicatorToggled(false),
@@ -274,6 +282,68 @@ void LLOutputMonitorCtrl::draw()
     if(mBorder)
         gl_rect_2d(0, monh, monw, 0, sColorBound, false);
 }
+
+// <VulkanStorm> GL-free replica of the icon selection in draw(); no GL, and
+// unlike draw() it does not refresh power/talking state from the voice client.
+LLOutputMonitorCtrl::VkDrawState LLOutputMonitorCtrl::getVkDrawState(F32 alpha) const
+{
+    VkDrawState state;
+    state.power = mPower;
+    state.is_muted = getIsMuted();
+    state.is_talking = mIsTalking;
+    state.draw_border = mBorder;
+    state.border_color = sColorBound;
+    state.border_color.mV[VALPHA] *= alpha;
+    localRectToScreen(getLocalRect(), &state.rect);
+
+    LLPointer<LLUIImage> icon;
+    std::string icon_name;
+    // Same selection as draw(): LLVoiceClient power level picks the icon.
+    EVoicePowerLevel power_level = LLVoiceClient::getInstance()->getPowerLevel(mSpeakerId);
+    switch (power_level)
+    {
+        case VPL_MUTED:
+            icon = mImageMute;
+            icon_name = mVkImageMute;
+            break;
+        case VPL_PTT_Off:
+            icon = mImageOff;
+            icon_name = mVkImageOff;
+            break;
+        case VPL_PTT_On:
+            icon = mImageOn;
+            icon_name = mVkImageOn;
+            break;
+        case VPL_Level1:
+            icon = mImageLevel1;
+            icon_name = mVkImageLevel1;
+            break;
+        case VPL_Level2:
+            icon = mImageLevel2;
+            icon_name = mVkImageLevel2;
+            break;
+        case VPL_Level3:
+            icon = mImageLevel3;
+            icon_name = mVkImageLevel3;
+            break;
+        default:
+            break;
+    }
+
+    if (icon.notNull())
+    {
+        state.icon_image = icon->getName();
+        state.icon_width = icon->getWidth();
+        state.icon_height = icon->getHeight();
+    }
+    if (state.icon_image.empty())
+    {
+        state.icon_image = icon_name;
+    }
+
+    return state;
+}
+// </VulkanStorm>
 
 // virtual
 bool LLOutputMonitorCtrl::handleMouseUp(S32 x, S32 y, MASK mask)

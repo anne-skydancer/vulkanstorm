@@ -69,7 +69,14 @@ LLVirtualTrackball::LLVirtualTrackball(const LLVirtualTrackball::Params& p)
     mImgSphere(p.image_sphere),
     mThumbMode(p.thumb_mode() == "moon" ? ThumbMode::MOON : ThumbMode::SUN),
     mIncrementMouse(DEG_TO_RAD * p.increment_angle_mouse()),
-    mIncrementBtn(DEG_TO_RAD * p.increment_angle_btn())
+    mIncrementBtn(DEG_TO_RAD * p.increment_angle_btn()),
+    // <VulkanStorm> retain the XUI names for the GL-free Vulkan path
+    mVkImgSphere(p.image_sphere.vk_image_name.isProvided() ? p.image_sphere.vk_image_name() : ""),
+    mVkImgSunFront(p.image_sun_front.vk_image_name.isProvided() ? p.image_sun_front.vk_image_name() : ""),
+    mVkImgSunBack(p.image_sun_back.vk_image_name.isProvided() ? p.image_sun_back.vk_image_name() : ""),
+    mVkImgMoonFront(p.image_moon_front.vk_image_name.isProvided() ? p.image_moon_front.vk_image_name() : ""),
+    mVkImgMoonBack(p.image_moon_back.vk_image_name.isProvided() ? p.image_moon_back.vk_image_name() : "")
+    // </VulkanStorm>
 {
     LLRect border_rect = getLocalRect();
     S32 centerX = border_rect.getCenterX();
@@ -152,11 +159,23 @@ LLVirtualTrackball::LLVirtualTrackball(const LLVirtualTrackball::Params& p)
     addChild(mLabelW);
 
 
+    // <VulkanStorm> the GL image is null without a GL context; fall back to
+    // the widget interior minus the button band until prepareVkDraw() learns
+    // the Vulkan-decoded intrinsic size.
+    S32 sphere_w = mImgSphere ? mImgSphere->getWidth() : 0;
+    S32 sphere_h = mImgSphere ? mImgSphere->getHeight() : 0;
+    if (sphere_w <= 0 || sphere_h <= 0)
+    {
+        sphere_w = llmax(1, border_rect.getWidth() - 2 * (S32)btn_size);
+        sphere_h = llmax(1, border_rect.getHeight() - 2 * (S32)btn_size);
+        mVkTouchAreaFallback = true;
+    }
+    // </VulkanStorm>
     LLPanel::Params touch_area;
-    touch_area.rect = LLRect(centerX - mImgSphere->getWidth() / 2,
-                             centerY + mImgSphere->getHeight() / 2,
-                             centerX + mImgSphere->getWidth() / 2,
-                             centerY - mImgSphere->getHeight() / 2);
+    touch_area.rect = LLRect(centerX - sphere_w / 2,
+                             centerY + sphere_h / 2,
+                             centerX + sphere_w / 2,
+                             centerY - sphere_h / 2);
     mTouchArea = LLUICtrlFactory::create<LLPanel>(touch_area);
     addChild(mTouchArea);
 }
@@ -211,10 +230,78 @@ bool LLVirtualTrackball::pointInTouchCircle(S32 x, S32 y) const
     return in_circle;
 }
 
+// <VulkanStorm>
+std::string LLVirtualTrackball::getVkSphereImageName() const
+{
+    return mImgSphere ? mImgSphere->getName() : mVkImgSphere;
+}
+
+void LLVirtualTrackball::prepareVkDraw(S32 sphere_width, S32 sphere_height)
+{
+    // Replace the ctor's fallback touch area once the Vulkan-decoded sphere
+    // size is known (mirrors the GL ctor's mImgSphere-based sizing).
+    if (mVkTouchAreaFallback && sphere_width > 0 && sphere_height > 0)
+    {
+        LLRect border_rect = getLocalRect();
+        LLRect touch_rect(border_rect.getCenterX() - sphere_width / 2,
+                          border_rect.getCenterY() + sphere_height / 2,
+                          border_rect.getCenterX() + sphere_width / 2,
+                          border_rect.getCenterY() - sphere_height / 2);
+        mTouchArea->setRect(touch_rect);
+        mVkTouchAreaFallback = false;
+    }
+
+    // draw()'s label visibility sync.
+    bool enabled = isInEnabledChain();
+    mLabelN->setVisible(enabled);
+    mLabelE->setVisible(enabled);
+    mLabelS->setVisible(enabled);
+    mLabelW->setVisible(enabled);
+}
+
+void LLVirtualTrackball::getVkDrawState(F32 alpha, VkDrawState& out) const
+{
+    // Mirrors draw(): sphere image + the sun/moon thumb at the rotated point.
+    LLVector3 draw_point = VectorZero * mValue;
+
+    S32 halfwidth = mTouchArea->getRect().getWidth() / 2;
+    S32 halfheight = mTouchArea->getRect().getHeight() / 2;
+    draw_point.mV[VX] = (draw_point.mV[VX] + 1.0f) * halfwidth + mTouchArea->getRect().mLeft;
+    draw_point.mV[VY] = (draw_point.mV[VY] + 1.0f) * halfheight + mTouchArea->getRect().mBottom;
+    const bool upper_hemisphere = (draw_point.mV[VZ] >= 0.f);
+
+    localRectToScreen(mTouchArea->getRect(), &out.touch_rect);
+    out.sphere_image = getVkSphereImageName();
+    // draw() uses UI_VERTEX_COLOR (plain white).
+    out.sphere_color = (upper_hemisphere ? LLColor4::white
+                                         : LLColor4::white % 0.5f) % alpha;
+
+    LLRect thumb_local;
+    thumb_local.setOriginAndSize((S32)draw_point.mV[VX], (S32)draw_point.mV[VY], 0, 0);
+    LLRect thumb_screen;
+    localRectToScreen(thumb_local, &thumb_screen);
+    out.thumb_x = thumb_screen.mLeft;
+    out.thumb_y = thumb_screen.mBottom;
+
+    LLUIImage* thumb = nullptr;
+    std::string retained;
+    if (mThumbMode == ThumbMode::SUN)
+    {
+        thumb = upper_hemisphere ? mImgSunFront : mImgSunBack;
+        retained = upper_hemisphere ? mVkImgSunFront : mVkImgSunBack;
+    }
+    else
+    {
+        thumb = upper_hemisphere ? mImgMoonFront : mImgMoonBack;
+        retained = upper_hemisphere ? mVkImgMoonFront : mVkImgMoonBack;
+    }
+    out.thumb_image = thumb ? thumb->getName() : retained;
+}
+// </VulkanStorm>
+
 void LLVirtualTrackball::draw()
 {
     LLVector3 draw_point = VectorZero * mValue;
-
     S32 halfwidth = mTouchArea->getRect().getWidth() / 2;
     S32 halfheight = mTouchArea->getRect().getHeight() / 2;
     draw_point.mV[VX] = (draw_point.mV[VX] + 1.0f) * halfwidth + mTouchArea->getRect().mLeft;

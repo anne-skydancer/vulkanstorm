@@ -198,6 +198,26 @@ public:
 
     void setIgnoreResizeNotification(bool ignore) { mSkipChangesOnNotifyParent = ignore;}
 
+    // <VulkanStorm> GL-free state for the Vulkan UI walker.
+    // Header chrome from LLAccordionCtrlTabHeader::draw() (the nested header
+    // class is private to the .cpp, so the state is fetched through these
+    // statics, which return false when `view` is not a tab header).
+    struct VkHeaderState
+    {
+        LLColor4    bg_color;
+        std::string header_image;       // focused/selected variant or normal
+        std::string header_over_image;  // empty unless hovered
+        std::string arrow_image;        // expand/collapse arrow (empty if not collapsible)
+    };
+    static bool getVkHeaderState(const LLView* view, F32 alpha, VkHeaderState& out);
+
+    // The container panel child + its clip rect (GL screen space), mirroring
+    // the LLLocalClipRect in draw()'s non-fit branch. Clip returns false in
+    // fit-panel mode or without a container.
+    const LLView* getVkContainerPanel() const { return mContainerPanel; }
+    bool getVkContainerClipRect(LLRect& screen_rect) const;
+    // </VulkanStorm>
+
 protected:
     void adjustContainerPanel   (const LLRect& child_rect);
     void adjustContainerPanel   ();

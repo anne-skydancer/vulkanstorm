@@ -55,6 +55,7 @@ LLThumbnailCtrl::LLThumbnailCtrl(const LLThumbnailCtrl::Params& p)
 ,   mBorderColor(p.border_color())
 ,   mBorderVisible(p.border_visible())
 ,   mFallbackImagep(p.fallback_image)
+,   mVkFallbackImageName(p.fallback_image.vk_image_name.isProvided() ? p.fallback_image.vk_image_name() : "") // <VulkanStorm> raw XUI name for the GL-free path
 ,   mInteractable(p.interactable())
 ,   mShowLoadingPlaceholder(p.show_loading())
 ,   mInited(false)
@@ -82,6 +83,61 @@ LLThumbnailCtrl::~LLThumbnailCtrl()
     mFallbackImagep = nullptr;
 }
 
+
+// <VulkanStorm> GL-free replica of draw()'s branch decisions; read-only.
+LLThumbnailCtrl::VkDrawState LLThumbnailCtrl::getVkDrawState(F32 alpha) const
+{
+    VkDrawState state;
+    state.image_asset_id = mImageAssetID;
+    state.border_visible = mBorderVisible;
+    state.border_color = mBorderColor.get();
+    state.border_color.mV[VALPHA] *= alpha;
+    state.interactable = mInteractable;
+    state.enabled = getEnabled();
+
+    LLRect draw_rect = getLocalRect();
+    localRectToScreen(draw_rect, &state.border_rect);
+    if (mBorderVisible)
+    {
+        draw_rect.stretch(-1);
+    }
+    localRectToScreen(draw_rect, &state.draw_rect);
+
+    if (mTexturep.notNull())
+    {
+        state.has_texture = true;
+        state.texture_components = mTexturep->getComponents();
+        state.texture_fully_loaded = mTexturep->isFullyLoaded();
+        state.show_loading_placeholder = mShowLoadingPlaceholder && !state.texture_fully_loaded;
+    }
+    else if (mImagep.notNull() || !mVkImageName.empty())
+    {
+        state.image_name = mImagep.notNull() ? mImagep->getName() : mVkImageName;
+    }
+    else
+    {
+        state.fallback_image = mFallbackImagep.notNull()
+            ? mFallbackImagep->getName() : mVkFallbackImageName;
+        if (!state.fallback_image.empty())
+        {
+            if (mFallbackImagep.notNull())
+            {
+                state.fallback_width = mFallbackImagep->getWidth();
+                state.fallback_height = mFallbackImagep->getHeight();
+                // draw() centers the fallback at native size when it fits
+                state.fallback_centered = draw_rect.getWidth() > state.fallback_width
+                    && draw_rect.getHeight() > state.fallback_height;
+            }
+        }
+        else
+        {
+            state.draw_grey_x = true;
+        }
+    }
+
+    return state;
+}
+// </VulkanStorm>
 
 void LLThumbnailCtrl::draw()
 {
@@ -246,6 +302,9 @@ void LLThumbnailCtrl::initImage()
     }
     else if (tvalue.isString())
     {
+        // <VulkanStorm> retain the raw name for the GL-free Vulkan path
+        mVkImageName = tvalue.asString();
+        // </VulkanStorm>
         mImagep = LLUI::getUIImage(tvalue.asString(), LLGLTexture::BOOST_UI);
         if (mImagep)
         {
@@ -263,6 +322,7 @@ void LLThumbnailCtrl::unloadImage()
     mImageAssetID = LLUUID::null;
     mTexturep = nullptr;
     mImagep = nullptr;
+    mVkImageName.clear(); // <VulkanStorm>
     mInited = false;
 }
 

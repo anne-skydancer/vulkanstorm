@@ -324,6 +324,39 @@ void LLLayoutStack::draw()
     }
 }
 
+// <VulkanStorm>
+bool LLLayoutStack::getVkPanelClipRect(const LLView* panel, LLRect& screen_rect) const
+{
+    // Mirrors draw(): clip each LLLayoutPanel child to its layout rect (scaled
+    // by the collapse/visible amount). The walker applies this via its clip
+    // stack instead of LLLocalClipRect.
+    const LLLayoutPanel* panelp = dynamic_cast<const LLLayoutPanel*>(panel);
+    if (!panelp) return false;
+
+    LLRect clip_rect = panelp->getRect();
+    if (mOrientation == HORIZONTAL)
+    {
+        clip_rect.mRight = clip_rect.mLeft + panelp->getVisibleDim();
+    }
+    else
+    {
+        clip_rect.mBottom = clip_rect.mTop - panelp->getVisibleDim();
+    }
+    // Convert this panel-local rect to screen space via the panel itself.
+    panelp->localRectToScreen(LLRect(0, panelp->getRect().getHeight(), panelp->getRect().getWidth(), 0), &screen_rect);
+    // Recompute the visible-dim crop in screen space.
+    if (mOrientation == HORIZONTAL)
+    {
+        screen_rect.mRight = screen_rect.mLeft + panelp->getVisibleDim();
+    }
+    else
+    {
+        screen_rect.mBottom = screen_rect.mTop - panelp->getVisibleDim();
+    }
+    return screen_rect.notEmpty();
+}
+// </VulkanStorm>
+
 // virtual
 void LLLayoutStack::deleteAllChildren()
 {

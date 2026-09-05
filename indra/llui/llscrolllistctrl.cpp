@@ -1871,6 +1871,14 @@ void LLScrollListCtrl::drawItems()
 // <VulkanStorm>
 void LLScrollListCtrl::prepareVkDraw()
 {
+    // <FS:Ansariel> Persists sort order of scroll lists
+    // (draw()-time one-shot load, reproduced for the GL-free path)
+    if (mPersistSortOrder && !mPersistedSortOrderLoaded)
+    {
+        loadPersistedSortOrder();
+        mPersistedSortOrderLoaded = true;
+    }
+    // </FS:Ansariel>
     updateSort();
     if (mNeedsScroll)
     {
@@ -1943,12 +1951,70 @@ void LLScrollListCtrl::getVkDrawState(F32 alpha, VkDrawState& out)
         localRectToScreen(item->getRect(), &row.screen_rect);
         row.background = row_bg;
         row.background_visible = row_bg.mV[VALPHA] > 0.f;
+
+        // Type-ahead search highlight alpha (mirrors drawItems()).
+        static LLUICachedControl<F32> type_ahead_timeout("TypeAheadTimeout", 0);
+        LLColor4 highlight_color = LLColor4::white;
+        highlight_color.mV[VALPHA] = clamp_rescale(mSearchTimer.getElapsedTimeF32(),
+                                                   type_ahead_timeout * 0.7f,
+                                                   type_ahead_timeout(), 0.4f, 0.f);
+        highlight_color.mV[VALPHA] *= alpha;
+
         S32 cur_x = item->getRect().mLeft;
         for (S32 col = 0; col < item->getNumColumns(); ++col)
         {
             LLScrollListCell* cell = item->getColumn(col);
-            if (!cell || cell->getWidth() < 0 || !cell->getVisible()) continue;
-            if (LLScrollListText* text_cell = dynamic_cast<LLScrollListText*>(cell))
+            if (!cell || cell->getWidth() < 0 || !cell->getVisible())
+            {
+                cur_x += (cell ? cell->getWidth() : 0) + mColumnPadding;
+                continue;
+            }
+            const LLRect local_cell(cur_x, item->getRect().mBottom + cell->getHeight(),
+                                    cur_x + cell->getWidth(), item->getRect().mBottom);
+            if (LLScrollListIconText* icon_text_cell = dynamic_cast<LLScrollListIconText*>(cell))
+            {
+                const LLScrollListText::VkTextState text = icon_text_cell->getVkTextState(fg);
+                VkTextCellState cell_state;
+                cell_state.text = text.text;
+                cell_state.font = text.font;
+                cell_state.color = text.color;
+                cell_state.color.setAlpha(cell_state.color.mV[VALPHA] * alpha);
+                cell_state.alignment = text.alignment;
+                cell_state.max_pixels = text.max_pixels;
+                localRectToScreen(local_cell, &cell_state.screen_rect);
+                cell_state.screen_baseline = (F32)cell_state.screen_rect.mBottom;
+                cell_state.screen_x = text.alignment == LLFontGL::RIGHT
+                    ? (F32)cell_state.screen_rect.mRight
+                    : text.alignment == LLFontGL::HCENTER
+                        ? (F32)cell_state.screen_rect.getCenterX()
+                        : (F32)cell_state.screen_rect.mLeft + (F32)icon_text_cell->getVkTextOffset();
+                LLRect hl_local;
+                if (icon_text_cell->getVkHighlightRect(hl_local))
+                {
+                    cell_state.highlight_visible = true;
+                    cell_state.highlight_color = highlight_color;
+                    LLRect hl_shifted(hl_local);
+                    hl_shifted.translate(local_cell.mLeft, local_cell.mBottom);
+                    localRectToScreen(hl_shifted, &cell_state.highlight_rect);
+                }
+                row.cells.push_back(cell_state);
+
+                std::string icon_name;
+                S32 icon_x = 0, icon_size = 0;
+                if (icon_text_cell->getVkIcon(icon_name, icon_x, icon_size))
+                {
+                    VkIconCellState icon_state;
+                    LLRect icon_local(local_cell.mLeft + icon_x,
+                                      local_cell.mBottom + icon_size,
+                                      local_cell.mLeft + icon_x + icon_size,
+                                      local_cell.mBottom);
+                    localRectToScreen(icon_local, &icon_state.screen_rect);
+                    icon_state.image = icon_name;
+                    icon_state.color = LLColor4::white % alpha;
+                    row.icons.push_back(icon_state);
+                }
+            }
+            else if (LLScrollListText* text_cell = dynamic_cast<LLScrollListText*>(cell))
             {
                 const LLScrollListText::VkTextState text = text_cell->getVkTextState(fg);
                 VkTextCellState cell_state;
@@ -1958,16 +2024,86 @@ void LLScrollListCtrl::getVkDrawState(F32 alpha, VkDrawState& out)
                 cell_state.color.setAlpha(cell_state.color.mV[VALPHA] * alpha);
                 cell_state.alignment = text.alignment;
                 cell_state.max_pixels = text.max_pixels;
-                LLRect local_cell(cur_x, item->getRect().mBottom + cell->getHeight(),
-                                  cur_x + cell->getWidth(), item->getRect().mBottom);
                 localRectToScreen(local_cell, &cell_state.screen_rect);
                 cell_state.screen_baseline = (F32)cell_state.screen_rect.mBottom;
                 cell_state.screen_x = text.alignment == LLFontGL::RIGHT
                     ? (F32)cell_state.screen_rect.mRight
                     : text.alignment == LLFontGL::HCENTER
                         ? (F32)cell_state.screen_rect.getCenterX()
-                        : (F32)cell_state.screen_rect.mLeft + 1.f;
+                        : (F32)cell_state.screen_rect.mLeft + (F32)text_cell->getVkTextOffset();
+                LLRect hl_local;
+                if (text_cell->getVkHighlightRect(hl_local))
+                {
+                    cell_state.highlight_visible = true;
+                    cell_state.highlight_color = highlight_color;
+                    LLRect hl_shifted(hl_local);
+                    hl_shifted.translate(local_cell.mLeft, local_cell.mBottom);
+                    localRectToScreen(hl_shifted, &cell_state.highlight_rect);
+                }
                 row.cells.push_back(cell_state);
+            }
+            else if (LLScrollListIcon* icon_cell = dynamic_cast<LLScrollListIcon*>(cell))
+            {
+                const LLScrollListIcon::VkIconState icon = icon_cell->getVkIconState();
+                if (icon.has_icon && !icon.image.empty())
+                {
+                    // draw() centers/aligns an icon of intrinsic (or forced)
+                    // size inside the cell, bottom-aligned.
+                    S32 draw_w = icon.icon_size;
+                    S32 draw_h = icon.icon_size;
+                    if (draw_w <= 0)
+                    {
+                        // Without GL the intrinsic size is unavailable here;
+                        // the walker resolves it by name before emission and
+                        // rewrites the rect (see llvkuirender.cpp).
+                        draw_w = 0;
+                        draw_h = 0;
+                    }
+                    VkIconCellState icon_state;
+                    S32 icon_x = local_cell.mLeft;
+                    if (icon.alignment == LLFontGL::RIGHT)
+                        icon_x = local_cell.mRight - draw_w;
+                    else if (icon.alignment == LLFontGL::HCENTER)
+                        icon_x = local_cell.mLeft + (local_cell.getWidth() - draw_w) / 2;
+                    LLRect icon_local(icon_x, local_cell.mBottom + draw_h,
+                                      icon_x + draw_w, local_cell.mBottom);
+                    localRectToScreen(icon_local, &icon_state.screen_rect);
+                    icon_state.image = icon.image;
+                    icon_state.color = icon.color % alpha;
+                    row.icons.push_back(icon_state);
+                }
+            }
+            else if (LLScrollListBar* bar_cell = dynamic_cast<LLScrollListBar*>(cell))
+            {
+                const LLScrollListBar::VkBarState bar = bar_cell->getVkBarState();
+                VkBarCellState bar_state;
+                LLRect bar_shifted(bar.local_rect);
+                bar_shifted.translate(local_cell.mLeft, local_cell.mBottom);
+                localRectToScreen(bar_shifted, &bar_state.screen_rect);
+                bar_state.color = bar.color % alpha;
+                row.bars.push_back(bar_state);
+            }
+            else if (LLScrollListCheck* check_cell = dynamic_cast<LLScrollListCheck*>(cell))
+            {
+                // The embedded checkbox is not a view-tree child; position its
+                // button image at the cell origin (mirrors mCheckBox->draw()).
+                const LLButton* check_button =
+                    check_cell->getCheckBox() ? check_cell->getCheckBox()->getVkButton() : nullptr;
+                if (check_button)
+                {
+                    VkCheckCellState check_state;
+                    const LLRect btn_local = check_button->getRect();
+                    LLRect cell_btn(local_cell.mLeft + btn_local.mLeft,
+                                    local_cell.mBottom + btn_local.mTop,
+                                    local_cell.mLeft + btn_local.mRight,
+                                    local_cell.mBottom + btn_local.mBottom);
+                    localRectToScreen(cell_btn, &check_state.screen_rect);
+                    LLColor4 img_color;
+                    check_state.image = check_button->getStateImageName(img_color, alpha);
+                    check_state.color = img_color;
+                    check_state.scale_image = check_button->getScaleImage();
+                    row.checks.push_back(check_state);
+                }
             }
             cur_x += cell->getWidth() + mColumnPadding;
         }

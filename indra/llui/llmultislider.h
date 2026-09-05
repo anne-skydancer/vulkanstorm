@@ -117,6 +117,38 @@ public:
     /*virtual*/ void    onMouseLeave(S32 x, S32 y, MASK mask) override;
     /*virtual*/ void    draw() override;
 
+    // <VulkanStorm> GL-free state for the Vulkan UI walker (mirrors draw()).
+    // All rects are GL-space SCREEN rects; the walker reproduces draw()'s
+    // branch structure (triangle/solid/image thumbs, ghost, focus, hover).
+    struct VkThumbState
+    {
+        std::string name;
+        LLRect      screen_rect;
+    };
+    struct VkDrawState
+    {
+        bool        horizontal = true;
+        bool        enabled = true;
+        bool        draw_track = false;
+        bool        use_triangle = false;
+        bool        has_focus = false;
+        bool        mouse_capture = false;
+        LLRect      track_rect;             // screen space (draw()'s rect)
+        LLRect      drag_start_thumb_rect;  // screen space
+        std::string cur_slider;
+        std::string hover_slider;
+        std::string thumb_image;            // empty when no thumb image
+        std::string rounded_square_image;   // empty when unavailable
+        LLColor4    track_color;            // unmodulated; pass applies opacity
+        LLColor4    triangle_color;
+        LLColor4    thumb_center_color;
+        LLColor4    thumb_center_selected_color;
+        LLColor4    thumb_highlight_color;
+        std::vector<VkThumbState> thumbs;
+    };
+    VkDrawState getVkDrawState(F32 alpha) const;
+    // </VulkanStorm>
+
     S32             getMaxNumSliders() const { return mMaxNumSliders; }
     S32             getCurNumSliders() const { return static_cast<S32>(mValue.size()); }
     F32             getOverlapThreshold() const { return mOverlapThreshold; }
@@ -151,6 +183,11 @@ protected:
     LLUIColor       mTriangleColor;
     LLUIImagePtr    mThumbImagep; //blimps on the slider, for now no 'disabled' support
     LLUIImagePtr    mRoundedSquareImgp; //blimps on the slider, for now no 'disabled' support
+
+    // <VulkanStorm> XUI name of the thumb image, retained for the GL-free
+    // Vulkan path (mThumbImagep is null when no GL context exists).
+    std::string     mVkThumbImage;
+    // </VulkanStorm>
 
     const EOrientation  mOrientation;
 

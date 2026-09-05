@@ -1105,6 +1105,14 @@ public:
 
     /*virtual*/ void draw();
 
+    // <VulkanStorm> GL-free clip rect for the Vulkan UI renderer: draw() wraps
+    // drawChild(mScrollArea) in LLLocalClipRect(mScrollArea->getRect()) because
+    // the scroll area is a plain LLPanel child, NOT an LLScrollContainer.
+    // Returns the clip rect in GL-space screen coordinates; false when there
+    // is no scroll area.
+    bool getVkScrollClipRect(LLRect& screen_rect) const;
+    // </VulkanStorm>
+
     S32 getMinWidth() const { return mMinWidth; }
 
     /*virtual*/ S32 notifyParent(const LLSD& info);

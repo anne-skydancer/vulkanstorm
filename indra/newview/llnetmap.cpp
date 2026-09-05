@@ -945,6 +945,235 @@ void LLNetMap::draw()
     LLUICtrl::draw();
 }
 
+// <VulkanStorm> The Vulkan UI path never executes draw(). This performs the
+// non-GL mutations draw() used to do every frame — pan easing, CPU object/
+// parcel layer refreshes (the GL texture upload is replaced by serial bumps
+// consumed by llvkuimaps.cpp's dynamic-image bridge) and avatar picking — so
+// the registered render hook has current, readable state. GL-free.
+void LLNetMap::prepareVkDraw()
+{
+    if (!LLWorld::instanceExists())
+    {
+        return;
+    }
+    static LLFrameTimer map_timer;
+
+    if (mScale != sScale)
+    {
+        setScale(sScale);
+    }
+
+    if (!LLWorld::getInstance()->getAllowMinimap())
+    {
+        return;
+    }
+
+    if (mObjectImagep.isNull())
+    {
+        createObjectImage();
+    }
+    if (mParcelImagep.isNull())
+    {
+        createParcelImage();
+    }
+
+    static LLUICachedControl<bool> auto_center("MiniMapAutoCenter", true);
+    bool auto_centering = auto_center && !mPanning;
+    mCentering = mCentering && !mPanning;
+
+    if (auto_centering || mCentering)
+    {
+        mCurPan = lerp(mCurPan, LLVector2(0.0f, 0.0f) , LLSmoothInterpolation::getInterpolant(0.1f));
+    }
+    bool centered = abs(mCurPan.mV[VX]) < 0.5f && abs(mCurPan.mV[VY]) < 0.5f;
+    if (centered)
+    {
+        mCurPan.mV[0] = 0.0f;
+        mCurPan.mV[1] = 0.0f;
+        mCentering = false;
+    }
+
+    auto menu = static_cast<LLMenuGL*>(mPopupMenuHandle.get());
+    if (menu)
+    {
+        bool can_recenter_map = !(centered || mCentering || auto_centering);
+        menu->setItemEnabled("Re-center map", can_recenter_map);
+    }
+    updateAboutLandPopupButton();
+
+    // Locate the center (same math as draw())
+    LLVector3 posCenter = globalPosToView(gAgentCamera.getCameraPositionGlobal());
+    posCenter.mV[VX] -= mCurPan.mV[VX];
+    posCenter.mV[VY] -= mCurPan.mV[VY];
+    posCenter.mV[VZ] = 0.f;
+    LLVector3d posCenterGlobal = viewPosToGlobal(llfloor(posCenter.mV[VX]), llfloor(posCenter.mV[VY]));
+
+    // Redraw object layer periodically (CPU side only; the Vulkan upload is
+    // driven by mVkObjectSerial)
+    static LLCachedControl<bool> s_fShowObjects(gSavedSettings, "MiniMapObjects") ;
+    if ( (s_fShowObjects) && ((mUpdateObjectImage) || (map_timer.getElapsedTimeF32() > 0.5f)) )
+    {
+        mUpdateObjectImage = false;
+        mObjectImageCenterGlobal = posCenterGlobal;
+
+        LLImageDataLock lock(mObjectRawImagep);
+        U8 *default_texture = mObjectRawImagep->getData();
+        memset( default_texture, 0, mObjectImagep->getWidth() * mObjectImagep->getHeight() * mObjectImagep->getComponents() );
+
+        gObjectList.renderObjectsForMap(*this);
+
+        ++mVkObjectSerial;
+        map_timer.reset();
+    }
+
+    // Redraw parcel overlay when stale (CPU side only)
+    static LLCachedControl<bool> s_fShowPropertyLines(gSavedSettings, "MiniMapShowPropertyLines") ;
+    if ( (s_fShowPropertyLines) && ((mUpdateParcelImage) || (dist_vec_squared2D(mParcelImageCenterGlobal, posCenterGlobal) > 9.0f)) )
+    {
+        mUpdateParcelImage = false;
+        mParcelImageCenterGlobal = posCenterGlobal;
+
+        U8* pTextureData = mParcelRawImagep->getData();
+        memset(pTextureData, 0, mParcelImagep->getWidth() * mParcelImagep->getHeight() * mParcelImagep->getComponents());
+
+        static LLUIColor map_parcel_outline_color = LLUIColorTable::instance().getColor("MapParcelOutlineColor", LLColor4(LLColor3(LLColor4::yellow), 0.5f));
+        for (LLWorld::region_list_t::const_iterator itRegion = LLWorld::getInstance()->getRegionList().begin();
+                itRegion != LLWorld::getInstance()->getRegionList().end(); ++itRegion)
+        {
+            const LLViewerRegion* pRegion = *itRegion; LLColor4U clrOverlay;
+            if (pRegion->isAlive())
+                clrOverlay = map_parcel_outline_color.get();
+            else
+                clrOverlay = LLColor4U(255, 128, 128, 255);
+            renderPropertyLinesForRegion(pRegion, clrOverlay);
+        }
+
+        ++mVkParcelSerial;
+    }
+
+    // Avatar picking + dot cache (draw()'s avatar loop, minus GL emission)
+    S32 local_mouse_x;
+    S32 local_mouse_y;
+    LLUI::getInstance()->getMousePositionLocal(this, &local_mouse_x, &local_mouse_y);
+    bool local_mouse = this->pointInView(local_mouse_x, local_mouse_y);
+    mClosestAgentToCursor.setNull();
+    mClosestAgentsToCursor.clear();
+    F32 closest_dist_squared = F32_MAX;
+    static LLCachedControl<F32> fsMinimapPickScale(gSavedSettings, "FSMinimapPickScale");
+    F32 min_pick_dist_squared = (mDotRadius * fsMinimapPickScale) * (mDotRadius * fsMinimapPickScale);
+
+    static LLUIColor map_avatar_color = LLUIColorTable::instance().getColor("MapAvatarColor", LLColor4::white);
+
+    LLVector3 pos_map;
+    uuid_vec_t avatar_ids;
+    std::vector<LLVector3d> positions;
+    bool unknown_relative_z;
+
+    LLWorld::getInstance()->getAvatars(&avatar_ids, &positions, gAgentCamera.getCameraPositionGlobal());
+
+    std::vector<std::pair<U32, bool>> indexed_avatars;
+    indexed_avatars.reserve(avatar_ids.size());
+    for (U32 i = 0; i < avatar_ids.size(); i++)
+    {
+        indexed_avatars.emplace_back(i, LLAvatarActions::isFriend(avatar_ids[i]));
+    }
+
+    // Sort avatars so non-friends are drawn first and friend dots will appear on top
+    std::sort(indexed_avatars.begin(), indexed_avatars.end(),
+                [](const auto& a, const auto& b) { return a.second < b.second; });
+
+    uuid_vec_t sorted_avatar_ids;
+    std::vector<LLVector3d> sorted_positions;
+    sorted_avatar_ids.reserve(avatar_ids.size());
+    sorted_positions.reserve(positions.size());
+
+    for (const auto& indexed_avatar : indexed_avatars)
+    {
+        sorted_avatar_ids.push_back(avatar_ids[indexed_avatar.first]);
+        sorted_positions.push_back(positions[indexed_avatar.first]);
+    }
+
+    mVkAvatarDots.clear();
+    mVkAvatarDots.reserve(sorted_avatar_ids.size());
+
+    LLVector3 camera_position = gAgentCamera.getCameraPositionAgent();
+
+    for (U32 i = 0; i < sorted_avatar_ids.size(); i++)
+    {
+        const LLUUID& uuid = sorted_avatar_ids.at(i);
+
+        // Skip self, we'll draw it later
+        if (uuid == gAgent.getID()) continue;
+
+        pos_map = globalPosToView(sorted_positions[i]);
+
+        LLColor4 color = getAvatarColor(uuid);
+
+        unknown_relative_z = false;
+        if (sorted_positions[i].mdV[VZ] == AVATAR_UNKNOWN_Z_OFFSET)
+        {
+            if (camera_position.mV[VZ] >= COARSEUPDATE_MAX_Z)
+            {
+                unknown_relative_z = true;
+            }
+            else
+            {
+                pos_map.mV[VZ] = F32_MAX;
+            }
+        }
+
+        VkAvatarDot dot;
+        dot.pos_map = pos_map;
+        dot.color = (RlvActions::canShowName(RlvActions::SNC_DEFAULT, uuid)) ? color : map_avatar_color.get();
+        dot.unknown_relative_z = unknown_relative_z;
+        if (uuid.notNull())
+        {
+            for (uuid_vec_t::iterator sel_iter = gmSelected.begin(); sel_iter != gmSelected.end(); ++sel_iter)
+            {
+                if (*sel_iter == uuid)
+                {
+                    dot.selected = true;
+                    break;
+                }
+            }
+        }
+        mVkAvatarDots.push_back(dot);
+
+        if (local_mouse)
+        {
+            F32 dist_to_cursor_squared = dist_vec_squared(LLVector2(pos_map.mV[VX], pos_map.mV[VY]),
+                                            LLVector2((F32)local_mouse_x, (F32)local_mouse_y));
+            if (dist_to_cursor_squared < min_pick_dist_squared)
+            {
+                if (dist_to_cursor_squared < closest_dist_squared)
+                {
+                    closest_dist_squared = dist_to_cursor_squared;
+                    mClosestAgentToCursor = uuid;
+                    // *NOTE: draw() uses positions[i] here (unsorted); the
+                    // sorted position matches the pos_map the distance test
+                    // used.
+                    mClosestAgentPosition = sorted_positions[i];
+                }
+                mClosestAgentsToCursor.push_back(uuid);
+            }
+        }
+    }
+
+    // Self pick (draw() gates this on the self marker image existing; the
+    // Vulkan image registry is independent of the GL LLUIImage pointers, so
+    // do it unconditionally)
+    LLVector3d pos_global = gAgent.getPositionGlobal();
+    pos_map = globalPosToView(pos_global);
+    F32 dist_to_cursor_squared = dist_vec_squared(LLVector2(pos_map.mV[VX], pos_map.mV[VY]),
+                                  LLVector2((F32)local_mouse_x, (F32)local_mouse_y));
+    if(dist_to_cursor_squared < min_pick_dist_squared && dist_to_cursor_squared < closest_dist_squared)
+    {
+        mClosestAgentToCursor = gAgent.getID();
+        mClosestAgentPosition = pos_global;
+    }
+}
+// </VulkanStorm>
+
 void LLNetMap::reshape(S32 width, S32 height, bool called_from_parent)
 {
     LLUICtrl::reshape(width, height, called_from_parent);

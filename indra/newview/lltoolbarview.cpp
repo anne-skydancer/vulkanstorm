@@ -629,6 +629,32 @@ void LLToolBarView::onToolBarButtonRemoved(LLView* button)
     // </FS:Ansariel>
 }
 
+// <VulkanStorm> GL-free replica of the drop-zone computation in draw();
+// read-only (does not reshape toolbar parents or toggle visibility).
+LLToolBarView::VkDrawState LLToolBarView::getVkDrawState(F32 alpha) const
+{
+    VkDrawState state;
+    state.tool_dragged = isToolDragged();
+
+    static const LLUIColor drop_color = LLUIColorTable::instance().getColor("ToolbarDropZoneColor");
+    state.drop_zone_color = drop_color.get();
+    state.drop_zone_color.mV[VALPHA] *= alpha;
+
+    for (S32 i = LLToolBarEnums::TOOLBAR_FIRST; i <= LLToolBarEnums::TOOLBAR_LAST; i++)
+    {
+        if (mToolbars[i])
+        {
+            LLRect local_rect;
+            mToolbars[i]->localRectToOtherView(mToolbars[i]->getLocalRect(), &local_rect, this);
+            localRectToScreen(local_rect, &state.drop_zone_rects[i]);
+            state.drop_zone_valid[i] = true;
+        }
+    }
+
+    return state;
+}
+// </VulkanStorm>
+
 void LLToolBarView::draw()
 {
     LLRect toolbar_rects[LLToolBarEnums::TOOLBAR_COUNT];

@@ -51,14 +51,43 @@ LLLoadingIndicator::LLLoadingIndicator(const Params& p)
 
 void LLLoadingIndicator::initFromParams(const Params& p)
 {
-    for (LLUIImage* image : p.images().image)
+    for (const auto& entry : p.images().image)
     {
-        mImages.push_back(image);
+        mImages.push_back((LLUIImage*)entry);
+        // <VulkanStorm> retain the XUI image name for the GL-free path; the
+        // LLUIImage pointer is null when no GL context exists.
+        mVkImageNames.push_back(entry.vk_image_name.isProvided()
+                                    ? entry.vk_image_name() : std::string());
+        // </VulkanStorm>
     }
 
     // Start timer for switching images.
     start();
 }
+
+// <VulkanStorm>
+void LLLoadingIndicator::prepareVkDraw()
+{
+    // The frame-advance half of draw(), without any rendering.
+    if (mImageSwitchTimer.getStarted() && mImageSwitchTimer.hasExpired())
+    {
+        if (!mImages.empty())
+        {
+            mCurImageIdx = (mCurImageIdx + 1) % mImages.size();
+        }
+        start();
+    }
+}
+
+std::string LLLoadingIndicator::getVkImageName() const
+{
+    if (mImages.empty()) return std::string();
+    LLUIImagePtr cur_image = mImages[mCurImageIdx];
+    if (cur_image.notNull()) return cur_image->getName();
+    return (mCurImageIdx < (S8)mVkImageNames.size()) ? mVkImageNames[mCurImageIdx]
+                                                     : std::string();
+}
+// </VulkanStorm>
 
 void LLLoadingIndicator::draw()
 {

@@ -87,6 +87,10 @@ public:
                                    std::string& tooltip_msg);
 
 private:
+    // <VulkanStorm> the outer class's static Vk accessors read these members
+    // to describe the header chrome for the GL-free walker.
+    friend class LLAccordionCtrlTab;
+    // </VulkanStorm>
     LLTextBox* mHeaderTextbox;
 
     // Overlay images (arrows)
@@ -100,6 +104,15 @@ private:
     LLPointer<LLUIImage> mImageHeaderOver;
     LLPointer<LLUIImage> mImageHeaderPressed;
     LLPointer<LLUIImage> mImageHeaderFocused;
+
+    // <VulkanStorm> XUI names retained for the GL-free Vulkan path (the
+    // LLUIImage pointers are null when no GL context exists).
+    std::string mVkImageCollapsed;
+    std::string mVkImageExpanded;
+    std::string mVkImageHeader;
+    std::string mVkImageHeaderOver;
+    std::string mVkImageHeaderFocused;
+    // </VulkanStorm>
 
     // style saved when applying it in setTitleFontStyle
     LLStyle::Params mStyleParams;
@@ -129,7 +142,14 @@ LLAccordionCtrlTab::LLAccordionCtrlTabHeader::LLAccordionCtrlTabHeader(
     mImageHeader(p.header_image),
     mImageHeaderOver(p.header_image_over),
     mImageHeaderPressed(p.header_image_pressed),
-    mImageHeaderFocused(p.header_image_focused)
+    mImageHeaderFocused(p.header_image_focused),
+    // <VulkanStorm> retain the XUI names for the GL-free Vulkan path
+    mVkImageCollapsed(p.header_collapse_img.vk_image_name.isProvided() ? p.header_collapse_img.vk_image_name() : ""),
+    mVkImageExpanded(p.header_expand_img.vk_image_name.isProvided() ? p.header_expand_img.vk_image_name() : ""),
+    mVkImageHeader(p.header_image.vk_image_name.isProvided() ? p.header_image.vk_image_name() : ""),
+    mVkImageHeaderOver(p.header_image_over.vk_image_name.isProvided() ? p.header_image_over.vk_image_name() : ""),
+    mVkImageHeaderFocused(p.header_image_focused.vk_image_name.isProvided() ? p.header_image_focused.vk_image_name() : "")
+    // </VulkanStorm>
 {
     LLTextBox::Params textboxParams;
     textboxParams.name(DD_TEXTBOX_NAME);
@@ -1105,6 +1125,73 @@ void LLAccordionCtrlTab::draw()
         drawChild(root_rect,mContainerPanel);
     }
 }
+
+// <VulkanStorm>
+namespace
+{
+    std::string vk_image_name(const LLPointer<LLUIImage>& image, const std::string& retained)
+    {
+        return image.notNull() ? image->getName() : retained;
+    }
+}
+
+bool LLAccordionCtrlTab::getVkHeaderState(const LLView* view, F32 alpha, VkHeaderState& out)
+{
+    // Mirrors LLAccordionCtrlTabHeader::draw(); the nested class is complete
+    // only in this TU, hence the static entry point.
+    const LLAccordionCtrlTabHeader* header =
+        dynamic_cast<const LLAccordionCtrlTabHeader*>(view);
+    if (!header) return false;
+
+    const LLAccordionCtrlTab* parent =
+        dynamic_cast<const LLAccordionCtrlTab*>(header->getParent());
+    const bool collapsible = parent && parent->getCollapsible();
+    const bool expanded = parent && parent->getDisplayChildren();
+
+    out.bg_color = header->mHeaderBGColor.get() % alpha;
+    const bool focused = (header->getParent() && header->getParent()->hasFocus())
+                         || header->mIsSelected;
+    out.header_image = vk_image_name(focused ? header->mImageHeaderFocused
+                                             : header->mImageHeader,
+                                     focused ? header->mVkImageHeaderFocused
+                                             : header->mVkImageHeader);
+    if (header->mNeedsHighlight)
+    {
+        out.header_over_image = vk_image_name(header->mImageHeaderOver,
+                                              header->mVkImageHeaderOver);
+    }
+    if (collapsible)
+    {
+        out.arrow_image = vk_image_name(expanded ? header->mImageExpanded
+                                                 : header->mImageCollapsed,
+                                        expanded ? header->mVkImageExpanded
+                                                 : header->mVkImageCollapsed);
+    }
+    return true;
+}
+
+bool LLAccordionCtrlTab::getVkContainerClipRect(LLRect& screen_rect) const
+{
+    // Mirrors the LLLocalClipRect scope in draw()'s non-fit branch.
+    if (mFitPanel || !mContainerPanel || !getRect().isValid()) return false;
+
+    const S32 width = getRect().getWidth();
+    const S32 height = getRect().getHeight();
+    // <VulkanStorm> getHeaderHeight() is non-const (it reads the header
+    // child); the computation it feeds is read-only.
+    const S32 header_height =
+        const_cast<LLAccordionCtrlTab*>(this)->getHeaderHeight();
+    // </VulkanStorm>
+    LLRect child_rect;
+    child_rect.setLeftTopAndSize(
+        getPaddingLeft(),
+        height - header_height - getPaddingTop(),
+        width - getPaddingLeft() - getPaddingRight(),
+        height - header_height - getPaddingTop() - getPaddingBottom());
+    localRectToScreen(child_rect, &screen_rect);
+    return screen_rect.notEmpty();
+}
+// </VulkanStorm>
 
 void LLAccordionCtrlTab::updateLayout(const LLRect& child_rect)
 {

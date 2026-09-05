@@ -126,6 +126,25 @@ public:
     // <VulkanStorm> Reconcile the scroll-bar geometry normally updated by
     // draw(), without invoking any OpenGL rendering.
     void prepareVkDraw();
+
+    // The scrolled content view (nullptr when none). The Vulkan walker clips
+    // this child's subtree to getVkScrolledClipRect(); the scrollbars and
+    // border stay unclipped, mirroring draw()'s LLLocalClipRect scope.
+    const LLView*   getVkScrolledView() const { return mScrolledView; }
+    // GL-space SCREEN rect clipping the scrolled view's contents (mirrors the
+    // LLLocalClipRect in draw(): inner rect minus the visible scrollbar
+    // strips). Returns false when no clip applies.
+    bool            getVkScrolledClipRect(LLRect& screen_rect) const;
+
+    // Opaque-background state from draw(): when bg_visible, the inner rect
+    // (SCREEN space) is filled with bg_color before the scrolled content.
+    struct VkBackground
+    {
+        bool     bg_visible = false;
+        LLRect   inner_rect;        // GL screen space
+        LLColor4 bg_color;
+    };
+    VkBackground    getVkBackground(F32 alpha) const;
     // </VulkanStorm>
 
     bool canAutoScroll(S32 x, S32 y);

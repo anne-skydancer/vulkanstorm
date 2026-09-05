@@ -63,13 +63,23 @@ LLChatEntry::~LLChatEntry()
 
 void LLChatEntry::draw()
 {
+    // <VulkanStorm> the expansion half moved to prepareVkDraw() so the
+    // GL-free Vulkan walker can run it without entering draw().
+    prepareVkDraw();
+    // </VulkanStorm>
+    LLTextEditor::draw();
+}
+
+// <VulkanStorm>
+void LLChatEntry::prepareVkDraw()
+{
     if(mIsExpandable)
     {
         reflow();
         expandText();
     }
-    LLTextEditor::draw();
 }
+// </VulkanStorm>
 
 void LLChatEntry::onCommit()
 {

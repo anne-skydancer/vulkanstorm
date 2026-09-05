@@ -102,6 +102,7 @@ set(llui_SOURCE_FILES
     lluicolortable.cpp
     lluictrl.cpp
     lluictrlfactory.cpp
+    lluiimagedecls.cpp
     lluistring.cpp
     lluiusage.cpp
     llundo.cpp
@@ -227,6 +228,7 @@ set(llui_HEADER_FILES
     lluifwd.h
     llui.h
     lluicolor.h
+    lluiimagedecls.h
     lluistring.h
     lluiusage.h
     llundo.h

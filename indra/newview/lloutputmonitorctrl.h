@@ -97,6 +97,25 @@ public:
 
     void            setShowParticipantsSpeaking(bool show) { mShowParticipantsSpeaking = show; }
 
+    // <VulkanStorm> GL-free description of the icon LLOutputMonitorCtrl::draw()
+    // paints (selected exactly as draw() selects it), plus border state.
+    // NOTE: the legacy power-bar gradient (sColorNormal/sColorOverdriven) is
+    // commented out in this codebase; only the icon and the bound rect remain.
+    struct VkDrawState
+    {
+        std::string icon_image;     // name of the state icon, empty = none drawn
+        S32 icon_width = 0;         // native size (icon->draw(0,0) uses it); 0 if unknown
+        S32 icon_height = 0;
+        F32 power = 0.f;            // mPower as last set (draw() refreshes it on GL path)
+        bool is_muted = false;
+        bool is_talking = false;
+        bool draw_border = false;   // mBorder
+        LLColor4 border_color;      // sColorBound
+        LLRect rect;                // this control's rect, screen space
+    };
+    VkDrawState getVkDrawState(F32 alpha) const;
+    // </VulkanStorm>
+
     /**
      * Sets avatar UUID to interact with voice channel.
      *
@@ -158,6 +177,16 @@ private:
     LLPointer<LLUIImage> mImageLevel1;
     LLPointer<LLUIImage> mImageLevel2;
     LLPointer<LLUIImage> mImageLevel3;
+
+    // <VulkanStorm> raw XUI names for the GL-free Vulkan path; the GL-backed
+    // LLUIImage pointers above may be null when GL image loading is off.
+    std::string     mVkImageMute;
+    std::string     mVkImageOff;
+    std::string     mVkImageOn;
+    std::string     mVkImageLevel1;
+    std::string     mVkImageLevel2;
+    std::string     mVkImageLevel3;
+    // </VulkanStorm>
 
     /** whether to deal with LLVoiceClient::getInstance() directly */
     bool            mAutoUpdate;

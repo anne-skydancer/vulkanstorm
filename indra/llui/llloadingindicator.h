@@ -76,6 +76,14 @@ public:
     // llview overrides
     virtual void draw();
 
+    // <VulkanStorm> GL-free path for the Vulkan UI walker. prepareVkDraw()
+    // advances the frame animation exactly as draw() does; getVkImageName()
+    // names the current frame (the LLUIImage pointers are null when no GL
+    // context exists).
+    void        prepareVkDraw();
+    std::string getVkImageName() const;
+    // </VulkanStorm>
+
     /**
      * Stop spinning.
      */
@@ -99,6 +107,9 @@ private:
     LLFrameTimer            mImageSwitchTimer;
 
     std::vector<LLUIImagePtr> mImages;
+    // <VulkanStorm> XUI names of mImages entries (GL-free path).
+    std::vector<std::string>  mVkImageNames;
+    // </VulkanStorm>
 };
 
 #endif // LL_LLLOADINGINDICATOR_H

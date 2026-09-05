@@ -29,6 +29,7 @@
 #include "llworldmapview.h"
 
 #include "indra_constants.h"
+#include "llimage.h"    // <VulkanStorm> LLImageRaw for vkCollectMipmapLevel
 #include "llui.h"
 #include "llmath.h"     // clampf()
 #include "llregionhandle.h"
@@ -886,6 +887,203 @@ bool LLWorldMapView::drawMipmapLevel(S32 width, S32 height, S32 level, bool load
     }
     return (completed_tiles == total_tiles);
 }
+
+// <VulkanStorm> The Vulkan UI path never executes draw(). prepareVkDraw()
+// performs draw()'s non-GL mutations (pan/zoom animation, visible-region
+// bookkeeping, tile fetching) and caches the tile draw list for the render
+// hook in llvkuimaps.cpp. GL-free.
+bool LLWorldMapView::vkCollectMipmapLevel(S32 width, S32 height, S32 level, bool load)
+{
+    // Same iteration + fetch side effects as drawMipmapLevel(), but collects
+    // VkMapTile entries instead of emitting GL, and treats an available CPU
+    // raw image (not hasGLTexture()) as "loaded".
+    llassert (level > 0);
+    if (level <= 0)
+        return false;
+
+    S32 completed_tiles = 0;
+    S32 total_tiles = 0;
+
+    S32 tile_width = LLWorldMipmap::MAP_TILE_SIZE * (1 << (level - 1));
+    LLVector3d pos_SW = viewPosToGlobal(0, 0);
+    LLVector3d pos_NE = viewPosToGlobal(width, height);
+    pos_NE[VX] += tile_width;
+    pos_NE[VY] += tile_width;
+
+    LLWorldMap* world_map = LLWorldMap::getInstance();
+    U32 grid_x, grid_y;
+    for (F64 index_y = pos_SW[VY]; index_y < pos_NE[VY]; index_y += tile_width)
+    {
+        for (F64 index_x = pos_SW[VX]; index_x < pos_NE[VX]; index_x += tile_width)
+        {
+            LLVector3d pos_global(index_x, index_y, pos_SW[VZ]);
+            LLWorldMipmap::globalToMipmap(pos_global[VX], pos_global[VY], level, &grid_x, &grid_y);
+            LLPointer<LLViewerFetchedTexture> simimage = world_map->getObjectsTile(grid_x, grid_y, level, load);
+            if (simimage)
+            {
+                const LLImageRaw* raw = simimage->isRawImageValid() ? (const LLImageRaw*)simimage->getRawImage() : simimage->getSavedRawImage();
+                if (raw && raw->getData())
+                {
+                    completed_tiles++;
+
+                    pos_global[VX] = grid_x * REGION_WIDTH_METERS;
+                    pos_global[VY] = grid_y * REGION_WIDTH_METERS;
+                    LLVector3 pos_screen = globalPosToView (pos_global);
+                    VkMapTile tile;
+                    tile.image  = simimage;
+                    tile.left   = pos_screen[VX];
+                    tile.bottom = pos_screen[VY];
+                    pos_global[VX] += tile_width;
+                    pos_global[VY] += tile_width;
+                    pos_screen = globalPosToView (pos_global);
+                    tile.right  = pos_screen[VX];
+                    tile.top    = pos_screen[VY];
+                    mVkMapTiles.push_back(tile);
+                }
+            }
+            else
+            {
+                completed_tiles++;
+            }
+            total_tiles++;
+        }
+    }
+    return (completed_tiles == total_tiles);
+}
+
+LLVector3 LLWorldMapView::vkGlobalPosToView(const LLVector3d& global_pos)
+{
+    return globalPosToView(global_pos);
+}
+
+void LLWorldMapView::prepareVkDraw()
+{
+    F64 current_time = LLTimer::getElapsedSeconds();
+
+    mVisibleRegions.clear();
+
+    // animate pan if necessary
+    mPanX = lerp(mPanX, mTargetPanX, LLSmoothInterpolation::getInterpolant(mMapIterpTime));
+    mPanY = lerp(mPanY, mTargetPanY, LLSmoothInterpolation::getInterpolant(mMapIterpTime));
+
+    //RN: snaps to zoom value because interpolation caused jitter in the text rendering
+    if (!sZoomTimer.getStarted() && mMapScale != mTargetMapScale)
+    {
+        sZoomTimer.start();
+    }
+    bool snap_scale = false;
+    F32 interp = llmin(MAP_ZOOM_MAX_INTERP, sZoomTimer.getElapsedTimeF32() / MAP_ZOOM_ACCELERATION_TIME);
+    F32 current_zoom_val = zoomFromScale(mMapScale);
+    F32 target_zoom_val = zoomFromScale(mTargetMapScale);
+    F32 new_zoom_val = lerp(current_zoom_val, target_zoom_val, interp);
+    if (abs(new_zoom_val - current_zoom_val) < MAP_SCALE_SNAP_THRESHOLD)
+    {
+        sZoomTimer.stop();
+        snap_scale = true;
+        new_zoom_val = target_zoom_val;
+    }
+    F32 map_scale = scaleFromZoom(new_zoom_val);
+    setScale(map_scale, snap_scale);
+
+    const S32 width = getRect().getWidth();
+    const S32 height = getRect().getHeight();
+    const F32 half_width = F32(width) / 2.0f;
+    const F32 half_height = F32(height) / 2.0f;
+    LLVector3d camera_global = gAgentCamera.getCameraPositionGlobal();
+
+    S32 level = LLWorldMipmap::scaleToLevel(mMapScale);
+
+    // Fetch + collect the mipmap tiles (drawMipmap() equivalent, minus GL)
+    mVkMapTiles.clear();
+#ifdef OPENSIM
+    if (!LLGridManager::getInstance()->isInAuroraSim())
+    {
+#endif //OPENSIM
+    LLWorldMap::getInstance()->equalizeBoostLevels();
+    if (!sVisibleTilesLoaded)
+    {
+        // Check all the lower res levels and render them in reverse order (worse to best)
+        for (S32 l = LLWorldMipmap::MAP_LEVELS; l > level; l--)
+        {
+            vkCollectMipmapLevel(width, height, l, false);
+        }
+        // Just go one level down in res
+        if (level > 1)
+        {
+            vkCollectMipmapLevel(width, height, level - 1, false);
+        }
+    }
+    sVisibleTilesLoaded = vkCollectMipmapLevel(width, height, level);
+#ifdef OPENSIM
+    }
+#endif //OPENSIM
+
+    // Per-region bookkeeping from draw()'s overlay loop (fetch priorities,
+    // agent counts, visible region list — no drawing here)
+    static LLCachedControl<bool> show_for_sale(gSavedSettings, "MapShowLandForSale");
+    LLWorldMap::sim_info_map_t::const_iterator end = LLWorldMap::instance().getRegionMap().end();
+    for (LLWorldMap::sim_info_map_t::const_iterator it = LLWorldMap::getInstance()->getRegionMap().begin(); it != end; ++it)
+    {
+        U64 handle = it->first;
+        LLSimInfo* info = it->second;
+
+        LLVector3d origin_global = from_region_handle(handle);
+        LLVector3d rel_region_pos = origin_global - camera_global;
+        F32 relative_x = (F32)(rel_region_pos.mdV[0] * mMapRatio);
+        F32 relative_y = (F32)(rel_region_pos.mdV[1] * mMapRatio);
+
+        F32 bottom =    mPanY + half_height + relative_y;
+        F32 left =      mPanX + half_width + relative_x;
+        F32 top =       bottom+ (mMapScale * (info->mSizeY / REGION_WIDTH_METERS));
+        F32 right =     left  + (mMapScale * (info->mSizeX / REGION_WIDTH_METERS));
+
+        // Discard if region is outside the screen rectangle
+        if ((top < 0.f)   || (bottom > height) ||
+            (right < 0.f) || (left > width)       )
+        {
+            info->dropImagePriority();
+            continue;
+        }
+
+        mVisibleRegions.push_back(handle);
+
+        if (level <= DRAW_SIMINFO_THRESHOLD)
+        {
+            info->updateAgentCount(current_time);
+        }
+
+        if (!info->isDown())
+        {
+#ifdef OPENSIM
+            if ((show_for_sale && (level <= DRAW_LANDFORSALE_THRESHOLD)) || LLGridManager::getInstance()->isInAuroraSim())
+#else
+            if (show_for_sale && (level <= DRAW_LANDFORSALE_THRESHOLD))
+#endif //OPENSIM
+            {
+                LLViewerFetchedTexture* overlayimage = info->getLandForSaleImage();
+                if (overlayimage)
+                {
+                    S32 x_draw_size = ll_round(mMapScale);
+                    S32 y_draw_size = ll_round(mMapScale);
+                    x_draw_size *= (S32)(info->mSizeX / REGION_WIDTH_METERS);
+                    y_draw_size *= (S32)(info->mSizeY / REGION_WIDTH_METERS);
+
+                    overlayimage->setKnownDrawSize(ll_round(x_draw_size * LLUI::getScaleFactor().mV[VX]), ll_round(y_draw_size * LLUI::getScaleFactor().mV[VY]));
+                }
+            }
+            else
+            {
+                info->dropImagePriority();
+            }
+        }
+    }
+
+    updateDirections();
+
+    // Get sim info for all sims in view
+    updateVisibleBlocks();
+}
+// </VulkanStorm>
 
 // Draw lines (rectangle outline and cross) to visualize the position of the tile
 // Used for debug only

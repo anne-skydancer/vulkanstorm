@@ -145,6 +145,11 @@ public:
     void scheduleArrange();
     static void updateClass();
 
+    // <VulkanStorm> The auto-scroll bookkeeping half of draw(), without any
+    // rendering; the Vulkan UI walker calls this before walking children.
+    void    prepareVkDraw();
+    // </VulkanStorm>
+
 private:
     void    initNoTabsWidget(const LLTextBox::Params& tb_params);
     void    updateNoTabsHelpTextVisibility();

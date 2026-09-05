@@ -90,6 +90,23 @@ void LLProfileImageCtrl::setValue(const LLSD& value)
     }
 }
 
+// <VulkanStorm> GL-free image state; read-only.
+LLProfileImageCtrl::VkDrawState LLProfileImageCtrl::getVkDrawState() const
+{
+    VkDrawState state;
+    state.image_id = mImageID;
+    if (mImage.notNull())
+    {
+        state.has_texture = true;
+        state.full_width = mImage->getFullWidth();
+        state.full_height = mImage->getFullHeight();
+        // Same "loaded" test as setImageAssetId()/updateDimensions()
+        state.loaded = (state.full_width * state.full_height) != 0;
+    }
+    return state;
+}
+// </VulkanStorm>
+
 void LLProfileImageCtrl::draw()
 {
     if (mImage.notNull())

@@ -60,6 +60,12 @@ public:
     /*virtual*/ void    setVisible(bool visible);
     /*virtual*/ void    draw();
 
+    // <VulkanStorm> draw() always paints the floater drop shadow; subclasses
+    // that bypass LLModalDialog::draw() (LLToast paints its own wrapper
+    // shadow instead) opt out here so the Vulkan walker matches.
+    virtual bool    getVkModalShadow() const { return true; }
+    // </VulkanStorm>
+
     bool            isModal() const { return mModal; }
     void            stopModal();
 

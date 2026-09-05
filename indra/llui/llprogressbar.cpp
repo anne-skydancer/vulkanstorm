@@ -56,7 +56,11 @@ LLProgressBar::LLProgressBar(const LLProgressBar::Params& p)
     mImageFill(p.image_fill),
     mColorBackground(p.color_bg()),
     mColorBar(p.color_bar()),
-    mPercentDone(0.f)
+    mPercentDone(0.f),
+    // <VulkanStorm> retain the XUI names for the GL-free Vulkan path
+    mVkImageBarName(p.image_bar.vk_image_name.isProvided() ? p.image_bar.vk_image_name() : ""),
+    mVkImageFillName(p.image_fill.vk_image_name.isProvided() ? p.image_fill.vk_image_name() : "")
+    // </VulkanStorm>
 {}
 
 LLProgressBar::~LLProgressBar()
@@ -91,3 +95,16 @@ void LLProgressBar::setValue(const LLSD& value)
 {
     mPercentDone = llclamp((F32)value.asReal(), 0.f, 100.f);
 }
+
+// <VulkanStorm>
+LLProgressBar::VkDrawState LLProgressBar::getVkDrawState(F32 alpha) const
+{
+    VkDrawState out;
+    out.percent = mPercentDone;
+    out.bar_image = mImageBar.notNull() ? mImageBar->getName() : mVkImageBarName;
+    out.fill_image = mImageFill.notNull() ? mImageFill->getName() : mVkImageFillName;
+    out.bar_color = mColorBackground.get() % alpha;
+    out.fill_color = mColorBar.get() % alpha;
+    return out;
+}
+// </VulkanStorm>

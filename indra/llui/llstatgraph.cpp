@@ -124,6 +124,73 @@ void LLStatGraph::draw()
     gl_rect_2d(1, ll_round(frac*getRect().getHeight()), getRect().getWidth() - 1, 0, true);
 }
 
+// <VulkanStorm>
+void LLStatGraph::prepareVkDraw()
+{
+    // The sampling/tooltip half of draw(), without any rendering.
+    if (mNewStatFloatp)
+    {
+        LLTrace::Recording& recording = LLTrace::get_frame_recording().getLastRecording();
+
+        if (mPerSec)
+        {
+            // <FS:Ansariel> Legacy periodic mean per second instead of per second
+            static LLUICachedControl<bool> fsStatbarLegacyMeanPerSec("FSStatbarLegacyMeanPerSec");
+            if (fsStatbarLegacyMeanPerSec)
+            {
+                mValue = (F32)LLTrace::get_frame_recording().getPeriodMeanPerSec(*mNewStatFloatp);
+            }
+            else
+            {
+                mValue = (F32)recording.getPerSec(*mNewStatFloatp);
+            }
+            // </FS:Ansariel>
+        }
+        else
+        {
+            mValue = (F32)recording.getSum(*mNewStatFloatp);
+        }
+    }
+
+    if (mUpdateTimer.getElapsedTimeF32() > 0.5f)
+    {
+        std::string format_str;
+        std::string tmp_str;
+        format_str = llformat("%%s%%.%df%%s", mPrecision);
+        tmp_str = llformat(format_str.c_str(), mLabel.c_str(), mValue, mUnits.c_str());
+        setToolTip(tmp_str);
+
+        mUpdateTimer.reset();
+    }
+}
+
+LLStatGraph::VkDrawState LLStatGraph::getVkDrawState() const
+{
+    // Mirrors draw()'s geometry. prepareVkDraw() must run first (the walker
+    // guarantees this) so mValue is current.
+    VkDrawState out;
+    out.valid = true;
+
+    const F32 range = mMax - mMin;
+    F32 frac = range != 0.f ? (mValue - mMin) / range : 0.f;
+    frac = llmax(0.f, frac);
+    frac = llmin(1.f, frac);
+
+    threshold_vec_t::const_iterator it = std::lower_bound(mThresholds.begin(), mThresholds.end(), Threshold(mValue / mMax, LLUIColor()));
+    if (it != mThresholds.begin())
+    {
+        it--;
+    }
+
+    static LLUIColor default_color = LLUIColorTable::instance().getColor( "MenuDefaultBgColor" );
+    out.bg_color = default_color.get();
+    out.border_color = LLColor4::black;
+    out.bar_color = it->mColor.get();
+    out.bar_rect.set(1, ll_round(frac*getRect().getHeight()), getRect().getWidth() - 1, 0);
+    return out;
+}
+// </VulkanStorm>
+
 void LLStatGraph::setMin(const F32 min)
 {
     mMin = min;

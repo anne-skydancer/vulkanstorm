@@ -170,6 +170,76 @@ void drawArrow(S32 tailX, S32 tailY, S32 tipX, S32 tipY, LLColor4 color)
     gl_triangle_2d(tipX, tipY, (S32)x, (S32)y, (S32)x2, (S32)y2, color, true);
 }
 
+// <VulkanStorm>
+void LLXYVector::prepareVkDraw()
+{
+    // draw()'s ghost tracking: with no capture the ghost follows the value.
+    if (!hasMouseCapture())
+    {
+        S32 centerX = mTouchArea->getRect().getCenterX();
+        S32 centerY = mTouchArea->getRect().getCenterY();
+        S32 pointX, pointY;
+        if (mLogarithmic)
+        {
+            pointX = (S32)((log(llabs(mValueX) + 1)) / mLogScaleX);
+            pointX *= (mValueX < 0) ? -1 : 1;
+            pointX += centerX;
+            pointY = (S32)((log(llabs(mValueY) + 1)) / mLogScaleY);
+            pointY *= (mValueY < 0) ? -1 : 1;
+            pointY += centerY;
+        }
+        else
+        {
+            pointX = centerX + (S32)(mValueX * mTouchArea->getRect().getWidth() / (2 * mMaxValueX));
+            pointY = centerY + (S32)(mValueY * mTouchArea->getRect().getHeight() / (2 * mMaxValueY));
+        }
+        mGhostX = pointX;
+        mGhostY = pointY;
+    }
+}
+
+void LLXYVector::getVkDrawState(VkDrawState& out) const
+{
+    // Mirrors draw()'s geometry (widget-local, bottom-left origin).
+    const LLRect& touch = mTouchArea->getRect();
+    out.touch_rect = touch;
+    out.area_color = mAreaColor.get();
+    out.grid_color = mGridColor.get();
+    out.arrow_color = mArrowColor.get();
+    out.ghost_color = mGhostColor.get();
+    out.circle_radius = CENTER_CIRCLE_RADIUS;
+
+    S32 centerX = touch.getCenterX();
+    S32 centerY = touch.getCenterY();
+    out.center_x = centerX;
+    out.center_y = centerY;
+
+    S32 pointX, pointY;
+    if (mLogarithmic)
+    {
+        pointX = (S32)((log(llabs(mValueX) + 1)) / mLogScaleX);
+        pointX *= (mValueX < 0) ? -1 : 1;
+        pointX += centerX;
+        pointY = (S32)((log(llabs(mValueY) + 1)) / mLogScaleY);
+        pointY *= (mValueY < 0) ? -1 : 1;
+        pointY += centerY;
+    }
+    else
+    {
+        pointX = centerX + (S32)(mValueX * touch.getWidth() / (2 * mMaxValueX));
+        pointY = centerY + (S32)(mValueY * touch.getHeight() / (2 * mMaxValueY));
+    }
+    out.point_x = pointX;
+    out.point_y = pointY;
+
+    out.draw_ghost = const_cast<LLXYVector*>(this)->hasMouseCapture();
+    out.ghost_x = (S32)mGhostX;
+    out.ghost_y = (S32)mGhostY;
+
+    out.draw_arrow = (llabs(mValueX) >= mIncrementX || llabs(mValueY) >= mIncrementY);
+}
+// </VulkanStorm>
+
 void LLXYVector::draw()
 {
     S32 centerX = mTouchArea->getRect().getCenterX();

@@ -264,6 +264,10 @@ public:
     virtual void restoreToWorld();
     virtual void gotoItem();
     virtual LLUIImagePtr getIcon() const;
+    // <VulkanStorm> GL-free icon names for the Vulkan UI (null-GL safe).
+    virtual std::string getVkIconName() const override;
+    virtual std::string getVkIconOverlayName() const override;
+    // </VulkanStorm>
     virtual std::string getLabelSuffix() const;
     virtual LLFontGL::StyleFlags getLabelStyle() const;
     virtual PermissionMask getPermissionMask() const;
@@ -320,6 +324,10 @@ public:
     virtual LLUIImagePtr getIcon() const;
     virtual LLUIImagePtr getIconOpen() const;
     virtual LLUIImagePtr getIconOverlay() const;
+    // <VulkanStorm> GL-free icon names for the Vulkan UI (null-GL safe).
+    virtual std::string getVkIconName() const override;
+    virtual std::string getVkIconOpenName() const override;
+    // </VulkanStorm>
     static LLUIImagePtr getIcon(LLFolderType::EType preferred_type);
     virtual std::string getLabelSuffix() const;
     virtual LLFontGL::StyleFlags getLabelStyle() const;

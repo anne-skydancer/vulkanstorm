@@ -54,48 +54,182 @@
 #include "llvkuiimage.h"        // LLVKUIImage registry (GL-free)
 #include "llvktext.h"           // independent FreeType/Vulkan text atlas
 #include "lluiimage.h"          // LLUIImage (regions)
+#include "llvkuirenderinternal.h" // shared walker context for chrome passes
+#include "llvkuiwidgets.h"      // additional per-widget chrome passes
+#include "llvkuifolder.h"       // folder-view (inventory tree) chrome passes
+
+using LLVKUIRenderInternal::RenderCtx;
+using LLVKUIRenderInternal::toSinkRect;
+using LLVKUIRenderInternal::pushClip;
+using LLVKUIRenderInternal::popClip;
+using LLVKUIRenderInternal::emitBorderLine;
+using LLVKUIRenderInternal::emitDropShadow;
+
+namespace LLVKUIRenderInternal
+{
+    void applyClip(const RenderCtx& rc)
+    {
+        // <VulkanStorm> diagnostic: VULKANSTORM_NO_CLIPSTACK=1 disables the
+        // whole clip stack (isolates scissor regressions from other causes).
+        static const bool s_no_clipstack = getenv("VULKANSTORM_NO_CLIPSTACK") != nullptr;
+        if (s_no_clipstack)
+        {
+            LLVKUI2DSink::get().clearScissor();
+            return;
+        }
+        if (rc.clip_stack.empty())
+        {
+            LLVKUI2DSink::get().clearScissor();
+            return;
+        }
+        LLRect clip = rc.clip_stack.front();
+        for (size_t i = 1; i < rc.clip_stack.size(); ++i)
+        {
+            clip.intersectWith(rc.clip_stack[i]);
+        }
+        const S32 sx = llclamp(ll_round((F32)clip.mLeft * rc.ui_scale_x),
+                               0, (S32)rc.dev_w);
+        const S32 sy = llclamp(ll_round((F32)(rc.dev_h / rc.ui_scale_y -
+                                              clip.mTop) * rc.ui_scale_y),
+                               0, (S32)rc.dev_h);
+        const S32 sr = llclamp(ll_round((F32)clip.mRight * rc.ui_scale_x),
+                               sx, (S32)rc.dev_w);
+        const S32 sb = llclamp(ll_round((F32)(rc.dev_h / rc.ui_scale_y -
+                                              clip.mBottom) * rc.ui_scale_y),
+                               sy, (S32)rc.dev_h);
+        LLVKUI2DSink::get().setScissor(sx, sy, sr - sx, sb - sy);
+    }
+
+    void pushClip(RenderCtx& rc, const LLRect& gl_screen_rect)
+    {
+        rc.clip_stack.push_back(gl_screen_rect);
+        applyClip(rc);
+    }
+
+    void popClip(RenderCtx& rc)
+    {
+        if (!rc.clip_stack.empty()) rc.clip_stack.pop_back();
+        applyClip(rc);
+    }
+
+    void emitBorderLine(const RenderCtx& rc, S32 x1, S32 y1, S32 x2, S32 y2,
+                        const LLColor4& c)
+    {
+        const F32 ui_h = (F32)rc.dev_h / rc.ui_scale_y;
+        const float xy[4] = { (F32)x1, ui_h - (F32)y1, (F32)x2, ui_h - (F32)y2 };
+        LLVKUI2DSink::get().lineStrip(xy, 2, c.mV[VRED], c.mV[VGREEN], c.mV[VBLUE], c.mV[VALPHA]);
+    }
+
+    // Mirror gl_drop_shadow (llrender2dutils.cpp:165): the same 30-vertex
+    // gradient fan hugging the right/bottom edges, with the same 1px overlap
+    // hack and per-vertex alpha fade, in sink space.
+    void emitDropShadow(const RenderCtx& rc, const LLRect& gl_screen,
+                        const LLColor4& start_color, S32 lines)
+    {
+        // GL: right--, bottom++, lines++ (overlap with the rectangle).
+        const F32 left   = (F32)gl_screen.mLeft;
+        const F32 top    = (F32)gl_screen.mTop;
+        const F32 right  = (F32)gl_screen.mRight - 1.f;
+        const F32 bottom = (F32)gl_screen.mBottom + 1.f;
+        const F32 ln     = (F32)(lines + 1);
+        const F32 ui_h   = (F32)rc.dev_h / rc.ui_scale_y;
+
+        LLColor4 end_color = start_color;
+        end_color.mV[VALPHA] = 0.f;
+
+        // Vertex stream identical to gl_drop_shadow; each vertex carries its
+        // GL-space position (y flipped to sink space) and the start/end color.
+        struct V { F32 x, y; bool start; };
+        const V gv[30] = {
+            // right edge
+            { right, top - ln, true },   { right, bottom, true },             { right + ln, bottom, false },
+            { right, top - ln, true },   { right + ln, bottom, false },       { right + ln, top - ln, false },
+            // bottom edge
+            { right, bottom, true },     { left + ln, bottom, true },         { left + ln, bottom - ln, false },
+            { right, bottom, true },     { left + ln, bottom - ln, false },   { right, bottom - ln, false },
+            // bottom-left corner
+            { left + ln, bottom, true }, { left, bottom, false },             { left + 1, bottom - ln + 1, false },
+            { left + ln, bottom, true }, { left + 1, bottom - ln + 1, false },{ left + ln, bottom - ln, false },
+            // bottom-right corner
+            { right, bottom, true },     { right, bottom - ln, false },       { right + ln - 1, bottom - ln + 1, false },
+            { right, bottom, true },     { right + ln - 1, bottom - ln + 1, false }, { right + ln, bottom, false },
+            // top-right corner
+            { right, top - ln, true },   { right + ln, top - ln, false },     { right + ln - 1, top - 1, false },
+            { right, top - ln, true },   { right + ln - 1, top - 1, false },  { right, top, false },
+        };
+        float xy[60], rgba[120];
+        for (int i = 0; i < 30; ++i)
+        {
+            xy[i * 2]     = gv[i].x;
+            xy[i * 2 + 1] = ui_h - gv[i].y;
+            const LLColor4& c = gv[i].start ? start_color : end_color;
+            rgba[i * 4]     = c.mV[VRED];
+            rgba[i * 4 + 1] = c.mV[VGREEN];
+            rgba[i * 4 + 2] = c.mV[VBLUE];
+            rgba[i * 4 + 3] = c.mV[VALPHA];
+        }
+        LLVKUI2DSink::get().rawTris(xy, rgba, 30);
+    }
+
+    void emitCircle(const RenderCtx& rc, F32 gl_center_x, F32 gl_center_y,
+                    F32 radius, const LLColor4& color, bool filled,
+                    S32 segments)
+    {
+        // CPU-triangulated gl_circle_2d: GL bottom-left -> sink top-left.
+        const F32 ui_h = (F32)rc.dev_h / rc.ui_scale_y;
+        const F32 cy = ui_h - gl_center_y;
+        segments = llmax(segments, 8);
+        if (filled)
+        {
+            std::vector<float> xy((segments + 2) * 3 * 2);
+            std::vector<float> rgba((segments + 2) * 3 * 4);
+            int n = 0;
+            for (S32 i = 0; i < segments; ++i)
+            {
+                const F32 a0 = (F32)i / (F32)segments * (F32)F_TWO_PI;
+                const F32 a1 = (F32)(i + 1) / (F32)segments * (F32)F_TWO_PI;
+                const F32 vx[3] = { gl_center_x,
+                                    gl_center_x + radius * cosf(a0),
+                                    gl_center_x + radius * cosf(a1) };
+                const F32 vy[3] = { cy,
+                                    cy - radius * sinf(a0),
+                                    cy - radius * sinf(a1) };
+                for (int k = 0; k < 3; ++k)
+                {
+                    xy[(n + k) * 2]     = vx[k];
+                    xy[(n + k) * 2 + 1] = vy[k];
+                    rgba[(n + k) * 4]     = color.mV[VRED];
+                    rgba[(n + k) * 4 + 1] = color.mV[VGREEN];
+                    rgba[(n + k) * 4 + 2] = color.mV[VBLUE];
+                    rgba[(n + k) * 4 + 3] = color.mV[VALPHA];
+                }
+                n += 3;
+            }
+            LLVKUI2DSink::get().rawTris(xy.data(), rgba.data(), n);
+        }
+        else
+        {
+            std::vector<float> xy((segments + 1) * 2);
+            for (S32 i = 0; i <= segments; ++i)
+            {
+                const F32 a = (F32)i / (F32)segments * (F32)F_TWO_PI;
+                xy[i * 2]     = gl_center_x + radius * cosf(a);
+                xy[i * 2 + 1] = cy - radius * sinf(a);
+            }
+            LLVKUI2DSink::get().lineStrip(xy.data(), segments + 1,
+                                          color.mV[VRED], color.mV[VGREEN],
+                                          color.mV[VBLUE], color.mV[VALPHA]);
+        }
+    }
+}
 
 namespace
 {
-    // Per-frame render context, threaded through the tree walk.
-    struct RenderCtx
-    {
-        unsigned dev_w = 0;
-        unsigned dev_h = 0;
-        float    ui_scale_x = 1.f;
-        float    ui_scale_y = 1.f;
-        float    parent_alpha = 1.f;   // accumulated draw-context alpha
-        // <VulkanStorm> M0 diagnostics
-        int visited = 0;      // views walked
-        int visible = 0;      // views passing getVisible()
-        int panels  = 0;      // views that are LLPanel
-        int emitted = 0;      // rects actually emitted
-        // <VulkanStorm> one-shot widget-tree dump (VULKANSTORM_TREE_DUMP=1):
-        // logs every visited view's class/name/screen rect so the chrome work
-        // can be planned from the real login-screen composition.
-        bool dump   = false;
-        int  depth  = 0;
-    };
-
-    // Convert a GL bottom-left-origin screen rect (from calcScreenRect) into
-    // the sink's top-left-origin coordinate space. Normalizes so top <= bottom
-    // (the GL->top-left conversion can produce inverted or off-window rects for
-    // some widgets; draw9Slice's band mapping assumes a sane top<bottom rect).
-    void toSinkRect(const RenderCtx& rc, const LLRect& gl_rect,
-                    float& left, float& top, float& right, float& bottom)
-    {
-        const F32 ui_h = (F32)rc.dev_h / rc.ui_scale_y;
-        left   = (F32)gl_rect.mLeft;
-        right  = (F32)gl_rect.mRight;
-        top    = ui_h - (F32)gl_rect.mTop;
-        bottom = ui_h - (F32)gl_rect.mBottom;
-        if (left > right) std::swap(left, right);
-        if (top > bottom) std::swap(top, bottom);
-    }
-
     // <VulkanStorm> Registered per-class hooks (newview-side classes).
     std::map<const std::type_info*, LLVKUIRender::ViewHook> s_hooks;
     std::map<const std::type_info*, LLVKUIRender::ViewPrepareHook> s_prepare_hooks;
+    std::map<const std::type_info*, LLVKUIRender::ViewClipHook> s_clip_hooks;
+    std::map<const std::type_info*, LLVKUIRender::ViewSubtreeAlphaHook> s_alpha_hooks;
     RenderCtx* s_active_render_ctx = nullptr;
     // </VulkanStorm>
 
@@ -117,77 +251,94 @@ namespace
         LLRect screen;
         panel->localRectToScreen(local, &screen);
 
+        // <VulkanStorm> diagnostic: which panel paints over the top menu strip?
+        static bool s_dbg_menu = getenv("VULKANSTORM_MENU_DEBUG") != nullptr;
+        static int  s_dbg_panel_n = 0;
+        if (s_dbg_menu && screen.mTop > 1340 && screen.getHeight() > 10 && s_dbg_panel_n < 20)
+        {
+            ++s_dbg_panel_n;
+            const LLColor4 bg = panel->isBackgroundOpaque() ? panel->getBackgroundColor() : panel->getTransparentColor();
+            LL_INFOS("Vulkan") << "VKPANEL-TOPSTRIP '" << panel->getName()
+                               << "' (" << typeid(*panel).name() << ")"
+                               << " rect=" << screen.mLeft << "," << screen.mBottom
+                               << "-" << screen.mRight << "," << screen.mTop
+                               << " opaque=" << (panel->isBackgroundOpaque() ? 1 : 0)
+                               << " bg=" << bg.mV[0] << "," << bg.mV[1] << "," << bg.mV[2] << "," << bg.mV[3]
+                               << LL_ENDL;
+        }
+        // </VulkanStorm>
+
         // A floater is a separate in-viewer window. Its image/color can retain
         // alpha for edge decoration and inactive-state tinting, but its body
         // must first occlude the scene and any CEF surface below it. OpenGL
         // obtains that composition from the floater pass; Vulkan needs the
         // equivalent opaque underlay explicitly.
-        if (dynamic_cast<const LLFloater*>(panel))
+        //
+        // <VulkanStorm> Only emit the underlay when the floater actually paints
+        // a background. In GL, LLFloater::draw() -> LLPanel::draw() emits
+        // NOTHING when mBgVisible is false. Toasts (LLToast) run with an
+        // invisible background so the world/menu shows through; the previous
+        // unconditional underlay painted an opaque strip over the menu bar
+        // and clipped dropdown popups. Keying on isBackgroundVisible() matches
+        // GL exactly.
+        if (panel->isBackgroundVisible())
         {
-            LLColor4 base = panel->isBackgroundOpaque()
-                                ? panel->getBackgroundColor()
-                                : panel->getTransparentColor();
-            base.mV[VALPHA] = 1.f;
-            // Keep the opaque body inside the skinned image's antialiased
-            // corner pixels. A full-rect underlay made Vulkan floaters square.
-            LLRect body = screen;
-            body.stretch(-2);
-            LLVKUIRender::emitScreenRect(body, rc.dev_h, rc.ui_scale_y, base);
-        }
-
-        if (panel->isBackgroundOpaque())
-        {
-            const std::string image_name = panel->getBackgroundImageVkName();
-            if (!image_name.empty() && LLVKUIImage::ready())
+            if (dynamic_cast<const LLFloater*>(panel))
             {
-                // getBackgroundImageOverlay() is non-const; read-only in effect.
-                const LLColor4& ov = const_cast<LLPanel*>(panel)->getBackgroundImageOverlay();
-                LLColor4 c = LLColor4(ov.mV[0] * rc.parent_alpha, ov.mV[1] * rc.parent_alpha,
-                                      ov.mV[2] * rc.parent_alpha, ov.mV[3] * rc.parent_alpha);
-                float l, t, r, b; toSinkRect(rc, screen, l, t, r, b);
-                LLVKUIImage::draw(image_name, l, t, r, b, c);
-                return;
+                LLColor4 base = panel->isBackgroundOpaque()
+                                    ? panel->getBackgroundColor()
+                                    : panel->getTransparentColor();
+                base.mV[VALPHA] = 1.f;
+                // Keep the opaque body inside the skinned image's antialiased
+                // corner pixels. A full-rect underlay made Vulkan floaters square.
+                LLRect body = screen;
+                body.stretch(-2);
+                LLVKUIRender::emitScreenRect(body, rc.dev_h, rc.ui_scale_y, base);
             }
-        }
-        else
-        {
-            const std::string image_name = panel->getTransparentImageVkName();
-            if (!image_name.empty() && LLVKUIImage::ready())
-            {
-                const LLColor4& ov = const_cast<LLPanel*>(panel)->getTransparentImageOverlay();
-                LLColor4 c = LLColor4(ov.mV[0] * rc.parent_alpha, ov.mV[1] * rc.parent_alpha,
-                                      ov.mV[2] * rc.parent_alpha, ov.mV[3] * rc.parent_alpha);
-                float l, t, r, b; toSinkRect(rc, screen, l, t, r, b);
-                LLVKUIImage::draw(image_name, l, t, r, b, c);
-                return;
-            }
-        }
 
-        LLColor4 c = panel->isBackgroundOpaque() ? panel->getBackgroundColor()
-                                                 : panel->getTransparentColor();
-        c.mV[VALPHA] *= rc.parent_alpha;
-        if (s_dbg)
-        {
-            LL_INFOS("Vulkan") << "panel emit: rect=" << screen.mLeft << "," << screen.mBottom
-                               << " to " << screen.mRight << "," << screen.mTop
-                               << " empty=" << (screen.isEmpty() ? 1 : 0)
-                               << " rgba=" << c.mV[0] << "," << c.mV[1] << "," << c.mV[2] << "," << c.mV[3] << LL_ENDL;
+            if (panel->isBackgroundOpaque())
+            {
+                const std::string image_name = panel->getBackgroundImageVkName();
+                if (!image_name.empty() && LLVKUIImage::ready())
+                {
+                    // getBackgroundImageOverlay() is non-const; read-only in effect.
+                    const LLColor4& ov = const_cast<LLPanel*>(panel)->getBackgroundImageOverlay();
+                    LLColor4 c = LLColor4(ov.mV[0] * rc.parent_alpha, ov.mV[1] * rc.parent_alpha,
+                                          ov.mV[2] * rc.parent_alpha, ov.mV[3] * rc.parent_alpha);
+                    float l, t, r, b; toSinkRect(rc, screen, l, t, r, b);
+                    LLVKUIImage::draw(image_name, l, t, r, b, c);
+                    return;
+                }
+            }
+            else
+            {
+                const std::string image_name = panel->getTransparentImageVkName();
+                if (!image_name.empty() && LLVKUIImage::ready())
+                {
+                    const LLColor4& ov = const_cast<LLPanel*>(panel)->getTransparentImageOverlay();
+                    LLColor4 c = LLColor4(ov.mV[0] * rc.parent_alpha, ov.mV[1] * rc.parent_alpha,
+                                          ov.mV[2] * rc.parent_alpha, ov.mV[3] * rc.parent_alpha);
+                    float l, t, r, b; toSinkRect(rc, screen, l, t, r, b);
+                    LLVKUIImage::draw(image_name, l, t, r, b, c);
+                    return;
+                }
+            }
+
+            LLColor4 c = panel->isBackgroundOpaque() ? panel->getBackgroundColor()
+                                                     : panel->getTransparentColor();
+            c.mV[VALPHA] *= rc.parent_alpha;
+            if (s_dbg)
+            {
+                LL_INFOS("Vulkan") << "panel emit: rect=" << screen.mLeft << "," << screen.mBottom
+                                   << " to " << screen.mRight << "," << screen.mTop
+                                   << " empty=" << (screen.isEmpty() ? 1 : 0)
+                                   << " rgba=" << c.mV[0] << "," << c.mV[1] << "," << c.mV[2] << "," << c.mV[3] << LL_ENDL;
+            }
+            LLVKUIRender::emitScreenRect(screen, rc.dev_h, rc.ui_scale_y, c);
         }
-        LLVKUIRender::emitScreenRect(screen, rc.dev_h, rc.ui_scale_y, c);
     }
 
     // <VulkanStorm> M3: non-text chrome helpers.
-
-    // Emit one GL-space line segment into the sink (GL bottom-left -> top-left
-    // conversion, same mapping as toSinkRect). Each gl_line_2d edge becomes its
-    // own 2-vertex strip so independent segments never connect.
-    void emitBorderLine(const RenderCtx& rc, S32 x1, S32 y1, S32 x2, S32 y2,
-                        const LLColor4& c)
-    {
-        const F32 ui_h = (F32)rc.dev_h / rc.ui_scale_y;
-        const float xy[4] = { (F32)x1, ui_h - (F32)y1, (F32)x2, ui_h - (F32)y2 };
-        LLVKUI2DSink::get().lineStrip(xy, 2, c.mV[VRED], c.mV[VGREEN], c.mV[VBLUE], c.mV[VALPHA]);
-    }
 
     // Mirror LLViewBorder::drawOnePixelLines()/drawTwoPixelLines()
     // (llviewborder.cpp): identical endpoints and per-edge colors, in sink
@@ -276,57 +427,6 @@ namespace
         rc.emitted++;
     }
 
-    // Mirror gl_drop_shadow (llrender2dutils.cpp:165): the same 30-vertex
-    // gradient fan hugging the right/bottom edges, with the same 1px overlap
-    // hack and per-vertex alpha fade, in sink space.
-    void emitDropShadow(const RenderCtx& rc, const LLRect& gl_screen,
-                        const LLColor4& start_color, S32 lines)
-    {
-        // GL: right--, bottom++, lines++ (overlap with the rectangle).
-        const F32 left   = (F32)gl_screen.mLeft;
-        const F32 top    = (F32)gl_screen.mTop;
-        const F32 right  = (F32)gl_screen.mRight - 1.f;
-        const F32 bottom = (F32)gl_screen.mBottom + 1.f;
-        const F32 ln     = (F32)(lines + 1);
-        const F32 ui_h   = (F32)rc.dev_h / rc.ui_scale_y;
-
-        LLColor4 end_color = start_color;
-        end_color.mV[VALPHA] = 0.f;
-
-        // Vertex stream identical to gl_drop_shadow; each vertex carries its
-        // GL-space position (y flipped to sink space) and the start/end color.
-        struct V { F32 x, y; bool start; };
-        const V gv[30] = {
-            // right edge
-            { right, top - ln, true },   { right, bottom, true },             { right + ln, bottom, false },
-            { right, top - ln, true },   { right + ln, bottom, false },       { right + ln, top - ln, false },
-            // bottom edge
-            { right, bottom, true },     { left + ln, bottom, true },         { left + ln, bottom - ln, false },
-            { right, bottom, true },     { left + ln, bottom - ln, false },   { right, bottom - ln, false },
-            // bottom-left corner
-            { left + ln, bottom, true }, { left, bottom, false },             { left + 1, bottom - ln + 1, false },
-            { left + ln, bottom, true }, { left + 1, bottom - ln + 1, false },{ left + ln, bottom - ln, false },
-            // bottom-right corner
-            { right, bottom, true },     { right, bottom - ln, false },       { right + ln - 1, bottom - ln + 1, false },
-            { right, bottom, true },     { right + ln - 1, bottom - ln + 1, false }, { right + ln, bottom, false },
-            // top-right corner
-            { right, top - ln, true },   { right + ln, top - ln, false },     { right + ln - 1, top - 1, false },
-            { right, top - ln, true },   { right + ln - 1, top - 1, false },  { right, top, false },
-        };
-        float xy[60], rgba[120];
-        for (int i = 0; i < 30; ++i)
-        {
-            xy[i * 2]     = gv[i].x;
-            xy[i * 2 + 1] = ui_h - gv[i].y;
-            const LLColor4& c = gv[i].start ? start_color : end_color;
-            rgba[i * 4]     = c.mV[VRED];
-            rgba[i * 4 + 1] = c.mV[VGREEN];
-            rgba[i * 4 + 2] = c.mV[VBLUE];
-            rgba[i * 4 + 3] = c.mV[VALPHA];
-        }
-        LLVKUI2DSink::get().rawTris(xy, rgba, 30);
-    }
-
     // Mirror the non-item chrome of LLMenuGL::draw() (llmenugl.cpp:3267): the
     // drop shadow first, then the background strip (bg color *
     // FSMenuBackgroundAlpha). Menu item text/highlight is out of scope.
@@ -364,6 +464,24 @@ namespace
         const LLMenuItemGL::VkDrawState state = item->getVkDrawState(rc.parent_alpha);
         const LLRect screen = item->calcScreenRect();
 
+        // <VulkanStorm> one-shot diagnostic: why is a menu item's text absent?
+        static bool s_dbg_menu = getenv("VULKANSTORM_MENU_DEBUG") != nullptr;
+        static int  s_dbg_menu_n = 0;
+        if (s_dbg_menu && state.menu_bar && s_dbg_menu_n < 12)
+        {
+            ++s_dbg_menu_n;
+            LL_INFOS("Vulkan") << "VKMENU '" << item->getName()
+                               << "' vis=" << (item->getVisible() ? 1 : 0)
+                               << " label_len=" << state.label.size()
+                               << " font=" << (void*)state.font
+                               << " color=" << state.foreground.mV[0] << "," << state.foreground.mV[1]
+                               << "," << state.foreground.mV[2] << "," << state.foreground.mV[3]
+                               << " rect=" << screen.mLeft << "," << screen.mBottom
+                               << "-" << screen.mRight << "," << screen.mTop
+                               << " clips=" << rc.clip_stack.size() << LL_ENDL;
+        }
+        // </VulkanStorm>
+
         const bool draw_highlight = state.highlight &&
             (state.menu_bar || (state.enabled && !state.brief));
         if (draw_highlight)
@@ -397,10 +515,19 @@ namespace
 
         if (state.menu_bar)
         {
-            LLVKText::render(state.font, state.label,
+            S32 drawn = LLVKText::render(state.font, state.label,
                              (F32)screen.getCenterX(), (F32)(screen.mBottom + 1),
                              state.foreground, LLFontGL::HCENTER,
                              LLFontGL::BOTTOM, S32_MAX);
+            // <VulkanStorm> diagnostic: confirm glyphs actually emitted.
+            if (s_dbg_menu && s_dbg_menu_n <= 12)
+            {
+                LL_INFOS("Vulkan") << "VKMENU-RENDER '" << item->getName()
+                                  << "' drawn=" << drawn
+                                  << " cx=" << screen.getCenterX()
+                                  << " basey=" << (screen.mBottom + 1) << LL_ENDL;
+            }
+            // </VulkanStorm>
         }
         else if (state.brief)
         {
@@ -443,7 +570,30 @@ namespace
 
     void prepareView(LLVKContext* context, const LLView* view)
     {
-        if (!context || !view || !view->getVisible()) return;
+        if (!context || !view) return;
+
+        // <VulkanStorm> A combo's dropdown list stays invisible until the combo
+        // opens, so the visibility gate below would skip it and its row glyphs
+        // would never be rasterized/uploaded (blank dropdown). Prepare the list
+        // contents explicitly before the visibility check drops this subtree.
+        if (LLComboBox* combo = dynamic_cast<LLComboBox*>(const_cast<LLView*>(view)))
+        {
+            if (LLScrollListCtrl* list = combo->getVkList())
+            {
+                list->prepareVkDraw();
+                if (LLVKText::ready())
+                {
+                    LLScrollListCtrl::VkDrawState state;
+                    list->getVkDrawState(1.f, state);
+                    for (const LLScrollListCtrl::VkRowState& row : state.rows)
+                        for (const LLScrollListCtrl::VkTextCellState& cell : row.cells)
+                            LLVKText::prepare(cell.font, cell.text);
+                }
+            }
+        }
+        // </VulkanStorm>
+
+        if (!view->getVisible()) return;
 
         // Several GL widgets finalize layout from draw(). Vulkan never calls
         // draw(), so make the same non-rendering updates before collecting
@@ -473,6 +623,14 @@ namespace
 
         auto hook = s_prepare_hooks.find(&typeid(*view));
         if (hook != s_prepare_hooks.end()) hook->second(view, context);
+
+        // Additional widget preparation (llvkuiwidgets.cpp / llvkuifolder.cpp).
+        static const bool s_no_widgets_prepare = getenv("VULKANSTORM_NO_WIDGETS") != nullptr;
+        if (!s_no_widgets_prepare)
+        {
+            LLVKUIWidgets::prepareView(context, view);
+            LLVKUIFolder::prepareView(context, view);
+        }
 
         if (LLVKText::ready())
         {
@@ -588,6 +746,22 @@ namespace
             size_t vbefore = LLVKUI2DSink::get().pendingVerts();
             renderPanelBackground(rc, panel);
             if (LLVKUI2DSink::get().pendingVerts() > vbefore) rc.emitted++;
+        }
+
+        // Scroll container opaque background (LLScrollContainer::draw()'s
+        // mIsOpaque branch); the scrolled-children clip is applied at the
+        // child recursion below.
+        if (const LLScrollContainer* scroll_container =
+                dynamic_cast<const LLScrollContainer*>(view))
+        {
+            const LLScrollContainer::VkBackground bg =
+                scroll_container->getVkBackground(rc.parent_alpha);
+            if (bg.bg_visible)
+            {
+                LLVKUIRender::emitScreenRect(bg.inner_rect, rc.dev_h,
+                                             rc.ui_scale_y, bg.bg_color);
+                rc.emitted++;
+            }
         }
 
         if (const LLScrollbar* scrollbar = dynamic_cast<const LLScrollbar*>(view))
@@ -859,23 +1033,51 @@ namespace
         {
             LLScrollListCtrl::VkDrawState state;
             list->getVkDrawState(rc.parent_alpha, state);
+
+            // <VulkanStorm> diagnostic: VULKANSTORM_LIST_DEBUG=1 logs the
+            // row/cell census for scroll lists (catches empty dropdowns).
+            static const bool s_dbg_list = getenv("VULKANSTORM_LIST_DEBUG") != nullptr;
+            if (s_dbg_list)
+            {
+                S32 total_cells = 0;
+                for (const auto& row : state.rows) total_cells += (S32)row.cells.size();
+                LL_INFOS("Vulkan") << "VKLIST '" << view->getName()
+                                   << "' rows=" << state.rows.size()
+                                   << " cells=" << total_cells
+                                   << " clip=" << state.clip_rect.mLeft << "," << state.clip_rect.mBottom
+                                   << "-" << state.clip_rect.mRight << "," << state.clip_rect.mTop
+                                   << " bg=" << (state.background_visible ? 1 : 0)
+                                   << " bgcolor=" << state.background.mV[0] << "," << state.background.mV[1]
+                                   << "," << state.background.mV[2] << "," << state.background.mV[3]
+                                   << " vis=" << (view->getVisible() ? 1 : 0) << LL_ENDL;
+                // Log the first few cells' text content + width to catch
+                // empty/zero-width dropdown rows.
+                int n = 0;
+                for (const auto& row : state.rows)
+                {
+                    for (const auto& cell : row.cells)
+                    {
+                        if (n++ >= 6) break;
+                        LL_INFOS("Vulkan") << "  VKCELL text='" << wstring_to_utf8str(cell.text)
+                                           << "' max_px=" << cell.max_pixels
+                                           << " color=" << cell.color.mV[0] << "," << cell.color.mV[1]
+                                           << "," << cell.color.mV[2] << "," << cell.color.mV[3]
+                                           << " rect=" << cell.screen_rect.mLeft << "," << cell.screen_rect.mBottom
+                                           << "-" << cell.screen_rect.mRight << "," << cell.screen_rect.mTop
+                                           << " font=" << (void*)cell.font
+                                           << " x=" << cell.screen_x << LL_ENDL;
+                    }
+                }
+            }
+            // </VulkanStorm>
+
             if (state.background_visible)
             {
                 LLVKUIRender::emitScreenRect(state.background_rect, rc.dev_h,
                                              rc.ui_scale_y, state.background);
                 rc.emitted++;
             }
-            const S32 sx = llclamp(ll_round((F32)state.clip_rect.mLeft * rc.ui_scale_x),
-                                   0, (S32)rc.dev_w);
-            const S32 sy = llclamp(ll_round((F32)(rc.dev_h / rc.ui_scale_y -
-                                                  state.clip_rect.mTop) * rc.ui_scale_y),
-                                   0, (S32)rc.dev_h);
-            const S32 sr = llclamp(ll_round((F32)state.clip_rect.mRight * rc.ui_scale_x),
-                                   sx, (S32)rc.dev_w);
-            const S32 sb = llclamp(ll_round((F32)(rc.dev_h / rc.ui_scale_y -
-                                                  state.clip_rect.mBottom) * rc.ui_scale_y),
-                                   sy, (S32)rc.dev_h);
-            LLVKUI2DSink::get().setScissor(sx, sy, sr - sx, sb - sy);
+            pushClip(rc, state.clip_rect);
             for (const LLScrollListCtrl::VkRowState& row : state.rows)
             {
                 if (row.background_visible)
@@ -885,15 +1087,80 @@ namespace
                 {
                     for (const LLScrollListCtrl::VkTextCellState& cell : row.cells)
                     {
+                        // Search/type-ahead highlight behind the matched
+                        // substring (draw()'s mHighlightCount branch).
+                        if (cell.highlight_visible)
+                        {
+                            float l, t, r, b;
+                            toSinkRect(rc, cell.highlight_rect, l, t, r, b);
+                            LLVKUIImage::draw("Rounded_Square", l, t, r, b,
+                                              cell.highlight_color);
+                        }
                         LLVKText::render(cell.font, cell.text, cell.screen_x,
                                          cell.screen_baseline, cell.color,
                                          cell.alignment, LLFontGL::BOTTOM,
                                          cell.max_pixels);
+                        // <VulkanStorm> diagnostic: dump the scissor stack state
+                        // at the moment a combo-popup row's text renders.
+                        if (s_dbg_list)
+                        {
+                            const S32 glyphs = LLVKText::debugGlyphCount(cell.font);
+                            const F32 adv = LLVKText::debugMeasureAdvance(cell.font, cell.text);
+                            LL_INFOS("Vulkan") << "VKCELL-GLYPHS '" << wstring_to_utf8str(cell.text)
+                                               << "' font_glyphs=" << glyphs
+                                               << " advance=" << adv
+                                               << " stack=" << rc.clip_stack.size() << LL_ENDL;
+                        }
+                        // </VulkanStorm>
                     }
+                }
+                // Icon cells (LLScrollListIcon / LLScrollListIconText).
+                for (LLScrollListCtrl::VkIconCellState icon : row.icons)
+                {
+                    if (icon.image.empty() || !LLVKUIImage::ready()) continue;
+                    if (icon.screen_rect.isEmpty())
+                    {
+                        // Intrinsic-sized icon whose dimensions were unknown
+                        // to llui (no GL image); resolve via the registry and
+                        // re-anchor at the cell's left/bottom.
+                        int w = 0, h = 0;
+                        LLVKUIImage::getSize(icon.image, w, h);
+                        if (w <= 0 || h <= 0) continue;
+                        icon.screen_rect.mRight = icon.screen_rect.mLeft + w;
+                        icon.screen_rect.mTop = icon.screen_rect.mBottom + h;
+                    }
+                    float l, t, r, b;
+                    toSinkRect(rc, icon.screen_rect, l, t, r, b);
+                    LLVKUIImage::draw(icon.image, l, t, r, b, icon.color);
+                }
+                // Bar cells (LLScrollListBar).
+                for (const LLScrollListCtrl::VkBarCellState& bar : row.bars)
+                {
+                    LLVKUIRender::emitScreenRect(bar.screen_rect, rc.dev_h,
+                                                 rc.ui_scale_y, bar.color);
+                }
+                // Embedded checkbox cells (LLScrollListCheck).
+                for (const LLScrollListCtrl::VkCheckCellState& check : row.checks)
+                {
+                    if (check.image.empty() || !LLVKUIImage::ready()) continue;
+                    LLRect rect = check.screen_rect;
+                    if (!check.scale_image)
+                    {
+                        int w = 0, h = 0;
+                        if (LLVKUIImage::getSize(check.image, w, h) && w > 0 && h > 0)
+                        {
+                            // Unscaled image at the local top-left (LLButton).
+                            rect.mRight = rect.mLeft + w;
+                            rect.mBottom = rect.mTop - h;
+                        }
+                    }
+                    float l, t, r, b;
+                    toSinkRect(rc, rect, l, t, r, b);
+                    LLVKUIImage::draw(check.image, l, t, r, b, check.color);
                 }
                 rc.emitted++;
             }
-            LLVKUI2DSink::get().clearScissor();
+            popClip(rc);
         }
 
         // Vulkan-native text. LLTextBase supplies its already-reflowed line
@@ -922,29 +1189,18 @@ namespace
 
                     if (run.clip)
                     {
-                        const S32 sx = llclamp(ll_round((F32)run.clip_rect.mLeft * rc.ui_scale_x),
-                                               0, (S32)rc.dev_w);
-                        const S32 sy = llclamp(ll_round((F32)(rc.dev_h / rc.ui_scale_y -
-                                                              run.clip_rect.mTop) * rc.ui_scale_y),
-                                               0, (S32)rc.dev_h);
-                        const S32 sr = llclamp(ll_round((F32)run.clip_rect.mRight * rc.ui_scale_x),
-                                               sx, (S32)rc.dev_w);
-                        const S32 sb = llclamp(ll_round((F32)(rc.dev_h / rc.ui_scale_y -
-                                                              run.clip_rect.mBottom) * rc.ui_scale_y),
-                                               sy, (S32)rc.dev_h);
-                        LLVKUI2DSink::get().setScissor(sx, sy, sr - sx, sb - sy);
-                    }
-                    else
-                    {
-                        LLVKUI2DSink::get().clearScissor();
+                        pushClip(rc, run.clip_rect);
                     }
                     LLVKText::render(run.font, run.text, (F32)run.screen_rect.mLeft, y,
                                      run.color, LLFontGL::LEFT, run.valign,
                                      run.screen_rect.getWidth(), run.ellipses,
                                      run.shadow);
                     rc.emitted++;
+                    if (run.clip)
+                    {
+                        popClip(rc);
+                    }
                 }
-                LLVKUI2DSink::get().clearScissor();
             }
             else if (line_editor)
             {
@@ -954,6 +1210,17 @@ namespace
                     LLVKUIRender::emitScreenRect(state.selection_rect, rc.dev_h,
                                                  rc.ui_scale_y,
                                                  state.selection_color);
+                    rc.emitted++;
+                }
+                // IME preedit underlines paint before the text (GL order).
+                std::vector<LLLineEditor::VkPreeditMarker> markers;
+                line_editor->getVkPreeditMarkers(rc.parent_alpha, markers);
+                for (const LLLineEditor::VkPreeditMarker& marker : markers)
+                {
+                    LLRect marker_screen;
+                    line_editor->localRectToScreen(marker.local_rect, &marker_screen);
+                    LLVKUIRender::emitScreenRect(marker_screen, rc.dev_h,
+                                                 rc.ui_scale_y, marker.color);
                     rc.emitted++;
                 }
                 LLVKText::render(state.font, state.text, state.screen_x, state.screen_baseline,
@@ -1012,7 +1279,7 @@ namespace
         }
         // </VulkanStorm>
 
-        // <VulkanStorm> Registered per-class hooks (e.g. LLMediaCtrl's
+        // </VulkanStorm> Registered per-class hooks (e.g. LLMediaCtrl's
         // no-media backdrop), supplied by newview for classes llvulkan must
         // not depend on.
         if (!s_hooks.empty())
@@ -1025,15 +1292,131 @@ namespace
         }
         // </VulkanStorm>
 
+        // Additional per-widget chrome passes (llvkuiwidgets.cpp /
+        // llvkuifolder.cpp): progress bars, badges, multi-sliders, editor
+        // extras, accordion chrome, folder-view rows, stat widgets, etc.
+        // <VulkanStorm> diagnostic: VULKANSTORM_NO_WIDGETS=1 disables the
+        // additional widget passes (isolates them from the core walker).
+        static const bool s_no_widgets = getenv("VULKANSTORM_NO_WIDGETS") != nullptr;
+        if (!s_no_widgets)
+        {
+            LLVKUIWidgets::renderChrome(rc, view);
+            LLVKUIFolder::renderChrome(rc, view);
+        }
+
         // Recurse children in painter's order. mChildList front = top-most, so
         // reverse iteration draws back-to-front (deepest first).
+        //
+        // Clipping: scroll containers clip only their scrolled content child
+        // (the scrollbars/border stay outside the clip, as in
+        // LLScrollContainer::draw()); registered clip hooks clip a view's
+        // whole subtree (the LLScreenClipRect pattern in newview widgets).
+        const LLScrollContainer* scroller =
+            dynamic_cast<const LLScrollContainer*>(view);
+        const LLView* scrolled_view =
+            scroller ? scroller->getVkScrolledView() : nullptr;
+        LLRect scroller_clip;
+        const bool has_scroller_clip =
+            scrolled_view && scroller->getVkScrolledClipRect(scroller_clip);
+
+        LLRect subtree_clip;
+        bool has_subtree_clip = false;
+        if (!s_clip_hooks.empty())
+        {
+            auto clip_it = s_clip_hooks.find(&typeid(*view));
+            if (clip_it != s_clip_hooks.end())
+            {
+                has_subtree_clip = clip_it->second(view, subtree_clip);
+            }
+        }
+        if (!has_subtree_clip)
+        {
+            has_subtree_clip = LLVKUIWidgets::subtreeClip(view, subtree_clip);
+        }
+
+        F32 saved_alpha = rc.parent_alpha;
+        if (!s_alpha_hooks.empty())
+        {
+            auto alpha_it = s_alpha_hooks.find(&typeid(*view));
+            if (alpha_it != s_alpha_hooks.end())
+            {
+                rc.parent_alpha *= alpha_it->second(view);
+            }
+        }
+        rc.parent_alpha *= LLVKUIWidgets::subtreeAlpha(view);
+
+        if (has_subtree_clip)
+        {
+            pushClip(rc, subtree_clip);
+        }
         rc.depth++;
         for (LLView::child_list_const_reverse_iter_t it = view->getChildList()->rbegin();
              it != view->getChildList()->rend(); ++it)
         {
-            renderView(rc, *it);
+            const LLView* child = *it;
+            // <VulkanStorm> An open combo's dropdown list is a registered
+            // popup: LLPopupView re-renders it above everything via
+            // renderOverlaySubtree(). Skip the in-tree copy (which runs under
+            // the combo's parent layout clip and fights the overlay on hover).
+            if (!rc.in_overlay)
+            {
+                if (const LLComboBox* combo = dynamic_cast<const LLComboBox*>(view))
+                {
+                    const LLScrollListCtrl* open_list = combo->getVkList();
+                    if (open_list && child == open_list && open_list->getVisible())
+                    {
+                        continue;
+                    }
+                }
+            }
+            // </VulkanStorm>
+            const bool clip_child =
+                has_scroller_clip && child == scrolled_view;
+            if (clip_child)
+            {
+                pushClip(rc, scroller_clip);
+            }
+            LLRect widget_child_clip;
+            const bool has_widget_child_clip =
+                LLVKUIWidgets::childClip(view, child, widget_child_clip);
+            if (has_widget_child_clip)
+            {
+                pushClip(rc, widget_child_clip);
+            }
+            // <VulkanStorm> LLLayoutStack::draw() clips each LLLayoutPanel
+            // child to its layout rect (this keeps e.g. the login panel out
+            // of the menu strip). Reproduce with the clip stack.
+            LLRect layout_child_clip;
+            const LLLayoutStack* layout_stack =
+                dynamic_cast<const LLLayoutStack*>(view);
+            const bool has_layout_clip =
+                layout_stack &&
+                layout_stack->getVkPanelClipRect(child, layout_child_clip);
+            if (has_layout_clip)
+            {
+                pushClip(rc, layout_child_clip);
+            }
+            // </VulkanStorm>
+            renderView(rc, child);
+            if (has_layout_clip)
+            {
+                popClip(rc);
+            }
+            if (has_widget_child_clip)
+            {
+                popClip(rc);
+            }
+            if (clip_child)
+            {
+                popClip(rc);
+            }
         }
         rc.depth--;
+        if (has_subtree_clip)
+        {
+            popClip(rc);
+        }
+        rc.parent_alpha = saved_alpha;
     }
 }
 
@@ -1052,14 +1435,30 @@ namespace LLVKUIRender
         if (hook) s_prepare_hooks[&type] = hook;
     }
 
+    void registerViewClipHook(const std::type_info& type, ViewClipHook hook)
+    {
+        if (hook) s_clip_hooks[&type] = hook;
+    }
+
+    void registerViewSubtreeAlphaHook(const std::type_info& type, ViewSubtreeAlphaHook hook)
+    {
+        if (hook) s_alpha_hooks[&type] = hook;
+    }
+
     void renderOverlaySubtree(const LLView* root)
     {
         if (!root || !s_active_render_ctx) return;
 
         // OpenGL draws a registered popup once in its ordinary hierarchy and
         // again from LLPopupView above the remaining UI. Share the enclosing
-        // Vulkan context so the second traversal has identical state/order.
-        renderView(*s_active_render_ctx, root);
+        // Vulkan context so the second traversal has identical state/order,
+        // and flag it so popup-owned subtrees (a combo's open list) render
+        // here rather than in the in-tree walk.
+        RenderCtx& rc = *s_active_render_ctx;
+        const bool saved = rc.in_overlay;
+        rc.in_overlay = true;
+        renderView(rc, root);
+        rc.in_overlay = saved;
     }
 
     void prepareFrame(LLVKContext* context, LLView* root)

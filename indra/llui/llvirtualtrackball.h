@@ -89,6 +89,25 @@ public:
 
     void    draw() override;
 
+    // <VulkanStorm> GL-free state for the Vulkan UI walker (mirrors draw()).
+    struct VkDrawState
+    {
+        LLRect      touch_rect;         // screen space
+        std::string sphere_image;
+        LLColor4    sphere_color;
+        S32         thumb_x = 0;        // screen coords (image center)
+        S32         thumb_y = 0;
+        std::string thumb_image;
+    };
+    void            getVkDrawState(F32 alpha, VkDrawState& out) const;
+    // Image names for the walker's intrinsic-size resolution + the touch-area
+    // reconciliation (the GL LLUIImage pointers are null without a context).
+    std::string     getVkSphereImageName() const;
+    // Reconcile the touch area + label visibility (draw()'s state half).
+    // sphere_width/height are the Vulkan-decoded intrinsic size.
+    void            prepareVkDraw(S32 sphere_width, S32 sphere_height);
+    // </VulkanStorm>
+
     void    setValue(const LLSD& value) override;
     void    setValue(F32 x, F32 y, F32 z, F32 w);
     LLSD    getValue() const override;
@@ -149,6 +168,17 @@ private:
     LLUIImage*     mImgBtnRotRight;
     LLUIImage*     mImgBtnRotBottom;
     LLUIImage*     mImgSphere;
+
+    // <VulkanStorm> XUI image names + decoded sphere size for the GL-free
+    // Vulkan path; mVkTouchAreaFallback tracks that the touch area was sized
+    // without the GL image and still needs the decoded size.
+    std::string     mVkImgSphere;
+    std::string     mVkImgSunFront;
+    std::string     mVkImgSunBack;
+    std::string     mVkImgMoonFront;
+    std::string     mVkImgMoonBack;
+    bool            mVkTouchAreaFallback = false;
+    // </VulkanStorm>
 
     LLQuaternion   mValue;
     ThumbMode      mThumbMode;

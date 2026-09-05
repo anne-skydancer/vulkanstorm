@@ -267,6 +267,12 @@ public:
 
     // virtuals
     void draw();
+
+    // <VulkanStorm> The layout/state half of draw() (button panel visibility,
+    // command-driven button enable/toggle sync, layout, drag caret), without
+    // any rendering; the Vulkan UI walker calls this before walking children.
+    void prepareVkDraw();
+    // </VulkanStorm>
     void reshape(S32 width, S32 height, bool called_from_parent = true);
     bool handleRightMouseDown(S32 x, S32 y, MASK mask);
     virtual bool handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,

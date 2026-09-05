@@ -48,6 +48,23 @@ public:
     virtual void setValue(const LLSD& value) override;
     LLUUID getImageAssetId() { return mImageID; }
     LLPointer<LLViewerFetchedTexture> getImage() {return mImage;}
+
+    // <VulkanStorm> GL-free state for the Vulkan UI renderer: the requested
+    // image asset and whether a usable texture has been resolved/loaded.
+    // Read-only; LLIconCtrl::draw() equivalent state comes from the base
+    // class walk, this only adds the dynamic texture identity. A hook should
+    // use the UUID for its own dynamic upload.
+    struct VkDrawState
+    {
+        LLUUID image_id;            // mImageID, null when no image requested
+        bool has_texture = false;   // mImage resolved (GL path)
+        bool loaded = false;        // full dimensions known (matches onImageLoaded check)
+        S32 full_width = 0;
+        S32 full_height = 0;
+    };
+    VkDrawState getVkDrawState() const;
+    // </VulkanStorm>
+
     void draw() override;
 
     typedef boost::signals2::signal<void(bool success, LLViewerFetchedTexture* imagep)> image_loaded_signal_t;

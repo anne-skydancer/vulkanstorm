@@ -74,6 +74,21 @@ LLAccordionCtrl::LLAccordionCtrl() : LLPanel()
 //---------------------------------------------------------------------------------
 void LLAccordionCtrl::draw()
 {
+    // <VulkanStorm> the bookkeeping below moved to prepareVkDraw() so the
+    // GL-free Vulkan walker can run it without entering draw().
+    prepareVkDraw();
+    // </VulkanStorm>
+
+    LLRect local_rect(0, getRect().getHeight(), getRect().getWidth(), 0);
+
+    LLLocalClipRect clip(local_rect);
+
+    LLPanel::draw();
+}
+
+// <VulkanStorm>
+void LLAccordionCtrl::prepareVkDraw()
+{
     if (mAutoScrolling)
     {
         // add acceleration to autoscroll
@@ -86,13 +101,8 @@ void LLAccordionCtrl::draw()
     }
     // clear this flag to be set on next call to autoScroll
     mAutoScrolling = false;
-
-    LLRect local_rect(0, getRect().getHeight(), getRect().getWidth(), 0);
-
-    LLLocalClipRect clip(local_rect);
-
-    LLPanel::draw();
 }
+// </VulkanStorm>
 
 //---------------------------------------------------------------------------------
 bool LLAccordionCtrl::postBuild()

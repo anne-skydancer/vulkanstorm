@@ -358,6 +358,15 @@ public:
         LLColor4 caret_color;
     };
     VkTextState getVkTextState(F32 alpha) const;
+
+    // IME preedit underline markers (draw()'s hasPreeditString() block), in
+    // editor-LOCAL coordinates; empty when no preedit is active.
+    struct VkPreeditMarker
+    {
+        LLRect   local_rect;
+        LLColor4 color;
+    };
+    void getVkPreeditMarkers(F32 alpha, std::vector<VkPreeditMarker>& out) const;
     // </VulkanStorm>
 
     void setShowContextMenu(bool show) { mShowContextMenu = show; }

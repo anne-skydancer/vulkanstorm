@@ -13,17 +13,17 @@
 #include "llvkuiimage.h"
 
 #include "llerror.h"
-#include "lldir.h"
 #include "llimage.h"          // LLImageFormatted::createFromExtension, LLImageRaw
 #include "llmath.h"           // ll_round, lerp, llclamp, llmin, llmax
 #include "llrect.h"
+// <VulkanStorm> shared GL-free UI image declaration registry (llui)
+#include "lluiimagedecls.h"
+// </VulkanStorm>
 #include "llvkcontext.h"
 #include "llvkui2d.h"
-#include "llxmlnode.h"        // LLXMLNode (GL-free XML parse)
 #include "v4color.h"
 
 #include <algorithm>
-#include <cstdio>
 #include <cstdlib>
 #include <map>
 #include <string>
@@ -59,16 +59,6 @@ namespace
         bool ok = false;
     };
     std::map<std::string, DynamicRec> s_dynamic;
-
-    struct ImageDecl
-    {
-        std::string file_name;
-        LLRect clip;
-        LLRect scale;
-        LLVKUIImage::ScaleStyle style = LLVKUIImage::ScaleStyle::Inner;
-        bool has_clip = false;
-        bool has_scale = false;
-    };
 
     // ---- helpers ----------------------------------------------------------
 
@@ -293,73 +283,35 @@ namespace LLVKUIImage
         if (s_ready || !ctx) return;
         s_ctx = ctx;
 
-        std::vector<std::string> paths =
-            gDirUtilp->findSkinnedFilenames(LLDir::TEXTURES, "textures.xml", LLDir::ALL_SKINS);
-        if (paths.empty())
+        // <VulkanStorm> Declarations come from the shared GL-free registry
+        // (llui/lluiimagedecls.*) — the same parse + ALL_SKINS merge the GL
+        // backend consumes — instead of re-parsing textures.xml here. The
+        // registry's merge semantics (specific-over-generic, partial
+        // overrides retaining omitted fields) are exactly what this function
+        // previously implemented by hand.
+        if (!LLUIImageDecls::load())
         {
             LL_WARNS("Vulkan") << "LLVKUIImage: no textures.xml found" << LL_ENDL;
             s_ready = true; // avoid retry storms; draws fall back to solid
             return;
         }
+        // Resolve every declaration through the CURRENT_SKIN search path
+        // (permits PNG-only theme overrides), as this loader did before.
+        LLUIImageDecls::resolvePaths();
 
-        // ALL_SKINS is generic-to-specific. Merge later declarations over
-        // earlier ones just as LLUIImageList does for OpenGL, retaining fields
-        // omitted by a partial skin override.
-        std::map<std::string, ImageDecl> declarations;
-        for (const std::string& p : paths)
-        {
-            LLXMLNodePtr root;
-            if (!LLXMLNode::parseFile(p, root, nullptr) || root.isNull()) continue;
-            for (LLXMLNodePtr child = root->getFirstChild(); child.notNull(); child = child->getNextSibling())
-            {
-                if (!child->hasName("texture")) continue;
-                std::string name, file_name;
-                if (!child->getAttributeString("name", name) || name.empty()) continue;
-                ImageDecl& decl = declarations[name];
-                if (decl.file_name.empty()) decl.file_name = name;
-                if (child->getAttributeString("file_name", file_name) && !file_name.empty())
-                    decl.file_name = file_name;
-
-                // clip/scale are pixel rects expressed as dotted sub-attributes
-                // (clip.left/clip.top/clip.right/clip.bottom), NOT a single
-                // string attribute. Read each sub-attribute as S32.
-                std::string scale_type = "scale_inner";
-                auto rd = [&](const char* base, LLRect& out)
-                {
-                    char a[64];
-                    S32 l, t, r, b;
-                    snprintf(a, sizeof(a), "%s.left",   base); if (!child->getAttributeS32(a, l)) return false;
-                    snprintf(a, sizeof(a), "%s.top",    base); if (!child->getAttributeS32(a, t)) return false;
-                    snprintf(a, sizeof(a), "%s.right",  base); if (!child->getAttributeS32(a, r)) return false;
-                    snprintf(a, sizeof(a), "%s.bottom", base); if (!child->getAttributeS32(a, b)) return false;
-                    out.mLeft = l; out.mTop = t; out.mRight = r; out.mBottom = b;
-                    return true;
-                };
-                LLRect clip_px, scale_px;
-                const bool has_clip  = rd("clip",  clip_px);
-                const bool has_scale = rd("scale", scale_px);
-                if (has_clip)  { decl.clip = clip_px; decl.has_clip = true; }
-                if (has_scale) { decl.scale = scale_px; decl.has_scale = true; }
-                if (child->getAttributeString("scale_type", scale_type))
-                    decl.style = (scale_type == "scale_outer") ? ScaleStyle::Outer : ScaleStyle::Inner;
-            }
-        }
-
-        for (const auto& entry : declarations)
+        for (const auto& entry : LLUIImageDecls::getDecls())
         {
             const std::string& name = entry.first;
-            const ImageDecl& decl = entry.second;
+            const LLUIImageDecls::Decl& decl = entry.second;
             ImageRec rec;
-            rec.style = decl.style;
+            rec.style = (decl.scale_style == LLUIImageDecls::SCALE_OUTER)
+                ? ScaleStyle::Outer : ScaleStyle::Inner;
 
-            // OpenGL resolves the merged filename through the current skin
-            // search path, which also permits PNG-only theme overrides.
-            const std::string full =
-                gDirUtilp->findSkinnedFilename(LLDir::TEXTURES, decl.file_name);
+            const std::string& full = decl.resolved_path;
             if (full.empty())
             {
                 LL_DEBUGS("Vulkan") << "LLVKUIImage: no skinned file for "
-                                    << name << " (" << decl.file_name << ")" << LL_ENDL;
+                                    << name << " (" << decl.getFileName() << ")" << LL_ENDL;
                 s_images[name] = rec;
                 continue;
             }
@@ -372,18 +324,19 @@ namespace LLVKUIImage
                 continue;
             }
             rec.w = w; rec.h = h;
-            rec.clip = decl.has_clip
-                ? LLRectf(llclamp((F32)decl.clip.mLeft / (F32)w, 0.f, 1.f),
-                          llclamp((F32)decl.clip.mTop / (F32)h, 0.f, 1.f),
-                          llclamp((F32)decl.clip.mRight / (F32)w, 0.f, 1.f),
-                          llclamp((F32)decl.clip.mBottom / (F32)h, 0.f, 1.f))
+            rec.clip = decl.clip_region != LLRect::null
+                ? LLRectf(llclamp((F32)decl.clip_region.mLeft / (F32)w, 0.f, 1.f),
+                          llclamp((F32)decl.clip_region.mTop / (F32)h, 0.f, 1.f),
+                          llclamp((F32)decl.clip_region.mRight / (F32)w, 0.f, 1.f),
+                          llclamp((F32)decl.clip_region.mBottom / (F32)h, 0.f, 1.f))
                 : LLRectf(0.f, 1.f, 1.f, 0.f);
-            rec.scale = decl.has_scale
-                ? LLRectf(llclamp((F32)decl.scale.mLeft / (F32)w, 0.f, 1.f),
-                          llclamp((F32)decl.scale.mTop / (F32)h, 0.f, 1.f),
-                          llclamp((F32)decl.scale.mRight / (F32)w, 0.f, 1.f),
-                          llclamp((F32)decl.scale.mBottom / (F32)h, 0.f, 1.f))
+            rec.scale = decl.scale_region != LLRect::null
+                ? LLRectf(llclamp((F32)decl.scale_region.mLeft / (F32)w, 0.f, 1.f),
+                          llclamp((F32)decl.scale_region.mTop / (F32)h, 0.f, 1.f),
+                          llclamp((F32)decl.scale_region.mRight / (F32)w, 0.f, 1.f),
+                          llclamp((F32)decl.scale_region.mBottom / (F32)h, 0.f, 1.f))
                 : LLRectf(0.f, 1.f, 1.f, 0.f);
+            // </VulkanStorm>
             std::string error;
             if (!ctx->createTexture2D(rgba.data(), (uint32_t)w, (uint32_t)h,
                                       rec.tex, error, /*linear=*/true))

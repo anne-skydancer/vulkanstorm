@@ -76,9 +76,48 @@ public:
 
     /*virtual*/ LLRect getRequiredRect();   // Return the height of this object, given the set options.
 
+    // <VulkanStorm> GL-free draw state for the Vulkan UI walker.
+    // prepareVkDraw() performs draw()'s value computation and state mutation
+    // (display-value rate limiting, range smoothing, auto-scaling) once per
+    // frame; getVkDrawState() exposes the computed geometry in widget-LOCAL
+    // coordinates (bottom-left origin, same frame draw() renders in).
+    struct VkTick
+    {
+        LLRect      rect;           // tick mark quad (local)
+        bool        labeled = false;
+        LLWString   label;
+        F32         label_x = 0.f;  // local coords
+        F32         label_y = 0.f;
+        LLFontGL::VAlign label_valign = LLFontGL::VCENTER;
+    };
+    struct VkDrawState
+    {
+        bool        valid = false;          // stat bound
+        LLWString   label;
+        std::string value_text;
+        bool        horizontal = true;
+        LLRect      bar_rect;               // local
+        bool        bar_visible = false;
+        bool        band_valid = false;
+        LLRect      band_rect;              // min..max red band (local)
+        bool        history_mode = false;
+        std::vector<LLRect> hist_quads;     // per-period min..max quads (local)
+        bool        cur_valid = false;
+        LLRect      cur_rect;               // current-value marker (local)
+        LLRect      mean_rect;              // mean marker (local)
+        std::vector<VkTick> ticks;
+    };
+    void prepareVkDraw();
+    const VkDrawState& getVkDrawState() const { return mVkState; }
+    // </VulkanStorm>
+
 private:
     void drawLabelAndValue( F32 mean, std::string &unit_label, LLRect &bar_rect, S32 decimal_digits );
     void drawTicks( F32 min, F32 max, F32 value_scale, LLRect &bar_rect );
+
+    // <VulkanStorm>
+    VkDrawState  mVkState;
+    // </VulkanStorm>
 
     F32          mTargetMinBar,
                  mTargetMaxBar,

@@ -127,6 +127,18 @@ std::string LLDragHandleTop::getTitle() const
     return mTitleBox == NULL ? LLStringUtil::null : mTitleBox->getText();
 }
 
+// <VulkanStorm>
+void LLDragHandle::prepareVkDraw()
+{
+    // Colorize the text to match the frontmost state (both subclasses' draw()
+    // do exactly this before drawing children).
+    if (mTitleBox)
+    {
+        mTitleBox->setEnabled(getForeground());
+    }
+}
+// </VulkanStorm>
+
 
 void LLDragHandleLeft::setTitle(const std::string& )
 {

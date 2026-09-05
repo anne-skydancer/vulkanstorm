@@ -52,6 +52,12 @@ public:
     void draw() override;
     void hide();
 
+    // <VulkanStorm> The layout/state half of draw() (notification-area
+    // reshape, expired-notification cleanup, background visibility), without
+    // any rendering; the Vulkan UI walker calls this before walking children.
+    void prepareVkDraw();
+    // </VulkanStorm>
+
     bool isShown() const;
 
     void setBackgroundImage(LLUIImage* image);

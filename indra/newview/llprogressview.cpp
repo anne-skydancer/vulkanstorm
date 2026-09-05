@@ -63,6 +63,11 @@ S32 gStartImageWidth = 1;
 S32 gStartImageHeight = 1;
 const F32 FADE_TO_WORLD_TIME = 1.0f;
 
+// <VulkanStorm> decoded start-screen pixels, retained for the Vulkan upload
+// bridge (the local gStartTexture drops its raw image after upload).
+static LLPointer<LLImageRaw> sVkStartRawImage;
+// </VulkanStorm>
+
 static LLPanelInjector<LLProgressView> r("progress_view");
 static LLPanelInjector<LLProgressViewMini> r_mini("progress_view_mini");
 
@@ -343,9 +348,95 @@ void LLProgressView::drawLogos(F32 alpha)
     }
 }
 
+// <VulkanStorm> GL-free replica of the state draw() uses; no GL, no side effects.
+LLProgressView::VkDrawState LLProgressView::getVkDrawState() const
+{
+    VkDrawState state;
+
+    state.fading_from_login = mFadeFromLoginTimer.getStarted();
+    state.fading_to_world = mFadeToWorldTimer.getStarted();
+    state.media_ctrl_visible = mMediaCtrl && mMediaCtrl->getVisible();
+
+    if (state.fading_from_login)
+    {
+        state.fade_elapsed = mFadeFromLoginTimer.getElapsedTimeF32();
+        state.alpha = clamp_rescale(state.fade_elapsed, 0.f, FADE_TO_WORLD_TIME, 0.f, 1.f);
+    }
+    else if (state.fading_to_world)
+    {
+        state.fade_elapsed = mFadeToWorldTimer.getElapsedTimeF32();
+        state.alpha = clamp_rescale(state.fade_elapsed, 0.f, FADE_TO_WORLD_TIME, 1.f, 0.f);
+    }
+
+    // drawStartTexture(): textured quad when gStartTexture is available,
+    // solid black rect otherwise; the quad is aspect-corrected via the same
+    // translate/scale drawStartTexture() applies to a unit local rect.
+    state.draw_start_texture = gStartTexture.notNull();
+    state.start_image_width = gStartImageWidth;
+    state.start_image_height = gStartImageHeight;
+    if (gStartTexture.notNull())
+    {
+        state.start_texture_id = gStartTexture->getID();
+        // <VulkanStorm> CPU pixels for the GL-free upload bridge (retained at
+        // decode time; local textures drop their raw image after upload).
+        state.start_raw = sVkStartRawImage.get();
+        // </VulkanStorm>
+    }
+
+    LLRect start_local = getLocalRect();
+    if (gStartTexture.notNull())
+    {
+        F32 image_aspect = (F32)gStartImageWidth / (F32)gStartImageHeight;
+        F32 width = (F32)getRect().getWidth();
+        F32 height = (F32)getRect().getHeight();
+        F32 view_aspect = width / height;
+        if (image_aspect > view_aspect)
+        {
+            F32 scale = image_aspect / view_aspect;
+            F32 offset = -0.5f * (scale - 1.f) * width;
+            start_local.mLeft = (S32)ll_round(offset);
+            start_local.mRight = (S32)ll_round(scale * width + offset);
+        }
+        else
+        {
+            F32 scale = view_aspect / image_aspect;
+            F32 offset = -0.5f * (scale - 1.f) * height;
+            start_local.mBottom = (S32)ll_round(offset);
+            start_local.mTop = (S32)ll_round(scale * height + offset);
+        }
+    }
+    localRectToScreen(start_local, &state.start_texture_rect);
+
+    // drawLogos(): logo rects are relative to the logos label origin.
+    if (!mLogosList.empty() && mLogosLabel)
+    {
+        S32 offset_x, offset_y;
+        mLogosLabel->localPointToScreen(0, 0, &offset_x, &offset_y);
+        state.logos.reserve(mLogosList.size());
+        for (std::vector<TextureData>::const_iterator iter = mLogosList.begin();
+             iter != mLogosList.end(); ++iter)
+        {
+            VkDrawState::VkLogo logo;
+            logo.rect = iter->mDrawRect;
+            logo.rect.translate(offset_x, offset_y);
+            logo.clip_rect = iter->mClipRect;
+            logo.offset_rect = iter->mOffsetRect;
+            logo.color = UI_VERTEX_COLOR % state.alpha;
+            logo.image_name = iter->mVkImageName;
+            logo.texture_id = iter->mTexturep.notNull() ? iter->mTexturep->getID() : LLUUID::null;
+            logo.raw = iter->mRawImage.get();
+            state.logos.push_back(logo);
+        }
+    }
+
+    return state;
+}
+// </VulkanStorm>
+
 void LLProgressView::draw()
 {
     static LLTimer timer;
+
 
     if (mFadeFromLoginTimer.getStarted())
     {
@@ -470,6 +561,11 @@ void LLProgressView::loadLogo(const std::string &path,
     data.mDrawRect = pos_rect;
     data.mClipRect = clip_rect;
     data.mOffsetRect = offset_rect;
+    // <VulkanStorm> keep the source file name for the GL-free Vulkan path
+    data.mVkImageName = gDirUtilp->getBaseFileName(path);
+    // <VulkanStorm> retain the decoded pixels for the Vulkan upload bridge
+    data.mRawImage = raw;
+    // </VulkanStorm>
     mLogosList.push_back(data);
 }
 
@@ -538,12 +634,12 @@ void LLProgressView::initLogos()
 
 void LLProgressView::initStartTexture(S32 location_id, bool is_in_production)
 {
+    sVkStartRawImage = NULL;    // <VulkanStorm/> drop any previous splash pixels
     if (gStartTexture.notNull())
     {
         gStartTexture = NULL;
         LL_INFOS("AppInit") << "re-initializing start screen" << LL_ENDL;
     }
-
     LL_DEBUGS("AppInit") << "Loading startup bitmap..." << LL_ENDL;
 
     U8 image_codec = IMG_CODEC_PNG;
@@ -600,6 +696,10 @@ void LLProgressView::initStartTexture(S32 location_id, bool is_in_production)
             // HACK: getLocalTexture allows only power of two dimentions
             raw->expandToPowerOfTwo();
             gStartTexture = LLViewerTextureManager::getLocalTexture(raw.get(), false);
+            // <VulkanStorm> retain the decoded pixels for the Vulkan upload
+            // bridge (local textures drop their raw image after upload).
+            sVkStartRawImage = raw;
+            // </VulkanStorm>
         }
     }
 
@@ -623,6 +723,7 @@ void LLProgressView::initTextures(S32 location_id, bool is_in_production)
 void LLProgressView::releaseTextures()
 {
     gStartTexture = NULL;
+    sVkStartRawImage = NULL;    // <VulkanStorm/>
     mLogosList.clear();
 
     childSetVisible("panel_top_spacer", true);

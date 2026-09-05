@@ -38,6 +38,13 @@ namespace
     struct Font
     {
         FT_Face face = nullptr;
+        // <VulkanStorm> Fallback face for glyphs the primary face cannot
+        // rasterize (color-emoji/bitmap fonts like Twitter Color Emoji have no
+        // outline ASCII glyphs). Loaded lazily from the default UI font.
+        FT_Face fallback_face = nullptr;
+        std::string fallback_filename;
+        FT_F26Dot6 fallback_size = 0;
+        // </VulkanStorm>
         std::map<llwchar, Glyph> glyphs;
         std::vector<U8> pixels;
         U32 pen_x = 1, pen_y = 1, row_h = 0;
@@ -88,6 +95,20 @@ namespace
         created->pixels.assign(ATLAS_SIZE * ATLAS_SIZE * 4, 0);
         Font* result = created.get();
         s_fonts[font] = std::move(created);
+        // <VulkanStorm> prepare the fallback face (default UI font) so
+        // bitmap/emoji-only fonts can render plain text glyphs. The default
+        // SansSerif face is the same source the working menu text uses.
+        LLFontGL* fallback_gl = LLFontGL::getFontSansSerif();
+        if (fallback_gl && fallback_gl != font)
+        {
+            LLFontGL::VkFaceInfo fb;
+            if (fallback_gl->getVkFaceInfo(fb) && fb.filename != info.filename)
+            {
+                result->fallback_filename = fb.filename;
+                result->fallback_size = (FT_F26Dot6)ll_round(fb.point_size * 64.f);
+            }
+        }
+        // </VulkanStorm>
         return result;
     }
 
@@ -96,11 +117,45 @@ namespace
         auto old = font.glyphs.find(ch);
         if (old != font.glyphs.end()) return &old->second;
         FT_UInt index = FT_Get_Char_Index(font.face, (FT_ULong)ch);
-        if (FT_Load_Glyph(font.face, index, FT_LOAD_FORCE_AUTOHINT) ||
+
+        FT_Int32 load_flags = FT_LOAD_FORCE_AUTOHINT;
+        if (FT_Load_Glyph(font.face, index, load_flags) ||
             FT_Render_Glyph(font.face->glyph, FT_RENDER_MODE_NORMAL))
             return nullptr;
+        FT_GlyphSlot slot = font.face->glyph;
+        // The primary face cannot rasterize this glyph (color/bitmap emoji
+        // fonts have no outline ASCII). Fall back to the default UI font face.
+        if (slot->advance.x == 0 && slot->bitmap.width == 0 &&
+            !font.fallback_filename.empty())
+        {
+            if (!font.fallback_face)
+            {
+                if (FT_New_Face(s_library, font.fallback_filename.c_str(), 0,
+                                &font.fallback_face))
+                {
+                    font.fallback_face = nullptr;
+                }
+                else
+                {
+                    FT_Set_Char_Size(font.fallback_face, 0, font.fallback_size,
+                                     (FT_UInt)LLFontGL::sHorizDPI, (FT_UInt)LLFontGL::sVertDPI);
+                }
+            }
+            if (font.fallback_face)
+            {
+                FT_UInt fb_index = FT_Get_Char_Index(font.fallback_face, (FT_ULong)ch);
+                if (FT_Load_Glyph(font.fallback_face, fb_index, FT_LOAD_FORCE_AUTOHINT) ||
+                    FT_Render_Glyph(font.fallback_face->glyph, FT_RENDER_MODE_NORMAL))
+                    return nullptr;
+                slot = font.fallback_face->glyph;
+            }
+            else
+            {
+                return nullptr;
+            }
+        }
+        // </VulkanStorm>
 
-        const FT_GlyphSlot slot = font.face->glyph;
         const U32 width = slot->bitmap.width;
         const U32 height = slot->bitmap.rows;
         if (font.pen_x + width + ATLAS_GAP >= ATLAS_SIZE)
@@ -124,6 +179,17 @@ namespace
         glyph.lsb_delta = slot->lsb_delta;
         glyph.rsb_delta = slot->rsb_delta;
         glyph.glyph_index = index;
+        // <VulkanStorm> trace zero-advance / empty glyphs (dropdown smear).
+        static const bool s_dbg_adv = getenv("VULKANSTORM_ADV_DEBUG") != nullptr;
+        if (s_dbg_adv && (slot->advance.x == 0 || width == 0))
+        {
+            LL_INFOS("Vulkan") << "VKGLYPH ch='" << (char)ch
+                               << "' adv_x=" << slot->advance.x
+                               << " w=" << width << " h=" << height
+                               << " size_metrics.x_ppem=" << font.face->size->metrics.x_ppem
+                               << " face=" << (font.face->family_name ? font.face->family_name : "?") << LL_ENDL;
+        }
+        // </VulkanStorm>
         glyph.u0 = (F32)font.pen_x / ATLAS_SIZE;
         glyph.v0 = (F32)font.pen_y / ATLAS_SIZE;
         glyph.u1 = (F32)(font.pen_x + width) / ATLAS_SIZE;
@@ -240,7 +306,11 @@ namespace LLVKText
                 s_context->destroyTexture2D(font.texture);
             }
         }
-        for (auto& pair : s_fonts) if (pair.second->face) FT_Done_Face(pair.second->face);
+        for (auto& pair : s_fonts)
+        {
+            if (pair.second->face) FT_Done_Face(pair.second->face);
+            if (pair.second->fallback_face) FT_Done_Face(pair.second->fallback_face); // <VulkanStorm/>
+        }
         s_fonts.clear();
         if (s_library) FT_Done_FreeType(s_library);
         s_library = nullptr;
@@ -268,6 +338,24 @@ namespace LLVKText
         }
     }
 
+    // <VulkanStorm>
+    S32 debugGlyphCount(const LLFontGL* fontp)
+    {
+        if (!ready() || !fontp) return -1;
+        auto found = s_fonts.find(fontp);
+        if (found == s_fonts.end()) return -1;
+        return (S32)found->second->glyphs.size();
+    }
+
+    F32 debugMeasureAdvance(const LLFontGL* fontp, const LLWString& text)
+    {
+        if (!ready() || !fontp) return -1.f;
+        Font* font = getFont(fontp);
+        if (!font) return -1.f;
+        return measure(*font, text);
+    }
+    // </VulkanStorm>
+
     S32 render(const LLFontGL* fontp, const LLWString& source,
                F32 x, F32 y, const LLColor4& color,
                LLFontGL::HAlign halign, LLFontGL::VAlign valign,
@@ -293,7 +381,22 @@ namespace LLVKText
         // rendering starts. Queue submission here would occur inside the
         // swapchain render pass and can make later UI text disappear.
         if (font->dirty || font->texture.descriptor == VK_NULL_HANDLE)
+        {
+            // <VulkanStorm> diagnostic: VULKANSTORM_TEXT_DEBUG=1 logs text
+            // that is dropped because the atlas isn't uploaded/ready.
+            static const bool s_dbg = getenv("VULKANSTORM_TEXT_DEBUG") != nullptr;
+            static int s_dbg_n = 0;
+            if (s_dbg && s_dbg_n < 24)
+            {
+                ++s_dbg_n;
+                LL_INFOS("Vulkan") << "VKTEXT-DROP dirty=" << (font->dirty ? 1 : 0)
+                                   << " desc=" << (font->texture.descriptor != VK_NULL_HANDLE ? 1 : 0)
+                                   << " x=" << x << " y=" << y
+                                   << " text='" << wstring_to_utf8str(text) << "'" << LL_ENDL;
+            }
+            // </VulkanStorm>
             return 0;
+        }
 
         F32 px = x * sx;
         F32 py = y * sy;

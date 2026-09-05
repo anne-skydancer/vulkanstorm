@@ -348,6 +348,361 @@ S32 calc_num_rapid_changes(LLTrace::PeriodicRecording& periodic_recording, const
 #pragma warning(push)
 #pragma warning(disable : 4756)
 #endif
+// <VulkanStorm>
+void LLStatBar::prepareVkDraw()
+{
+    // Mirrors draw()'s computation and state mutation, storing local-space
+    // geometry in mVkState instead of emitting GL. See draw() for the
+    // authoritative order of operations (ticks run before the bars and may
+    // adjust the auto-scale targets for the NEXT frame's smoothed range).
+    mVkState = VkDrawState();
+
+    LLTrace::PeriodicRecording& frame_recording = LLTrace::get_frame_recording();
+    LLTrace::Recording& last_frame_recording = frame_recording.getLastRecording();
+
+    std::string unit_label;
+    F32         current         = 0,
+                min             = 0,
+                max             = 0,
+                mean            = 0,
+                display_value   = 0;
+    S32         num_frames      = mDisplayHistory
+                                ? mNumHistoryFrames
+                                : mNumShortHistoryFrames;
+    S32         num_rapid_changes = 0;
+    S32         decimal_digits = mDecimalDigits;
+
+    mVkState.valid = (mStat.valid != nullptr);
+    mVkState.horizontal = (mOrientation == HORIZONTAL);
+
+    switch(mStatType)
+    {
+    case STAT_COUNT:
+        {
+            const LLTrace::StatType<LLTrace::CountAccumulator>& count_stat = *mStat.countStatp;
+
+            unit_label    = std::string(count_stat.getUnitLabel()) + "/s";
+            current       = (F32)last_frame_recording.getPerSec(count_stat);
+            min           = (F32)frame_recording.getPeriodMinPerSec(count_stat, num_frames);
+            max           = (F32)frame_recording.getPeriodMaxPerSec(count_stat, num_frames);
+            mean          = (F32)frame_recording.getPeriodMeanPerSec(count_stat, num_frames);
+            if (mShowMedian)
+            {
+                display_value = (F32)frame_recording.getPeriodMedianPerSec(count_stat, num_frames);
+            }
+            else
+            {
+                display_value = mean;
+            }
+        }
+        break;
+    case STAT_EVENT:
+        {
+            const LLTrace::StatType<LLTrace::EventAccumulator>& event_stat = *mStat.eventStatp;
+
+            unit_label        = mUnitLabel.empty() ? event_stat.getUnitLabel() : mUnitLabel;
+            current           = (F32)last_frame_recording.getLastValue(event_stat);
+            min               = (F32)frame_recording.getPeriodMin(event_stat, num_frames);
+            max               = (F32)frame_recording.getPeriodMax(event_stat, num_frames);
+            mean              = (F32)frame_recording.getPeriodMean(event_stat, num_frames);
+            display_value     = mean;
+        }
+        break;
+    case STAT_SAMPLE:
+        {
+            const LLTrace::StatType<LLTrace::SampleAccumulator>& sample_stat = *mStat.sampleStatp;
+
+            unit_label        = mUnitLabel.empty() ? sample_stat.getUnitLabel() : mUnitLabel;
+            current           = (F32)last_frame_recording.getLastValue(sample_stat);
+            min               = (F32)frame_recording.getPeriodMin(sample_stat, num_frames);
+            max               = (F32)frame_recording.getPeriodMax(sample_stat, num_frames);
+            mean              = (F32)frame_recording.getPeriodMean(sample_stat, num_frames);
+            num_rapid_changes = calc_num_rapid_changes(frame_recording, sample_stat, RAPID_CHANGE_WINDOW);
+
+            if (mShowMedian)
+            {
+                display_value = (F32)frame_recording.getPeriodMedian(sample_stat, num_frames);
+            }
+            else if (num_rapid_changes / RAPID_CHANGE_WINDOW.value() > MAX_RAPID_CHANGES_PER_SEC)
+            {
+                display_value = mean;
+            }
+            else
+            {
+                display_value = current;
+                // always display current value, don't rate limit
+                mLastDisplayValue = current;
+                if (is_approx_equal((F32)(S32)display_value, display_value))
+                {
+                    decimal_digits = 0;
+                }
+            }
+        }
+        break;
+    default:
+        break;
+    }
+
+    LLRect bar_rect;
+    if (mOrientation == HORIZONTAL)
+    {
+        bar_rect.mTop    = llmax(5, getRect().getHeight() - 15);
+        bar_rect.mLeft   = 0;
+        bar_rect.mRight  = getRect().getWidth() - 40;
+        bar_rect.mBottom = llmin(bar_rect.mTop - 5, 0);
+    }
+    else // VERTICAL
+    {
+        bar_rect.mTop    = llmax(5, getRect().getHeight() - 15);
+        bar_rect.mLeft   = 0;
+        bar_rect.mRight  = getRect().getWidth();
+        bar_rect.mBottom = llmin(bar_rect.mTop - 5, 20);
+    }
+
+    mCurMaxBar = LLSmoothInterpolation::lerp(mCurMaxBar, mTargetMaxBar, 0.05f);
+    mCurMinBar = LLSmoothInterpolation::lerp(mCurMinBar, mTargetMinBar, 0.05f);
+
+    // rate limited updates
+    if (mLastDisplayValueTimer.getElapsedTimeF32() < MEAN_VALUE_UPDATE_TIME)
+    {
+        display_value = mLastDisplayValue;
+    }
+    else
+    {
+        mLastDisplayValueTimer.reset();
+    }
+
+    // drawLabelAndValue(): text only, positions resolved by the walker.
+    mVkState.label = mLabel.getWString();
+    mVkState.value_text = !llisnan(display_value)
+                        ? llformat("%10.*f %s", decimal_digits, display_value, unit_label.c_str())
+                        : LLTrans::getString("na");
+    mVkState.bar_rect = bar_rect;
+    mLastDisplayValue = display_value;
+
+    if (mDisplayBar && mStat.valid)
+    {
+        mVkState.bar_visible = true;
+
+        F32 value_scale;
+        if (mCurMaxBar == mCurMinBar)
+        {
+            value_scale = 0.f;
+        }
+        else
+        {
+            value_scale = (mOrientation == HORIZONTAL)
+                ? (bar_rect.getHeight())/(mCurMaxBar - mCurMinBar)
+                : (bar_rect.getWidth())/(mCurMaxBar - mCurMinBar);
+        }
+
+        // drawTicks(): tick geometry + label placement (and the auto-scale
+        // target adjustment from drawTicks()).
+        if (value_scale != std::numeric_limits<float>::infinity()
+            && !llisnan(min) && (mAutoScaleMax || mAutoScaleMin))
+        {
+            F32 u = LLSmoothInterpolation::getInterpolant(10.f);
+            mFloatingTargetMinBar = llmin(min, lerp(mFloatingTargetMinBar, min, u));
+            mFloatingTargetMaxBar = llmax(max, lerp(mFloatingTargetMaxBar, max, u));
+            F32 range_min = mAutoScaleMin ? mFloatingTargetMinBar : mTargetMinBar;
+            F32 range_max = mAutoScaleMax ? mFloatingTargetMaxBar : mTargetMaxBar;
+            F32 tick_value = 0.f;
+            calc_auto_scale_range(range_min, range_max, tick_value);
+            if (mAutoScaleMin) { mTargetMinBar = range_min; }
+            if (mAutoScaleMax) { mTargetMaxBar = range_max; }
+            if (mAutoScaleMin && mAutoScaleMax)
+            {
+                mTickSpacing = tick_value;
+            }
+            else
+            {
+                mTickSpacing = calc_tick_value(mTargetMinBar, mTargetMaxBar);
+            }
+        }
+
+        if (mTickSpacing > 0.f && value_scale > 0.f)
+        {
+            const S32 MIN_TICK_SPACING  = mOrientation == HORIZONTAL ? 20 : 30;
+            const S32 MIN_LABEL_SPACING = mOrientation == HORIZONTAL ? 30 : 60;
+            const S32 TICK_LENGTH = 4;
+            const S32 TICK_WIDTH = 1;
+
+            S32 last_tick = S32_MIN;
+            S32 last_label = S32_MIN;
+            F32 start = mCurMinBar < 0.f
+                ? llceil(-mCurMinBar / mTickSpacing) * -mTickSpacing
+                : 0.f;
+            for (F32 tick_value = start; ;tick_value += mTickSpacing)
+            {
+                const S32 tick_begin = llfloor(llmin((F32)(S32_MAX / 2), (tick_value - mCurMinBar)*value_scale));
+                const S32 tick_end = tick_begin + TICK_WIDTH;
+                if (tick_begin < last_tick + MIN_TICK_SPACING)
+                {
+                    continue;
+                }
+                last_tick = tick_begin;
+
+                S32 tick_decimal_digits = mDecimalDigits;
+                if (is_approx_equal((F32)(S32)tick_value, tick_value))
+                {
+                    tick_decimal_digits = 0;
+                }
+
+                VkTick tick;
+                if (mOrientation == HORIZONTAL)
+                {
+                    if (tick_begin > last_label + MIN_LABEL_SPACING)
+                    {
+                        tick.rect.set(bar_rect.mLeft, tick_end, bar_rect.mRight - TICK_LENGTH, tick_begin);
+                        tick.labeled = true;
+                        tick.label = utf8str_to_wstring(llformat("%.*f", tick_decimal_digits, tick_value));
+                        tick.label_x = (F32)bar_rect.mRight;
+                        tick.label_y = (F32)tick_begin;
+                        tick.label_valign = LLFontGL::VCENTER;
+                        last_label = tick_begin;
+                    }
+                    else
+                    {
+                        tick.rect.set(bar_rect.mLeft, tick_end, bar_rect.mRight - TICK_LENGTH/2, tick_begin);
+                    }
+                }
+                else
+                {
+                    LLWString tick_label = utf8str_to_wstring(llformat("%.*f", tick_decimal_digits, tick_value));
+                    if (tick_begin > last_label + MIN_LABEL_SPACING)
+                    {
+                        tick.rect.set(tick_begin, bar_rect.mTop, tick_end, bar_rect.mBottom - TICK_LENGTH);
+                        tick.labeled = true;
+                        tick.label = tick_label;
+                        S32 tick_label_width = LLFontGL::getFontMonospace()->getWidth(tick_label.c_str());
+                        S32 label_pos = tick_begin - ll_round((F32)tick_label_width * ((F32)tick_begin / (F32)bar_rect.getWidth()));
+                        tick.label_x = (F32)label_pos;
+                        tick.label_y = (F32)(bar_rect.mBottom - TICK_LENGTH);
+                        tick.label_valign = LLFontGL::TOP;
+                        last_label = label_pos;
+                    }
+                    else
+                    {
+                        tick.rect.set(tick_begin, bar_rect.mTop, tick_end, bar_rect.mBottom - TICK_LENGTH/2);
+                    }
+                }
+                mVkState.ticks.push_back(tick);
+                // always draw one tick value past tick_end, so we can see part of the text, if possible
+                if (tick_value > mCurMaxBar)
+                {
+                    break;
+                }
+            }
+        }
+
+        // Min..max band.
+        if (!llisnan(display_value) && frame_recording.getNumRecordedPeriods() != 0)
+        {
+            S32 begin = (S32) ((min - mCurMinBar) * value_scale);
+            if (begin < 0)
+            {
+                begin = 0;
+            }
+            S32 end = (S32) ((max - mCurMinBar) * value_scale);
+            mVkState.band_valid = true;
+            if (mOrientation == HORIZONTAL)
+            {
+                mVkState.band_rect.set(bar_rect.mLeft, end, bar_rect.mRight, begin);
+            }
+            else
+            {
+                mVkState.band_rect.set(begin, bar_rect.mTop, end, bar_rect.mBottom);
+            }
+
+            F32 span = (mOrientation == HORIZONTAL)
+                    ? (F32)(bar_rect.getWidth())
+                    : (F32)(bar_rect.getHeight());
+
+            if (mDisplayHistory && mStat.valid)
+            {
+                mVkState.history_mode = true;
+                const S32 num_values = static_cast<S32>(frame_recording.getNumRecordedPeriods()) - 1;
+                F32 min_value = 0.f,
+                    max_value = 0.f;
+
+                const S32 max_frame = llmin(num_frames, num_values);
+                U32 num_samples = 0;
+                for (S32 i = 1; i <= max_frame; i++)
+                {
+                    F32 offset = ((F32)i / (F32)num_frames) * span;
+                    LLTrace::Recording& recording = frame_recording.getPrevRecording(i);
+
+                    switch(mStatType)
+                    {
+                        case STAT_COUNT:
+                            min_value       = (F32)recording.getPerSec(*mStat.countStatp);
+                            max_value       = min_value;
+                            num_samples     = recording.getSampleCount(*mStat.countStatp);
+                            break;
+                        case STAT_EVENT:
+                            min_value       = (F32)recording.getMin(*mStat.eventStatp);
+                            max_value       = (F32)recording.getMax(*mStat.eventStatp);
+                            num_samples     = recording.getSampleCount(*mStat.eventStatp);
+                            break;
+                        case STAT_SAMPLE:
+                            min_value       = (F32)recording.getMin(*mStat.sampleStatp);
+                            max_value       = (F32)recording.getMax(*mStat.sampleStatp);
+                            num_samples     = recording.getSampleCount(*mStat.sampleStatp);
+                            break;
+                        default:
+                            break;
+                    }
+
+                    if (!num_samples) continue;
+
+                    F32 sample_min = (min_value  - mCurMinBar) * value_scale;
+                    F32 sample_max = llmax(sample_min + 1, (max_value - mCurMinBar) * value_scale);
+                    LLRect quad;
+                    if (mOrientation == HORIZONTAL)
+                    {
+                        // 1px-wide quad ending at bar_right - offset.
+                        quad.set(ll_round((F32)bar_rect.mRight - offset - 1), ll_round(sample_max),
+                                 ll_round((F32)bar_rect.mRight - offset), ll_round(sample_min));
+                    }
+                    else
+                    {
+                        quad.set(ll_round(sample_min), ll_round((F32)bar_rect.mBottom + offset + 1),
+                                 ll_round(sample_max), ll_round((F32)bar_rect.mBottom + offset));
+                    }
+                    mVkState.hist_quads.push_back(quad);
+                }
+            }
+            else
+            {
+                S32 begin_cur = (S32) ((current - mCurMinBar) * value_scale) - 1;
+                S32 end_cur = (S32) ((current - mCurMinBar) * value_scale) + 1;
+                mVkState.cur_valid = true;
+                if (mOrientation == HORIZONTAL)
+                {
+                    mVkState.cur_rect.set(bar_rect.mLeft, end_cur, bar_rect.mRight, begin_cur);
+                }
+                else
+                {
+                    mVkState.cur_rect.set(begin_cur, bar_rect.mTop, end_cur, bar_rect.mBottom);
+                }
+            }
+
+            // Mean bar.
+            const S32 mean_begin = (S32) ((mean - mCurMinBar) * value_scale) - 1;
+            const S32 mean_end = (S32) ((mean - mCurMinBar) * value_scale) + 1;
+            if (mOrientation == HORIZONTAL)
+            {
+                mVkState.mean_rect.set(bar_rect.mLeft - 2, mean_begin, bar_rect.mRight + 2, mean_end);
+            }
+            else
+            {
+                mVkState.mean_rect.set(mean_begin, bar_rect.mTop + 2, mean_end, bar_rect.mBottom - 2);
+            }
+        }
+    }
+}
+// </VulkanStorm>
+
 void LLStatBar::draw()
 {
     LLLocalClipRect _(getLocalRect());

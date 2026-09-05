@@ -56,6 +56,20 @@ namespace LLVKUIRender
     void registerViewHook(const std::type_info& type, ViewHook hook);
     void registerViewPrepareHook(const std::type_info& type, ViewPrepareHook hook);
 
+    // Whole-subtree clip hook: when the walker recurses into a registered
+    // view's children, it asks the hook for a GL-space screen clip rect (the
+    // equivalent of the GL path's LLScreenClipRect/LLLocalClipRect around the
+    // child draw). Return false for no clip. Nested clips intersect (stack
+    // semantics).
+    typedef bool (*ViewClipHook)(const LLView* view, LLRect& gl_screen_rect);
+    void registerViewClipHook(const std::type_info& type, ViewClipHook hook);
+
+    // Subtree alpha hook: returns the draw-context alpha the view pushes for
+    // itself and its descendants (e.g. LLPanelPulldown's hover fade). The
+    // walker multiplies it into the accumulated parent alpha.
+    typedef float (*ViewSubtreeAlphaHook)(const LLView* view);
+    void registerViewSubtreeAlphaHook(const std::type_info& type, ViewSubtreeAlphaHook hook);
+
     // Draw a transient popup subtree using the currently active Vulkan frame
     // context. LLPopupView owns its popup list in newview, so its registered
     // hook uses this without introducing an llvulkan -> newview dependency.

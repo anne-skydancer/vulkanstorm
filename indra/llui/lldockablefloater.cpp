@@ -83,6 +83,7 @@ bool LLDockableFloater::postBuild()
     }
 
     mDockTongue = LLUI::getUIImage("Flyout_Pointer");
+    mVkDockTongueImage = "Flyout_Pointer";  // <VulkanStorm/> retained name
     LLFloater::setDocked(true);
     return LLView::postBuild();
 }
@@ -222,16 +223,23 @@ void LLDockableFloater::setDocked(bool docked, bool pop_on_undock)
 
 void LLDockableFloater::draw()
 {
+    // <VulkanStorm> the repositioning half moved to prepareVkDraw() so the
+    // GL-free Vulkan walker can run it without entering draw(); the tongue
+    // itself is emitted by the walker via LLDockControl::getVkTongueState().
+    prepareVkDraw();
+    // </VulkanStorm>
+    LLFloater::draw();
+}
+
+// <VulkanStorm>
+void LLDockableFloater::prepareVkDraw()
+{
     if (mDockControl.get() != NULL)
     {
         mDockControl.get()->repositionDockable();
-        if (isDocked())
-        {
-            mDockControl.get()->drawToungue();
-        }
     }
-    LLFloater::draw();
 }
+// </VulkanStorm>
 
 void LLDockableFloater::setDockControl(LLDockControl* dockControl)
 {
@@ -245,12 +253,15 @@ const LLUIImagePtr& LLDockableFloater::getDockTongue(LLDockControl::DocAt dock_s
     {
     case LLDockControl::LEFT:
         mDockTongue = LLUI::getUIImage("Flyout_Left");
+        mVkDockTongueImage = "Flyout_Left";     // <VulkanStorm/>
         break;
     case LLDockControl::RIGHT:
         mDockTongue = LLUI::getUIImage("Flyout_Right");
+        mVkDockTongueImage = "Flyout_Right";    // <VulkanStorm/>
         break;
     default:
         mDockTongue = LLUI::getUIImage("Flyout_Pointer");
+        mVkDockTongueImage = "Flyout_Pointer";  // <VulkanStorm/>
         break;
     }
 

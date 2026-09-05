@@ -100,7 +100,10 @@ LLScrollListIcon::LLScrollListIcon(const LLScrollListCell::Params& p)
     mIcon(LLUI::getUIImage(p.value().asString())),
     mIconSize(0),
     mColor(p.color),
-    mAlignment(p.font_halign)
+    mAlignment(p.font_halign),
+    // <VulkanStorm> retain the XUI/call-site name for the GL-free path
+    mVkIconName(p.value().asString())
+    // </VulkanStorm>
 {}
 
 LLScrollListIcon::~LLScrollListIcon()
@@ -122,6 +125,10 @@ void LLScrollListIcon::setValue(const LLSD& value)
         // don't use default image specified by LLUUID::null, use no image in that case
         LLUUID image_id = value.asUUID();
         mIcon = image_id.notNull() ? LLUI::getUIImageByID(image_id) : LLUIImagePtr(NULL);
+        // <VulkanStorm> UUID-backed icons have no skinned name for the
+        // GL-free path (the Vulkan registry holds textures.xml entries).
+        mVkIconName.clear();
+        // </VulkanStorm>
     }
     else
     {
@@ -133,10 +140,12 @@ void LLScrollListIcon::setValue(const LLSD& value)
         else if (!value_string.empty())
         {
             mIcon = LLUI::getUIImage(value.asString());
+            mVkIconName = value_string; // <VulkanStorm/>
         }
         else
         {
             mIcon = NULL;
+            mVkIconName.clear();        // <VulkanStorm/>
         }
     }
 }
@@ -150,6 +159,20 @@ void LLScrollListIcon::setIconSize(S32 size)
 {
     mIconSize = size;
 }
+
+// <VulkanStorm>
+LLScrollListIcon::VkIconState LLScrollListIcon::getVkIconState() const
+{
+    VkIconState out;
+    out.has_icon = mIcon.notNull() || !mVkIconName.empty();
+    out.image = mIcon.notNull() ? mIcon->getName() : mVkIconName;
+    out.color = mColor;
+    out.alignment = mAlignment;
+    out.icon_size = mIconSize;
+    out.cell_width = getWidth();
+    return out;
+}
+// </VulkanStorm>
 
 S32 LLScrollListIcon::getWidth() const
 {
@@ -265,6 +288,20 @@ void LLScrollListBar::draw(const LLColor4& color, const LLColor4& highlight_colo
 
     gl_rect_2d(left, mBottom, getWidth() - mRightPad, mBottom - 1, mColor);
 }
+
+// <VulkanStorm>
+LLScrollListBar::VkBarState LLScrollListBar::getVkBarState() const
+{
+    // Mirrors draw(): right-anchored 1px bar whose left edge tracks mRatio.
+    VkBarState out;
+    const S32 bar_width = getWidth() - mLeftPad - mRightPad;
+    S32 left = (S32)(bar_width - bar_width * mRatio);
+    left = llclamp(left, mLeftPad, getWidth() - mRightPad - 1);
+    out.local_rect.set(left, mBottom, getWidth() - mRightPad, mBottom - 1);
+    out.color = mColor;
+    return out;
+}
+// </VulkanStorm>
 
 //
 // LLScrollListText
@@ -403,6 +440,31 @@ LLScrollListText::getVkTextState(const LLColor4& fallback_color) const
     out.alignment = mFontAlignment;
     out.max_pixels = mTextWidth;
     return out;
+}
+
+bool LLScrollListText::getVkHighlightRect(LLRect& local_rect) const
+{
+    // Mirrors draw()'s mHighlightCount branch (cell-local coordinates).
+    if (mHighlightCount <= 0) return false;
+
+    S32 left = 0;
+    switch(mFontAlignment)
+    {
+    case LLFontGL::LEFT:
+        left = mFont->getWidth(mText.getWString().c_str(), 1, mHighlightOffset);
+        break;
+    case LLFontGL::RIGHT:
+        left = getWidth() - mFont->getWidth(mText.getWString().c_str(), mHighlightOffset, S32_MAX);
+        break;
+    case LLFontGL::HCENTER:
+        left = (getWidth() - mFont->getWidth(mText.getWString().c_str())) / 2;
+        break;
+    }
+    local_rect.set(left - 2,
+            mFont->getLineHeight() + 1,
+            left + mFont->getWidth(mText.getWString().c_str(), mHighlightOffset, mHighlightCount) + 1,
+            1);
+    return true;
 }
 // </VulkanStorm>
 
@@ -600,7 +662,10 @@ const LLSD LLScrollListDate::getValue() const
 LLScrollListIconText::LLScrollListIconText(const LLScrollListCell::Params& p)
     : LLScrollListText(p),
     mIcon(p.value().isUUID() ? LLUI::getUIImageByID(p.value().asUUID()) : LLUI::getUIImage(p.value().asString())),
-    mPad(4)
+    mPad(4),
+    // <VulkanStorm> retain the name for the GL-free path (empty for UUID icons)
+    mVkIconName(p.value().isUUID() ? LLStringUtil::null : p.value().asString())
+    // </VulkanStorm>
 {
     mTextWidth = getWidth() - mPad /*padding*/ - mFont->getLineHeight();
 }
@@ -625,6 +690,7 @@ void LLScrollListIconText::setValue(const LLSD& value)
         // don't use default image specified by LLUUID::null, use no image in that case
         LLUUID image_id = value.asUUID();
         mIcon = image_id.notNull() ? LLUI::getUIImageByID(image_id) : LLUIImagePtr(NULL);
+        mVkIconName.clear();    // <VulkanStorm/> no skinned name for UUID icons
     }
     else
     {
@@ -636,10 +702,12 @@ void LLScrollListIconText::setValue(const LLSD& value)
         else if (!value_string.empty())
         {
             mIcon = LLUI::getUIImage(value.asString());
+            mVkIconName = value_string; // <VulkanStorm/>
         }
         else
         {
             mIcon = NULL;
+            mVkIconName.clear();        // <VulkanStorm/>
         }
     }
 }
@@ -650,6 +718,72 @@ void LLScrollListIconText::setWidth(S32 width)
     // Assume that iamge height and width is identical to font height and width
     mTextWidth = width - mPad /*padding*/ - mFont->getLineHeight();
 }
+
+// <VulkanStorm>
+S32 LLScrollListIconText::getVkTextOffset() const
+{
+    // draw() shifts LEFT-aligned text right of the icon.
+    const S32 icon_height = mFont->getLineHeight();
+    const S32 icon_space = (mIcon.notNull() || !mVkIconName.empty()) ? (icon_height + mPad) : 0;
+    return icon_space + 1;
+}
+
+bool LLScrollListIconText::getVkIcon(std::string& image, S32& icon_x, S32& icon_size) const
+{
+    if (mIcon.isNull() && mVkIconName.empty()) return false;
+
+    image = mIcon.notNull() ? mIcon->getName() : mVkIconName;
+    icon_size = mFont->getLineHeight();
+    const S32 icon_space = icon_size + mPad;
+    switch (mFontAlignment)
+    {
+    case LLFontGL::LEFT:
+        icon_x = 1;
+        break;
+    case LLFontGL::RIGHT:
+        icon_x = getWidth() - mFont->getWidth(mText.getWString().c_str()) - icon_space;
+        break;
+    case LLFontGL::HCENTER:
+    {
+        F32 center = (F32)getWidth() * 0.5f;
+        icon_x = (S32)(center - (((F32)icon_space + mFont->getWidth(mText.getWString().c_str())) * 0.5f));
+        break;
+    }
+    default:
+        icon_x = 1;
+        break;
+    }
+    return true;
+}
+
+bool LLScrollListIconText::getVkHighlightRect(LLRect& local_rect) const
+{
+    // Mirrors draw()'s highlight branch (with the icon-space shift).
+    if (mHighlightCount <= 0) return false;
+
+    const S32 icon_height = mFont->getLineHeight();
+    const S32 icon_space = (mIcon.notNull() || !mVkIconName.empty()) ? (icon_height + mPad) : 0;
+
+    S32 left = 0;
+    switch (mFontAlignment)
+    {
+    case LLFontGL::LEFT:
+        left = mFont->getWidth(mText.getWString().c_str(), icon_space + 1, mHighlightOffset);
+        break;
+    case LLFontGL::RIGHT:
+        left = getWidth() - mFont->getWidth(mText.getWString().c_str(), mHighlightOffset, S32_MAX) - icon_space;
+        break;
+    case LLFontGL::HCENTER:
+        left = (getWidth() - mFont->getWidth(mText.getWString().c_str()) - icon_space) / 2;
+        break;
+    }
+    local_rect.set(left - 2,
+        mFont->getLineHeight() + 1,
+        left + mFont->getWidth(mText.getWString().c_str(), mHighlightOffset, mHighlightCount) + 1,
+        1);
+    return true;
+}
+// </VulkanStorm>
 
 
 void LLScrollListIconText::draw(const LLColor4& color, const LLColor4& highlight_color)

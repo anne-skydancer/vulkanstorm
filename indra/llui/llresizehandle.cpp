@@ -75,6 +75,22 @@ LLResizeHandle::~LLResizeHandle()
     gFocusMgr.removeKeyboardFocusWithoutCallback(this);
 }
 
+// <VulkanStorm>
+LLResizeHandle::VkDrawState LLResizeHandle::getVkDrawState() const
+{
+    // Mirrors draw(): the "Resize_Corner" image at the local origin, only for
+    // the bottom-right corner. The name is fixed (not an XUI param), so it
+    // survives the null GL image pointer on the Vulkan path.
+    VkDrawState out;
+    out.draw_image = (mCorner == RIGHT_BOTTOM);
+    if (out.draw_image)
+    {
+        out.image = mImage.notNull() ? mImage->getName() : "Resize_Corner";
+    }
+    return out;
+}
+// </VulkanStorm>
+
 
 bool LLResizeHandle::handleMouseDown(S32 x, S32 y, MASK mask)
 {

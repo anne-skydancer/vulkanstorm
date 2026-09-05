@@ -971,6 +971,20 @@ void LLToolBar::updateLayoutAsNeeded()
 
 void LLToolBar::draw()
 {
+    // <VulkanStorm> the layout/state half moved to prepareVkDraw() so the
+    // GL-free Vulkan walker can run it without entering draw().
+    prepareVkDraw();
+    // </VulkanStorm>
+
+    LLUICtrl::draw();
+    LLIconCtrl* caret = mCaretIcon;
+    if (caret) caret->setVisible(false);
+    mDragAndDropTarget = false;
+}
+
+// <VulkanStorm>
+void LLToolBar::prepareVkDraw()
+{
     if (mButtons.empty())
     {
         mButtonPanel->setVisible(false);
@@ -1005,10 +1019,6 @@ void LLToolBar::draw()
     }
 
     updateLayoutAsNeeded();
-    // rect may have shifted during layout
-    LLUI::popMatrix();
-    LLUI::pushMatrix();
-    LLUI::translate((F32)getRect().mLeft, (F32)getRect().mBottom);
 
     // Position the caret
     if (!mCaretIcon)
@@ -1038,10 +1048,12 @@ void LLToolBar::draw()
         caret->setVisible(true);
     }
 
-    LLUICtrl::draw();
-    caret->setVisible(false);
+    // draw() consumes the drag-target flag after presenting the caret; the
+    // Vulkan path renders between prepare calls, so consume it here at the
+    // same once-per-frame cadence.
     mDragAndDropTarget = false;
 }
+// </VulkanStorm>
 
 void LLToolBar::reshape(S32 width, S32 height, bool called_from_parent)
 {

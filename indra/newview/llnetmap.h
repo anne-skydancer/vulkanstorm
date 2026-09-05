@@ -35,6 +35,8 @@
 #include "llpointer.h"
 #include "llcoord.h"
 
+#include <vector>
+
 class LLColor4U;
 class LLImageRaw;
 class LLViewerTexture;
@@ -107,6 +109,34 @@ public:
 
     // <FS:Ansariel> Synchronize double click handling throughout instances
     void            performDoubleClickAction(LLVector3d pos_global);
+
+    // <VulkanStorm> GL-free state for the Vulkan UI minimap hook
+    // (indra/newview/llvkuimaps.cpp). The Vulkan frame never runs draw(), so
+    // prepareVkDraw() performs draw()'s non-GL mutations (pan easing, CPU map
+    // layer refreshes, avatar picking) and the accessors below expose the
+    // readable state the render hook emits from.
+    struct VkAvatarDot
+    {
+        LLVector3   pos_map;                // view-local, GL bottom-left origin (Z in meters relative to camera)
+        LLColor4    color;
+        bool        unknown_relative_z = false;
+        bool        selected = false;
+    };
+    void                prepareVkDraw();
+    const LLUIColor&    getVkBackgroundColor() const    { return mBackgroundColor; }
+    F32                 getVkScale() const              { return mScale; }
+    const LLVector2&    getVkCurPan() const             { return mCurPan; }
+    F32                 getVkDotRadius() const          { return mDotRadius; }
+    F32                 getVkObjectMapPixels() const    { return mObjectMapPixels; }
+    const LLImageRaw*   getVkObjectRawImage() const     { return mObjectRawImagep.get(); }
+    const LLImageRaw*   getVkParcelRawImage() const     { return mParcelRawImagep.get(); }
+    const LLVector3d&   getVkObjectImageCenterGlobal() const { return mObjectImageCenterGlobal; }
+    const LLVector3d&   getVkParcelImageCenterGlobal() const { return mParcelImageCenterGlobal; }
+    U64                 getVkObjectSerial() const       { return mVkObjectSerial; }
+    U64                 getVkParcelSerial() const       { return mVkParcelSerial; }
+    LLVector3           vkGlobalPosToView(const LLVector3d& global_pos) { return globalPosToView(global_pos); }
+    const std::vector<VkAvatarDot>& getVkAvatarDots() const { return mVkAvatarDots; }
+    // </VulkanStorm>
 
     // <FS:Ansariel> Mark avatar feature
     static bool     hasAvatarMarkColor(const LLUUID& avatar_id) { return sAvatarMarksMap.find(avatar_id) != sAvatarMarksMap.end(); }
@@ -270,6 +300,12 @@ private:
 
     LLHandle<LLView> mPopupMenuHandle;
     uuid_vec_t      gmSelected;
+
+    // <VulkanStorm> Vulkan UI path state (see prepareVkDraw)
+    std::vector<VkAvatarDot> mVkAvatarDots;
+    U64             mVkObjectSerial = 0;    // bumped on each CPU object-layer refresh
+    U64             mVkParcelSerial = 0;    // bumped on each CPU parcel-layer refresh
+    // </VulkanStorm>
 };
 
 

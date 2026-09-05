@@ -70,6 +70,34 @@ public:
     void setInitImmediately(bool val) { mInitImmediately = val; }
     void clearTexture();
 
+    // <VulkanStorm> GL-free description of what draw() paints: border, then
+    // texture / named image / fallback image / grey-X content per branch.
+    // Read-only; does not lazily init the image like draw() does - a Vulkan
+    // hook should treat image_asset_id/image_name as authoritative and fetch
+    // or upload them itself.
+    struct VkDrawState
+    {
+        LLUUID image_asset_id;          // mImageAssetID (may be null)
+        bool has_texture = false;       // mTexturep resolved
+        S32 texture_components = 0;     // 4 => dark grey backing rect drawn
+        bool texture_fully_loaded = true;
+        std::string image_name;         // named UI image (mImagep / raw value)
+        std::string fallback_image;     // fallback image name
+        bool fallback_centered = false; // draw() centers a native-size fallback
+        S32 fallback_width = 0;         // native fallback size; 0 if unknown
+        S32 fallback_height = 0;
+        bool draw_grey_x = false;       // nothing available
+        bool border_visible = false;
+        LLColor4 border_color;
+        LLRect border_rect;             // screen space, full local rect
+        LLRect draw_rect;               // screen space, after border inset
+        bool show_loading_placeholder = false;
+        bool interactable = false;      // mInteractable (hand cursor on hover)
+        bool enabled = true;
+    };
+    VkDrawState getVkDrawState(F32 alpha) const;
+    // </VulkanStorm>
+
     virtual bool handleHover(S32 x, S32 y, MASK mask) override;
 
 protected:
@@ -90,6 +118,13 @@ private:
     LLPointer<LLViewerFetchedTexture> mTexturep;
     LLPointer<LLUIImage> mImagep;
     LLPointer<LLUIImage> mFallbackImagep;
+
+    // <VulkanStorm> raw names for the GL-free Vulkan path: the image_name
+    // value string (mImagep may be null when GL image loading is off) and the
+    // raw XUI fallback_image name.
+    std::string mVkImageName;
+    std::string mVkFallbackImageName;
+    // </VulkanStorm>
 };
 
 #endif
