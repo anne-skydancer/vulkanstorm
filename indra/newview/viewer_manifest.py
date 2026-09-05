@@ -175,6 +175,14 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             with self.prefix(src_dst="*/html"):
                 self.path("*/*/*.html")
 
+        # <FS/> Vulkanstorm: the native-Vulkan 2D pipeline loads its compiled SPIR-V
+        # shaders from <exe>/shaders/compiled/ (llvkcontext.cpp loadShaderModule).
+        # These live in source at indra/llvulkan/shaders/compiled, NOT under
+        # app_settings -- so without this the packaged/installed viewer (and a build
+        # that didn't copy them) white-screens on the Vulkan backend.
+        with self.prefix(src=os.path.join(self.args['source'], "..", "llvulkan", "shaders"), dst="shaders"):
+            self.path("compiled/*.spv")
+
         if self.is_packaging_viewer():
             with self.prefix(src_dst="app_settings"):
                 # include the extracted list of contributors
