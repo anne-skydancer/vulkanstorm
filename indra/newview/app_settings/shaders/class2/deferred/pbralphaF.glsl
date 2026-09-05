@@ -273,7 +273,20 @@ void main()
     float final_scale = 1;
     if (classic_mode > 0)
         final_scale = 1.1;
-    frag_color = max(vec4(color.rgb * final_scale,a), vec4(0));
+#ifdef ALPHA_OIT
+    vec4 oit_out = max(vec4(color.rgb * final_scale,a), vec4(0));
+    if (oit_mode == 1 && oit_append(oit_out, gl_FragCoord.z)) { discard; }
+#ifdef ALPHA_DEPTH_PEEL
+    alpha_depth_peel(oit_out, gl_FragCoord.z);
+#endif
+    frag_color = oit_out;
+#else
+    vec4 oit_out = max(vec4(color.rgb * final_scale,a), vec4(0));
+#ifdef ALPHA_DEPTH_PEEL
+    alpha_depth_peel(oit_out, gl_FragCoord.z);
+#endif
+    frag_color = oit_out;
+#endif
 }
 
 #else
@@ -327,14 +340,7 @@ void main()
     color += colorEmissive;
 
     color = linear_to_srgb(color);
-    vec4 oit_out = max(vec4(color.rgb,a), vec4(0));
-#ifdef ALPHA_OIT
-    if (oit_mode == 1 && oit_append(oit_out, gl_FragCoord.z)) { discard; }
-#endif
-#ifdef ALPHA_DEPTH_PEEL
-    alpha_depth_peel(oit_out, gl_FragCoord.z);
-#endif
-    frag_color = oit_out;
+    frag_color = max(vec4(color.rgb,a), vec4(0));
 }
 
 #endif
