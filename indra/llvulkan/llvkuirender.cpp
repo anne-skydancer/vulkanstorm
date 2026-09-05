@@ -570,7 +570,30 @@ namespace
 
     void prepareView(LLVKContext* context, const LLView* view)
     {
-        if (!context || !view || !view->getVisible()) return;
+        if (!context || !view) return;
+
+        // <VulkanStorm> A combo's dropdown list stays invisible until the combo
+        // opens, so the visibility gate below would skip it and its row glyphs
+        // would never be rasterized/uploaded (blank dropdown). Prepare the list
+        // contents explicitly before the visibility check drops this subtree.
+        if (LLComboBox* combo = dynamic_cast<LLComboBox*>(const_cast<LLView*>(view)))
+        {
+            if (LLScrollListCtrl* list = combo->getVkList())
+            {
+                list->prepareVkDraw();
+                if (LLVKText::ready())
+                {
+                    LLScrollListCtrl::VkDrawState state;
+                    list->getVkDrawState(1.f, state);
+                    for (const LLScrollListCtrl::VkRowState& row : state.rows)
+                        for (const LLScrollListCtrl::VkTextCellState& cell : row.cells)
+                            LLVKText::prepare(cell.font, cell.text);
+                }
+            }
+        }
+        // </VulkanStorm>
+
+        if (!view->getVisible()) return;
 
         // Several GL widgets finalize layout from draw(). Vulkan never calls
         // draw(), so make the same non-rendering updates before collecting
@@ -1010,6 +1033,40 @@ namespace
         {
             LLScrollListCtrl::VkDrawState state;
             list->getVkDrawState(rc.parent_alpha, state);
+
+            // <VulkanStorm> diagnostic: VULKANSTORM_LIST_DEBUG=1 logs the
+            // row/cell census for scroll lists (catches empty dropdowns).
+            static const bool s_dbg_list = getenv("VULKANSTORM_LIST_DEBUG") != nullptr;
+            if (s_dbg_list)
+            {
+                S32 total_cells = 0;
+                for (const auto& row : state.rows) total_cells += (S32)row.cells.size();
+                LL_INFOS("Vulkan") << "VKLIST '" << view->getName()
+                                   << "' rows=" << state.rows.size()
+                                   << " cells=" << total_cells
+                                   << " clip=" << state.clip_rect.mLeft << "," << state.clip_rect.mBottom
+                                   << "-" << state.clip_rect.mRight << "," << state.clip_rect.mTop
+                                   << " bg=" << (state.background_visible ? 1 : 0)
+                                   << " vis=" << (view->getVisible() ? 1 : 0) << LL_ENDL;
+                // Log the first few cells' text content + width to catch
+                // empty/zero-width dropdown rows.
+                int n = 0;
+                for (const auto& row : state.rows)
+                {
+                    for (const auto& cell : row.cells)
+                    {
+                        if (n++ >= 6) break;
+                        LL_INFOS("Vulkan") << "  VKCELL text='" << wstring_to_utf8str(cell.text)
+                                           << "' max_px=" << cell.max_pixels
+                                           << " rect=" << cell.screen_rect.mLeft << "," << cell.screen_rect.mBottom
+                                           << "-" << cell.screen_rect.mRight << "," << cell.screen_rect.mTop
+                                           << " font=" << (void*)cell.font
+                                           << " x=" << cell.screen_x << LL_ENDL;
+                    }
+                }
+            }
+            // </VulkanStorm>
+
             if (state.background_visible)
             {
                 LLVKUIRender::emitScreenRect(state.background_rect, rc.dev_h,
@@ -1039,6 +1096,20 @@ namespace
                                          cell.screen_baseline, cell.color,
                                          cell.alignment, LLFontGL::BOTTOM,
                                          cell.max_pixels);
+                        // <VulkanStorm> diagnostic: dump the scissor stack state
+                        // at the moment a combo-popup row's text renders.
+                        if (s_dbg_list && !rc.clip_stack.empty())
+                        {
+                            LLRect clip = rc.clip_stack.front();
+                            for (size_t ci = 1; ci < rc.clip_stack.size(); ++ci)
+                                clip.intersectWith(rc.clip_stack[ci]);
+                            LL_INFOS("Vulkan") << "VKCELL-SCISSOR '" << wstring_to_utf8str(cell.text)
+                                               << "' cell=(" << cell.screen_rect.mLeft << "," << cell.screen_rect.mBottom
+                                               << "-" << cell.screen_rect.mRight << "," << cell.screen_rect.mTop << ")"
+                                               << " clip=(" << clip.mLeft << "," << clip.mBottom << "-" << clip.mRight << "," << clip.mTop << ")"
+                                               << " stack=" << rc.clip_stack.size() << LL_ENDL;
+                        }
+                        // </VulkanStorm>
                     }
                 }
                 // Icon cells (LLScrollListIcon / LLScrollListIconText).
@@ -1363,7 +1434,19 @@ namespace LLVKUIRender
         // OpenGL draws a registered popup once in its ordinary hierarchy and
         // again from LLPopupView above the remaining UI. Share the enclosing
         // Vulkan context so the second traversal has identical state/order.
-        renderView(*s_active_render_ctx, root);
+        //
+        // The overlay pass must NOT inherit the clip stack: a combo list is
+        // clipped to its owner's layout rect in-tree, and the popup re-render
+        // would be scissored to that (empty) region, leaving the dropdown
+        // empty. LLPopupView::draw() in GL runs outside any such clip, so the
+        // overlay renders the popup unclipped at its overlay position.
+        RenderCtx& rc = *s_active_render_ctx;
+        std::vector<LLRect> saved_clip;
+        saved_clip.swap(rc.clip_stack);
+        LLVKUI2DSink::get().clearScissor();
+        renderView(rc, root);
+        saved_clip.swap(rc.clip_stack);   // restore the tree's clip stack
+        LLVKUIRenderInternal::applyClip(rc);  // re-assert the active scissor
     }
 
     void prepareFrame(LLVKContext* context, LLView* root)

@@ -241,6 +241,13 @@ public:
     virtual void    showList();
     virtual void    hideList();
 
+    // <VulkanStorm> The dropdown's scroll list stays invisible until the combo
+    // opens, so the Vulkan prepare walk (which skips invisible views) never
+    // rasterizes its row glyphs and the opened dropdown is blank. Expose it so
+    // the prepare walk can reach its text regardless of visibility.
+    LLScrollListCtrl* getVkList() const { return mList; }
+    // </VulkanStorm>
+
     virtual void    onTextEntry(LLLineEditor* line_editor);
 
 protected:
