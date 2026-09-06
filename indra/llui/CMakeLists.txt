@@ -50,6 +50,7 @@ set(llui_SOURCE_FILES
     llkeywords.cpp
     lllayoutstack.cpp
     lllineeditor.cpp
+    llmarkdown.cpp
     llloadingindicator.cpp
     lllocalcliprect.cpp
     llmenubutton.cpp
@@ -170,6 +171,7 @@ set(llui_HEADER_FILES
     lllazyvalue.h
     lllineeditor.h
     llloadingindicator.h
+    llmarkdown.h
     lllocalcliprect.h
     llmenubutton.h
     llmenugl.h
@@ -284,6 +286,7 @@ if(LL_TESTS)
   set(test_libs llmessage llcorehttp llxml llrender llcommon ll::hunspell)
 
   SET(llui_TEST_SOURCE_FILES
+      llmarkdown.cpp
       llurlmatch.cpp
       )
   set_property( SOURCE ${llui_TEST_SOURCE_FILES} PROPERTY LL_TEST_ADDITIONAL_LIBRARIES ${test_libs})
