@@ -398,4 +398,76 @@ namespace tut
         ensure_equals("bold", spans[1].mText, "bold");
         ensure_equals("suffix", spans[3].mText, " _dangling");
     }
+
+    // --- stripEmphasisDelimiters (console plain-text path) ------------------
+    // The on-screen LLConsole chat overlay renders one font style per line and
+    // bypasses the markdown span styling, but must not show the delimiters.
+    // These cases cover the reported defect and its neighbours.
+
+    template<> template<>
+    void markdown_object::test<21>()
+    {
+        // Reported defect: trailing '_' after a word in an emote closes the
+        // italic region and is consumed, not displayed.
+        ensure_equals("emote trailing underscore",
+            LLMarkdown::stripEmphasisDelimiters("nuzzles the nape of your neck_ yes Mistress", /*emote=*/true),
+            "nuzzles the nape of your neck yes Mistress");
+    }
+
+    template<> template<>
+    void markdown_object::test<22>()
+    {
+        // Trailing toggle with a spoken tail.
+        ensure_equals("emote toggle to end of line",
+            LLMarkdown::stripEmphasisDelimiters("shrugs_ whatever", /*emote=*/true),
+            "shrugs whatever");
+    }
+
+    template<> template<>
+    void markdown_object::test<23>()
+    {
+        // Paired toggles: italic -> normal -> italic; both '_' are delimiters.
+        ensure_equals("emote paired toggles",
+            LLMarkdown::stripEmphasisDelimiters("waves_ hi _smiles", /*emote=*/true),
+            "waves hi smiles");
+    }
+
+    template<> template<>
+    void markdown_object::test<24>()
+    {
+        // Escaped underscore collapses to one literal '_'.
+        ensure_equals("emote escaped underscore",
+            LLMarkdown::stripEmphasisDelimiters("uses__literal", /*emote=*/true),
+            "uses_literal");
+    }
+
+    template<> template<>
+    void markdown_object::test<25>()
+    {
+        // Ordinary intraword underscores are never delimiters (non-emote).
+        ensure_equals("intraword underscores literal",
+            LLMarkdown::stripEmphasisDelimiters("some_var_name"),
+            "some_var_name");
+    }
+
+    template<> template<>
+    void markdown_object::test<26>()
+    {
+        // Non-emote emphasis: delimiters removed, content kept.
+        ensure_equals("non-emote italic",
+            LLMarkdown::stripEmphasisDelimiters("it _is_ perfect"),
+            "it is perfect");
+        ensure_equals("non-emote bold",
+            LLMarkdown::stripEmphasisDelimiters("perfect **now**"),
+            "perfect now");
+    }
+
+    template<> template<>
+    void markdown_object::test<27>()
+    {
+        // No delimiters at all -> fast path returns the input unchanged.
+        ensure_equals("no delimiters",
+            LLMarkdown::stripEmphasisDelimiters("plain chat line"),
+            "plain chat line");
+    }
 }

@@ -34,6 +34,7 @@
 #include "llavatarnamecache.h"
 #include "llconsole.h"
 #include "llimview.h"
+#include "llmarkdown.h" // <FS> strip emote markdown delimiters for the console
 #include "lltrans.h"
 #include "llviewerchat.h"
 #include "llviewercontrol.h"
@@ -90,6 +91,13 @@ bool FSConsoleUtils::ProcessChatMessage(const LLChat& chat_msg, const LLSD &args
         }
 
         std::string message = irc_me ? chat_msg.mText.substr(3) : chat_msg.mText;
+        // <FS> The console renders plain text (one font style per line); strip
+        // the emote markdown toggle delimiters so a trailing '_' isn't shown.
+        if (irc_me)
+        {
+            message = LLMarkdown::stripEmphasisDelimiters(message, /*emote=*/true);
+        }
+        // </FS>
         console_chat = sender_name + delimiter + message;
         F32 alpha = 1.f;
         LLUIColor chatcolor;
@@ -151,6 +159,13 @@ void FSConsoleUtils::onProcessChatAvatarNameLookup(const LLUUID& agent_id, const
     }
 
     std::string message = irc_me ? chat_msg.mText.substr(3) : chat_msg.mText;
+    // <FS> The console renders plain text (one font style per line); strip the
+    // emote markdown toggle delimiters so a trailing '_' isn't shown.
+    if (irc_me)
+    {
+        message = LLMarkdown::stripEmphasisDelimiters(message, /*emote=*/true);
+    }
+    // </FS>
 
     // Get the display name of the sender if required
     if (!chat_msg.mRlvNamesFiltered)
@@ -225,6 +240,10 @@ void FSConsoleUtils::onProccessInstantMessageNameLookup(const LLUUID& agent_id, 
     {
         delimiter = LLStringUtil::null;
         message = message.substr(3);
+        // <FS> The console renders plain text (one font style per line); strip
+        // the emote markdown toggle delimiters so a trailing '_' isn't shown.
+        message = LLMarkdown::stripEmphasisDelimiters(message, /*emote=*/true);
+        // </FS>
     }
 
     sender_name = FSCommon::getAvatarNameByDisplaySettings(av_name);

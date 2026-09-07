@@ -87,6 +87,15 @@ public:
     // toggle character and EMOTE_LITERAL a collapsed '__'. The toggle
     // never survives the line (input is split per line upstream).
     static span_vec_t parseEmphasis(const std::string& text, bool emote = false);
+
+    // <FS> Strip the markdown emphasis delimiters, returning the visible text
+    // with all EMPHASIS_DELIM / STRONG_DELIM / EMOTE_DELIM runs removed and
+    // escaped EMOTE_LITERAL "__" collapsed to a single '_'. Font styling is
+    // dropped — this is for consumers that render plain text only (e.g. the
+    // on-screen LLConsole chat overlay, which has no per-segment font style)
+    // but must not show the raw delimiters.
+    static std::string stripEmphasisDelimiters(const std::string& text, bool emote = false);
+    // </FS>
 };
 
 #endif // LL_LLMARKDOWN_H
