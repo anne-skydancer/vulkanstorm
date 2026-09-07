@@ -292,3 +292,32 @@ LLMarkdown::span_vec_t LLMarkdown::parseEmphasis(const std::string& text, bool e
 
     return spans;
 }
+
+// <FS> See llmarkdown.h. Drop the delimiter spans; keep everything else
+// (PLAIN / EMPHASIS / STRONG / EMOTE_TOGGLE_* / EMOTE_LITERAL all contribute
+// their visible text; EMOTE_LITERAL is already the collapsed single '_').
+std::string LLMarkdown::stripEmphasisDelimiters(const std::string& text, bool emote)
+{
+    // Fast path: no delimiters at all -> unchanged.
+    if (text.find('_') == std::string::npos && text.find("**") == std::string::npos)
+    {
+        return text;
+    }
+    std::string out;
+    out.reserve(text.size());
+    for (const Span& span : parseEmphasis(text, emote))
+    {
+        switch (span.mType)
+        {
+            case ESpanType::EMPHASIS_DELIM:
+            case ESpanType::STRONG_DELIM:
+            case ESpanType::EMOTE_DELIM:
+                break; // hidden delimiter: drop
+            default:
+                out += span.mText;
+                break;
+        }
+    }
+    return out;
+}
+// </FS>
