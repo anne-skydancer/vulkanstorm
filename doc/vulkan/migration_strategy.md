@@ -6,6 +6,15 @@
 
 ## Guiding principle
 
+> Development is now governed by the [native Vulkan invariants](native_vulkan_invariants.md),
+> derived from the [approved reverse engineering](reverse-engineering/README.md).
+> They preserve the result-equivalence principle below while defining its review
+> gates and precedence. In particular, exact comparison applies to established
+> exact contracts; floating-point/image tolerances require reference evidence,
+> not a blanket assumption that every attachment is cross-driver byte-exact.
+> This historical strategy does not override the separate OpenGL modernization
+> roadmap or establish current implementation/validation status.
+
 > **Every load-bearing feature of the rendering pipeline must yield an equivalent _result_, not necessarily equivalent _code_.**
 
 This is the migration's single governing rule, established 2026-09-06. It generalizes the UI plan's §0 rule ("follow the results, not the logic") to the entire pipeline.

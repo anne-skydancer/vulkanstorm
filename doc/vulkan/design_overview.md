@@ -3,6 +3,12 @@
 Status: Draft (design phase)
 Target codebase: Firestorm viewer (`indra/`), Windows-first, SDL2/macOS to follow.
 
+> Historical proposal. The [native Vulkan invariants](native_vulkan_invariants.md)
+> now govern development and supersede this document's LLRender dispatch/shared
+> low-level backend architecture and call-translation proposals. Use the
+> [approved reverse engineering](reverse-engineering/README.md) for the pinned
+> implementation facts; this draft is not current capability or platform policy.
+
 ## 1. Objective
 
 Provide a **parallel, selectable, end-to-end Vulkan render pipeline** alongside the
