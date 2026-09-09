@@ -103,18 +103,18 @@ struct LLDir_Dummy: public LLDir
 
     virtual ~LLDir_Dummy() {}
 
-    virtual void initAppDirs(const std::string& app_name, const std::string& app_read_only_data_dir)
+    virtual void initAppDirs(const std::string& app_name, const std::string& app_read_only_data_dir) override
     {
         // Implement this when we write a test that needs it
     }
 
-    virtual std::string getCurPath()
+    virtual std::string getCurPath() override
     {
         // Implement this when we write a test that needs it
         return "";
     }
 
-    virtual U32 countFilesInDir(const std::string& dirname, const std::string& mask)
+    virtual U32 countFilesInDir(const std::string& dirname, const std::string& mask) override
     {
         // Implement this when we write a test that needs it
         return 0;
@@ -127,7 +127,7 @@ struct LLDir_Dummy: public LLDir
         return false;
     }
 
-    virtual bool fileExists(const std::string& pathname) const
+    virtual bool fileExists(const std::string& pathname) const override
     {
         // Record fileExists() calls so we can check whether caching is
         // working right. Certain LLDir calls should be able to make decisions
@@ -138,13 +138,13 @@ struct LLDir_Dummy: public LLDir
         return (mFilesystem.find(pathname) != mFilesystem.end());
     }
 
-    virtual std::string getLLPluginLauncher()
+    virtual std::string getLLPluginLauncher() override
     {
         // Implement this when we write a test that needs it
         return "";
     }
 
-    virtual std::string getLLPluginFilename(std::string base_name)
+    virtual std::string getLLPluginFilename(std::string base_name) override
     {
         // Implement this when we write a test that needs it
         return "";
