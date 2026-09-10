@@ -12,6 +12,17 @@ read and follow [the native Vulkan invariants](../../doc/vulkan/native_vulkan_in
 They are normative; conflicting historical renderer drafts are not authority.
 They do not change the separate OpenGL modernization roadmap.
 
+- Before implementing or changing any Vulkan-related function or helper, answer:
+  1. What is the OpenGL function doing?
+  2. How is this done in Vulkan?
+  3. What is the cleanest implementation of question 2 in terms of Vulkan?
+  Follow NV-00 in the invariants: trace branches, hidden state, callbacks and
+  transitive helpers; identify CPU-only responsibilities explicitly. Record the
+  source contract, native design and discriminating check before editing code.
+  One GL function need not map to one Vulkan function. Unknown behavior stays open;
+  a scaffold, wrapper, disabled feature or successful screenshot is not closure.
+- Follow the [native viewer roadmap](../../doc/vulkan/native_viewer_roadmap.md).
+  Start from checkpoint 90af5a7, not the reverted post-checkpoint implementations.
 - Implement equivalent results with native scene/view/material/resource data.
   Do not transpose GL calls, add an LLRender-dispatch/shared low-level RHI, invoke
   GL-coupled draw callbacks, or display a GL-produced frame as native Vulkan.

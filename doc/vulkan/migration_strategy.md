@@ -1,6 +1,9 @@
 # OpenGL-to-Vulkan migration strategy
 
 **Status:** DRAFT for review (2026-09-06)  
+**Superseded implementation sequence:** use the
+[2026-09-10 native viewer roadmap](native_viewer_roadmap.md). This document remains
+historical evidence; its implementation-status statements are not current gates.
 **Baseline:** `master` @ `bf7d58111b`  
 **Related:** [design_overview.md](design_overview.md) · [phase1_bootstrap.md](phase1_bootstrap.md) · [phase3_v2_ui_plan.md](phase3_v2_ui_plan.md) · [phase3_v2_m0_design.md](phase3_v2_m0_design.md) · [capability_probe_design.md](capability_probe_design.md) · [shared_assets.md](shared_assets.md)
 

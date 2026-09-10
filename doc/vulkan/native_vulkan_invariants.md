@@ -31,6 +31,54 @@ promoted to a compatibility requirement merely because it appears in source.
 
 ## Architecture and reference
 
+### NV-00: Answer the three architectural questions first
+
+Established 2026-09-10 after resetting implementation work to PR #41,
+`90af5a7220f1fec28e3c909c051b6ee7e062f10b`. This is the foundational method for
+all native Vulkan work, including startup, UI, helpers, assets, shaders, build
+integration and shutdown, not only functions containing graphics API calls.
+
+For every function and helper in the migration inventory, answer:
+
+1. **What is the OpenGL function doing?** Recover its observable contract from
+	source: inputs, outputs, units/encoding, state reads/writes, branches, early
+	returns, failures, ordering, callbacks and ownership. Follow the actual helper,
+	constructor/destructor, virtual and registered-callback targets. Do not infer
+	purity from a name or a const method; identify configuration-dependent paths.
+2. **How is this done in Vulkan?** Explain how to produce that result using native
+	data and ownership. Identify responsibilities that stay CPU-only and suitable
+	audited neutral libraries. Separate CPU preparation, GPU execution, publication
+	and retirement. State dependencies instead of translating API calls.
+3. **What is the cleanest implementation of question 2 in terms of Vulkan?**
+	Compare viable native designs, choose the smallest coherent ownership model,
+	and explain its lifetime, synchronization, capability and failure contracts.
+	Several GL functions may become one native operation, or one GL function may
+	split across stages. A native counterpart with the same name is not required.
+
+Before an implementation edit, the touched behavior MUST have a source-backed
+answer to all three questions and a focused check that can disprove the proposed
+contract/design. Existing contracts can be referenced rather than duplicated.
+Unknown reachable behavior and unresolved transitive dependencies MUST remain
+explicitly open; they cannot be silently treated as omissions or completed work.
+Bounded probes may investigate an unknown, but MUST NOT be presented as finished
+implementations. Global inventory work can proceed incrementally; this is not
+permission to implement an unexamined slice while calling it complete.
+
+Each record MUST identify source revision/configuration and function roots,
+callee/callback obligations, the three answers, verification and current status.
+Distinguish local-body inspection, transitive closure, implemented behavior,
+runtime validation and measured parity. Counts of symbols, extracted AST entries,
+successful builds or screenshots do not establish exhaustive understanding.
+
+A failure diagnostic or disabled route may be temporary containment, but MUST
+NOT replace the requested functionality or close its milestone. Likewise an
+offscreen rendering experiment does not establish interactive login, native
+widget construction, complete lifecycle routing or world rendering.
+
+The [native viewer roadmap](native_viewer_roadmap.md) applies this method to the
+restored checkpoint. Reverted experiments are evidence to reassess, not approved
+architecture, reusable code by default, or current feature completion.
+
 ### NV-01: Preserve results, not OpenGL execution
 
 Native Vulkan MUST implement the renderer's scene decisions, material equations,

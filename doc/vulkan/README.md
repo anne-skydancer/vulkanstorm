@@ -2,6 +2,9 @@
 
 ## Governing contract and reference
 
+- [Native viewer roadmap](native_viewer_roadmap.md), reset at PR #41 on
+  2026-09-10: function/helper contracts first, native design second, implementation
+  and verification third. This replaces the older native implementation sequence.
 - [Native Vulkan development invariants](native_vulkan_invariants.md) govern
   native renderer work and integration changes across the repository.
 - [Approved OpenGL reverse engineering](reverse-engineering/README.md) documents
