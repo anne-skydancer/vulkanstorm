@@ -5,14 +5,14 @@ omitted `autobuild-package.xml`. Autobuild 3.9.3 therefore marked the dependency
 dirty on both Windows and Linux. This was a provenance/packaging defect, not a
 Linux compiler or Vulkan runtime problem.
 
-The replacement is the `v1.4.350-metadata1` release of
-`anne-skydancer/3p-vulkan-sdk`, built from `47952d7e3673b81020ce65ec36ad325d65b6639e`
-on Ubuntu 24.04 in Actions run `35610560576`. Its archive is
-`vulkan_sdk-1.4.350-common-3.tar.zst` with SHA-256:
+The replacement is the `v1.4.350-metadata2` release of
+`anne-skydancer/3p-vulkan-sdk`, built from `6638a752b7b2d8233f32e4fc6daba17eec05be0d`
+on Ubuntu 24.04 in Actions run `35612168685`. Its archive is
+`vulkan_sdk-1.4.350-common-5.tar.zst` with SHA-256:
 
-`26fe911a2d6adb80ce933db873263339df529386c97f460a8a943140ca218f54`
+`8235bdb9d30764cd0eb26e39ff0976e293075dae99028b0e3fa39b032c246fe1`
 
-It contains Autobuild-generated metadata, a version file, a complete 57-file
+It contains Autobuild-generated version metadata and a complete 56-file
 payload manifest, licenses and the unchanged upstream component versions:
 Vulkan-Headers `vulkan-sdk-1.4.350.1`, volk `1.4.350`, and VMA `v3.4.0`.
 It remains a `common` headers/source package. The viewer compiles volk itself;
@@ -24,9 +24,16 @@ publishing a hand-created archive. Its validator checks metadata, payload
 coverage and every packaged file against the assembled tree. A separate install
 probe exercises normal Autobuild installation and verifies a clean dependency.
 
-Validation: the published archive was built and validated on Linux. A fresh
-Windows install using this viewer manifest successfully downloaded and verified
-the release and reported no dirty packages. No full viewer rebuild or runtime
+The initial `metadata1` fix wrongly installed a root-level `VERSION.txt`, which
+collided with another dependency in the shared prefix. It is now a build-only
+input; the installed version lives in `autobuild-package.xml`. The regression
+test preinstalls another owner of `VERSION.txt`, reproduces the old collision,
+and verifies the corrected SDK neither claims nor alters that file.
+
+Validation: Linux and Windows passed package and coexistence checks. A fresh
+Windows install of the viewer's real `soloud` and corrected `vulkan_sdk` packages
+also passed, reported no dirty packages, and identified SoLoud as the owner of
+`VERSION.txt`. No full viewer rebuild or runtime
 rendering test was needed or performed for this manifest-only change.
 
 NV-00/NV-01: the consumer-visible contract is the same include/source/license
