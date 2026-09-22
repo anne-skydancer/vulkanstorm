@@ -306,7 +306,6 @@ set(llvulkan_SOURCE_FILES
     llvkuiwidgets.cpp
     llvkuifolder.cpp
     llvklegacytext.cpp
-    llvkuitestscene.cpp
     ${VULKAN_SDK_VOLK_SOURCE}
     )
 
@@ -325,7 +324,6 @@ set(llvulkan_HEADER_FILES
     llvkuiwidgets.h
     llvkuifolder.h
     llvklegacytext.h
-    llvkuitestscene.h
     )
 
 # volk.c is C; the rest is C++. Give volk its required define so it exposes the
