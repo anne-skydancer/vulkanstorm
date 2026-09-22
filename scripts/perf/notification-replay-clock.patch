@@ -1,0 +1,38 @@
+diff --git a/indra/llcommon/llframetimer.cpp b/indra/llcommon/llframetimer.cpp
+index a0080b57bb..9383c0979e 100644
+--- a/indra/llcommon/llframetimer.cpp
++++ b/indra/llcommon/llframetimer.cpp
+@@ -28,6 +28,7 @@
+ #include "u64.h"
+ 
+ #include "llframetimer.h"
++#include "../../tools/vulkan/diagnostic_replay_clock.h"
+ 
+ // Static members
+ //LLTimer   LLFrameTimer::sInternalTimer;
+@@ -42,7 +43,7 @@ const F64 USEC_TO_SEC_F64 = 0.000001;
+ // static
+ void LLFrameTimer::updateFrameTime()
+ {
+-    U64 total_time = totalTime();
++    U64 total_time = diagnostic_replay::Clock::instance().microseconds(totalTime(),sTotalTime);
+     sFrameDeltaTime = total_time - sTotalTime;
+     sTotalTime = total_time;
+     sTotalSeconds = U64_to_F64(sTotalTime) * USEC_TO_SEC_F64;
+diff --git a/indra/newview/llappviewer.cpp b/indra/newview/llappviewer.cpp
+index c00344c3cb..f79b775858 100644
+--- a/indra/newview/llappviewer.cpp
++++ b/indra/newview/llappviewer.cpp
+@@ -1578,8 +1578,12 @@ bool LLAppViewer::frame()
+     return ret;
+ }
+ 
++#include "../../tools/vulkan/diagnostic_replay_clock.h"
++
+ bool LLAppViewer::doFrame()
+ {
++    pauseMainloopTimeout();
++    diagnostic_replay::Frame replayFrame;
+     resumeMainloopTimeout("Main:doFrameStart");
+ #ifdef LL_DISCORD
+     {

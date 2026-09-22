@@ -3987,7 +3987,7 @@ void LLWindowWin32::swapBuffers()
     }
     // </VulkanStorm>
     {
-        LL_PROFILE_ZONE_SCOPED_CATEGORY_WIN32;
+        LL_PROFILE_ZONE_NAMED("SwapBuffers");
         SwapBuffers(mhDC);
     }
 

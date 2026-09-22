@@ -1,0 +1,57 @@
+diff --git a/wrappers/glproc_gl.cpp b/wrappers/glproc_gl.cpp
+index 6b8e1e1..c7428db 100644
+--- a/wrappers/glproc_gl.cpp
++++ b/wrappers/glproc_gl.cpp
+@@ -52,18 +52,37 @@ void *
+ _getPublicProcAddress(const char *procName)
+ {
+     if (!_libGlHandle) {
+-        char szDll[MAX_PATH] = {0};
+-        
+-        if (!GetSystemDirectoryA(szDll, MAX_PATH)) {
+-            return NULL;
++        // Diagnostic-only override: keep tracing on the selected Mesa runtime.
++        // An invalid explicit override must never fall back to native OpenGL.
++        wchar_t szDll[32768] = {0};
++        DWORD length = GetEnvironmentVariableW(L"APITRACE_OPENGL_DLL", szDll, 32768);
++        if (length >= 32768) {
++            os::log("apitrace: APITRACE_OPENGL_DLL is too long\n");
++            os::abort();
+         }
+-        
+-        strcat(szDll, "\\opengl32.dll");
+-        
+-        _libGlHandle = LoadLibraryA(szDll);
++        if (length) {
++            if (!((szDll[0] && szDll[1] == L':' && (szDll[2] == L'\\' || szDll[2] == L'/')) ||
++                  (szDll[0] == L'\\' && szDll[1] == L'\\'))) {
++                os::log("apitrace: APITRACE_OPENGL_DLL must be absolute\n");
++                os::abort();
++            }
++        } else {
++            if (!GetSystemDirectoryW(szDll, 32768 - 14)) {
++                return NULL;
++            }
++            wcscat(szDll, L"\\opengl32.dll");
++        }
++        _libGlHandle = LoadLibraryExW(szDll, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+         if (!_libGlHandle) {
+-            os::log("apitrace: error: couldn't load %s\n", szDll);
+-            return NULL;
++            os::log("apitrace: error: couldn't load selected OpenGL DLL (%lu)\n", GetLastError());
++            os::abort();
++        }
++        HMODULE wrapper = NULL;
++        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
++                           reinterpret_cast<LPCWSTR>(&_getPublicProcAddress), &wrapper);
++        if (_libGlHandle == wrapper) {
++            os::log("apitrace: OpenGL override points to the tracing wrapper\n");
++            os::abort();
+         }
+     }
+         
+@@ -254,4 +273,3 @@ _getPrivateProcAddress(const char *procName)
+ 
+ 
+ #endif 
+-
