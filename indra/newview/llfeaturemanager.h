@@ -111,6 +111,7 @@ public:
 
     EGPUClass getGPUClass()             { return mGPUClass; }
     std::string& getGPUString()         { return mGPUString; }
+    bool graphicsIdentityChanged() const;
 
     // get the measured GPU memory bandwidth in GB/sec
     // may return 0 of benchmark has not been run or failed to run
@@ -183,6 +184,7 @@ protected:
     std::string mGPUString;
     bool        mGPUSupported;
     bool        mSkipProfiling = false;
+    bool        mRecommendedSettingsPending = false;
 };
 
 inline

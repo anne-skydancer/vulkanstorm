@@ -812,7 +812,7 @@ bool idle_startup()
         {
             LLNotificationsUtil::add("DisplaySetToRecommendedFeatureChange");
         }
-        else if ( ! lastGPU.empty() && (lastGPU != thisGPU))
+        else if (!lastGPU.empty() && LLFeatureManager::getInstance()->graphicsIdentityChanged())
         {
             LLSD subs;
             subs["LAST_GPU"] = lastGPU;
@@ -834,6 +834,7 @@ bool idle_startup()
 
         gSavedSettings.setS32("LastFeatureVersion", LLFeatureManager::getInstance()->getVersion());
         gSavedSettings.setString("LastGPUString", thisGPU);
+        gSavedSettings.setString("LastGraphicsRendererFamily", LLWindow::getSkipGLContext() ? "Vulkan" : "OpenGL");
 
         std::string xml_file = LLUI::locateSkin("xui_version.xml");
         LLXMLNodePtr root;
