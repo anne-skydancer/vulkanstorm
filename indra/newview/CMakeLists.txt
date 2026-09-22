@@ -32,6 +32,7 @@ include(LLKDU)
 include(LLPhysicsExtensions)
 include(LLPrimitive)
 include(LLWindow)
+include(MesaZink)
 include(NDOF)
 include(NVAPI)
 include(OPENAL)
@@ -2768,6 +2769,21 @@ if (LINUX)
     linux-crash-logger
     )
 
+  if (USE_MESAZINK)
+    foreach(runtime ${MESAZINK_RUNTIME_FILES})
+      list(APPEND COPY_INPUT_DEPENDENCIES "${MESAZINK_RUNTIME_DIR}/${runtime}")
+    endforeach()
+    add_custom_target(stage_linux_mesazink
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/mesa"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${MESAZINK_RUNTIME_DIR}/libGLX_vulkanstorm.so.0"
+        "${MESAZINK_RUNTIME_DIR}/libgallium_vulkanstorm.so"
+        "${CMAKE_CURRENT_BINARY_DIR}/mesa"
+      DEPENDS ${MESAZINK_RUNTIME_DIR}/libGLX_vulkanstorm.so.0
+              ${MESAZINK_RUNTIME_DIR}/libgallium_vulkanstorm.so)
+    add_dependencies(${VIEWER_BINARY_NAME} stage_linux_mesazink)
+  endif()
+
   add_dependencies(${VIEWER_BINARY_NAME} SLPlugin media_plugin_gstreamer10 media_plugin_cef linux-crash-logger)
   
   add_custom_command(
@@ -2782,6 +2798,7 @@ if (LINUX)
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
         "--soloud=${USE_SOLOUD}"
+        "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"        
         --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2812,6 +2829,7 @@ if (LINUX)
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
       "--soloud=${USE_SOLOUD}"
+        "--mesazink=${USE_MESAZINK}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
       --build=${CMAKE_CURRENT_BINARY_DIR}

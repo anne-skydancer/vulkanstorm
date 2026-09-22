@@ -16,7 +16,8 @@ disabled = {"OPENSIM", "USE_KDU", "INSTALL_PROPRIETARY", "USE_OPENAL",
             "USE_FMODSTUDIO", "USE_DISCORD", "USE_BUGSPLAT", "USE_TRACY",
             "USE_AVX_OPTIMIZATION", "USE_VELOPACK", "USE_NSIS", "LL_TESTS",
             "RELEASE_CRASH_REPORTING", "NON_RELEASE_CRASH_REPORTING"}
-(enabled if windows else disabled).update({"USE_INNOSETUP", "USE_MESAZINK"})
+enabled.add("USE_MESAZINK")
+(enabled if windows else disabled).add("USE_INNOSETUP")
 errors = []
 for key in sorted(enabled | disabled):
     actual = values.get(key, "<missing>").upper()

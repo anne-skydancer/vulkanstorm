@@ -1704,6 +1704,20 @@
       <map>
         <key>platforms</key>
         <map>
+          <key>linux64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>0342116e64910385547d67709491810810c20ca462c7f639b594e551d68c8bc5</string>
+              <key>hash_algorithm</key>
+              <string>sha256</string>
+              <key>url</key>
+              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/v26.3.0-devel/mesazink-26.3.0-devel-git.00e42c51b1-linux64-g00e42c51b1.tar.zst</string>
+            </map>
+            <key>name</key>
+            <string>linux64</string>
+          </map>
           <key>windows64</key>
           <map>
             <key>archive</key>

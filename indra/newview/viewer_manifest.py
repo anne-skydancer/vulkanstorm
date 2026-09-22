@@ -2374,6 +2374,12 @@ class LinuxManifest(ViewerManifest):
         relpkgdir = os.path.join(pkgdir, "lib", "release")
         debpkgdir = os.path.join(pkgdir, "lib", "debug")
 
+        if self.args['mesazink'].lower() == 'on':
+            with self.prefix(src=os.path.join(relpkgdir, 'mesa'), dst='lib/mesa'):
+                self.path('libGLX_vulkanstorm.so.0')
+                self.path('libgallium_vulkanstorm.so')
+            with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
+                self.path('mesazink.txt')
         self.path("licenses-linux.txt","licenses.txt")
         if self.args.get('soloud', 'OFF').lower() == 'on':
             with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
