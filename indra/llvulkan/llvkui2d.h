@@ -57,12 +57,6 @@ public:
 
     bool isActive() const { return mCmd != VK_NULL_HANDLE; }
 
-    // <VulkanStorm> M0 diagnostic: vertices emitted so far this frame.
-    size_t frameVertsEmitted() const { return mFrameVerts; }
-    int    frameFlushes() const { return mFrameFlushes; }
-    size_t pendingVerts() const { return mVerts.size(); } // pending (pre-flush) geometry
-    // </VulkanStorm>
-
     // --- State (read at flush; a change flushes the pending run first) ------
     void setBlend(LLVKBlend blend);
     void setTexture(VkDescriptorSet descriptor); // VK_NULL_HANDLE = solid/white
@@ -116,9 +110,6 @@ private:
     // frame's draws are submitted (they may still be referenced by the
     // in-flight command buffer, so destruction must not wait-idle mid-pass).
     std::vector<std::pair<VkBuffer, VmaAllocation>> mRetiredBufs;
-    // Per-frame draw stats (diagnostic).
-    int    mFrameFlushes = 0;
-    size_t mFrameVerts = 0;
     // Running vertex offset into mVBuf for this frame (appended per flush so
     // deferred draws don't overwrite each other).
     size_t mFrameVertOffset = 0;

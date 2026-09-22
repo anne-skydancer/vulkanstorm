@@ -142,7 +142,6 @@ void LLVKUIFolder::renderChrome(RenderCtx& rc, const LLView* view)
         {
             emitOutline(rc, op.rect, op.color);
         }
-        rc.emitted++;
     }
 
     // 2. Disclosure arrow (drawOpenFolderArrow()). NOTE: GL rotates this image
@@ -152,7 +151,6 @@ void LLVKUIFolder::renderChrome(RenderCtx& rc, const LLView* view)
     {
         LLVKUIRender::emitScreenRect(state.arrow_rect, rc.dev_h, rc.ui_scale_y,
                                      state.arrow_image, state.arrow_color);
-        rc.emitted++;
     }
 
     // 3. Favorite star (drawFavoriteIcon()).
@@ -160,7 +158,6 @@ void LLVKUIFolder::renderChrome(RenderCtx& rc, const LLView* view)
     {
         LLVKUIRender::emitScreenRect(state.favorite_rect, rc.dev_h, rc.ui_scale_y,
                                      state.favorite_image, state.favorite_color);
-        rc.emitted++;
     }
 
     // 4. Item icon (+ link overlay).
@@ -169,14 +166,12 @@ void LLVKUIFolder::renderChrome(RenderCtx& rc, const LLView* view)
         LLVKUIRender::emitScreenRect(state.icon_rect, rc.dev_h, rc.ui_scale_y,
                                      state.icon_image,
                                      LLColor4(1.f, 1.f, 1.f, (F32)rc.parent_alpha));
-        rc.emitted++;
     }
     if (state.overlay_visible)
     {
         LLVKUIRender::emitScreenRect(state.overlay_rect, rc.dev_h, rc.ui_scale_y,
                                      state.overlay_image,
                                      LLColor4(1.f, 1.f, 1.f, (F32)rc.parent_alpha));
-        rc.emitted++;
     }
 
     // 5. Filter-match background boxes (under the label text).
@@ -184,7 +179,6 @@ void LLVKUIFolder::renderChrome(RenderCtx& rc, const LLView* view)
     {
         LLVKUIRender::emitScreenRect(box, rc.dev_h, rc.ui_scale_y,
                                      state.selection_image, state.filter_bg_color);
-        rc.emitted++;
     }
 
     // 6. Label text: label, locked/protected markers, suffix, filter-match
