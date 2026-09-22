@@ -71,6 +71,7 @@ private:
 
     bool mDone;
     bool mBackendFade = false;
+    bool mStreamStartDeferred = false;
     F32 mFadeTime;
     std::string mNextStreamURI;
     EFadeState mFadeState;

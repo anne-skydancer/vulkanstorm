@@ -109,6 +109,17 @@ void LLViewerAudio::startInternetStreamWithAutoFade(const std::string &streamURI
     // Record the URI we are going to be switching to
     mNextStreamURI = streamURI;
 
+    // Parcel music can arrive before login finishes. Defer the start itself:
+    // resetting the viewer fade timer cannot hold back a VLC-owned fade.
+    mStreamStartDeferred = !streamURI.empty() &&
+        (LLStartUp::getStartupState() < STATE_STARTED ||
+         !gViewerWindow || gViewerWindow->getShowProgress());
+    if (mStreamStartDeferred)
+    {
+        registerIdleListener();
+        return;
+    }
+
     // <FS:Ansariel> Optional audio stream fading
     if (!gSavedSettings.getBOOL("FSFadeAudioStream"))
     {
@@ -164,6 +175,21 @@ void LLViewerAudio::startInternetStreamWithAutoFade(const std::string &streamURI
 // A return of true means we have finished with it and the callback will be deleted.
 bool LLViewerAudio::onIdleUpdate()
 {
+    if (mStreamStartDeferred)
+    {
+        if (!gAudiop || LLStartUp::getStartupState() < STATE_STARTED ||
+            !gViewerWindow || gViewerWindow->getShowProgress())
+        {
+            return false;
+        }
+
+        mStreamStartDeferred = false;
+        // Apply the user's volume/mute before the plugin can begin playback.
+        audio_update_volume(false);
+        const std::string stream_uri = mNextStreamURI;
+        startInternetStreamWithAutoFade(stream_uri);
+    }
+
     bool fadeIsFinished = false;
     LLStreamingAudioInterface* stream = gAudiop ? gAudiop->getStreamingAudioImpl() : nullptr;
     if (mBackendFade && stream)
@@ -258,6 +284,7 @@ bool LLViewerAudio::onIdleUpdate()
 
 void LLViewerAudio::stopInternetStreamWithAutoFade()
 {
+    mStreamStartDeferred = false;
     // <FS:Ansariel> Optional audio stream fading
     if (!gSavedSettings.getBOOL("FSFadeAudioStream"))
     {
@@ -594,13 +621,16 @@ void audio_update_volume(bool force_update)
         LLStreamingAudioInterface* stream = gAudiop->getStreamingAudioImpl();
         if (stream && stream->hasAudioFade())
         {
-            stream->setAudioHardMute(mute_audio || mute_music());
+            stream->setAudioHardMute(mute_audio || mute_music() ||
+                progress_view_visible || LLStartUp::getStartupState() < STATE_STARTED);
             gAudiop->setInternetStreamGain(master_volume * al_music());
         }
         else
         {
             F32 music_volume = mute_volume * master_volume * al_music() * fade_volume;
-            gAudiop->setInternetStreamGain (mute_music() ? 0.f : music_volume);
+            gAudiop->setInternetStreamGain (
+                mute_music() || progress_view_visible ||
+                LLStartUp::getStartupState() < STATE_STARTED ? 0.f : music_volume);
         }
     }
 
