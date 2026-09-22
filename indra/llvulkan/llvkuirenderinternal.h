@@ -42,6 +42,14 @@ namespace LLVKUIRenderInternal
         // GL-space screen clip stack (scroll containers, accordion tabs, hook
         // clippers). The effective scissor is the intersection of all entries.
         std::vector<LLRect> clip_stack;
+        // Diagnostics
+        int visited = 0;      // views walked
+        int visible = 0;      // views passing getVisible()
+        int panels  = 0;      // views that are LLPanel
+        int emitted = 0;      // rects actually emitted
+        // One-shot widget-tree dump (VULKANSTORM_TREE_DUMP=1)
+        bool dump   = false;
+        int  depth  = 0;
         // True while rendering a registered popup via renderOverlaySubtree()
         // (LLPopupView). A combo's open dropdown list renders only in this
         // pass; the normal tree walk skips it so the two don't double-draw.

@@ -14,6 +14,8 @@ namespace LLVKText
     bool ready();
     void prepare(const LLFontGL* font, const LLWString& text);
     void flushPrepared();
+    S32 debugGlyphCount(const LLFontGL* font);
+    F32 debugMeasureAdvance(const LLFontGL* font, const LLWString& text);
     S32 render(const LLFontGL* font, const LLWString& text,
                F32 x, F32 y, const LLColor4& color,
                LLFontGL::HAlign halign, LLFontGL::VAlign valign,
