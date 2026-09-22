@@ -2150,7 +2150,7 @@ LLViewerWindow::LLViewerWindow(const Params& p)
 
     if (LLFeatureManager::getInstance()->isSafe()
         || (gSavedSettings.getS32("LastFeatureVersion") != LLFeatureManager::getInstance()->getVersion())
-        || (gSavedSettings.getString("LastGPUString") != LLFeatureManager::getInstance()->getGPUString())
+        || LLFeatureManager::getInstance()->graphicsIdentityChanged()
         || (gSavedSettings.getBOOL("ProbeHardwareOnStartup")))
     {
         LLFeatureManager::getInstance()->applyRecommendedSettings();

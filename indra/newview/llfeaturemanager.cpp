@@ -32,6 +32,7 @@
 #include <boost/regex.hpp>
 
 #include "llfeaturemanager.h"
+#include "llgraphicsidentity.h"
 #include "lldir.h"
 
 #include "llsys.h"
@@ -612,6 +613,12 @@ bool LLFeatureManager::loadGPUClass()
 
 // <VulkanStorm> Vulkan bounded-defer: true when the Vulkan backend owns the
 // window (no GL context) and the bandwidth micro-benchmark has not yet run.
+bool LLFeatureManager::graphicsIdentityChanged() const
+{
+    return LLGraphicsIdentity::changed(gSavedSettings.getString("LastGPUString"), mGPUString,
+        gSavedSettings.getString("LastGraphicsRendererFamily"), LLWindow::getSkipGLContext());
+}
+
 bool LLFeatureManager::isGPUClassPending() const
 {
     return LLWindow::getSkipGLContext() && !LLVKSession::isRunning();
@@ -630,7 +637,11 @@ void LLFeatureManager::resolveGPUClassAndApply()
     // the masks + recommended settings once, with the correct class.
     loadGPUClass();
     applyBaseMasks();
-    applyRecommendedSettings();
+    if (mRecommendedSettingsPending)
+    {
+        mRecommendedSettingsPending = false;
+        applyRecommendedSettings();
+    }
 }
 // </VulkanStorm>
 
@@ -661,6 +672,7 @@ void LLFeatureManager::applyRecommendedSettings()
     // at device-up. GL path unchanged.
     if (isGPUClassPending())
     {
+        mRecommendedSettingsPending = true;
         LL_INFOS("RenderInit") << "Vulkan backend: deferring recommended-settings application until the GPU class is resolved." << LL_ENDL;
         return;
     }
