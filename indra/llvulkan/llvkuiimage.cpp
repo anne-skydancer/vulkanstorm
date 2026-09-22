@@ -134,6 +134,17 @@ namespace
         const float vy[6] = { y0, y0, y1, y0, y1, y1 };
         const float tu[6] = { u0, u1, u1, u0, u1, u0 };
         const float tv[6] = { v0, v0, v1, v0, v1, v1 };
+        // <VulkanStorm> orientation diagnostic (VULKANSTORM_UI_DEBUG=1): log the
+        // quad's screen rect + texture v at its top/bottom edges.
+        static bool s_dbg = getenv("VULKANSTORM_UI_DEBUG") != nullptr;
+        static int  s_n = 0;
+        if (s_dbg && s_n < 24)
+        {
+            ++s_n;
+            LL_INFOS("Vulkan") << "VKQUAD rect=" << (int)x0 << "," << (int)y0 << "-" << (int)x1 << "," << (int)y1
+                               << " vTop=" << v0 << " vBot=" << v1 << LL_ENDL;
+        }
+        // </VulkanStorm>
         for (int i = 0; i < 6; ++i)
         {
             xy[i * 2] = vx[i]; xy[i * 2 + 1] = vy[i];
@@ -354,9 +365,21 @@ namespace LLVKUIImage
 
     void draw(const std::string& name, float left, float top, float right, float bottom, const LLColor4& color)
     {
+        // <VulkanStorm> M2 diagnostic (VULKANSTORM_UI_DEBUG=1): log the first
+        // few image draws with their resolution status.
+        static bool s_dbg = getenv("VULKANSTORM_UI_DEBUG") != nullptr;
+        static int  s_dbg_n = 0;
         auto it = s_images.find(name);
         const bool found = (it != s_images.end());
         const bool ok    = found && it->second.ok;
+        if (s_dbg && s_dbg_n < 12)
+        {
+            ++s_dbg_n;
+            LL_INFOS("Vulkan") << "VKIMG draw '" << name << "' found=" << (found?1:0)
+                               << " ok=" << (ok?1:0)
+                               << (ok ? (" " + std::to_string(it->second.w) + "x" + std::to_string(it->second.h)) : "")
+                               << " rect=" << (int)left << "," << (int)top << "-" << (int)right << "," << (int)bottom << LL_ENDL;
+        }
         if (!found || !ok)
         {
             // Unknown/unloaded: fill solid so the widget still shows *something*.

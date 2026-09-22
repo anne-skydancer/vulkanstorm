@@ -79,6 +79,7 @@ namespace
         if (!state.bar_image.empty() && LLVKUIImage::ready())
         {
             LLVKUIImage::draw(state.bar_image, l, t, r, b, state.bar_color);
+            rc.emitted++;
         }
         if (!state.fill_image.empty() && state.percent > 0.f && LLVKUIImage::ready())
         {
@@ -92,6 +93,7 @@ namespace
             float fl, ft, fr, fb;
             toSinkRect(rc, fill_screen, fl, ft, fr, fb);
             LLVKUIImage::draw(state.fill_image, fl, ft, fr, fb, fill);
+            rc.emitted++;
         }
     }
 
@@ -112,6 +114,7 @@ namespace
         toSinkRect(rc, image_screen, l, t, r, b);
         LLVKUIImage::draw(state.image, l, t, r, b,
                           LLColor4::white % rc.parent_alpha);
+        rc.emitted++;
     }
 
     // Mirror LLLoadingIndicator::draw(): the current animation frame stretched
@@ -125,6 +128,7 @@ namespace
         toSinkRect(rc, indicator->calcScreenRect(), l, t, r, b);
         LLVKUIImage::draw(image, l, t, r, b,
                           LLColor4::white % rc.parent_alpha);
+        rc.emitted++;
     }
 
     // Mirror LLBadge::draw(): badge image (+ optional border image), then the
@@ -145,10 +149,12 @@ namespace
         {
             // LLUIImage::drawSolid semantics: texture ignored, tinted fill.
             LLVKUIImage::drawSolid(state.image, l, t, r, b, state.image_color);
+            rc.emitted++;
             if (!state.border_image.empty())
             {
                 LLVKUIImage::drawSolid(state.border_image, l, t, r, b,
                                        state.border_color);
+                rc.emitted++;
             }
         }
         else
@@ -158,6 +164,7 @@ namespace
             LLVKUIRender::emitScreenRect(badge_screen, rc.dev_h, rc.ui_scale_y,
                                          state.image_color);
             LLVKUI2DSink::get().setBlend(LLVKBlend::Alpha);
+            rc.emitted++;
         }
 
         if (LLVKText::ready() && state.font && !state.label.empty())
@@ -170,6 +177,7 @@ namespace
                              state.label_color, LLFontGL::HCENTER,
                              LLFontGL::VCENTER, S32_MAX, false,
                              LLFontGL::DROP_SHADOW_SOFT);
+            rc.emitted++;
         }
     }
 
@@ -207,6 +215,7 @@ namespace
             toSinkRect(rc, state.track_rect, l, t, r, b);
             LLVKUIImage::draw(state.rounded_square_image, l, t, r, b,
                               state.track_color % opacity);
+            rc.emitted++;
         }
 
         const auto draw_thumb_image = [&](const LLMultiSlider::VkThumbState& thumb,
@@ -227,6 +236,7 @@ namespace
                 LLVKUIRender::emitScreenRect(thumb.screen_rect, rc.dev_h,
                                              rc.ui_scale_y, color);
             }
+            rc.emitted++;
         };
 
         if (state.use_triangle)
@@ -242,6 +252,7 @@ namespace
                                    tr.mLeft + tr.getWidth() / 2,
                                    tr.mBottom - extra_triangle_height,
                                    state.triangle_color % opacity);
+                rc.emitted++;
             }
             return;
         }
@@ -256,6 +267,7 @@ namespace
                 if (thumb.name == state.hover_slider && state.enabled && !state.mouse_capture) continue;
                 LLVKUIRender::emitScreenRect(thumb.screen_rect, rc.dev_h,
                                              rc.ui_scale_y, state.thumb_center_color);
+                rc.emitted++;
             }
             for (const LLMultiSlider::VkThumbState& thumb : state.thumbs)
             {
@@ -264,6 +276,7 @@ namespace
                     LLVKUIRender::emitScreenRect(thumb.screen_rect, rc.dev_h,
                                                  rc.ui_scale_y,
                                                  state.thumb_center_selected_color);
+                    rc.emitted++;
                 }
             }
             if (state.mouse_capture)
@@ -275,6 +288,7 @@ namespace
                 emitBorderLine(rc, gr.mLeft, gr.mTop, gr.mRight, gr.mTop, c);
                 emitBorderLine(rc, gr.mRight, gr.mTop, gr.mRight, gr.mBottom, c);
                 emitBorderLine(rc, gr.mLeft, gr.mBottom, gr.mRight, gr.mBottom, c);
+                rc.emitted++;
             }
             else
             {
@@ -285,6 +299,7 @@ namespace
                         LLVKUIRender::emitScreenRect(thumb.screen_rect, rc.dev_h,
                                                      rc.ui_scale_y,
                                                      state.thumb_center_selected_color);
+                        rc.emitted++;
                     }
                 }
             }
@@ -314,6 +329,7 @@ namespace
                     !state.thumb_image.empty() ? state.thumb_image
                                                : state.rounded_square_image,
                     l, t, r, b, border_color, flash_width);
+                rc.emitted++;
             }
         }
         if (!state.hover_slider.empty())
@@ -329,6 +345,7 @@ namespace
                     !state.thumb_image.empty() ? state.thumb_image
                                                : state.rounded_square_image,
                     l, t, r, b, border_color, flash_width);
+                rc.emitted++;
             }
         }
 
@@ -392,6 +409,7 @@ namespace
         bg_rect.mTop -= 1;
         LLVKUIRender::emitScreenRect(bg_rect, rc.dev_h, rc.ui_scale_y,
                                      hs.bg_color);
+        rc.emitted++;
 
         if (!LLVKUIImage::ready()) return;
 
@@ -401,11 +419,13 @@ namespace
         {
             LLVKUIImage::draw(hs.header_image, l, t, r, b,
                               LLColor4::white % rc.parent_alpha);
+            rc.emitted++;
         }
         if (!hs.header_over_image.empty())
         {
             LLVKUIImage::draw(hs.header_over_image, l, t, r, b,
                               LLColor4::white % rc.parent_alpha);
+            rc.emitted++;
         }
         if (!hs.arrow_image.empty())
         {
@@ -423,6 +443,7 @@ namespace
                 toSinkRect(rc, arrow_screen, al, at, ar, ab);
                 LLVKUIImage::draw(hs.arrow_image, al, at, ar, ab,
                                   LLColor4::white % rc.parent_alpha);
+                rc.emitted++;
             }
         }
     }
@@ -438,6 +459,7 @@ namespace
             editor->localRectToScreen(marker.local_rect, &screen);
             LLVKUIRender::emitScreenRect(screen, rc.dev_h, rc.ui_scale_y,
                                          marker.color);
+            rc.emitted++;
         }
     }
 
@@ -480,12 +502,14 @@ namespace
             local_rect_to_screen(state.bar_rect, screen);
             LLVKUIRender::emitScreenRect(screen, rc.dev_h, rc.ui_scale_y,
                                          LLColor4(0.f, 0.f, 0.f, 0.25f));
+            rc.emitted++;
             // Min..max band.
             if (state.band_valid)
             {
                 local_rect_to_screen(state.band_rect, screen);
                 LLVKUIRender::emitScreenRect(screen, rc.dev_h, rc.ui_scale_y,
                                              LLColor4(1.f, 0.f, 0.f, 0.25f));
+                rc.emitted++;
             }
             // History samples or the current-value marker.
             if (state.history_mode)
@@ -496,17 +520,20 @@ namespace
                     LLVKUIRender::emitScreenRect(screen, rc.dev_h, rc.ui_scale_y,
                                                  LLColor4(1.f, 0.f, 0.f, 1.f));
                 }
+                rc.emitted++;
             }
             else if (state.cur_valid)
             {
                 local_rect_to_screen(state.cur_rect, screen);
                 LLVKUIRender::emitScreenRect(screen, rc.dev_h, rc.ui_scale_y,
                                              LLColor4(1.f, 0.f, 0.f, 1.f));
+                rc.emitted++;
             }
             // Mean bar.
             local_rect_to_screen(state.mean_rect, screen);
             LLVKUIRender::emitScreenRect(screen, rc.dev_h, rc.ui_scale_y,
                                          LLColor4(0.f, 1.f, 0.f, 1.f));
+            rc.emitted++;
         }
 
         // Label (top-left) + value (top-right of the bar).
@@ -523,6 +550,7 @@ namespace
                              (F32)bar_screen.mRight, (F32)widget_screen.mTop,
                              LLColor4::white, LLFontGL::RIGHT, LLFontGL::TOP,
                              S32_MAX);
+            rc.emitted++;
         }
     }
 
@@ -545,6 +573,7 @@ namespace
         emitBorderLine(rc, screen.mLeft, screen.mTop, screen.mRight, screen.mTop, state.border_color);
         emitBorderLine(rc, screen.mRight, screen.mTop, screen.mRight, screen.mBottom, state.border_color);
         emitBorderLine(rc, screen.mLeft, screen.mBottom, screen.mRight, screen.mBottom, state.border_color);
+        rc.emitted += 2;
     }
 
     // Mirror LLVirtualTrackball::draw(): sphere image + sun/moon thumb.
@@ -558,6 +587,7 @@ namespace
             float l, t, r, b;
             toSinkRect(rc, state.touch_rect, l, t, r, b);
             LLVKUIImage::draw(state.sphere_image, l, t, r, b, state.sphere_color);
+            rc.emitted++;
         }
         if (!state.thumb_image.empty() && LLVKUIImage::ready())
         {
@@ -572,6 +602,7 @@ namespace
                 toSinkRect(rc, thumb_screen, l, t, r, b);
                 LLVKUIImage::draw(state.thumb_image, l, t, r, b,
                                   LLColor4::white % rc.parent_alpha);
+                rc.emitted++;
             }
         }
     }
@@ -612,6 +643,7 @@ namespace
         vector->localRectToScreen(state.touch_rect, &touch_screen);
         LLVKUIRender::emitScreenRect(touch_screen, rc.dev_h, rc.ui_scale_y,
                                      state.area_color % rc.parent_alpha);
+        rc.emitted++;
 
         // Grid crosshair (local coords -> screen offsets).
         const S32 ox = touch_screen.mLeft;
@@ -640,6 +672,7 @@ namespace
         // Center circle (arrow color in both draw() branches).
         emitCircle(rc, (F32)center_x, (F32)center_y, state.circle_radius,
                    state.arrow_color % rc.parent_alpha, true, 12);
+        rc.emitted++;
     }
 
     // Mirror LLConsole::draw(): background + colored paragraph segments.
@@ -665,6 +698,7 @@ namespace
                                              state.bg_color);
             }
         }
+        rc.emitted++;
 
         if (LLVKText::ready() && state.font)
         {
@@ -677,6 +711,7 @@ namespace
                                  run.color, LLFontGL::LEFT, LLFontGL::BASELINE,
                                  run.max_pixels, false, LLFontGL::DROP_SHADOW);
             }
+            rc.emitted++;
         }
     }
 
@@ -710,6 +745,7 @@ namespace
         float l, t, r, b;
         toSinkRect(rc, tongue_screen, l, t, r, b);
         LLVKUIImage::draw(image, l, t, r, b, LLColor4::white % rc.parent_alpha);
+        rc.emitted++;
     }
 }
 
@@ -895,6 +931,7 @@ namespace LLVKUIWidgets
                     LLUIColorTable::instance().getColor("ColorDropShadow");
                 emitDropShadow(rc, dialog->calcScreenRect(), shadow_color.get(),
                                DROP_SHADOW_FLOATER);
+                rc.emitted++;
             }
         }
     }

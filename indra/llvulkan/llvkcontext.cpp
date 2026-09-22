@@ -1324,6 +1324,7 @@ bool LLVKContext::end2DFrame()
     present.pImageIndices = &mAcquiredImageIndex;
     VkResult pres = vkQueuePresentKHR(mPresentQueue, &present);
 
+    mLastPresentedImageIndex = mAcquiredImageIndex;
     mFrameActive = false;
     mFrameIndex = (mFrameIndex + 1) % kFramesInFlight;
     if (pres == VK_ERROR_OUT_OF_DATE_KHR || pres == VK_SUBOPTIMAL_KHR)
@@ -1416,7 +1417,151 @@ bool LLVKContext::recordUiPacket(std::span<const UiVertex> vertices, std::span<c
     return true;
 }
 
+bool LLVKContext::readbackSwapchain(std::vector<uint8_t>& out_rgba, uint32_t& out_w, uint32_t& out_h)
+{
+    if (mDevice == VK_NULL_HANDLE || mSwapchain == VK_NULL_HANDLE || mSwapchainImages.empty()) return false;
 
+    const uint32_t w = mSwapchainExtent.width;
+    const uint32_t h = mSwapchainExtent.height;
+    out_w = w; out_h = h;
+
+    // The capture races the frame loop (the "last acquired" image may not be
+    // the one most recently presented, and may still be in flight). Idle the
+    // device so every image is settled, then read the presented image
+    // deterministically.
+    vkDeviceWaitIdle(mDevice);
+
+    // Host-visible destination buffer for the copy.
+    VkDeviceSize buf_size = (VkDeviceSize)w * h * 4;
+    VkBufferCreateInfo bi{};
+    bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bi.size = buf_size;
+    bi.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    VmaAllocationCreateInfo ai{};
+    ai.usage = VMA_MEMORY_USAGE_AUTO;
+    ai.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    VkBuffer staging = VK_NULL_HANDLE;
+    VmaAllocation staging_alloc = VK_NULL_HANDLE;
+    VmaAllocationInfo alloc_info{};
+    if (vmaCreateBuffer(mAllocator, &bi, &ai, &staging, &staging_alloc, &alloc_info) != VK_SUCCESS) return false;
+
+    // One-shot command buffer: copy the swapchain image to the buffer.
+    VkCommandBufferAllocateInfo cai{};
+    cai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cai.commandPool = mCommandPool;
+    cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cai.commandBufferCount = 1;
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    if (vkAllocateCommandBuffers(mDevice, &cai, &cmd) != VK_SUCCESS)
+    {
+        vmaDestroyBuffer(mAllocator, staging, staging_alloc);
+        return false;
+    }
+
+    VkCommandBufferBeginInfo begin{};
+    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &begin);
+
+    // Read the image that was most recently PRESENTED (it holds the current
+    // frame's content). mAcquiredImageIndex would point at the image acquired
+    // for the NEXT frame, which may be stale.
+    VkImage img = mSwapchainImages[mLastPresentedImageIndex];
+
+    VkImageMemoryBarrier to_src{};
+    to_src.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    to_src.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    to_src.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    to_src.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_src.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_src.image = img;
+    to_src.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    to_src.subresourceRange.levelCount = 1;
+    to_src.subresourceRange.layerCount = 1;
+    to_src.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    to_src.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_src);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = { 0, 0, 0 };
+    region.imageExtent = { w, h, 1 };
+    vkCmdCopyImageToBuffer(cmd, img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging, 1, &region);
+
+    VkImageMemoryBarrier to_present{};
+    to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    to_present.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    to_present.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_present.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_present.image = img;
+    to_present.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    to_present.subresourceRange.levelCount = 1;
+    to_present.subresourceRange.layerCount = 1;
+    to_present.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    to_present.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &to_present);
+
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fi{};
+    fi.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    VkFence fence = VK_NULL_HANDLE;
+    vkCreateFence(mDevice, &fi, nullptr, &fence);
+
+    VkSubmitInfo submit{};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &cmd;
+    bool ok = (vkQueueSubmit(mGraphicsQueue, 1, &submit, fence) == VK_SUCCESS) &&
+              (vkWaitForFences(mDevice, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS);
+
+    if (ok)
+    {
+        out_rgba.resize((size_t)buf_size);
+        memcpy(out_rgba.data(), alloc_info.pMappedData, (size_t)buf_size);
+
+        // Swapchain is B8G8R8A8 on this driver; normalize to RGBA8 so the
+        // diff harness compares the same channel order as the GL reference.
+        if (mSwapchainFormat == VK_FORMAT_B8G8R8A8_UNORM ||
+            mSwapchainFormat == VK_FORMAT_B8G8R8A8_SRGB)
+        {
+            for (size_t i = 0; i + 3 < out_rgba.size(); i += 4)
+            {
+                std::swap(out_rgba[i], out_rgba[i + 2]);
+            }
+        }
+
+        // <VulkanStorm> Flip to the harness's BOTTOM-origin row order so the
+        // Vulkan capture compares directly against the GL glReadPixels frame.
+        // The swapchain copy is TOP-origin (image row 0 = screen top); the GL
+        // reference is bottom-origin (row 0 = screen bottom). Without this the
+        // readback is vertically inverted relative to GL and the diff measures
+        // the OPPOSITE of the on-screen truth (this masked the real orientation
+        // bug for a whole debugging pass).
+        const size_t row = (size_t)w * 4;
+        std::vector<uint8_t> tmp(row);
+        for (uint32_t y = 0; y < h / 2; ++y)
+        {
+            uint8_t* top    = out_rgba.data() + (size_t)y * row;
+            uint8_t* bottom = out_rgba.data() + (size_t)(h - 1 - y) * row;
+            memcpy(tmp.data(), top, row);
+            memcpy(top, bottom, row);
+            memcpy(bottom, tmp.data(), row);
+        }
+        // </VulkanStorm>
+    }
+
+    vkDestroyFence(mDevice, fence, nullptr);
+    vkFreeCommandBuffers(mDevice, mCommandPool, 1, &cmd);
+    vmaDestroyBuffer(mAllocator, staging, staging_alloc);
+    return ok;
+}
 
 // --- Textures (Phase 3) ----------------------------------------------------
 
