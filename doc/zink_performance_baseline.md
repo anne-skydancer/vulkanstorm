@@ -1,5 +1,29 @@
 # Mesa/Zink performance baseline
 
+## Instrumentation correction after the first Tracy attempt
+
+The first native OpenGL capture during loading was rejected: process commit
+grew from about 10 GB to 50 GB, available system RAM fell below 200 MB, and
+the viewer exited. The agent stopped the collector, not the viewer. This does
+not establish the cause of the exit or prove that allocation events caused
+all the growth. Local evidence is in logs/tracy-native-20260922-loading.
+
+LL_PROFILE_ALLOC/FREE previously emitted Tracy events even though
+LL_PROFILER_ENABLE_TRACY_MEMORY was zero. They now honor that flag, controlled
+by USE_TRACY_MEMORY (OFF by default) independently of CPU timing zones.
+The compiled regression test exercises default/OFF/ON configurations and
+verifies that CPU zones remain active with allocation events disabled:
+
+```powershell
+python -m unittest discover -s scripts/perf -p test_profiler_memory_gate.py -v
+```
+
+For the next runtime check, use a five-second capture after login/loading,
+record viewer and collector memory, and qualify overhead before longer runs.
+Do not accept the failed loading capture as a native OpenGL baseline. The
+remaining CPU zones and lock instrumentation can still produce significant
+traffic; disabling allocation events alone does not establish bounded overhead.
+
 ## Verified starting point
 
 The consolidated RelWithDebInfo build completed successfully on 2026-09-22,
@@ -207,8 +231,8 @@ dependency: a short host call does not prove that the GPU did not wait.
 Time inside `SwapBuffers` can include pacing, VSync, or queue backpressure;
 it is not by itself evidence of driver inefficiency.
 
-The existing Tracy allocation events and enabled categories still contribute
-profiling overhead. Compare the same instrumented executable across backends,
+With USE_TRACY_MEMORY=OFF, allocation events are excluded. Enabled CPU
+categories still contribute profiling overhead. Compare the same instrumented executable across backends,
 then confirm any eventual improvement with an ordinary Release build.
 
 ## Capture procedure
