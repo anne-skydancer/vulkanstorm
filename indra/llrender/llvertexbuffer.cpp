@@ -926,6 +926,48 @@ void LLVertexBuffer::drawRange(U32 mode, U32 start, U32 end, U32 count, U32 indi
     STOP_GLERROR;
 }
 
+void LLVertexBuffer::drawIndirect(U32 mode, U32 command_offset, U32 draw_count) const
+{
+    llassert(mGLBuffer == sGLRenderBuffer);
+    llassert(mGLIndices == sGLRenderIndices);
+    gGL.syncMatrices();
+    glMultiDrawElementsIndirect(sGLMode[mode], mIndicesType,
+        reinterpret_cast<const void*>(static_cast<size_t>(command_offset) * 5 * sizeof(U32)),
+        draw_count, 5 * sizeof(U32));
+}
+
+void LLVertexBuffer::copyResidentRange(const LLVertexBuffer& source, U32 source_vertex, U32 source_index,
+    U32 vertices, U32 indices, U32 target_vertex, U32 target_index)
+{
+    llassert(this != &source);
+    llassert(mTypeMask == source.mTypeMask && mIndicesType == GL_UNSIGNED_SHORT && source.mIndicesType == GL_UNSIGNED_SHORT);
+    llassert(source_vertex+vertices <= source.mNumVerts && target_vertex+vertices <= mNumVerts);
+    llassert(source_index+indices <= source.mNumIndices && target_index+indices <= mNumIndices);
+    GLint read_binding = 0, write_binding = 0;
+    glGetIntegerv(GL_COPY_READ_BUFFER_BINDING, &read_binding);
+    glGetIntegerv(GL_COPY_WRITE_BUFFER_BINDING, &write_binding);
+    glBindBuffer(GL_COPY_READ_BUFFER, source.mGLBuffer);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, mGLBuffer);
+    for (U32 type=0; type<TYPE_TEXTURE_INDEX; ++type)
+    {
+        if (!(mTypeMask & (1u<<type))) continue;
+        const U32 bytes = vertices*sTypeSize[type];
+        const U32 src = source.mOffsets[type]+source_vertex*sTypeSize[type];
+        const U32 dst = mOffsets[type]+target_vertex*sTypeSize[type];
+        std::memcpy(mMappedData+dst, source.mMappedData+src, bytes);
+        glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, src, dst, bytes);
+    }
+    glBindBuffer(GL_COPY_READ_BUFFER, read_binding);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, write_binding);
+    if (indices)
+    {
+        const U16* src = reinterpret_cast<const U16*>(source.mMappedIndexData)+source_index;
+        U16* dst = reinterpret_cast<U16*>(mapIndexBuffer(target_index, indices));
+        for (U32 i=0; i<indices; ++i) dst[i] = U16(S32(src[i])-S32(source_vertex)+S32(target_vertex));
+    }
+    unmapBuffer();
+}
+
 void LLVertexBuffer::drawRangeFast(U32 mode, U32 start, U32 end, U32 count, U32 indices_offset) const
 {
     glDrawRangeElements(sGLMode[mode], start, end, count, mIndicesType,

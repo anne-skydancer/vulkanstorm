@@ -266,6 +266,13 @@ public:
     // Detailed error checking can be enabled by setting gDebugGL to true
     void draw(U32 mode, U32 count, U32 indices_offset) const;
     void drawArrays(U32 mode, U32 offset, U32 count) const;
+    // Commands use index elements, not byte offsets; the bound indirect buffer
+    // contains standard five-word DrawElementsIndirectCommand records.
+    void drawIndirect(U32 mode, U32 command_offset, U32 draw_count) const;
+    // Copy a resident range into a larger same-layout buffer. Attribute data is
+    // copied on the GPU; the CPU shadow and rebased 16-bit indices stay coherent.
+    void copyResidentRange(const LLVertexBuffer& source, U32 source_vertex, U32 source_index,
+        U32 vertices, U32 indices, U32 target_vertex, U32 target_index);
     void drawRange(U32 mode, U32 start, U32 end, U32 count, U32 indices_offset) const;
 
     // draw without syncing matrices.  If you're positive there have been no matrix

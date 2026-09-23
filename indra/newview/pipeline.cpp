@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "pipeline.h"
+#include "llcomputemesh.h"
+#include "llmeshstreaming.h"
 
 // library includes
 #include "llimagepng.h"
@@ -702,6 +704,7 @@ LLPipeline::~LLPipeline()
 
 void LLPipeline::cleanup()
 {
+    LLComputeMesh::destroyGL();
     assertInitialized();
 
     mGroupQ1.clear() ;
@@ -785,6 +788,7 @@ void LLPipeline::cleanup()
 
 void LLPipeline::destroyGL()
 {
+    LLComputeMesh::destroyGL();
     stop_glerror();
     unloadShaders();
     mHighlightFaces.clear();
@@ -3058,32 +3062,49 @@ void LLPipeline::updateGeom(F32 max_dtime)
     // for now, only LLVOVolume does this to throttle LOD changes
     LLVOVolume::preUpdateGeom();
 
-    // Iterate through all drawables on the priority build queue,
-    for (LLDrawable::drawable_list_t::iterator iter = mBuildQ1.begin();
-         iter != mBuildQ1.end();)
+    auto rebuild = [&](const LLPointer<LLDrawable>& entry)
+        {
+            auto* drawable = entry.get();
+            if (!drawable || drawable->isDead()) return true;
+            if (drawable->isUnload())
+            {
+                drawable->unload();
+                drawable->clearState(LLDrawable::FOR_UNLOAD);
+            }
+            if (!updateDrawableGeom(drawable)) return false;
+            drawable->clearState(LLDrawable::IN_REBUILD_Q);
+            return true;
+        };
+    // Particle geometry is animation, not streamed mesh construction. Service
+    // it (and other non-mesh objects) every frame, independently of mesh backlog.
+    auto immediate = LLMeshStreaming::extractImmediate(mBuildQ1,
+        [](const LLPointer<LLDrawable>& entry)
+        {
+            auto* volume = entry ? entry->getVOVolume() : nullptr;
+            return !volume || !volume->isMesh();
+        });
+    for (auto it=immediate.begin(); it!=immediate.end();)
     {
-        LLDrawable::drawable_list_t::iterator curiter = iter++;
-        LLDrawable* drawablep = *curiter;
-        if (drawablep && !drawablep->isDead())
-        {
-            if (drawablep->isUnload())
-            {
-                drawablep->unload();
-                drawablep->clearState(LLDrawable::FOR_UNLOAD);
-            }
-
-            if (updateDrawableGeom(drawablep))
-            {
-                drawablep->clearState(LLDrawable::IN_REBUILD_Q);
-                mBuildQ1.erase(curiter);
-            }
-        }
-        else
-        {
-            mBuildQ1.erase(curiter);
-        }
+        auto current = it++;
+        if (rebuild(*current)) immediate.erase(current);
     }
+    update_timer.reset();
+    // Keep streamed meshes bounded and fair without freezing cloud particles.
+    const U32 processed = LLMeshStreaming::rebuildBatch(mBuildQ1, rebuild,
+        [&]() { return update_timer.getElapsedTimeF32() >= llclamp(max_dtime, 0.0001f, 0.005f); });
+    mBuildQ1.splice(mBuildQ1.end(), immediate);
 
+    static LLTimer report_timer;
+    static F32 max_batch_ms = 0.f;
+    static U32 rebuild_steps = 0;
+    max_batch_ms = llmax(max_batch_ms, F32(update_timer.getElapsedTimeF32())*1000.f);
+    rebuild_steps += processed;
+    if (report_timer.getElapsedTimeF32() >= 5.f)
+    {
+        LL_INFOS("MeshBatch") << "drawable_rebuild_pending=" << mBuildQ1.size()
+            << " drawable_rebuild_steps=" << rebuild_steps << " drawable_max_frame_ms=" << max_batch_ms << LL_ENDL;
+        max_batch_ms = 0.f; rebuild_steps = 0; report_timer.reset();
+    }
     updateMovedList(mMovedBridge);
 }
 
@@ -3196,6 +3217,7 @@ void LLPipeline::markShift(LLDrawable *drawablep)
 
 void LLPipeline::shiftObjects(const LLVector3 &offset)
 {
+    LLComputeMesh::shiftLOD(offset);
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     assertInitialized();
 
@@ -3309,6 +3331,17 @@ void LLPipeline::markRebuild(LLSpatialGroup* group)
 
 void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags flag)
 {
+    if (drawablep && drawablep->getVOVolume() && (flag & LLDrawable::REBUILD_ALL))
+    {
+        auto* volume = drawablep->getVOVolume();
+        if (volume->mComputeLOD)
+        {
+            // The fast mesh update writes only the CPU-selected range. Resident
+            // objects need all their ranges regenerated after a geometry edit.
+            if (auto* group = drawablep->getSpatialGroup()) group->dirtyGeom();
+            LLComputeMesh::invalidateLOD(*volume);
+        }
+    }
     if (drawablep && !drawablep->isDead() && assertInitialized())
     {
         if (!drawablep->isState(LLDrawable::IN_REBUILD_Q))
@@ -3330,6 +3363,9 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
 
 void LLPipeline::stateSort(LLCamera& camera, LLCullResult &result)
 {
+    if (LLViewerCamera::sCurCameraID == LLViewerCamera::CAMERA_WORLD &&
+        !gCubeSnapshot && !sShadowRender && !sReflectionRender && !sRenderingHUDs)
+        LLComputeMesh::beginLOD();
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     LL_PROFILE_GPU_ZONE("stateSort");
 

@@ -2,6 +2,30 @@
 <llsd xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="llsd.xsd">
 <map>
+  <key>RenderGLComputeMeshBudgetMiB</key>
+  <map>
+    <key>Comment</key><string>Additional resident mesh geometry budget in MiB, including staged replacements (64-2048). Lowering it limits new admissions.</string>
+    <key>Persist</key><integer>1</integer><key>Type</key><string>U32</string><key>Value</key><integer>1024</integer>
+  </map>
+  <key>RenderGLComputeMeshPrepareMS</key>
+  <map>
+    <key>Comment</key><string>Per-frame resident mesh preparation time budget in milliseconds. Checks occur between bounded face/LOD work units.</string>
+    <key>Persist</key><integer>1</integer><key>Type</key><string>F32</string><key>Value</key><real>1.5</real>
+  </map>
+  <key>RenderGLComputeLOD</key>
+  <map>
+    <key>Comment</key><string>Select lowest, low, medium and high resident mesh geometry with OpenGL compute. Requires RenderGLComputeMesh; changes reload shaders.</string>
+    <key>Persist</key><integer>1</integer>
+    <key>Type</key><string>Boolean</string>
+    <key>Value</key><integer>1</integer>
+  </map>
+  <key>RenderGLComputeMesh</key>
+  <map>
+    <key>Comment</key><string>Use resident GPU-selected indirect draws for static opaque PBR meshes and rigged mesh attachments. Requires RenderGLComputeLOD; changes reload shaders.</string>
+    <key>Persist</key><integer>1</integer>
+    <key>Type</key><string>Boolean</string>
+    <key>Value</key><integer>1</integer>
+  </map>
   <key>FSLandmarkCreatedNotification</key>
   <map>
     <key>Comment</key>

@@ -34,6 +34,8 @@
 #include "lllocalbitmaps.h"
 #include "m3math.h"     // LLMatrix3
 #include "m4math.h"     // LLMatrix4
+#include <memory>
+namespace LLComputeMesh { struct Object; }
 #include <unordered_map>
 #include <unordered_set>
 
@@ -110,6 +112,8 @@ protected:
     virtual             ~LLVOVolume();
 
 public:
+    std::shared_ptr<LLComputeMesh::Object> mComputeLOD;
+    U32 mComputeLODRetryFrame = 0;
     static      void    initClass();
     static      void    cleanupClass();
     static      void    preUpdateGeom();

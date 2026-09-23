@@ -276,6 +276,25 @@ bool handleSetShaderChanged(const LLSD& newvalue)
     return true;
 }
 
+static bool handleComputeLODChanged(const LLSD& newvalue)
+{
+    if (gPipeline.isInit())
+    {
+        // A setting change must also revisit meshes whose CPU LOD has not
+        // changed. Otherwise enabling the path could leave it idle indefinitely.
+        for (S32 i = 0; i < gObjectList.getNumObjects(); ++i)
+        {
+            auto* object = gObjectList.getObject(i);
+            if (!object || object->isDead() || !object->mDrawable) continue;
+            auto* volume = object->mDrawable->getVOVolume();
+            if (!volume || !volume->isMesh()) continue;
+            if (auto* group = object->mDrawable->getSpatialGroup()) group->dirtyGeom();
+            gPipeline.markRebuild(object->mDrawable, LLDrawable::REBUILD_GEOMETRY);
+        }
+    }
+    return handleSetShaderChanged(newvalue);
+}
+
 static bool handleRenderPerfTestChanged(const LLSD& newvalue)
 {
        bool status = !newvalue.asBoolean();
@@ -1344,6 +1363,8 @@ void settings_setup_listeners()
     setting_setup_signal_listener(gSavedSettings, "RenderMaxPartCount", handleMaxPartCountChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderDynamicLOD", handleRenderDynamicLODChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderVSyncEnable", handleVSyncChanged);
+    setting_setup_signal_listener(gSavedSettings, "RenderGLComputeLOD", handleComputeLODChanged);
+    setting_setup_signal_listener(gSavedSettings, "RenderGLComputeMesh", handleComputeLODChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderDeferredNoise", handleReleaseGLBufferChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderDebugPipeline", handleRenderDebugPipelineChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderResolutionDivisor", handleRenderResolutionDivisorChanged);

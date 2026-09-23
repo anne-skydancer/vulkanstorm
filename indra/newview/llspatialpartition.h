@@ -46,6 +46,8 @@
 //<FS:Beq> needed to resolve render_hull dep
 #include "llmodel.h"
 //</FS:Beq>
+#include <memory>
+namespace LLComputeMesh { struct Resident; }
 #include <functional>
 #include <queue>
 #include <unordered_map>
@@ -106,6 +108,8 @@ public:
     U16 mEnd = 0;
     U32 mCount = 0;
     U32 mOffset = 0;
+
+    std::shared_ptr<LLComputeMesh::Resident> mComputeLOD;
 
     LLPointer<LLViewerTexture>     mTexture;
     LLPointer<LLViewerTexture> mSpecularMap;

@@ -32,6 +32,7 @@
 #include "apr_dso.h"
 #include "llhttpconstants.h"
 #include "llmeshrepository.h"
+#include "llmeshstreaming.h"
 
 #include "llagent.h"
 #include "llappviewer.h"
@@ -3455,138 +3456,88 @@ void LLMeshUploadThread::onCompleted(LLCore::HttpHandle handle, LLCore::HttpResp
 
 void LLMeshRepoThread::notifyLoadedMeshes()
 {
-    bool update_metrics(false);
-
-    if (!mMutex)
+    if (!mMutex) return;
+    static U32 completed_frame = ~0u;
+    if (completed_frame == gFrameCount) return;
+    completed_frame = gFrameCount;
+    LL_PROFILE_ZONE_NAMED("Mesh bounded completions");
+    LLTimer timer;
+    U32 processed = 0;
+    static U32 kind = 0;
+    // Round-robin service prevents a mesh backlog from starving skin/physics.
+    // Only pop under the lock; callbacks run on the main thread without it.
+    auto process = [&](auto& queue, auto callback)
     {
-        return;
-    }
-
-    LL_PROFILE_ZONE_SCOPED;
-
-    if (!mLoadedQ.empty())
-    {
-        std::deque<LoadedMesh> loaded_queue;
-
-        mLoadedMutex->lock();
-        if (!mLoadedQ.empty())
+        if (!mLoadedMutex->trylock()) return false;
+        if (queue.empty()) { mLoadedMutex->unlock(); return false; }
+        auto item = std::move(queue.front()); queue.pop_front();
+        mLoadedMutex->unlock();
+        if (!callback(item))
         {
-            loaded_queue.swap(mLoadedQ);
-            mLoadedMutex->unlock();
-
-            LL_PROFILE_ZONE_NAMED("notify loaded meshes");
-
-            update_metrics = true;
-
-            // Process the elements free of the lock
-            for (const auto& mesh : loaded_queue)
+            LLMutexLock lock(mLoadedMutex);
+            queue.push_back(std::move(item));
+        }
+        return true;
+    };
+    for (U32 attempts=0; attempts<48 && processed<8 && timer.getElapsedTimeF32()<0.0015f; ++attempts)
+    {
+        bool worked = false;
+        switch (kind++ % 6)
+        {
+        case 0:
+            worked = process(mLoadedQ, [](LoadedMesh& mesh)
             {
                 if (mesh.mVolume->getNumVolumeFaces() > 0)
-                {
-                    gMeshRepo.notifyMeshLoaded(mesh.mMeshParams, mesh.mVolume, mesh.mLOD);
-                }
-                else
-                {
-                    gMeshRepo.notifyMeshUnavailable(mesh.mMeshParams, mesh.mLOD, LLVolumeLODGroup::getVolumeDetailFromScale(mesh.mVolume->getDetail()));
-                }
-            }
+                    return gMeshRepo.notifyMeshLoaded(mesh.mMeshParams, mesh.mVolume, mesh.mLOD, mesh.mPublished);
+                return gMeshRepo.notifyMeshUnavailable(mesh.mMeshParams, mesh.mLOD,
+                    LLVolumeLODGroup::getVolumeDetailFromScale(mesh.mVolume->getDetail()));
+            });
+            break;
+        case 1:
+            worked = process(mUnavailableQ, [](LODRequest& request)
+                { return gMeshRepo.notifyMeshUnavailable(request.mMeshParams, request.mLOD, request.mLOD); });
+            break;
+        case 2:
+            worked = process(mSkinInfoQ, [](auto& info) { return gMeshRepo.notifySkinInfoReceived(info); });
+            break;
+        case 3:
+            worked = process(mSkinUnavailableQ, [](UUIDBasedRequest& request)
+                { return gMeshRepo.notifySkinInfoUnavailable(request.mId); });
+            break;
+        case 4:
+            worked = process(mDecompositionQ, [](auto& info)
+                { gMeshRepo.notifyDecompositionReceived(info, false); return true; });
+            break;
+        case 5:
+            worked = process(mPhysicsQ, [](auto& info)
+                { gMeshRepo.notifyDecompositionReceived(info, true); return true; });
+            break;
         }
-        else
-        {
-            mLoadedMutex->unlock();
-        }
+        processed += worked;
     }
-
-    if (!mUnavailableQ.empty())
+    static LLTimer report_timer;
+    static U32 completion_steps = 0;
+    static F32 completion_max_ms = 0;
+    completion_steps += processed;
+    completion_max_ms = llmax(completion_max_ms, F32(timer.getElapsedTimeF32())*1000.f);
+    if (report_timer.getElapsedTimeF32() >= 5.f)
     {
-        std::deque<LODRequest> unavil_queue;
-
-        mLoadedMutex->lock();
-        if (!mUnavailableQ.empty())
+        size_t meshes, skins, other;
         {
-            unavil_queue.swap(mUnavailableQ);
-            mLoadedMutex->unlock();
-
-            LL_PROFILE_ZONE_NAMED("notify unavail meshes");
-
-            update_metrics = true;
-
-            // Process the elements free of the lock
-            for (const auto& req : unavil_queue)
-            {
-                gMeshRepo.notifyMeshUnavailable(req.mMeshParams, req.mLOD, req.mLOD);
-            }
+            LLMutexLock lock(mLoadedMutex);
+            meshes = mLoadedQ.size()+mUnavailableQ.size();
+            skins = mSkinInfoQ.size()+mSkinUnavailableQ.size();
+            other = mDecompositionQ.size()+mPhysicsQ.size();
         }
-        else
-        {
-            mLoadedMutex->unlock();
-        }
+        LL_INFOS("MeshBatch") << "mesh_completion_pending=" << meshes << " skin_completion_pending=" << skins
+            << " other_completion_pending=" << other
+            << " lod_requests_queued=" << LLMeshRepository::sLODPending
+            << " mesh_http_active=" << sActiveHeaderRequests.load()+sActiveLODRequests.load()+sActiveSkinRequests.load()
+            << " completion_steps=" << completion_steps
+            << " completion_max_frame_ms=" << completion_max_ms << LL_ENDL;
+        completion_steps = 0; completion_max_ms = 0; report_timer.reset();
     }
-
-    if (!mSkinInfoQ.empty() || !mSkinUnavailableQ.empty() || !mDecompositionQ.empty() || !mPhysicsQ.empty())
-    {
-        if (mLoadedMutex->trylock())
-        {
-            LL_PROFILE_ZONE_NAMED("notify misc meshes");
-            std::deque<LLPointer<LLMeshSkinInfo>> skin_info_q;
-            std::deque<UUIDBasedRequest> skin_info_unavail_q;
-            std::list<LLModel::Decomposition*> decomp_q;
-            std::list<LLModel::Decomposition*> physics_q;
-
-            if (! mSkinInfoQ.empty())
-            {
-                skin_info_q.swap(mSkinInfoQ);
-            }
-
-            if (! mSkinUnavailableQ.empty())
-            {
-                skin_info_unavail_q.swap(mSkinUnavailableQ);
-            }
-
-            if (! mDecompositionQ.empty())
-            {
-                decomp_q.swap(mDecompositionQ);
-            }
-
-            if (!mPhysicsQ.empty())
-            {
-                physics_q.swap(mPhysicsQ);
-            }
-
-            mLoadedMutex->unlock();
-
-            // Process the elements free of the lock
-            while (! skin_info_q.empty())
-            {
-                gMeshRepo.notifySkinInfoReceived(skin_info_q.front());
-                skin_info_q.pop_front();
-            }
-            while (! skin_info_unavail_q.empty())
-            {
-                gMeshRepo.notifySkinInfoUnavailable(skin_info_unavail_q.front().mId);
-                skin_info_unavail_q.pop_front();
-            }
-
-            while (! decomp_q.empty())
-            {
-                gMeshRepo.notifyDecompositionReceived(decomp_q.front(), false);
-                decomp_q.pop_front();
-            }
-
-            while (!physics_q.empty())
-            {
-                gMeshRepo.notifyDecompositionReceived(physics_q.front(), true);
-                physics_q.pop_front();
-            }
-        }
-    }
-
-    if (update_metrics)
-    {
-        // Ping time-to-load metrics for mesh download operations.
-        LLMeshRepository::metricsProgress(0);
-    }
-
+    if (processed) LLMeshRepository::metricsProgress(0);
 }
 
 S32 LLMeshRepoThread::getActualMeshLOD(const LLVolumeParams& mesh_params, S32 lod)
@@ -4491,6 +4442,35 @@ S32 LLMeshRepository::loadMesh(LLVOVolume* vobj, const LLVolumeParams& mesh_para
         return new_lod;
     }
 
+    const S32 desired_lod = new_lod;
+    if (!vobj->isHUDAttachment())
+    {
+        const S32 next = LLMeshStreaming::firstMissingLevel(new_lod,
+            [&](S32 level)
+            {
+                // A failed authored level must not block all finer levels.
+                for (S32 candidate=level; candidate<4; ++candidate)
+                {
+                    const S32 actual = getActualMeshLOD(mesh_params, candidate);
+                    if (actual < 0) return -1;
+                    LLVolume* source = LLPrimitive::getVolumeManager()->refVolume(mesh_params, actual);
+                    const bool failed = source && source->isMeshAssetUnavaliable();
+                    if (source) LLPrimitive::getVolumeManager()->unrefVolume(source);
+                    if (!failed) return actual;
+                }
+                return -1;
+            },
+            [&](S32 actual)
+            {
+                LLVolume* source = LLPrimitive::getVolumeManager()->refVolume(mesh_params, actual);
+                const bool ready = source && source->isMeshAssetLoaded();
+                if (source) LLPrimitive::getVolumeManager()->unrefVolume(source);
+                return ready;
+            });
+        if (next < 0) return last_lod >= 0 ? last_lod : new_lod;
+        new_lod = next;
+    }
+
     {
         LLMutexLock lock(mMeshMutex);
         //add volume to list of loading meshes
@@ -4524,43 +4504,18 @@ S32 LLMeshRepository::loadMesh(LLVOVolume* vobj, const LLVolumeParams& mesh_para
 
         if (group)
         {
-            //first, see if last_lod is available (don't transition down to avoid funny popping a la SH-641)
-            if (last_lod >= 0)
+            U32 ready = 0;
+            for (S32 level=0; level<4; ++level)
             {
-                LLVolume* lod = group->refLOD(last_lod);
-                if (lod && lod->isMeshAssetLoaded() && lod->getNumVolumeFaces() > 0)
-                {
-                    group->derefLOD(lod);
-                    return last_lod;
-                }
+                LLVolume* lod = group->refLOD(level);
+                if (lod && lod->isMeshAssetLoaded() && lod->getNumVolumeFaces()>0) ready |= 1u<<level;
                 group->derefLOD(lod);
             }
-
-            //next, see what the next lowest LOD available might be
-            for (S32 i = new_lod -1; i >= 0; --i)
-            {
-                LLVolume* lod = group->refLOD(i);
-                if (lod && lod->isMeshAssetLoaded() && lod->getNumVolumeFaces() > 0)
-                {
-                    group->derefLOD(lod);
-                    return i;
-                }
-
-                group->derefLOD(lod);
-            }
-
-            //no lower LOD is a available, is a higher lod available?
-            for (S32 i = new_lod+1; i < LLVolumeLODGroup::NUM_LODS; ++i)
-            {
-                LLVolume* lod = group->refLOD(i);
-                if (lod && lod->isMeshAssetLoaded() && lod->getNumVolumeFaces() > 0)
-                {
-                    group->derefLOD(lod);
-                    return i;
-                }
-
-                group->derefLOD(lod);
-            }
+            // Advance to each newly available finer level; the old early return
+            // for last_lod kept Lowest visible until High completed. A finer
+            // cached previous level still stays visible while waiting.
+            const U32 visible = LLMeshStreaming::visibleLevel(ready, desired_lod, last_lod);
+            if (visible<4) return visible;
         }
     }
 
@@ -4830,8 +4785,14 @@ void LLMeshRepository::notifyLoadedMeshes()
         if (active_count < LLMeshRepoThread::sRequestHighWater)
         {
             S32 push_count = LLMeshRepoThread::sRequestHighWater - active_count;
+            // Let the bounded main-thread consumer catch up before admitting
+            // more downloads. In-flight requests may still complete normally.
+            {
+                LLMutexLock completed_lock(mThread->mLoadedMutex);
+                if (mThread->mLoadedQ.size()+mThread->mSkinInfoQ.size() >= 256) push_count = 0;
+            }
 
-            if (mPendingRequests.size() > push_count)
+            if (push_count > 0 && mPendingRequests.size() > size_t(push_count))
             {
                 LL_PROFILE_ZONE_NAMED("Mesh score update");
                 // More requests than the high-water limit allows so
@@ -4897,40 +4858,36 @@ void LLMeshRepository::notifyLoadedMeshes()
     mThread->mSignal->signal();
 }
 
-void LLMeshRepository::notifySkinInfoReceived(LLMeshSkinInfo* info)
+namespace
 {
-    mSkinMap[info->mMeshID] = info; // Cache into LLPointer
-    // Alternative: We can get skin size from header
-    sCacheBytesSkins += info->sizeBytes();
-
-    skin_load_map::iterator iter = mLoadingSkins.find(info->mMeshID);
-    if (iter != mLoadingSkins.end())
-    {
-        for (LLVOVolume* vobj : iter->second.mVolumes)
-        {
-            if (vobj)
-            {
-                vobj->notifySkinInfoLoaded(info);
-            }
-        }
-        mLoadingSkins.erase(iter);
-    }
+// Consume tracked waiters in place so unregisterMesh/unregisterSkinInfo still
+// remove dead or changed objects. Never retain raw object pointers across frames.
+template<class Map, class Callback>
+bool notifyMeshWaiters(Map& map, const LLUUID& id, Callback callback)
+{
+    LLTimer timer;
+    return LLMeshStreaming::notifyWaiters(map, id, callback,
+        [&]() { return timer.getElapsedTimeF32() >= 0.00025f; });
+}
 }
 
-void LLMeshRepository::notifySkinInfoUnavailable(const LLUUID& mesh_id)
+bool LLMeshRepository::notifySkinInfoReceived(LLMeshSkinInfo* info)
 {
-    skin_load_map::iterator iter = mLoadingSkins.find(mesh_id);
-    if (iter != mLoadingSkins.end())
+    auto found = mSkinMap.find(info->mMeshID);
+    if (found == mSkinMap.end() || found->second.get() != info)
     {
-        for (LLVOVolume* vobj : iter->second.mVolumes)
-        {
-            if (vobj)
-            {
-                vobj->notifySkinInfoUnavailable();
-            }
-        }
-        mLoadingSkins.erase(iter);
+        if (found != mSkinMap.end()) sCacheBytesSkins -= found->second->sizeBytes();
+        mSkinMap[info->mMeshID] = info;
+        sCacheBytesSkins += info->sizeBytes();
     }
+    return notifyMeshWaiters(mLoadingSkins, info->mMeshID,
+        [info](LLVOVolume& object) { object.notifySkinInfoLoaded(info); });
+}
+
+bool LLMeshRepository::notifySkinInfoUnavailable(const LLUUID& mesh_id)
+{
+    return notifyMeshWaiters(mLoadingSkins, mesh_id,
+        [](LLVOVolume& object) { object.notifySkinInfoUnavailable(); });
 }
 
 void LLMeshRepository::notifyDecompositionReceived(LLModel::Decomposition* decomp, bool physics_mesh)
@@ -4960,86 +4917,43 @@ void LLMeshRepository::notifyDecompositionReceived(LLModel::Decomposition* decom
     }
 }
 
-void LLMeshRepository::notifyMeshLoaded(const LLVolumeParams& mesh_params, LLVolume* volume, S32 lod)
-{ //called from main thread
-
-    //get list of objects waiting to be notified this mesh is loaded
+bool LLMeshRepository::notifyMeshLoaded(const LLVolumeParams& mesh_params, LLVolume* volume, S32 lod, bool& published)
+{
     const auto& mesh_id = mesh_params.getSculptID();
-    mesh_load_map::iterator obj_iter = mLoadingMeshes[lod].find(mesh_id);
-
-    if (volume && obj_iter != mLoadingMeshes[lod].end())
+    if (!volume || mLoadingMeshes[lod].find(mesh_id) == mLoadingMeshes[lod].end()) return true;
+    if (!published)
     {
-        //make sure target volume is still valid
-        if (volume->getNumVolumeFaces() <= 0)
-        {
-            LL_WARNS(LOG_MESH) << "Mesh loading returned empty volume.  ID:  " << mesh_id
-                               << LL_ENDL;
-        }
-
-        { //update system volume
-            S32 detail = LLVolumeLODGroup::getVolumeDetailFromScale(volume->getDetail());
-            LLVolume* sys_volume = LLPrimitive::getVolumeManager()->refVolume(mesh_params, detail);
-            if (sys_volume)
-            {
-                sys_volume->copyVolumeFaces(volume);
-                sys_volume->setMeshAssetLoaded(true);
-                LLPrimitive::getVolumeManager()->unrefVolume(sys_volume);
-            }
-            else
-            {
-                LL_WARNS(LOG_MESH) << "Couldn't find system volume for mesh " << mesh_id
-                                   << LL_ENDL;
-            }
-        }
-
-        //notify waiting LLVOVolume instances that their requested mesh is available
-        for (LLVOVolume* vobj : obj_iter->second.mVolumes)
-        {
-            if (vobj)
-            {
-                vobj->notifyMeshLoaded();
-            }
-        }
-
-        mLoadingMeshes[lod].erase(obj_iter);
-
-        LLViewerStatsRecorder::instance().meshLoaded();
-    }
-}
-
-void LLMeshRepository::notifyMeshUnavailable(const LLVolumeParams& mesh_params, S32 request_lod, S32 volume_lod)
-{ //called from main thread
-    //get list of objects waiting to be notified this mesh is loaded
-    const auto& mesh_id = mesh_params.getSculptID();
-    mesh_load_map::iterator obj_iter = mLoadingMeshes[request_lod].find(mesh_id);
-    if (obj_iter != mLoadingMeshes[request_lod].end())
-    {
-        F32 detail = LLVolumeLODGroup::getVolumeScaleFromDetail(volume_lod);
-
-        LLVolume* sys_volume = LLPrimitive::getVolumeManager()->refVolume(mesh_params, volume_lod);
+        const S32 detail = LLVolumeLODGroup::getVolumeDetailFromScale(volume->getDetail());
+        LLVolume* sys_volume = LLPrimitive::getVolumeManager()->refVolume(mesh_params, detail);
         if (sys_volume)
         {
-            sys_volume->setMeshAssetUnavaliable(true);
+            sys_volume->copyVolumeFaces(volume);
+            sys_volume->setMeshAssetLoaded(true);
             LLPrimitive::getVolumeManager()->unrefVolume(sys_volume);
         }
-
-        for (LLVOVolume* vobj : obj_iter->second.mVolumes)
-        {
-            if (vobj)
-            {
-                LLVolume* obj_volume = vobj->getVolume();
-
-                if (obj_volume &&
-                    obj_volume->getDetail() == detail &&
-                    obj_volume->getParams() == mesh_params)
-                { //should force volume to find most appropriate LOD
-                    vobj->setVolume(obj_volume->getParams(), volume_lod);
-                }
-            }
-        }
-
-        mLoadingMeshes[request_lod].erase(obj_iter);
+        published = true;
+        LLViewerStatsRecorder::instance().meshLoaded();
     }
+    return notifyMeshWaiters(mLoadingMeshes[lod], mesh_id,
+        [](LLVOVolume& object) { object.notifyMeshLoaded(); });
+}
+
+bool LLMeshRepository::notifyMeshUnavailable(const LLVolumeParams& mesh_params, S32 request_lod, S32 volume_lod)
+{
+    const F32 detail = LLVolumeLODGroup::getVolumeScaleFromDetail(volume_lod);
+    LLVolume* sys_volume = LLPrimitive::getVolumeManager()->refVolume(mesh_params, volume_lod);
+    if (sys_volume)
+    {
+        sys_volume->setMeshAssetUnavaliable(true);
+        LLPrimitive::getVolumeManager()->unrefVolume(sys_volume);
+    }
+    return notifyMeshWaiters(mLoadingMeshes[request_lod], mesh_params.getSculptID(),
+        [&](LLVOVolume& object)
+        {
+            auto* volume = object.getVolume();
+            if (volume && volume->getDetail() == detail && volume->getParams() == mesh_params)
+                object.setVolume(volume->getParams(), volume_lod);
+        });
 }
 
 S32 LLMeshRepository::getActualMeshLOD(const LLVolumeParams& mesh_params, S32 lod)

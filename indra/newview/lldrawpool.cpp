@@ -37,6 +37,7 @@
 #include "lldrawpoolbump.h"
 #include "lldrawpoolmaterials.h"
 #include "lldrawpoolpbropaque.h"
+#include "llcomputemesh.h"
 #include "lldrawpoolsimple.h"
 #include "lldrawpoolsky.h"
 #include "lldrawpooltree.h"
@@ -570,6 +571,15 @@ void LLRenderPass::applyModelMatrix(const LLMatrix4* model_matrix)
     }
 }
 
+void LLRenderPass::drawGeometry(LLDrawInfo& params)
+{
+    if (!LLComputeMesh::drawLOD(params))
+    {
+        params.mVertexBuffer->setBuffer();
+        params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+    }
+}
+
 void LLRenderPass::pushBatch(LLDrawInfo& params, bool texture, bool batch_textures)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
@@ -622,8 +632,7 @@ void LLRenderPass::pushBatch(LLDrawInfo& params, bool texture, bool batch_textur
         return;
     }
     // </FS:Beq>
-    params.mVertexBuffer->setBuffer();
-    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+    drawGeometry(params);
     if (tex_setup)
     {
         gGL.matrixMode(LLRender::MM_TEXTURE0);
@@ -643,8 +652,7 @@ void LLRenderPass::pushUntexturedBatch(LLDrawInfo& params)
 
     applyModelMatrix(params);
 
-    params.mVertexBuffer->setBuffer();
-    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+    drawGeometry(params);
 }
 
 // static
@@ -834,8 +842,7 @@ void LLRenderPass::pushGLTFBatch(LLDrawInfo& params)
 
     applyModelMatrix(params);
 
-    params.mVertexBuffer->setBuffer();
-    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+    drawGeometry(params);
 
     teardown_texture_matrix(params);
 }
@@ -849,8 +856,7 @@ void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params)
 
     applyModelMatrix(params);
 
-    params.mVertexBuffer->setBuffer();
-    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+    drawGeometry(params);
 }
 
 void LLRenderPass::pushRiggedGLTFBatches(U32 type, bool textured)
