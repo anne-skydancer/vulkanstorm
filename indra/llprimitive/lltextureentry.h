@@ -209,6 +209,8 @@ public:
     // GLTF render material
     // nuanced behavior here -- if there is no render material, fall back to getGLTFMaterial, but ONLY for the getter, not the setter
     LLGLTFMaterial* getGLTFRenderMaterial() const;
+    // Deferred geometry work must wait while overrides lack a resolved material.
+    bool isGLTFRenderMaterialReady() const;
     S32 setGLTFRenderMaterial(LLGLTFMaterial* mat);
 
 public:

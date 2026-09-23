@@ -10,6 +10,28 @@ struct Object { int id; bool dead=false; bool isDead() const { return dead; } };
 struct Waiters { std::set<Object*> mVolumes; };
 int main()
 {
+    // A direct-draw fallback must catch up before a finer rigged generation
+    // becomes resident. Later invalidation must not expose the original Lowest.
+    unsigned cpu_level = 0;
+    auto authored = [](unsigned level) { return int(level); };
+    for (unsigned loaded=0; loaded<4; ++loaded)
+    {
+        const unsigned ready = (1u << (loaded+1))-1;
+        const int promotion = LLMeshStreaming::fallbackPromotion(cpu_level, ready, authored);
+        if (promotion >= 0) cpu_level = unsigned(promotion);
+        assert(cpu_level == loaded);
+        assert(LLMeshStreaming::fallbackPromotion(cpu_level, ready, authored) == -1);
+    }
+    assert(LLMeshStreaming::fallbackPromotion(cpu_level, 1, authored) == -1); // never demote a warm fallback
+    assert(LLMeshStreaming::fallbackPromotion(0, 8, authored) == 3); // authored High only
+    assert(LLMeshStreaming::fallbackPromotion(0, 0, authored) == -1); // no source yet
+    // Nominal High may alias the already active authored Low. Promoting to the
+    // nominal slot would rebuild forever because the source remains Low.
+    auto low_only = [](unsigned) { return 1; };
+    assert(LLMeshStreaming::fallbackPromotion(1, 15, low_only) == -1);
+    assert(LLMeshStreaming::fallbackPromotion(0, 15, low_only) == 1);
+    for (unsigned mask=1; mask<16; ++mask)
+        assert(LLMeshStreaming::fallbackPromotion(1, mask, low_only) == -1);
     // A Medium refinement after High residency must retain High, even when a
     // 16-bit packed subset previously omitted Medium.
     assert(LLMeshStreaming::retainLoadedLevel(3, 2, 8, 7));

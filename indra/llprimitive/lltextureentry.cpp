@@ -593,6 +593,12 @@ S32 LLTextureEntry::setBaseMaterial()
     return changed;
 }
 
+bool LLTextureEntry::isGLTFRenderMaterialReady() const
+{
+    return mGLTFRenderMaterial.notNull() || getGLTFMaterialOverride() == nullptr ||
+        getGLTFMaterialOverride()->isClearedForBaseMaterial();
+}
+
 LLGLTFMaterial* LLTextureEntry::getGLTFRenderMaterial() const
 {
     if (mGLTFRenderMaterial.notNull())

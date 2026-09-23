@@ -415,6 +415,14 @@ BuildResult advanceJob(BuildJob& job)
     if (!current || !current->isMeshAssetLoaded()) return BuildResult::WAIT;
     const S32 count = current->getNumVolumeFaces();
     if (count <= 0 || count != object->mDrawable->getNumFaces() || size_t(count) != owner->faces.size()) return BuildResult::DROP;
+    // Jobs resume on later frames: a material update can arrive between any
+    // two preparation steps, including before fallback promotion/publication.
+    for (S32 f=0; f<count; ++f)
+    {
+        const auto* te = object->getTE(f);
+        if (!te) return BuildResult::DROP;
+        if (!te->isGLTFRenderMaterialReady()) return BuildResult::WAIT;
+    }
     const bool rigged = object->mDrawable->isState(LLDrawable::RIGGED);
     if (!job.initialized)
     {
@@ -454,6 +462,22 @@ BuildResult advanceJob(BuildJob& job)
             }
         }
         if (!job.ready_mask) return job.failed_mask == 15 ? BuildResult::DROP : BuildResult::WAIT;
+        if (rigged)
+        {
+            const U32 cpu_level = LLVolumeLODGroup::getVolumeDetailFromScale(current->getDetail());
+            const S32 promotion = LLMeshStreaming::fallbackPromotion(cpu_level, job.ready_mask,
+                [&](U32 level) { return LLVolumeLODGroup::getVolumeDetailFromScale(job.volumes[level]->getDetail()); });
+            if (promotion >= 0)
+            {
+                // A camera/material rebuild temporarily uses the direct drawable.
+                // Promote that fallback through the normal bounded rebuild path
+                // before publishing finer resident ranges. Otherwise every such
+                // rebuild exposes the original Lowest body/clothing mesh again.
+                object->forceLOD(promotion);
+                object->notifyMeshLoaded();
+                return BuildResult::DROP; // forceLOD invalidated this generation
+            }
+        }
         bool adds_detail = false;
         for (const auto& record : owner->faces)
             adds_detail |= !record->valid || (job.ready_mask & ~record->available_lods);

@@ -20,10 +20,25 @@ intentionally empty authored range remains empty, distinct from missing data.
 Each object publishes all its faces together at the main-world preparation point.
 Its opaque, alpha, emissive, shadow and PPLL replay submissions share that mapping.
 
-CPU picking retains the existing available source mesh; residency no longer forces
-High on the CPU. Selection/editing returns to the existing CPU LOD path. Picking
-can therefore use a coarser silhouette than the GPU-refined geometry until that
-interaction changes the CPU LOD. This requires in-world validation.
+Before publishing finer rigged residency, the ordinary drawable is promoted through
+the normal bounded rebuild queue to that available source level. A camera/material
+rebuild can therefore fall back to matching detail instead of exposing the original
+coarse body or clothing mesh. This follows available detail progressively; it does
+not force a cold High download. Unrigged CPU picking still retains the existing
+available source mesh and can have a coarser silhouette than GPU-refined geometry.
+Selection/editing returns to the existing CPU LOD path. In-world validation remains
+necessary.
+
+Fallback promotion compares authored source detail, not the nominal slot. For
+example, if High resolves to Low, an ordinary Low drawable already matches that
+source; repeatedly requesting High would never advance it and would cause rebuild
+churn. Regression coverage includes this aliased-level case.
+
+Deferred preparation checks texture-entry render-material readiness on every step,
+including before fallback promotion and publication. An override without a resolved
+render material defers work until completion. The existing strict material getter
+retains its invariant. The focused `LL_TEXTURE_ENTRY_MATERIAL_TEST` target exercises
+the real texture entry through pending, resolved, changed and cleared overrides.
 
 ## GPU selection and streaming feedback
 
@@ -158,17 +173,23 @@ shader reload, memory pressure and repeated camera/refocus changes.
 ## Build
 
 RelWithDebInfo, Tracy enabled, no installer. Reconfigured through `autobuild configure` with `USE_MESAZINK=ON` so runtime staging includes the required DLL pair.
+Local configuration must set both `revision` and `AUTOBUILD_BUILD_ID` to
+`git rev-list --count HEAD`, matching CI. Without an explicit ID, autobuild creates
+a date-based number that takes precedence over CMake's Git-count fallback.
 Verified on 2026-09-23: `vulkanstorm-bin` and `copy_w_viewer_manifest` both completed
-successfully. The EXE and PDB were linked at 21:04 local time with the 1024 MiB
-budget and rigged/cloud fixes. The manifest copy was
+successfully. The latest EXE was linked at 21:41 local time as **7.2.5.81950**, with
+the authored-LOD handoff correction, material readiness guard and 1024 MiB budget. FileVersion, ProductVersion and
+the generated version header all agree on 81950. The manifest copy was
 rerun after linking because its dependency direction otherwise leaves the branded
 executable from the previous build.
 
 Run `build-vc170-64/newview/RelWithDebInfo/Vulkanstorm-RelWithDebInfo.exe`.
-Its SHA-256 is `7564A6EE0C6F064D98193CF81DB2F1ADE96A91649D4D8B76559FEEBEA971E41F`,
+Its SHA-256 is `990A03474A77089764798EA933A318BC05F33FC0C65C395EFBE50C6B3267F015`,
 identical to `vulkanstorm-bin.exe`. Staged settings, `cloud.xml`, `meshLODC.glsl`, and both
 `mesa/opengl32.dll` and `mesa/libgallium_wgl.dll` match their source/package hashes.
-Evidence in `build-vc170-64`: `rigged-refinement-fix-build.log`,
-`rigged-refinement-1024-build.log`, `rigged-refinement-stage.log`, and
-`rigged-refinement-stage-verification.json`.
+Latest build evidence in `build-vc170-64`: `material-readiness-configure.log`,
+`material-readiness-verified-build.log` (including all three focused material tests
+passing), and `material-readiness-stage.log`.
+The earlier runtime asset hash verification is recorded in
+`rigged-refinement-stage-verification.json`; its executable hash is superseded above.
 The viewer has not been launched for in-world validation of this build.

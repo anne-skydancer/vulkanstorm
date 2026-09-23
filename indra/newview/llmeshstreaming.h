@@ -8,6 +8,18 @@ inline bool retainLoadedLevel(unsigned level, unsigned target, unsigned previous
 {
     return level <= target || (previous & (1u << level)) || !ready;
 }
+template<class Resolve>
+int fallbackPromotion(unsigned current, unsigned ready, Resolve resolve)
+{
+    int finest = int(current);
+    for (unsigned level=0; level<4; ++level)
+        if (ready & (1u << level))
+        {
+            const int actual = resolve(level);
+            if (actual > finest) finest = actual;
+        }
+    return finest > int(current) ? finest : -1;
+}
 template<class Resolve, class Ready>
 int firstMissingLevel(int desired, Resolve resolve, Ready ready)
 {
