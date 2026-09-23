@@ -2990,7 +2990,7 @@
       <key>Type</key>
       <string>U32</string>
       <key>Value</key>
-      <integer>2048</integer>
+      <integer>6400</integer>
     </map>
     <key>CacheValidateCounter</key>
     <map>
@@ -27914,6 +27914,20 @@ Change of this parameter will affect the layout of buttons in notification toast
       <string>Boolean</string>
       <key>Value</key>
       <integer>1</integer>
+    </map>
+    <key>TextureDiscardOnFocusLoss</key>
+    <map>
+        <key>Comment</key><string>Discard texture detail when a visible viewer loses focus. Hidden and minimized viewers still discard.</string>
+        <key>Persist</key><integer>1</integer>
+        <key>Type</key><string>Boolean</string>
+        <key>Value</key><integer>0</integer>
+    </map>
+    <key>SceneLoadAutomaticMemoryBudget</key>
+    <map>
+        <key>Comment</key><string>Automatically size runtime scene memory limits from installed RAM and the viewer heap cap. Disable to use the saved SceneLoadLowMemoryBound and SceneLoadHighMemoryBound values.</string>
+        <key>Persist</key><integer>1</integer>
+        <key>Type</key><string>Boolean</string>
+        <key>Value</key><integer>1</integer>
     </map>
   </map>
 </llsd>

@@ -87,6 +87,8 @@ void load_exr(const std::string& filename)
 
         glGenerateMipmap(GL_TEXTURE_2D);
 
+        LLImageGLMemory::record_generated_mips();
+
         gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     }

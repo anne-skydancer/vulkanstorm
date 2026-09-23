@@ -54,6 +54,7 @@ set(llrender_HEADER_FILES
     llgltexture.h
     llgltypes.h
     llimagegl.h
+    lltextureallocation.h
     llpostprocess.h
     llrender.h
     llrender2dutils.h
