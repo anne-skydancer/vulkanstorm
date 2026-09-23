@@ -2,6 +2,12 @@
 
 Development worktree: `gl-compute-mesh`, branch `codex/gl-compute-mesh`.
 
+Release integration branch: `codex/gl-compute-mesh-release`, based on `master`.
+It carries the renderer changes without the inherited development hooks or the
+development-only PPLL sampler. Build evidence below refers to the development
+worktree; the release integration branch separately passes the mesh-streaming
+helper tests and Mesa/Zink GPU tests, with a full viewer build left to CI.
+
 ## Current behavior
 
 Mesh levels are Lowest, Low, Medium and High (0-3). Cold requests go through the

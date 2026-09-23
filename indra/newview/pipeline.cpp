@@ -8205,98 +8205,8 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
                          << " MiB pool, " << pixel_layers << " max layers/pixel)" << LL_ENDL;
 }
 
-namespace
-{
-// Sample once per second. Results are consumed only after the final timestamp
-// is available; never read the active allocator back to the CPU.
-struct OITProfileSample
-{
-    GLuint query[4] = {};
-    GLuint counter = 0;
-    bool pending = false;
-    U32 capacity = 0;
-    U32 width = 0, height = 0;
-    F32 cpu_ms = 0.f;
-};
-OITProfileSample oit_samples[4];
-OITProfileSample* oit_active = nullptr;
-LLTimer oit_sample_interval;
-LLTimer oit_cpu_timer;
-
-void releaseOITProfile()
-{
-    oit_active = nullptr;
-    for (auto& sample : oit_samples)
-    {
-        if (sample.query[0]) glDeleteQueries(4, sample.query);
-        if (sample.counter) glDeleteBuffers(1, &sample.counter);
-        sample = OITProfileSample{};
-    }
-}
-
-void beginOITProfile(U32 capacity, U32 width, U32 height)
-{
-    oit_active = nullptr;
-    static LLCachedControl<bool> enabled(gSavedSettings, "RenderAlphaOITProfile", true);
-    if (!enabled || !glQueryCounter || !glGetQueryObjectui64v) return;
-    for (auto& sample : oit_samples)
-    {
-        if (!sample.pending) continue;
-        GLuint available = 0;
-        glGetQueryObjectuiv(sample.query[3], GL_QUERY_RESULT_AVAILABLE, &available);
-        if (!available) continue;
-        GLuint64 stamp[4];
-        for (U32 i = 0; i < 4; ++i)
-            glGetQueryObjectui64v(sample.query[i], GL_QUERY_RESULT, &stamp[i]);
-        GLint previous = 0;
-        glGetIntegerv(GL_COPY_READ_BUFFER_BINDING, &previous);
-        glBindBuffer(GL_COPY_READ_BUFFER, sample.counter);
-        U32 used = 0;
-        glGetBufferSubData(GL_COPY_READ_BUFFER, 0, sizeof(used), &used);
-        glBindBuffer(GL_COPY_READ_BUFFER, previous);
-        const F64 clear_ms = F64(stamp[1] - stamp[0]) / 1.e6;
-        const F64 capture_ms = F64(stamp[2] - stamp[1]) / 1.e6;
-        const F64 resolve_ms = F64(stamp[3] - stamp[2]) / 1.e6;
-        const F64 allocation_mib = (F64(sample.capacity) * 16. + F64(sample.width) * sample.height * 4. + 4.) / 1048576.;
-        LL_INFOS("OITProfile") << "gpu_clear_ms=" << clear_ms
-            << " gpu_capture_ms=" << capture_ms << " gpu_resolve_ms=" << resolve_ms
-            << " cpu_submit_ms=" << sample.cpu_ms << " nodes_requested=" << used
-            << " node_capacity=" << sample.capacity << " pool_overflow=" << (used > sample.capacity)
-            << " allocation_mib=" << allocation_mib
-            << " size=" << sample.width << "x" << sample.height << LL_ENDL;
-        LL_PROFILE_PLOT("PPLL GPU capture ms", capture_ms);
-        LL_PROFILE_PLOT("PPLL GPU resolve ms", resolve_ms);
-        sample.pending = false;
-    }
-    if (oit_sample_interval.getElapsedTimeF32() < 1.f) return;
-    for (auto& sample : oit_samples)
-    {
-        if (sample.pending) continue;
-        if (!sample.query[0])
-        {
-            glGenQueries(4, sample.query);
-            glGenBuffers(1, &sample.counter);
-            GLint previous = 0;
-            glGetIntegerv(GL_COPY_WRITE_BUFFER_BINDING, &previous);
-            glBindBuffer(GL_COPY_WRITE_BUFFER, sample.counter);
-            glBufferData(GL_COPY_WRITE_BUFFER, sizeof(U32), nullptr, GL_STREAM_READ);
-            glBindBuffer(GL_COPY_WRITE_BUFFER, previous);
-        }
-        sample.capacity = capacity;
-        sample.width = width;
-        sample.height = height;
-        oit_active = &sample;
-        oit_cpu_timer.reset();
-        oit_sample_interval.reset();
-        glQueryCounter(sample.query[0], GL_TIMESTAMP);
-        return;
-    }
-}
-}
-
 void LLPipeline::releaseAlphaOITBuffers()
 {
-    releaseOITProfile();
     if (mAlphaOITHead)    { glDeleteTextures(1, &mAlphaOITHead);   mAlphaOITHead = 0; }
     if (mAlphaOITNodes)   { glDeleteBuffers(1, &mAlphaOITNodes);   mAlphaOITNodes = 0; }
     if (mAlphaOITCounter) { glDeleteBuffers(1, &mAlphaOITCounter); mAlphaOITCounter = 0; }
@@ -8311,7 +8221,6 @@ bool LLPipeline::beginAlphaOITCapture()
         return false;
     }
     LL_PROFILE_GPU_ZONE("alpha oit capture begin");
-    beginOITProfile(mAlphaOITNodeCap, mAlphaOITWidth, mAlphaOITHeight);
 
     // The previous capture wrote these resources through shaders. Order those
     // writes before the API resets, including when reusing unchanged allocations.
@@ -8338,7 +8247,6 @@ bool LLPipeline::beginAlphaOITCapture()
     // the fragment deliberately falls through to ordinary source-over blending so
     // overflow degrades to legacy ordering rather than making cards disappear.
     gGL.setColorMask(true, true);
-    if (oit_active) glQueryCounter(oit_active->query[1], GL_TIMESTAMP);
     return true;
 }
 
@@ -8353,20 +8261,6 @@ void LLPipeline::endAlphaOITCapture()
                     GL_SHADER_STORAGE_BARRIER_BIT |
                     GL_ATOMIC_COUNTER_BARRIER_BIT);
     gGL.setColorMask(true, true);
-    if (oit_active)
-    {
-        // GPU-to-GPU snapshot; the next frame may reset the live counter.
-        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
-        GLint read_buffer = 0, write_buffer = 0;
-        glGetIntegerv(GL_COPY_READ_BUFFER_BINDING, &read_buffer);
-        glGetIntegerv(GL_COPY_WRITE_BUFFER_BINDING, &write_buffer);
-        glBindBuffer(GL_COPY_READ_BUFFER, mAlphaOITCounter);
-        glBindBuffer(GL_COPY_WRITE_BUFFER, oit_active->counter);
-        glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(U32));
-        glBindBuffer(GL_COPY_READ_BUFFER, read_buffer);
-        glBindBuffer(GL_COPY_WRITE_BUFFER, write_buffer);
-        glQueryCounter(oit_active->query[2], GL_TIMESTAMP);
-    }
 }
 
 void LLPipeline::compositeAlphaOIT()
@@ -8436,13 +8330,6 @@ void LLPipeline::compositeAlphaOIT()
     //   * blendFunc -> standard source-alpha: the resolve used premultiplied (ONE, 1-SRC_ALPHA).
     gGL.setColorMask(true, false);
     gGL.blendFunc(LLRender::BF_SOURCE_ALPHA, LLRender::BF_ONE_MINUS_SOURCE_ALPHA);
-    if (oit_active)
-    {
-        glQueryCounter(oit_active->query[3], GL_TIMESTAMP);
-        oit_active->cpu_ms = oit_cpu_timer.getElapsedTimeF32() * 1000.f;
-        oit_active->pending = true;
-        oit_active = nullptr;
-    }
 }
 
 bool LLPipeline::allocateAlphaDepthPeelBuffers(U32 w, U32 h)
