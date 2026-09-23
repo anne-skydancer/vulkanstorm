@@ -1790,7 +1790,10 @@ void LLImageGL::syncToMainThread(LLGLuint new_tex_name)
             // upload is complete
             auto sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
             glFlush();
-            glClientWaitSync(sync, 0, GL_TIMEOUT_IGNORED);
+            {
+                LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("glClientWaitSync");
+                glClientWaitSync(sync, 0, GL_TIMEOUT_IGNORED);
+            }
             glDeleteSync(sync);
         }
         else
