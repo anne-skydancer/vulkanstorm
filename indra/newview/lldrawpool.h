@@ -350,6 +350,8 @@ public:
     bool isDead() { return false; }
     void resetDrawOrders() { }
 
+    // Draw the same resident LOD in color, shadow, alpha and replay passes.
+    static void drawGeometry(LLDrawInfo& params);
     static void applyModelMatrix(const LLDrawInfo& params);
     // For rendering that doesn't use LLDrawInfo for some reason
     static void applyModelMatrix(const LLMatrix4* model_matrix);

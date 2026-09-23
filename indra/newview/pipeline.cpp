@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "pipeline.h"
+#include "llcomputemesh.h"
+#include "llmeshstreaming.h"
 
 // library includes
 #include "llimagepng.h"
@@ -702,6 +704,7 @@ LLPipeline::~LLPipeline()
 
 void LLPipeline::cleanup()
 {
+    LLComputeMesh::destroyGL();
     assertInitialized();
 
     mGroupQ1.clear() ;
@@ -785,6 +788,7 @@ void LLPipeline::cleanup()
 
 void LLPipeline::destroyGL()
 {
+    LLComputeMesh::destroyGL();
     stop_glerror();
     unloadShaders();
     mHighlightFaces.clear();
@@ -3058,32 +3062,49 @@ void LLPipeline::updateGeom(F32 max_dtime)
     // for now, only LLVOVolume does this to throttle LOD changes
     LLVOVolume::preUpdateGeom();
 
-    // Iterate through all drawables on the priority build queue,
-    for (LLDrawable::drawable_list_t::iterator iter = mBuildQ1.begin();
-         iter != mBuildQ1.end();)
+    auto rebuild = [&](const LLPointer<LLDrawable>& entry)
+        {
+            auto* drawable = entry.get();
+            if (!drawable || drawable->isDead()) return true;
+            if (drawable->isUnload())
+            {
+                drawable->unload();
+                drawable->clearState(LLDrawable::FOR_UNLOAD);
+            }
+            if (!updateDrawableGeom(drawable)) return false;
+            drawable->clearState(LLDrawable::IN_REBUILD_Q);
+            return true;
+        };
+    // Particle geometry is animation, not streamed mesh construction. Service
+    // it (and other non-mesh objects) every frame, independently of mesh backlog.
+    auto immediate = LLMeshStreaming::extractImmediate(mBuildQ1,
+        [](const LLPointer<LLDrawable>& entry)
+        {
+            auto* volume = entry ? entry->getVOVolume() : nullptr;
+            return !volume || !volume->isMesh();
+        });
+    for (auto it=immediate.begin(); it!=immediate.end();)
     {
-        LLDrawable::drawable_list_t::iterator curiter = iter++;
-        LLDrawable* drawablep = *curiter;
-        if (drawablep && !drawablep->isDead())
-        {
-            if (drawablep->isUnload())
-            {
-                drawablep->unload();
-                drawablep->clearState(LLDrawable::FOR_UNLOAD);
-            }
-
-            if (updateDrawableGeom(drawablep))
-            {
-                drawablep->clearState(LLDrawable::IN_REBUILD_Q);
-                mBuildQ1.erase(curiter);
-            }
-        }
-        else
-        {
-            mBuildQ1.erase(curiter);
-        }
+        auto current = it++;
+        if (rebuild(*current)) immediate.erase(current);
     }
+    update_timer.reset();
+    // Keep streamed meshes bounded and fair without freezing cloud particles.
+    const U32 processed = LLMeshStreaming::rebuildBatch(mBuildQ1, rebuild,
+        [&]() { return update_timer.getElapsedTimeF32() >= llclamp(max_dtime, 0.0001f, 0.005f); });
+    mBuildQ1.splice(mBuildQ1.end(), immediate);
 
+    static LLTimer report_timer;
+    static F32 max_batch_ms = 0.f;
+    static U32 rebuild_steps = 0;
+    max_batch_ms = llmax(max_batch_ms, F32(update_timer.getElapsedTimeF32())*1000.f);
+    rebuild_steps += processed;
+    if (report_timer.getElapsedTimeF32() >= 5.f)
+    {
+        LL_INFOS("MeshBatch") << "drawable_rebuild_pending=" << mBuildQ1.size()
+            << " drawable_rebuild_steps=" << rebuild_steps << " drawable_max_frame_ms=" << max_batch_ms << LL_ENDL;
+        max_batch_ms = 0.f; rebuild_steps = 0; report_timer.reset();
+    }
     updateMovedList(mMovedBridge);
 }
 
@@ -3196,6 +3217,7 @@ void LLPipeline::markShift(LLDrawable *drawablep)
 
 void LLPipeline::shiftObjects(const LLVector3 &offset)
 {
+    LLComputeMesh::shiftLOD(offset);
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     assertInitialized();
 
@@ -3309,6 +3331,17 @@ void LLPipeline::markRebuild(LLSpatialGroup* group)
 
 void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags flag)
 {
+    if (drawablep && drawablep->getVOVolume() && (flag & LLDrawable::REBUILD_ALL))
+    {
+        auto* volume = drawablep->getVOVolume();
+        if (volume->mComputeLOD)
+        {
+            // The fast mesh update writes only the CPU-selected range. Resident
+            // objects need all their ranges regenerated after a geometry edit.
+            if (auto* group = drawablep->getSpatialGroup()) group->dirtyGeom();
+            LLComputeMesh::invalidateLOD(*volume);
+        }
+    }
     if (drawablep && !drawablep->isDead() && assertInitialized())
     {
         if (!drawablep->isState(LLDrawable::IN_REBUILD_Q))
@@ -3330,6 +3363,9 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
 
 void LLPipeline::stateSort(LLCamera& camera, LLCullResult &result)
 {
+    if (LLViewerCamera::sCurCameraID == LLViewerCamera::CAMERA_WORLD &&
+        !gCubeSnapshot && !sShadowRender && !sReflectionRender && !sRenderingHUDs)
+        LLComputeMesh::beginLOD();
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     LL_PROFILE_GPU_ZONE("stateSort");
 
@@ -8169,8 +8205,98 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
                          << " MiB pool, " << pixel_layers << " max layers/pixel)" << LL_ENDL;
 }
 
+namespace
+{
+// Sample once per second. Results are consumed only after the final timestamp
+// is available; never read the active allocator back to the CPU.
+struct OITProfileSample
+{
+    GLuint query[4] = {};
+    GLuint counter = 0;
+    bool pending = false;
+    U32 capacity = 0;
+    U32 width = 0, height = 0;
+    F32 cpu_ms = 0.f;
+};
+OITProfileSample oit_samples[4];
+OITProfileSample* oit_active = nullptr;
+LLTimer oit_sample_interval;
+LLTimer oit_cpu_timer;
+
+void releaseOITProfile()
+{
+    oit_active = nullptr;
+    for (auto& sample : oit_samples)
+    {
+        if (sample.query[0]) glDeleteQueries(4, sample.query);
+        if (sample.counter) glDeleteBuffers(1, &sample.counter);
+        sample = OITProfileSample{};
+    }
+}
+
+void beginOITProfile(U32 capacity, U32 width, U32 height)
+{
+    oit_active = nullptr;
+    static LLCachedControl<bool> enabled(gSavedSettings, "RenderAlphaOITProfile", true);
+    if (!enabled || !glQueryCounter || !glGetQueryObjectui64v) return;
+    for (auto& sample : oit_samples)
+    {
+        if (!sample.pending) continue;
+        GLuint available = 0;
+        glGetQueryObjectuiv(sample.query[3], GL_QUERY_RESULT_AVAILABLE, &available);
+        if (!available) continue;
+        GLuint64 stamp[4];
+        for (U32 i = 0; i < 4; ++i)
+            glGetQueryObjectui64v(sample.query[i], GL_QUERY_RESULT, &stamp[i]);
+        GLint previous = 0;
+        glGetIntegerv(GL_COPY_READ_BUFFER_BINDING, &previous);
+        glBindBuffer(GL_COPY_READ_BUFFER, sample.counter);
+        U32 used = 0;
+        glGetBufferSubData(GL_COPY_READ_BUFFER, 0, sizeof(used), &used);
+        glBindBuffer(GL_COPY_READ_BUFFER, previous);
+        const F64 clear_ms = F64(stamp[1] - stamp[0]) / 1.e6;
+        const F64 capture_ms = F64(stamp[2] - stamp[1]) / 1.e6;
+        const F64 resolve_ms = F64(stamp[3] - stamp[2]) / 1.e6;
+        const F64 allocation_mib = (F64(sample.capacity) * 16. + F64(sample.width) * sample.height * 4. + 4.) / 1048576.;
+        LL_INFOS("OITProfile") << "gpu_clear_ms=" << clear_ms
+            << " gpu_capture_ms=" << capture_ms << " gpu_resolve_ms=" << resolve_ms
+            << " cpu_submit_ms=" << sample.cpu_ms << " nodes_requested=" << used
+            << " node_capacity=" << sample.capacity << " pool_overflow=" << (used > sample.capacity)
+            << " allocation_mib=" << allocation_mib
+            << " size=" << sample.width << "x" << sample.height << LL_ENDL;
+        LL_PROFILE_PLOT("PPLL GPU capture ms", capture_ms);
+        LL_PROFILE_PLOT("PPLL GPU resolve ms", resolve_ms);
+        sample.pending = false;
+    }
+    if (oit_sample_interval.getElapsedTimeF32() < 1.f) return;
+    for (auto& sample : oit_samples)
+    {
+        if (sample.pending) continue;
+        if (!sample.query[0])
+        {
+            glGenQueries(4, sample.query);
+            glGenBuffers(1, &sample.counter);
+            GLint previous = 0;
+            glGetIntegerv(GL_COPY_WRITE_BUFFER_BINDING, &previous);
+            glBindBuffer(GL_COPY_WRITE_BUFFER, sample.counter);
+            glBufferData(GL_COPY_WRITE_BUFFER, sizeof(U32), nullptr, GL_STREAM_READ);
+            glBindBuffer(GL_COPY_WRITE_BUFFER, previous);
+        }
+        sample.capacity = capacity;
+        sample.width = width;
+        sample.height = height;
+        oit_active = &sample;
+        oit_cpu_timer.reset();
+        oit_sample_interval.reset();
+        glQueryCounter(sample.query[0], GL_TIMESTAMP);
+        return;
+    }
+}
+}
+
 void LLPipeline::releaseAlphaOITBuffers()
 {
+    releaseOITProfile();
     if (mAlphaOITHead)    { glDeleteTextures(1, &mAlphaOITHead);   mAlphaOITHead = 0; }
     if (mAlphaOITNodes)   { glDeleteBuffers(1, &mAlphaOITNodes);   mAlphaOITNodes = 0; }
     if (mAlphaOITCounter) { glDeleteBuffers(1, &mAlphaOITCounter); mAlphaOITCounter = 0; }
@@ -8185,6 +8311,7 @@ bool LLPipeline::beginAlphaOITCapture()
         return false;
     }
     LL_PROFILE_GPU_ZONE("alpha oit capture begin");
+    beginOITProfile(mAlphaOITNodeCap, mAlphaOITWidth, mAlphaOITHeight);
 
     // The previous capture wrote these resources through shaders. Order those
     // writes before the API resets, including when reusing unchanged allocations.
@@ -8211,6 +8338,7 @@ bool LLPipeline::beginAlphaOITCapture()
     // the fragment deliberately falls through to ordinary source-over blending so
     // overflow degrades to legacy ordering rather than making cards disappear.
     gGL.setColorMask(true, true);
+    if (oit_active) glQueryCounter(oit_active->query[1], GL_TIMESTAMP);
     return true;
 }
 
@@ -8225,6 +8353,20 @@ void LLPipeline::endAlphaOITCapture()
                     GL_SHADER_STORAGE_BARRIER_BIT |
                     GL_ATOMIC_COUNTER_BARRIER_BIT);
     gGL.setColorMask(true, true);
+    if (oit_active)
+    {
+        // GPU-to-GPU snapshot; the next frame may reset the live counter.
+        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+        GLint read_buffer = 0, write_buffer = 0;
+        glGetIntegerv(GL_COPY_READ_BUFFER_BINDING, &read_buffer);
+        glGetIntegerv(GL_COPY_WRITE_BUFFER_BINDING, &write_buffer);
+        glBindBuffer(GL_COPY_READ_BUFFER, mAlphaOITCounter);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, oit_active->counter);
+        glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(U32));
+        glBindBuffer(GL_COPY_READ_BUFFER, read_buffer);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, write_buffer);
+        glQueryCounter(oit_active->query[2], GL_TIMESTAMP);
+    }
 }
 
 void LLPipeline::compositeAlphaOIT()
@@ -8294,6 +8436,13 @@ void LLPipeline::compositeAlphaOIT()
     //   * blendFunc -> standard source-alpha: the resolve used premultiplied (ONE, 1-SRC_ALPHA).
     gGL.setColorMask(true, false);
     gGL.blendFunc(LLRender::BF_SOURCE_ALPHA, LLRender::BF_ONE_MINUS_SOURCE_ALPHA);
+    if (oit_active)
+    {
+        glQueryCounter(oit_active->query[3], GL_TIMESTAMP);
+        oit_active->cpu_ms = oit_cpu_timer.getElapsedTimeF32() * 1000.f;
+        oit_active->pending = true;
+        oit_active = nullptr;
+    }
 }
 
 bool LLPipeline::allocateAlphaDepthPeelBuffers(U32 w, U32 h)

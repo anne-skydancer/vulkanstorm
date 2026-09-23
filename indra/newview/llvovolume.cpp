@@ -29,6 +29,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llvovolume.h"
+#include "llcomputemesh.h"
 
 #include <sstream>
 
@@ -286,6 +287,7 @@ LLVOVolume::~LLVOVolume()
 
 void LLVOVolume::markDead()
 {
+    LLComputeMesh::invalidateLOD(*this);
     if (!mDead)
     {
         LL_PROFILE_ZONE_SCOPED;
@@ -1228,6 +1230,7 @@ void LLVOVolume::unregisterOldMeshAndSkin()
 
 bool LLVOVolume::setVolume(const LLVolumeParams &params_in, const S32 detail, bool unique_volume)
 {
+    LLComputeMesh::invalidateLOD(*this);
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
     LLVolumeParams volume_params = params_in;
 
@@ -1452,8 +1455,15 @@ void LLVOVolume::updateVisualComplexity()
 
 void LLVOVolume::notifyMeshLoaded()
 {
-    mSculptChanged = true;
-    gPipeline.markRebuild(mDrawable, LLDrawable::REBUILD_GEOMETRY);
+    // The repository has published the source volume. Resident refinement can
+    // consume it without tearing down the level currently on screen.
+    if (!LLComputeMesh::preserveLODOnMeshLoad(*this))
+    {
+        mSculptChanged = true;
+        gPipeline.markRebuild(mDrawable, LLDrawable::REBUILD_GEOMETRY);
+    }
+    // Resident geometry only avoids a rebuild. Avatar loading notifications and
+    // attachment overrides must still run when another mesh level arrives.
 
     if (!mSkinInfo && !mSkinInfoUnavaliable)
     {
@@ -1482,6 +1492,7 @@ void LLVOVolume::notifyMeshLoaded()
 
 void LLVOVolume::notifySkinInfoLoaded(const LLMeshSkinInfo* skin)
 {
+    if (mSkinInfo.get() != skin) LLComputeMesh::invalidateLOD(*this);
     mSkinInfoUnavaliable = false;
     mSkinInfo = skin;
 
@@ -1490,6 +1501,7 @@ void LLVOVolume::notifySkinInfoLoaded(const LLMeshSkinInfo* skin)
 
 void LLVOVolume::notifySkinInfoUnavailable()
 {
+    LLComputeMesh::invalidateLOD(*this);
     mSkinInfoUnavaliable = true;
     mSkinInfo = nullptr;
 }
@@ -1671,6 +1683,13 @@ bool LLVOVolume::calcLOD()
     if (mGLTFAsset != nullptr)
     {
         // do not calculate LOD for GLTF objects
+        return false;
+    }
+
+    // A resident object uses GPU-selected ranges in every draw pass. Retain the
+    // available mesh on the CPU for picking; no camera-driven rebuild is necessary.
+    if (LLComputeMesh::ownsLOD(*this))
+    {
         return false;
     }
 
@@ -5768,9 +5787,11 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         }
     }
 
+    auto compute_resident = (rigged || type == LLRenderPass::PASS_GLTF_PBR) ?
+        LLComputeMesh::prepareFace(*facep) : nullptr;
     LLDrawInfo* info = idx >= 0 ? draw_vec[idx] : nullptr;
 
-    if (info &&
+    if (info && !compute_resident && !info->mComputeLOD &&
         info->mVertexBuffer == facep->getVertexBuffer() &&
         info->mEnd == facep->getGeomIndex()-1 &&
         (LLPipeline::sTextureBindTest || draw_vec[idx]->mTexture == tex || batchable) &&
@@ -5886,6 +5907,8 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         draw_info->validate();
     }
 
+    info->mComputeLOD = compute_resident;
+
     llassert(info->mGLTFMaterial == nullptr || (info->mVertexBuffer->getTypeMask() & LLVertexBuffer::MAP_TANGENT) != 0);
     llassert(type != LLPipeline::RENDER_TYPE_PASS_GLTF_PBR || info->mGLTFMaterial != nullptr);
     llassert(type != LLPipeline::RENDER_TYPE_PASS_GLTF_PBR_RIGGED || info->mGLTFMaterial != nullptr);
@@ -5977,6 +6000,11 @@ void LLVolumeGeometryManager::rebuildGeom(LLSpatialGroup* group)
     const LLVector4a* bounds = group->getObjectBounds();
     group->mObjectBoxSize = bounds[1].getLength3().getF32();
 
+    for (auto it = group->getDataBegin(); it != group->getDataEnd(); ++it)
+    {
+        auto* drawable = static_cast<LLDrawable*>((*it)->getDrawable());
+        if (drawable && drawable->getVOVolume()) LLComputeMesh::invalidateLOD(*drawable->getVOVolume());
+    }
     group->clearDrawMap();
 
     U32 fullbright_count[2] = { 0 };
@@ -6518,6 +6546,7 @@ void LLVolumeGeometryManager::rebuildMesh(LLSpatialGroup* group)
                     LLVOVolume* vobj = drawablep->getVOVolume();
 
                     if (!vobj) continue;
+                    LLComputeMesh::invalidateLOD(*vobj);
 
                     if (vobj->isNoLOD()) continue;
 

@@ -31,6 +31,7 @@
 
 #include "llfeaturemanager.h"
 #include "llviewershadermgr.h"
+#include "llcomputemesh.h"
 #include "llviewercontrol.h"
 #include "llversioninfo.h"
 
@@ -745,6 +746,7 @@ void LLViewerShaderMgr::setShaders()
 
 void LLViewerShaderMgr::unloadShaders()
 {
+    LLComputeMesh::reloadLOD();
     while (!LLGLSLShader::sInstances.empty())
     {
         LLGLSLShader* shader = *(LLGLSLShader::sInstances.begin());

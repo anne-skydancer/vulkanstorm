@@ -655,8 +655,7 @@ void LLDrawPoolAlpha::renderAlphaHighlight()
                     // </FS:Beq>
                     gGL.diffuseColor4f(1, 0, 0, 1);
                     LLRenderPass::applyModelMatrix(params);
-                    params.mVertexBuffer->setBuffer();
-                    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+                    LLRenderPass::drawGeometry(params);
                 }
             }
         }
@@ -683,9 +682,8 @@ inline bool IsEmissive(LLDrawInfo& params)
 
 inline void Draw(LLDrawInfo* draw, U32 mask)
 {
-    draw->mVertexBuffer->setBuffer();
     LLRenderPass::applyModelMatrix(*draw);
-    draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
+    LLRenderPass::drawGeometry(*draw);
 }
 
 bool LLDrawPoolAlpha::TexSetup(LLDrawInfo* draw, bool use_material)
@@ -778,11 +776,10 @@ void LLDrawPoolAlpha::RestoreTexSetup(bool tex_setup)
 void LLDrawPoolAlpha::drawEmissive(LLDrawInfo* draw)
 {
     LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::EMISSIVE_BRIGHTNESS, 1.f);
-    draw->mVertexBuffer->setBuffer();
     // OIT residual replay can queue this face without drawing its normal batch.
     // Establish its transform here instead of inheriting the previous batch's.
     LLRenderPass::applyModelMatrix(*draw);
-    draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
+    LLRenderPass::drawGeometry(*draw);
 }
 
 
@@ -808,9 +805,8 @@ void LLDrawPoolAlpha::renderPbrEmissives(std::vector<LLDrawInfo*>& emissives)
         llassert(draw->mGLTFMaterial);
         LLGLDisable cull_face(draw->mGLTFMaterial->mDoubleSided ? GL_CULL_FACE : 0);
         draw->mGLTFMaterial->bind(draw->mTexture);
-        draw->mVertexBuffer->setBuffer();
         LLRenderPass::applyModelMatrix(*draw);
-        draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
+        LLRenderPass::drawGeometry(*draw);
     }
 }
 
@@ -856,9 +852,8 @@ void LLDrawPoolAlpha::renderRiggedPbrEmissives(std::vector<LLDrawInfo*>& emissiv
 
         LLGLDisable cull_face(draw->mGLTFMaterial->mDoubleSided ? GL_CULL_FACE : 0);
         draw->mGLTFMaterial->bind(draw->mTexture);
-        draw->mVertexBuffer->setBuffer();
         LLRenderPass::applyModelMatrix(*draw);
-        draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
+        LLRenderPass::drawGeometry(*draw);
     }
 }
 
@@ -1240,8 +1235,7 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
                         reset_minimum_alpha = true;
                     }
 
-                    params.mVertexBuffer->setBuffer();
-                    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+                    LLRenderPass::drawGeometry(params);
                     stop_glerror();
 
                     if (reset_minimum_alpha)

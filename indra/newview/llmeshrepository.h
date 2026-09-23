@@ -505,6 +505,7 @@ public:
         LLPointer<LLVolume> mVolume;
         LLVolumeParams mMeshParams;
         S32 mLOD;
+        bool mPublished = false;
 
         LoadedMesh(LLVolume* volume, const LLVolumeParams&  mesh_params, S32 lod)
             : mVolume(volume), mMeshParams(mesh_params), mLOD(lod)
@@ -903,10 +904,10 @@ public:
     S32 loadMesh(LLVOVolume* volume, const LLVolumeParams& mesh_params, S32 new_lod = 0, S32 last_lod = -1);
 
     void notifyLoadedMeshes();
-    void notifyMeshLoaded(const LLVolumeParams& mesh_params, LLVolume* volume, S32 lod);
-    void notifyMeshUnavailable(const LLVolumeParams& mesh_params, S32 request_lod, S32 volume_lod);
-    void notifySkinInfoReceived(LLMeshSkinInfo* info);
-    void notifySkinInfoUnavailable(const LLUUID& info);
+    bool notifyMeshLoaded(const LLVolumeParams& mesh_params, LLVolume* volume, S32 lod, bool& published);
+    bool notifyMeshUnavailable(const LLVolumeParams& mesh_params, S32 request_lod, S32 volume_lod);
+    bool notifySkinInfoReceived(LLMeshSkinInfo* info);
+    bool notifySkinInfoUnavailable(const LLUUID& info);
     void notifyDecompositionReceived(LLModel::Decomposition* info, bool physics_mesh);
 
     S32 getActualMeshLOD(const LLVolumeParams& mesh_params, S32 lod);
