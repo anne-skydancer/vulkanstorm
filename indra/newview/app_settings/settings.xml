@@ -2,6 +2,13 @@
 <llsd xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="llsd.xsd">
 <map>
+  <key>RenderAlphaOITProfile</key>
+  <map>
+    <key>Comment</key><string>Development: sample PPLL GPU timings and node usage once per second, consuming only completed GPU queries.</string>
+    <key>Persist</key><integer>1</integer>
+    <key>Type</key><string>Boolean</string>
+    <key>Value</key><integer>1</integer>
+  </map>
   <key>RenderGLComputeMeshBudgetMiB</key>
   <map>
     <key>Comment</key><string>Additional resident mesh geometry budget in MiB, including staged replacements (64-2048). Lowering it limits new admissions.</string>
