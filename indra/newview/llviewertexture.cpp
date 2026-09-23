@@ -519,11 +519,12 @@ void LLViewerTexture::updateClass()
     static LLCachedControl<U32> max_vram_budget(gSavedSettings, "RenderMaxVRAMBudget", 0);
     static LLCachedControl<bool> max_vram_budget_enabled(gSavedSettings, "FSLimitTextureVRAMUsage"); // <FS:Ansariel> Expose max texture VRAM setting
 
-    F64 texture_bytes_alloc = LLImageGL::getTextureBytesAllocated() / 1024.0 / 512.0;
+    F64 texture_bytes_alloc = LLImageGL::getTextureBytesAllocated() / 1024.0 / 1024.0;
     F64 vertex_bytes_alloc = LLVertexBuffer::getBytesAllocated() / 1024.0 / 512.0;
 
     // get an estimate of how much video memory we're using
-    // NOTE: our metrics miss about half the vram we use, so this biases high but turns out to typically be within 5% of the real number
+    // Texture estimates include mip images and storage padding. Vertex buffers
+    // retain the existing overhead estimate; neither counter measures residency.
     F32 used = (F32)ll_round(texture_bytes_alloc + vertex_bytes_alloc);
 
     // <FS:Ansariel> Expose max texture VRAM setting
@@ -614,8 +615,11 @@ void LLViewerTexture::updateClass()
     static LLCachedControl<F32> minimized_discard_time(gSavedSettings, "TextureDiscardMinimizedTime", 1.f);
     static LLCachedControl<F32> backgrounded_discard_time(gSavedSettings, "TextureDiscardBackgroundedTime", 60.f);
 
-    bool in_background = (gViewerWindow && !gViewerWindow->getWindow()->getVisible()) || !gFocusMgr.getAppHasFocus();
-    bool is_minimized  = gViewerWindow && gViewerWindow->getWindow()->getMinimized() && in_background;
+    static LLCachedControl<bool> discard_on_focus_loss(gSavedSettings, "TextureDiscardOnFocusLoss", false);
+    const bool has_focus = gFocusMgr.getAppHasFocus();
+    const bool hidden = gViewerWindow && !gViewerWindow->getWindow()->getVisible();
+    const bool is_minimized = gViewerWindow && gViewerWindow->getWindow()->getMinimized();
+    const bool in_background = hidden || is_minimized || (discard_on_focus_loss && !has_focus);
     if (in_background)
     {
         F32 discard_time = is_minimized ? minimized_discard_time : backgrounded_discard_time;
@@ -666,19 +670,7 @@ void LLViewerTexture::updateClass()
 //static
 U32Megabytes LLViewerTexture::getFreeSystemMemory()
 {
-    static LLFrameTimer timer;
-    static U32Megabytes physical_res = U32Megabytes(U32_MAX);
-
-    if (timer.getElapsedTimeF32() < MEMORY_CHECK_WAIT_TIME) //call this once per second.
-    {
-        return physical_res;
-    }
-
-    timer.reset();
-
-    LLMemory::updateMemoryInfo();
-    physical_res = LLMemory::getAvailableMemKB();
-    return physical_res;
+    return U32Megabytes(LLMemory::getScarcestFreeMemMB());
 }
 
 S32Megabytes get_render_free_main_memory_treshold()
@@ -922,6 +914,7 @@ void LLViewerTexture::setKnownDrawSize(S32 width, S32 height)
 //virtual
 void LLViewerTexture::addFace(U32 ch, LLFace* facep)
 {
+    mFaceScan.reset();
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     llassert(ch < LLRender::NUM_TEXTURE_CHANNELS);
 
@@ -938,6 +931,7 @@ void LLViewerTexture::addFace(U32 ch, LLFace* facep)
 //virtual
 void LLViewerTexture::removeFace(U32 ch, LLFace* facep)
 {
+    mFaceScan.reset();
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     llassert(ch < LLRender::NUM_TEXTURE_CHANNELS);
 

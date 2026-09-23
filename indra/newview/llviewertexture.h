@@ -29,6 +29,7 @@
 
 #include "llatomic.h"
 #include "llgltexture.h"
+#include "lltexturefacescan.h"
 #include "lltimer.h"
 #include "llframetimer.h"
 #include "llhost.h"
@@ -209,6 +210,7 @@ protected:
 
     ll_face_list_t    mFaceList[LLRender::NUM_TEXTURE_CHANNELS]; //reverse pointer pointing to the faces using this image as texture
     U32               mNumFaces[LLRender::NUM_TEXTURE_CHANNELS];
+    LLTextureFaceScan  mFaceScan;
     LLFrameTimer      mLastFaceListUpdateTimer ;
 
     ll_volume_list_t  mVolumeList[LLRender::NUM_VOLUME_TEXTURE_CHANNELS];

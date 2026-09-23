@@ -43,6 +43,8 @@
 #endif
 
 #include "llmemory.h"
+#include "llmemorypolicy.h"
+#include <cstdio>
 
 #include "llsys.h"
 #include "llframetimer.h"
@@ -157,7 +159,13 @@ void LLMemory::updateMemoryInfo()
 #endif
     sample(sAllocatedMem, sAllocatedMemInKB);
 
-    sAvailPhysicalMemInKB = llmin(sAvailPhysicalMemInKB, sMaxHeapSizeInKB - sAllocatedMemInKB);
+    // Saturate the unsigned subtraction; preserve the unavailable sentinel.
+    if (sAvailPhysicalMemInKB != U32Kilobytes(U32_MAX))
+    {
+        const U32Kilobytes headroom = sAllocatedMemInKB < sMaxHeapSizeInKB
+            ? U32Kilobytes(sMaxHeapSizeInKB - sAllocatedMemInKB) : U32Kilobytes(0);
+        sAvailPhysicalMemInKB = llmin(sAvailPhysicalMemInKB, headroom);
+    }
 
     return ;
 }
@@ -209,75 +217,35 @@ void LLMemory::updateFreeSystemMemory()
     }
 }
 
+S32Megabytes LLMemory::getScarcestFreeMemMB()
+{
+    updateFreeSystemMemory();
+    S32Megabytes available = getAvailableMemKB();
+#if LL_WINDOWS
+    const U32Megabytes commit = getAvailableCommitMemMB();
+    if (commit != U32Megabytes(U32_MAX))
+    {
+        available = llmin(available, S32Megabytes(commit));
+    }
+#endif
+    return available;
+}
+
 F32 LLMemory::getSystemMemoryBudgetFactor()
 {
-    // Only update once per frame
-    U32 current_frame = LLFrameTimer::getFrameCount();
-    if (sFactorLastFrameCount == current_frame)
+    const U32 frame = LLFrameTimer::getFrameCount();
+    if (sFactorLastFrameCount == frame)
     {
         return sSysMemoryFactor;
     }
-    sFactorLastFrameCount = current_frame;
-
+    sFactorLastFrameCount = frame;
     updateFreeSystemMemory();
-#if LL_WINDOWS
-    S32Megabytes free_sys_mem = getAvailableCommitMemMB();
-#else
-    S32Megabytes free_sys_mem = getAvailableMemKB();
-#endif
-    bool is_sys_low = free_sys_mem < MEM_LOW_THRESHOLD;
-    static bool was_low = false;
-
-    // sSysMemoryFactor affects draw distance
-    //
-    // We only decrement when more than 406MB is free, but increment
-    // when below 256MB free. This should provide a stable value
-    // in the 256-406MB range to avoid draw range fluctuations.
-    //
-    // Draw range reduction is a last resort, texture bias is supposed
-    // to free at least some memory before we get here.
-    // Note: textures were mostly moved to vram, we might want to
-    // detach texture bias from system memory.
-    if (is_sys_low)
+    if (sAvailPhysicalMemInKB == U32Kilobytes(U32_MAX))
     {
-        // debt is a negative value since MIN_FREE_MAIN_MEMORY > free memory.
-        S32Megabytes sys_budget_debt = free_sys_mem - MEM_LOW_THRESHOLD;
-
-        // Leave some padding, otherwise we will crash out of memory before hitting factor 2.
-        const S32Megabytes PAD_BUFFER(32);
-        S32Megabytes budget_target = MEM_LOW_THRESHOLD - PAD_BUFFER;
-        if (!was_low)
-        {
-            // Result should range from 1 at 0 debt to 2 at -224 debt, 2.14 at -256MB
-            F32 new_factor = 1.f - (F32)sys_budget_debt.value() / (F32)budget_target.value();
-            sSysMemoryFactor = llmax(sSysMemoryFactor, new_factor);
-        }
-        else
-        {
-            // Slowly ramp up factor to free memory (increasing factor decreases draw range)
-            constexpr F32 MAX_INCREMENT = 0.05f;
-            F32 increment = MAX_INCREMENT * llmax(-(F32)sys_budget_debt.value() / (F32)budget_target.value(), 0.f);
-            sSysMemoryFactor += increment * LLFrameTimer::getFrameDeltaTimeF32();
-        }
-        sSysMemoryFactor = llclamp(sSysMemoryFactor, 1.f, 2.f);
+        return sSysMemoryFactor;
     }
-    else
-    {
-        // Only start ramping down when we have breathing room.
-        // This should be under the value of isSystemMemoryLow to not throw texture
-        // bias into 1.5+ territory each time we fluctuate around isSystemMemoryLow's
-        // threshold.
-        const S32Megabytes MEM_THRESHOLD = MEM_LOW_THRESHOLD + S32Megabytes(150);
-        if (free_sys_mem > MEM_THRESHOLD && sSysMemoryFactor > 1.f)
-        {
-            // Ramp down factor over time.
-            constexpr F32 DECREMENT = 0.02f;
-            sSysMemoryFactor -= DECREMENT * LLFrameTimer::getFrameDeltaTimeF32();
-            sSysMemoryFactor = llclamp(sSysMemoryFactor, 1.f, 2.f);
-        }
-    }
-    was_low = is_sys_low;
-
+    sSysMemoryFactor = LLMemoryPolicy::pressureFactor(sSysMemoryFactor,
+        (F32)getScarcestFreeMemMB().value(), LLFrameTimer::getFrameDeltaTimeF32());
     return sSysMemoryFactor;
 }
 
@@ -362,15 +330,27 @@ U64 LLMemory::getCurrentRSS()
 
 U64 LLMemory::getCurrentRSS()
 {
-    struct rusage usage;
-
-    if (getrusage(RUSAGE_SELF, &usage) != 0) {
-        // Error handling code could be here
-        return 0;
+    // /proc/self/statm: size resident shared text lib data dt, in pages. The
+    // resident figure is the set as it is now. getrusage's ru_maxrss is the
+    // peak, and a memory budget that reads the peak only ever tightens.
+    if (FILE* statm = fopen("/proc/self/statm", "r"))
+    {
+        long size = 0;
+        long resident = 0;
+        const int got = fscanf(statm, "%ld %ld", &size, &resident);
+        fclose(statm);
+        if (got == 2 && resident > 0)
+        {
+            return (U64)resident * (U64)sysconf(_SC_PAGESIZE);
+        }
     }
 
-    // ru_maxrss (since Linux 2.6.32)
-    // This is the maximum resident set size used (in kilobytes).
+    struct rusage usage;
+    if (getrusage(RUSAGE_SELF, &usage) != 0)
+    {
+        return 0;
+    }
+    // ru_maxrss (since Linux 2.6.32): the peak resident set size, in kilobytes
     return usage.ru_maxrss * 1024;
 }
 

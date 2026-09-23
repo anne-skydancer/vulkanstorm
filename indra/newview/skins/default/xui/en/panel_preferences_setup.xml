@@ -404,12 +404,13 @@
 		 follows="left|top"
 		 height="15"
 		 increment="64"
-		 initial_value="1024"
+		 initial_value="6400"
 		 layout="topleft"
 		 max_val="20000"
 		 min_val="256"
 		 top_pad="10"
 		 name="cache_size"
+		 tool_tip="Total disk allowance. The 6400 MB default provides approximately 4096 MB of texture data; the remainder is reserved for headers and the fast cache. Takes effect after restarting the viewer."
 		 width="279" />
 		<text
 		 type="string"
