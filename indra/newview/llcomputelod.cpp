@@ -113,7 +113,12 @@ struct Bindings
 bool initialize()
 {
     if (program) return true;
-    if (!enabled() || !glDispatchCompute || !glMemoryBarrier || !glMultiDrawElementsIndirect) return false;
+    if (!enabled()) return false;
+#if LL_WINDOWS && !LL_MESA
+    // Windows loads these entry points dynamically; Linux uses GL prototypes.
+    // enabled() checks the OpenGL 4.3 requirement on every platform.
+    if (!glDispatchCompute || !glMemoryBarrier || !glMultiDrawElementsIndirect) return false;
+#endif
     failed = true;
     std::ifstream file(gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders", "class1/objects/meshLODC.glsl"));
     std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
