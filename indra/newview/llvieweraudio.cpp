@@ -109,14 +109,14 @@ void LLViewerAudio::startInternetStreamWithAutoFade(const std::string &streamURI
     // Record the URI we are going to be switching to
     mNextStreamURI = streamURI;
 
-    // Parcel music can arrive before login finishes. Defer the start itself:
-    // resetting the viewer fade timer cannot hold back a VLC-owned fade.
-    mStreamStartDeferred = !streamURI.empty() &&
-        (LLStartUp::getStartupState() < STATE_STARTED ||
-         !gViewerWindow || gViewerWindow->getShowProgress());
-    if (mStreamStartDeferred)
+    // Match upstream: connect/buffer as soon as parcel music is known. Apply
+    // startup mute before creating the plugin; the fade is held separately.
+    if (LLStartUp::getStartupState() < STATE_STARTED)
+        audio_update_volume(false);
+
+    if (mLoginFadePending && streamURI.empty())
     {
-        registerIdleListener();
+        stopInternetStreamWithAutoFade();
         return;
     }
 
@@ -125,6 +125,7 @@ void LLViewerAudio::startInternetStreamWithAutoFade(const std::string &streamURI
     {
         mDone = true;
         mBackendFade = false;
+        mLoginFadePending = false;
         mFadeState = FADE_IDLE;
         gAudiop->startInternetStream(mNextStreamURI);
         return;
@@ -161,6 +162,12 @@ void LLViewerAudio::startInternetStreamWithAutoFade(const std::string &streamURI
         break;
 
     case FADE_IN:
+        if (mLoginFadePending && mNextStreamURI != gAudiop->getInternetStreamURL())
+        {
+            mDone = true;
+            startFading();
+            gAudiop->startInternetStream(mNextStreamURI);
+        }
         break;
 
     default:
@@ -175,21 +182,6 @@ void LLViewerAudio::startInternetStreamWithAutoFade(const std::string &streamURI
 // A return of true means we have finished with it and the callback will be deleted.
 bool LLViewerAudio::onIdleUpdate()
 {
-    if (mStreamStartDeferred)
-    {
-        if (!gAudiop || LLStartUp::getStartupState() < STATE_STARTED ||
-            !gViewerWindow || gViewerWindow->getShowProgress())
-        {
-            return false;
-        }
-
-        mStreamStartDeferred = false;
-        // Apply the user's volume/mute before the plugin can begin playback.
-        audio_update_volume(false);
-        const std::string stream_uri = mNextStreamURI;
-        startInternetStreamWithAutoFade(stream_uri);
-    }
-
     bool fadeIsFinished = false;
     LLStreamingAudioInterface* stream = gAudiop ? gAudiop->getStreamingAudioImpl() : nullptr;
     if (mBackendFade && stream)
@@ -203,10 +195,22 @@ bool LLViewerAudio::onIdleUpdate()
             mFadeState = FADE_IDLE;
             mDone = true;
             mBackendFade = false;
+            mLoginFadePending = false;
             gAudiop->stopInternetStream();
             deregisterIdleListener();
             return true;
         }
+    }
+    if (mLoginFadePending)
+    {
+        if (LLStartUp::getStartupState() < STATE_STARTED)
+            return false;
+
+        // Release the already-buffering stream at upstream's startup boundary.
+        // VLC owns the full fade duration; progress-screen visibility is unrelated.
+        mLoginFadePending = false;
+        mDone = true;
+        startFading();
     }
     getFadeVolume();
 
@@ -284,7 +288,7 @@ bool LLViewerAudio::onIdleUpdate()
 
 void LLViewerAudio::stopInternetStreamWithAutoFade()
 {
-    mStreamStartDeferred = false;
+    mLoginFadePending = false;
     // <FS:Ansariel> Optional audio stream fading
     if (!gSavedSettings.getBOOL("FSFadeAudioStream"))
     {
@@ -346,8 +350,13 @@ void LLViewerAudio::startFading()
         mFadeTime = llmax(mFadeTime, AUDIO_MUSIC_MINIMUM_FADE_TIME);
 
         LLStreamingAudioInterface* stream = gAudiop ? gAudiop->getStreamingAudioImpl() : nullptr;
-        mBackendFade = stream && stream->beginAudioFade(mFadeState == FADE_OUT ? 0.f : 1.f,
-            llclamp(mFadeTime, AUDIO_MUSIC_MINIMUM_FADE_TIME, 60.f));
+        mLoginFadePending = mFadeState == FADE_IN &&
+            LLStartUp::getStartupState() < STATE_STARTED;
+        // Keep the native envelope at zero while the stream connects. On login
+        // completion, startFading submits the configured sample-timed fade once.
+        mBackendFade = stream && stream->beginAudioFade(
+            mLoginFadePending || mFadeState == FADE_OUT ? 0.f : 1.f,
+            mLoginFadePending ? 0.f : llclamp(mFadeTime, AUDIO_MUSIC_MINIMUM_FADE_TIME, 60.f));
         stream_fade_timer.reset();
         stream_fade_timer.setTimerExpirySec(mFadeTime);
         mDone = false;
@@ -356,6 +365,10 @@ void LLViewerAudio::startFading()
 
 F32 LLViewerAudio::getFadeVolume()
 {
+    // Completion of the zero-gain hold is not completion of the login fade.
+    if (mLoginFadePending)
+        return 0.f;
+
     if (mFadeState == FADE_IDLE)
     {
         mBackendFade = false;
@@ -622,15 +635,14 @@ void audio_update_volume(bool force_update)
         if (stream && stream->hasAudioFade())
         {
             stream->setAudioHardMute(mute_audio || mute_music() ||
-                progress_view_visible || LLStartUp::getStartupState() < STATE_STARTED);
+                LLStartUp::getStartupState() < STATE_STARTED);
             gAudiop->setInternetStreamGain(master_volume * al_music());
         }
         else
         {
             F32 music_volume = mute_volume * master_volume * al_music() * fade_volume;
             gAudiop->setInternetStreamGain (
-                mute_music() || progress_view_visible ||
-                LLStartUp::getStartupState() < STATE_STARTED ? 0.f : music_volume);
+                mute_music() || LLStartUp::getStartupState() < STATE_STARTED ? 0.f : music_volume);
         }
     }
 
