@@ -27,6 +27,7 @@
 #include "linden_common.h"
 
 #include "llfasttimer.h"
+#include "llframetimer.h"
 #include "llsys.h"
 #include "llvertexbuffer.h"
 // #include "llrender.h"
@@ -416,6 +417,15 @@ public:
 
     U64 getVramBytesUsed() override
     {
+        static LLFrameTimer focus_memory_timer;
+        if (focus_memory_timer.getElapsedTimeF32() >= 5.f)
+        {
+            focus_memory_timer.reset();
+            LL_INFOS("FocusMemory") << "vbo_live_bytes=" << mAllocated
+                << " vbo_cached_bytes=" << mReserved
+                << " vbo_distributed_bytes=" << mDistributed
+                << " cache_touches=" << mTouchCount << LL_ENDL;
+        }
         return mAllocated + mReserved;
     }
 

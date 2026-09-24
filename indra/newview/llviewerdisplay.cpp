@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llfocusrenderprobe.h"
 
 #include "llviewerdisplay.h"
 
@@ -1459,6 +1460,8 @@ static void update_tp_display(bool minimized)
 // Paint the display!
 void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 {
+    static FocusRenderProbe::Probe probe("display");
+    FocusRenderProbe::Scope measure(probe);
 #if LL_WINDOWS
     // <VulkanStorm> The Vulkan backend owns the frame end-to-end while the
     // 2D/3D pipelines are being ported. Pre-STATE_STARTED (login/startup): the
@@ -2709,6 +2712,8 @@ void render_ui(F32 zoom_factor, int subfield)
 
 void swap()
 {
+    static FocusRenderProbe::Probe probe("swap");
+    FocusRenderProbe::Scope measure(probe);
     LLPerfStats::RecordSceneTime T ( LLPerfStats::StatType_t::RENDER_SWAP ); // render time capture - Swap buffer time - can signify excessive data transfer to/from GPU
     LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Swap");
     LL_PROFILE_GPU_ZONE("swap");
