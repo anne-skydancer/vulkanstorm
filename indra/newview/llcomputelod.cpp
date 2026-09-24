@@ -498,17 +498,19 @@ BuildResult advanceJob(BuildJob& job)
             }
         }
         if (!job.ready_mask) return job.failed_mask == 15 ? BuildResult::DROP : wait(LLComputeMesh::MESH);
-        if (rigged)
+        // Keep the direct drawable and its bounds in step with resident detail
+        // for world meshes as well as attachments. A coarse world drawable can
+        // otherwise remain the culling/picking/fallback representation forever:
+        // ownsLOD bypasses camera LOD updates and mesh arrival preserves it.
         {
             const U32 cpu_level = LLVolumeLODGroup::getVolumeDetailFromScale(current->getDetail());
             const S32 promotion = LLMeshStreaming::fallbackPromotion(cpu_level, job.ready_mask,
                 [&](U32 level) { return LLVolumeLODGroup::getVolumeDetailFromScale(job.volumes[level]->getDetail()); });
             if (promotion >= 0)
             {
-                // A camera/material rebuild temporarily uses the direct drawable.
-                // Promote that fallback through the normal bounded rebuild path
-                // before publishing finer resident ranges. Otherwise every such
-                // rebuild exposes the original Lowest body/clothing mesh again.
+                // Promote through the normal bounded rebuild path before
+                // publishing finer ranges. This also refreshes world-mesh bounds
+                // and faces without requiring a camera-distance change.
                 object->forceLOD(promotion);
                 object->notifyMeshLoaded();
                 return BuildResult::DROP; // forceLOD invalidated this generation
