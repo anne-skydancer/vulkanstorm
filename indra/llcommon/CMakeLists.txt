@@ -114,7 +114,6 @@ set(llcommon_SOURCE_FILES
 set(llcommon_HEADER_FILES
     CMakeLists.txt
 
-    llassetpool.h
     always_return.h
     apply.h
     chrono.h

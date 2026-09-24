@@ -12,7 +12,6 @@
 #include "llappviewer.h"
 #include "lldir.h"
 #include "pipeline.h"
-#include "llassetpool.h"
 #include <array>
 #include <fstream>
 #include <iterator>
@@ -377,72 +376,41 @@ bool LLComputeMesh::ownsLOD(LLVOVolume& object)
 
 namespace
 {
-U64 staged_geometry_bytes = 0;
 struct StagedFace
 {
     LLPointer<LLVertexBuffer> buffer;
     Entry entry;
     U64 bytes = 0;
     U32 vertex_offset = 0, index_offset = 0;
-    ~StagedFace() { staged_geometry_bytes -= bytes; resident_bytes -= bytes; if (bytes) ++resource_epoch; }
+    ~StagedFace() { resident_bytes -= bytes; if (bytes) ++resource_epoch; }
 };
-LLAssetPool::Reservations preparation_reservations;
-U32 active_preparations = 0, source_lods_reclaimed = 0;
 struct BuildJob
 {
-    LLVOVolume* object = nullptr; // non-owning; owner generation guards access
+    LLPointer<LLVOVolume> object;
     std::weak_ptr<LLComputeMesh::Object> owner;
-    LLVolumeLease volumes[4];
+    LLVolume* volumes[4] = {};
     std::vector<std::shared_ptr<StagedFace>> faces;
     U32 target = 0, ready_mask = 0, failed_mask = 0, face_index = 0, lod = 0;
-    bool initialized = false, executing = false;
-    U64 reserved = 0;
-    void releaseSources()
-    {
-        for (auto& volume : volumes) volume.reset();
-    }
-    void releasePreparation()
-    {
-        faces.clear();
-        releaseSources();
-        if (reserved) { preparation_reservations.release(reserved); reserved = 0; ++resource_epoch; }
-        if (initialized) { --active_preparations; initialized = false; }
-        face_index = lod = 0;
-    }
+    bool initialized = false;
     unsigned waiting = 0;
     U64 blocked_resource_epoch = 0;
     U64 prepared_epoch = 0;
     ~BuildJob()
     {
-        releasePreparation();
+        for (auto* volume : volumes)
+            if (volume) LLPrimitive::getVolumeManager()->unrefVolume(volume);
         if (auto token = owner.lock()) token->pending = false;
     }
 };
 std::deque<std::shared_ptr<BuildJob>> build_jobs;
-std::unordered_map<LLVOVolume*, std::weak_ptr<BuildJob>> preparation_lookup;
 LLComputeMesh::DependencyWaits<LLVOVolume*, std::shared_ptr<BuildJob>> waiting_jobs;
 std::map<LLVOVolume*, std::weak_ptr<BuildJob>> resource_waiters;
 U32 dependency_wakes = 0, resource_checks = 0;
 F32 resource_wake_ms = 0.f;
 void cancelPreparation(LLVOVolume& object)
 {
-    auto found = preparation_lookup.find(&object);
-    if (found != preparation_lookup.end())
-    {
-        if (auto job = found->second.lock())
-        {
-            // A callback can invalidate the job currently on the stack. Its
-            // payload must survive until advanceJob returns; queued work can
-            // shed heavy references immediately, before its bounded next turn.
-            if (!job->executing)
-            {
-                job->releasePreparation();
-                job->owner.reset();
-                job->object = nullptr;
-            }
-        }
-        preparation_lookup.erase(found);
-    }
+    // Runnable jobs hold a weak generation token and are rejected at their next
+    // bounded turn. Parked jobs must be removed now: no event may follow death.
     waiting_jobs.erase(&object);
     resource_waiters.erase(&object);
 }
@@ -462,15 +430,14 @@ void enqueueBuild(const std::shared_ptr<LLComputeMesh::Object>& owner, U32 targe
     job->owner = owner;
     job->target = owner->requested_lod;
     owner->pending = true;
-    preparation_lookup[owner->object] = job;
     build_jobs.push_back(std::move(job));
 }
 
 BuildResult advanceJob(BuildJob& job)
 {
-    auto* object = job.object;
+    auto* object = job.object.get();
     auto owner = job.owner.lock();
-    if (!owner || !object || object->isDead() || object->mComputeLOD != owner) return BuildResult::DROP;
+    if (!owner || object->isDead() || object->mComputeLOD != owner) return BuildResult::DROP;
     auto wait = [&](unsigned dependency) { job.waiting = dependency; return BuildResult::WAIT; };
     if (object->mDrawable && object->mDrawable->isState(LLDrawable::RIGGED) && !object->getSkinInfo())
         return wait(LLComputeMesh::SKIN);
@@ -514,8 +481,8 @@ BuildResult advanceJob(BuildJob& job)
         {
             const S32 actual = gMeshRepo.getActualMeshLOD(current->getParams(), lod);
             if (actual < 0) return BuildResult::DROP;
-            if (!job.volumes[lod]) job.volumes[lod] = LLVolumeLease(*LLPrimitive::getVolumeManager(), current->getParams(), actual);
-            auto* source = job.volumes[lod].get();
+            if (!job.volumes[lod]) job.volumes[lod] = LLPrimitive::getVolumeManager()->refVolume(current->getParams(), actual);
+            auto* source = job.volumes[lod];
             if (source && source->isMeshAssetUnavaliable()) job.failed_mask |= 1u<<lod;
             if (source && source->isMeshAssetLoaded())
             {
@@ -563,11 +530,11 @@ BuildResult advanceJob(BuildJob& job)
                 for (U32 lod=0; lod<4; ++lod)
                 {
                     if (!(levels & (1u<<lod))) continue;
-                    auto* source = job.volumes[lod].get();
+                    auto* source = job.volumes[lod];
                     if (source->getNumVolumeFaces() != count) { compatible = false; return false; }
                     bool alias = false;
                     for (U32 previous=0; previous<lod; ++previous)
-                        alias |= (levels & (1u<<previous)) && job.volumes[previous].get() == source;
+                        alias |= (levels & (1u<<previous)) && job.volumes[previous] == source;
                     if (!alias) vertices += (source->getVolumeFace(f).mNumVertices+3)&~3u;
                 }
                 fits &= vertices <= 65535;
@@ -600,14 +567,14 @@ BuildResult advanceJob(BuildJob& job)
             for (U32 lod=0; lod<4; ++lod)
             {
                 if (!(job.ready_mask & (1u<<lod))) continue;
-                auto* source = job.volumes[lod].get();
+                auto* source = job.volumes[lod];
                 if (source->getNumVolumeFaces() != count) return BuildResult::DROP;
                 const auto& vf = source->getVolumeFace(f);
                 if (vf.mNumVertices < 0 || vf.mNumIndices < 0 || (!vf.mNumVertices && vf.mNumIndices) ||
                     (rigged && vf.mNumVertices && !vf.mWeights)) return BuildResult::DROP;
                 bool alias = false;
                 for (U32 previous=0; previous<lod; ++previous)
-                    alias |= (job.ready_mask & (1u<<previous)) && job.volumes[previous].get() == source;
+                    alias |= (job.ready_mask & (1u<<previous)) && job.volumes[previous] == source;
                 if (!alias) { vertices += (vf.mNumVertices+3)&~3u; indices += vf.mNumIndices; }
             }
             if (vertices > 65535) return BuildResult::DROP;
@@ -615,13 +582,10 @@ BuildResult advanceJob(BuildJob& job)
             new_slots += owner->faces[f]->slot == ~0u;
         }
         // Include the still-visible old buffers while preparing replacements.
-        if (new_slots > CAPACITY-extent+available.size()) return BuildResult::RESOURCE_LIMIT;
+        if (new_slots > CAPACITY-extent+available.size() || resident_bytes+estimate > byteBudget()) return BuildResult::RESOURCE_LIMIT;
         if (!initialize()) return BuildResult::DROP;
-        if (!preparation_reservations.acquire(resident_bytes, estimate, byteBudget())) return BuildResult::RESOURCE_LIMIT;
-        job.reserved = estimate;
         job.faces.resize(count);
         job.initialized = true;
-        ++active_preparations;
         return BuildResult::MORE;
     }
     if (job.face_index < U32(count))
@@ -639,7 +603,7 @@ BuildResult advanceJob(BuildJob& job)
                 if (!(job.ready_mask & (1u<<lod))) continue;
                 bool alias = false;
                 for (U32 previous=0; previous<lod; ++previous)
-                    alias |= (job.ready_mask & (1u<<previous)) && job.volumes[previous].get() == job.volumes[lod].get();
+                    alias |= (job.ready_mask & (1u<<previous)) && job.volumes[previous] == job.volumes[lod];
                 if (!alias)
                 {
                     const auto& vf = job.volumes[lod]->getVolumeFace(face_index);
@@ -650,12 +614,7 @@ BuildResult advanceJob(BuildJob& job)
             staged->buffer = new LLVertexBuffer(mask);
             if (!staged->buffer->allocateBuffer(llmax(vertices, 4u), llmax(indices, 1u))) return BuildResult::RESOURCE_LIMIT;
             staged->bytes = staged->buffer->getSize()+staged->buffer->getIndicesSize();
-            // Convert reserved output to actual staging, without charging twice.
-            const U64 converted = llmin(job.reserved, staged->bytes);
-            preparation_reservations.release(converted);
-            job.reserved -= converted;
             resident_bytes += staged->bytes;
-            staged_geometry_bytes += staged->bytes;
             geometry_allocation_bytes += staged->bytes;
             if (rigged && !record->avatar)
             {
@@ -675,10 +634,10 @@ BuildResult advanceJob(BuildJob& job)
         {
             job.lod = lod+1;
             if (!(job.ready_mask & (1u<<lod))) continue;
-            auto* source = job.volumes[lod].get();
+            auto* source = job.volumes[lod];
             S32 alias = -1;
             for (U32 previous=0; previous<lod; ++previous)
-                if ((job.ready_mask & (1u<<previous)) && job.volumes[previous].get() == source) { alias=previous; break; }
+                if ((job.ready_mask & (1u<<previous)) && job.volumes[previous] == source) { alias=previous; break; }
             if (alias >= 0)
             {
                 std::copy(entry.ranges[alias], entry.ranges[alias]+4, entry.ranges[lod]);
@@ -758,9 +717,7 @@ BuildResult advanceJob(BuildJob& job)
         resident_bytes -= record->bytes;
         if (record->bytes) ++resource_epoch;
         record->buffer = staged.buffer;
-        record->bytes = staged.bytes;
-        staged_geometry_bytes -= staged.bytes;
-        staged.bytes = 0;
+        record->bytes = staged.bytes; staged.bytes = 0;
         const LLVector3 center(object->mDrawable->getPositionGroup().getF32ptr());
         std::copy(center.mV, center.mV+3, staged.entry.centerRadius);
         staged.entry.centerRadius[3] = current->mLODScaleBias.scaledVec(object->getScale()).length();
@@ -825,8 +782,7 @@ void wakeResourceJobs(const LLTimer& timer, F32 deadline_ms)
         auto job = found->second.lock();
         if (!job) { resource_waiters.erase(found); return true; }
         if (job->blocked_resource_epoch != resource_epoch)
-            if (auto owner = job->owner.lock())
-                LLComputeMesh::notifyLODDependency(*owner->object, LLComputeMesh::RESOURCES);
+            LLComputeMesh::notifyLODDependency(*job->object, LLComputeMesh::RESOURCES);
         return true;
     }, [&]() { return timer.getElapsedTimeF32()*1000.f >= deadline_ms; });
 }
@@ -853,13 +809,8 @@ void processBuildJobs()
             geometry_upload_bytes+geometry_copy_bytes+geometry_allocation_bytes-bytes_before >= 4ull*1024*1024) break;
         auto job = build_jobs.front(); build_jobs.pop_front();
         auto owner = job->owner.lock();
-        // Waiting demand does not keep dead scene objects alive. Pin only for
-        // this service turn, including callbacks and terminal-state handling.
-        LLPointer<LLVOVolume> live_object = owner ? owner->object : nullptr;
         const U64 event_epoch = owner ? owner->dependency_epoch : 0;
-        job->executing = true;
         auto result = advanceJob(*job);
-        job->executing = false;
         if (result == BuildResult::MORE || result == BuildResult::DONE) ++steps;
         if (result == BuildResult::MORE) build_jobs.push_back(std::move(job));
         else if (owner && !job->object->isDead() && job->object->mComputeLOD == owner)
@@ -875,25 +826,22 @@ void processBuildJobs()
             }
             else if (result == BuildResult::WAIT)
             {
-                // A dependency wait must not reserve replacement capacity
-                // indefinitely (for example, a failed material fetch). Keep the
-                // lightweight subscription and the old visible generation.
-                job->releasePreparation();
                 // A synchronous callback during advanceJob must not be lost.
                 if (owner->dependency_epoch != event_epoch) build_jobs.push_back(std::move(job));
-                else waiting_jobs.park(job->object, job->waiting, job);
+                else waiting_jobs.park(job->object.get(), job->waiting, job);
             }
             else if (result == BuildResult::RESOURCE_LIMIT)
             {
                 // Release unfinished replacement buffers before recording the
                 // resource epoch, so a job cannot wake itself by freeing them.
-                job->releasePreparation();
+                job->faces.clear(); job->initialized = false;
+                job->face_index = job->lod = 0;
                 job->blocked_resource_epoch = resource_epoch;
                 job->waiting = LLComputeMesh::RESOURCES;
                 owner->resource_waiting = true;
-                waiting_jobs.park(job->object, LLComputeMesh::RESOURCES | LLComputeMesh::MESH |
+                waiting_jobs.park(job->object.get(), LLComputeMesh::RESOURCES | LLComputeMesh::MESH |
                     LLComputeMesh::SKIN | LLComputeMesh::MATERIAL | LLComputeMesh::DRAWABLE, job);
-                resource_waiters[job->object] = job;
+                resource_waiters[job->object.get()] = job;
             }
             else if (result == BuildResult::DROP)
             {
@@ -980,9 +928,6 @@ bool LLComputeMesh::drawLOD(LLDrawInfo& info)
 
 void LLComputeMesh::beginLOD()
 {
-    // Reclaim only unused decoded source LODs. Focus and texture demand remain
-    // governed by upstream policy, not by asset-pool pinning.
-    source_lods_reclaimed += LLPrimitive::getVolumeManager()->trimUnusedLODs(LLViewerTexture::isSystemMemoryLow());
     consumeDemand();
     processBuildJobs();
     // Snapshot the world camera before shadow/reflection cameras are installed.
@@ -1021,12 +966,6 @@ void LLComputeMesh::beginLOD()
             << " rigged_indirect_draws=" << rigged_draws << " rigged_cpu_lod_bypasses=" << rigged_bypasses
             << " avatar_dispatches=" << avatar_dispatches
             << " budget_mib=" << byteBudget()/1048576
-            << " staged_geometry_bytes=" << staged_geometry_bytes
-            << " saved_pixel_transfer_bytes=" << LLAssetPool::pixelTransferredBytes.exchange(0)
-            << " saved_pixel_copy_bytes=" << LLAssetPool::pixelCopiedBytes.exchange(0)
-            << " active_preparations=" << active_preparations
-            << " reserved_preparation_bytes=" << preparation_reservations.bytes()
-            << " source_lods_reclaimed=" << source_lods_reclaimed
             << " preparation_pending=" << build_jobs.size() << " preparation_waiting=" << waiting_jobs.size()
             << " waiting_mesh=" << waiting[0] << " waiting_skin=" << waiting[1]
             << " waiting_material=" << waiting[2] << " waiting_drawable=" << waiting[3]
@@ -1040,7 +979,7 @@ void LLComputeMesh::beginLOD()
         prepared_steps = cancelled_jobs = dependency_wakes = resource_checks = 0;
         resource_wake_ms = 0.f;
         geometry_upload_bytes = geometry_copy_bytes = geometry_allocation_bytes = 0;
-        retained_jobs = source_lods_reclaimed = 0;
+        retained_jobs = 0;
         preparation_ms = preparation_max_ms = 0.f;
         rigged_draws = rigged_bypasses = avatar_dispatches = 0;
         draws = dispatches = bypasses = 0; uploaded = 0; report_timer.reset();
@@ -1052,11 +991,11 @@ void LLComputeMesh::shiftLOD(const LLVector3& offset)
 {
     for (auto& job : build_jobs)
     {
-        job->releasePreparation();
+        job->faces.clear(); job->initialized = false; job->face_index = job->lod = 0;
     }
     waiting_jobs.forEach([](const auto& job)
     {
-        job->releasePreparation();
+        job->faces.clear(); job->initialized = false; job->face_index = job->lod = 0;
     });
     for (U32 i = 0; i < extent; ++i)
     {
@@ -1086,17 +1025,13 @@ void LLComputeMesh::destroyLOD()
     // Reset object generations as well as queues. Otherwise a surviving draw
     // record could retain an invalid token with no job capable of waking it.
     std::map<LLVOVolume*, LLPointer<LLVOVolume>> reset_objects;
-    for (const auto& job : build_jobs)
-        if (auto owner = job->owner.lock()) reset_objects[owner->object] = owner->object;
-    waiting_jobs.forEach([&](const auto& job)
-    {
-        if (auto owner = job->owner.lock()) reset_objects[owner->object] = owner->object;
-    });
+    for (const auto& job : build_jobs) reset_objects[job->object.get()] = job->object;
+    waiting_jobs.forEach([&](const auto& job) { reset_objects[job->object.get()] = job->object; });
     for (auto* record : owners)
         if (record)
             if (auto owner = record->owner.lock()) reset_objects[owner->object] = owner->object;
     for (const auto& entry : reset_objects) invalidateLOD(*entry.first);
-    build_jobs.clear(); preparation_lookup.clear();
+    build_jobs.clear();
     waiting_jobs.clear(); resource_waiters.clear();
     preparation_frame = ~0u;
     for (auto* owner : owners) if (owner) owner->valid = false;
