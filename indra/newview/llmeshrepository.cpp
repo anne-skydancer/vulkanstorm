@@ -33,6 +33,7 @@
 #include "llhttpconstants.h"
 #include "llmeshrepository.h"
 #include "llmeshstreaming.h"
+#include <type_traits>
 
 #include "llagent.h"
 #include "llappviewer.h"
@@ -999,7 +1000,7 @@ LLMeshRepoThread::~LLMeshRepoThread()
 
     while (!mSkinInfoQ.empty())
     {
-        llassert(mSkinInfoQ.front()->getNumRefs() == 1);
+        llassert(mSkinInfoQ.front().mInfo->getNumRefs() == 1);
         mSkinInfoQ.pop_front();
     }
 
@@ -2518,9 +2519,23 @@ EMeshProcessingResult LLMeshRepoThread::lodReceived(const LLVolumeParams& mesh_p
             }
 
             LoadedMesh mesh(volume, mesh_params, lod);
+            // Estimate decoded payload once, before publication. This excludes
+            // allocator/driver overhead and is not a process-memory measurement.
+            mesh.mRetainedBytes = sizeof(LLVolume) + U64(num_faces)*sizeof(LLVolumeFace);
+            for (S32 i=0; i<num_faces; ++i)
+            {
+                const auto& face = volume->getVolumeFace(i);
+                mesh.mRetainedBytes += U64(llmax(face.mNumAllocatedVertices, 0)) *
+                    (2*sizeof(LLVector4a)+sizeof(LLVector2));
+                mesh.mRetainedBytes += U64(llmax(face.mNumIndices, 0))*sizeof(U16);
+                const U64 optional_vertices = U64(llmax(face.mNumVertices, 0))*sizeof(LLVector4a);
+                if (face.mTangents) mesh.mRetainedBytes += optional_vertices;
+                if (face.mWeights) mesh.mRetainedBytes += optional_vertices;
+            }
             {
                 LLMutexLock lock(mLoadedMutex);
                 mLoadedQ.push_back(mesh);
+                mCompletionBytes += mesh.mRetainedBytes;
                 // LLPointer is not thread safe, since we added this pointer into
                 // threaded list, make sure counter gets decreased inside mutex lock
                 // and won't affect mLoadedQ processing
@@ -2586,7 +2601,9 @@ bool LLMeshRepoThread::skinInfoReceived(const LLUUID& mesh_id, U8* data, S32 dat
             // Move the LLPointer in to the skin info queue to avoid reference
             // count modification after we leave the lock
             LLMutexLock lock(mLoadedMutex);
-            mSkinInfoQ.emplace_back(std::move(info));
+            const U64 bytes = info->sizeBytes();
+            mSkinInfoQ.push_back({std::move(info), bytes});
+            mCompletionBytes += bytes;
         }
     }
 
@@ -3470,12 +3487,21 @@ void LLMeshRepoThread::notifyLoadedMeshes()
         if (!mLoadedMutex->trylock()) return false;
         if (queue.empty()) { mLoadedMutex->unlock(); return false; }
         auto item = std::move(queue.front()); queue.pop_front();
+        using Item = std::decay_t<decltype(item)>;
+        constexpr bool accounted = std::is_same_v<Item, LoadedMesh> || std::is_same_v<Item, LoadedSkin>;
+        if constexpr (accounted)
+        {
+            llassert(mCompletionBytes >= item.mRetainedBytes);
+            mCompletionBytes -= item.mRetainedBytes;
+        }
         mLoadedMutex->unlock();
         if (!callback(item))
         {
             LLMutexLock lock(mLoadedMutex);
+            if constexpr (accounted) mCompletionBytes += item.mRetainedBytes;
             queue.push_back(std::move(item));
         }
+        else if constexpr (accounted) ++mAdmissionCompleted;
         return true;
     };
     const U32 processed = LLMeshStreaming::completionBatch(kind, 6, [&](U32 queue_kind)
@@ -3497,7 +3523,7 @@ void LLMeshRepoThread::notifyLoadedMeshes()
                 { return gMeshRepo.notifyMeshUnavailable(request.mMeshParams, request.mLOD, request.mLOD); });
             break;
         case 2:
-            worked = process(mSkinInfoQ, [](auto& info) { return gMeshRepo.notifySkinInfoReceived(info); });
+            worked = process(mSkinInfoQ, [](auto& info) { return gMeshRepo.notifySkinInfoReceived(info.mInfo); });
             break;
         case 3:
             worked = process(mSkinUnavailableQ, [](UUIDBasedRequest& request)
@@ -4780,19 +4806,42 @@ void LLMeshRepository::notifyLoadedMeshes()
         // Checking sRequestHighWater to keep queues at least somewhat populated
         // for faster transition into http
         S32 active_count = LLMeshRepoThread::sActiveHeaderRequests + LLMeshRepoThread::sActiveLODRequests + LLMeshRepoThread::sActiveSkinRequests;
-        active_count += (S32)(mThread->mLODReqQ.size() + mThread->mHeaderReqQ.size() + mThread->mSkinInfoQ.size());
-        if (active_count < LLMeshRepoThread::sRequestHighWater)
+        active_count += (S32)(mThread->mLODReqQ.size() + mThread->mHeaderReqQ.size() + mThread->mSkinRequests.size());
+        // Observe admission even when capacity is full, so drain-rate samples
+        // and diagnostics include blocked periods rather than hiding them.
         {
             size_t completion_backlog = 0;
+            U64 completion_bytes = 0;
             {
                 LLMutexLock completed_lock(mThread->mLoadedMutex);
                 completion_backlog = mThread->mLoadedQ.size()+mThread->mSkinInfoQ.size();
+                completion_bytes = mThread->mCompletionBytes;
             }
             // Reduce total concurrency progressively; existing requests finish
             // normally. Repeated calls cannot each admit another full allowance.
-            const S32 push_count = LLMeshStreaming::admissionRoom(
+            static LLMeshStreaming::AdmissionController admission;
+            static LLTimer admission_clock, admission_report;
+            S32 push_count = admission.room(
                 U32(llmax(LLMeshRepoThread::sRequestHighWater, 0)),
-                U32(llmax(active_count, 0)), completion_backlog);
+                U32(llmax(active_count, 0)), completion_backlog, completion_bytes,
+                mThread->mAdmissionCompleted, admission_clock.getElapsedTimeF64());
+            if (admission_report.getElapsedTimeF32() >= 5.f)
+            {
+                const auto delayed_skins = std::count_if(mThread->mSkinRequests.begin(), mThread->mSkinRequests.end(),
+                    [](const auto& request) { return request.isDelayed(); });
+                LL_INFOS("MeshBatch") << "admission_backlog=" << completion_backlog
+                    << " completion_payload_estimate_bytes=" << completion_bytes
+                    << " completion_drain_per_second=" << admission.drainPerSecond
+                    << " drain_rate_known=" << admission.rateKnown
+                    << " admission_throttled=" << admission.throttled
+                    << " admission_limit=" << admission.limit
+                    << " request_work_active_queued=" << active_count
+                    << " skin_requests_queued=" << mThread->mSkinRequests.size()
+                    << " skin_requests_delayed=" << delayed_skins
+                    << " lod_requests_admitted=" << mThread->mLODReqQ.size()
+                    << " headers_queued=" << mThread->mHeaderReqQ.size() << LL_ENDL;
+                admission_report.reset();
+            }
 
             if (push_count > 0 && mPendingRequests.size() > size_t(push_count))
             {

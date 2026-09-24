@@ -10,24 +10,44 @@ struct Object { int id; bool dead=false; bool isDead() const { return dead; } };
 struct Waiters { std::set<Object*> mVolumes; };
 int main()
 {
-    // Backpressure tapers at the old cutoff rather than stopping all traffic.
-    assert(LLMeshStreaming::admissionLimit(64,0)==64);
-    assert(LLMeshStreaming::admissionLimit(64,256)==32);
-    assert(LLMeshStreaming::admissionLimit(64,768)==16);
-    assert(LLMeshStreaming::admissionLimit(64,UINT64_MAX)==1);
-    assert(LLMeshStreaming::admissionLimit(0,256)==0);
-    assert(LLMeshStreaming::admissionRoom(64,40,256)==0); // no cancellation or unsigned wrap
-    assert(LLMeshStreaming::admissionRoom(64,30,256)==2);
-    assert(LLMeshStreaming::admissionRoom(64,32,256)==0); // no extra allowance next frame
-    assert(LLMeshStreaming::admissionRoom(64,32,0)==32); // capacity recovers as backlog drains
-    assert(LLMeshStreaming::admissionRoom(64,0,UINT64_MAX)==1);
-    unsigned previous_limit=64;
-    for (unsigned backlog=0;backlog<10000;++backlog)
-    {
-        const unsigned limit=LLMeshStreaming::admissionLimit(64,backlog);
-        assert(limit>=1 && limit<=previous_limit);
-        previous_limit=limit;
-    }
+    using Admission = LLMeshStreaming::AdmissionController;
+    Admission admission;
+    assert(admission.room(64,0,0,0,0,0.)==64);
+    assert(admission.room(64,0,256,0,0,0.)==32 && admission.throttled);
+    assert(admission.room(64,0,200,0,0,0.)==32 && admission.throttled); // hysteresis
+    assert(admission.room(64,0,128,0,0,0.)>32 && !admission.throttled);
+    assert(admission.room(64,0,768,0,0,0.)==16);
+    assert(admission.room(64,40,256,0,0,0.)==0); // in-flight work exceeds reduced target
+    assert(admission.room(64,30,256,0,0,0.)==2);
+    assert(admission.room(64,32,256,0,0,0.)==0); // no repeated per-frame allowance
+    assert(admission.room(64,32,0,0,0,0.)==32);
+    assert(admission.room(0,0,0,0,0,0.)==0);
+    assert(admission.room(64,0,UINT64_MAX,UINT64_MAX,0,0.)==1);
+    // Regression: observed healthy backlog was reducing 80 slots to 54 even
+    // though admission_throttled was false and drain capacity was ample.
+    Admission healthy;
+    assert(healthy.room(80,0,117,1187408,0,0.)==80 && !healthy.throttled);
+    assert(healthy.room(80,37,117,1187408,588,1.)==43 && !healthy.throttled);
+    assert(healthy.limit==80);
+    assert(healthy.room(80,77,1,6360342,588,1.)==3 && !healthy.throttled);
+    Admission memory;
+    assert(memory.room(64,0,1,Admission::HIGH_BYTES,0,0.)==32 && memory.throttled);
+    assert(memory.room(64,0,1,Admission::LOW_BYTES+1,0,0.)==32 && memory.throttled);
+    assert(memory.room(64,0,1,Admission::LOW_BYTES,0,0.)>32 && !memory.throttled);
+    Admission stalled;
+    stalled.room(64,0,100,0,0,0.);
+    assert(stalled.room(64,0,100,0,0,1.)<32 && stalled.rateKnown && stalled.throttled);
+    assert(stalled.drainPerSecond==0.);
+    assert(stalled.room(64,0,10,0,100,2.)>32 && !stalled.throttled);
+    assert(stalled.room(64,0,0,0,100,3.)==64 && !stalled.rateKnown);
+    Admission fast;
+    fast.room(64,0,100,0,0,0.);
+    assert(fast.room(64,0,100,0,100,1.)>32 && !fast.throttled);
+    assert(fast.rateKnown && fast.drainPerSecond==100.);
+    // A long delay cannot manufacture extra capacity; the measured rate is per second.
+    Admission paused;
+    paused.room(64,0,100,0,0,0.);
+    assert(paused.room(64,0,100,0,10,10.)<32 && paused.drainPerSecond==1.);
 
     // Cheap completions use the time allowance rather than stopping at eight.
     unsigned cursor = 0, elapsed = 0;

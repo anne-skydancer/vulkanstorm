@@ -2,24 +2,54 @@
 #ifndef LL_MESH_STREAMING_H
 #define LL_MESH_STREAMING_H
 #include <cstdint>
+#include <algorithm>
 namespace LLMeshStreaming
 {
-// Taper total admitted work as completions accumulate. At the former stop
-// threshold (256), retain half the normal capacity; never force it to zero.
-// This is a ceiling on active + queued requests, not a per-frame allowance.
-inline unsigned admissionLimit(unsigned high_water, std::uint64_t completions)
+// Admission uses completed payload estimates, backlog and measured drain rate.
+// Hysteresis prevents toggling near a threshold. Limits apply to total in-flight
+// plus queued network work, never to an independent allowance each frame.
+class AdmissionController
 {
-    if (!high_water) return 0;
-    // Saturation also protects the denominator for synthetic/extreme inputs.
-    if (completions > UINT32_MAX) completions = UINT32_MAX;
-    const auto scaled = std::uint64_t(high_water) * 256 / (256 + completions);
-    return scaled ? unsigned(scaled) : 1u;
-}
-inline unsigned admissionRoom(unsigned high_water, unsigned active, std::uint64_t completions)
-{
-    const unsigned limit = admissionLimit(high_water, completions);
-    return active < limit ? limit - active : 0;
-}
+public:
+    static constexpr std::uint64_t HIGH_BYTES = 64ull*1024*1024;
+    static constexpr std::uint64_t LOW_BYTES = HIGH_BYTES/2;
+    bool throttled = false, rateKnown = false;
+    double drainPerSecond = 0.;
+    unsigned limit = 0;
+
+    unsigned room(unsigned high, unsigned active, std::uint64_t backlog,
+                  std::uint64_t bytes, std::uint64_t completed, double now)
+    {
+        if (sampleTime < 0. || now < sampleTime || completed < sampleCompleted)
+        { sampleTime = now; sampleCompleted = completed; rateKnown = false; }
+        if (!backlog)
+        {
+            sampleTime = now; sampleCompleted = completed;
+            rateKnown = false; drainPerSecond = 0.;
+        }
+        else if (now-sampleTime >= 1.)
+        {
+            const double measured = double(completed-sampleCompleted)/(now-sampleTime);
+            drainPerSecond = rateKnown ? 0.5*drainPerSecond + 0.5*measured : measured;
+            rateKnown = true; sampleTime = now; sampleCompleted = completed;
+        }
+        const double rateHigh = rateKnown ? std::max(32., 2.*drainPerSecond) : 256.;
+        const double rateLow = rateKnown ? std::max(16., drainPerSecond) : 128.;
+        if (!throttled && (backlog>=256 || bytes>=HIGH_BYTES || double(backlog)>rateHigh)) throttled=true;
+        else if (throttled && backlog<=128 && bytes<=LOW_BYTES && double(backlog)<=rateLow) throttled=false;
+        double pressure = std::max(double(backlog)/256., double(bytes)/HIGH_BYTES);
+        if (rateKnown) pressure = std::max(pressure, double(backlog)/rateHigh);
+        // Keep pressure engaged until the lower thresholds are satisfied.
+        if (throttled) pressure = std::max(1., pressure);
+        // A healthy, draining queue must retain normal request concurrency.
+        // Pressure scales capacity only after an entry threshold has fired.
+        limit = !throttled ? high : (high ? std::max(1u, unsigned(double(high)/(1.+pressure))) : 0);
+        return active<limit ? limit-active : 0;
+    }
+private:
+    double sampleTime = -1.;
+    std::uint64_t sampleCompleted = 0;
+};
 
 // Fair completion service bounded by elapsed time, not a fixed number of items.
 // A failed probe (empty queue or unavailable lock) advances to the next queue.
