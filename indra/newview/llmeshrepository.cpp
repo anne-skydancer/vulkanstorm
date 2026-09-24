@@ -33,6 +33,7 @@
 #include "llhttpconstants.h"
 #include "llmeshrepository.h"
 #include "llmeshstreaming.h"
+#include "llcomputemesh.h"
 #include <type_traits>
 
 #include "llagent.h"
@@ -4979,6 +4980,7 @@ bool LLMeshRepository::notifyMeshUnavailable(const LLVolumeParams& mesh_params, 
     return notifyMeshWaiters(mLoadingMeshes[request_lod], mesh_params.getSculptID(),
         [&](LLVOVolume& object)
         {
+            LLComputeMesh::notifyLODDependency(object, LLComputeMesh::MESH);
             auto* volume = object.getVolume();
             if (volume && volume->getDetail() == detail && volume->getParams() == mesh_params)
                 object.setVolume(volume->getParams(), volume_lod);

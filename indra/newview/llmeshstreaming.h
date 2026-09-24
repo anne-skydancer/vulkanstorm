@@ -144,6 +144,15 @@ int fallbackPromotion(unsigned current, unsigned ready, Resolve resolve)
         }
     return finest > int(current) ? finest : -1;
 }
+// Preserve the finest loaded levels that fit the legacy 16-bit face layout.
+// Decide the final pack BEFORE comparing it with resident ranges or allocating.
+// Aliased levels are counted by the caller once, just as in the actual pack.
+template<class Fits>
+unsigned fitResidentLevels(unsigned loaded, Fits fits)
+{
+    while (loaded && !fits(loaded)) loaded &= loaded-1;
+    return loaded;
+}
 inline unsigned residentLevel(unsigned ready, unsigned desired)
 {
     for (int level=int(desired); level>=0; --level) if (ready & (1u<<level)) return level;

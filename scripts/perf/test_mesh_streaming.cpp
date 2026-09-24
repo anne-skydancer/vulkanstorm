@@ -10,6 +10,29 @@ struct Object { int id; bool dead=false; bool isDead() const { return dead; } };
 struct Waiters { std::set<Object*> mVolumes; };
 int main()
 {
+    // A dense High plus a loaded coarse level must converge to the existing
+    // High pack, rather than allocate an identical replacement on every demand.
+    const std::array<unsigned,4> vertices{10000,20000,30000,60000};
+    for (unsigned loaded=1; loaded<16; ++loaded)
+    {
+        auto fits = [&](unsigned mask)
+        {
+            unsigned total=0;
+            for (unsigned i=0; i<4; ++i) if (mask & (1u<<i)) total+=vertices[i];
+            return total<=65535;
+        };
+        const unsigned packed=LLMeshStreaming::fitResidentLevels(loaded,fits);
+        assert(packed && fits(packed) && !(packed & ~loaded));
+        assert(LLMeshStreaming::fitResidentLevels(packed,fits)==packed);
+        unsigned finest=0;
+        for (unsigned i=0; i<4; ++i) if (loaded & (1u<<i)) finest=i;
+        assert(packed & (1u<<finest));
+        if (loaded & 8) assert(packed==8);
+    }
+    // Aliases share storage; they must not be dropped as if duplicated vertices.
+    assert(LLMeshStreaming::fitResidentLevels(15,[](unsigned){return true;})==15);
+    assert(LLMeshStreaming::fitResidentLevels(8,[](unsigned){return false;})==0);
+    assert(LLMeshStreaming::fitResidentLevels(3,[](unsigned){return true;})==3);
     using Lane = LLMeshStreaming::RequestLane;
     assert(LLMeshStreaming::requestBefore(0.f, 10.f, 4.f, 1.f));
     assert(LLMeshStreaming::requestBefore(5.f, 0.f, 0.f, 100.f));
