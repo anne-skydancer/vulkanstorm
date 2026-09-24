@@ -506,6 +506,7 @@ public:
         LLVolumeParams mMeshParams;
         S32 mLOD;
         bool mPublished = false;
+        U64 mRetainedBytes = 0;
 
         LoadedMesh(LLVolume* volume, const LLVolumeParams&  mesh_params, S32 lod)
             : mVolume(volume), mMeshParams(mesh_params), mLOD(lod)
@@ -518,7 +519,15 @@ public:
     std::deque<UUIDBasedRequest> mSkinRequests;
 
     // list of completed skin info requests
-    std::deque<LLPointer<LLMeshSkinInfo>> mSkinInfoQ;
+    struct LoadedSkin
+    {
+        LLPointer<LLMeshSkinInfo> mInfo;
+        U64 mRetainedBytes = 0;
+    };
+    std::deque<LoadedSkin> mSkinInfoQ;
+    // Payload estimates protected by mLoadedMutex; drain count is main-thread only.
+    U64 mCompletionBytes = 0;
+    U64 mAdmissionCompleted = 0;
 
     // list of skin info requests that have failed or are unavailaibe
     std::deque<UUIDBasedRequest> mSkinUnavailableQ;
