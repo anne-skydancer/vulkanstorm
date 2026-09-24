@@ -3462,7 +3462,6 @@ void LLMeshRepoThread::notifyLoadedMeshes()
     completed_frame = gFrameCount;
     LL_PROFILE_ZONE_NAMED("Mesh bounded completions");
     LLTimer timer;
-    U32 processed = 0;
     static U32 kind = 0;
     // Round-robin service prevents a mesh backlog from starving skin/physics.
     // Only pop under the lock; callbacks run on the main thread without it.
@@ -3479,10 +3478,10 @@ void LLMeshRepoThread::notifyLoadedMeshes()
         }
         return true;
     };
-    for (U32 attempts=0; attempts<48 && processed<8 && timer.getElapsedTimeF32()<0.0015f; ++attempts)
+    const U32 processed = LLMeshStreaming::completionBatch(kind, 6, [&](U32 queue_kind)
     {
         bool worked = false;
-        switch (kind++ % 6)
+        switch (queue_kind)
         {
         case 0:
             worked = process(mLoadedQ, [](LoadedMesh& mesh)
@@ -3513,8 +3512,8 @@ void LLMeshRepoThread::notifyLoadedMeshes()
                 { gMeshRepo.notifyDecompositionReceived(info, true); return true; });
             break;
         }
-        processed += worked;
-    }
+        return worked;
+    }, [&]() { return timer.getElapsedTimeF32() >= 0.0015f; });
     static LLTimer report_timer;
     static U32 completion_steps = 0;
     static F32 completion_max_ms = 0;
@@ -4784,13 +4783,16 @@ void LLMeshRepository::notifyLoadedMeshes()
         active_count += (S32)(mThread->mLODReqQ.size() + mThread->mHeaderReqQ.size() + mThread->mSkinInfoQ.size());
         if (active_count < LLMeshRepoThread::sRequestHighWater)
         {
-            S32 push_count = LLMeshRepoThread::sRequestHighWater - active_count;
-            // Let the bounded main-thread consumer catch up before admitting
-            // more downloads. In-flight requests may still complete normally.
+            size_t completion_backlog = 0;
             {
                 LLMutexLock completed_lock(mThread->mLoadedMutex);
-                if (mThread->mLoadedQ.size()+mThread->mSkinInfoQ.size() >= 256) push_count = 0;
+                completion_backlog = mThread->mLoadedQ.size()+mThread->mSkinInfoQ.size();
             }
+            // Reduce total concurrency progressively; existing requests finish
+            // normally. Repeated calls cannot each admit another full allowance.
+            const S32 push_count = LLMeshStreaming::admissionRoom(
+                U32(llmax(LLMeshRepoThread::sRequestHighWater, 0)),
+                U32(llmax(active_count, 0)), completion_backlog);
 
             if (push_count > 0 && mPendingRequests.size() > size_t(push_count))
             {

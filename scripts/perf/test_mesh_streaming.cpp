@@ -10,6 +10,53 @@ struct Object { int id; bool dead=false; bool isDead() const { return dead; } };
 struct Waiters { std::set<Object*> mVolumes; };
 int main()
 {
+    // Backpressure tapers at the old cutoff rather than stopping all traffic.
+    assert(LLMeshStreaming::admissionLimit(64,0)==64);
+    assert(LLMeshStreaming::admissionLimit(64,256)==32);
+    assert(LLMeshStreaming::admissionLimit(64,768)==16);
+    assert(LLMeshStreaming::admissionLimit(64,UINT64_MAX)==1);
+    assert(LLMeshStreaming::admissionLimit(0,256)==0);
+    assert(LLMeshStreaming::admissionRoom(64,40,256)==0); // no cancellation or unsigned wrap
+    assert(LLMeshStreaming::admissionRoom(64,30,256)==2);
+    assert(LLMeshStreaming::admissionRoom(64,32,256)==0); // no extra allowance next frame
+    assert(LLMeshStreaming::admissionRoom(64,32,0)==32); // capacity recovers as backlog drains
+    assert(LLMeshStreaming::admissionRoom(64,0,UINT64_MAX)==1);
+    unsigned previous_limit=64;
+    for (unsigned backlog=0;backlog<10000;++backlog)
+    {
+        const unsigned limit=LLMeshStreaming::admissionLimit(64,backlog);
+        assert(limit>=1 && limit<=previous_limit);
+        previous_limit=limit;
+    }
+
+    // Cheap completions use the time allowance rather than stopping at eight.
+    unsigned cursor = 0, elapsed = 0;
+    unsigned remaining[3] = {100, 1, 1};
+    std::vector<unsigned> serviced;
+    auto service = [&](unsigned q) {
+        if (!remaining[q]) return false;
+        --remaining[q]; ++elapsed; serviced.push_back(q); return true;
+    };
+    assert(LLMeshStreaming::completionBatch(cursor, 3, service, [&]{return elapsed>=20;}) == 20);
+    assert(serviced[0]==0 && serviced[1]==1 && serviced[2]==2);
+    assert(remaining[0]==82 && remaining[1]==0 && remaining[2]==0);
+    // No work or unavailable locks cannot spin until the deadline.
+    unsigned probes = 0;
+    assert(LLMeshStreaming::completionBatch(cursor, 6, [&](unsigned){++probes;return false;}, []{return false;})==0);
+    assert(probes==6);
+    probes=0;
+    assert(LLMeshStreaming::completionBatch(cursor, 6, [&](unsigned){++probes;return true;}, []{return true;})==0);
+    assert(probes==0);
+    // Expiration preserves round-robin position; slow callbacks get no extra turn.
+    cursor=0; elapsed=0;
+    assert(LLMeshStreaming::completionBatch(cursor,3,[&](unsigned q){assert(q==0);elapsed=10;return true;},[&]{return elapsed>=1;})==1);
+    assert(cursor==1);
+    elapsed=0;
+    assert(LLMeshStreaming::completionBatch(cursor,3,[&](unsigned q){assert(q==1);++elapsed;return true;},[&]{return elapsed>=1;})==1);
+    // Requeued partial notifications can continue, still sharing the time budget.
+    elapsed=0;
+    assert(LLMeshStreaming::completionBatch(cursor,1,[&](unsigned){++elapsed;return true;},[&]{return elapsed>=12;})==12);
+
     // A direct-draw fallback must catch up before a finer rigged generation
     // becomes resident. Later invalidation must not expose the original Lowest.
     unsigned cpu_level = 0;

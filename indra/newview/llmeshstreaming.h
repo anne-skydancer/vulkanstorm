@@ -4,6 +4,42 @@
 #include <cstdint>
 namespace LLMeshStreaming
 {
+// Taper total admitted work as completions accumulate. At the former stop
+// threshold (256), retain half the normal capacity; never force it to zero.
+// This is a ceiling on active + queued requests, not a per-frame allowance.
+inline unsigned admissionLimit(unsigned high_water, std::uint64_t completions)
+{
+    if (!high_water) return 0;
+    // Saturation also protects the denominator for synthetic/extreme inputs.
+    if (completions > UINT32_MAX) completions = UINT32_MAX;
+    const auto scaled = std::uint64_t(high_water) * 256 / (256 + completions);
+    return scaled ? unsigned(scaled) : 1u;
+}
+inline unsigned admissionRoom(unsigned high_water, unsigned active, std::uint64_t completions)
+{
+    const unsigned limit = admissionLimit(high_water, completions);
+    return active < limit ? limit - active : 0;
+}
+
+// Fair completion service bounded by elapsed time, not a fixed number of items.
+// A failed probe (empty queue or unavailable lock) advances to the next queue.
+// Stop after a whole idle round; retain the cursor across frames.
+template<class Service, class Exhausted>
+unsigned completionBatch(unsigned& next, unsigned queues, Service service, Exhausted exhausted)
+{
+    if (!queues) return 0;
+    unsigned processed = 0, idle = 0;
+    next %= queues;
+    while (idle < queues && !exhausted())
+    {
+        const unsigned current = next;
+        next = (next + 1) % queues;
+        if (service(current)) { ++processed; idle = 0; }
+        else ++idle;
+    }
+    return processed;
+}
+
 inline bool retainLoadedLevel(unsigned level, unsigned target, unsigned previous, unsigned ready)
 {
     return level <= target || (previous & (1u << level)) || !ready;
