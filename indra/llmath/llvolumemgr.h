@@ -27,6 +27,7 @@
 #ifndef LL_LLVOLUMEMGR_H
 #define LL_LLVOLUMEMGR_H
 
+#include <chrono>
 #include <map>
 
 #include "llvolume.h"
@@ -58,6 +59,7 @@ public:
     LLVolume* refLOD(const S32 detail);
     bool derefLOD(LLVolume *volumep);
     S32 getNumRefs() const { return mRefs; }
+    bool takeUnusedLOD(bool pressure, LLPointer<LLVolume>& released);
 
     const LLVolumeParams* getVolumeParams() const { return &mVolumeParams; };
 
@@ -69,6 +71,7 @@ protected:
 
     S32 mRefs;
     S32 mLODRefs[NUM_LODS];
+    std::chrono::steady_clock::time_point mUnusedSince[NUM_LODS];
     LLPointer<LLVolume> mVolumeLODs[NUM_LODS];
     static F32 mDetailThresholds[NUM_LODS];
     static F32 mDetailScales[NUM_LODS];
@@ -91,6 +94,10 @@ public:
     virtual void unrefVolume(LLVolume *volumep);
 
     void dump();
+    // Main-thread maintenance: bounded group scan, at most one payload released
+    // outside the manager lock per call. Active or externally referenced LODs stay.
+    U32 trimUnusedLODs(bool pressure);
+
 
     // manually call this for mutex magic
     void useMutex();
@@ -107,6 +114,46 @@ protected:
     volume_lod_group_map_t mVolumeLODGroups;
 
     LLMutex* mDataMutex;
+    LLVolumeParams mTrimCursor;
+    bool mHaveTrimCursor = false;
+};
+
+// Move-only lease into the existing decoded-volume asset pool. The manager's
+// per-LOD reference is the pin; destruction releases exactly that acquisition.
+// Legacy object/picking owners continue to use their established references.
+class LLVolumeLease
+{
+    LLVolumeMgr* mManager = nullptr;
+    LLVolume* mVolume = nullptr;
+public:
+    LLVolumeLease() = default;
+    LLVolumeLease(LLVolumeMgr& manager, const LLVolumeParams& params, S32 lod)
+        : mManager(&manager), mVolume(manager.refVolume(params, lod)) {}
+    ~LLVolumeLease() { reset(); }
+    LLVolumeLease(const LLVolumeLease&) = delete;
+    LLVolumeLease& operator=(const LLVolumeLease&) = delete;
+    LLVolumeLease(LLVolumeLease&& other) noexcept
+        : mManager(other.mManager), mVolume(other.mVolume)
+    { other.mManager = nullptr; other.mVolume = nullptr; }
+    LLVolumeLease& operator=(LLVolumeLease&& other) noexcept
+    {
+        if (this != &other)
+        {
+            reset(); mManager = other.mManager; mVolume = other.mVolume;
+            other.mManager = nullptr; other.mVolume = nullptr;
+        }
+        return *this;
+    }
+    LLVolume* get() const { return mVolume; }
+    LLVolume* operator->() const { return mVolume; }
+    explicit operator bool() const { return mVolume != nullptr; }
+    void reset()
+    {
+        auto* volume = mVolume;
+        mVolume = nullptr;
+        if (volume) mManager->unrefVolume(volume);
+        mManager = nullptr;
+    }
 };
 
 #endif // LL_LLVOLUMEMGR_H

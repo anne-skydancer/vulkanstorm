@@ -28,6 +28,7 @@
 #include "llmutex.h"
 #include "llvolumemgr.h"
 #include "llvolume.h"
+#include "llassetpool.h"
 
 
 const F32 BASE_THRESHOLD = 0.03f;
@@ -312,6 +313,7 @@ bool LLVolumeLODGroup::derefLOD(LLVolume *volumep)
         {
             llassert_always(mLODRefs[i] > 0);
             mLODRefs[i]--;
+            if (!mLODRefs[i]) mUnusedSince[i] = std::chrono::steady_clock::now();
 #if 0 // SJB: Possible opt: keep other lods around
             if (!mLODRefs[i])
             {
@@ -323,6 +325,42 @@ bool LLVolumeLODGroup::derefLOD(LLVolume *volumep)
     }
     LL_ERRS() << "Deref of non-matching LOD in volume LOD group" << LL_ENDL;
     return false;
+}
+
+bool LLVolumeLODGroup::takeUnusedLOD(bool pressure, LLPointer<LLVolume>& released)
+{
+    const auto now = std::chrono::steady_clock::now();
+    for (S32 i=0; i<NUM_LODS; ++i)
+    {
+        auto* volume = mVolumeLODs[i].get();
+        // Only decoded mesh payloads; leave procedural volumes and negative
+        // asset results under their existing lifetime policy.
+        if (!volume || !volume->isMeshAssetLoaded()) continue;
+        const double idle = std::chrono::duration<double>(now-mUnusedSince[i]).count();
+        if (LLAssetPool::reclaimSource(mLODRefs[i], volume->getNumRefs(), idle, pressure))
+        {
+            released = mVolumeLODs[i];
+            mVolumeLODs[i] = nullptr;
+            return true;
+        }
+    }
+    return false;
+}
+
+U32 LLVolumeMgr::trimUnusedLODs(bool pressure)
+{
+    LLPointer<LLVolume> released;
+    if (mDataMutex) mDataMutex->lock();
+    auto it = mHaveTrimCursor ? mVolumeLODGroups.upper_bound(&mTrimCursor) : mVolumeLODGroups.begin();
+    for (U32 scanned=0; it!=mVolumeLODGroups.end() && scanned<64; ++scanned, ++it)
+    {
+        mTrimCursor = *it->first;
+        mHaveTrimCursor = true;
+        if (it->second->takeUnusedLOD(pressure, released)) break;
+    }
+    if (it==mVolumeLODGroups.end()) mHaveTrimCursor = false;
+    if (mDataMutex) mDataMutex->unlock();
+    return released.notNull() ? 1 : 0; // destruction after unlock
 }
 
 S32 LLVolumeLODGroup::getDetailFromTan(const F32 tan_angle)

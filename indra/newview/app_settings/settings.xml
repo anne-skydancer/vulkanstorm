@@ -12,7 +12,7 @@
   <key>RenderGLComputeMeshBudgetMiB</key>
   <map>
     <key>Comment</key><string>Additional resident mesh geometry budget in MiB, including staged replacements (64-2048). Lowering it limits new admissions.</string>
-    <key>Persist</key><integer>1</integer><key>Type</key><string>U32</string><key>Value</key><integer>1024</integer>
+    <key>Persist</key><integer>1</integer><key>Type</key><string>U32</string><key>Value</key><integer>768</integer>
   </map>
   <key>RenderGLComputeMeshPrepareMS</key>
   <map>
@@ -3021,7 +3021,7 @@
       <key>Type</key>
       <string>U32</string>
       <key>Value</key>
-      <integer>6400</integer>
+      <integer>4096</integer>
     </map>
     <key>CacheValidateCounter</key>
     <map>

@@ -25,6 +25,7 @@
  * $/LicenseInfo$
  */
 
+#include "llassetpool.h"
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewertexture.h"
@@ -2893,6 +2894,19 @@ void LLViewerFetchedTexture::saveRawImage()
 
     LLImageDataSharedLock lock(mRawImage);
 
+    // destroyRawImage releases mRawImage immediately after this call. Transfer
+    // sole ownership for identical pixels; do not alias external mutable users.
+    auto save_identical = [&]() -> LLPointer<LLImageRaw>
+    {
+        if (LLAssetPool::canTransferPixels(mRawImage->getNumRefs()))
+        {
+            LLAssetPool::pixelTransferredBytes += mRawImage->getDataSize();
+            return mRawImage;
+        }
+        LLAssetPool::pixelCopiedBytes += mRawImage->getDataSize();
+        return new LLImageRaw(mRawImage->getData(), mRawImage->getWidth(),
+                              mRawImage->getHeight(), mRawImage->getComponents());
+    };
     mSavedRawDiscardLevel = mRawDiscardLevel;
     if (mBoostLevel == LLGLTexture::BOOST_ICON)
     {
@@ -2905,7 +2919,7 @@ void LLViewerFetchedTexture::saveRawImage()
         }
         else
         {
-            mSavedRawImage = new LLImageRaw(mRawImage->getData(), mRawImage->getWidth(), mRawImage->getHeight(), mRawImage->getComponents());
+            mSavedRawImage = save_identical();
         }
     }
     else if (mBoostLevel == LLGLTexture::BOOST_THUMBNAIL)
@@ -2917,7 +2931,7 @@ void LLViewerFetchedTexture::saveRawImage()
         }
         else
         {
-            mSavedRawImage = new LLImageRaw(mRawImage->getData(), mRawImage->getWidth(), mRawImage->getHeight(), mRawImage->getComponents());
+            mSavedRawImage = save_identical();
         }
     }
     else if (mBoostLevel == LLGLTexture::BOOST_SCULPTED)
@@ -2931,12 +2945,12 @@ void LLViewerFetchedTexture::saveRawImage()
         }
         else
         {
-            mSavedRawImage = new LLImageRaw(mRawImage->getData(), mRawImage->getWidth(), mRawImage->getHeight(), mRawImage->getComponents());
+            mSavedRawImage = save_identical();
         }
     }
     else
     {
-        mSavedRawImage = new LLImageRaw(mRawImage->getData(), mRawImage->getWidth(), mRawImage->getHeight(), mRawImage->getComponents());
+        mSavedRawImage = save_identical();
     }
 
     if(mForceToSaveRawImage && mSavedRawDiscardLevel <= mDesiredSavedRawDiscardLevel)
