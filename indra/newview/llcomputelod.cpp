@@ -460,9 +460,9 @@ BuildResult advanceJob(BuildJob& job)
             }
             else if (lod<=job.target && !requested && source && !source->isMeshAssetUnavaliable())
             {
-                // loadMesh resolves the first missing prerequisite, so a cold
-                // request for High still starts with Lowest. One request per job.
-                gMeshRepo.loadMesh(object, current->getParams(), job.target, object->getLOD());
+                // Request desired detail concurrently with first geometry;
+                // other resident ranges use the opportunistic priority lane.
+                gMeshRepo.loadMesh(object, current->getParams(), job.target, object->getLOD(), true);
                 requested = true;
             }
         }
