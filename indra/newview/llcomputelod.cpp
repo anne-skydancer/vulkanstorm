@@ -46,7 +46,7 @@ U32 rigged_draws = 0, avatar_dispatches = 0, rigged_bypasses = 0;
 constexpr U32 CAPACITY = 8192;
 U64 byteBudget()
 {
-    static LLCachedControl<U32> mib(gSavedSettings, "RenderGLComputeMeshBudgetMiB", 1024);
+    static LLCachedControl<U32> mib(gSavedSettings, "RenderGLComputeMeshBudgetMiB", 768);
     return U64(llclamp(U32(mib), 64u, 2048u)) * 1024 * 1024;
 }
 struct Entry { F32 centerRadius[4] = {}; U32 ranges[4][4] = {}; U32 owner[4] = {}; };
