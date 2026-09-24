@@ -6,7 +6,7 @@ Developed against vkstorm-devel 107366d729; the production changes are also carr
 
 Adapt selected policies from Alchemy develop 902e75e7db77aea86a675c72006510d5331979ae. Alchemy and Linden source retain their LGPL-2.1-only attribution. The complete texture-container replacement, immutable-storage rewrite, and reworked offscreen-object eviction are excluded from this change.
 
-- Keep texture detail in a visible, unfocused viewer by default. Hidden/minimized behavior and genuine memory-pressure response remain active. TextureDiscardOnFocusLoss restores the old focus-loss policy when enabled.
+- Preserve upstream texture downscaling on focus loss, hiding, and minimization, including its existing timers. The earlier focus-loss override has been removed.
 - Saturate heap-headroom subtraction, read current Linux RSS with a peak-RSS fallback, and use the scarcest available physical/commit memory on Windows. Pressure recovery has a deadband and rate limits.
 - SceneLoadAutomaticMemoryBudget defaults to true. It derives effective scene-loading limits from installed RAM (25%/60%) and the viewer heap cap. The legacy SceneLoadLowMemoryBound/HighMemoryBound values remain saved and take effect in manual mode; runtime pressure never overwrites them. This implements the user's selected migration policy.
 - Limit ordinary texture face-priority traversal to 32 faces per visit. Carry size and visibility over a rotation, age old results out, and reset traversal when face membership changes. Retain existing texture containers, ownership/refcount thresholds, selected/sculpt handling, and >1024-face fallback.
