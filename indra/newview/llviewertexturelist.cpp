@@ -942,52 +942,26 @@ void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imag
         F32 max_vsize = 0.f;
         bool on_screen = false;
 
-        constexpr U32 max_faces_to_check = 1024;
-        // Faces one visit walks. The stat this feeds is a running max, so a
-        // texture with more faces than this converges on its largest face over
-        // a few visits. Above BIAS_TRS_OUT_OF_SCREEN the max is reset every
-        // visit; the slice's max is carried across a rotation of the list so
-        // the reset still sees the whole list, one rotation late.
-
-        U32 channel_faces[LLRender::NUM_TEXTURE_CHANNELS];
         U32 face_count = 0;
+        U32 max_faces_to_check = 1024;
+
+        // get adjusted bias based on image resolution
+        LLImageGL* img = imagep->getGLTexture();
+        F32 max_discard = F32(img ? img->getMaxDiscardLevel() : MAX_DISCARD_LEVEL);
+        F32 bias = llclamp(max_discard - 2.f, 1.f, LLViewerTexture::sDesiredDiscardBias);
+
+        // convert bias into a vsize scaler
+        bias = (F32) llroundf(powf(4, bias - 1.f));
+
+        LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
         for (U32 i = 0; i < LLRender::NUM_TEXTURE_CHANNELS; ++i)
         {
-            channel_faces[i] = imagep->getNumFaces(i);
-            face_count += channel_faces[i];
-        }
+            face_count += imagep->getNumFaces(i);
+            S32 faces_to_check = (face_count > max_faces_to_check) ? 0 : imagep->getNumFaces(i);
 
-        if (face_count > 0 && face_count <= max_faces_to_check)
-        {
-            // get adjusted bias based on image resolution
-            LLImageGL* img = imagep->getGLTexture();
-            F32 max_discard = F32(img ? img->getMaxDiscardLevel() : MAX_DISCARD_LEVEL);
-            F32 bias = llclamp(max_discard - 2.f, 1.f, LLViewerTexture::sDesiredDiscardBias);
-
-            // convert bias into a vsize scaler
-            bias = (F32) llroundf(powf(4, bias - 1.f));
-
-            const bool sliced = face_count > 32;
-            U32 position = imagep->mFaceScan.begin(face_count);
-            const U32 to_walk = imagep->mFaceScan.length();
-
-            // position counts across the channels' lists laid end to end
-            U32 channel = 0;
-            while (position >= channel_faces[channel])
+            for (S32 fi = 0; fi < faces_to_check; ++fi)
             {
-                position -= channel_faces[channel];
-                ++channel;
-            }
-
-            for (U32 walked = 0; walked < to_walk; ++walked)
-            {
-                while (position >= channel_faces[channel])
-                {
-                    position = 0;
-                    channel = (channel + 1) % LLRender::NUM_TEXTURE_CHANNELS;
-                }
-                LLFace* face = (*(imagep->getFaceList(channel)))[position];
-                ++position;
+                LLFace* face = (*(imagep->getFaceList(i)))[fi];
 
                 if (face && face->getViewerObject())
                 {
@@ -1038,7 +1012,7 @@ void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imag
                     max_vsize = llmax(max_vsize, vsize);
 
                     // addTextureStats limits size to sMaxVirtualSize
-                    if (!sliced && max_vsize >= LLViewerFetchedTexture::sMaxVirtualSize
+                    if (max_vsize >= LLViewerFetchedTexture::sMaxVirtualSize
                         && (on_screen || LLViewerTexture::sDesiredDiscardBias <= BIAS_TRS_ON_SCREEN))
                     {
                         break;
@@ -1046,18 +1020,11 @@ void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imag
                 }
             }
 
-            if (sliced)
+            if (max_vsize >= LLViewerFetchedTexture::sMaxVirtualSize
+                && (on_screen || LLViewerTexture::sDesiredDiscardBias <= BIAS_TRS_ON_SCREEN))
             {
-                imagep->mFaceScan.finish(to_walk, max_vsize, on_screen);
+                break;
             }
-            else
-            {
-                imagep->mFaceScan.reset();
-            }
-        }
-        else
-        {
-            imagep->mFaceScan.reset();
         }
 
         if (face_count > max_faces_to_check)

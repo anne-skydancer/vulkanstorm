@@ -51,8 +51,6 @@ class LLWindow;
 namespace LLImageGLMemory
 {
     void alloc_tex_image(U32 width, U32 height, U32 intformat, U32 count);
-    void record_tex_image(U32 target, U32 mip, U32 width, U32 height, U32 format, U32 layers);
-    void record_generated_mips(U32 max_mip = 31);
     void free_tex_image(U32 texName);
     void free_tex_images(U32 count, const U32* texNames);
     void free_cur_tex_image();
@@ -68,8 +66,9 @@ public:
     static void updateClass();
 
     // Get an estimate of how many bytes have been allocated in vram for textures.
-    // Includes recorded mip levels, cube faces and estimated storage padding.
-    // Does not measure physical residency or all driver overhead.
+    // Does not include mipmaps.
+    // NOTE: multiplying this number by two gives a good estimate for total
+    // video memory usage based on testing in lagland against an NVIDIA GPU.
     static U64 getTextureBytesAllocated();
 
     // These 2 functions replace glGenTextures() and glDeleteTextures()
@@ -78,7 +77,6 @@ public:
 
     // Size calculation
     static S32 dataFormatBits(S32 dataformat);
-    static S64 dataFormatVRAMBytes(S32 format, S32 width, S32 height);
     static S64 dataFormatBytes(S32 dataformat, S32 width, S32 height);
     static S32 dataFormatComponents(S32 dataformat);
 

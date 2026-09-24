@@ -33,7 +33,6 @@
 #include "llviewerregion.h"
 #include "llagentcamera.h"
 #include "llmemory.h"
-#include "llmemorypolicy.h"
 #include "llsdserialize.h"
 #include "llagent.h" // <FS:Beq/> For gAgent
 #include "llworld.h" // For LLWorld::getInstance()
@@ -483,12 +482,24 @@ void LLVOCacheEntry::updateDebugSettings()
     LLMemory::updateMemoryInfo() ;
     U32 allocated_mem = LLMemory::getAllocatedMemKB().value();
     static const F32 KB_to_MB = 1.f / 1024.f;
-    // Compute runtime bounds; never overwrite the user's manual values.
-    static LLCachedControl<bool> automatic(gSavedSettings, "SceneLoadAutomaticMemoryBudget", true);
-    const F32 adjust_factor = LLMemoryPolicy::sceneFactor(allocated_mem * KB_to_MB,
-        LLMemory::getMaxMemKB().value() * KB_to_MB,
-        LLMemory::getMaxHeapSizeKB().value() * KB_to_MB,
-        (F32)low_mem_bound_MB, (F32)high_mem_bound_MB, automatic);
+    // <FS:Beq> FIRE-32688 Area search and other visibility issues
+    // If this machine has limited RAM, then restore the LL defaults.
+    // So long as we have at least 8GB of RAM, then we will use our values.
+    if( LLMemory::getAvailableMemKB() * KB_to_MB < 8096 )
+    {
+        if( (U32)low_mem_bound_MB > 768 )
+        {
+            gSavedSettings.setU32("SceneLoadLowMemoryBound", 768);
+        }
+        if( (U32)high_mem_bound_MB > 2048 )
+        {
+            gSavedSettings.setU32("SceneLoadHighMemoryBound", 2048);
+        }
+    }
+    // </FS:Beq>
+    U32 clamped_memory = (U32)llclamp(allocated_mem * KB_to_MB, (F32) low_mem_bound_MB, (F32) high_mem_bound_MB);
+    const F32 adjust_range = (F32)(high_mem_bound_MB - low_mem_bound_MB);
+    const F32 adjust_factor = (high_mem_bound_MB - clamped_memory) / adjust_range; // [0, 1]
 
     //min radius: all objects within this radius remain loaded in memory
     static LLCachedControl<F32> min_radius(gSavedSettings,"SceneLoadMinRadius");
