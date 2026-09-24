@@ -442,8 +442,6 @@ public:
     static void updateMemoryInfo() ;
     static void logMemoryInfo(bool update = false);
     static F32 getSystemMemoryBudgetFactor();
-    static S32Megabytes getScarcestFreeMemMB();
-    static U32Kilobytes getMaxHeapSizeKB() { return sMaxHeapSizeInKB; }
 
 #if LL_WINDOWS
     // Commit charge is a Windows-only concept, combines page file and ram

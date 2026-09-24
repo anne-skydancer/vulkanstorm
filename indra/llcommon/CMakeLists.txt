@@ -186,7 +186,6 @@ set(llcommon_HEADER_FILES
     llmainthreadtask.h
     llmd5.h
     llmemory.h
-    llmemorypolicy.h
     llmemorystream.h
     llmetrics.h
     llmetricperformancetester.h

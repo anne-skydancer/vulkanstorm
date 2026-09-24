@@ -513,7 +513,6 @@ void LLRenderTarget::flush()
         LL_PROFILE_GPU_ZONE("rt generate mipmaps");
         bindTexture(0, 0, LLTexUnit::TFO_TRILINEAR);
         glGenerateMipmap(GL_TEXTURE_2D);
-        LLImageGLMemory::record_generated_mips();
     }
 
     if (mPreviousRT)

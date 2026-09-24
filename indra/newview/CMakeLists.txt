@@ -1709,7 +1709,6 @@ set(viewer_HEADER_FILES
     llviewertexlayer.h
     llviewertexteditor.h
     llviewertexture.h
-    lltexturefacescan.h
     llviewertextureanim.h
     llviewertexturelist.h
     llviewerthrottle.h

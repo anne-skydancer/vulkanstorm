@@ -30,7 +30,6 @@
 #include "linden_common.h"
 
 #include "llimagegl.h"
-#include "lltextureallocation.h"
 
 #include "llerror.h"
 #include "llfasttimer.h"
@@ -64,39 +63,30 @@ U32 LLImageGL::sFrameCount = 0;
 
 // texture memory accounting (for macOS)
 static LLMutex sTexMemMutex;
-static std::unordered_map<U32, LLTextureAllocation> sTextureAllocs;
+static std::unordered_map<U32, U64> sTextureAllocs;
 static U64 sTextureBytes = 0;
 
-// Account individual mip images without changing mutable GL storage semantics.
-void LLImageGLMemory::record_tex_image(U32 target, U32 mip, U32 width, U32 height, U32 format, U32 layers)
+// track a texture alloc on the currently bound texture.
+// asserts that no currently tracked alloc exists
+void LLImageGLMemory::alloc_tex_image(U32 width, U32 height, U32 intformat, U32 count)
 {
-    const U32 name = gGL.getTexUnit(gGL.getCurrentTexUnitIndex())->getCurrTexture();
-    const U32 face = target >= GL_TEXTURE_CUBE_MAP_POSITIVE_X && target <= GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
-        ? target - GL_TEXTURE_CUBE_MAP_POSITIVE_X + 1 : 0;
-    LLMutexLock lock(&sTexMemMutex);
-    auto& allocation = sTextureAllocs[name];
-    sTextureBytes -= allocation.bytes;
-    allocation.set(face, mip, {width, height, format, layers,
-        U64(LLImageGL::dataFormatVRAMBytes(format, width, height)) * layers});
-    sTextureBytes += allocation.bytes;
-}
+    U32 texUnit = gGL.getCurrentTexUnitIndex();
+    llassert(texUnit == 0); // allocations should always be done on tex unit 0
+    U32 texName = gGL.getTexUnit(texUnit)->getCurrTexture();
+    U64 size = LLImageGL::dataFormatBytes(intformat, width, height);
+    size *= count;
 
-void LLImageGLMemory::alloc_tex_image(U32 width, U32 height, U32 format, U32 count)
-{
-    record_tex_image(0, 0, width, height, format, count);
-}
+    llassert(size >= 0);
 
-void LLImageGLMemory::record_generated_mips(U32 max_mip)
-{
-    const U32 name = gGL.getTexUnit(gGL.getCurrentTexUnitIndex())->getCurrTexture();
-    LLMutexLock lock(&sTexMemMutex);
-    auto it = sTextureAllocs.find(name);
-    if (it == sTextureAllocs.end()) return;
-    sTextureBytes -= it->second.bytes;
-    it->second.generate(max_mip, [](U32 format, U32 width, U32 height) {
-        return U64(LLImageGL::dataFormatVRAMBytes(format, width, height));
-    });
-    sTextureBytes += it->second.bytes;
+    sTexMemMutex.lock();
+
+    // it is a precondition that no existing allocation exists for this texture
+    llassert(sTextureAllocs.find(texName) == sTextureAllocs.end());
+
+    sTextureAllocs[texName] = size;
+    sTextureBytes += size;
+
+    sTexMemMutex.unlock();
 }
 
 // track texture free on given texName
@@ -106,9 +96,9 @@ void LLImageGLMemory::free_tex_image(U32 texName)
     auto iter = sTextureAllocs.find(texName);
     if (iter != sTextureAllocs.end()) // sometimes a texName will be "freed" before allocated (e.g. first call to setManualImage for a given texName)
     {
-        llassert(iter->second.bytes <= sTextureBytes); // sTextureBytes MUST NOT go below zero
+        llassert(iter->second <= sTextureBytes); // sTextureBytes MUST NOT go below zero
 
-        sTextureBytes -= iter->second.bytes;
+        sTextureBytes -= iter->second;
 
         sTextureAllocs.erase(iter);
     }
@@ -139,7 +129,6 @@ using namespace LLImageGLMemory;
 // static
 U64 LLImageGL::getTextureBytesAllocated()
 {
-    LLMutexLock lock(&sTexMemMutex);
     return sTextureBytes;
 }
 
@@ -384,28 +373,6 @@ S64 LLImageGL::dataFormatBytes(S32 dataformat, S32 width, S32 height)
     S64 bytes (((S64)width * (S64)height * (S64)dataFormatBits(dataformat)+7)>>3);
     S64 aligned = (bytes+3)&~3;
     return aligned;
-}
-
-// Driver-storage estimate, not a measurement of physical residency.
-S64 LLImageGL::dataFormatVRAMBytes(S32 format, S32 width, S32 height)
-{
-    S32 bits = 0;
-    switch (format)
-    {
-    case GL_RGB8: case GL_SRGB8: case GL_DEPTH_COMPONENT24: bits = 32; break;
-    case GL_RGB16F: bits = 64; break;
-    case GL_RGB32F: bits = 128; break;
-    case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
-    case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT:
-        return S64((width + 3) / 4) * ((height + 3) / 4) * 8;
-    case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
-    case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT:
-    case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
-    case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT:
-        return S64((width + 3) / 4) * ((height + 3) / 4) * 16;
-    default: return dataFormatBytes(format, width, height);
-    }
-    return S64(width) * height * bits / 8;
 }
 
 //static
@@ -830,7 +797,6 @@ bool LLImageGL::setImage(const U8* data_in, bool data_hasmips /* = false */, S32
                 {
                     GLsizei tex_size = (GLsizei)dataFormatBytes(mFormatPrimary, w, h);
                     glCompressedTexImage2D(mTarget, gl_level, mFormatPrimary, w, h, 0, tex_size, (GLvoid *)data_in);
-                    record_tex_image(mTarget, gl_level, w, h, mFormatPrimary, 1);
                     stop_glerror();
                 }
                 else
@@ -904,7 +870,6 @@ bool LLImageGL::setImage(const U8* data_in, bool data_hasmips /* = false */, S32
                         LL_PROFILE_GPU_ZONE("generate mip map");
                         glGenerateMipmap(mTarget);
                     }
-                    record_generated_mips(mMaxDiscardLevel - mCurrentDiscardLevel);
                     stop_glerror();
                 }
             }
@@ -1035,7 +1000,6 @@ bool LLImageGL::setImage(const U8* data_in, bool data_hasmips /* = false */, S32
         {
             GLsizei tex_size = (GLsizei)dataFormatBytes(mFormatPrimary, w, h);
             glCompressedTexImage2D(mTarget, 0, mFormatPrimary, w, h, 0, tex_size, (GLvoid *)data_in);
-            record_tex_image(mTarget, 0, w, h, mFormatPrimary, 1);
             stop_glerror();
         }
         else
@@ -1502,6 +1466,7 @@ void LLImageGL::setManualImage(U32 target, S32 miplevel, S32 intformat, S32 widt
         LL_PROFILE_ZONE_NUM(width);
         LL_PROFILE_ZONE_NUM(height);
 
+        free_cur_tex_image();
         const bool use_sub_image = should_stagger_image_set(compress);
         if (!use_sub_image)
         {
@@ -1523,7 +1488,7 @@ void LLImageGL::setManualImage(U32 target, S32 miplevel, S32 intformat, S32 widt
                 sub_image_lines(target, miplevel, 0, 0, width, height, pixformat, pixtype, src, width);
             }
         }
-        record_tex_image(target, miplevel, width, height, intformat, 1);
+        alloc_tex_image(width, height, intformat, 1);
     }
     stop_glerror();
 }
@@ -2535,9 +2500,10 @@ bool LLImageGL::scaleDown(S32 desired_discard)
         {
             glDrawArrays(GL_TRIANGLES, 0, 3);
 
+            free_tex_image(mTexName);
             glTexImage2D(mTarget, 0, mFormatInternal, desired_width, desired_height, 0, mFormatPrimary, mFormatType, nullptr);
             glCopyTexSubImage2D(mTarget, 0, 0, 0, 0, 0, desired_width, desired_height);
-            record_tex_image(mTarget, 0, desired_width, desired_height, mFormatInternal, 1);
+            alloc_tex_image(desired_width, desired_height, mFormatInternal, 1);
 
             mTexOptionsDirty = true;
 
@@ -2546,7 +2512,6 @@ bool LLImageGL::scaleDown(S32 desired_discard)
                 LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("scaleDown - glGenerateMipmap");
                 gGL.getTexUnit(0)->bind(this);
                 glGenerateMipmap(mTarget);
-                record_generated_mips(mMaxDiscardLevel - mCurrentDiscardLevel);
                 gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
             }
         }
@@ -2578,19 +2543,20 @@ bool LLImageGL::scaleDown(S32 desired_discard)
 
         glGetTexImage(mTarget, mip, mFormatPrimary, mFormatType, nullptr);
 
+        free_tex_image(mTexName);
+
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, sScratchPBO);
         glTexImage2D(mTarget, 0, mFormatInternal, desired_width, desired_height, 0, mFormatPrimary, mFormatType, nullptr);
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-        record_tex_image(mTarget, 0, desired_width, desired_height, mFormatInternal, 1);
+        alloc_tex_image(desired_width, desired_height, mFormatInternal, 1);
 
         if (mHasMipMaps)
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("scaleDown - glGenerateMipmap");
             glGenerateMipmap(mTarget);
-            record_generated_mips(mMaxDiscardLevel - mCurrentDiscardLevel);
         }
 
         gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
