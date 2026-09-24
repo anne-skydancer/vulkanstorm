@@ -113,7 +113,6 @@ protected:
 
 public:
     std::shared_ptr<LLComputeMesh::Object> mComputeLOD;
-    U32 mComputeLODRetryFrame = 0;
     static      void    initClass();
     static      void    cleanupClass();
     static      void    preUpdateGeom();
@@ -518,4 +517,3 @@ protected:
 };
 
 #endif // LL_LLVOVOLUME_H
-

@@ -1488,6 +1488,7 @@ void LLVOVolume::notifyMeshLoaded()
         cav->notifyAttachmentMeshLoaded();
     }
     updateVisualComplexity();
+    LLComputeMesh::notifyLODDependency(*this, LLComputeMesh::MESH);
 }
 
 void LLVOVolume::notifySkinInfoLoaded(const LLMeshSkinInfo* skin)
@@ -1495,6 +1496,7 @@ void LLVOVolume::notifySkinInfoLoaded(const LLMeshSkinInfo* skin)
     if (mSkinInfo.get() != skin) LLComputeMesh::invalidateLOD(*this);
     mSkinInfoUnavaliable = false;
     mSkinInfo = skin;
+    LLComputeMesh::notifyLODDependency(*this, LLComputeMesh::SKIN);
 
     notifyMeshLoaded();
 }
@@ -6511,6 +6513,8 @@ void LLVolumeGeometryManager::rebuildGeom(LLSpatialGroup* group)
             if(drawablep)
             {
                 drawablep->clearState(LLDrawable::REBUILD_ALL);
+                if (auto* volume = drawablep->getVOVolume())
+                    LLComputeMesh::notifyLODDependency(*volume, LLComputeMesh::DRAWABLE);
             }
         }
     }
@@ -6589,6 +6593,7 @@ void LLVolumeGeometryManager::rebuildMesh(LLSpatialGroup* group)
                     }
 
                     drawablep->clearState(LLDrawable::REBUILD_ALL);
+                    LLComputeMesh::notifyLODDependency(*vobj, LLComputeMesh::DRAWABLE);
                 }
             }
 
