@@ -615,11 +615,8 @@ void LLViewerTexture::updateClass()
     static LLCachedControl<F32> minimized_discard_time(gSavedSettings, "TextureDiscardMinimizedTime", 1.f);
     static LLCachedControl<F32> backgrounded_discard_time(gSavedSettings, "TextureDiscardBackgroundedTime", 60.f);
 
-    static LLCachedControl<bool> discard_on_focus_loss(gSavedSettings, "TextureDiscardOnFocusLoss", false);
-    const bool has_focus = gFocusMgr.getAppHasFocus();
-    const bool hidden = gViewerWindow && !gViewerWindow->getWindow()->getVisible();
-    const bool is_minimized = gViewerWindow && gViewerWindow->getWindow()->getMinimized();
-    const bool in_background = hidden || is_minimized || (discard_on_focus_loss && !has_focus);
+    bool in_background = (gViewerWindow && !gViewerWindow->getWindow()->getVisible()) || !gFocusMgr.getAppHasFocus();
+    bool is_minimized  = gViewerWindow && gViewerWindow->getWindow()->getMinimized() && in_background;
     if (in_background)
     {
         F32 discard_time = is_minimized ? minimized_discard_time : backgrounded_discard_time;
@@ -4202,4 +4199,3 @@ void LLTexturePipelineTester::LLTextureTestSession::reset()
 //----------------------------------------------------------------------------------------------
 //end of LLTexturePipelineTester
 //----------------------------------------------------------------------------------------------
-
