@@ -49,10 +49,7 @@ uniform int oit_max_pixel_layers;
 void main()
 {
     ivec2 coord = ivec2(gl_FragCoord.xy);
-    // Opaque scene depth at this pixel. The capture shaders have NO early_fragment_tests (it is
-    // expensive on Zink and, being compile-time, perturbed the normal alpha path), so fragments
-    // behind opaque geometry were still appended -- reject them here. Standard depth (nearer =
-    // smaller z): keep nz <= opaque_z, the same LEQUAL test the hardware early test used.
+    // Detached opaque-depth snapshot shared with capture. Retain the final LEQUAL guard.
     float opaque_z = texelFetch(depthMap, coord, 0).r;
 
     uint idx = imageLoad(oit_head, coord).r;

@@ -102,7 +102,8 @@ public:
 
 private:
     LLGLSLShader* target_shader;
-    LLRenderTarget* mAlphaPeelDepth = nullptr;
+    LLRenderTarget* mAlphaPeelDepth = nullptr; // shared sampler for peeling or PPLL depth snapshot
+    bool mAlphaDepthTextureIsDepth = false;
 
     // setup by beginFooPass, [0] is static variant, [1] is rigged variant
     LLGLSLShader* simple_shader = nullptr;

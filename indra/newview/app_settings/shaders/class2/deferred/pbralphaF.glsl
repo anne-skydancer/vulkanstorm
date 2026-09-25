@@ -30,18 +30,22 @@
 /*[EXTRA_CODE_HERE]*/
 
 #if defined(ALPHA_OIT) || defined(ALPHA_DEPTH_PEEL)
+uniform sampler2D alpha_peel_depth; // detached PPLL opaque depth or selected peel depth
 uniform int oit_mode;       // 0 normal, 1 PPLL capture, 2 peel select, 3 peel replay, 4 legacy tail
 #endif
 
 #ifdef ALPHA_OIT
 // ---- alpha OIT (per-pixel linked list) capture ----
-    // no early_fragment_tests: occlusion is rejected in the resolve (alphaOITResolveF) by depth compare;
+    // Capture-only depth rejection below; normal alpha shader depth behaviour is unchanged.
 layout(binding = 0, r32ui) uniform coherent uimage2D oit_head;
 layout(std430, binding = 0) buffer OITNodePool { uint oit_nodes[]; };
 layout(binding = 0, offset = 0) uniform atomic_uint oit_counter;
 uniform int oit_node_cap;   // node pool capacity; overflow falls through to legacy blending
 bool oit_append(vec4 c, float z)
 {
+    // Match resolve LEQUAL, including equality; reject before allocator/SSBO work.
+    // discard also prevents hidden fragments from taking the overflow blend path.
+    if (!(z <= texelFetch(alpha_peel_depth, ivec2(gl_FragCoord.xy), 0).r)) discard;
     uint idx = atomicCounterIncrement(oit_counter);
     if (idx >= uint(oit_node_cap)) return false;
     uint prev = imageAtomicExchange(oit_head, ivec2(gl_FragCoord.xy), idx);
@@ -55,7 +59,6 @@ bool oit_append(vec4 c, float z)
 #endif
 
 #ifdef ALPHA_DEPTH_PEEL
-uniform sampler2D alpha_peel_depth;
 uniform int alpha_peel_first;
 void alpha_depth_peel(inout vec4 c, float z)
 {

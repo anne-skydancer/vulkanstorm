@@ -507,7 +507,9 @@ void LLDrawPoolAlpha::setOITMode(S32 mode, LLRenderTarget* peel_depth, bool firs
     static const LLStaticHashedString sOITNodeCap("oit_node_cap");
     static const LLStaticHashedString sPeelFirst("alpha_peel_first");
     const S32 node_cap = (S32)llmin<U32>(gPipeline.getAlphaOITNodeCap(), 0x7fffffffu);
-    mAlphaPeelDepth = (mode == 2 || mode == 3 || mode == 4) ? peel_depth : nullptr;
+    mAlphaDepthTextureIsDepth = mode == 1;
+    mAlphaPeelDepth = mode == 1 ? gPipeline.getAlphaOITOpaqueDepth() :
+        ((mode == 2 || mode == 3 || mode == 4) ? peel_depth : nullptr);
 
     auto apply = [&](LLGLSLShader* shader)
     {
@@ -522,7 +524,7 @@ void LLDrawPoolAlpha::setOITMode(S32 mode, LLRenderTarget* peel_depth, bool firs
         if (mAlphaPeelDepth)
         {
             shader->bindTexture(LLShaderMgr::ALPHA_PEEL_DEPTH, mAlphaPeelDepth,
-                                false, LLTexUnit::TFO_POINT);
+                                mAlphaDepthTextureIsDepth, LLTexUnit::TFO_POINT);
         }
         if (shader->mRiggedVariant && shader->mRiggedVariant != shader)
         {
@@ -533,7 +535,7 @@ void LLDrawPoolAlpha::setOITMode(S32 mode, LLRenderTarget* peel_depth, bool firs
             if (mAlphaPeelDepth)
             {
                 shader->mRiggedVariant->bindTexture(LLShaderMgr::ALPHA_PEEL_DEPTH, mAlphaPeelDepth,
-                                                    false, LLTexUnit::TFO_POINT);
+                                                    mAlphaDepthTextureIsDepth, LLTexUnit::TFO_POINT);
             }
         }
     };
@@ -1116,7 +1118,7 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
                         if (mAlphaPeelDepth)
                         {
                             target_shader->bindTexture(LLShaderMgr::ALPHA_PEEL_DEPTH,
-                                                       mAlphaPeelDepth, false, LLTexUnit::TFO_POINT);
+                                                       mAlphaPeelDepth, mAlphaDepthTextureIsDepth, LLTexUnit::TFO_POINT);
                         }
                         // </FS>
                     }
@@ -1182,7 +1184,7 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
                         if (mAlphaPeelDepth)
                         {
                             target_shader->bindTexture(LLShaderMgr::ALPHA_PEEL_DEPTH,
-                                                       mAlphaPeelDepth, false, LLTexUnit::TFO_POINT);
+                                                       mAlphaPeelDepth, mAlphaDepthTextureIsDepth, LLTexUnit::TFO_POINT);
                         }
                         // </FS>
 
