@@ -8130,8 +8130,9 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
 #else
     sRenderAlphaOITSupported = false;
 #endif
-    if (!sRenderAlphaOITSupported)
+    if (!sRenderAlphaOITSupported || !glBufferStorage || !glCopyImageSubData)
     {
+        sRenderAlphaOITSupported = false;
         releaseAlphaOITBuffers();
         gSavedSettings.setBOOL("RenderAlphaPPLLAvailable", false);
         return;
@@ -8168,7 +8169,7 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
     const U32 node_cap = (U32)capacity64;
     const U32 pixel_layers = llclamp((U32)max_pixel_layers, 4u, 32u);
 
-    if (mAlphaOITHead &&
+    if (mAlphaOITHead && mAlphaOITOpaqueDepth.isComplete() &&
         mAlphaOITWidth == w && mAlphaOITHeight == h &&
         mAlphaOITNodeCap == node_cap && mAlphaOITMaxPixelLayers == pixel_layers)
     {
@@ -8194,7 +8195,8 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
     // HDR node pool: packed half-float RG/BA, depth, next.
     glGenBuffers(1, &mAlphaOITNodes);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, mAlphaOITNodes);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, (GLsizeiptr)(capacity64 * NODE_BYTES), nullptr, GL_DYNAMIC_DRAW);
+    // Shader-only storage: do not request dynamic/CPU-coherent placement.
+    glBufferStorage(GL_SHADER_STORAGE_BUFFER, (GLsizeiptr)(capacity64 * NODE_BYTES), nullptr, 0);
     GLint allocated_bytes = 0;
     glGetBufferParameteriv(GL_SHADER_STORAGE_BUFFER, GL_BUFFER_SIZE, &allocated_bytes);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
@@ -8206,8 +8208,10 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
     glBufferData(GL_ATOMIC_COUNTER_BUFFER, sizeof(U32), &zero, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, 0);
 
+    // Separate depth storage avoids sampling the active scene depth attachment.
+    const bool depth_allocated = mAlphaOITOpaqueDepth.allocate(w, h, 0, true);
     const GLenum allocation_error = glGetError();
-    if (allocation_error != GL_NO_ERROR ||
+    if (!depth_allocated || allocation_error != GL_NO_ERROR ||
         (U64)llmax(allocated_bytes, 0) < capacity64 * NODE_BYTES)
     {
         LL_WARNS("Pipeline") << "Alpha PPLL allocation failed (GL error "
@@ -8282,7 +8286,7 @@ void beginOITProfile(U32 capacity, U32 width, U32 height)
         const F64 clear_ms = F64(stamp[1] - stamp[0]) / 1.e6;
         const F64 capture_ms = F64(stamp[2] - stamp[1]) / 1.e6;
         const F64 resolve_ms = F64(stamp[3] - stamp[2]) / 1.e6;
-        const F64 allocation_mib = (F64(sample.capacity) * 16. + F64(sample.width) * sample.height * 4. + 4.) / 1048576.;
+        const F64 allocation_mib = (F64(sample.capacity) * 16. + F64(sample.width) * sample.height * 8. + 4.) / 1048576.;
         LL_INFOS("OITProfile") << "gpu_clear_ms=" << clear_ms
             << " gpu_capture_ms=" << capture_ms << " gpu_resolve_ms=" << resolve_ms
             << " cpu_submit_ms=" << sample.cpu_ms << " nodes_requested=" << used
@@ -8321,6 +8325,7 @@ void beginOITProfile(U32 capacity, U32 width, U32 height)
 
 void LLPipeline::releaseAlphaOITBuffers()
 {
+    mAlphaOITOpaqueDepth.release();
     releaseOITProfile();
     if (mAlphaOITHead)    { glDeleteTextures(1, &mAlphaOITHead);   mAlphaOITHead = 0; }
     if (mAlphaOITNodes)   { glDeleteBuffers(1, &mAlphaOITNodes);   mAlphaOITNodes = 0; }
@@ -8331,12 +8336,22 @@ void LLPipeline::releaseAlphaOITBuffers()
 bool LLPipeline::beginAlphaOITCapture()
 {
     if (!mAlphaOITHead || !mAlphaOITNodes || !mAlphaOITCounter ||
-        !gAlphaOITResolveProgram.mProgramObject)
+        !gAlphaOITResolveProgram.mProgramObject || !mAlphaOITOpaqueDepth.isComplete() ||
+        !mRT->deferredScreen.getDepth() ||
+        mRT->deferredScreen.getWidth() != mAlphaOITWidth ||
+        mRT->deferredScreen.getHeight() != mAlphaOITHeight)
     {
         return false;
     }
     LL_PROFILE_GPU_ZONE("alpha oit capture begin");
+
     beginOITProfile(mAlphaOITNodeCap, mAlphaOITWidth, mAlphaOITHeight);
+
+    // LLRenderTarget depth textures are DEPTH_COMPONENT24. Copy the opaque depth
+    // before capture/residual passes; this destination is never the draw attachment.
+    glCopyImageSubData(mRT->deferredScreen.getDepth(), GL_TEXTURE_2D, 0, 0, 0, 0,
+                       mAlphaOITOpaqueDepth.getDepth(), GL_TEXTURE_2D, 0, 0, 0, 0,
+                       mAlphaOITWidth, mAlphaOITHeight, 1);
 
     // The previous capture wrote these resources through shaders. Order those
     // writes before the API resets, including when reusing unchanged allocations.
@@ -8440,9 +8455,8 @@ void LLPipeline::compositeAlphaOIT()
     static const LLStaticHashedString sOITMaxPixelLayers("oit_max_pixel_layers");
     gAlphaOITResolveProgram.uniform1i(sOITMaxPixelLayers, (S32)mAlphaOITMaxPixelLayers);
 
-    // opaque scene depth: the resolve rejects captured fragments that are behind opaque geometry
-    // (the capture shaders no longer use early_fragment_tests -- see alphaOITResolveF).
-    gAlphaOITResolveProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
+    // Use the same detached opaque-depth snapshot as capture for the final guard.
+    gAlphaOITResolveProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mAlphaOITOpaqueDepth, true);
 
     // head image (read) + node pool (SSBO) -- same binding points the capture wrote to
     glBindImageTexture(0, mAlphaOITHead, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32UI);

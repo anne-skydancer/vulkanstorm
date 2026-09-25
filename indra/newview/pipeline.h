@@ -416,6 +416,7 @@ public:
     void releaseAlphaOITBuffers();               // destroy them
     U32  getAlphaOITNodeCap() const { return mAlphaOITNodeCap; }  // node-pool capacity (append overflow guard)
     U32  getAlphaOITMaxPixelLayers() const { return mAlphaOITMaxPixelLayers; }
+    LLRenderTarget* getAlphaOITOpaqueDepth() { return &mAlphaOITOpaqueDepth; }
 
     // OpenGL 4.1 bounded depth peeling. Deliberately main-view/post-water only.
     bool allocateAlphaDepthPeelBuffers(U32 w, U32 h);
@@ -781,6 +782,7 @@ public:
 
     // <FS> Vulkanstorm: alpha OIT (per-pixel linked list) GPU resources, stored as raw GL names
     // (uint, 0 = none). Allocated at main-view render resolution; see beginAlphaOITCapture().
+    LLRenderTarget mAlphaOITOpaqueDepth; // detached per-frame depth snapshot
     U32 mAlphaOITHead = 0;      // R32UI per-pixel head-pointer image (0xFFFFFFFF = empty)
     U32 mAlphaOITNodes = 0;     // SSBO uint[nodeCap*4] = { RG16F, BA16F, depth, next }
     U32 mAlphaOITCounter = 0;   // atomic counter buffer: next free node index
