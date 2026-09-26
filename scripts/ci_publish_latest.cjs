@@ -8,8 +8,9 @@ module.exports = async function publishLatest({ github, context, core, directory
     const repo = context.repo;
     const runId = String(context.runId);
     const files = [];
-    for (const [platform, suffix] of [['Windows', '_Setup.exe'], ['Linux', '.tar.xz']]) {
-        const folder = path.join(directory, `${platform}-installer`);
+    // The upload paths in build.yaml preserve Release/ in the Windows artifact.
+    for (const [platform, subdirectory, suffix] of [['Windows', 'Release', '_Setup.exe'], ['Linux', '', '.tar.xz']]) {
+        const folder = path.join(directory, `${platform}-installer`, subdirectory);
         const names = (await fs.readdir(folder)).filter(name => name.endsWith(suffix));
         if (names.length !== 1) throw new Error(`Expected one ${platform} installer, found ${names.length}`);
         const file = path.join(folder, names[0]);

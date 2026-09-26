@@ -10,9 +10,11 @@ async function fixture(t, options = {}) {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'vulkanstorm-publish-'));
     t.after(() => fs.rm(directory, { recursive: true, force: true }));
     for (const [platform, filename] of [['Windows', 'new_Setup.exe'], ['Linux', 'new.tar.xz']]) {
-        await fs.mkdir(path.join(directory, `${platform}-installer`));
+        // Match actions/download-artifact's layout for the CI upload paths.
+        const folder = path.join(directory, `${platform}-installer`, platform === 'Windows' ? 'Release' : '');
+        await fs.mkdir(folder, { recursive: true });
         if (options.missing !== platform) {
-            await fs.writeFile(path.join(directory, `${platform}-installer`, filename), platform);
+            await fs.writeFile(path.join(folder, filename), platform);
         }
     }
     const calls = [];
