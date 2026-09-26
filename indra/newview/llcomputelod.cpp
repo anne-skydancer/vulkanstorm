@@ -447,32 +447,29 @@ BuildResult advanceJob(BuildJob& job)
     if (!current || !current->isMeshAssetLoaded()) return wait(LLComputeMesh::MESH);
     const S32 count = current->getNumVolumeFaces();
     if (count <= 0 || count != object->mDrawable->getNumFaces() || size_t(count) != owner->faces.size()) return BuildResult::DROP;
-    // Jobs resume on later frames: a material update can arrive between any
-    // two preparation steps, including before fallback promotion/publication.
+    const bool rigged = object->mDrawable->isState(LLDrawable::RIGGED);
+    // Preparation yields between frames. Teleports and drawable rebuilds can
+    // clear a face buffer or change materials/skin after initialization.
+    // Revalidate before every step, including fallback promotion/publication.
     for (S32 f=0; f<count; ++f)
     {
-        const auto* te = object->getTE(f);
+        auto* face = object->mDrawable->getFace(f);
+        auto* te = object->getTE(f);
         if (!te) return BuildResult::DROP;
         if (!te->isGLTFRenderMaterialReady()) return wait(LLComputeMesh::MATERIAL);
+        auto* material = te->getGLTFRenderMaterial();
+        if (!owner->faces[f]) return BuildResult::DROP; // face is outside compute eligibility
+        if (!face || !face->getVertexBuffer()) return wait(LLComputeMesh::DRAWABLE);
+        if (face->isState(LLFace::TEXTURE_ANIM) || face->hasMedia()) return BuildResult::DROP;
+        if (!rigged && (!material || material->mAlphaMode != LLGLTFMaterial::ALPHA_MODE_OPAQUE || te->getGlow() != 0.f)) return BuildResult::DROP;
+        if (rigged && (!face->mAvatar || !face->mSkinInfo ||
+            !(face->getVertexBuffer()->getTypeMask() & LLVertexBuffer::MAP_WEIGHT4))) return wait(LLComputeMesh::SKIN | LLComputeMesh::DRAWABLE);
     }
-    const bool rigged = object->mDrawable->isState(LLDrawable::RIGGED);
     if (!job.initialized)
     {
         job.prepared_epoch = owner->dependency_epoch;
         job.target = owner->requested_lod;
         job.ready_mask = job.failed_mask = 0;
-        for (S32 f=0; f<count; ++f)
-        {
-            auto* face = object->mDrawable->getFace(f);
-            auto* te = object->getTE(f);
-            auto* material = te ? te->getGLTFRenderMaterial() : nullptr;
-            if (!owner->faces[f]) return BuildResult::DROP; // face is outside compute eligibility
-            if (!face || !face->getVertexBuffer()) return wait(LLComputeMesh::DRAWABLE);
-            if (!te || face->isState(LLFace::TEXTURE_ANIM) || face->hasMedia()) return BuildResult::DROP;
-            if (!rigged && (!material || material->mAlphaMode != LLGLTFMaterial::ALPHA_MODE_OPAQUE || te->getGlow() != 0.f)) return BuildResult::DROP;
-            if (rigged && (!face->mAvatar || !face->mSkinInfo ||
-                !(face->getVertexBuffer()->getTypeMask() & LLVertexBuffer::MAP_WEIGHT4))) return wait(LLComputeMesh::SKIN | LLComputeMesh::DRAWABLE);
-        }
         U32 previous_levels = 0;
         for (const auto& record : owner->faces)
             if (record->valid) previous_levels |= record->available_lods;
