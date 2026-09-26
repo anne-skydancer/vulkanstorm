@@ -8105,7 +8105,12 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
 #else
     sRenderAlphaOITSupported = false;
 #endif
-    if (!sRenderAlphaOITSupported || !glBufferStorage || !glCopyImageSubData)
+#if LL_WINDOWS && !LL_MESA
+    // Windows resolves these entry points at runtime. On Linux they are GL
+    // prototypes, so testing their addresses is both redundant and a warning.
+    sRenderAlphaOITSupported = sRenderAlphaOITSupported && glBufferStorage && glCopyImageSubData;
+#endif
+    if (!sRenderAlphaOITSupported)
     {
         sRenderAlphaOITSupported = false;
         releaseAlphaOITBuffers();
