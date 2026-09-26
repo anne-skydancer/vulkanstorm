@@ -131,6 +131,9 @@ jobs:
       - name: Check render-target allocation and recovery
         run: python scripts/tests/test_render_target.py
 
+      - name: Check mesh preparation after drawable changes
+        run: python scripts/tests/test_compute_resume.py
+
       - name: Install Inno Setup
         if: runner.os == 'Windows'
         shell: powershell
