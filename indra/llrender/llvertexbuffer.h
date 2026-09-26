@@ -103,6 +103,7 @@ public:
 
     static void initClass(LLWindow* window);
     static void cleanupClass();
+    static void updateClass(); // main GL thread, after LLImageGL::updateClass()
     static void setupClientArrays(U32 data_mask);
     static void drawArrays(U32 mode, const std::vector<LLVector3>& pos);
     static void drawElements(U32 mode, const LLVector4a* pos, const LLVector2* tc, U32 num_indices, const U16* indicesp);
@@ -256,6 +257,8 @@ public:
 
     U32 getTypeMask() const                 { return mTypeMask; }
     bool hasDataType(AttributeType type) const { return ((1 << type) & getTypeMask()); }
+    U64 getCPUVertexBytes() const;
+    U64 getCPUIndexBytes() const;
     U32 getSize() const                     { return mSize; }
     U32 getIndicesSize() const              { return mIndicesSize; }
     U8* getMappedData() const               { return mMappedData; }

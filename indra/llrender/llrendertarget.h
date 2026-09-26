@@ -175,6 +175,7 @@ public:
     static LLRenderTarget* sBoundTarget;
 
 protected:
+    bool mAllocationValid = false;
     U32 mResX;
     U32 mResY;
     std::vector<U32> mTex;

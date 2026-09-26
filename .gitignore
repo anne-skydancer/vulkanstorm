@@ -134,6 +134,9 @@ checks.json
 # Local agent/tooling scratch (ffmpeg, helper scripts, etc.)
 .codex-tools/
 
+# Local build trees, smoke-test profiles, downloaded artifacts, and scratch files.
+/.tmp/
+
 # Excluded test paths (ignore rules do not suppress already tracked changes).
 /indra/llui/tests/llmarkdown_test.cpp
 /indra/llui/tests/llurlmatch_test.cpp

@@ -65,6 +65,8 @@ LLRenderTarget::LLRenderTarget() :
     mFBO(0),
     mDepth(0),
     mUseDepth(false),
+    mGenerateMipMaps(LLTexUnit::TMG_NONE),
+    mMipLevels(1),
     mUsage(LLTexUnit::TT_TEXTURE)
 {
 }
@@ -76,6 +78,7 @@ LLRenderTarget::~LLRenderTarget()
 
 void LLRenderTarget::resize(U32 resx, U32 resy)
 {
+    mAllocationValid = false;
     //for accounting, get the number of pixels added/subtracted
     S32 pix_diff = (resx*resy)-(mResX*mResY);
 
@@ -108,15 +111,22 @@ bool LLRenderTarget::allocate(U32 resx, U32 resy, U32 color_fmt, bool depth, LLT
     llassert(usage == LLTexUnit::TT_TEXTURE);
     llassert(!isBoundInStack());
 
-    if(mResX == resx && mResY == resy && mUsage == usage && depth == mUseDepth && mGenerateMipMaps == generateMipMaps)
+    resx = llmin(resx, (U32) gGLManager.mGLMaxTextureSize);
+    resy = llmin(resy, (U32) gGLManager.mGLMaxTextureSize);
+    const bool same_format = color_fmt == 0 ? mInternalFormat.empty() :
+        (!mInternalFormat.empty() && mInternalFormat.front() == color_fmt);
+    if (mAllocationValid && mResX == resx && mResY == resy && mUsage == usage &&
+        depth == mUseDepth && mGenerateMipMaps == generateMipMaps && same_format)
     {
         return true;
     }
-    resx = llmin(resx, (U32) gGLManager.mGLMaxTextureSize);
-    resy = llmin(resy, (U32) gGLManager.mGLMaxTextureSize);
 
     release();
 
+    if (!resx || !resy || (!color_fmt && !depth))
+    {
+        return false;
+    }
     mResX = resx;
     mResY = resy;
 
@@ -135,6 +145,7 @@ bool LLRenderTarget::allocate(U32 resx, U32 resy, U32 color_fmt, bool depth, LLT
         if (!allocateDepth())
         {
             LL_WARNS() << "Failed to allocate depth buffer for render target." << LL_ENDL;
+            release();
             return false;
         }
     }
@@ -150,7 +161,27 @@ bool LLRenderTarget::allocate(U32 resx, U32 resy, U32 color_fmt, bool depth, LLT
         glBindFramebuffer(GL_FRAMEBUFFER, sCurFBO);
     }
 
-    return addColorAttachment(color_fmt);
+    if (!mFBO || !addColorAttachment(color_fmt))
+    {
+        release();
+        return false;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, mFBO);
+    if (!color_fmt)
+    {
+        glDrawBuffer(GL_NONE);
+        glReadBuffer(GL_NONE);
+    }
+    const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    glBindFramebuffer(GL_FRAMEBUFFER, sCurFBO);
+    if (status != GL_FRAMEBUFFER_COMPLETE)
+    {
+        LL_WARNS() << "Render target allocation incomplete: " << std::hex << status << LL_ENDL;
+        release();
+        return false;
+    }
+    mAllocationValid = true;
+    return true;
 }
 
 void LLRenderTarget::setColorAttachment(LLImageGL* img, LLGLuint use_name)
@@ -167,6 +198,7 @@ void LLRenderTarget::setColorAttachment(LLImageGL* img, LLGLuint use_name)
         glGenFramebuffers(1, (GLuint*)&mFBO);
     }
 
+    mAllocationValid = false;
     mResX = img->getWidth();
     mResY = img->getHeight();
     mUsage = img->getTarget();
@@ -200,6 +232,7 @@ void LLRenderTarget::releaseColorAttachment()
     glBindFramebuffer(GL_FRAMEBUFFER, sCurFBO);
 
     mTex.clear();
+    mAllocationValid = false;
 }
 
 bool LLRenderTarget::addColorAttachment(U32 color_fmt)
@@ -239,6 +272,7 @@ bool LLRenderTarget::addColorAttachment(U32 color_fmt)
         if (glGetError() != GL_NO_ERROR)
         {
             LL_WARNS() << "Could not allocate color buffer for render target." << LL_ENDL;
+            LLImageGL::deleteTextures(1, &tex);
             return false;
         }
     }
@@ -277,8 +311,17 @@ bool LLRenderTarget::addColorAttachment(U32 color_fmt)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+offset,
             LLTexUnit::getInternalType(mUsage), tex, 0);
 
-        check_framebuffer_status();
-
+        const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE)
+        {
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + offset,
+                LLTexUnit::getInternalType(mUsage), 0, 0);
+            glBindFramebuffer(GL_FRAMEBUFFER, sCurFBO);
+            LLImageGL::deleteTextures(1, &tex);
+            sBytesAllocated -= mResX * mResY * 4;
+            LL_WARNS() << "Color attachment incomplete: " << std::hex << status << LL_ENDL;
+            return false;
+        }
         glBindFramebuffer(GL_FRAMEBUFFER, sCurFBO);
     }
 
@@ -348,6 +391,7 @@ void LLRenderTarget::shareDepthBuffer(LLRenderTarget& target)
         glBindFramebuffer(GL_FRAMEBUFFER, sCurFBO);
 
         target.mUseDepth = true;
+        target.mAllocationValid = false; // borrowed depth is not an owned allocation
     }
 }
 
@@ -415,6 +459,10 @@ void LLRenderTarget::release()
     mInternalFormat.clear();
 
     mResX = mResY = 0;
+    mUseDepth = false;
+    mAllocationValid = false;
+    mGenerateMipMaps = LLTexUnit::TMG_NONE;
+    mMipLevels = 1;
 }
 
 void LLRenderTarget::bindTarget()

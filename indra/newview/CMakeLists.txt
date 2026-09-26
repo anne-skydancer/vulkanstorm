@@ -2115,7 +2115,7 @@ if (WINDOWS)
         )
 
     set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/viewerRes.rc
-      PROPERTIES COMPILE_FLAGS "-I${CMAKE_CURRENT_SOURCE_DIR}/res"
+      PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/res"
       )
 
     SOURCE_GROUP("Resource Files" FILES ${viewer_RESOURCE_FILES})
@@ -2680,6 +2680,8 @@ endif ()
 if (WINDOWS)
   target_link_libraries(${VIEWER_BINARY_NAME} llvkwindowmgr)
   add_dependencies(${VIEWER_BINARY_NAME} llvk_ui_shaders)
+  # The copy manifest consumes these shaders before the viewer link/post-build step.
+  add_dependencies(copy_w_viewer_manifest llvk_ui_shaders)
   add_custom_command(TARGET ${VIEWER_BINARY_NAME} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "$<TARGET_FILE:llwebrtc>"

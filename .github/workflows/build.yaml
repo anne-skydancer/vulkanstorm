@@ -135,6 +135,9 @@ jobs:
             -o "$RUNNER_TEMP/allocation-limits-test"
           "$RUNNER_TEMP/allocation-limits-test"
 
+      - name: Check render-target allocation and recovery
+        run: python scripts/tests/test_render_target.py
+
       - name: Install Inno Setup
         if: runner.os == 'Windows'
         shell: powershell

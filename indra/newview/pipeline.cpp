@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llfocusrenderprobe.h"
 
 #include "pipeline.h"
 #include "llcomputemesh.h"
@@ -704,6 +705,7 @@ LLPipeline::~LLPipeline()
 
 void LLPipeline::cleanup()
 {
+    FocusRenderProbe::cleanup();
     LLComputeMesh::destroyGL();
     assertInitialized();
 
@@ -849,6 +851,10 @@ void LLPipeline::resizeScreenTexture()
         if (gResizeScreenTexture || (scaledResX != mRT->screen.getWidth()) || (scaledResY != mRT->screen.getHeight()))
 // [/SL:KB]
         {
+            static FocusRenderProbe::Probe resize_probe("resize_buffers", true);
+            FocusRenderProbe::Scope resize_measure(resize_probe);
+            LL_INFOS("FocusRender") << "resize old=" << mRT->screen.getWidth() << "x" << mRT->screen.getHeight()
+                << " requested=" << resX << "x" << resY << " forced=" << gResizeScreenTexture << LL_ENDL;
             releaseScreenBuffers();
             releaseSunShadowTargets();
             releaseSpotShadowTargets();
@@ -3336,6 +3342,21 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
         auto* volume = drawablep->getVOVolume();
         if (volume->mComputeLOD)
         {
+            static U64 reasons[4] = {};
+            static LLFrameTimer reason_timer;
+            reasons[0] += (flag & LLDrawable::REBUILD_VOLUME) != 0;
+            reasons[1] += (flag & LLDrawable::REBUILD_POSITION) != 0;
+            reasons[2] += (flag & LLDrawable::REBUILD_TCOORD) != 0;
+            reasons[3] += (flag & LLDrawable::REBUILD_COLOR) != 0;
+            if (reason_timer.getElapsedTimeF32() >= 5.f)
+            {
+                LL_INFOS("FocusRender") << "packed_invalidation volume=" << reasons[0]
+                    << " position=" << reasons[1] << " texcoord=" << reasons[2]
+                    << " color=" << reasons[3] << LL_ENDL;
+                for (auto& count : reasons) count = 0;
+                reason_timer.reset();
+            }
+
             // The fast mesh update writes only the CPU-selected range. Resident
             // objects need all their ranges regenerated after a geometry edit.
             if (auto* group = drawablep->getSpatialGroup()) group->dirtyGeom();
@@ -4325,6 +4346,8 @@ U32 LLPipeline::sCurRenderPoolType = 0 ;
 
 void LLPipeline::renderGeomDeferred(LLCamera& camera, bool do_occlusion)
 {
+    static FocusRenderProbe::Probe probe("deferred");
+    FocusRenderProbe::Scope measure(probe, true);
     LLAppViewer::instance()->pingMainloopTimeout("Pipeline:RenderGeomDeferred");
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL; //LL_RECORD_BLOCK_TIME(FTM_RENDER_GEOMETRY);
     LL_PROFILE_GPU_ZONE("renderGeomDeferred");
@@ -4464,6 +4487,8 @@ void LLPipeline::renderGeomDeferred(LLCamera& camera, bool do_occlusion)
 // This is gonna be stuff like alpha, water, etc.
 void LLPipeline::renderGeomPostDeferred(LLCamera& camera)
 {
+    static FocusRenderProbe::Probe probe("post_deferred");
+    FocusRenderProbe::Scope measure(probe, true);
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
     LL_PROFILE_GPU_ZONE("renderGeomPostDeferred");
 
@@ -8214,9 +8239,99 @@ void LLPipeline::allocateAlphaOITBuffers(U32 w, U32 h)
                          << " MiB pool, " << pixel_layers << " max layers/pixel)" << LL_ENDL;
 }
 
+namespace
+{
+// Sample once per second. Results are consumed only after the final timestamp
+// is available; never read the active allocator back to the CPU.
+struct OITProfileSample
+{
+    GLuint query[4] = {};
+    GLuint counter = 0;
+    bool pending = false;
+    U32 capacity = 0;
+    U32 width = 0, height = 0;
+    F32 cpu_ms = 0.f;
+};
+OITProfileSample oit_samples[4];
+OITProfileSample* oit_active = nullptr;
+LLTimer oit_sample_interval;
+LLTimer oit_cpu_timer;
+
+void releaseOITProfile()
+{
+    oit_active = nullptr;
+    for (auto& sample : oit_samples)
+    {
+        if (sample.query[0]) glDeleteQueries(4, sample.query);
+        if (sample.counter) glDeleteBuffers(1, &sample.counter);
+        sample = OITProfileSample{};
+    }
+}
+
+void beginOITProfile(U32 capacity, U32 width, U32 height)
+{
+    oit_active = nullptr;
+    static LLCachedControl<bool> enabled(gSavedSettings, "RenderAlphaOITProfile", true);
+    if (!enabled || !glQueryCounter || !glGetQueryObjectui64v) return;
+    for (auto& sample : oit_samples)
+    {
+        if (!sample.pending) continue;
+        GLuint available = 0;
+        glGetQueryObjectuiv(sample.query[3], GL_QUERY_RESULT_AVAILABLE, &available);
+        if (!available) continue;
+        GLuint64 stamp[4];
+        for (U32 i = 0; i < 4; ++i)
+            glGetQueryObjectui64v(sample.query[i], GL_QUERY_RESULT, &stamp[i]);
+        GLint previous = 0;
+        glGetIntegerv(GL_COPY_READ_BUFFER_BINDING, &previous);
+        glBindBuffer(GL_COPY_READ_BUFFER, sample.counter);
+        U32 used = 0;
+        glGetBufferSubData(GL_COPY_READ_BUFFER, 0, sizeof(used), &used);
+        glBindBuffer(GL_COPY_READ_BUFFER, previous);
+        const F64 clear_ms = F64(stamp[1] - stamp[0]) / 1.e6;
+        const F64 capture_ms = F64(stamp[2] - stamp[1]) / 1.e6;
+        const F64 resolve_ms = F64(stamp[3] - stamp[2]) / 1.e6;
+        const F64 allocation_mib = (F64(sample.capacity) * 16. + F64(sample.width) * sample.height * 8. + 4.) / 1048576.;
+        LL_INFOS("OITProfile") << "gpu_clear_ms=" << clear_ms
+            << " gpu_capture_ms=" << capture_ms << " gpu_resolve_ms=" << resolve_ms
+            << " cpu_submit_ms=" << sample.cpu_ms << " nodes_requested=" << used
+            << " node_capacity=" << sample.capacity << " pool_overflow=" << (used > sample.capacity)
+            << " allocation_mib=" << allocation_mib
+            << " size=" << sample.width << "x" << sample.height << LL_ENDL;
+        LL_PROFILE_PLOT("PPLL GPU capture ms", capture_ms);
+        LL_PROFILE_PLOT("PPLL GPU resolve ms", resolve_ms);
+        sample.pending = false;
+    }
+    if (oit_sample_interval.getElapsedTimeF32() < 1.f) return;
+    for (auto& sample : oit_samples)
+    {
+        if (sample.pending) continue;
+        if (!sample.query[0])
+        {
+            glGenQueries(4, sample.query);
+            glGenBuffers(1, &sample.counter);
+            GLint previous = 0;
+            glGetIntegerv(GL_COPY_WRITE_BUFFER_BINDING, &previous);
+            glBindBuffer(GL_COPY_WRITE_BUFFER, sample.counter);
+            glBufferData(GL_COPY_WRITE_BUFFER, sizeof(U32), nullptr, GL_STREAM_READ);
+            glBindBuffer(GL_COPY_WRITE_BUFFER, previous);
+        }
+        sample.capacity = capacity;
+        sample.width = width;
+        sample.height = height;
+        oit_active = &sample;
+        oit_cpu_timer.reset();
+        oit_sample_interval.reset();
+        glQueryCounter(sample.query[0], GL_TIMESTAMP);
+        return;
+    }
+}
+}
+
 void LLPipeline::releaseAlphaOITBuffers()
 {
     mAlphaOITOpaqueDepth.release();
+    releaseOITProfile();
     if (mAlphaOITHead)    { glDeleteTextures(1, &mAlphaOITHead);   mAlphaOITHead = 0; }
     if (mAlphaOITNodes)   { glDeleteBuffers(1, &mAlphaOITNodes);   mAlphaOITNodes = 0; }
     if (mAlphaOITCounter) { glDeleteBuffers(1, &mAlphaOITCounter); mAlphaOITCounter = 0; }
@@ -8234,6 +8349,8 @@ bool LLPipeline::beginAlphaOITCapture()
         return false;
     }
     LL_PROFILE_GPU_ZONE("alpha oit capture begin");
+
+    beginOITProfile(mAlphaOITNodeCap, mAlphaOITWidth, mAlphaOITHeight);
 
     // LLRenderTarget depth textures are DEPTH_COMPONENT24. Copy the opaque depth
     // before capture/residual passes; this destination is never the draw attachment.
@@ -8266,6 +8383,7 @@ bool LLPipeline::beginAlphaOITCapture()
     // the fragment deliberately falls through to ordinary source-over blending so
     // overflow degrades to legacy ordering rather than making cards disappear.
     gGL.setColorMask(true, true);
+    if (oit_active) glQueryCounter(oit_active->query[1], GL_TIMESTAMP);
     return true;
 }
 
@@ -8280,10 +8398,26 @@ void LLPipeline::endAlphaOITCapture()
                     GL_SHADER_STORAGE_BARRIER_BIT |
                     GL_ATOMIC_COUNTER_BARRIER_BIT);
     gGL.setColorMask(true, true);
+    if (oit_active)
+    {
+        // GPU-to-GPU snapshot; the next frame may reset the live counter.
+        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+        GLint read_buffer = 0, write_buffer = 0;
+        glGetIntegerv(GL_COPY_READ_BUFFER_BINDING, &read_buffer);
+        glGetIntegerv(GL_COPY_WRITE_BUFFER_BINDING, &write_buffer);
+        glBindBuffer(GL_COPY_READ_BUFFER, mAlphaOITCounter);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, oit_active->counter);
+        glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(U32));
+        glBindBuffer(GL_COPY_READ_BUFFER, read_buffer);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, write_buffer);
+        glQueryCounter(oit_active->query[2], GL_TIMESTAMP);
+    }
 }
 
 void LLPipeline::compositeAlphaOIT()
 {
+    static FocusRenderProbe::Probe probe("ppll_resolve");
+    FocusRenderProbe::Scope measure(probe, true);
     if (!mAlphaOITHead || !gAlphaOITResolveProgram.mProgramObject)
     {
         return;
@@ -8348,6 +8482,13 @@ void LLPipeline::compositeAlphaOIT()
     //   * blendFunc -> standard source-alpha: the resolve used premultiplied (ONE, 1-SRC_ALPHA).
     gGL.setColorMask(true, false);
     gGL.blendFunc(LLRender::BF_SOURCE_ALPHA, LLRender::BF_ONE_MINUS_SOURCE_ALPHA);
+    if (oit_active)
+    {
+        glQueryCounter(oit_active->query[3], GL_TIMESTAMP);
+        oit_active->cpu_ms = oit_cpu_timer.getElapsedTimeF32() * 1000.f;
+        oit_active->pending = true;
+        oit_active = nullptr;
+    }
 }
 
 bool LLPipeline::allocateAlphaDepthPeelBuffers(U32 w, U32 h)

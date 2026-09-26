@@ -618,11 +618,9 @@ static void settings_to_globals()
 {
     LLSurface::setTextureSize(gSavedSettings.getU32("RegionTextureSize"));
 
-#if LL_DARWIN
+    // The renderer requires Core. Migrate old saved compatibility-profile settings.
     LLRender::sGLCoreProfile = true;
-#else
-    LLRender::sGLCoreProfile = gSavedSettings.getBOOL("RenderGLContextCoreProfile");
-#endif
+    gSavedSettings.setBOOL("RenderGLContextCoreProfile", true);
     LLRender::sNsightDebugSupport = gSavedSettings.getBOOL("RenderNsightDebugSupport");
     LLImageGL::sGlobalUseAnisotropic    = gSavedSettings.getBOOL("RenderAnisotropic");
     LLImageGL::sCompressTextures        = gSavedSettings.getBOOL("RenderCompressTextures");
@@ -6068,6 +6066,7 @@ void LLAppViewer::idle()
     static LLCachedControl<U32> downscale_method(gSavedSettings, "RenderDownScaleMethod");
     gGLManager.mDownScaleMethod = downscale_method;
     LLImageGL::updateClass();
+    LLVertexBuffer::updateClass();
 
     // Service the WorkQueue we use for replies from worker threads.
     // Use function statics for the timeslice setting so we only have to fetch

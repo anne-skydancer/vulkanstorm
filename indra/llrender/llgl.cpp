@@ -1131,6 +1131,24 @@ bool LLGLManager::initGL()
 
     mGLVersion = mDriverVersionMajor + mDriverVersionMinor * .1f;
 
+#if LL_WINDOWS || LL_LINUX
+    // Verify what the driver actually returned, independently of saved settings.
+    GLint profile = 0;
+    if (mDriverVersionMajor > 3 || (mDriverVersionMajor == 3 && mDriverVersionMinor >= 2))
+    {
+        glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &profile);
+    }
+    if (mDriverVersionMajor < 4 ||
+        (mDriverVersionMajor == 4 && mDriverVersionMinor < 3) ||
+        !(profile & GL_CONTEXT_CORE_PROFILE_BIT))
+    {
+        LL_WARNS("RenderInit") << "OpenGL 4.3 Core or newer required. GPU: " << mGLRenderer
+            << "; vendor: " << mGLVendor << "; version: " << mGLVersionString
+            << "; profile mask: " << profile << LL_ENDL;
+        return false;
+    }
+#endif
+
     if (mGLVersion >= 2.f)
     {
         parse_glsl_version(mGLSLVersionMajor, mGLSLVersionMinor);
