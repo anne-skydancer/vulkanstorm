@@ -27974,9 +27974,9 @@ Change of this parameter will affect the layout of buttons in notification toast
       <string>Color4</string>
       <key>Value</key>
       <array>
-        <real>0.666</real>
-        <real>0.228</real>
-        <real>0.13</real>
+        <real>0</real>
+        <real>0.5</real>
+        <real>0.5</real>
         <real>0.1</real>
       </array>
     </map>
@@ -27990,9 +27990,9 @@ Change of this parameter will affect the layout of buttons in notification toast
       <string>Color4</string>
       <key>Value</key>
       <array>
-        <real>0.766</real>
-        <real>0.328</real>
-        <real>0.23</real>
+        <real>0</real>
+        <real>0.5</real>
+        <real>0.5</real>
         <real>0.9</real>
       </array>
     </map>
