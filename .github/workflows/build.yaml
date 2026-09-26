@@ -12,7 +12,14 @@ permissions:
   contents: read
 
 jobs:
+  check-publication:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: node --test scripts/tests/ci_publish_latest.test.cjs
+
   build:
+    needs: check-publication
     strategy:
       fail-fast: false
       matrix:
@@ -225,6 +232,34 @@ jobs:
             ${{ matrix.directory }}/*glxinfo.txt
             ${{ matrix.directory }}/zink-*-test.txt
             ${{ matrix.directory }}/newview/viewer_version.txt
+
+  latest:
+    # PR builds validate changes but must never publish release binaries.
+    if: >-
+      github.repository == 'anne-skydancer/vulkanstorm' &&
+      contains(fromJSON('["push", "workflow_dispatch", "schedule"]'), github.event_name)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: vulkanstorm-latest-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '*-installer'
+          path: installers
+      - name: Publish both platforms and advance latest
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const publish = require('./scripts/ci_publish_latest.cjs');
+            await publish({ github, context, core, directory: 'installers' });
 
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/Second_Life')
