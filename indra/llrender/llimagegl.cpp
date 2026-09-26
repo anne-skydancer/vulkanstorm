@@ -265,9 +265,10 @@ void LLImageGL::initClass(LLWindow* window, S32 num_catagories, bool skip_analyz
 
     if (thread_texture_loads || thread_media_updates)
     {
-        LLImageGLThread::createInstance(window);
         LLImageGLThread::sEnabledTextures = gGLManager.mGLVersion > 3.95f ? thread_texture_loads : false;
         LLImageGLThread::sEnabledMedia = gGLManager.mGLVersion > 3.95f ? thread_media_updates : false;
+        // Construction disables both flags if a shared Core context cannot be created.
+        LLImageGLThread::createInstance(window);
     }
 }
 
@@ -2701,6 +2702,7 @@ LLImageGLThread::LLImageGLThread(LLWindow* window)
     if( !mContext )
     {
         sEnabledTextures = false;
+        sEnabledMedia = false;
         mFinished = true;
         return;
     }

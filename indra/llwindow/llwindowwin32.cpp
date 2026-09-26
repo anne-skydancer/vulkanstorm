@@ -1780,13 +1780,12 @@ const   S32   max_format  = (S32)num_formats - 1;
         << LL_ENDL;
 
     mhRC = 0;
-    if (wglCreateContextAttribsARB)
-    { //attempt to create a specific versioned context
-        mhRC = (HGLRC) createSharedContext();
-        if (!mhRC)
-        {
-            return false;
-        }
+    mhRC = (HGLRC) createSharedContext();
+    if (!mhRC)
+    {
+        LLError::LLUserWarningMsg::show("Vulkanstorm requires OpenGL 4.3 Core or newer. Update your graphics driver or select a supported GPU.", 8);
+        close();
+        return false;
     }
 
     if (!wglMakeCurrent(mhDC, mhRC))
@@ -1962,55 +1961,33 @@ void LLWindowWin32::recreateWindow(RECT window_rect, DWORD dw_ex_style, DWORD dw
 
 void* LLWindowWin32::createSharedContext()
 {
-    mMaxGLVersion = llclamp(mMaxGLVersion, 3.f, 4.6f);
-
-    S32 version_major = llfloor(mMaxGLVersion);
-    S32 version_minor = (S32)llround((mMaxGLVersion-version_major)*10);
-
-    S32 attribs[] =
+    // A legacy context is used only to bootstrap WGL entry points. Every
+    // rendering/upload context must satisfy the same Core >= 4.3 contract.
+    mMaxGLVersion = llclamp(mMaxGLVersion, 4.3f, 4.6f);
+    const S32 max_minor = (S32)llround((mMaxGLVersion - 4.f) * 10);
+    HGLRC rc = nullptr;
+    if (wglCreateContextAttribsARB)
     {
-        WGL_CONTEXT_MAJOR_VERSION_ARB, version_major,
-        WGL_CONTEXT_MINOR_VERSION_ARB, version_minor,
-        WGL_CONTEXT_PROFILE_MASK_ARB,  LLRender::sGLCoreProfile ? WGL_CONTEXT_CORE_PROFILE_BIT_ARB : WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
-        WGL_CONTEXT_FLAGS_ARB, gDebugGL ? WGL_CONTEXT_DEBUG_BIT_ARB : 0,
-        0
-    };
-
-    HGLRC rc = 0;
-
-    bool done = false;
-    while (!done)
-    {
-        rc = wglCreateContextAttribsARB(mhDC, mhRC, attribs);
-
-        if (!rc)
+        for (S32 minor = max_minor; minor >= 3 && !rc; --minor)
         {
-            if (attribs[3] > 0)
-            { //decrement minor version
-                attribs[3]--;
+            const S32 attribs[] = {
+                WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
+                WGL_CONTEXT_MINOR_VERSION_ARB, minor,
+                WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+                WGL_CONTEXT_FLAGS_ARB, gDebugGL ? WGL_CONTEXT_DEBUG_BIT_ARB : 0,
+                0
+            };
+            rc = wglCreateContextAttribsARB(mhDC, mhRC, attribs);
+            if (rc)
+            {
+                LL_INFOS("Window") << "Created OpenGL 4." << minor << " core context." << LL_ENDL;
             }
-            else if (attribs[1] > 3)
-            { //decrement major version and start minor version over at 3
-                attribs[1]--;
-                attribs[3] = 3;
-            }
-            else
-            { //we reached 3.0 and still failed, bail out
-                done = true;
-            }
-        }
-        else
-        {
-            LL_INFOS() << "Created OpenGL " << llformat("%d.%d", attribs[1], attribs[3]) <<
-                (LLRender::sGLCoreProfile ? " core" : " compatibility") << " context." << LL_ENDL;
-            done = true;
         }
     }
-
-    if (!rc && !(rc = wglCreateContext(mhDC)))
+    if (!rc)
     {
-        close();
-        LLError::LLUserWarningMsg::show(mCallbacks->translateString("MBGLContextErr"), 8/*LAST_EXEC_GRAPHICS_INIT*/);
+        // Shared-context failure must not tear down a working main window.
+        LL_WARNS("Window") << "OpenGL 4.3 Core or newer is required; context creation failed." << LL_ENDL;
     }
 
     return rc;

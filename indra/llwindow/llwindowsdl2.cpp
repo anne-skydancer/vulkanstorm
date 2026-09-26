@@ -741,6 +741,10 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, stencilBits);
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, gDebugGL ? SDL_GL_CONTEXT_DEBUG_FLAG : 0);
 
     if (mFSAASamples > 0)
     {
@@ -754,12 +758,21 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
 
     if( mWindow )
     {
-        mContext = SDL_GL_CreateContext( mWindow );
+        // Prefer newer Core versions; never fall back below the supported floor.
+        for (int minor = 6; minor >= 3; --minor)
+        {
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor);
+            mContext = SDL_GL_CreateContext(mWindow);
+            if (mContext)
+            {
+                break;
+            }
+        }
 
         if( mContext == 0 )
         {
             LL_WARNS() << "Cannot create GL context " << SDL_GetError() << LL_ENDL;
-            setupFailure("GL Context creation error creation error", "Error", OSMB_OK);
+            setupFailure("Vulkanstorm requires OpenGL 4.3 Core or newer. Update your graphics driver or select a supported GPU.", "Error", OSMB_OK);
             return false;
         }
 
@@ -2710,7 +2723,7 @@ void* LLWindowSDL::createSharedContext()
     }
 
     LL_WARNS() << "Creating shared OpenGL context failed!" << LL_ENDL;
-
+    delete sc;
     return nullptr;
 }
 
