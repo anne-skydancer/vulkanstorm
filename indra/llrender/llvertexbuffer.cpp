@@ -293,30 +293,44 @@ static GLuint gen_buffer()
     return ret;
 }
 
+// Main GL thread only. Keep the existing four-slot retirement schedule, but
+// service it every frame even when no more buffers are being retired.
+static std::vector<GLuint> sDeferredBufferDeletes[4];
+
+static void drain_buffer_deletes(U32 slot)
+{
+    auto& buffers = sDeferredBufferDeletes[slot];
+    if (!buffers.empty())
+    {
+        if (gGLManager.mInited)
+        {
+            glDeleteBuffers((GLsizei)buffers.size(), buffers.data());
+        }
+        buffers.clear();
+    }
+}
+
 static void delete_buffers(S32 count, GLuint* buffers)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VERTEX;
-    // wait a few frames before actually deleting the buffers to avoid
-    // synchronization issues with the GPU
-    static std::vector<GLuint> sFreeList[4];
-
     if (gGLManager.mInited)
     {
-        U32 idx = LLImageGL::sFrameCount % 4;
-
+        auto& pending = sDeferredBufferDeletes[LLImageGL::sFrameCount % 4];
         for (S32 i = 0; i < count; ++i)
         {
-            sFreeList[idx].push_back(buffers[i]);
-        }
-
-        idx = (LLImageGL::sFrameCount + 3) % 4;
-
-        if (!sFreeList[idx].empty())
-        {
-            glDeleteBuffers((GLsizei)sFreeList[idx].size(), sFreeList[idx].data());
-            sFreeList[idx].resize(0);
+            pending.push_back(buffers[i]);
         }
     }
+}
+
+//static
+void LLVertexBuffer::updateClass()
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_VERTEX;
+    // Called immediately after LLImageGL advances the frame counter. The
+    // original (frame + 3) % 4 schedule retires the previous frame's bucket.
+    // Do not delete the current frame's buffers or force GPU synchronization.
+    drain_buffer_deletes((LLImageGL::sFrameCount + 3) % 4);
 }
 
 
@@ -330,6 +344,7 @@ class LLVBOPool
     virtual void allocate(GLenum type, U32 size, GLuint& name, U8*& data) = 0;
     virtual void free(GLenum type, U32 size, GLuint name, U8* data) = 0;
     virtual U64 getVramBytesUsed() = 0;
+    virtual U32 backingSize(U32 size) { return size; }
 };
 
 // VBO Pool for Apple GPUs (as in M1/M2 etc, not Intel macs)
@@ -439,6 +454,8 @@ public:
         U32 block_size = llmax(nhpo2(size) / 8, (U32) 16);
         size += block_size - (size % block_size);
     }
+
+    U32 backingSize(U32 size) override { adjustSize(size); return size; }
 
     void allocate(GLenum type, U32 size, GLuint& name, U8*& data) override
     {
@@ -1061,6 +1078,14 @@ void LLVertexBuffer::cleanupClass()
     delete sQueue;
     sQueue = nullptr;
 #endif
+
+    // The pool destructor above may retire more buffers. There will be no
+    // further frame updates; release all names while the GL context exists.
+    // OpenGL retains any backing storage still needed by submitted GPU work.
+    for (U32 slot = 0; slot < 4; ++slot)
+    {
+        drain_buffer_deletes(slot);
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -1157,6 +1182,16 @@ LLVertexBuffer::~LLVertexBuffer()
 };
 
 //----------------------------------------------------------------------------
+
+// Allocator-requested CPU bytes, including size classes, excluding malloc metadata.
+U64 LLVertexBuffer::getCPUVertexBytes() const
+{
+    return mMappedData && sVBOPool ? sVBOPool->backingSize(mSize) : 0;
+}
+U64 LLVertexBuffer::getCPUIndexBytes() const
+{
+    return mMappedIndexData && sVBOPool ? sVBOPool->backingSize(mIndicesSize) : 0;
+}
 
 void LLVertexBuffer::genBuffer(U32 size)
 {
