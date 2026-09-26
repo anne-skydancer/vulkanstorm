@@ -103,11 +103,6 @@ void LLVKUI2D::begin(LLVKContext* ctx, VkCommandBuffer cmd)
 void LLVKUI2D::end()
 {
     flushRun();
-    // <VulkanStorm> M1 diagnostic: total verts drawn this frame (VULKANSTORM_UI_DEBUG=1).
-    static bool s_dbg = getenv("VULKANSTORM_UI_DEBUG") != nullptr;
-    if (s_dbg) { static int s_f = 0; if ((s_f++ % 120) == 0) { LL_INFOS("Vulkan") << "UI2D frame: flushes=" << mFrameFlushes << " vertsDrawn=" << mFrameVerts << LL_ENDL; } }
-    mFrameFlushes = 0; mFrameVerts = 0;
-    // </VulkanStorm>
     mCmd = VK_NULL_HANDLE;
     // Retired buffers from mid-stream grows: the frame's submits are queued but
     // not necessarily complete, so defer destruction until the device is idle.
@@ -350,12 +345,8 @@ void LLVKUI2D::flushRun()
     vkCmdSetViewport(mCmd, 0, 1, &viewport);
     // </VulkanStorm>
 
-    // Scissor (read at flush).
-    // <VulkanStorm> M1 diagnostic: VULKANSTORM_UI_DEBUG=nosci forces full-frame
-    // scissor to isolate a bad scissor conversion.
-    static bool s_nosci = getenv("VULKANSTORM_UI_DEBUG") && std::string(getenv("VULKANSTORM_UI_DEBUG")) == "nosci";
     VkRect2D scissor{ { 0, 0 }, mCtx->swapchainExtent() };
-    if (mScissorOn && !s_nosci)
+    if (mScissorOn)
     {
         scissor.offset = { mSx, mSy };
         scissor.extent = { (uint32_t)mSw, (uint32_t)mSh };
@@ -372,10 +363,6 @@ void LLVKUI2D::flushRun()
     VkDeviceSize off = 0;
     vkCmdBindVertexBuffers(mCmd, 0, 1, &mVBuf, &off);
     vkCmdDraw(mCmd, (uint32_t)mVerts.size(), 1, firstVertex, 0);
-
-    // <VulkanStorm> track per-frame draw stats (diagnostic).
-    ++mFrameFlushes; mFrameVerts += mVerts.size();
-    // </VulkanStorm>
 
     mVerts.clear();
 }

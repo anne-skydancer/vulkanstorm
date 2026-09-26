@@ -88,15 +88,8 @@ namespace LLProfiler
 // <FS:Beq> Fixed mutual exclusion issues with RAM and GPU. NOTE: This might still break on Apple in which case we'll need to restrict that platform
         //// GPU Mutually exclusive with detailed memory tracing
         // #define LL_PROFILER_ENABLE_TRACY_OPENGL 0
-        // Allocation events are opt-in independently of CPU timing zones.
-        #ifndef LL_PROFILER_ENABLE_TRACY_MEMORY
         #define LL_PROFILER_ENABLE_TRACY_MEMORY 0
-        #endif
-        // Tracy.cmake enables GPU queries only when USE_TRACY_GPU is requested.
-        // CPU-only captures must not add OpenGL timestamp queries or collection.
-        #ifndef LL_PROFILER_ENABLE_TRACY_OPENGL
-        #define LL_PROFILER_ENABLE_TRACY_OPENGL 0
-        #endif
+        #define LL_PROFILER_ENABLE_TRACY_OPENGL 1
 
         // Enable RenderDoc labeling
         //#define LL_PROFILER_ENABLE_RENDER_DOC 0
@@ -256,7 +249,7 @@ namespace LLProfiler
 #define LL_PROFILER_GPU_CONTEXT_NS(name, size)           (void)name;(void)size;
 #endif // LL_PROFILER_ENABLE_TRACY_OPENGL
 
-#if LL_PROFILER_CONFIGURATION >= LL_PROFILER_CONFIG_TRACY && LL_PROFILER_ENABLE_TRACY_MEMORY
+#if LL_PROFILER_CONFIGURATION >= LL_PROFILER_CONFIG_TRACY
 #define LL_PROFILE_ALLOC(ptr, size)             TracyAlloc(ptr, size);
 #define LL_PROFILE_FREE(ptr)                    TracyFree(ptr);
 #else

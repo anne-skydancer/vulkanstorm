@@ -123,11 +123,7 @@ protected:
     virtual U8* reallocateData(S32 size = -1);
 
 public:
-    explicit LLImageBase(bool raw_memory_category = false);
-    static U64 getOwnedRawBytes();
-    static U64 getPeakOwnedRawBytes();
-    static U64 getOwnedOtherImageBytes();
-    static U64 getDetachedRawBytes();
+    LLImageBase();
 
     enum
     {
@@ -168,9 +164,6 @@ public:
     //static LLTrace::MemStatHandle sMemStat;
 
 private:
-    void updateOwnedMemory();
-    bool mRawMemoryCategory = false;
-    U64 mOwnedMemoryBytes = 0;
     U8 *mData;
     S32 mDataSize;
 

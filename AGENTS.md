@@ -4,6 +4,7 @@
 - Develop new features on a feature branch based on `vkstorm-devel`.
 - Prefer incorporating new features from `vkstorm-devel` into `master` through pull requests.
 - Handle patches and error fixes directly in `master` or `vkstorm-devel`, as appropriate to the affected code and intended target.
+- Keep development-only rendering hooks, capture harnesses, and profiling probes out of `master`. Audit inherited development commits before integrating a feature branch; run `scripts/tests/check_release_hooks.py` for master changes. Ordinary viewer debug facilities and standalone tools are permitted.
 - The default development viewer build configuration is `RelWithDebInfo`.
 - Use the same feature and dependency configuration as the Vulkanstorm Release viewer, except for the build type and installer generation.
 - Do not generate an installer for a development viewer.

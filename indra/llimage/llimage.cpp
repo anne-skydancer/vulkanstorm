@@ -28,7 +28,6 @@
 
 #include "llimageworker.h"
 #include "llimage.h"
-#include <atomic>
 
 #include "llmath.h"
 #include "v4coloru.h"
@@ -622,34 +621,8 @@ void LLImage::setLastError(const std::string& message)
 // <FS:ND> Report amount of failed buffer allocations
 U32 LLImageBase::sAllocationErrors;
 
-namespace
-{
-std::atomic<U64> owned_raw_bytes{0}, peak_owned_raw_bytes{0}, owned_other_image_bytes{0}, detached_raw_bytes{0};
-}
-U64 LLImageBase::getOwnedRawBytes() { return owned_raw_bytes.load(std::memory_order_relaxed); }
-U64 LLImageBase::getPeakOwnedRawBytes() { return peak_owned_raw_bytes.load(std::memory_order_relaxed); }
-U64 LLImageBase::getOwnedOtherImageBytes() { return owned_other_image_bytes.load(std::memory_order_relaxed); }
-U64 LLImageBase::getDetachedRawBytes() { return detached_raw_bytes.load(std::memory_order_relaxed); }
-void LLImageBase::updateOwnedMemory()
-{
-    const U64 bytes = mData && mDataSize > 0 ? U64(mDataSize) : 0;
-    auto& total = mRawMemoryCategory ? owned_raw_bytes : owned_other_image_bytes;
-    if (bytes > mOwnedMemoryBytes)
-    {
-        const U64 live = total.fetch_add(bytes - mOwnedMemoryBytes, std::memory_order_relaxed) + bytes - mOwnedMemoryBytes;
-        if (mRawMemoryCategory)
-        {
-            U64 peak = peak_owned_raw_bytes.load(std::memory_order_relaxed);
-            while (peak < live && !peak_owned_raw_bytes.compare_exchange_weak(peak, live, std::memory_order_relaxed)) {}
-        }
-    }
-    else if (bytes < mOwnedMemoryBytes) total.fetch_sub(mOwnedMemoryBytes - bytes, std::memory_order_relaxed);
-    mOwnedMemoryBytes = bytes;
-}
-
-LLImageBase::LLImageBase(bool raw_memory_category)
-:   mRawMemoryCategory(raw_memory_category),
-    mData(NULL),
+LLImageBase::LLImageBase()
+:   mData(NULL),
     mDataSize(0),
     mWidth(0),
     mHeight(0),
@@ -701,7 +674,6 @@ void LLImageBase::deleteData()
     ll_aligned_free_16(mData);
     mDataSize = 0;
     mData = NULL;
-    updateOwnedMemory();
 }
 
 // virtual
@@ -770,7 +742,6 @@ U8* LLImageBase::allocateData(S32 size)
         addAllocationError();
     }
     mDataSize = size;
-    updateOwnedMemory();
 
     return mData;
 }
@@ -793,7 +764,6 @@ U8* LLImageBase::reallocateData(S32 size)
     mData = new_datap;
     mDataSize = size;
     mBadBufferAllocation = false;
-    updateOwnedMemory();
     return mData;
 }
 
@@ -858,13 +828,13 @@ U32 LLImageBase::getAllocationErrors()
 S32 LLImageRaw::sRawImageCount = 0;
 
 LLImageRaw::LLImageRaw()
-    : LLImageBase(true)
+    : LLImageBase()
 {
     ++sRawImageCount;
 }
 
 LLImageRaw::LLImageRaw(U16 width, U16 height, S8 components)
-    : LLImageBase(true)
+    : LLImageBase()
 {
     //llassert( S32(width) * S32(height) * S32(components) <= MAX_IMAGE_DATA_SIZE );
     allocateDataSize(width, height, components);
@@ -872,7 +842,7 @@ LLImageRaw::LLImageRaw(U16 width, U16 height, S8 components)
 }
 
 LLImageRaw::LLImageRaw(const U8* data, U16 width, U16 height, S8 components)
-    : LLImageBase(true)
+    : LLImageBase()
 {
     if (allocateDataSize(width, height, components))
     {
@@ -881,7 +851,7 @@ LLImageRaw::LLImageRaw(const U8* data, U16 width, U16 height, S8 components)
 }
 
 LLImageRaw::LLImageRaw(U8 *data, U16 width, U16 height, S8 components, bool no_copy)
-    : LLImageBase(true)
+    : LLImageBase()
 {
     if(no_copy)
     {
@@ -930,7 +900,6 @@ void LLImageRaw::releaseData()
 {
     LLImageDataLock lock(this);
 
-    detached_raw_bytes.fetch_add(!isBufferInvalid() && getDataSize() > 0 ? U64(getDataSize()) : 0, std::memory_order_relaxed);
     LLImageBase::setSize(0, 0, 0);
     LLImageBase::setDataAndSize(nullptr, 0);
 }
@@ -2657,7 +2626,6 @@ void LLImageBase::setDataAndSize(U8 *data, S32 size)
     ll_assert_aligned(data, 16);
     mData = data;
     mDataSize = size;
-    updateOwnedMemory();
 }
 
 //static

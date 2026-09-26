@@ -5258,13 +5258,6 @@ void LLVOVolume::updateRiggedVolume(bool force_treat_as_rigged, LLRiggedVolume::
     mRiggedVolume->update(skin, avatar, volume, face_index, rebuild_face_octrees);
 }
 
-LLRiggedVolume::~LLRiggedVolume()
-{
-    llassert(sWeightBytes >= mWeightBytes && sWeightFaces >= mWeightFaces);
-    sWeightBytes -= mWeightBytes;
-    sWeightFaces -= mWeightFaces;
-}
-
 void LLRiggedVolume::update(
     const LLMeshSkinInfo* skin,
     LLVOAvatar* avatar,
@@ -5294,20 +5287,6 @@ void LLRiggedVolume::update(
     if (copy)
     {
         copyVolumeFaces(volume);
-        sWeightBytes -= mWeightBytes;
-        sWeightFaces -= mWeightFaces;
-        mWeightBytes = mWeightFaces = 0;
-        for (const auto& face : mVolumeFaces)
-        {
-            if (face.mWeights)
-            {
-                mWeightBytes += U64(face.mNumVertices) * sizeof(LLVector4a);
-                ++mWeightFaces;
-            }
-        }
-        sWeightBytes += mWeightBytes;
-        sWeightFaces += mWeightFaces;
-        sWeightPeakBytes = llmax(sWeightPeakBytes, sWeightBytes);
     }
     else
     {

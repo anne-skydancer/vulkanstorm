@@ -17,6 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: node --test scripts/tests/ci_publish_latest.test.cjs
+      - name: Keep development hooks out of master
+        if: github.ref == 'refs/heads/master' || github.base_ref == 'master'
+        run: python3 scripts/tests/check_release_hooks.py
 
   build:
     needs: check-publication

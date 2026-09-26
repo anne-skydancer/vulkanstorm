@@ -42,8 +42,6 @@
 #include "llwindow.h"
 #include "llframetimer.h"
 #include <unordered_set>
-#include <atomic>
-#include <chrono>
 
 extern LL_COMMON_API bool on_main_thread();
 
@@ -67,11 +65,6 @@ U32 LLImageGL::sFrameCount = 0;
 static LLMutex sTexMemMutex;
 static std::unordered_map<U32, U64> sTextureAllocs;
 static U64 sTextureBytes = 0;
-
-// Development-only observation: no GL queries, waits or scheduling changes.
-static std::atomic<U64> sCompletionPending{0}, sCompletionBytes{0};
-static std::atomic<U64> sCompletionDone{0}, sCompletionRejected{0}, sCompletionAgeMaxUs{0};
-
 
 // track a texture alloc on the currently bound texture.
 // asserts that no currently tracked alloc exists
@@ -1296,34 +1289,6 @@ static std::vector<U32> sFreeList[DELETE_DELAY+1];
 void LLImageGL::updateClass()
 {
     sFrameCount++;
-    static LLFrameTimer focus_memory_timer;
-    if (focus_memory_timer.getElapsedTimeF32() >= 5.f)
-    {
-        focus_memory_timer.reset();
-        U64 retired_names = 0, retired_bytes = 0, allocated_bytes = 0;
-        {
-            LLMutexLock lock(&sTexMemMutex);
-            allocated_bytes = sTextureBytes;
-            for (const auto& names : sFreeList)
-            {
-                retired_names += names.size();
-                for (U32 name : names)
-                {
-                    const auto entry = sTextureAllocs.find(name);
-                    if (entry != sTextureAllocs.end()) retired_bytes += entry->second;
-                }
-            }
-        }
-        LL_INFOS("FocusMemory") << "texture_completions_pending=" << sCompletionPending.load()
-            << " pending_base_image_estimate_bytes=" << sCompletionBytes.load()
-            << " completed=" << sCompletionDone.exchange(0)
-            << " rejected=" << sCompletionRejected.exchange(0)
-            << " completion_age_max_us=" << sCompletionAgeMaxUs.exchange(0)
-            << " deferred_texture_names=" << retired_names
-            << " deferred_base_image_estimate_bytes=" << retired_bytes
-            << " texture_base_image_estimate_bytes=" << allocated_bytes << LL_ENDL;
-    }
-
 
     // wait a few frames before actually deleting the textures to avoid
     // synchronization issues with the GPU
@@ -1791,10 +1756,7 @@ void LLImageGL::syncToMainThread(LLGLuint new_tex_name)
             // upload is complete
             auto sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
             glFlush();
-            {
-                LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("glClientWaitSync");
-                glClientWaitSync(sync, 0, GL_TIMEOUT_IGNORED);
-            }
+            glClientWaitSync(sync, 0, GL_TIMEOUT_IGNORED);
             glDeleteSync(sync);
         }
         else
@@ -1822,38 +1784,15 @@ void LLImageGL::syncToMainThread(LLGLuint new_tex_name)
         }
     }
 
-    U64 pending_bytes = 0;
-    {
-        LLMutexLock lock(&sTexMemMutex);
-        const auto entry = sTextureAllocs.find(new_tex_name);
-        if (entry != sTextureAllocs.end()) pending_bytes = entry->second;
-    }
-    const auto posted_at = std::chrono::steady_clock::now();
-    sCompletionPending.fetch_add(1);
-    sCompletionBytes.fetch_add(pending_bytes);
     ref();
-    const bool posted = LL::WorkQueue::postMaybe(
+    LL::WorkQueue::postMaybe(
         mMainQueue,
         [=, this]()
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("cglt - delete callback");
-            const U64 age_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::steady_clock::now() - posted_at).count();
-            U64 previous = sCompletionAgeMaxUs.load();
-            while (previous < age_us && !sCompletionAgeMaxUs.compare_exchange_weak(previous, age_us)) {}
             syncTexName(new_tex_name);
-            sCompletionPending.fetch_sub(1);
-            sCompletionBytes.fetch_sub(pending_bytes);
-            sCompletionDone.fetch_add(1);
             unref();
         });
-    if (!posted)
-    {
-        sCompletionPending.fetch_sub(1);
-        sCompletionBytes.fetch_sub(pending_bytes);
-        sCompletionRejected.fetch_add(1);
-        // Preserve the existing rejected-post resource behavior during diagnosis.
-    }
 
     LL_PROFILER_GPU_COLLECT;
 }

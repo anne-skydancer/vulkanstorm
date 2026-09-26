@@ -27,7 +27,6 @@
 #include "linden_common.h"
 
 #include "llfasttimer.h"
-#include "llframetimer.h"
 #include "llsys.h"
 #include "llvertexbuffer.h"
 // #include "llrender.h"
@@ -344,7 +343,6 @@ class LLVBOPool
     virtual void allocate(GLenum type, U32 size, GLuint& name, U8*& data) = 0;
     virtual void free(GLenum type, U32 size, GLuint name, U8* data) = 0;
     virtual U64 getVramBytesUsed() = 0;
-    virtual U32 backingSize(U32 size) { return size; }
 };
 
 // VBO Pool for Apple GPUs (as in M1/M2 etc, not Intel macs)
@@ -432,15 +430,6 @@ public:
 
     U64 getVramBytesUsed() override
     {
-        static LLFrameTimer focus_memory_timer;
-        if (focus_memory_timer.getElapsedTimeF32() >= 5.f)
-        {
-            focus_memory_timer.reset();
-            LL_INFOS("FocusMemory") << "vbo_live_bytes=" << mAllocated
-                << " vbo_cached_bytes=" << mReserved
-                << " vbo_distributed_bytes=" << mDistributed
-                << " cache_touches=" << mTouchCount << LL_ENDL;
-        }
         return mAllocated + mReserved;
     }
 
@@ -454,8 +443,6 @@ public:
         U32 block_size = llmax(nhpo2(size) / 8, (U32) 16);
         size += block_size - (size % block_size);
     }
-
-    U32 backingSize(U32 size) override { adjustSize(size); return size; }
 
     void allocate(GLenum type, U32 size, GLuint& name, U8*& data) override
     {
@@ -1182,16 +1169,6 @@ LLVertexBuffer::~LLVertexBuffer()
 };
 
 //----------------------------------------------------------------------------
-
-// Allocator-requested CPU bytes, including size classes, excluding malloc metadata.
-U64 LLVertexBuffer::getCPUVertexBytes() const
-{
-    return mMappedData && sVBOPool ? sVBOPool->backingSize(mSize) : 0;
-}
-U64 LLVertexBuffer::getCPUIndexBytes() const
-{
-    return mMappedIndexData && sVBOPool ? sVBOPool->backingSize(mIndicesSize) : 0;
-}
 
 void LLVertexBuffer::genBuffer(U32 size)
 {

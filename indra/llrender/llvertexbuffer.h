@@ -257,8 +257,6 @@ public:
 
     U32 getTypeMask() const                 { return mTypeMask; }
     bool hasDataType(AttributeType type) const { return ((1 << type) & getTypeMask()); }
-    U64 getCPUVertexBytes() const;
-    U64 getCPUIndexBytes() const;
     U32 getSize() const                     { return mSize; }
     U32 getIndicesSize() const              { return mIndicesSize; }
     U8* getMappedData() const               { return mMappedData; }
