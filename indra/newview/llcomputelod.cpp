@@ -23,10 +23,28 @@
 #include <deque>
 #include <map>
 #include <limits>
+#include <set>
 #include <glm/gtc/type_ptr.hpp>
 
 namespace LLComputeMesh
 {
+struct Batch
+{
+    std::weak_ptr<Submission> submission;
+    std::vector<LLPointer<LLDrawInfo>> members;
+    std::vector<LLDrawInfo*> draws;
+    std::vector<U32> slots;
+    GLuint candidates = 0;
+    U32 generation = 0;
+    bool failed = false;
+    ~Batch();
+};
+struct Submission
+{
+    bool dirty = false;
+    std::vector<LLPointer<LLDrawInfo>> draws;
+    U64 index_count = 0;
+};
 struct Page
 {
     LLPointer<LLVertexBuffer> buffer;
@@ -107,6 +125,16 @@ struct GeometryMemory
 };
 GeometryMemory published_memory, staged_memory, page_memory;
 std::vector<std::weak_ptr<LLComputeMesh::Page>> pages;
+std::set<GLuint> registered_buffers;
+void invalidateSubmissions(LLComputeMesh::Resident& resident)
+{
+    auto& listeners = resident.submissions;
+    for (auto it=listeners.begin(); it!=listeners.end();)
+    {
+        if (auto submission = it->lock()) { submission->dirty = true; ++it; }
+        else it = listeners.erase(it);
+    }
+}
 void cancelPreparation(LLVOVolume& object);
 GLuint program = 0, buffers[7] = {};
 GLuint transform_texture = 0;
@@ -267,6 +295,7 @@ struct TransformBinding
         channel = shader ? shader->getTextureChannel(LLShaderMgr::MESH_TRANSFORMS) : -1;
         ready = channel >= 0 && transform_texture != 0;
         if (!ready) { shader = nullptr; return; }
+        gGL.flush(); // queued ordinary vertices must not inherit the resident transform flag
         glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
         glActiveTexture(GL_TEXTURE0 + channel);
         glGetIntegerv(GL_TEXTURE_BINDING_BUFFER, &previous);
@@ -506,6 +535,12 @@ bool dispatch()
 }
 }
 
+LLComputeMesh::Batch::~Batch()
+{
+    if (generation == ::generation && candidates && registered_buffers.erase(candidates))
+        glDeleteBuffers(1, &candidates);
+}
+
 LLComputeMesh::PageRange::~PageRange()
 {
     if (page)
@@ -555,7 +590,11 @@ void LLComputeMesh::invalidateLOD(LLVOVolume& object)
     cancelPreparation(object);
     if (object.mComputeLOD)
     {
-        for (auto& face : object.mComputeLOD->faces) if (face) face->valid = false;
+        for (auto& face : object.mComputeLOD->faces) if (face)
+        {
+            invalidateSubmissions(*face);
+            face->valid = false;
+        }
         object.mComputeLOD.reset();
     }
 }
@@ -1024,6 +1063,7 @@ BuildResult advanceJob(BuildJob& job)
     {
         auto& staged = *job.faces[f];
         auto& record = owner->faces[f];
+        invalidateSubmissions(*record);
         for (U32 lod=0; lod<4; ++lod)
         {
             if (job.ready_mask & (1u<<lod)) continue;
@@ -1274,14 +1314,136 @@ bool LLComputeMesh::compatibleBatch(const LLDrawInfo& first, const LLDrawInfo& n
         !first.mAvatar && !next.mAvatar;
 }
 
-bool LLComputeMesh::drawBatch(const std::vector<LLDrawInfo*>& batch)
+bool LLComputeMesh::appendSubmission(LLSpatialGroup& group, LLCullResult& cull, bool count_triangles)
+{
+    if (!enabled()) return false;
+    const auto found = group.mDrawMap.find(LLRenderPass::PASS_GLTF_PBR);
+    if (found == group.mDrawMap.end()) return false;
+    auto& cached = group.mComputeSubmission;
+    if (!cached || cached->dirty)
+    {
+        // Replace rather than mutate: another camera may still hold raw draw
+        // pointers into the previous submission, retained by its LLCullResult.
+        auto next = std::make_shared<Submission>();
+        const auto& source = found->second;
+        for (const auto& info : source)
+        {
+            next->index_count += info->mCount;
+            if (const auto& resident = info->mComputeLOD)
+            {
+                auto& listeners = resident->submissions;
+                listeners.erase(std::remove_if(listeners.begin(), listeners.end(),
+                    [](const auto& listener) { return listener.expired(); }), listeners.end());
+                listeners.push_back(next);
+            }
+        }
+        for (size_t i=0; i<source.size();)
+        {
+            size_t end = i+1;
+            if (compatibleBatch(*source[i], *source[i]))
+                while (end<source.size() && end-i<BATCH_CAPACITY && compatibleBatch(*source[i], *source[end])) ++end;
+            if (end-i == 1) next->draws.push_back(source[i]);
+            else
+            {
+                auto batch = std::make_shared<Batch>();
+                batch->submission = next;
+                for (size_t member=i; member<end; ++member)
+                {
+                    batch->members.push_back(source[member]);
+                    batch->draws.push_back(source[member].get());
+                    batch->slots.push_back(source[member]->mComputeLOD->slot);
+                }
+                auto& first = *source[i];
+                LLPointer<LLDrawInfo> proxy = new LLDrawInfo(first.mStart, first.mEnd, first.mCount,
+                    first.mOffset, first.mTexture, first.mVertexBuffer, first.mFullbright, first.mBump);
+                proxy->mModelMatrix = first.mModelMatrix;
+                proxy->mTextureMatrix = first.mTextureMatrix;
+                proxy->mGLTFMaterial = first.mGLTFMaterial;
+                proxy->mComputeBatch = std::move(batch);
+                next->draws.push_back(proxy);
+            }
+            i=end;
+        }
+        if (next->draws.size() == source.size())
+        {
+            // No packet replaces multiple records. Keep only the notification
+            // subscription; use the original map and its cross-group batching.
+            std::vector<LLPointer<LLDrawInfo>>().swap(next->draws);
+        }
+        cached = std::move(next);
+    }
+    if (cached->draws.empty()) return false;
+    cull.retainMeshSubmission(cached);
+    for (const auto& draw : cached->draws) cull.pushDrawInfo(LLRenderPass::PASS_GLTF_PBR, draw);
+    if (count_triangles)
+    {
+        U64 remaining = cached->index_count;
+        // addTrianglesDrawn accepts a signed index count; keep each chunk a
+        // multiple of three so large groups retain their exact triangle total.
+        while (remaining)
+        {
+            const U32 count = U32(llmin(remaining, U64(2147483646)));
+            gPipeline.addTrianglesDrawn(count);
+            remaining -= count;
+        }
+    }
+    return true;
+}
+
+void LLComputeMesh::submitRegistered(LLDrawInfo& proxy, bool textured)
+{
+    auto& batch = *proxy.mComputeBatch;
+    auto submission = batch.submission.lock();
+    if (!submission || submission->dirty || !enabled())
+    {
+        // Membership or material state changed after this view was built.
+        // Restore each original record's state, not the old packet's state.
+        for (auto* draw : batch.draws)
+            if (textured) LLRenderPass::pushGLTFBatch(*draw);
+            else LLRenderPass::pushUntexturedGLTFBatch(*draw);
+        return;
+    }
+    if (textured) LLRenderPass::pushGLTFBatch(*batch.draws.front(), &batch.draws, &batch);
+    else LLRenderPass::pushUntexturedGLTFBatch(*batch.draws.front(), &batch.draws, &batch);
+}
+
+namespace
+{
+GLuint registeredCandidates(LLComputeMesh::Batch& batch)
+{
+    if (batch.failed) return 0;
+    if (batch.generation != generation) batch.candidates = 0;
+    if (batch.candidates) return batch.candidates;
+    glGenBuffers(1, &batch.candidates);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, batch.candidates);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, batch.slots.size()*sizeof(U32), batch.slots.data(), GL_STATIC_DRAW);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        glDeleteBuffers(1, &batch.candidates);
+        batch.candidates = 0;
+        batch.failed = true;
+        return 0;
+    }
+    batch.generation = generation;
+    registered_buffers.insert(batch.candidates);
+    return batch.candidates;
+}
+}
+
+bool LLComputeMesh::drawBatch(const std::vector<LLDrawInfo*>& batch, Batch* registered)
 {
     if (batch.empty() || batch.size() > BATCH_CAPACITY || !enabled()) return false;
     const auto& first = *batch.front();
-    for (const auto* info : batch) if (!info || !compatibleBatch(first, *info)) return false;
+    if (registered)
+    {
+        const auto submission = registered->submission.lock();
+        if (!submission || submission->dirty || registered->failed || &registered->draws != &batch) return false;
+    }
+    else for (const auto* info : batch) if (!info || !compatibleBatch(first, *info)) return false;
     if (!dispatch() || !initializeBatch()) return false;
     std::array<U32, BATCH_CAPACITY> candidates;
-    for (size_t i=0; i<batch.size(); ++i) candidates[i] = batch[i]->mComputeLOD->slot;
+    if (!registered)
+        for (size_t i=0; i<batch.size(); ++i) candidates[i] = batch[i]->mComputeLOD->slot;
     gGL.flush();
     const glm::mat4 clip = gGL.getProjectionMatrix() * gGL.getModelviewMatrix();
     {
@@ -1290,10 +1452,19 @@ bool LLComputeMesh::drawBatch(const std::vector<LLDrawInfo*>& batch)
         // Source commands may have been generated earlier in this view/frame.
         // Order both shader reads and writes after preceding consumers.
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, batch_buffers[0]);
-        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, batch.size()*sizeof(U32), candidates.data());
+        GLuint candidate_buffer = batch_buffers[0];
+        if (registered)
+        {
+            candidate_buffer = registeredCandidates(*registered);
+            if (!candidate_buffer) return false;
+        }
+        else
+        {
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, candidate_buffer);
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, batch.size()*sizeof(U32), candidates.data());
+        }
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, buffers[1]);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, batch_buffers[0]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, candidate_buffer);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, batch_buffers[1]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, buffers[5]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, buffers[6]);
@@ -1457,7 +1628,7 @@ void LLComputeMesh::destroyLOD()
     build_jobs.clear();
     waiting_jobs.clear(); resource_waiters.clear();
     preparation_frame = ~0u;
-    for (auto* owner : owners) if (owner) owner->valid = false;
+    for (auto* owner : owners) if (owner) { invalidateSubmissions(*owner); owner->valid = false; }
     avatar_owners.fill(nullptr);
     avatar_lookup.clear();
     available_avatars.clear();
@@ -1471,6 +1642,8 @@ void LLComputeMesh::destroyLOD()
     resident_transforms.fill(Transform{});
     available.clear();
     extent = 0;
+    for (GLuint buffer : registered_buffers) glDeleteBuffers(1, &buffer);
+    registered_buffers.clear();
     ++generation;
     if (demand_fence) glDeleteSync(demand_fence);
     demand_fence = nullptr;

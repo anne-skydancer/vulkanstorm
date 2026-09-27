@@ -827,8 +827,13 @@ void LLRenderPass::pushUntexturedGLTFBatches(U32 type)
 }
 
 // static
-void LLRenderPass::pushGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch)
+void LLRenderPass::pushGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch, LLComputeMesh::Batch* registered)
 {
+    if (params.mComputeBatch)
+    {
+        LLComputeMesh::submitRegistered(params, true);
+        return;
+    }
     auto& mat = params.mGLTFMaterial;
 
     if (mat.notNull())
@@ -844,7 +849,7 @@ void LLRenderPass::pushGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInf
 
     if (batch)
     {
-        if (!LLComputeMesh::drawBatch(*batch))
+        if (!LLComputeMesh::drawBatch(*batch, registered))
             for (auto* info : *batch) drawGeometry(*info);
     }
     else drawGeometry(params);
@@ -853,8 +858,13 @@ void LLRenderPass::pushGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInf
 }
 
 // static
-void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch)
+void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch, LLComputeMesh::Batch* registered)
 {
+    if (params.mComputeBatch)
+    {
+        LLComputeMesh::submitRegistered(params, false);
+        return;
+    }
     auto& mat = params.mGLTFMaterial;
 
     LLGLDisable cull_face(mat->mDoubleSided ? GL_CULL_FACE : 0);
@@ -863,7 +873,7 @@ void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params, const std::vector
 
     if (batch)
     {
-        if (!LLComputeMesh::drawBatch(*batch))
+        if (!LLComputeMesh::drawBatch(*batch, registered))
             for (auto* info : *batch) drawGeometry(*info);
     }
     else drawGeometry(params);
