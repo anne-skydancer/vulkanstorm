@@ -323,7 +323,7 @@ print('PASS: four GPU-copied/rebased refinement ranges match original color and 
 
 # Gather source commands in arbitrary order and cull against the actual view.
 batch_program=program([(0x91B9,shader_path.with_name('meshBatchC.glsl').read_text())])
-batch_buffers=(U*3)();gen(3,batch_buffers)
+batch_buffers=(U*4)();gen(4,batch_buffers)
 source_commands=[(3,1,12,0,0),(6,1,30,0,0),(0,1,42,0,0)]
 blob=C.create_string_buffer(b''.join(struct.pack('<IIIiI',*row) for row in source_commands))
 bind(SSBO,batch_buffers[0]);data(SSBO,len(blob)-1,blob,0x88E4);base(SSBO,0,batch_buffers[0])
@@ -341,8 +341,17 @@ cases=[(1,(-.5,-.5,-.5),(.5,.5,.5),True),
 for i in range(65):
     x=float(i)-32
     cases.append((i%3,(x,-.2,-.2),(x+.4,.2,.2),-1.4<=x<=1))
-payload=b''.join(struct.pack('<4I8f',slot,0,0,0,*lo,0,*hi,0) for slot,lo,hi,_ in cases)
+# Each resident slot has immutable bounds shared by every view. Give each case
+# its own slot, including cases that use identical source draw commands.
+original_commands=source_commands
+source_commands=[original_commands[slot] if slot<len(original_commands) else (0,0,0,0,0) for slot,_,_,_ in cases]
+cases=[(i if slot<len(original_commands) else 99,lo,hi,expected) for i,(slot,lo,hi,expected) in enumerate(cases)]
+blob=C.create_string_buffer(b''.join(struct.pack('<IIIiI',*row) for row in source_commands))
+bind(SSBO,batch_buffers[0]);data(SSBO,len(blob)-1,blob,0x88E4)
+payload=b''.join(struct.pack('<I',slot) for slot,_,_,_ in cases)
 blob=C.create_string_buffer(payload);bind(SSBO,batch_buffers[1]);data(SSBO,len(payload),blob,0x88E4);base(SSBO,1,batch_buffers[1])
+bounds_payload=b''.join(struct.pack('<8f',*lo,0,*hi,0) for _,lo,hi,_ in cases)
+blob=C.create_string_buffer(bounds_payload);bind(SSBO,batch_buffers[3]);data(SSBO,len(bounds_payload),blob,0x88E4);base(SSBO,3,batch_buffers[3])
 use(batch_program);uniform(location(batch_program,b'candidateCount'),len(cases));uniform(location(batch_program,b'sourceCount'),len(source_commands))
 matrix_uniform=fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))
 for translation, depth_clamp in ((0.,False),(10.,False),(0.,True),(10.,True)):
@@ -363,18 +372,30 @@ for translation, depth_clamp in ((0.,False),(10.,False),(0.,True),(10.,True)):
             expected=(count,instances if visible else 0,first,vertex,instance)
         actual=struct.unpack_from('<IIIiI',result.raw,i*20)
         assert actual==expected,('batch gather/view',translation,depth_clamp,i,actual,expected)
+# A resident bound update changes visibility without re-uploading the candidate
+# list. This also exercises slot reuse/publication independent of pass cameras.
+use(batch_program);uniform(location(batch_program,b'clipPlaneMask'),63)
+matrix=(C.c_float*16)(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)
+matrix_uniform(location(batch_program,b'clipFromBuffer'),1,0,matrix)
+changed=C.create_string_buffer(struct.pack('<8f',4,4,4,0,5,5,5,0))
+bind(SSBO,batch_buffers[3]);sub_data(SSBO,0,32,changed)
+dispatch((len(cases)+63)//64,1,1);barrier(0x200|0x40)
+bind(SSBO,batch_buffers[2]);result=C.create_string_buffer(20);read(SSBO,0,20,result)
+assert struct.unpack('<IIIiI',result.raw)==(source_commands[0][0],0,*source_commands[0][2:]), 'resident bounds update'
 # Consume gathered commands as multi-draw, with a rejected draw between visible
 # ones and page-local nonzero firstIndex. Compare full color/depth attachments.
 triangles=(-.8,-.8,-.1,-.8,-.45,.5, .1,-.8,.8,-.8,.45,.5)
 blob=C.create_string_buffer(struct.pack('<12f',*triangles));bind(0x8892,mesh[0]);data(0x8892,48,blob,0x88E4)
 fn('glVertexAttribPointer',None,U,I,U,C.c_ubyte,I,P)(0,2,0x1406,0,8,None)
 blob=C.create_string_buffer(struct.pack('<6H',0,1,2,3,4,5));bind(0x8893,mesh[1]);data(0x8893,12,blob,0x88E4)
-commands=[(3,1,3,0,0),(3,1,0,0,0)]
+commands=[(3,1,3,0,0),(3,1,0,0,0),(3,1,3,0,0)]
 blob=C.create_string_buffer(b''.join(struct.pack('<IIIiI',*row) for row in commands));bind(SSBO,batch_buffers[0]);data(SSBO,len(blob)-1,blob,0x88E4)
-payload=b''.join(struct.pack('<4I8f',slot,0,0,0,*lo,0,*hi,0) for slot,lo,hi in
-    [(1,(-1,-1,-1),(1,1,1)),(0,(4,4,4),(5,5,5)),(0,(-1,-1,-1),(1,1,1))])
+payload=struct.pack('<3I',1,2,0)
 blob=C.create_string_buffer(payload);bind(SSBO,batch_buffers[1]);data(SSBO,len(payload),blob,0x88E4)
-use(batch_program);uniform(location(batch_program,b'clipPlaneMask'),63);uniform(location(batch_program,b'candidateCount'),3);uniform(location(batch_program,b'sourceCount'),2)
+payload=b''.join(struct.pack('<8f',*lo,0,*hi,0) for lo,hi in
+    [((-1,-1,-1),(1,1,1)),((-1,-1,-1),(1,1,1)),((4,4,4),(5,5,5))])
+blob=C.create_string_buffer(payload);bind(SSBO,batch_buffers[3]);data(SSBO,len(payload),blob,0x88E4)
+use(batch_program);uniform(location(batch_program,b'clipPlaneMask'),63);uniform(location(batch_program,b'candidateCount'),3);uniform(location(batch_program,b'sourceCount'),3)
 matrix=(C.c_float*16)(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)
 matrix_uniform(location(batch_program,b'clipFromBuffer'),1,0,matrix)
 dispatch(1,1,1);barrier(0x40)
