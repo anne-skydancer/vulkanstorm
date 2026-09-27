@@ -37,6 +37,39 @@
 
 out vec4 frag_color;
 
+#ifdef GPU_PARTICLE_RENDER
+layout(pixel_interlock_ordered) in;
+// Color and virtual depth are detached from the drawing framebuffer. Writable
+// depth must be resolved back before the next non-particle alpha draw.
+layout(binding=0,rgba16f) uniform coherent image2D particle_color;
+layout(binding=1,r32f) uniform coherent image2D particle_depth;
+uniform int particle_depth_mode; // 0 disabled, 1 LEQUAL read, 2 LEQUAL write
+flat in uint particle_glow_pass;
+uniform int particle_impostor;
+uniform int particle_depth_only;
+uniform sampler2D alpha_peel_depth; // scene depth, detached from our drawing FBO
+in float particle_glow;
+// Material values are constant for each indirect draw. Loading them in the
+// single vertex module avoids native AMD's bindless SSBO failure when a fragment
+// program links multiple shader objects, and removes per-fragment buffer loads.
+flat in sampler2D particle_texture;
+flat in uint particle_blend, particle_flags;
+vec3 particleBlendFactor(uint code, vec4 source, vec4 destination)
+{
+    if(code==0u) return vec3(1);
+    if(code==1u) return vec3(0);
+    if(code==2u) return destination.rgb;
+    if(code==3u) return source.rgb;
+    if(code==4u) return vec3(1)-destination.rgb;
+    if(code==5u) return vec3(1)-source.rgb;
+    if(code==7u) return vec3(source.a);
+    return vec3(1-source.a);
+}
+void calcAtmosphericVars(vec3 pos, vec3 light_dir, float ambFactor,
+    out vec3 sunlit, out vec3 amblit, out vec3 additive, out vec3 atten);
+#endif
+
+
 #if defined(ALPHA_OIT) || defined(ALPHA_DEPTH_PEEL)
 uniform sampler2D alpha_peel_depth; // detached PPLL opaque depth or selected peel depth
 uniform int oit_mode;       // 0 normal, 1 PPLL capture, 2 peel select, 3 peel replay, 4 legacy tail
@@ -227,8 +260,19 @@ vec3 calcPointLightOrSpotLight(vec3 light_col, vec3 diffuse, vec3 v, vec3 n, vec
     return col;
 }
 
+#ifdef GPU_PARTICLE_RENDER
+vec4 shadeParticle()
+#else
 void main()
+#endif
 {
+    float alpha_cutoff=minimum_alpha;
+#ifdef GPU_PARTICLE_RENDER
+    // Match legacy custom-blend admission: invisible source-alpha fragments can
+    // still change destination color with these factors (except impostors).
+    if (particle_impostor==0 && (particle_blend&255u)!=7u && ((particle_blend>>8u)&255u)!=7u)
+        alpha_cutoff=0.;
+#endif
     mirrorClip(vary_position);
 
     vec2 frag = vary_fragcoord.xy/vary_fragcoord.z*0.5+0.5;
@@ -243,6 +287,9 @@ void main()
     float shadow = 1.0f;
 
 #ifdef HAS_SUN_SHADOW
+#ifdef GPU_PARTICLE_RENDER
+    if ((particle_flags & 1u)==0u)
+#endif
     shadow = sampleDirectionalShadow(pos.xyz, norm.xyz, frag);
 #endif
 
@@ -254,6 +301,23 @@ void main()
     vec4 diffuse_tap = diffuseLookup(vary_texcoord0.xy);
 #endif
 
+#ifdef GPU_PARTICLE_RENDER
+    vec4 diffuse_tap = texture(particle_texture,vary_texcoord0.xy);
+    if ((particle_flags & 1u)!=0u)
+    {
+        // Match the existing fullbright-alpha shader, including its texture-alpha
+        // cutoff and HUD color space. The lit path below remains shared.
+        if (diffuse_tap.a < alpha_cutoff) discard;
+        vec4 fullbright = diffuse_tap * vertex_color;
+#ifndef IS_HUD
+        fullbright.rgb = srgb_to_linear(fullbright.rgb);
+        vec3 sunlit, amblit, additive, atten;
+        calcAtmosphericVars(pos.xyz,vec3(0),1.0,sunlit,amblit,additive,atten);
+        fullbright.rgb = applySkyAndWaterFog(pos.xyz,additive,atten,fullbright).rgb;
+#endif
+        return max(fullbright,vec4(0));
+    }
+#endif
     vec4 diffuse_srgb = diffuse_tap;
 
 #ifdef FOR_IMPOSTOR
@@ -266,7 +330,7 @@ void main()
 
     // Insure we don't pollute depth with invis pixels in impostor rendering
     //
-    if (final_alpha < minimum_alpha)
+    if (final_alpha < alpha_cutoff)
     {
         discard;
     }
@@ -283,7 +347,7 @@ void main()
     float final_alpha = diffuse_linear.a;
 
 #ifdef IS_AVATAR_SKIN
-    if(final_alpha < minimum_alpha)
+    if(final_alpha < alpha_cutoff)
     {
         discard;
     }
@@ -292,7 +356,7 @@ void main()
 #ifdef USE_VERTEX_COLOR
     final_alpha *= vertex_color.a;
 
-    if (final_alpha < minimum_alpha)
+    if (final_alpha < alpha_cutoff)
     { // TODO: figure out how to get invisible faces out of
         // render batches without breaking glow
         discard;
@@ -373,6 +437,9 @@ void main()
 #endif
 
     color.rgb *= final_scale;
+#ifdef GPU_PARTICLE_RENDER
+    return max(color, vec4(0));
+#else
 #ifdef ALPHA_OIT
     vec4 oit_out = max(color, vec4(0));
     if (oit_mode == 1 && oit_append(oit_out, gl_FragCoord.z)) { discard; }
@@ -387,5 +454,40 @@ void main()
 #endif
     frag_color = oit_out;
 #endif
+#endif // GPU_PARTICLE_RENDER
 }
 
+
+#ifdef GPU_PARTICLE_RENDER
+void main()
+{
+    vec4 source;
+    if (particle_glow_pass!=0)
+    {
+        mirrorClip(vary_position);
+        waterClip(vary_position);
+        source=vec4(0,0,0,texture(particle_texture,vary_texcoord0).a*particle_glow);
+    }
+    else source=shadeParticle();
+    beginInvocationInterlockARB();
+    ivec2 pixel=ivec2(gl_FragCoord.xy);
+    if (particle_depth_mode==0 || gl_FragCoord.z<=min(imageLoad(particle_depth,pixel).r,texelFetch(alpha_peel_depth,pixel,0).r))
+    {
+        vec4 destination=imageLoad(particle_color,pixel);
+        vec4 result;
+        if (particle_glow_pass!=0)
+            result=vec4(destination.rgb,destination.a+source.a);
+        else
+        {
+            uint src=particle_blend & 255u, dst=(particle_blend>>8u) & 255u;
+            result=vec4(source.rgb*particleBlendFactor(src,source,destination)+
+                        destination.rgb*particleBlendFactor(dst,source,destination),
+                        destination.a*(1.0-source.a));
+        }
+        if (particle_depth_only==0) imageStore(particle_color,pixel,result);
+        if (particle_depth_mode==2 && particle_glow_pass==0)
+            imageStore(particle_depth,pixel,vec4(gl_FragCoord.z));
+    }
+    endInvocationInterlockARB();
+}
+#endif

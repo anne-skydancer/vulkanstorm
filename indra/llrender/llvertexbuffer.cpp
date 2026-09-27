@@ -1765,6 +1765,7 @@ bool LLVertexBuffer::getClothWeightStrider(LLStrider<LLVector4a>& strider, U32 i
 // Set for rendering
 void LLVertexBuffer::setBuffer()
 {
+    if (mBeforeBind) mBeforeBind();
     STOP_GLERROR;
 
     if (mMapped)
@@ -2023,7 +2024,6 @@ void LLVertexBuffer::setIndexData(const U32* data, U32 offset, U32 count)
     }
     flush_vbo(GL_ELEMENT_ARRAY_BUFFER, offset * sizeof(U32), (offset + count) * sizeof(U32) - 1, (U8*)data, mMappedIndexData);
 }
-
 
 
 

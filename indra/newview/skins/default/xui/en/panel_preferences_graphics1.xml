@@ -1836,7 +1836,7 @@ If you do not understand the distinction then leave this control alone."
          name="PPLL"/>
         <radio_item
          height="20"
-         label="Depth Peeling (Windows/Linux/macOS, OpenGL 4.1+)"
+         label="Depth Peeling"
          layout="topleft"
          left_delta="0"
          top_pad="2"

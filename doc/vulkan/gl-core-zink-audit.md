@@ -1,5 +1,13 @@
 # OpenGL Core modernization and Mesa/Zink audit
 
+> Current contract (2026-09-27 clarification): the Windows/Linux viewer baseline
+> remains **OpenGL 4.3 Core**. The advanced resident particle path uses OpenGL
+> 4.5 / GLSL 4.50 plus interlock, bindless textures, shader draw parameters and
+> indirect draw counts **when available**. Missing advanced capabilities select
+> CPU simulation/ordering/submission automatically, without a user toggle or
+> viewer startup rejection. Supported systems use the GPU path; they do not run
+> duplicate CPU simulation. Particle rendering remains outside PPLL/depth peeling.
+
 > Current implementation contract: Windows/Linux OpenGL **>=4.3 Core**.
 > Both OIT paths remain for now. Depth peeling will be deprecated before it is
 > retired; PPLL is the long-term sole OIT target. Its current 4.4-dependent calls

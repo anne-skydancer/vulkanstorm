@@ -186,6 +186,7 @@
 #include "llviewerstats.h"
 #include "llvoavatarself.h"
 #include "llvopartgroup.h"
+#include "llparticleviewer.h"
 #include "llvovolume.h"
 #include "llworld.h"
 #include "llworldmapview.h"
@@ -2984,6 +2985,12 @@ void LLViewerWindow::drawDebugText()
 
 void LLViewerWindow::draw()
 {
+#if LL_RELEASE_WITH_DEBUG_INFO
+    // Process-local offscreen qualification, never a rendering preference.
+    if (LLStartUp::getStartupState() == STATE_LOGIN_WAIT)
+        LLParticleViewer::runDevelopmentTest();
+#endif
+
 
 //#if LL_DEBUG
     LLView::sIsDrawing = true;
@@ -7652,7 +7659,11 @@ void LLPickInfo::fetchResults()
     { //search for closest particle to click origin out to intersection point
         S32 part_face = -1;
 
-        LLVOPartGroup* group = gPipeline.lineSegmentIntersectParticle(start, particle_end, NULL, &part_face);
+        if (LLParticleViewer::active())
+            LLParticleViewer::pick(LLVector3(start.getF32ptr()), LLVector3(particle_end.getF32ptr()),
+                mParticleOwnerID, mParticleSourceID);
+        LLVOPartGroup* group = LLParticleViewer::active() ? nullptr :
+            gPipeline.lineSegmentIntersectParticle(start, particle_end, NULL, &part_face);
         if (group)
         {
             mParticleOwnerID = group->getPartOwner(part_face);

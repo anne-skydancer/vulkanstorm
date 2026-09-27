@@ -569,7 +569,18 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     S32 major_version = gGLManager.mGLSLVersionMajor;
     S32 minor_version = gGLManager.mGLSLVersionMinor;
 
-    if (major_version == 1 && minor_version < 30)
+    const bool gpu_particle = defines && defines->count("GPU_PARTICLE_RENDER");
+    if (gpu_particle)
+    {
+        // Only the capability-gated particle program needs GLSL 4.50. Ordinary
+        // viewer shaders and the viewer's 4.3 Core baseline remain unchanged.
+        shader_code_text[shader_code_count++] = strdup("#version 450 core\n");
+        shader_code_text[shader_code_count++] = strdup("#extension GL_ARB_bindless_texture : require\n");
+        shader_code_text[shader_code_count++] = strdup("#extension GL_ARB_shader_draw_parameters : require\n");
+        if (type == GL_FRAGMENT_SHADER)
+            shader_code_text[shader_code_count++] = strdup("#extension GL_ARB_fragment_shader_interlock : require\n");
+    }
+    else if (major_version == 1 && minor_version < 30)
     {
         llassert(false); // GL 3.1 or later required
     }
@@ -657,13 +668,13 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     // fragment shaders on GL >= 4.4, where SSBO + image load/store + atomic counters +
     // glClearTexImage are all core. On older contexts ALPHA_OIT stays undefined and the alpha
     // shaders compile the legacy sorted-alpha path (the #extension lines above only warn).
-    if (type == GL_FRAGMENT_SHADER && gGLManager.mGLVersion >= 4.1f)
+    if (!gpu_particle && type == GL_FRAGMENT_SHADER && gGLManager.mGLVersion >= 4.1f)
     {
         extra_code_text[extra_code_count++] = strdup("#define ALPHA_DEPTH_PEEL 1\n");
     }
 
 #if LL_WINDOWS || LL_LINUX
-    if (type == GL_FRAGMENT_SHADER && gGLManager.mGLVersion >= 4.4f)
+    if (!gpu_particle && type == GL_FRAGMENT_SHADER && gGLManager.mGLVersion >= 4.4f)
     {
         extra_code_text[extra_code_count++] = strdup("#define ALPHA_OIT 1\n");
     }

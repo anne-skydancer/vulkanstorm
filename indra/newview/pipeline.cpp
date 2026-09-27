@@ -10434,7 +10434,12 @@ void LLPipeline::renderDeferredLighting()
         LLGLDisable blend(GL_BLEND);
 
         pushRenderTypeMask();
+        // Resident particles are submitted here, after CPU particle groups have
+        // been removed. Preserve the caller's particle visibility bits for the
+        // alpha consumer; intersecting the mask must not silently disable them.
         andRenderTypeMask(LLPipeline::RENDER_TYPE_ALPHA,
+                          LLPipeline::RENDER_TYPE_PARTICLES,
+                          LLPipeline::RENDER_TYPE_HUD_PARTICLES,
                           LLPipeline::RENDER_TYPE_ALPHA_PRE_WATER,
                           LLPipeline::RENDER_TYPE_ALPHA_POST_WATER,
                           LLPipeline::RENDER_TYPE_FULLBRIGHT,

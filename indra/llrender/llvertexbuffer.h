@@ -202,6 +202,11 @@ public:
     //      - This buffer has sufficient attributes within it to satisfy the needs of the currently bound shader
     void    setBuffer();
 
+    // A deferred GPU producer may batch work until its first vertex consumer.
+    // It must retain this buffer and clear the callback on completion/teardown.
+    // The callback must restore all GL state it changes.
+    void setBeforeBind(void (*callback)()) { mBeforeBind = callback; }
+
     // Only call each getVertexPointer, etc, once before calling unmapBuffer()
     // call unmapBuffer() after calls to getXXXStrider() before any calls to setBuffer()
     // example:
@@ -260,6 +265,9 @@ public:
     U64 getCPUVertexBytes() const;
     U64 getCPUIndexBytes() const;
     U32 getSize() const                     { return mSize; }
+    // Compute writers must flush pending uploads first and provide the barriers
+    // for subsequent consumers. GPU writes do not update the CPU shadow.
+    U32 getGLBuffer() const                 { return mGLBuffer; }
     U32 getIndicesSize() const              { return mIndicesSize; }
     U8* getMappedData() const               { return mMappedData; }
     U8* getMappedIndices() const            { return mMappedIndexData; }
@@ -292,6 +300,7 @@ public:
     void clone(LLVertexBuffer& target) const;
 
 protected:
+    void (*mBeforeBind)() = nullptr;
     U32     mGLBuffer = 0;      // GL VBO handle
     U32     mGLIndices = 0;     // GL IBO handle
     U32     mNumVerts = 0;      // Number of vertices allocated

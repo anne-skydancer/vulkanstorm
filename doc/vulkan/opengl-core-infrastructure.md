@@ -1,5 +1,13 @@
 # OpenGL Core infrastructure: first implementation milestone
 
+> Current contract (2026-09-27 clarification): the Windows/Linux viewer baseline
+> remains **OpenGL 4.3 Core**. The advanced resident particle path uses OpenGL
+> 4.5 / GLSL 4.50 plus interlock, bindless textures, shader draw parameters and
+> indirect draw counts **when available**. Missing advanced capabilities select
+> CPU simulation/ordering/submission automatically, without a user toggle or
+> viewer startup rejection. Supported systems use the GPU path; they do not run
+> duplicate CPU simulation. Particle rendering remains outside PPLL/depth peeling.
+
 Branch: `codex/opengl-core-modernization`, based on local `vkstorm-devel`
 at `4a6056aa15`. The earlier audits describe `master` at `50871c432f`;
 their source observations are historical references, not updated line numbers
