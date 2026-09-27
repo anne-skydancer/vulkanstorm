@@ -160,11 +160,11 @@ bool publish()
     std::vector<Source> snapshots(owners.size());
     std::vector<WindVelocity> winds;
     std::map<LLViewerRegion*, U32> windOffsets;
-    std::vector<Region> regions;
+    std::vector<LLParticlePipeline::Region> regions;
     auto appendRegion = [&](LLViewerRegion* region)
     {
         if (!region || windOffsets.count(region)) return;
-        Region r{};
+        LLParticlePipeline::Region r{};
         const LLVector3 origin=region->getOriginAgent();
         r.originSize[0]=origin[0]; r.originSize[1]=origin[1];
         r.originSize[2]=r.originSize[3]=region->getWidth();
