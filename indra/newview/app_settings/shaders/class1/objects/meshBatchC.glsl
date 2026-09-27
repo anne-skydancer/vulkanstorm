@@ -7,13 +7,15 @@ layout(std430, binding=0) readonly buffer Source { Command source[]; };
 layout(std430, binding=1) readonly buffer Candidates { uint candidates[]; };
 layout(std430, binding=2) writeonly buffer Output { Command commands[]; };
 layout(std430, binding=3) readonly buffer ResidentBounds { Bounds bounds[]; };
+struct Transform { mat4 position; vec4 normal[3]; };
+layout(std430, binding=4) readonly buffer ResidentTransforms { Transform transforms[]; };
 uniform uint candidateCount;
 uniform uint sourceCount;
 uniform mat4 clipFromBuffer;
 // Depth-clamped shadow passes clip only against the four lateral planes.
 uniform uint clipPlaneMask;
 
-bool visible(Bounds c)
+bool visible(Bounds c, mat4 clipFromLocal)
 {
     if (any(isnan(c.minimum.xyz)) || any(isinf(c.minimum.xyz)) ||
         any(isnan(c.maximum.xyz)) || any(isinf(c.maximum.xyz)) ||
@@ -24,7 +26,7 @@ bool visible(Bounds c)
         vec3 p = vec3((corner&1u)==0u ? c.minimum.x : c.maximum.x,
                       (corner&2u)==0u ? c.minimum.y : c.maximum.y,
                       (corner&4u)==0u ? c.minimum.z : c.maximum.z);
-        vec4 clip = clipFromBuffer * vec4(p, 1.0);
+        vec4 clip = clipFromLocal * vec4(p, 1.0);
         if (any(isnan(clip)) || any(isinf(clip))) return true;
         // Conservative epsilon at clip boundaries avoids precision flicker.
         float w = clip.w + 1e-5 * max(1.0, abs(clip.w));
@@ -47,6 +49,6 @@ void main()
         return;
     }
     Command command=source[slot];
-    if (!visible(bounds[slot])) command.instances=0u;
+    if (!visible(bounds[slot], clipFromBuffer * transforms[slot].position)) command.instances=0u;
     commands[i]=command;
 }

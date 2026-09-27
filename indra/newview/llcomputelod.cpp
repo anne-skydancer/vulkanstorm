@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "llcomputemesh.h"
 #include "llmeshranges.h"
+#include "llshadermgr.h"
 #include "llvovolume.h"
 #include "llspatialpartition.h"
 #include "llviewercontrol.h"
@@ -71,6 +72,9 @@ std::array<Entry, CAPACITY> entries;
 struct Bounds { F32 minimum[4] = {}, maximum[4] = {}; };
 static_assert(sizeof(Bounds) == 32, "std430 bounds layout");
 std::array<Bounds, CAPACITY> resident_bounds;
+struct Transform { F32 position[16] = {}, normal[12] = {}; };
+static_assert(sizeof(Transform) == 7*16, "texture buffer transform layout");
+std::array<Transform, CAPACITY> resident_transforms;
 std::array<LLComputeMesh::Resident*, CAPACITY> owners = {};
 std::vector<U32> available;
 U32 extent = 0, generation = 1;
@@ -82,7 +86,8 @@ F32 lod_policy[4] = {};
 U64 resident_bytes = 0, resource_epoch = 0;
 std::vector<std::weak_ptr<LLComputeMesh::Page>> pages;
 void cancelPreparation(LLVOVolume& object);
-GLuint program = 0, buffers[6] = {};
+GLuint program = 0, buffers[7] = {};
+GLuint transform_texture = 0;
 GLuint demand_readback = 0;
 GLsync demand_fence = nullptr;
 LLTimer demand_timer;
@@ -181,7 +186,7 @@ bool initialize()
         return false;
     }
     Bindings saved;
-    glGenBuffers(6, buffers);
+    glGenBuffers(7, buffers);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[0]);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(entries), entries.data(), GL_DYNAMIC_DRAW);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[1]);
@@ -194,6 +199,14 @@ bool initialize()
     glBufferData(GL_SHADER_STORAGE_BUFFER, CAPACITY * sizeof(U32), nullptr, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[5]);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(resident_bounds), resident_bounds.data(), GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[6]);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(resident_transforms), resident_transforms.data(), GL_DYNAMIC_DRAW);
+    GLint old_texture = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_BUFFER, &old_texture);
+    glGenTextures(1, &transform_texture);
+    glBindTexture(GL_TEXTURE_BUFFER, transform_texture);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, buffers[6]);
+    glBindTexture(GL_TEXTURE_BUFFER, old_texture);
     glGenBuffers(1, &demand_readback);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, demand_readback);
     glBufferData(GL_SHADER_STORAGE_BUFFER, CAPACITY * sizeof(U32), nullptr, GL_STREAM_READ);
@@ -201,8 +214,9 @@ bool initialize()
     {
         glDeleteProgram(linked);
         glDeleteBuffers(1, &demand_readback); demand_readback = 0;
-        glDeleteBuffers(6, buffers);
-        buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = buffers[5] = 0;
+        glDeleteTextures(1, &transform_texture); transform_texture = 0;
+        glDeleteBuffers(7, buffers);
+        buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = buffers[5] = buffers[6] = 0;
         return false;
     }
     program = linked;
@@ -214,6 +228,48 @@ bool initialize()
     failed = false;
     LL_INFOS("ComputeLOD") << "Resident four-level indirect LOD initialized; budget_mib=" << byteBudget()/1048576 << " capacity=" << CAPACITY << LL_ENDL;
     return true;
+}
+
+// Scoped raw TBO binding: LLTexUnit does not track GL_TEXTURE_BUFFER. Restore
+// both the actual binding and active unit, and leave ordinary draws disabled.
+struct TransformBinding
+{
+    LLGLSLShader* shader = nullptr;
+    GLint active = 0, previous = 0;
+    S32 channel = -1;
+    bool ready = true;
+    explicit TransformBinding(bool required)
+    {
+        if (!required) return;
+        shader = LLGLSLShader::sCurBoundShaderPtr;
+        channel = shader ? shader->getTextureChannel(LLShaderMgr::MESH_TRANSFORMS) : -1;
+        ready = channel >= 0 && transform_texture != 0;
+        if (!ready) { shader = nullptr; return; }
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
+        glActiveTexture(GL_TEXTURE0 + channel);
+        glGetIntegerv(GL_TEXTURE_BINDING_BUFFER, &previous);
+        glBindTexture(GL_TEXTURE_BUFFER, transform_texture);
+        glActiveTexture(active);
+        shader->uniform1i(LLShaderMgr::MESH_TRANSFORM_ENABLED, 1);
+    }
+    ~TransformBinding()
+    {
+        if (!shader) return;
+        shader->uniform1i(LLShaderMgr::MESH_TRANSFORM_ENABLED, 0);
+        glActiveTexture(GL_TEXTURE0 + channel);
+        glBindTexture(GL_TEXTURE_BUFFER, previous);
+        glActiveTexture(active);
+    }
+};
+
+Transform objectTransform(const LLVOVolume& object)
+{
+    Transform transform;
+    std::memcpy(transform.position, object.getRelativeXform().mMatrix, sizeof(transform.position));
+    const auto& normal = object.getRelativeXformInvTrans();
+    for (U32 column=0; column<3; ++column)
+        for (U32 row=0; row<3; ++row) transform.normal[column*4+row] = normal.mMatrix[column][row];
+    return transform;
 }
 
 bool initializeBatch()
@@ -354,7 +410,11 @@ bool dispatch()
             const U64 bounds_bytes = (end - dirty_begin) * sizeof(Bounds);
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, dirty_begin * sizeof(Bounds), bounds_bytes,
                             resident_bounds.data() + dirty_begin);
-            uploaded += bytes + bounds_bytes;
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[6]);
+            const U64 transform_bytes = (end - dirty_begin) * sizeof(Transform);
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, dirty_begin * sizeof(Transform), transform_bytes,
+                            resident_transforms.data() + dirty_begin);
+            uploaded += bytes + bounds_bytes + transform_bytes;
         }
         dirty_begin = CAPACITY; dirty_end = 0;
     }
@@ -476,13 +536,55 @@ void LLComputeMesh::invalidateLOD(LLVOVolume& object)
     }
 }
 
+bool LLComputeMesh::canUpdateTransform(LLVOVolume& object)
+{
+    const auto& owner = object.mComputeLOD;
+    if (!owner || !eligible(object) || owner->faces.empty() ||
+        object.mDrawable->isState(LLDrawable::RIGGED | LLDrawable::REBUILD_VOLUME |
+                                 LLDrawable::REBUILD_TCOORD | LLDrawable::REBUILD_COLOR)) return false;
+    for (const auto& record : owner->faces)
+        if (!record || !record->valid || !record->page || record->generation != generation) return false;
+    // Planar texgen and legacy bump inputs can depend on scale/normal transforms.
+    // Preserve their established conversion until those inputs have GPU owners.
+    for (S32 face=0; face<object.getNumTEs(); ++face)
+    {
+        const auto* te = object.getTE(face);
+        if (!te || te->getTexGen() != LLTextureEntry::TEX_GEN_DEFAULT || te->getBumpmap()) return false;
+    }
+    return true;
+}
+
+void LLComputeMesh::updateTransform(LLVOVolume& object)
+{
+    if (!canUpdateTransform(object)) return;
+    const Transform transform = objectTransform(object);
+    const LLVector3 center(object.mDrawable->getPositionGroup().getF32ptr());
+    const auto* volume = object.getVolume();
+    if (!volume) return;
+    const F32 radius = volume->mLODScaleBias.scaledVec(object.getScale()).length();
+    for (const auto& record : object.mComputeLOD->faces)
+    {
+        auto& previous = resident_transforms[record->slot];
+        auto& entry = entries[record->slot];
+        if (std::memcmp(&previous, &transform, sizeof(transform)) == 0 &&
+            std::memcmp(entry.centerRadius, center.mV, 3*sizeof(F32)) == 0 &&
+            entry.centerRadius[3] == radius) continue;
+        previous = transform;
+        std::copy(center.mV, center.mV+3, entry.centerRadius);
+        entry.centerRadius[3] = radius;
+        // Vertices and local bounds remain untouched. Each GPU view transforms
+        // the local bounds with this same matrix when gathering commands.
+        dirty(record->slot);
+    }
+}
+
 bool LLComputeMesh::ownsLOD(LLVOVolume& object)
 {
     if (!object.mComputeLOD) return false;
     // Let normal CPU LOD selection catch up while refinement lacks capacity
     // or is unsupported. Existing valid ranges can still draw until replaced.
     if (object.mComputeLOD->blocked || object.mComputeLOD->resource_waiting) return false;
-    if (!eligible(object) || object.mDrawable->isState(LLDrawable::REBUILD_ALL))
+    if (!eligible(object) || (object.mDrawable->isState(LLDrawable::REBUILD_ALL) && !canUpdateTransform(object)))
     {
         invalidateLOD(object);
         return false;
@@ -774,6 +876,14 @@ BuildResult advanceJob(BuildJob& job)
                 staged->vertex_offset = range->vertex;
                 staged->index_offset = range->index;
                 staged->page_range = std::move(range);
+                if (record->slot == ~0u)
+                {
+                    if (available.empty() && extent == CAPACITY) return BuildResult::RESOURCE_LIMIT;
+                    record->slot = available.empty() ? extent++ : available.back();
+                    if (!available.empty()) available.pop_back();
+                    record->generation = generation;
+                    owners[record->slot] = record.get();
+                }
             }
             else
             {
@@ -814,22 +924,12 @@ BuildResult advanceJob(BuildJob& job)
             if (!vf.mNumVertices) continue;
             if (!rigged)
             {
-                // Union every resident LOD's transformed bounds, not just the
-                // current CPU drawable: a coarser level may be smaller.
-                LLMatrix4a transform;
-                transform.loadu(object->getRelativeXform());
-                for (U32 corner=0; corner<8; ++corner)
+                // Local bounds stay immutable with geometry. Publication derives
+                // buffer-space bounds from the same transform used by the shader.
+                for (U32 axis=0; axis<3; ++axis)
                 {
-                    LLVector4a local, transformed;
-                    local.set(vf.mExtents[(corner>>0)&1].getF32ptr()[0],
-                              vf.mExtents[(corner>>1)&1].getF32ptr()[1],
-                              vf.mExtents[(corner>>2)&1].getF32ptr()[2]);
-                    transform.affineTransform(local, transformed);
-                    for (U32 axis=0; axis<3; ++axis)
-                    {
-                        staged.minimum[axis] = llmin(staged.minimum[axis], transformed.getF32ptr()[axis]);
-                        staged.maximum[axis] = llmax(staged.maximum[axis], transformed.getF32ptr()[axis]);
-                    }
+                    staged.minimum[axis] = llmin(staged.minimum[axis], vf.mExtents[0].getF32ptr()[axis]);
+                    staged.maximum[axis] = llmax(staged.maximum[axis], vf.mExtents[1].getF32ptr()[axis]);
                 }
             }
             const bool reuse = record->valid && (record->available_lods & (1u<<lod)) &&
@@ -870,8 +970,11 @@ BuildResult advanceJob(BuildJob& job)
                 temporary.setVertexBuffer(staged.buffer);
                 // The established conversion applies bind shape and inverse-transpose
                 // exactly once for rigged faces and copies this LOD's skin weights.
-                if (!temporary.getGeometryVolume(*source, face_index, object->getRelativeXform(),
-                        object->getRelativeXformInvTrans(), vertex_offset, true)) return BuildResult::DROP;
+                if (!temporary.getGeometryVolume(*source, face_index,
+                        rigged ? object->getRelativeXform() : LLMatrix4(),
+                        rigged ? object->getRelativeXformInvTrans() : LLMatrix3(),
+                        vertex_offset, true, false, false,
+                        rigged ? ~0u : record->slot)) return BuildResult::DROP;
 
             }
             entry.ranges[lod][0] = vf.mNumIndices;
@@ -924,8 +1027,12 @@ BuildResult advanceJob(BuildJob& job)
             owners[record->slot] = record.get();
         }
         entries[record->slot] = staged.entry;
-        std::copy(staged.minimum, staged.minimum+4, resident_bounds[record->slot].minimum);
-        std::copy(staged.maximum, staged.maximum+4, resident_bounds[record->slot].maximum);
+        if (!rigged)
+        {
+            resident_transforms[record->slot] = objectTransform(*object);
+            std::copy(staged.minimum, staged.minimum+4, resident_bounds[record->slot].minimum);
+            std::copy(staged.maximum, staged.maximum+4, resident_bounds[record->slot].maximum);
+        }
         dirty(record->slot);
         record->available_lods = job.ready_mask;
         record->failed_lods = job.failed_mask;
@@ -1115,6 +1222,8 @@ bool LLComputeMesh::drawLOD(LLDrawInfo& info)
         (!record->avatar->object->isControlAvatar() && !record->avatar->object->isFullyLoaded()) ||
         info.mAvatar != record->avatar->object || info.getSkinHash() != record->skin_hash)) return false;
     if (!dispatch()) return false;
+    TransformBinding transform(record->page != nullptr);
+    if (!transform.ready) return false;
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buffers[1]);
     record->buffer->setBuffer();
     record->buffer->drawIndirect(LLRender::TRIANGLES, record->slot, 1);
@@ -1158,6 +1267,7 @@ bool LLComputeMesh::drawBatch(const std::vector<LLDrawInfo*>& batch)
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, batch_buffers[0]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, batch_buffers[1]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, buffers[5]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, buffers[6]);
         glUniform1ui(batch_count, U32(batch.size()));
         glUniform1ui(batch_source_count, extent);
         glUniform1ui(batch_clip_planes, glIsEnabled(GL_DEPTH_CLAMP) ? 15u : 63u);
@@ -1165,6 +1275,8 @@ bool LLComputeMesh::drawBatch(const std::vector<LLDrawInfo*>& batch)
         glDispatchCompute((U32(batch.size())+63)/64, 1, 1);
         glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
     }
+    TransformBinding transform(true);
+    if (!transform.ready) return false;
     GLint indirect = 0;
     glGetIntegerv(GL_DRAW_INDIRECT_BUFFER_BINDING, &indirect);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, batch_buffers[1]);
@@ -1263,9 +1375,11 @@ void LLComputeMesh::reloadLOD()
     demand_fence = nullptr;
     if (demand_readback) glDeleteBuffers(1, &demand_readback);
     demand_readback = 0;
-    if (buffers[0]) glDeleteBuffers(6, buffers);
+    if (transform_texture) glDeleteTextures(1, &transform_texture);
+    transform_texture = 0;
+    if (buffers[0]) glDeleteBuffers(7, buffers);
     if (program) glDeleteProgram(program);
-    program = buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = buffers[5] = 0;
+    program = buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = buffers[5] = buffers[6] = 0;
     failed = false;
     dispatched_frame = ~0u;
 }
@@ -1296,6 +1410,7 @@ void LLComputeMesh::destroyLOD()
     owners.fill(nullptr);
     entries.fill(Entry{});
     resident_bounds.fill(Bounds{});
+    resident_transforms.fill(Transform{});
     available.clear();
     extent = 0;
     ++generation;
@@ -1303,9 +1418,11 @@ void LLComputeMesh::destroyLOD()
     demand_fence = nullptr;
     if (demand_readback) glDeleteBuffers(1, &demand_readback);
     demand_readback = 0;
-    if (buffers[0]) glDeleteBuffers(6, buffers);
+    if (transform_texture) glDeleteTextures(1, &transform_texture);
+    transform_texture = 0;
+    if (buffers[0]) glDeleteBuffers(7, buffers);
     if (program) glDeleteProgram(program);
-    program = buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = buffers[5] = 0;
+    program = buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = buffers[5] = buffers[6] = 0;
     failed = false;
     dirty_begin = CAPACITY; dirty_end = 0;
     dispatched_frame = ~0u;

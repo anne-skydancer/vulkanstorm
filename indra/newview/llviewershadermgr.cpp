@@ -1427,6 +1427,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         gDeferredPBROpaqueProgram.mShaderFiles.clear();
         gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueV.glsl", GL_VERTEX_SHADER));
+        gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair("objects/meshTransformV.glsl", GL_VERTEX_SHADER));
         gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueF.glsl", GL_FRAGMENT_SHADER));
         gDeferredPBROpaqueProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gDeferredPBROpaqueProgram.clearPermutations();
@@ -2290,6 +2291,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowProgram.mName = "Deferred Shadow Shader";
         gDeferredShadowProgram.mShaderFiles.clear();
         gDeferredShadowProgram.mShaderFiles.push_back(make_pair("deferred/shadowV.glsl", GL_VERTEX_SHADER));
+        gDeferredShadowProgram.mShaderFiles.push_back(make_pair("objects/meshTransformV.glsl", GL_VERTEX_SHADER));
         gDeferredShadowProgram.mShaderFiles.push_back(make_pair("deferred/shadowF.glsl", GL_FRAGMENT_SHADER));
         gDeferredShadowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gDeferredShadowProgram.mRiggedVariant = &gDeferredSkinnedShadowProgram;
