@@ -29,6 +29,7 @@
 
 #include "llmutex.h"
 #include "llpointer.h"
+#include "lltexturedeliverybudget.h"
 #include "llstring.h"
 #include "lltrace.h"
 #include "lluuid.h"
@@ -207,6 +208,9 @@ protected:
     /*virtual*/ ~LLImageRaw();
 
 public:
+    // Set before publishing decoded data; last owner returns delivery capacity.
+    LLTextureDeliveryBudget::Lease mDeliveryReservation;
+
     LLImageRaw();
     LLImageRaw(U16 width, U16 height, S8 components);
     LLImageRaw(const U8* data, U16 width, U16 height, S8 components);

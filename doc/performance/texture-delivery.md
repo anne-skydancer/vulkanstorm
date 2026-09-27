@@ -1,0 +1,157 @@
+# Bounded, asynchronous texture delivery
+
+Release integration of `502f31a9f8` and `45dd2f8b98` from `vkstorm-devel`.
+Windows/Linux retain the OpenGL 4.3 Core contract.
+
+## Purpose
+
+Reduce the interval between a texture becoming necessary and its first usable
+GPU image becoming available. Priority depends on visibility and image residency,
+**never on pixel colour**. Grey, white, black or other placeholders are symptoms;
+intentionally grey textures have no special treatment.
+
+The investigation found thousands of decoded textures waiting for main-thread GL
+creation. More decode concurrency alone can enlarge that backlog. The changes
+coordinate decode admission with downstream delivery and move upload preparation
+and submission onto the existing single shared-context GL worker.
+
+## Admission and memory
+
+`LLTextureDeliveryBudget` provides a shared **2048 MiB ceiling** for texture-fetch
+outputs, decodes already admitted, and preparation for their uploads. Ordinary
+work can occupy three quarters of available capacity; the remaining quarter is
+reserved for first usable images needed on screen. A request waiting twenty
+seconds can use this reserve to avoid indefinite starvation.
+
+Reservations precede decoder submission. They conservatively cover two primary
+images at the formatted image's full dimensions rounded up to powers of two,
+plus an auxiliary channel when
+requested. This accounts for the decoder's initial full-size output allocation
+and a separate resized upload image. After a successful decode, before publishing
+the result, the reservation shrinks to two primary images at the decoded size
+(with power-of-two padding retained) plus actual auxiliary storage. A 2048-square
+RGBA admission therefore drops from 32 MiB to 0.5 MiB if decoded at 256 square.
+The decoder retains the full allowance while running. Failed/incomplete decodes
+do not trim it early, and shrinking cannot grow or resurrect a released lease.
+Fast-cache reads reserve their bounded 16-by-16 RGBA entry plus preparation
+before reading. New reservations fail without blocking; the existing fetch state
+machine retries them without marking an asset missing.
+
+Raw outputs and their scaled derivatives share ownership of the reservation.
+Unused decode allowance returns at decode completion; the remaining output and
+preparation capacity returns when the final owner releases it, including pending cache writes
+and uploads. An obsolete result is released by the fetch worker before it seeks a
+reservation for another decode. Otherwise old results could pin the capacity
+needed to replace themselves.
+
+Upload-preparation allowance is still retained with the output until its final
+owner releases it; separate stage ownership is not implemented here.
+
+When available RAM falls, new admission uses a lower effective ceiling, leaving
+512 MiB of headroom and using half of additional available memory. The effective
+ceiling has a 256 MiB floor so a large RGBA image with auxiliary data can still make progress.
+Existing reservations are never revoked. This is admission control, not a promise
+to keep total process memory below 2048 MiB. Resident textures, saved raw-image
+caches, encoded/network data, decoder/OpenCL scratch memory and driver-private
+allocations remain outside this budget. Caller-created local/raw-readback images
+already exist before delivery; their upload preparation receives a reservation
+at dispatch, but their original allocations are not retrospectively capped.
+
+The decoder remains this fork's OpenJPEG configuration, including its automatic
+OpenCL selection and CPU fallback. No decoder replacement or fixed GPU percentage
+split is introduced: decode admission yields when delivery cannot drain its work.
+
+## Scheduling and parallel work
+
+All fetched images enter one main-thread delivery queue, including images formerly
+posted directly to the background worker. Dispatch uses these tiers:
+
+1. Visible images with no usable GL image, and requests aged twenty seconds.
+2. Visible resolution upgrades.
+3. Other work.
+
+Age orders work within each tier. Visibility reuses the existing face-demand
+traversal instead of rescanning faces in the comparator. Boosted UI/avatar assets
+and faceless demand, including GPU particles, retain timely delivery. This is the
+viewer's visibility estimate, not a new pixel-level occlusion pass.
+
+Before dispatch, an upload is omitted if the displayed image already satisfies
+current demand. Ordinary surface images that became unnecessarily detailed are
+resized into a separate raw image on the worker before GL allocation. Sculpt,
+auxiliary/callback data and unsupported two-channel CPU scaling retain their
+original raw representation. The shared fetch result is never resized in place.
+
+The worker prepares and uploads an isolated `LLImageGL`, computes the existing
+alpha/picking mask, and generates GPU mipmaps through the existing GL path. It
+does not mutate the displayed image. The pending object is excluded from global
+texture-option traversal and rendering bind statistics while it belongs to the
+worker. Preparation and GL submission are serialized on one worker but overlap
+network fetching, the decode pool and main-thread rendering. This first version
+uses the raw source as staging, not an additional persistent-mapped PBO ring.
+
+There are at most sixteen outstanding uploads. Submission pauses when outstanding
+source/preparation bytes reach 64 MiB; one admitted image may cross that threshold.
+This smaller window bounds driver work independently of the 2048 MiB decode
+backlog. Queue saturation postpones work instead of forcing a synchronous upload.
+The existing `RenderGLMultiThreadedTextures` diagnostic setting now defaults on in both settings XML and Windows/Linux feature
+tables;
+unavailable shared contexts retain the main-thread path.
+
+## Completion and correctness
+
+The worker inserts a fence after upload commands and flushes its context. It then
+publishes CPU completion with release/acquire synchronization. The render thread
+polls the fence with a zero timeout. An unfinished upload leaves the displayed
+image intact. Completed uploads can pass an unfinished predecessor.
+
+Once ready, image storage, dimensions, format and picking mask are adopted together
+on the render thread. The original `LLImageGL` identity remains stable and its
+content revision increments, invalidating GPU-particle bindless snapshots. The
+pending object receives the old image and retires it through the existing delayed
+texture deletion path. Demand is checked again at completion to avoid replacing an
+already sufficient image with an obsolete upgrade.
+
+Failure retains the previous image and releases pending ownership through normal
+cleanup. Texture completion is serviced before teleport's early return so completed
+jobs cannot pin memory throughout a transition. Shutdown drains workers/fences
+before releasing pending images, without scheduling sculpt rebuilds after pipeline
+teardown. Normal frame completion never waits for an unsignaled fence.
+
+The fence/poll protocol follows the Khronos references for
+[glFenceSync](https://registry.khronos.org/OpenGL-Refpages/gl4/html/glFenceSync.xhtml)
+and [glClientWaitSync](https://registry.khronos.org/OpenGL-Refpages/gl4/html/glClientWaitSync.xhtml).
+Driver upload calls themselves may still block the upload worker or contend with
+rendering; asynchronous submission does not guarantee independent hardware engines.
+
+## Retention and release scope
+
+The distance-band policy already merged in PR #79 is preserved; see
+[avatar texture retention](avatar-texture-retention.md). Asynchronous completion
+also rejects a poorer replacement of an existing sharper image. Deliberate
+retention-aware downscaling remains a separate path.
+
+This integration excludes the development GPU readback self-test, periodic
+focus/frame/memory profiling, and unused admission diagnostic counters. It does
+not import other development rendering hooks or change CI publication, decoder
+selection, build channels, or global texture discard bias. The release-hook
+checker rejects the texture self-test and profiling log categories as well.
+
+## CPU scope and validation
+
+Fetch scheduling, admission, decode fallback, raw resizing, alpha/picking-mask
+preparation, upload submission, callbacks and publication still involve CPU work.
+Moving preparation onto the worker reduces main-thread work; it does not convert
+these algorithms into GPU compute kernels.
+
+Run `python scripts/tests/test_texture_publication.py` to compile and exercise
+production admission, reservation trimming, discard selection, publication and
+image adoption against a deterministic GL fixture. It covers pending/ready fences,
+out-of-order completion, failures, stale/poorer replacements, narrow images,
+metadata and picking masks, shutdown, and zero-timeout normal-frame polling.
+It also runs the budget concurrency and shared-ownership tests.
+
+Run `python scripts/tests/test_avatar_texture_retention.py` for the existing
+retention policy and `python scripts/tests/check_release_hooks.py` for release
+policy. These tests passed on Windows/MSVC for this integration. Full Windows/Linux
+viewer builds and in-world validation of the release integration remain pending.
+The fixtures do not establish driver correctness or quantify delivery speedup.

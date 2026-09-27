@@ -12,9 +12,9 @@ ROOT = Path(__file__).resolve().parents[2]
 FORBIDDEN = re.compile(
     r"\b(?:VULKANSTORM_(?:ADV_DEBUG|CAPTURE|CLEAR_TEAL|LIST_DEBUG|MENU_DEBUG|"
     r"NO_BORDER|NO_CLIPSTACK|NO_LINEEDIT|NO_MENU|NO_NEWVIEW_HOOKS|NO_WIDGETS|"
-    r"TEXT_DEBUG|TREE_DUMP|UI_DEBUG|UITEST|PARTICLE_SELFTEST)|"
+    r"TEXT_DEBUG|TREE_DUMP|UI_DEBUG|UITEST|PARTICLE_SELFTEST|TEXTURE_DELIVERY_SELFTEST)|"
     r"LLVKUITestScene|readbackSwapchain|gl_render_ui_test_scene|gl_capture_frame_once|"
-    r"FocusRenderProbe|RenderAlphaOITProfile|OITProfileSample|"
+    r"FocusMemory|TextureDeliveryTest|FocusRenderProbe|RenderAlphaOITProfile|OITProfileSample|"
     r"sCompletionPending|sampleSourceMemory|accumulateSourceMemory|"
     r"getOwnedRawBytes|getPeakOwnedRawBytes|getOwnedOtherImageBytes|getDetachedRawBytes|"
     r"getCPUVertexBytes|getCPUIndexBytes|USE_TRACY_MEMORY)\b"
