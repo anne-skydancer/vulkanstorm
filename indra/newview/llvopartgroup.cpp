@@ -27,6 +27,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llvopartgroup.h"
+#include "llparticlecompute.h"
+#include "llparticlepipeline.h"
+#include "llparticleviewer.h"
+#include <cmath>
 
 #include "lldrawpoolalpha.h"
 
@@ -59,6 +63,8 @@ void LLVOPartGroup::restoreGL()
 //static
 void LLVOPartGroup::destroyGL()
 {
+    LLParticleCompute::destroyGL();
+    LLParticleViewer::destroyGL();
 }
 
 bool ll_is_part_idx_allocated(S32 idx, S32* start, S32* end)
@@ -427,7 +433,7 @@ bool LLVOPartGroup::lineSegmentIntersect(const LLVector4a& start, const LLVector
         LLStrider<LLVector4a> verticesp;
         verticesp = v;
 
-        getGeometry(part, verticesp);
+        getPickingGeometry(part, verticesp);
 
         F32 a,b,t;
         if (LLTriangleRayIntersect(v[0], v[1], v[2], start, dir, a,b,t) ||
@@ -457,7 +463,7 @@ bool LLVOPartGroup::lineSegmentIntersect(const LLVector4a& start, const LLVector
     return ret;
 }
 
-void LLVOPartGroup::getGeometry(const LLViewerPart& part,
+void LLVOPartGroup::getPickingGeometry(const LLViewerPart& part,
                                 LLStrider<LLVector4a>& verticesp)
 {
     if (part.mFlags & LLPartData::LL_PART_RIBBON_MASK)
@@ -478,7 +484,7 @@ void LLVOPartGroup::getGeometry(const LLViewerPart& part,
         else
         { //use source object as position
 
-            if (part.mPartSourcep->mSourceObjectp.notNull())
+            if (part.mPartSourcep.notNull() && part.mPartSourcep->mSourceObjectp.notNull())
             {
                 LLVector3 v = LLVector3(0,0,1);
                 v *= part.mPartSourcep->mSourceObjectp->getRenderRotation();
@@ -514,144 +520,46 @@ void LLVOPartGroup::getGeometry(const LLViewerPart& part,
     }
     else
     {
-        LLVector4a part_pos_agent;
-        part_pos_agent.load3(part.mPosAgent.mV);
-        LLVector4a camera_agent;
-        camera_agent.load3(getCameraPosition().mV);
-        LLVector4a at;
-        at.setSub(part_pos_agent, camera_agent);
-        LLVector4a up(0, 0, 1);
-        LLVector4a right;
-
-        right.setCross3(at, up);
-        right.normalize3fast();
-
-        up.setCross3(right, at);
-        up.normalize3fast();
-
-        if (part.mFlags & LLPartData::LL_PART_FOLLOW_VELOCITY_MASK && !part.mVelocity.isExactlyZero())
+        // Match the compute shader's finite basis for picking as well. This
+        // routine is never used to populate a rendering vertex buffer.
+        const auto unit_or = [](LLVector3 value, const LLVector3& fallback)
         {
-            LLVector4a normvel;
-            normvel.load3(part.mVelocity.mV);
-            normvel.normalize3fast();
-            LLVector2 up_fracs;
-            up_fracs.mV[0] = normvel.dot3(right).getF32();
-            up_fracs.mV[1] = normvel.dot3(up).getF32();
-            up_fracs.normalize();
-            LLVector4a new_up;
-            LLVector4a new_right;
-
-            //new_up = up_fracs.mV[0] * right + up_fracs.mV[1]*up;
-            LLVector4a t = right;
-            t.mul(up_fracs.mV[0]);
-            new_up = up;
-            new_up.mul(up_fracs.mV[1]);
-            new_up.add(t);
-
-            //new_right = up_fracs.mV[1] * right - up_fracs.mV[0]*up;
-            t = right;
-            t.mul(up_fracs.mV[1]);
-            new_right = up;
-            new_right.mul(up_fracs.mV[0]);
-            t.sub(new_right);
-
-            up = new_up;
-            right = t;
-            up.normalize3fast();
-            right.normalize3fast();
+            F32 scale = llmax(std::fabs(value.mV[0]), std::fabs(value.mV[1]), std::fabs(value.mV[2]));
+            if (!(scale > 0.f) || !std::isfinite(scale)) return fallback;
+            for (U32 i = 0; i < 3; ++i) value.mV[i] /= scale;
+            value.normalize();
+            return value;
+        };
+        LLVector3 at = unit_or(part.mPosAgent - getCameraPosition(), LLVector3(0, 1, 0));
+        LLVector3 right = unit_or(at % LLVector3(0, 0, 1), LLVector3(1, 0, 0));
+        LLVector3 up = unit_or(right % at, LLVector3(0, 0, 1));
+        if (part.mFlags & LLPartData::LL_PART_FOLLOW_VELOCITY_MASK)
+        {
+            LLVector3 velocity = unit_or(part.mVelocity, LLVector3::zero);
+            F32 x = velocity * right, y = velocity * up;
+            F32 length_squared = x*x + y*y;
+            if (length_squared > 1e-12f)
+            {
+                F32 length = std::sqrt(length_squared);
+                x /= length; y /= length;
+                LLVector3 new_up = unit_or(x * right + y * up, up);
+                right = unit_or(y * right - x * up, right);
+                up = new_up;
+            }
         }
-
-        right.mul(0.5f*part.mScale.mV[0]);
-        up.mul(0.5f*part.mScale.mV[1]);
-
-
-        //HACK -- the verticesp->mV[3] = 0.f here are to set the texture index to 0 (particles don't use texture batching, maybe they should)
-        // this works because there is actually a 4th float stored after the vertex position which is used as a texture index
-        // also, somebody please VECTORIZE THIS
-
-        LLVector4a ppapu;
-        LLVector4a ppamu;
-
-        ppapu.setAdd(part_pos_agent, up);
-        ppamu.setSub(part_pos_agent, up);
-
-        verticesp->setSub(ppapu, right);
-        (*verticesp++).getF32ptr()[3] = 0.f;
-        verticesp->setSub(ppamu, right);
-        (*verticesp++).getF32ptr()[3] = 0.f;
-        verticesp->setAdd(ppapu, right);
-        (*verticesp++).getF32ptr()[3] = 0.f;
-        verticesp->setAdd(ppamu, right);
-        (*verticesp++).getF32ptr()[3] = 0.f;
+        right *= .5f * part.mScale.mV[0];
+        up *= .5f * part.mScale.mV[1];
+        for (U32 corner = 0; corner < 4; ++corner)
+        {
+            LLVector3 center = part.mPosAgent + ((corner & 1) ? -up : up);
+            LLVector3 position = center + (corner < 2 ? -right : right);
+            verticesp->load3(position.mV);
+            (*verticesp++).getF32ptr()[3] = 0.f;
+        }
     }
 }
 
 
-
-void LLVOPartGroup::getGeometry(S32 idx,
-                                LLStrider<LLVector4a>& verticesp,
-                                LLStrider<LLVector3>& normalsp,
-                                LLStrider<LLVector2>& texcoordsp,
-                                LLStrider<LLColor4U>& colorsp,
-                                LLStrider<LLColor4U>& emissivep,
-                                LLStrider<U16>& indicesp)
-{
-    if (idx >= (S32) mViewerPartGroupp->mParticles.size())
-    {
-        return;
-    }
-
-    const LLViewerPart &part = *((LLViewerPart*) (mViewerPartGroupp->mParticles[idx]));
-
-    getGeometry(part, verticesp);
-
-    LLColor4U pcolor;
-    LLColor4U color = part.mColor;
-
-    LLColor4U pglow;
-
-    if (part.mFlags & LLPartData::LL_PART_RIBBON_MASK)
-    { //make sure color blends properly
-        if (part.mParent)
-        {
-            pglow = part.mParent->mGlow;
-            pcolor = part.mParent->mColor;
-        }
-        else
-        {
-            pglow = LLColor4U(0, 0, 0, (U8) ll_round(255.f*part.mStartGlow));
-            pcolor = part.mStartColor;
-        }
-    }
-    else
-    {
-        pglow = part.mGlow;
-        pcolor = color;
-    }
-
-    *colorsp++ = pcolor;
-    *colorsp++ = pcolor;
-    *colorsp++ = color;
-    *colorsp++ = color;
-
-    //if (pglow.mV[3] || part.mGlow.mV[3])
-    { //only write glow if it is not zero
-        *emissivep++ = pglow;
-        *emissivep++ = pglow;
-        *emissivep++ = part.mGlow;
-        *emissivep++ = part.mGlow;
-    }
-
-
-    if (!(part.mFlags & LLPartData::LL_PART_EMISSIVE_MASK))
-    { //not fullbright, needs normal
-        LLVector3 normal = -LLViewerCamera::getInstance()->getXAxis();
-        *normalsp++   = normal;
-        *normalsp++   = normal;
-        *normalsp++   = normal;
-        *normalsp++   = normal;
-    }
-}
 
 U32 LLVOPartGroup::getPartitionType() const
 {
@@ -806,15 +714,13 @@ void LLParticlePartition::getGeometry(LLSpatialGroup* group)
 
     LLVertexBuffer* buffer = group->mVertexBuffer;
 
-    LLStrider<LLVector4a> verticesp;
-    LLStrider<LLVector3> normalsp;
-    LLStrider<LLColor4U> colorsp;
-    LLStrider<LLColor4U> emissivep;
-
-    buffer->getVertexStrider(verticesp);
-    buffer->getNormalStrider(normalsp);
-    buffer->getColorStrider(colorsp);
-    buffer->getEmissiveStrider(emissivep);
+    if (!LLParticleCompute::generate(*buffer, mFaceList))
+    {
+        // Never submit stale geometry or switch rendering back to CPU execution.
+        LL_WARNS_ONCE("ParticleCompute") << "Required GPU particle geometry failed; particle draw group omitted" << LL_ENDL;
+        mFaceList.clear();
+        return;
+    }
 
     S32 geom_idx = 0;
     S32 indices_idx = 0;
@@ -829,29 +735,10 @@ void LLParticlePartition::getGeometry(LLSpatialGroup* group)
         facep->setGeomIndex(geom_idx);
         facep->setIndicesIndex(indices_idx);
 
-        LLStrider<LLVector4a> cur_vert = verticesp + geom_idx;
-        LLStrider<LLVector3> cur_norm = normalsp + geom_idx;
-        LLStrider<LLColor4U> cur_col = colorsp + geom_idx;
-        LLStrider<LLColor4U> cur_glow = emissivep + geom_idx;
-
-        // not actually used
-        LLStrider<LLVector2> cur_tc;
-        LLStrider<U16> cur_idx;
-
-
+        // Emissive attributes exist for every particle, including zero glow.
+        const bool has_glow = true;
         geom_idx += 4;
         indices_idx += 6;
-
-        LLColor4U* start_glow = cur_glow.get();
-
-        object->getGeometry(facep->getTEOffset(), cur_vert, cur_norm, cur_tc, cur_col, cur_glow, cur_idx);
-
-        bool has_glow = false;
-
-        if (cur_glow.get() != start_glow)
-        {
-            has_glow = true;
-        }
 
         llassert(facep->getGeomCount() == 4);
         llassert(facep->getIndicesCount() == 6);
@@ -937,4 +824,3 @@ LLVector3 LLVOHUDPartGroup::getCameraPosition() const
 {
     return LLVector3(-1,0,0);
 }
-

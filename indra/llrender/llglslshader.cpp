@@ -577,6 +577,9 @@ void dumpAttachObject(const char* func_name, GLuint program_object, const std::s
 
 bool LLGLSLShader::attachVertexObject(std::string object_path)
 {
+    // The resident particle entry point computes every varying directly. Keep
+    // its bindless material loads in one vertex module; no helper is needed.
+    if (mDefines.count("GPU_PARTICLE_RENDER")) return true;
     if (LLShaderMgr::instance()->mVertexShaderObjects.count(object_path) > 0)
     {
         stop_glerror();

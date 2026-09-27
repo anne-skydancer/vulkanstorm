@@ -229,6 +229,15 @@ std::list<LLGLUpdate*> LLGLUpdate::sGLQ;
 // WGL_ARB_create_context
 PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = nullptr;
 
+PFNGLMULTIDRAWARRAYSINDIRECTCOUNTARBPROC glMultiDrawArraysIndirectCountARB = nullptr;
+
+// Optional GPU particle rendering entry points.
+PFNGLGETTEXTUREHANDLEARBPROC glGetTextureHandleARB = nullptr;
+PFNGLGETTEXTURESAMPLERHANDLEARBPROC glGetTextureSamplerHandleARB = nullptr;
+PFNGLMAKETEXTUREHANDLERESIDENTARBPROC glMakeTextureHandleResidentARB = nullptr;
+PFNGLMAKETEXTUREHANDLENONRESIDENTARBPROC glMakeTextureHandleNonResidentARB = nullptr;
+PFNGLISTEXTUREHANDLERESIDENTARBPROC glIsTextureHandleResidentARB = nullptr;
+
 // WGL_AMD_gpu_association
 PFNWGLGETGPUIDSAMDPROC                          wglGetGPUIDsAMD = nullptr;
 PFNWGLGETGPUINFOAMDPROC                         wglGetGPUInfoAMD = nullptr;
@@ -1201,6 +1210,27 @@ bool LLGLManager::initGL()
     // This is called here because it depends on the setting of mIsGF2or4MX, and sets up mHasMultitexture.
     initExtensions();
 
+    // These are optional rendering capabilities, never viewer startup requirements.
+    auto has_extension = [](const char* extension) {
+        GLint count = 0;
+        glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+        for (GLint index = 0; index < count; ++index)
+        {
+            const char* name = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, index));
+            if (name && std::string(name) == extension) return true;
+        }
+        return false;
+    };
+    mHasFragmentShaderInterlock = has_extension("GL_ARB_fragment_shader_interlock");
+    mHasBindlessTexture = has_extension("GL_ARB_bindless_texture");
+    mHasShaderDrawParameters = has_extension("GL_ARB_shader_draw_parameters");
+    mHasIndirectParameters = has_extension("GL_ARB_indirect_parameters");
+#if LL_WINDOWS
+    mHasBindlessTexture = mHasBindlessTexture && glGetTextureHandleARB && glGetTextureSamplerHandleARB &&
+        glMakeTextureHandleResidentARB && glMakeTextureHandleNonResidentARB && glIsTextureHandleResidentARB;
+    mHasIndirectParameters = mHasIndirectParameters && glMultiDrawArraysIndirectCountARB;
+#endif
+
     // <FS:Beq> stop doing this and trust the hardware detection
     // if hardware detection has all failed the this will correct for that
     // U32 old_vram = mVRAM;
@@ -1517,6 +1547,13 @@ void LLGLManager::initExtensions()
 
 // <FS:Zi> Linux support
 // #if LL_WINDOWS
+    glMultiDrawArraysIndirectCountARB = (PFNGLMULTIDRAWARRAYSINDIRECTCOUNTARBPROC)GLH_EXT_GET_PROC_ADDRESS("glMultiDrawArraysIndirectCountARB");
+    glGetTextureHandleARB = (PFNGLGETTEXTUREHANDLEARBPROC)GLH_EXT_GET_PROC_ADDRESS("glGetTextureHandleARB");
+    glGetTextureSamplerHandleARB = (PFNGLGETTEXTURESAMPLERHANDLEARBPROC)GLH_EXT_GET_PROC_ADDRESS("glGetTextureSamplerHandleARB");
+    glMakeTextureHandleResidentARB = (PFNGLMAKETEXTUREHANDLERESIDENTARBPROC)GLH_EXT_GET_PROC_ADDRESS("glMakeTextureHandleResidentARB");
+    glMakeTextureHandleNonResidentARB = (PFNGLMAKETEXTUREHANDLENONRESIDENTARBPROC)GLH_EXT_GET_PROC_ADDRESS("glMakeTextureHandleNonResidentARB");
+    glIsTextureHandleResidentARB = (PFNGLISTEXTUREHANDLERESIDENTARBPROC)GLH_EXT_GET_PROC_ADDRESS("glIsTextureHandleResidentARB");
+
     // WGL_AMD_gpu_association
     wglGetGPUIDsAMD = (PFNWGLGETGPUIDSAMDPROC)GLH_EXT_GET_PROC_ADDRESS("wglGetGPUIDsAMD");
     wglGetGPUInfoAMD = (PFNWGLGETGPUINFOAMDPROC)GLH_EXT_GET_PROC_ADDRESS("wglGetGPUInfoAMD");

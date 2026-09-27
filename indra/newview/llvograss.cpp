@@ -713,7 +713,7 @@ void LLGrassPartition::getGeometry(LLSpatialGroup* group)
 
         // LLAlphaObject* object = (LLAlphaObject*) facep->getViewerObject();
 
-        LLAlphaObject* object = dynamic_cast<LLAlphaObject*>( facep->getViewerObject() );
+        LLVOGrass* object = dynamic_cast<LLVOGrass*>( facep->getViewerObject() );
 
         // </FS:ND>
 
