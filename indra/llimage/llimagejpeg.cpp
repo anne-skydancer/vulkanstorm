@@ -31,16 +31,9 @@
 #include "llerror.h"
 #include "llexception.h"
 
-namespace
-{
-// One recovery target per codec invocation, including nested and concurrent calls.
-struct JPEGErrorManager : jpeg_error_mgr
-{
 #if !LL_ARM64
-    jmp_buf recovery;
+jmp_buf LLImageJPEG::sSetjmpBuffer ;
 #endif
-};
-}
 LLImageJPEG::LLImageJPEG(S32 quality)
 :   LLImageFormatted(IMG_CODEC_JPEG),
     mOutputBuffer( NULL ),
@@ -73,10 +66,10 @@ bool LLImageJPEG::updateData()
 
     // This struct contains the JPEG decompression parameters and pointers to
     // working space (which is allocated as needed by the JPEG library).
-    struct jpeg_decompress_struct cinfo{};
+    struct jpeg_decompress_struct cinfo;
     cinfo.client_data = this;
 
-    JPEGErrorManager jerr{};
+    struct jpeg_error_mgr jerr;
     cinfo.err = jpeg_std_error(&jerr);
 
     // Customize with our own callbacks
@@ -90,7 +83,7 @@ bool LLImageJPEG::updateData()
     //except in the case of AARCH64/ARM64 where setjmp will crash
     //
 #if !LL_ARM64
-    if(setjmp(jerr.recovery))
+    if(setjmp(sSetjmpBuffer))
     {
         jpeg_destroy_decompress(&cinfo);
         return false;
@@ -186,14 +179,8 @@ void LLImageJPEG::decodeSkipInputData (j_decompress_ptr cinfo, long num_bytes)
     jpeg_source_mgr* src = cinfo->src;
 //  LLImageJPEG* self = (LLImageJPEG*) cinfo->client_data;
 
-    if (num_bytes <= 0) return;
-    if (static_cast<size_t>(num_bytes) > src->bytes_in_buffer)
-    {
-        ERREXIT(cinfo, JERR_INPUT_EMPTY);
-        return;
-    }
-    src->next_input_byte += static_cast<size_t>(num_bytes);
-    src->bytes_in_buffer -= static_cast<size_t>(num_bytes);
+    src->next_input_byte += (size_t) num_bytes;
+    src->bytes_in_buffer -= (size_t) num_bytes;
 }
 
 void LLImageJPEG::decodeTermSource (j_decompress_ptr cinfo)
@@ -227,9 +214,9 @@ bool LLImageJPEG::decode(LLImageRaw* raw_image, F32 decode_time)
 
     // This struct contains the JPEG decompression parameters and pointers to
     // working space (which is allocated as needed by the JPEG library).
-    struct jpeg_decompress_struct cinfo{};
+    struct jpeg_decompress_struct cinfo;
 
-    JPEGErrorManager jerr{};
+    struct jpeg_error_mgr jerr;
     cinfo.err = jpeg_std_error(&jerr);
 
     // Customize with our own callbacks
@@ -242,7 +229,7 @@ bool LLImageJPEG::decode(LLImageRaw* raw_image, F32 decode_time)
     //so as instead, we use setjmp/longjmp to avoid this crash, which is the best we can get. --bao
     //
 #if !LL_ARM64
-    if(setjmp(jerr.recovery))
+    if(setjmp(sSetjmpBuffer))
     {
         jpeg_destroy_decompress(&cinfo);
         return true; // done
@@ -450,11 +437,11 @@ void LLImageJPEG::errorExit( j_common_ptr cinfo )
     // Always display the message
     (*cinfo->err->output_message)(cinfo);
 
+    // Let the memory manager delete any temp files
+    jpeg_destroy(cinfo);
 #if !LL_ARM64
     // Return control to the setjmp point
-    longjmp(static_cast<JPEGErrorManager*>(cinfo->err)->recovery, 1);
-#else
-    throw -1; // caught by the existing ARM exception path
+    longjmp(sSetjmpBuffer, 1) ;
 #endif
 }
 
@@ -554,14 +541,14 @@ bool LLImageJPEG::encode( const LLImageRaw* raw_image, F32 encode_time )
 
     // This struct contains the JPEG compression parameters and pointers to
     // working space (which is allocated as needed by the JPEG library).
-    struct jpeg_compress_struct cinfo{};
+    struct jpeg_compress_struct cinfo;
     cinfo.client_data = this;
 
     // We have to set up the error handler first, in case the initialization
     // step fails.  (Unlikely, but it could happen if you are out of memory.)
     // This routine fills in the contents of struct jerr, and returns jerr's
     // address which we place into the link field in cinfo.
-    JPEGErrorManager jerr{};
+    struct jpeg_error_mgr jerr;
     cinfo.err = jpeg_std_error(&jerr);
 
     // Customize with our own callbacks
@@ -574,7 +561,7 @@ bool LLImageJPEG::encode( const LLImageRaw* raw_image, F32 encode_time )
     //so as instead, we use setjmp/longjmp to avoid this crash, which is the best we can get. --bao
     //
 #if !LL_ARM64
-    if( setjmp(jerr.recovery) )
+    if( setjmp(sSetjmpBuffer) )
     {
         // If we get here, the JPEG code has signaled an error.
         // We need to clean up the JPEG object, close the input file, and return.
