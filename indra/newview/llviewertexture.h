@@ -275,6 +275,7 @@ const std::string& fttype_to_string(const FTType& fttype);
 //
 class LLViewerFetchedTexture : public LLViewerTexture
 {
+    friend class LLViewerTextureList;
     friend class LLTextureBar; // debug info only
     friend class LLTextureView; // debug info only
 
@@ -415,7 +416,7 @@ public:
     void        setCanUseHTTP(bool can_use_http) {mCanUseHTTP = can_use_http;}
 
     void        forceToDeleteRequest();
-    void        loadFromFastCache();
+    bool loadFromFastCache();
     void        setInFastCacheList(bool in_list) { mInFastCacheList = in_list; }
     bool        isInFastCacheList() { return mInFastCacheList; }
 
@@ -423,6 +424,11 @@ public:
 
     virtual bool scaleDown() { return false; };
 
+    bool isFirstVisibleDelivery() const;
+    bool isVisibleDelivery() const;
+    bool retainOwnAttachmentDetail();
+    bool mDeliveryOnScreen = false;
+    F64 mDeliveryQueuedAt = 0.;
     bool mCreatePending = false;    // if true, this is in gTextureList.mCreateTextureList
     mutable bool mDownScalePending = false; // if true, this is in gTextureList.mDownScaleQueue
 
