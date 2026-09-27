@@ -10,15 +10,20 @@ class LLFace;
 class LLDrawInfo;
 class LLVOVolume;
 class LLVector3;
+class LLSpatialGroup;
+class LLCullResult;
 namespace LLComputeMesh
 {
 struct Avatar;
 struct Object;
 struct Page;
 struct PageRange;
+struct Submission;
+struct Batch;
 struct Resident
 {
     std::weak_ptr<Object> owner;
+    std::vector<std::weak_ptr<Submission>> submissions;
     std::shared_ptr<Avatar> avatar;
     std::shared_ptr<Page> page;
     std::shared_ptr<PageRange> page_range;
@@ -53,7 +58,9 @@ void shiftLOD(const LLVector3& offset);
 void beginLOD();
 bool drawLOD(LLDrawInfo& info);
 bool compatibleBatch(const LLDrawInfo& first, const LLDrawInfo& next);
-bool drawBatch(const std::vector<LLDrawInfo*>& batch);
+bool drawBatch(const std::vector<LLDrawInfo*>& batch, Batch* registered = nullptr);
+bool appendSubmission(LLSpatialGroup& group, LLCullResult& cull, bool count_triangles);
+void submitRegistered(LLDrawInfo& proxy, bool textured);
 void reloadLOD();
 void destroyLOD();
 void destroyGL();

@@ -24,6 +24,7 @@ constexpr int GL_ACTIVE_TEXTURE=1,GL_TEXTURE_BINDING_BUFFER=2,GL_TEXTURE_BUFFER=
 struct LLShaderMgr{enum{MESH_TRANSFORMS,MESH_TRANSFORM_ENABLED};};
 struct LLGLSLShader{static inline LLGLSLShader* sCurBoundShaderPtr=nullptr;int channel=3,enabled=0;
  int getTextureChannel(int)const{return channel;}void uniform1i(int,int value){enabled=value;}};
+struct Render{void flush(){}}gGL;
 int active_texture=107;std::array<int,16> texture_bindings{};int transform_texture=77;
 void glGetIntegerv(int name,int* value){*value=name==GL_ACTIVE_TEXTURE?active_texture:texture_bindings[active_texture-GL_TEXTURE0];}
 void glActiveTexture(int unit){active_texture=unit;}

@@ -128,6 +128,8 @@ public:
     bool mSkipRender;
 };
 
+namespace LLComputeMesh { struct Batch; }
+
 class LLRenderPass : public LLDrawPool
 {
 public:
@@ -378,9 +380,9 @@ public:
     void pushUntexturedRiggedGLTFBatches(U32 type);
 
     // push a single GLTF draw call
-    static void pushGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch = nullptr);
+    static void pushGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch = nullptr, LLComputeMesh::Batch* registered = nullptr);
     static void pushRiggedGLTFBatch(LLDrawInfo& params, const LLVOAvatar*& lastAvatar, U64& lastMeshId, bool& skipLastSkin);
-    static void pushUntexturedGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch = nullptr);
+    static void pushUntexturedGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch = nullptr, LLComputeMesh::Batch* registered = nullptr);
     static void pushUntexturedRiggedGLTFBatch(LLDrawInfo& params, const LLVOAvatar*& lastAvatar, U64& lastMeshId, bool& skipLastSkin);
 
     void pushMaskBatches(U32 type, bool texture = true, bool batch_textures = false);

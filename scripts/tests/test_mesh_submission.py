@@ -26,7 +26,7 @@ constexpr int GL_CULL_FACE = 1;
 struct LLGLDisable { explicit LLGLDisable(int) {} };
 struct Material { bool mDoubleSided=false; int binds=0; void bind(int){++binds;} };
 struct Mat : std::shared_ptr<Material> { using std::shared_ptr<Material>::shared_ptr; bool notNull()const{return bool(*this);} };
-struct LLDrawInfo { int id=0; int group=0; bool resident=true; Mat mGLTFMaterial; int mTexture=0; };
+struct LLDrawInfo { int id=0; int group=0; bool resident=true; bool mComputeBatch=false; Mat mGLTFMaterial; int mTexture=0; };
 std::vector<int> rendered;
 std::vector<size_t> attempts;
 bool batch_success=true;
@@ -40,8 +40,10 @@ struct Pipeline {
  LLDrawInfo** endRenderMap(U32){return list.data()+list.size();}
 } gPipeline;
 namespace LLComputeMesh {
+ struct Batch {};
+ void submitRegistered(LLDrawInfo&,bool){assert(false);}
  bool compatibleBatch(const LLDrawInfo& a,const LLDrawInfo& b){return a.resident&&b.resident&&a.group==b.group;}
- bool drawBatch(const std::vector<LLDrawInfo*>& batch){
+ bool drawBatch(const std::vector<LLDrawInfo*>& batch,Batch*){
   attempts.push_back(batch.size());
   if(!batch_success)return false;
   for(auto* p:batch)rendered.push_back(p->id);
@@ -52,8 +54,8 @@ struct LLRenderPass {
  static void pushGLTFBatches(U32,bool);
  static void pushGLTFBatches(U32);
  static void pushUntexturedGLTFBatches(U32);
- static void pushGLTFBatch(LLDrawInfo&,const std::vector<LLDrawInfo*>* =nullptr);
- static void pushUntexturedGLTFBatch(LLDrawInfo&,const std::vector<LLDrawInfo*>* =nullptr);
+ static void pushGLTFBatch(LLDrawInfo&,const std::vector<LLDrawInfo*>* =nullptr,LLComputeMesh::Batch* =nullptr);
+ static void pushUntexturedGLTFBatch(LLDrawInfo&,const std::vector<LLDrawInfo*>* =nullptr,LLComputeMesh::Batch* =nullptr);
  static void applyModelMatrix(LLDrawInfo&){++models;}
  static void drawGeometry(LLDrawInfo& p){rendered.push_back(p.id);}
 };

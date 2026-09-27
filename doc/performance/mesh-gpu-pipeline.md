@@ -55,25 +55,22 @@ Build and fully stage an Autobuild RelWithDebInfo viewer without an installer.
 
 ## Status
 
-The first infrastructure implementation is connected to unrigged opaque PBR
-submission. Resident ranges share bounded pages; leases coalesce returned space,
-and the accounting includes both staged and published page storage. Compatible
-consecutive draws share material/model/texture state and one indirect multi-draw.
-The compute gather reads existing world-camera LOD commands and uses the current
-pass matrices to suppress out-of-view commands. Bounds union all resident LODs.
-Invalid bounds fail open. No per-frame command-count readback is introduced.
-Clean unrigged neighbours now retain resident geometry across spatial-group
-repacking. Rigged records still invalidate under the established policy.
+Implemented on the feature branch:
 
-Remaining implementation: replacement of eligible CPU visibility/draw-list
-traversal and retirement of routine direct-buffer maintenance. Object-space
-residency and resident transform-only updates are connected below.
-Batch submission now includes the untextured depth/shadow consumers. Current draw lists still come
-from CPU culling, so GPU culling is not yet a replacement of that CPU work.
-Initial topology/UV conversion and direct-path buffers remain. Resident local
-geometry now survives eligible position-only updates; fallback geometry still
-uses its established CPU update path.
-There is no claim of finished CPU offload or measured frame-time improvement.
+- Shared resident geometry pages with range leases and bounded admission.
+- Local-space resident vertex/normal/tangent streams and compact transform records.
+- GPU per-view bound transformation/culling and indirect command gathering for
+  compatible opaque PBR color/reflection and depth/shadow draws.
+- Event-driven spatial-group packet registration and persistent GPU candidate
+  lists, including invalidation and cross-view lifetime protection.
+
+The CPU still performs coarse scene/occlusion policy, initial topology/UV/color
+preparation, asset streaming, material ownership, and normal fallback-buffer
+maintenance. Static, unrigged opaque PBR meshes are the initial eligibility;
+rigged/active/selected/alpha/HUD/media/flexible paths retain their established
+contracts. Routine fallback-buffer retirement and broader eligibility are not
+implemented. Full live-scene correctness and performance acceptance remain open;
+there is no measured frame-time claim.
 
 Validation so far:
 
@@ -150,8 +147,9 @@ invalidation. The initial static/unrigged/opaque-PBR eligibility is unchanged.
 unsupported passes and failure recovery; initial topology/UV/color preparation,
 scene traversal and candidate enumeration also remain. This checkpoint removes
 resident vertex transformation/repacking, not every CPU fallback conversion.
-Persistent registration and retirement of routine fallback-buffer maintenance
-remain implementation work, as does in-world performance/visual acceptance.
+Persistent registration is connected in the following checkpoint. Retirement of
+routine fallback-buffer maintenance and in-world performance/visual acceptance
+remain open.
 
 Validation adds production admission/publication and scoped binding tests, plus
 native AMD and Mesa/Zink color/depth comparisons for the production transform
@@ -165,3 +163,43 @@ The complete staged executable and linked binary have SHA-256
 Isolated native AMD Core-profile and Mesa/Zink starts loaded the viewer shaders,
 reached login, passed the existing texture self-test and exited with code 0.
 These startup tests do not exercise in-world resident mesh publication.
+
+### Persistent draw registration checkpoint
+
+Spatial groups now cache compatible opaque PBR packets when draw-map membership
+or resident page publication changes. Resident tokens notify only their subscribed
+group caches on invalidation/publication. Transform-only metadata changes do not
+reclassify packets. Groups without a multi-record packet retain the original map
+and its cross-group batching; classification is retried on a relevant event.
+
+Each packet uploads its slot list once, then reuses it across views and frames.
+Normal submission visits packet heads and skips member compatibility checks,
+slot-array construction and candidate uploads. GPU visibility still uses each
+pass's matrices and depth-clamp state. Coarse CPU group culling, occlusion policy,
+render-type exclusions and surface-area limits remain in the existing pipeline.
+Initial material grouping stays on the CPU when registrations change; transparent
+ordering is not part of this path.
+
+Cull results hold strong references to their submissions because the render maps
+contain raw pointers. Replacing a group's cache in a later view therefore cannot
+free packets still used by an earlier view. Invalidated packets restore each
+original draw's state. Candidate buffers retire with their packets or GL context;
+shader reload keeps immutable candidate lists. Allocation failure uses existing
+single-record submission without retrying allocation every frame.
+
+Registration is currently within spatial groups. This bounds ownership and keeps
+the existing visibility policies, but may limit merging across group boundaries;
+its submission savings versus extra packet boundaries require in-world timing.
+Tests cover 520 records, repeated world/shadow views without reclassification,
+invalidated/retained old views, no-packet groups waking on publication, one upload
+across twelve views, context recreation and allocation-failure cleanup.
+
+The registration checkpoint compiled, linked and was fully restaged through
+Autobuild RelWithDebInfo, with the Release feature/dependency check passing.
+The linked and staged executable SHA-256 is
+`FD7B5171B9CF5521B4885495EAF7FB5F852D2819637680908E53F952954D888B`;
+the four affected staged shaders match source. Isolated native AMD and Mesa/Zink
+Core-profile starts reached login, passed the texture publication/readback
+self-test and exited with code 0. These are startup checks, not live-world mesh
+correctness or frame-time measurements. The local build retains version 82065;
+use this hash to distinguish it from earlier checkpoints with that build number.
