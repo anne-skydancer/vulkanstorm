@@ -88,7 +88,7 @@ U32 demand_extent = 0;
 GLint count_uniform = -1, camera_uniform = -1, policy_uniform = -1, phase_uniform = -1, avatar_count_uniform = -1;
 GLuint batch_program = 0, batch_buffers[2] = {};
 bool batch_failed = false;
-GLint batch_count = -1, batch_source_count = -1, batch_matrix = -1;
+GLint batch_count = -1, batch_source_count = -1, batch_matrix = -1, batch_clip_planes = -1;
 constexpr U32 BATCH_CAPACITY = 256;
 struct BatchCandidate { U32 slot[4] = {}; F32 minimum[4] = {}, maximum[4] = {}; };
 static_assert(sizeof(BatchCandidate) == 48, "std430 batch layout");
@@ -267,6 +267,7 @@ bool initializeBatch()
     batch_count = glGetUniformLocation(linked, "candidateCount");
     batch_source_count = glGetUniformLocation(linked, "sourceCount");
     batch_matrix = glGetUniformLocation(linked, "clipFromBuffer");
+    batch_clip_planes = glGetUniformLocation(linked, "clipPlaneMask");
     return true;
 }
 void destroyBatch()
@@ -1154,6 +1155,7 @@ bool LLComputeMesh::drawBatch(const std::vector<LLDrawInfo*>& batch)
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, batch_buffers[1]);
         glUniform1ui(batch_count, U32(batch.size()));
         glUniform1ui(batch_source_count, extent);
+        glUniform1ui(batch_clip_planes, glIsEnabled(GL_DEPTH_CLAMP) ? 15u : 63u);
         glUniformMatrix4fv(batch_matrix, 1, GL_FALSE, glm::value_ptr(clip));
         glDispatchCompute((U32(batch.size())+63)/64, 1, 1);
         glMemoryBarrier(GL_COMMAND_BARRIER_BIT);

@@ -66,8 +66,8 @@ Clean unrigged neighbours now retain resident geometry across spatial-group
 repacking. Rigged records still invalidate under the established policy.
 
 Remaining implementation: object-space residency and transform-only metadata
-updates; replacement of eligible CPU visibility/draw-list traversal; expansion of
-batch submission to the depth/shadow consumers. Current draw lists still come
+updates; replacement of eligible CPU visibility/draw-list traversal.
+Batch submission now includes the untextured depth/shadow consumers. Current draw lists still come
 from CPU culling, so GPU culling is not yet a replacement of that CPU work.
 Initial conversion, transform-driven rebuilds and direct-path buffers remain.
 There is no claim of finished CPU offload or measured frame-time improvement.
@@ -85,7 +85,7 @@ Validation so far:
   staged without an installer. Configuration matches the Release dependency/
   feature set. The branded executable matches the linked binary by SHA-256:
   `DA6EA37DAA6381A4EDAFE1DBF9C13FF06EB3AEF4E5882CBA520B117C50AC4FA4`.
-  The staged batch shader matches source. An isolated no-login Zink startup
+  The staged batch shader matched source at that checkpoint. An isolated no-login Zink startup
   reached login, passed the existing texture publication/readback self-test, and
   shut down with exit code 0. This does not exercise a resident world-mesh scene;
   in-world acceptance remains open.
@@ -93,3 +93,17 @@ Validation so far:
 The page pool deliberately retains the existing CPU mirrors used by conversion
 and range copying. Removing those mirrors requires separate consumers to stop
 reading them; this implementation does not claim a reduction in resident bytes.
+
+### Depth/shadow submission checkpoint
+
+Color and untextured depth/shadow passes share the same batching walk and resident
+LOD. Nonresident records and state boundaries preserve submission order. If batch
+compute cannot run, every member is submitted through its established draw path.
+The compute clip mask follows `GL_DEPTH_CLAMP`: clamped shadows retain casters
+outside the near/far planes while still rejecting lateral outliers.
+
+`test_mesh_submission.py` exercises the production submission functions with
+observable draw/material operations: 520 records, the 256-command boundary,
+nonresident and material breaks, and successful/failed GPU submission in both
+textured and untextured passes. Native AMD and Mesa/Zink shader tests cover both
+clip masks and distinct pass cameras. This does not replace in-world shadow QA.
