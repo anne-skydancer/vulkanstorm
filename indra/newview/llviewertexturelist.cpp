@@ -1505,7 +1505,7 @@ F32 LLViewerTextureList::updateImagesCreateTextures(F32 max_time)
             llassert(image->mDownScalePending);
 
             LLImageGL* img = image->getGLTexture();
-            if (img && img->getHasGLTexture() && !image->retainOwnAttachmentDetail())
+            if (img && img->getHasGLTexture() && !image->retainAvatarDetail())
             {
                 img->scaleDown(image->getDesiredDiscardLevel());
             }

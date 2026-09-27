@@ -426,7 +426,8 @@ public:
 
     bool isFirstVisibleDelivery() const;
     bool isVisibleDelivery() const;
-    bool retainOwnAttachmentDetail();
+    bool retainAvatarDetail();
+    F64 mAvatarDetailRetentionStarted = -1.;
     bool mDeliveryOnScreen = false;
     F64 mDeliveryQueuedAt = 0.;
     bool mCreatePending = false;    // if true, this is in gTextureList.mCreateTextureList

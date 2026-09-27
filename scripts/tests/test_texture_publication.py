@@ -43,12 +43,35 @@ fixture = r'''
 #include "lltexturedeliverybudget.h"
 using U64 = uint64_t; using S32 = int; using GLenum = unsigned;
 using U32 = unsigned;
+using F32 = float; using F64 = double;
+template<class T> T llmax(T a,T b) { return std::max(a,b); }
+float testDrawDistance=128.f;
+int gSavedSettings=0;
+template<class T> struct LLCachedControl {
+    LLCachedControl(int&,const char*,T) {}
+    operator T() const { return T(testDrawDistance); }
+};
+struct Position {
+    float x=0,y=0,z=0;
+    Position operator-(const Position& other) const { return {x-other.x,y-other.y,z-other.z}; }
+    float lengthSquared() const { return x*x+y*y+z*z; }
+};
+struct Agent { Position position; Position getPositionAgent() const { return position; } } gAgent;
+struct LLTimer { static inline double now=0; static double getTotalSeconds() { return now; } };
 namespace LLRender { constexpr U32 NUM_TEXTURE_CHANNELS=4; }
-struct LLVOAvatar { bool self=false; bool isSelf() const { return self; } };
+struct LLVOAvatar {
+    bool self=false,dead=false;
+    Position position{1000,0,0};
+    bool isSelf() const { return self; }
+    bool isDead() const { return dead; }
+    Position getPositionAgent() const { return position; }
+};
 struct LLViewerObject {
     bool dead=false, attachment=false;
     LLViewerObject* root=this;
     LLVOAvatar* avatar=nullptr;
+    LLVOAvatar* directAvatar=nullptr;
+    LLVOAvatar* asAvatar() { return directAvatar; }
     bool isDead() const { return dead; }
     bool isAttachment() const { return attachment; }
     LLViewerObject* getRootEdit() { return root; }
@@ -140,7 +163,8 @@ struct LLViewerFetchedTexture {
     bool isSystemMemoryLow() const { return lowMemory; }
     int getNumFaces(U32 channel) const { return int(faces[channel].size()); }
     const std::vector<LLFace*>* getFaceList(U32 channel) const { return &faces[channel]; }
-    bool retainOwnAttachmentDetail();
+    bool retainAvatarDetail();
+    F64 mAvatarDetailRetentionStarted=-1.;
     LLImageGL image;
     bool mNeedsCreateTexture=true, mCreatePending=true;
     int posts=0, destroyed_raw=0, desired=0;
@@ -166,7 +190,7 @@ fixture += method('indra/newview/llviewertexturelist.cpp', 'static S32 deliveryD
 fixture += method('indra/newview/llviewertexturelist.cpp', 'struct LLViewerTextureList::PendingUpload') + ';\n'
 fixture += method('indra/llrender/llimagegl.cpp', 'void LLImageGL::adoptUploadImage') + '\n'
 fixture += method('indra/newview/llviewertexturelist.cpp', 'void LLViewerTextureList::completeTextureUploads') + '\n'
-fixture += method('indra/newview/llviewertexture.cpp', 'bool LLViewerFetchedTexture::retainOwnAttachmentDetail') + '\n'
+fixture += method('indra/newview/llviewertexture.cpp', 'bool LLViewerFetchedTexture::retainAvatarDetail') + '\n'
 fixture += r'''
 int main() {
     LLVOAvatar self{true}, other{false};
@@ -175,12 +199,33 @@ int main() {
     LLFace face{&child};
     LLViewerFetchedTexture worn; worn.image.mTexName=10;
     worn.faces[3].push_back(&face); // child prim's material channel
-    assert(worn.retainOwnAttachmentDetail());
-    worn.lowMemory=true; assert(!worn.retainOwnAttachmentDetail()); worn.lowMemory=false;
-    child.avatar=&other; assert(!worn.retainOwnAttachmentDetail()); child.avatar=&self;
-    attachment.attachment=false; assert(!worn.retainOwnAttachmentDetail()); attachment.attachment=true;
-    child.dead=true; assert(!worn.retainOwnAttachmentDetail()); child.dead=false;
-    worn.image.mTexName=0; assert(!worn.retainOwnAttachmentDetail());
+    assert(worn.retainAvatarDetail());
+    worn.lowMemory=true; assert(!worn.retainAvatarDetail()); worn.lowMemory=false;
+    child.avatar=&other; assert(!worn.retainAvatarDetail()); child.avatar=&self;
+    attachment.attachment=false; assert(!worn.retainAvatarDetail()); attachment.attachment=true;
+    child.dead=true; assert(!worn.retainAvatarDetail()); child.dead=false;
+    worn.image.mTexName=0; assert(!worn.retainAvatarDetail());
+    worn.image.mTexName=10; child.avatar=&other;
+    other.position={10,0,0}; LLTimer::now=100;
+    assert(worn.retainAvatarDetail());
+    LLTimer::now=159; assert(worn.retainAvatarDetail());
+    LLTimer::now=160; assert(!worn.retainAvatarDetail()); // retries do not renew
+    worn.mAvatarDetailRetentionStarted=-1.; other.position={15,0,0}; LLTimer::now=200;
+    assert(worn.retainAvatarDetail()); LLTimer::now=230; assert(!worn.retainAvatarDetail());
+    other.position={20,0,0}; assert(!worn.retainAvatarDetail());
+    other.position={9,0,0}; LLTimer::now=300; assert(worn.retainAvatarDetail());
+    other.position={15,0,0}; LLTimer::now=331; assert(!worn.retainAvatarDetail()); // band changes share start
+    testDrawDistance=8; other.position={9,0,0}; assert(!worn.retainAvatarDetail());
+    testDrawDistance=128; assert(worn.retainAvatarDetail());
+    worn.lowMemory=true; assert(!worn.retainAvatarDetail()); worn.lowMemory=false;
+    other.dead=true; assert(!worn.retainAvatarDetail()); other.dead=false;
+    gAgent.position={100,0,0}; other.position={109,0,0}; assert(worn.retainAvatarDetail());
+    gAgent.position={0,0,0}; assert(!worn.retainAvatarDetail()); // avatar-relative, not camera-relative
+    LLViewerObject body; body.directAvatar=&other; LLFace bodyFace{&body};
+    other.position={5,0,0}; worn.faces[0].push_back(&bodyFace);
+    assert(worn.retainAvatarDetail()); // avatar body, not only attachments
+    LLTimer::now+=45; assert(worn.retainAvatarDetail());
+    worn.faces[0].clear(); other.position={15,0,0}; assert(!worn.retainAvatarDetail());
     bool invalid=false;
     auto formatted=std::make_shared<LLImageFormatted>();
     auto reserved=LLImageDecodeThread::reserveDelivery(formatted.get(), true, true, invalid);

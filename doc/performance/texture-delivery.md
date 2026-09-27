@@ -130,7 +130,27 @@ rendering; asynchronous submission does not guarantee independent hardware engin
 
 ## CPU scope and validation
 
-### Own-attachment detail retention
+### Avatar detail retention
+
+Other avatars and their attachments retain already loaded detail for 60 seconds
+within 10 m of the user's avatar, 30 seconds beyond 10 m but below 20 m, and
+use normal retention at 20 m and beyond. The existing `RenderFarClip` (Draw
+Distance) setting caps proximity protection, including when changed at runtime.
+Camera position and direction do not determine the band. The timer starts on
+the first request to reduce detail, not on every retry; moving between bands
+changes the duration against that same start time. If current detail is needed
+again, the timer resets for a later reduction request. Shared textures receive
+the longest retention of their current avatar users. Both admission to the
+downscale queue and execution recheck the policy, including low system memory.
+This delays ordinary downscaling; it does not permanently pin nearby textures
+or request extra resolution. Existing general eviction remains separate.
+
+Windows RelWithDebInfo **7.2.5.82009** includes these bands. Compilation, linking,
+full runtime staging and configuration validation passed. The production-method
+fixture covers boundaries, expiry without renewal, live Draw Distance changes,
+avatar-relative positions, body/attachment users and low-memory bypass. Zink
+startup and GPU publication/readback checks passed with normal exit. In-world
+retention under crowded-region pressure remains to be evaluated.
 
 Camera-driven downscaling now preserves already resident detail on the user's
 own worn attachments, including linked children and all registered material

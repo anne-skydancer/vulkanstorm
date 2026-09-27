@@ -60,6 +60,7 @@
 #include "llmediaentry.h"
 #include "llvovolume.h"
 #include "llvoavatar.h"
+#include "llagent.h"
 #include "llviewermedia.h"
 #include "lltexturecache.h"
 #include "llviewerwindow.h"
@@ -1669,9 +1670,17 @@ void LLViewerFetchedTexture::postCreateTexture()
     mNeedsCreateTexture = false;
 }
 
-bool LLViewerFetchedTexture::retainOwnAttachmentDetail()
+bool LLViewerFetchedTexture::retainAvatarDetail()
 {
-    if (!hasGLTexture() || isSystemMemoryLow()) return false;
+    if (!hasGLTexture() || isSystemMemoryLow())
+    {
+        mAvatarDetailRetentionStarted = -1.;
+        return false;
+    }
+
+    static LLCachedControl<F32> draw_distance(gSavedSettings, "RenderFarClip", 128.f);
+    const F32 range = llmax(0.f, F32(draw_distance));
+    F64 retention_seconds = 0.;
 
     // Camera visibility must not evict detail already loaded for worn items.
     // Inspect current face ownership so detaching an item removes protection,
@@ -1682,14 +1691,31 @@ bool LLViewerFetchedTexture::retainOwnAttachmentDetail()
         {
             LLFace* face = (*getFaceList(channel))[index];
             LLViewerObject* object = face ? face->getViewerObject() : nullptr;
-            if (object && !object->isDead() && object->getRootEdit()->isAttachment())
+            if (object && !object->isDead())
             {
-                LLVOAvatar* avatar = object->getAvatarAncestor();
-                if (avatar && avatar->isSelf()) return true;
+                LLVOAvatar* avatar = object->asAvatar();
+                if (!avatar) avatar = object->getAvatarAncestor();
+                if (!avatar || avatar->isDead()) continue;
+                if (avatar->isSelf() && object->getRootEdit()->isAttachment()) return true;
+                const F32 distance_squared = (avatar->getPositionAgent() - gAgent.getPositionAgent()).lengthSquared();
+                if (distance_squared <= range * range)
+                {
+                    if (distance_squared <= 100.f) retention_seconds = 60.;
+                    else if (distance_squared < 400.f) retention_seconds = llmax(retention_seconds, 30.);
+                }
             }
         }
     }
-    return false;
+    if (retention_seconds == 0.)
+    {
+        mAvatarDetailRetentionStarted = -1.;
+        return false;
+    }
+    // Start once when lower detail is requested, not on each retry. Changing
+    // bands adjusts this same deadline; it must not indefinitely renew it.
+    const F64 now = LLTimer::getTotalSeconds();
+    if (mAvatarDetailRetentionStarted < 0.) mAvatarDetailRetentionStarted = now;
+    return now - mAvatarDetailRetentionStarted < retention_seconds;
 }
 
 bool LLViewerFetchedTexture::isVisibleDelivery() const
@@ -3188,6 +3214,12 @@ void LLViewerLODTexture::processTextureStats()
         mDesiredDiscardLevel = llmin(mDesiredDiscardLevel, (S8)mDesiredSavedRawDiscardLevel);
     }
 
+    if (mDesiredDiscardLevel <= getDiscardLevel())
+    {
+        // Current detail is needed again (or the reduction has completed).
+        mAvatarDetailRetentionStarted = -1.;
+    }
+
     // selection manager will immediately reset BOOST_SELECTED but never unsets it
     // unset it immediately after we consume it
     if (getBoostLevel() == BOOST_SELECTED)
@@ -3205,7 +3237,7 @@ extern LLGLSLShader gCopyProgram;
 
 bool LLViewerLODTexture::scaleDown()
 {
-    if (retainOwnAttachmentDetail()) return false;
+    if (retainAvatarDetail()) return false;
 
     if (mGLTexturep.isNull() || !mGLTexturep->getHasGLTexture())
     {
