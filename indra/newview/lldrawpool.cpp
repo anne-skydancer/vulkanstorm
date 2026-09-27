@@ -801,13 +801,24 @@ void LLRenderPass::pushGLTFBatches(U32 type)
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
     auto* begin = gPipeline.beginRenderMap(type);
     auto* end = gPipeline.endRenderMap(type);
+    std::vector<LLDrawInfo*> batch;
+    batch.reserve(256);
     for (LLCullResult::drawinfo_iterator i = begin; i != end; )
     {
-        LL_PROFILE_ZONE_NAMED_CATEGORY_DRAWPOOL("pushGLTFBatch");
         LLDrawInfo& params = **i;
         LLCullResult::increment_iterator(i, end);
-
-        pushGLTFBatch(params);
+        batch.clear();
+        batch.push_back(&params);
+        if (LLComputeMesh::compatibleBatch(params, params))
+        {
+            while (i != end && batch.size() < 256 && LLComputeMesh::compatibleBatch(params, **i))
+            {
+                batch.push_back(*i);
+                LLCullResult::increment_iterator(i, end);
+            }
+            pushGLTFBatch(params, &batch);
+        }
+        else pushGLTFBatch(params);
     }
 }
 
@@ -827,7 +838,7 @@ void LLRenderPass::pushUntexturedGLTFBatches(U32 type)
 }
 
 // static
-void LLRenderPass::pushGLTFBatch(LLDrawInfo& params)
+void LLRenderPass::pushGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch)
 {
     auto& mat = params.mGLTFMaterial;
 
@@ -842,7 +853,12 @@ void LLRenderPass::pushGLTFBatch(LLDrawInfo& params)
 
     applyModelMatrix(params);
 
-    drawGeometry(params);
+    if (batch)
+    {
+        if (!LLComputeMesh::drawBatch(*batch))
+            for (auto* info : *batch) drawGeometry(*info);
+    }
+    else drawGeometry(params);
 
     teardown_texture_matrix(params);
 }

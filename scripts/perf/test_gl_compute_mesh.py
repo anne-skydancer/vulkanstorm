@@ -320,4 +320,69 @@ for wanted,distance in ((0,100),(1,20),(2,8),(3,2)):
 assert get_error()==0
 print('PASS: four GPU-copied/rebased refinement ranges match original color and depth',flush=True)
 
+
+# Gather source commands in arbitrary order and cull against the actual view.
+batch_program=program([(0x91B9,shader_path.with_name('meshBatchC.glsl').read_text())])
+batch_buffers=(U*3)();gen(3,batch_buffers)
+source_commands=[(3,1,12,0,0),(6,1,30,0,0),(0,1,42,0,0)]
+blob=C.create_string_buffer(b''.join(struct.pack('<IIIiI',*row) for row in source_commands))
+bind(SSBO,batch_buffers[0]);data(SSBO,len(blob)-1,blob,0x88E4);base(SSBO,0,batch_buffers[0])
+# Bounds inside, outside, intersecting, exact boundary, invalid, empty LOD,
+# stale slot and a workgroup tail. No visibility readback precedes production draws.
+cases=[(1,(-.5,-.5,-.5),(.5,.5,.5),True),
+       (0,(2,2,2),(3,3,3),False),
+       (0,(-2,-2,-2),(2,2,2),True),
+       (0,(1,-.5,-.5),(2,.5,.5),True),
+       (1,(float('nan'),0,0),(1,1,1),True),
+       (2,(-.5,-.5,-.5),(.5,.5,.5),True),
+       (99,(-.5,-.5,-.5),(.5,.5,.5),False)]
+for i in range(65):
+    x=float(i)-32
+    cases.append((i%3,(x,-.2,-.2),(x+.4,.2,.2),-1.4<=x<=1))
+payload=b''.join(struct.pack('<4I8f',slot,0,0,0,*lo,0,*hi,0) for slot,lo,hi,_ in cases)
+blob=C.create_string_buffer(payload);bind(SSBO,batch_buffers[1]);data(SSBO,len(payload),blob,0x88E4);base(SSBO,1,batch_buffers[1])
+use(batch_program);uniform(location(batch_program,b'candidateCount'),len(cases));uniform(location(batch_program,b'sourceCount'),len(source_commands))
+matrix_uniform=fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))
+for translation in (0.,10.):
+    matrix=(C.c_float*16)(1,0,0,0,0,1,0,0,0,0,1,0,translation,0,0,1)
+    matrix_uniform(location(batch_program,b'clipFromBuffer'),1,0,matrix)
+    initial=b'\xcd'*(20*(len(cases)+1));blob=C.create_string_buffer(initial)
+    bind(SSBO,batch_buffers[2]);data(SSBO,len(initial),blob,0x88E0);base(SSBO,2,batch_buffers[2])
+    dispatch((len(cases)+63)//64,1,1);barrier(0x200|0x40)
+    result=C.create_string_buffer(len(initial));read(SSBO,0,len(initial),result)
+    assert result.raw[-20:]==b'\xcd'*20
+    for i,(slot,lo,hi,_) in enumerate(cases):
+        if slot>=len(source_commands): expected=(0,0,0,0,0)
+        else:
+            invalid=not all(math.isfinite(v) for v in (*lo,*hi))
+            visible=invalid or all(lo[a]+(translation if a==0 else 0)<=1.00001 and hi[a]+(translation if a==0 else 0)>=-1.00001 for a in range(3))
+            count,instances,first,vertex,instance=source_commands[slot]
+            expected=(count,instances if visible else 0,first,vertex,instance)
+        actual=struct.unpack_from('<IIIiI',result.raw,i*20)
+        assert actual==expected,('batch gather/view',translation,i,actual,expected)
+# Consume gathered commands as multi-draw, with a rejected draw between visible
+# ones and page-local nonzero firstIndex. Compare full color/depth attachments.
+triangles=(-.8,-.8,-.1,-.8,-.45,.5, .1,-.8,.8,-.8,.45,.5)
+blob=C.create_string_buffer(struct.pack('<12f',*triangles));bind(0x8892,mesh[0]);data(0x8892,48,blob,0x88E4)
+fn('glVertexAttribPointer',None,U,I,U,C.c_ubyte,I,P)(0,2,0x1406,0,8,None)
+blob=C.create_string_buffer(struct.pack('<6H',0,1,2,3,4,5));bind(0x8893,mesh[1]);data(0x8893,12,blob,0x88E4)
+commands=[(3,1,3,0,0),(3,1,0,0,0)]
+blob=C.create_string_buffer(b''.join(struct.pack('<IIIiI',*row) for row in commands));bind(SSBO,batch_buffers[0]);data(SSBO,len(blob)-1,blob,0x88E4)
+payload=b''.join(struct.pack('<4I8f',slot,0,0,0,*lo,0,*hi,0) for slot,lo,hi in
+    [(1,(-1,-1,-1),(1,1,1)),(0,(4,4,4),(5,5,5)),(0,(-1,-1,-1),(1,1,1))])
+blob=C.create_string_buffer(payload);bind(SSBO,batch_buffers[1]);data(SSBO,len(payload),blob,0x88E4)
+use(batch_program);uniform(location(batch_program,b'candidateCount'),3);uniform(location(batch_program,b'sourceCount'),2)
+matrix=(C.c_float*16)(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)
+matrix_uniform(location(batch_program,b'clipFromBuffer'),1,0,matrix)
+dispatch(1,1,1);barrier(0x40)
+use(render);clear(0x4100);bind(0x8F3F,batch_buffers[2])
+fn('glMultiDrawElementsIndirect',None,U,U,P,I,I)(4,0x1403,None,3,20)
+actual=pixels();actual_depth=depth_pixels()
+clear(0x4100)
+fn('glDrawElements',None,U,I,U,P)(4,3,0x1403,None)
+fn('glDrawElements',None,U,I,U,P)(4,3,0x1403,C.c_void_p(6))
+assert actual==pixels() and actual_depth==depth_pixels(), 'gathered multi-draw color/depth mismatch'
+assert get_error()==0
+print('PASS: batch gather/MDI pixels, conservative visibility, distinct views, stale slots and dispatch tails',flush=True)
+
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)

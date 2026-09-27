@@ -6026,7 +6026,12 @@ void LLVolumeGeometryManager::rebuildGeom(LLSpatialGroup* group)
     for (auto it = group->getDataBegin(); it != group->getDataEnd(); ++it)
     {
         auto* drawable = static_cast<LLDrawable*>((*it)->getDrawable());
-        if (drawable && drawable->getVOVolume()) LLComputeMesh::invalidateLOD(*drawable->getVOVolume());
+        // Repacking a spatial group's direct buffers does not change a clean
+        // object's resident geometry. Only the object's own dirty state retires
+        // its generation; neighbours must not trigger repeated LOD conversion.
+        if (drawable && drawable->getVOVolume() &&
+            drawable->isState(LLDrawable::REBUILD_ALL | LLDrawable::RIGGED))
+            LLComputeMesh::invalidateLOD(*drawable->getVOVolume());
     }
     group->clearDrawMap();
 

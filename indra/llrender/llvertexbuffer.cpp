@@ -966,7 +966,8 @@ void LLVertexBuffer::drawIndirect(U32 mode, U32 command_offset, U32 draw_count) 
 void LLVertexBuffer::copyResidentRange(const LLVertexBuffer& source, U32 source_vertex, U32 source_index,
     U32 vertices, U32 indices, U32 target_vertex, U32 target_index)
 {
-    llassert(this != &source);
+    llassert(this != &source || target_vertex >= source_vertex+vertices || source_vertex >= target_vertex+vertices);
+    llassert(this != &source || target_index >= source_index+indices || source_index >= target_index+indices);
     llassert(mTypeMask == source.mTypeMask && mIndicesType == GL_UNSIGNED_SHORT && source.mIndicesType == GL_UNSIGNED_SHORT);
     llassert(source_vertex+vertices <= source.mNumVerts && target_vertex+vertices <= mNumVerts);
     llassert(source_index+indices <= source.mNumIndices && target_index+indices <= mNumIndices);
