@@ -335,7 +335,9 @@ cases=[(1,(-.5,-.5,-.5),(.5,.5,.5),True),
        (0,(1,-.5,-.5),(2,.5,.5),True),
        (1,(float('nan'),0,0),(1,1,1),True),
        (2,(-.5,-.5,-.5),(.5,.5,.5),True),
-       (99,(-.5,-.5,-.5),(.5,.5,.5),False)]
+       (99,(-.5,-.5,-.5),(.5,.5,.5),False),
+       (0,(-.2,-.2,2),(.2,.2,3),False),
+       (1,(-.2,-.2,-3),(.2,.2,-2),False)]
 for i in range(65):
     x=float(i)-32
     cases.append((i%3,(x,-.2,-.2),(x+.4,.2,.2),-1.4<=x<=1))
@@ -343,7 +345,8 @@ payload=b''.join(struct.pack('<4I8f',slot,0,0,0,*lo,0,*hi,0) for slot,lo,hi,_ in
 blob=C.create_string_buffer(payload);bind(SSBO,batch_buffers[1]);data(SSBO,len(payload),blob,0x88E4);base(SSBO,1,batch_buffers[1])
 use(batch_program);uniform(location(batch_program,b'candidateCount'),len(cases));uniform(location(batch_program,b'sourceCount'),len(source_commands))
 matrix_uniform=fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))
-for translation in (0.,10.):
+for translation, depth_clamp in ((0.,False),(10.,False),(0.,True),(10.,True)):
+    uniform(location(batch_program,b'clipPlaneMask'),15 if depth_clamp else 63)
     matrix=(C.c_float*16)(1,0,0,0,0,1,0,0,0,0,1,0,translation,0,0,1)
     matrix_uniform(location(batch_program,b'clipFromBuffer'),1,0,matrix)
     initial=b'\xcd'*(20*(len(cases)+1));blob=C.create_string_buffer(initial)
@@ -355,11 +358,11 @@ for translation in (0.,10.):
         if slot>=len(source_commands): expected=(0,0,0,0,0)
         else:
             invalid=not all(math.isfinite(v) for v in (*lo,*hi))
-            visible=invalid or all(lo[a]+(translation if a==0 else 0)<=1.00001 and hi[a]+(translation if a==0 else 0)>=-1.00001 for a in range(3))
+            visible=invalid or all(lo[a]+(translation if a==0 else 0)<=1.00001 and hi[a]+(translation if a==0 else 0)>=-1.00001 for a in range(2 if depth_clamp else 3))
             count,instances,first,vertex,instance=source_commands[slot]
             expected=(count,instances if visible else 0,first,vertex,instance)
         actual=struct.unpack_from('<IIIiI',result.raw,i*20)
-        assert actual==expected,('batch gather/view',translation,i,actual,expected)
+        assert actual==expected,('batch gather/view',translation,depth_clamp,i,actual,expected)
 # Consume gathered commands as multi-draw, with a rejected draw between visible
 # ones and page-local nonzero firstIndex. Compare full color/depth attachments.
 triangles=(-.8,-.8,-.1,-.8,-.45,.5, .1,-.8,.8,-.8,.45,.5)
@@ -371,7 +374,7 @@ blob=C.create_string_buffer(b''.join(struct.pack('<IIIiI',*row) for row in comma
 payload=b''.join(struct.pack('<4I8f',slot,0,0,0,*lo,0,*hi,0) for slot,lo,hi in
     [(1,(-1,-1,-1),(1,1,1)),(0,(4,4,4),(5,5,5)),(0,(-1,-1,-1),(1,1,1))])
 blob=C.create_string_buffer(payload);bind(SSBO,batch_buffers[1]);data(SSBO,len(payload),blob,0x88E4)
-use(batch_program);uniform(location(batch_program,b'candidateCount'),3);uniform(location(batch_program,b'sourceCount'),2)
+use(batch_program);uniform(location(batch_program,b'clipPlaneMask'),63);uniform(location(batch_program,b'candidateCount'),3);uniform(location(batch_program,b'sourceCount'),2)
 matrix=(C.c_float*16)(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)
 matrix_uniform(location(batch_program,b'clipFromBuffer'),1,0,matrix)
 dispatch(1,1,1);barrier(0x40)
@@ -383,6 +386,6 @@ fn('glDrawElements',None,U,I,U,P)(4,3,0x1403,None)
 fn('glDrawElements',None,U,I,U,P)(4,3,0x1403,C.c_void_p(6))
 assert actual==pixels() and actual_depth==depth_pixels(), 'gathered multi-draw color/depth mismatch'
 assert get_error()==0
-print('PASS: batch gather/MDI pixels, conservative visibility, distinct views, stale slots and dispatch tails',flush=True)
+print('PASS: batch gather/MDI pixels, conservative visibility, distinct views, depth-clamped shadows, stale slots and dispatch tails',flush=True)
 
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)

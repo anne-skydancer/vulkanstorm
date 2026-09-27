@@ -9,13 +9,15 @@ layout(std430, binding=2) writeonly buffer Output { Command commands[]; };
 uniform uint candidateCount;
 uniform uint sourceCount;
 uniform mat4 clipFromBuffer;
+// Depth-clamped shadow passes clip only against the four lateral planes.
+uniform uint clipPlaneMask;
 
 bool visible(Candidate c)
 {
     if (any(isnan(c.minimum.xyz)) || any(isinf(c.minimum.xyz)) ||
         any(isnan(c.maximum.xyz)) || any(isinf(c.maximum.xyz)) ||
         any(greaterThan(c.minimum.xyz, c.maximum.xyz))) return true;
-    uint commonOutside = 63u;
+    uint commonOutside = clipPlaneMask;
     for (uint corner=0u; corner<8u; ++corner)
     {
         vec3 p = vec3((corner&1u)==0u ? c.minimum.x : c.maximum.x,

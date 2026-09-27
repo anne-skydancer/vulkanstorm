@@ -786,18 +786,6 @@ void teardown_texture_matrix(LLDrawInfo& params)
 
 void LLRenderPass::pushGLTFBatches(U32 type, bool textured)
 {
-    if (textured)
-    {
-        pushGLTFBatches(type);
-    }
-    else
-    {
-        pushUntexturedGLTFBatches(type);
-    }
-}
-
-void LLRenderPass::pushGLTFBatches(U32 type)
-{
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
     auto* begin = gPipeline.beginRenderMap(type);
     auto* end = gPipeline.endRenderMap(type);
@@ -808,33 +796,34 @@ void LLRenderPass::pushGLTFBatches(U32 type)
         LLDrawInfo& params = **i;
         LLCullResult::increment_iterator(i, end);
         batch.clear();
-        batch.push_back(&params);
+        const std::vector<LLDrawInfo*>* resident_batch = nullptr;
         if (LLComputeMesh::compatibleBatch(params, params))
         {
+            batch.push_back(&params);
             while (i != end && batch.size() < 256 && LLComputeMesh::compatibleBatch(params, **i))
             {
                 batch.push_back(*i);
                 LLCullResult::increment_iterator(i, end);
             }
-            pushGLTFBatch(params, &batch);
+            // A singleton already has its GPU LOD command. Gathering it again
+            // adds an upload/dispatch without reducing submission work.
+            if (batch.size() > 1) resident_batch = &batch;
         }
-        else pushGLTFBatch(params);
+        // Color and depth/shadow consumers use the same resident LOD and batch
+        // rules. Only the textured pass binds material textures/transforms.
+        if (textured) pushGLTFBatch(params, resident_batch);
+        else pushUntexturedGLTFBatch(params, resident_batch);
     }
+}
+
+void LLRenderPass::pushGLTFBatches(U32 type)
+{
+    pushGLTFBatches(type, true);
 }
 
 void LLRenderPass::pushUntexturedGLTFBatches(U32 type)
 {
-    LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
-    auto* begin = gPipeline.beginRenderMap(type);
-    auto* end = gPipeline.endRenderMap(type);
-    for (LLCullResult::drawinfo_iterator i = begin; i != end; )
-    {
-        LL_PROFILE_ZONE_NAMED_CATEGORY_DRAWPOOL("pushGLTFBatch");
-        LLDrawInfo& params = **i;
-        LLCullResult::increment_iterator(i, end);
-
-        pushUntexturedGLTFBatch(params);
-    }
+    pushGLTFBatches(type, false);
 }
 
 // static
@@ -864,7 +853,7 @@ void LLRenderPass::pushGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInf
 }
 
 // static
-void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params)
+void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch)
 {
     auto& mat = params.mGLTFMaterial;
 
@@ -872,7 +861,12 @@ void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params)
 
     applyModelMatrix(params);
 
-    drawGeometry(params);
+    if (batch)
+    {
+        if (!LLComputeMesh::drawBatch(*batch))
+            for (auto* info : *batch) drawGeometry(*info);
+    }
+    else drawGeometry(params);
 }
 
 void LLRenderPass::pushRiggedGLTFBatches(U32 type, bool textured)
