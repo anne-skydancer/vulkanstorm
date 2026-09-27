@@ -2985,12 +2985,6 @@ void LLViewerWindow::drawDebugText()
 
 void LLViewerWindow::draw()
 {
-#if LL_RELEASE_WITH_DEBUG_INFO
-    // Process-local offscreen qualification, never a rendering preference.
-    if (LLStartUp::getStartupState() == STATE_LOGIN_WAIT)
-        LLParticleViewer::runDevelopmentTest();
-#endif
-
 
 //#if LL_DEBUG
     LLView::sIsDrawing = true;

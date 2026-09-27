@@ -8,9 +8,6 @@ class LLViewerRegion;
 class LLGLSLShader;
 namespace LLParticleViewer
 {
-#if LL_RELEASE_WITH_DEBUG_INFO
-void runDevelopmentTest();
-#endif
 bool active();
 bool acceptsBirths();
 bool beginFrame();
