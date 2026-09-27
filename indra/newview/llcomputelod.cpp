@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 #include "llviewerprecompiledheaders.h"
 #include "llcomputemesh.h"
+#include "llmeshranges.h"
 #include "llvovolume.h"
 #include "llspatialpartition.h"
 #include "llviewercontrol.h"
@@ -20,9 +21,24 @@
 #include <cstring>
 #include <deque>
 #include <map>
+#include <limits>
+#include <glm/gtc/type_ptr.hpp>
 
 namespace LLComputeMesh
 {
+struct Page
+{
+    LLPointer<LLVertexBuffer> buffer;
+    Ranges vertices, indices;
+    U64 bytes = 0;
+    ~Page();
+};
+struct PageRange
+{
+    std::shared_ptr<Page> page;
+    U32 vertex = 0, index = 0, vertices = 0, indices = 0;
+    ~PageRange();
+};
 struct Avatar
 {
     LLPointer<LLVOAvatar> object;
@@ -61,6 +77,7 @@ U32 camera_frame = ~0u;
 LLVector3 lod_camera;
 F32 lod_policy[4] = {};
 U64 resident_bytes = 0, resource_epoch = 0;
+std::vector<std::weak_ptr<LLComputeMesh::Page>> pages;
 void cancelPreparation(LLVOVolume& object);
 GLuint program = 0, buffers[5] = {};
 GLuint demand_readback = 0;
@@ -69,6 +86,12 @@ LLTimer demand_timer;
 std::array<std::weak_ptr<LLComputeMesh::Object>, CAPACITY> demand_owners;
 U32 demand_extent = 0;
 GLint count_uniform = -1, camera_uniform = -1, policy_uniform = -1, phase_uniform = -1, avatar_count_uniform = -1;
+GLuint batch_program = 0, batch_buffers[2] = {};
+bool batch_failed = false;
+GLint batch_count = -1, batch_source_count = -1, batch_matrix = -1;
+constexpr U32 BATCH_CAPACITY = 256;
+struct BatchCandidate { U32 slot[4] = {}; F32 minimum[4] = {}, maximum[4] = {}; };
+static_assert(sizeof(BatchCandidate) == 48, "std430 batch layout");
 bool failed = false;
 LLTimer report_timer;
 U32 draws = 0, dispatches = 0, bypasses = 0;
@@ -124,7 +147,11 @@ bool initialize()
     failed = true;
     std::ifstream file(gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders", "class1/objects/meshLODC.glsl"));
     std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    if (source.empty()) return false;
+    if (source.empty())
+    {
+        LL_WARNS("ComputeLOD") << "Missing mesh compute shader source" << LL_ENDL;
+        return false;
+    }
     GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
     const char* text = source.c_str();
     glShaderSource(shader, 1, &text, nullptr);
@@ -183,6 +210,71 @@ bool initialize()
     failed = false;
     LL_INFOS("ComputeLOD") << "Resident four-level indirect LOD initialized; budget_mib=" << byteBudget()/1048576 << " capacity=" << CAPACITY << LL_ENDL;
     return true;
+}
+
+bool initializeBatch()
+{
+    if (batch_program) return true;
+    if (batch_failed) return false;
+    batch_failed = true;
+    std::ifstream file(gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders", "class1/objects/meshBatchC.glsl"));
+    std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    if (source.empty())
+    {
+        LL_WARNS("ComputeLOD") << "Missing mesh compute shader source" << LL_ENDL;
+        return false;
+    }
+    GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+    const char* text = source.c_str();
+    glShaderSource(shader, 1, &text, nullptr);
+    glCompileShader(shader);
+    GLint ok = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+    if (!ok)
+    {
+        char log[4096] = {};
+        glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
+        LL_WARNS("ComputeLOD") << "Mesh batch shader: " << log << LL_ENDL;
+        glDeleteShader(shader); return false;
+    }
+    GLuint linked = glCreateProgram();
+    glAttachShader(linked, shader);
+    glLinkProgram(linked);
+    glDeleteShader(shader);
+    glGetProgramiv(linked, GL_LINK_STATUS, &ok);
+    if (!ok)
+    {
+        char log[4096] = {};
+        glGetProgramInfoLog(linked, sizeof(log), nullptr, log);
+        LL_WARNS("ComputeLOD") << "Mesh batch program: " << log << LL_ENDL;
+        glDeleteProgram(linked); return false;
+    }
+    Bindings saved;
+    glGenBuffers(2, batch_buffers);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, batch_buffers[0]);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, BATCH_CAPACITY*sizeof(BatchCandidate), nullptr, GL_STREAM_DRAW);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, batch_buffers[1]);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, BATCH_CAPACITY*5*sizeof(U32), nullptr, GL_STREAM_DRAW);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        glDeleteProgram(linked);
+        glDeleteBuffers(2, batch_buffers);
+        batch_buffers[0] = batch_buffers[1] = 0;
+        return false;
+    }
+    batch_failed = false;
+    batch_program = linked;
+    batch_count = glGetUniformLocation(linked, "candidateCount");
+    batch_source_count = glGetUniformLocation(linked, "sourceCount");
+    batch_matrix = glGetUniformLocation(linked, "clipFromBuffer");
+    return true;
+}
+void destroyBatch()
+{
+    if (batch_program) glDeleteProgram(batch_program);
+    if (batch_buffers[0]) glDeleteBuffers(2, batch_buffers);
+    batch_program = batch_buffers[0] = batch_buffers[1] = 0;
+    batch_failed = false;
 }
 
 AvatarInput avatarInput(LLVOAvatar& avatar)
@@ -323,6 +415,25 @@ bool dispatch()
 }
 }
 
+LLComputeMesh::PageRange::~PageRange()
+{
+    if (page)
+    {
+        page->vertices.release(vertex, vertices);
+        page->indices.release(index, indices);
+        ++resource_epoch;
+    }
+}
+
+LLComputeMesh::Page::~Page()
+{
+    if (bytes)
+    {
+        resident_bytes -= bytes;
+        ++resource_epoch;
+    }
+}
+
 LLComputeMesh::Avatar::~Avatar()
 {
     if (generation != ::generation || slot == ~0u) return;
@@ -376,10 +487,42 @@ bool LLComputeMesh::ownsLOD(LLVOVolume& object)
 
 namespace
 {
+// Draw records retain range leases. Reuse occurs only after all CPU owners
+// release the range; ordinary GL buffer updates order writes after prior GPU
+// consumers (no unsynchronized/persistent mapping). Empty pages can retire.
+std::shared_ptr<LLComputeMesh::Page> acquirePage(U32 mask, U32 vertices, U32 indices)
+{
+    for (auto it = pages.begin(); it != pages.end();)
+    {
+        auto page = it->lock();
+        if (!page) { it = pages.erase(it); continue; }
+        ++it;
+        if (page->buffer->getTypeMask() == mask &&
+            page->vertices.fits(vertices) && page->indices.fits(indices)) return page;
+    }
+    const U32 vertex_capacity = llmax(32768u, vertices);
+    const U32 index_capacity = llmax(131072u, indices);
+    const U64 estimate = U64(vertex_capacity)*llmax(128u, LLVertexBuffer::calcVertexSize(mask)) + U64(index_capacity)*2 + 512;
+    if (resident_bytes + estimate > byteBudget()) return {};
+    auto page = std::make_shared<LLComputeMesh::Page>();
+    page->buffer = new LLVertexBuffer(mask);
+    if (!page->buffer->allocateBuffer(vertex_capacity, index_capacity)) return {};
+    page->vertices = LLComputeMesh::Ranges(vertex_capacity);
+    page->indices = LLComputeMesh::Ranges(index_capacity);
+    page->bytes = page->buffer->getSize() + page->buffer->getIndicesSize();
+    resident_bytes += page->bytes;
+    pages.push_back(page);
+    return page;
+}
+
 struct StagedFace
 {
     LLPointer<LLVertexBuffer> buffer;
     Entry entry;
+    std::shared_ptr<LLComputeMesh::Page> page;
+    std::shared_ptr<LLComputeMesh::PageRange> page_range;
+    F32 minimum[4] = {std::numeric_limits<F32>::infinity(), std::numeric_limits<F32>::infinity(), std::numeric_limits<F32>::infinity(), 0};
+    F32 maximum[4] = {-std::numeric_limits<F32>::infinity(), -std::numeric_limits<F32>::infinity(), -std::numeric_limits<F32>::infinity(), 0};
     U64 bytes = 0;
     U32 vertex_offset = 0, index_offset = 0;
     ~StagedFace() { resident_bytes -= bytes; if (bytes) ++resource_epoch; }
@@ -579,7 +722,7 @@ BuildResult advanceJob(BuildJob& job)
             new_slots += owner->faces[f]->slot == ~0u;
         }
         // Include the still-visible old buffers while preparing replacements.
-        if (new_slots > CAPACITY-extent+available.size() || resident_bytes+estimate > byteBudget()) return BuildResult::RESOURCE_LIMIT;
+        if (new_slots > CAPACITY-extent+available.size() || (rigged && resident_bytes+estimate > byteBudget())) return BuildResult::RESOURCE_LIMIT;
         if (!initialize()) return BuildResult::DROP;
         job.faces.resize(count);
         job.initialized = true;
@@ -607,12 +750,30 @@ BuildResult advanceJob(BuildJob& job)
                     vertices += (vf.mNumVertices+3)&~3u; indices += vf.mNumIndices;
                 }
             }
-            if (resident_bytes+U64(llmax(vertices, 4u))*llmax(128u, LLVertexBuffer::calcVertexSize(mask))+U64(llmax(indices, 1u))*2+512 > byteBudget()) return BuildResult::RESOURCE_LIMIT;
-            staged->buffer = new LLVertexBuffer(mask);
-            if (!staged->buffer->allocateBuffer(llmax(vertices, 4u), llmax(indices, 1u))) return BuildResult::RESOURCE_LIMIT;
-            staged->bytes = staged->buffer->getSize()+staged->buffer->getIndicesSize();
-            resident_bytes += staged->bytes;
-            geometry_allocation_bytes += staged->bytes;
+            if (rigged && resident_bytes+U64(llmax(vertices, 4u))*llmax(128u, LLVertexBuffer::calcVertexSize(mask))+U64(llmax(indices, 1u))*2+512 > byteBudget()) return BuildResult::RESOURCE_LIMIT;
+            if (!rigged)
+            {
+                staged->page = acquirePage(mask, llmax(vertices, 4u), llmax(indices, 1u));
+                if (!staged->page) return BuildResult::RESOURCE_LIMIT;
+                staged->buffer = staged->page->buffer;
+                auto range = std::make_shared<LLComputeMesh::PageRange>();
+                range->vertices = llmax(vertices, 4u);
+                range->indices = llmax(indices, 1u);
+                range->vertex = *staged->page->vertices.take(range->vertices);
+                range->index = *staged->page->indices.take(range->indices);
+                range->page = staged->page;
+                staged->vertex_offset = range->vertex;
+                staged->index_offset = range->index;
+                staged->page_range = std::move(range);
+            }
+            else
+            {
+                staged->buffer = new LLVertexBuffer(mask);
+                if (!staged->buffer->allocateBuffer(llmax(vertices, 4u), llmax(indices, 1u))) return BuildResult::RESOURCE_LIMIT;
+                staged->bytes = staged->buffer->getSize()+staged->buffer->getIndicesSize();
+                resident_bytes += staged->bytes;
+                geometry_allocation_bytes += staged->bytes;
+            }
             if (rigged && !record->avatar)
             {
                 record->avatar = acquireAvatar(face.mAvatar);
@@ -642,6 +803,26 @@ BuildResult advanceJob(BuildJob& job)
             }
             const auto& vf = source->getVolumeFace(face_index);
             if (!vf.mNumVertices) continue;
+            if (!rigged)
+            {
+                // Union every resident LOD's transformed bounds, not just the
+                // current CPU drawable: a coarser level may be smaller.
+                LLMatrix4a transform;
+                transform.loadu(object->getRelativeXform());
+                for (U32 corner=0; corner<8; ++corner)
+                {
+                    LLVector4a local, transformed;
+                    local.set(vf.mExtents[(corner>>0)&1].getF32ptr()[0],
+                              vf.mExtents[(corner>>1)&1].getF32ptr()[1],
+                              vf.mExtents[(corner>>2)&1].getF32ptr()[2]);
+                    transform.affineTransform(local, transformed);
+                    for (U32 axis=0; axis<3; ++axis)
+                    {
+                        staged.minimum[axis] = llmin(staged.minimum[axis], transformed.getF32ptr()[axis]);
+                        staged.maximum[axis] = llmax(staged.maximum[axis], transformed.getF32ptr()[axis]);
+                    }
+                }
+            }
             const bool reuse = record->valid && (record->available_lods & (1u<<lod)) &&
                 record->buffer->getTypeMask() == mask;
             if (reuse)
@@ -711,6 +892,13 @@ BuildResult advanceJob(BuildJob& job)
             const U32 fallback = LLMeshStreaming::residentLevel(job.ready_mask, lod);
             std::copy(staged.entry.ranges[fallback], staged.entry.ranges[fallback]+4, staged.entry.ranges[lod]);
         }
+        if (staged.bytes)
+        {
+        }
+        record->page_range = staged.page_range;
+        record->page = staged.page;
+        std::copy(staged.minimum, staged.minimum+4, record->minimum);
+        std::copy(staged.maximum, staged.maximum+4, record->maximum);
         resident_bytes -= record->bytes;
         if (record->bytes) ++resource_epoch;
         record->buffer = staged.buffer;
@@ -916,10 +1104,67 @@ bool LLComputeMesh::drawLOD(LLDrawInfo& info)
         (!record->avatar->object->isControlAvatar() && !record->avatar->object->isFullyLoaded()) ||
         info.mAvatar != record->avatar->object || info.getSkinHash() != record->skin_hash)) return false;
     if (!dispatch()) return false;
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buffers[1]);
     record->buffer->setBuffer();
     record->buffer->drawIndirect(LLRender::TRIANGLES, record->slot, 1);
     ++draws;
     if (record->avatar) ++rigged_draws;
+    return true;
+}
+
+bool LLComputeMesh::compatibleBatch(const LLDrawInfo& first, const LLDrawInfo& next)
+{
+    const auto& a = first.mComputeLOD;
+    const auto& b = next.mComputeLOD;
+    return a && b && a->valid && b->valid && a->page && a->page == b->page &&
+        !a->avatar && !b->avatar && a->generation == generation && b->generation == generation &&
+        first.mModelMatrix == next.mModelMatrix && first.mTextureMatrix == next.mTextureMatrix &&
+        first.mGLTFMaterial == next.mGLTFMaterial && first.mTexture == next.mTexture &&
+        first.mGLTFMaterial.notNull() &&
+        first.mGLTFMaterial->mAlphaMode == LLGLTFMaterial::ALPHA_MODE_OPAQUE &&
+        !first.mAvatar && !next.mAvatar;
+}
+
+bool LLComputeMesh::drawBatch(const std::vector<LLDrawInfo*>& batch)
+{
+    if (batch.empty() || batch.size() > BATCH_CAPACITY || !enabled()) return false;
+    const auto& first = *batch.front();
+    for (const auto* info : batch) if (!info || !compatibleBatch(first, *info)) return false;
+    if (!dispatch() || !initializeBatch()) return false;
+    std::array<BatchCandidate, BATCH_CAPACITY> candidates;
+    for (size_t i=0; i<batch.size(); ++i)
+    {
+        const auto& record = *batch[i]->mComputeLOD;
+        candidates[i].slot[0] = record.slot;
+        std::copy(record.minimum, record.minimum+4, candidates[i].minimum);
+        std::copy(record.maximum, record.maximum+4, candidates[i].maximum);
+    }
+    gGL.flush();
+    const glm::mat4 clip = gGL.getProjectionMatrix() * gGL.getModelviewMatrix();
+    {
+        Bindings saved;
+        glUseProgram(batch_program);
+        // Source commands may have been generated earlier in this view/frame.
+        // Order both shader reads and writes after preceding consumers.
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, batch_buffers[0]);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, batch.size()*sizeof(BatchCandidate), candidates.data());
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, buffers[1]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, batch_buffers[0]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, batch_buffers[1]);
+        glUniform1ui(batch_count, U32(batch.size()));
+        glUniform1ui(batch_source_count, extent);
+        glUniformMatrix4fv(batch_matrix, 1, GL_FALSE, glm::value_ptr(clip));
+        glDispatchCompute((U32(batch.size())+63)/64, 1, 1);
+        glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
+    }
+    GLint indirect = 0;
+    glGetIntegerv(GL_DRAW_INDIRECT_BUFFER_BINDING, &indirect);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, batch_buffers[1]);
+    first.mComputeLOD->buffer->setBuffer();
+    first.mComputeLOD->buffer->drawIndirect(LLRender::TRIANGLES, 0, U32(batch.size()));
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirect);
+    ++draws;
     return true;
 }
 
@@ -1004,6 +1249,7 @@ void LLComputeMesh::shiftLOD(const LLVector3& offset)
 
 void LLComputeMesh::reloadLOD()
 {
+    destroyBatch();
     // Shader reload does not invalidate immutable geometry. Preserve residency
     // and recreate only the program and command/metadata buffers on next draw.
     if (demand_fence) glDeleteSync(demand_fence);
@@ -1019,6 +1265,7 @@ void LLComputeMesh::reloadLOD()
 
 void LLComputeMesh::destroyLOD()
 {
+    destroyBatch();
     // Reset object generations as well as queues. Otherwise a surviving draw
     // record could retain an invalid token with no job capable of waking it.
     std::map<LLVOVolume*, LLPointer<LLVOVolume>> reset_objects;
@@ -1038,6 +1285,7 @@ void LLComputeMesh::destroyLOD()
     avatar_inputs.fill(AvatarInput{});
     avatar_extent = 0;
     avatars_dirty = false;
+    pages.clear();
     owners.fill(nullptr);
     entries.fill(Entry{});
     available.clear();

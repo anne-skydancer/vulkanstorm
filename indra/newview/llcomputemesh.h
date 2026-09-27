@@ -14,10 +14,15 @@ namespace LLComputeMesh
 {
 struct Avatar;
 struct Object;
+struct Page;
+struct PageRange;
 struct Resident
 {
     std::weak_ptr<Object> owner;
     std::shared_ptr<Avatar> avatar;
+    std::shared_ptr<Page> page;
+    std::shared_ptr<PageRange> page_range;
+    F32 minimum[4] = {}, maximum[4] = {};
     U32 available_lods = 0, failed_lods = 0, excluded_lods = 0;
     U64 skin_hash = 0;
     LLPointer<LLVertexBuffer> buffer;
@@ -44,6 +49,8 @@ void notifyLODDependency(LLVOVolume& object, unsigned changed);
 void shiftLOD(const LLVector3& offset);
 void beginLOD();
 bool drawLOD(LLDrawInfo& info);
+bool compatibleBatch(const LLDrawInfo& first, const LLDrawInfo& next);
+bool drawBatch(const std::vector<LLDrawInfo*>& batch);
 void reloadLOD();
 void destroyLOD();
 void destroyGL();
