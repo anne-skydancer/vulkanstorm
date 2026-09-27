@@ -41,6 +41,19 @@ int main()
     Budget::updateAvailableMemory(16 * 1024 * MiB);
     assert(Budget::limit() == Budget::Ceiling);
 
+    // A small decoded result must not retain full-resolution decode allowance.
+    auto decoded = Budget::reserve(32 * MiB, false);
+    auto consumer = decoded;
+    decoded->shrinkTo(MiB / 2);
+    assert(Budget::used() == MiB / 2 && consumer->bytes() == MiB / 2);
+    decoded->shrinkTo(64 * MiB); // cannot grow an admitted reservation
+    assert(Budget::used() == MiB / 2);
+    decoded.reset();
+    assert(Budget::used() == MiB / 2); // output still owned
+    consumer->release(); consumer->shrinkTo(MiB);
+    assert(Budget::used() == 0 && consumer->bytes() == 0);
+    consumer.reset();
+
     // Exercise admission/release races and independent cancellation owners.
     std::vector<std::thread> threads;
     for (int i = 0; i < 12; ++i)
@@ -52,6 +65,7 @@ int main()
                 if (lease)
                 {
                     auto second_owner = lease;
+                    lease->shrinkTo(2 * MiB);
                     if (j % 2) second_owner->release();
                 }
                 assert(Budget::used() <= Budget::Ceiling);
@@ -59,5 +73,14 @@ int main()
         });
     for (auto& thread : threads) thread.join();
     assert(Budget::used() == 0);
+    // Concurrent stage completion/cancellation on the same shared reservation.
+    for (int round = 0; round < 100; ++round)
+    {
+        auto lease = Budget::reserve(32 * MiB, true);
+        std::thread completion([lease] { lease->shrinkTo(MiB); });
+        std::thread cancellation([lease] { lease->release(); });
+        completion.join(); cancellation.join();
+        assert(lease->bytes() == 0 && Budget::used() == 0);
+    }
     std::cout << "Texture delivery budget: admission, headroom, ownership and concurrency passed\n";
 }

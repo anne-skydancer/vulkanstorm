@@ -27,16 +27,30 @@ Reservations precede decoder submission. They conservatively cover two primary
 images at the formatted image's full dimensions rounded up to powers of two,
 plus an auxiliary channel when
 requested. This accounts for the decoder's initial full-size output allocation
-and a separate resized upload image. It intentionally overestimates reduced J2C
-outputs. Fast-cache reads reserve their bounded 16-by-16 RGBA entry plus preparation
+and a separate resized upload image. After a successful decode, before publishing
+the result, the reservation shrinks to two primary images at the decoded size
+(with power-of-two padding retained) plus actual auxiliary storage. A 2048-square
+RGBA admission therefore drops from 32 MiB to 0.5 MiB if decoded at 256 square.
+The decoder retains the full allowance while running. Failed/incomplete decodes
+do not trim it early, and shrinking cannot grow or resurrect a released lease.
+Fast-cache reads reserve their bounded 16-by-16 RGBA entry plus preparation
 before reading. New reservations fail without blocking; the existing fetch state
 machine retries them without marking an asset missing.
 
 Raw outputs and their scaled derivatives share ownership of the reservation.
-Capacity returns when the final owner releases it, including pending cache writes
+Unused decode allowance returns at decode completion; the remaining output and
+preparation capacity returns when the final owner releases it, including pending cache writes
 and uploads. An obsolete result is released by the fetch worker before it seeks a
 reservation for another decode. Otherwise old results could pin the capacity
 needed to replace themselves.
+
+The development `FocusMemory` samples include cumulative `admission_deferred_attempts`,
+`urgent_admission_deferred_attempts` (first-visible or aged work) and
+`decode_allowance_returned_bytes`. Deferrals count retries, not distinct textures;
+compare increments over equal time windows. Returned bytes measure conservative
+allowance returned, not bytes freed from the process or additional upload throughput.
+Upload-preparation allowance is still retained with the output until its final
+owner releases it; separate stage ownership is not implemented here.
 
 When available RAM falls, new admission uses a lower effective ceiling, leaving
 512 MiB of headroom and using half of additional available memory. The effective
@@ -172,6 +186,15 @@ and Mesa/Zink, both with asynchronous delivery enabled. The synchronous fallback
 also passed in an isolated profile with background texture uploads disabled.
 All three driver test runs exited normally. These are startup and correctness
 checks, not measurements of in-world texture delivery under pressure.
+
+Build **7.2.5.82007** adds post-decode reservation trimming and admission counters.
+Windows RelWithDebInfo compilation, linking, complete staging and configuration
+validation passed. The production-method fixture verifies successful versus failed
+completion, reduced results, auxiliary storage, power-of-two padding and repeated
+admission of small results. Concurrent shrink/release tests passed. A Zink startup
+run passed GPU publication/readback checks and exited normally; real startup
+decodes returned 155,512 bytes of excess allowance. This demonstrates the path is
+active, not a crowded-region delivery speedup. In-world comparison is pending.
 
 In-world
 acceptance requires a comparable dense-region traversal on native OpenGL and Zink,

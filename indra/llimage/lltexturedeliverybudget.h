@@ -20,10 +20,22 @@ public:
         ~Reservation() { release(); }
         void release()
         {
-            if (auto bytes = mBytes.exchange(0))
+            shrinkTo(0);
+        }
+        // Once a stage has finished, return its unused allowance without
+        // revoking ownership of the output. Never grow or resurrect a lease.
+        void shrinkTo(std::uint64_t bytes)
+        {
+            // Also makes destruction of an uncharged reservation safe while
+            // reserve() holds sMutex (shared_ptr allocation failure).
+            if (mBytes.load() <= bytes) return;
+            std::lock_guard<std::mutex> lock(sMutex);
+            const auto previous = mBytes.load();
+            if (bytes < previous)
             {
-                std::lock_guard<std::mutex> lock(sMutex);
-                sUsed -= bytes;
+                mBytes.store(bytes);
+                sUsed -= previous - bytes;
+                if (bytes) sTrimmedBytes += previous - bytes;
             }
         }
         std::uint64_t bytes() const { return mBytes.load(); }
@@ -40,7 +52,13 @@ public:
         // A quarter of capacity is reserved for first visible images. Ordinary
         // work can use only the other three quarters.
         const auto limit = first_visible ? sLimit : sLimit * 3 / 4;
-        if (!bytes || bytes > limit || sUsed > limit - bytes) return {};
+        if (!bytes) return {};
+        if (bytes > limit || sUsed > limit - bytes)
+        {
+            ++sDeferredAttempts;
+            if (first_visible) ++sUrgentDeferredAttempts;
+            return {};
+        }
         auto result = Lease(new Reservation(0));
         sUsed += bytes;
         result->mBytes.store(bytes);
@@ -59,9 +77,22 @@ public:
     static std::uint64_t used() { std::lock_guard<std::mutex> lock(sMutex); return sUsed; }
     static std::uint64_t limit() { std::lock_guard<std::mutex> lock(sMutex); return sLimit; }
 
+    struct Statistics
+    {
+        std::uint64_t deferredAttempts, urgentDeferredAttempts, trimmedBytes;
+    };
+    static Statistics statistics()
+    {
+        std::lock_guard<std::mutex> lock(sMutex);
+        return {sDeferredAttempts, sUrgentDeferredAttempts, sTrimmedBytes};
+    }
+
 private:
     inline static std::mutex sMutex;
     inline static std::uint64_t sUsed = 0;
     inline static std::uint64_t sLimit = Ceiling;
+    inline static std::uint64_t sDeferredAttempts = 0;
+    inline static std::uint64_t sUrgentDeferredAttempts = 0;
+    inline static std::uint64_t sTrimmedBytes = 0;
 };
 #endif

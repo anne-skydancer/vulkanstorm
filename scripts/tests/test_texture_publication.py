@@ -36,6 +36,7 @@ fixture = r'''
 #include <deque>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -61,6 +62,7 @@ constexpr GLenum GL_ALREADY_SIGNALED=1, GL_TIMEOUT_EXPIRED=2, GL_WAIT_FAILED=3;
 #define LL_WARNS(x) std::cerr
 #define LL_INFOS(x) std::cout
 #define LL_ENDL std::endl
+#define LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE
 bool on_main_thread() { return true; }
 std::deque<GLenum> responses;
 std::vector<U64> waits;
@@ -71,7 +73,14 @@ GLenum glClientWaitSync(GLsync, unsigned, U64 timeout) {
 }
 void glDeleteSync(GLsync) { ++deleted_fences; }
 template<class T> using LLPointer = std::shared_ptr<T>;
-struct LLImageRaw { int width=1,height=1; int getWidth() const { return width; } int getHeight() const { return height; } };
+struct LLImageRaw {
+    int width=1,height=1,components=4;
+    LLTextureDeliveryBudget::Lease mDeliveryReservation;
+    int getWidth() const { return width; }
+    int getHeight() const { return height; }
+    int getComponents() const { return components; }
+    int getDataSize() const { return width*height*components; }
+};
 constexpr int MAX_DISCARD_LEVEL=5;
 constexpr U64 MAX_IMAGE_SIZE=4096, MAX_IMAGE_COMPONENTS=8;
 struct LLImageFormatted {
@@ -87,6 +96,29 @@ struct LLImageDataLock { explicit LLImageDataLock(LLImageFormatted*) {} };
 struct LLImageDecodeThread {
     static LLTextureDeliveryBudget::Lease reserveDelivery(LLImageFormatted* image,
         bool needs_aux, bool first_visible, bool& invalid_image);
+    static U64 decodedDeliveryBytes(const LLImageRaw* raw, const LLImageRaw* aux);
+};
+struct DecodeReply {
+    bool success=false;
+    U64 reserved=0;
+    void completed(bool ok, const std::string&, const LLPointer<LLImageRaw>& raw,
+                   const LLPointer<LLImageRaw>& aux, U32) {
+        success=ok; reserved=raw->mDeliveryReservation->bytes();
+        if (aux) assert(aux->mDeliveryReservation==raw->mDeliveryReservation);
+    }
+};
+struct ImageRequest {
+    bool mDecodedRaw=true, mDecodedAux=false, mNeedsAux=false;
+    LLTextureDeliveryBudget::Lease mReservation;
+    LLPointer<LLImageRaw> mDecodedImageRaw, mDecodedImageAux;
+    std::string mErrorString;
+    U32 mRequestId=1;
+    struct Responder {
+        DecodeReply* value=nullptr;
+        bool notNull() const { return value!=nullptr; }
+        DecodeReply* operator->() { return value; }
+    } mResponder;
+    void finishRequest(bool completed);
 };
 struct LLImageGL {
     bool mDetachedUpload = false;
@@ -128,6 +160,8 @@ public:
 };
 '''
 fixture += method('indra/llimage/llimageworker.cpp', 'LLTextureDeliveryBudget::Lease LLImageDecodeThread::reserveDelivery') + '\n'
+fixture += method('indra/llimage/llimageworker.cpp', 'U64 LLImageDecodeThread::decodedDeliveryBytes') + '\n'
+fixture += method('indra/llimage/llimageworker.cpp', 'void ImageRequest::finishRequest') + '\n'
 fixture += method('indra/newview/llviewertexturelist.cpp', 'static S32 deliveryDiscardForRaw') + '\n'
 fixture += method('indra/newview/llviewertexturelist.cpp', 'struct LLViewerTextureList::PendingUpload') + ';\n'
 fixture += method('indra/llrender/llimagegl.cpp', 'void LLImageGL::adoptUploadImage') + '\n'
@@ -153,6 +187,30 @@ int main() {
     assert(reserved && !invalid && formatted->parses==1);
     assert(reserved->bytes()==U64(2048)*2048*9);
     reserved.reset();
+    LLImageRaw small{256,256,4}, auxiliary{256,256,1}, nonpot{17,20,3};
+    assert(LLImageDecodeThread::decodedDeliveryBytes(&small,nullptr)==524288);
+    assert(LLImageDecodeThread::decodedDeliveryBytes(&small,&auxiliary)==589824);
+    assert(LLImageDecodeThread::decodedDeliveryBytes(&nonpot,nullptr)==6144);
+    {
+        ImageRequest request; DecodeReply reply; request.mResponder.value=&reply;
+        request.mDecodedImageRaw=std::make_shared<LLImageRaw>(small);
+        request.mReservation=LLTextureDeliveryBudget::reserve(32*1048576,false);
+        request.finishRequest(false);
+        assert(!reply.success && reply.reserved==32*1048576); // no premature trim
+        request.finishRequest(true);
+        assert(reply.success && reply.reserved==524288); // trim before publication
+    }
+    assert(LLTextureDeliveryBudget::used()==0);
+    // Completing many reduced decodes must leave admission available, while
+    // every result and its preparation allowance remain charged.
+    std::vector<LLTextureDeliveryBudget::Lease> decoded_results;
+    for (int i=0;i<100;++i) {
+        auto lease=LLImageDecodeThread::reserveDelivery(formatted.get(),false,false,invalid);
+        assert(lease); lease->shrinkTo(LLImageDecodeThread::decodedDeliveryBytes(&small,nullptr));
+        decoded_results.push_back(lease);
+    }
+    assert(LLTextureDeliveryBudget::used()==100*524288);
+    decoded_results.clear(); assert(LLTextureDeliveryBudget::used()==0);
     auto malformed=std::make_shared<LLImageFormatted>(); malformed->valid=false;
     assert(!LLImageDecodeThread::reserveDelivery(malformed.get(), false, true, invalid) && invalid);
     auto all=LLTextureDeliveryBudget::reserve(LLTextureDeliveryBudget::Ceiling,true);

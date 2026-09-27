@@ -975,6 +975,7 @@ void LLViewerTextureList::updateImages(F32 max_time)
     {
         focus_memory_timer.reset();
         previous_focus = focused;
+        const auto delivery_stats = LLTextureDeliveryBudget::statistics();
         LL_INFOS("FocusMemory") << "focused=" << focused
             << " frame_mean_seconds=" << (frame_samples ? frame_sum / frame_samples : 0.)
             << " frame_max_seconds=" << frame_max
@@ -984,6 +985,9 @@ void LLViewerTextureList::updateImages(F32 max_time)
             << " upload_pending=" << mPendingUploads.size()
             << " delivery_reserved_bytes=" << LLTextureDeliveryBudget::used()
             << " delivery_budget_bytes=" << LLTextureDeliveryBudget::limit()
+            << " admission_deferred_attempts=" << delivery_stats.deferredAttempts
+            << " urgent_admission_deferred_attempts=" << delivery_stats.urgentDeferredAttempts
+            << " decode_allowance_returned_bytes=" << delivery_stats.trimmedBytes
             << " discard_bias=" << LLViewerTexture::sDesiredDiscardBias
             << LL_ENDL;
         LLMemory::logMemoryInfo(true);

@@ -116,6 +116,17 @@ LLTextureDeliveryBudget::Lease LLImageDecodeThread::reserveDelivery(
         std::bit_ceil(width) * std::bit_ceil(height) * (components * 2 + (needs_aux ? 1 : 0)), first_visible);
 }
 
+U64 LLImageDecodeThread::decodedDeliveryBytes(const LLImageRaw* raw, const LLImageRaw* aux)
+{
+    // Keep room for a separate prepared primary image, including local-file
+    // power-of-two expansion. Full-resolution decoder allowance is no longer
+    // needed once decoding has completed. Auxiliary data remains owned too.
+    const U64 primary = raw ? std::max(U64(raw->getDataSize()),
+        std::bit_ceil(U64(raw->getWidth())) *
+        std::bit_ceil(U64(raw->getHeight())) * raw->getComponents()) : 0;
+    return 2 * primary + (aux ? U64(aux->getDataSize()) : 0);
+}
+
 LLImageDecodeThread::handle_t LLImageDecodeThread::decodeImage(
     const LLPointer<LLImageFormatted>& image,
     S32 discard,
@@ -261,11 +272,16 @@ bool ImageRequest::processRequest()
 void ImageRequest::finishRequest(bool completed)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
+    const bool success = completed && mDecodedRaw && (!mNeedsAux || mDecodedAux);
+    if (success && mReservation)
+    {
+        mReservation->shrinkTo(LLImageDecodeThread::decodedDeliveryBytes(
+            mDecodedImageRaw.get(), mDecodedImageAux.get()));
+    }
     if (mDecodedImageRaw) mDecodedImageRaw->mDeliveryReservation = mReservation;
     if (mDecodedImageAux) mDecodedImageAux->mDeliveryReservation = mReservation;
     if (mResponder.notNull())
     {
-        bool success = completed && mDecodedRaw && (!mNeedsAux || mDecodedAux);
         mResponder->completed(success, mErrorString, mDecodedImageRaw, mDecodedImageAux, mRequestId);
     }
     // Will automatically be deleted
