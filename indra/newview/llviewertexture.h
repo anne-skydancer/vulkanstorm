@@ -423,6 +423,9 @@ public:
 
     virtual bool scaleDown() { return false; };
 
+    bool retainAvatarDetail();
+    F64 mAvatarDetailRetentionStarted = -1.;
+
     bool mCreatePending = false;    // if true, this is in gTextureList.mCreateTextureList
     mutable bool mDownScalePending = false; // if true, this is in gTextureList.mDownScaleQueue
 
