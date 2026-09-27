@@ -695,6 +695,7 @@ void LLImageGL::forceUpdateBindStats(void) const
 
 bool LLImageGL::updateBindStats() const
 {
+    if (mDetachedUpload) return false;
     if (mTexName != 0)
     {
 #ifdef DEBUG_MISS
@@ -1724,7 +1725,7 @@ bool LLImageGL::createGLTexture(S32 discard_level, const U8* data_in, bool data_
     //if we're on the image loading thread, be sure to delete old_texname and update mTexName on the main thread
     if (!defer_copy)
     {
-        if (!main_thread)
+        if (!main_thread && !mDetachedUpload)
         {
             syncToMainThread(new_texname);
         }
@@ -1743,10 +1744,60 @@ bool LLImageGL::createGLTexture(S32 discard_level, const U8* data_in, bool data_
     mTextureMemory = (S64Bytes)getMipBytes(mCurrentDiscardLevel);
 
     // mark this as bound at this point, so we don't throw it out immediately
-    mLastBindTime = sLastFrameTime;
+    if (!mDetachedUpload) mLastBindTime = sLastFrameTime;
 
     checkActiveThread();
     return true;
+}
+
+LLPointer<LLImageGL> LLImageGL::makeUploadImage() const
+{
+    llassert(on_main_thread());
+    LLPointer<LLImageGL> image = new LLImageGL(mUseMipMaps, mAllowCompression);
+    image->mDetachedUpload = true;
+    sImageList.erase(image.get());
+    image->mNeedsAlphaAndPickMask = mNeedsAlphaAndPickMask;
+    image->mTarget = mTarget;
+    image->mBindTarget = mBindTarget;
+    image->mAddressMode = mAddressMode;
+    image->mFilterOption = mFilterOption;
+    if (mHasExplicitFormat)
+    {
+        image->setExplicitFormat(mFormatInternal, mFormatPrimary, mFormatType, mFormatSwapBytes);
+    }
+    return image;
+}
+
+void LLImageGL::adoptUploadImage(LLImageGL& image)
+{
+    llassert(on_main_thread());
+    llassert(image.mDetachedUpload);
+    // The upload object takes ownership of the old image, including its mask.
+    // Keep this LLImageGL's identity: consumers retain pointers and revisions.
+    std::swap(mTextureMemory, image.mTextureMemory);
+    std::swap(mPickMask, image.mPickMask);
+    std::swap(mPickMaskWidth, image.mPickMaskWidth);
+    std::swap(mPickMaskHeight, image.mPickMaskHeight);
+    std::swap(mIsMask, image.mIsMask);
+    std::swap(mAlphaStride, image.mAlphaStride);
+    std::swap(mAlphaOffset, image.mAlphaOffset);
+    std::swap(mGLTextureCreated, image.mGLTextureCreated);
+    std::swap(mTexName, image.mTexName);
+    std::swap(mWidth, image.mWidth);
+    std::swap(mHeight, image.mHeight);
+    std::swap(mCurrentDiscardLevel, image.mCurrentDiscardLevel);
+    std::swap(mHasMipMaps, image.mHasMipMaps);
+    std::swap(mMipLevels, image.mMipLevels);
+    std::swap(mComponents, image.mComponents);
+    std::swap(mMaxDiscardLevel, image.mMaxDiscardLevel);
+    std::swap(mFormatInternal, image.mFormatInternal);
+    std::swap(mFormatPrimary, image.mFormatPrimary);
+    std::swap(mFormatType, image.mFormatType);
+    std::swap(mFormatSwapBytes, image.mFormatSwapBytes);
+    std::swap(mAutoGenMips, image.mAutoGenMips);
+    mTexOptionsDirty = true;
+    mLastBindTime = sLastFrameTime;
+    ++mContentRevision;
 }
 
 void LLImageGL::syncToMainThread(LLGLuint new_tex_name)

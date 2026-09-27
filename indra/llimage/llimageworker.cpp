@@ -29,6 +29,7 @@
 #include "llimageworker.h"
 #include "llimagedxt.h"
 #include "threadpool.h"
+#include <bit>
 
 /*--------------------------------------------------------------------------*/
 class ImageRequest
@@ -38,7 +39,7 @@ public:
                  S32 discard,
                  bool needs_aux,
                  const LLPointer<LLImageDecodeThread::Responder>& responder,
-                 U32 request_id);
+                 U32 request_id, LLTextureDeliveryBudget::Lease reservation);
     virtual ~ImageRequest();
 
     /*virtual*/ bool processRequest();
@@ -58,6 +59,7 @@ private:
     bool mDecodedRaw;
     bool mDecodedAux;
     LLPointer<LLImageDecodeThread::Responder> mResponder;
+    LLTextureDeliveryBudget::Lease mReservation;
     std::string mErrorString;};
 
 
@@ -88,11 +90,49 @@ size_t LLImageDecodeThread::getPending()
     return mThreadPool->getQueue().size();
 }
 
+LLTextureDeliveryBudget::Lease LLImageDecodeThread::reserveDelivery(
+    LLImageFormatted* image, bool needs_aux, bool first_visible, bool& invalid_image)
+{
+    invalid_image = false;
+    LLImageDataLock lock(image);
+    // setData()/appendData() own encoded bytes but do not parse dimensions.
+    // Header inspection is necessary before reserving the decoder's output.
+    if ((!image->getWidth() || !image->getHeight() || !image->getComponents()) && !image->updateData())
+    {
+        invalid_image = true;
+        return {};
+    }
+    const U64 width = image->getWidth();
+    const U64 height = image->getHeight();
+    const U64 components = image->getComponents();
+    if (!width || !height || !components || width > MAX_IMAGE_SIZE ||
+        height > MAX_IMAGE_SIZE || components > MAX_IMAGE_COMPONENTS)
+    {
+        invalid_image = true;
+        return {};
+    }
+    return LLTextureDeliveryBudget::reserve(
+        // Local files may expand to power-of-two dimensions before upload.
+        std::bit_ceil(width) * std::bit_ceil(height) * (components * 2 + (needs_aux ? 1 : 0)), first_visible);
+}
+
+U64 LLImageDecodeThread::decodedDeliveryBytes(const LLImageRaw* raw, const LLImageRaw* aux)
+{
+    // Keep room for a separate prepared primary image, including local-file
+    // power-of-two expansion. Full-resolution decoder allowance is no longer
+    // needed once decoding has completed. Auxiliary data remains owned too.
+    const U64 primary = raw ? std::max(U64(raw->getDataSize()),
+        std::bit_ceil(U64(raw->getWidth())) *
+        std::bit_ceil(U64(raw->getHeight())) * raw->getComponents()) : 0;
+    return 2 * primary + (aux ? U64(aux->getDataSize()) : 0);
+}
+
 LLImageDecodeThread::handle_t LLImageDecodeThread::decodeImage(
     const LLPointer<LLImageFormatted>& image,
     S32 discard,
     bool needs_aux,
-    const LLPointer<LLImageDecodeThread::Responder>& responder)
+    const LLPointer<LLImageDecodeThread::Responder>& responder,
+    LLTextureDeliveryBudget::Lease reservation)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
 
@@ -102,7 +142,7 @@ LLImageDecodeThread::handle_t LLImageDecodeThread::decodeImage(
 
     // Instantiate the ImageRequest right in the lambda, why not?
     bool posted = mThreadPool->getQueue().post(
-        [req = ImageRequest(image, discard, needs_aux, responder, decode_id)]
+        [req = ImageRequest(image, discard, needs_aux, responder, decode_id, std::move(reservation))]
         () mutable
         {
             auto done = req.processRequest();
@@ -132,14 +172,15 @@ ImageRequest::ImageRequest(const LLPointer<LLImageFormatted>& image,
                            S32 discard,
                            bool needs_aux,
                            const LLPointer<LLImageDecodeThread::Responder>& responder,
-                           U32 request_id)
+                           U32 request_id, LLTextureDeliveryBudget::Lease reservation)
     : mFormattedImage(image),
       mDiscardLevel(discard),
       mNeedsAux(needs_aux),
       mDecodedRaw(false),
       mDecodedAux(false),
       mResponder(responder),
-      mRequestId(request_id)
+      mRequestId(request_id),
+      mReservation(std::move(reservation))
 {
 }
 
@@ -231,9 +272,16 @@ bool ImageRequest::processRequest()
 void ImageRequest::finishRequest(bool completed)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
+    const bool success = completed && mDecodedRaw && (!mNeedsAux || mDecodedAux);
+    if (success && mReservation)
+    {
+        mReservation->shrinkTo(LLImageDecodeThread::decodedDeliveryBytes(
+            mDecodedImageRaw.get(), mDecodedImageAux.get()));
+    }
+    if (mDecodedImageRaw) mDecodedImageRaw->mDeliveryReservation = mReservation;
+    if (mDecodedImageAux) mDecodedImageAux->mDeliveryReservation = mReservation;
     if (mResponder.notNull())
     {
-        bool success = completed && mDecodedRaw && (!mNeedsAux || mDecodedAux);
         mResponder->completed(success, mErrorString, mDecodedImageRaw, mDecodedImageAux, mRequestId);
     }
     // Will automatically be deleted

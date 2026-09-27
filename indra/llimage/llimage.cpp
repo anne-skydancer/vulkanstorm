@@ -1768,6 +1768,7 @@ LLPointer<LLImageRaw> LLImageRaw::scaled(S32 new_width, S32 new_height)
         }
     }
 
+    if (result) result->mDeliveryReservation = mDeliveryReservation;
     return result;
 }
 

@@ -592,6 +592,7 @@ private:
     bool mDecoded;
     bool mWritten;
     bool mNeedsAux;
+    bool mFirstVisible = false;
     bool mHaveAllData;
     bool mInLocalCache;
     bool mInCache;
@@ -1990,9 +1991,34 @@ bool LLTextureFetchWorker::doWork(S32 param)
             return true;
         }
 
+        // Old results are obsolete at this state. Drop our ownership before
+        // admission so a worker cannot pin its previous reservation while
+        // waiting for capacity for the next decode. Other consumers retain theirs.
+        mRawImage = nullptr;
+        mAuxImage = nullptr;
+        // Reserve before submitting, not after decode allocates its output.
+        // The decoder initially allocates full dimensions even for a reduced
+        // J2C decode. Include a second primary image for upload preparation.
+        bool invalid_image = false;
+        auto reservation = LLImageDecodeThread::reserveDelivery(mFormattedImage.get(), mNeedsAux,
+            mFirstVisible || mStateTimer.getElapsedTimeF32() >= 20.f, invalid_image);
+        if (invalid_image)
+        {
+            // Use the existing bad-cache retry path; admission pressure itself
+            // must never be mistaken for a malformed or missing asset.
+            mDecoded = true;
+            mDecodedDiscard = -1;
+            setState(DECODE_IMAGE_UPDATE);
+            return doWork(param);
+        }
+        if (!reservation)
+        {
+            // Keep the request in DECODE_IMAGE. No blocking wait and no failed
+            // asset: the fetch worker retries as delivery releases capacity.
+            return false;
+        }
+
         mDecodeTimer.reset();
-        mRawImage = NULL;
-        mAuxImage = NULL;
 
         // if we have the entire image data (and the image is not J2C), decode the full res image
         // DO NOT decode a higher res j2c than was requested.  This is a waste of time and memory.
@@ -2007,7 +2033,7 @@ bool LLTextureFetchWorker::doWork(S32 param)
         mDecodeHandle = LLAppViewer::getImageDecodeThread()->decodeImage(mFormattedImage,
                                                                        discard,
                                                                        mNeedsAux,
-                                                                       new DecodeResponder(mFetcher, mID, this));
+                                                                       new DecodeResponder(mFetcher, mID, this), std::move(reservation));
         if (mDecodeHandle == 0)
         {
             // Abort, failed to put into queue.
@@ -2780,7 +2806,7 @@ LLTextureFetch::~LLTextureFetch()
 }
 
 S32 LLTextureFetch::createRequest(FTType f_type, const std::string& url, const LLUUID& id, const LLHost& host, F32 priority,
-    S32 w, S32 h, S32 c, S32 desired_discard, bool needs_aux, bool can_use_http)
+    S32 w, S32 h, S32 c, S32 desired_discard, bool needs_aux, bool can_use_http, bool first_visible)
 {
     LL_PROFILE_ZONE_SCOPED;
     if (mDebugPause)
@@ -2864,6 +2890,7 @@ S32 LLTextureFetch::createRequest(FTType f_type, const std::string& url, const L
         }
         worker->mActiveCount++;
         worker->mNeedsAux = needs_aux;
+        worker->mFirstVisible = first_visible;
         worker->setImagePriority(priority);
         worker->setDesiredDiscard(desired_discard, desired_size);
         worker->setCanUseHTTP(can_use_http);
@@ -2892,6 +2919,7 @@ S32 LLTextureFetch::createRequest(FTType f_type, const std::string& url, const L
         worker->lockWorkMutex();                                        // +Mw
         worker->mActiveCount++;
         worker->mNeedsAux = needs_aux;
+        worker->mFirstVisible = first_visible;
         worker->setCanUseHTTP(can_use_http);
         worker->unlockWorkMutex();                                      // -Mw
     }
@@ -3179,7 +3207,7 @@ bool LLTextureFetch::getRequestFinished(const LLUUID& id, S32& discard_level, S3
 }
 
 // Threads:  T*
-bool LLTextureFetch::updateRequestPriority(const LLUUID& id, F32 priority)
+bool LLTextureFetch::updateRequestPriority(const LLUUID& id, F32 priority, bool first_visible)
 {
     LL_PROFILE_ZONE_SCOPED;
     mRequestQueue.tryPost([=, this]()
@@ -3189,6 +3217,7 @@ bool LLTextureFetch::updateRequestPriority(const LLUUID& id, F32 priority)
             {
                 worker->lockWorkMutex();                                        // +Mw
                 worker->setImagePriority(priority);
+                worker->mFirstVisible = first_visible;
                 worker->unlockWorkMutex();                                      // -Mw
             }
         });

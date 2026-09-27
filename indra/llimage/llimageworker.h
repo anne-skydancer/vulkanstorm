@@ -50,7 +50,13 @@ public:
     typedef U32 handle_t;
     handle_t decodeImage(const LLPointer<LLImageFormatted>& image,
                          S32 discard, bool needs_aux,
-                         const LLPointer<Responder>& responder);
+                         const LLPointer<Responder>& responder,
+                         LLTextureDeliveryBudget::Lease reservation = {});
+    // Parse missing metadata before sizing admission. A null result is either
+    // temporary pressure or invalid input, distinguished by invalid_image.
+    static LLTextureDeliveryBudget::Lease reserveDelivery(LLImageFormatted* image,
+        bool needs_aux, bool first_visible, bool& invalid_image);
+    static U64 decodedDeliveryBytes(const LLImageRaw* raw, const LLImageRaw* aux);
     size_t getPending();
     size_t update(F32 max_time_ms);
     S32 getTotalDecodeCount() { return mDecodeCount; }
