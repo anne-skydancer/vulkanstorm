@@ -33,6 +33,8 @@
 #include "llviewertexture.h"
 #include "llui.h"
 #include <list>
+#include <deque>
+#include <memory>
 #include <unordered_set>
 #include "lluiimage.h"
 
@@ -218,7 +220,16 @@ public:
     typedef std::queue<LLPointer<LLViewerFetchedTexture> > image_queue_t;
 
     // images that have been loaded but are waiting to be uploaded to GL
-    image_queue_t mCreateTextureList;
+    std::deque<LLPointer<LLViewerFetchedTexture>> mCreateTextureList;
+
+private:
+    struct PendingUpload;
+    std::deque<std::unique_ptr<PendingUpload>> mPendingUploads;
+    U64 mPendingUploadBytes = 0;
+    void completeTextureUploads(bool drain = false);
+    enum class UploadStart { Started, Busy, Unavailable };
+    UploadStart startTextureUpload(LLViewerFetchedTexture* image);
+public:
 
     // images that must be downscaled quickly so we don't run out of memory
     image_queue_t mDownScaleQueue;

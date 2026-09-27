@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include <sys/stat.h>
+#include <thread>
+#include <chrono>
 
 #include "llviewertexturelist.h"
 
@@ -76,6 +78,35 @@ S32 LLViewerTextureList::sNumImages = 0;
 
 // <FS:Ansariel> Fast cache stats
 U32 LLViewerTextureList::sNumFastCacheReads = 0;
+
+static S32 deliveryDiscardForRaw(const LLImageRaw& raw, S32 decoded, S32 desired)
+{
+    // Derive this from the incoming image, not the old displayed image. Never
+    // shrink past a one-pixel short edge: doing so changes inferred full size.
+    S32 limit = decoded;
+    S32 edge = std::min(raw.getWidth(), raw.getHeight());
+    while (edge > 1 && limit < MAX_DISCARD_LEVEL)
+    {
+        edge >>= 1;
+        ++limit;
+    }
+    return std::clamp(desired, decoded, limit);
+}
+
+struct LLViewerTextureList::PendingUpload
+{
+    LLPointer<LLViewerFetchedTexture> texture;
+    LLPointer<LLImageGL> image;
+    LLPointer<LLImageRaw> raw;
+    LLTextureDeliveryBudget::Lease reservation;
+    std::atomic<bool> submitted{false};
+    GLsync fence = nullptr;
+    bool success = false;
+    U64 bytes = 0;
+    S32 discard = 0;
+    S32 targetDiscard = 0;
+    S32 category = 0;
+};
 
 LLViewerTextureList gTextureList;
 
@@ -299,6 +330,7 @@ LLViewerTextureList::~LLViewerTextureList()
 
 void LLViewerTextureList::shutdown()
 {
+    completeTextureUploads(true);
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     LL_WARNS() << "Shutdown called" << LL_ENDL;
     // clear out preloads
@@ -367,7 +399,7 @@ void LLViewerTextureList::shutdown()
     while (!mCreateTextureList.empty())
     {
         mCreateTextureList.front()->mCreatePending = false;
-        mCreateTextureList.pop();
+        mCreateTextureList.pop_front();
     }
     mFastCacheList.clear();
 
@@ -841,6 +873,90 @@ void LLViewerTextureList::deleteImage(LLViewerFetchedTexture *image)
 
 void LLViewerTextureList::updateImages(F32 max_time)
 {
+    if (!gGLManager.mIsDisabled) completeTextureUploads();
+    const U64 available = U64(LLMemory::getAvailableMemKB().value()) * 1024;
+    if (LLMemory::getMaxMemKB().value()) LLTextureDeliveryBudget::updateAvailableMemory(available);
+#if defined(LL_RELEASE_WITH_DEBUG_INFO)
+    // Development-only driver qualification. Remove with the other runtime
+    // harnesses when preparing master integration (check_release_hooks.py).
+    static const bool delivery_test = bool(LLStringUtil::getoptenv("VULKANSTORM_TEXTURE_DELIVERY_SELFTEST"));
+    static bool delivery_test_done = false;
+    static F64 delivery_test_started = 0.;
+    static std::vector<LLPointer<LLViewerFetchedTexture>> delivery_test_images;
+    static std::vector<std::weak_ptr<LLTextureDeliveryBudget::Reservation>> delivery_test_leases;
+    if (delivery_test && !delivery_test_done && !gGLManager.mIsDisabled)
+    {
+        if (delivery_test_images.empty())
+        {
+            delivery_test_started = LLTimer::getTotalSeconds();
+            for (S32 test = 0; test < 5; ++test)
+            {
+                LLPointer<LLViewerFetchedTexture> image = new LLViewerFetchedTexture(LLUUID::generateNewID(), FTT_LOCAL_FILE);
+                image->setBoostLevel(LLGLTexture::BOOST_UI);
+                image->getGLTexture()->setAllowCompression(false);
+                if (test == 1 || test == 4)
+                {
+                    LLPointer<LLImageRaw> old = new LLImageRaw(16, 16, 4);
+                    old->clear(211, 41, 71, 255);
+                    image->createGLTexture(2, old);
+                }
+                const S32 width = test == 2 ? 1024 : 64;
+                const S32 height = test == 2 ? 1 : 64;
+                image->mFullWidth = width;
+                image->mFullHeight = height;
+                image->mRawImage = new LLImageRaw(width, height, 4);
+                ++LLViewerTexture::sRawCount;
+                image->mRawImage->clear(37, 91, 163, 255);
+                image->mRawImage->mDeliveryReservation = LLTextureDeliveryBudget::reserve(U64(width) * height * 8, true);
+                delivery_test_leases.push_back(image->mRawImage->mDeliveryReservation);
+                image->mRawDiscardLevel = 0;
+                image->mDesiredDiscardLevel = test == 2 ? 5 : test >= 3 ? 2 : 0;
+                image->mIsRawImageValid = true;
+                image->addToCreateTexture();
+                delivery_test_images.push_back(image);
+            }
+        }
+        else
+        {
+            bool ready = true;
+            for (auto& image : delivery_test_images)
+                ready &= !image->mCreatePending && !image->mNeedsCreateTexture;
+            if (ready || LLTimer::getTotalSeconds() - delivery_test_started > 10.)
+            {
+                bool passed = ready;
+                for (S32 test = 0; test < 5 && passed; ++test)
+                {
+                    auto image = delivery_test_images[test];
+                    const S32 expected_discard = (test == 4 || (test == 3 && LLImageGLThread::sEnabledTextures)) ? 2 : 0;
+                    LLPointer<LLImageRaw> pixels = new LLImageRaw();
+                    passed = image->getDiscardLevel() == expected_discard &&
+                        image->getGLTexture()->readBackRaw(expected_discard, pixels, false);
+                    if (passed)
+                    {
+                        const S32 width = test == 2 ? 1024 : (64 >> expected_discard);
+                        const S32 height = test == 2 ? 1 : width;
+                        passed = pixels->getWidth() == width && pixels->getHeight() == height && pixels->getComponents() == 4;
+                        for (S32 offset = 0; offset < pixels->getDataSize() && passed; offset += 4)
+                        {
+                            const U8* pixel = pixels->getData() + offset;
+                            passed = pixel[0] == (test == 4 ? 211 : 37) &&
+                                pixel[1] == (test == 4 ? 41 : 91) &&
+                                pixel[2] == (test == 4 ? 71 : 163) && pixel[3] == 255;
+                        }
+                    }
+                    if (!passed) LL_WARNS("TextureDeliveryTest") << "Image case failed: " << test << LL_ENDL;
+                }
+                delivery_test_images.clear();
+                for (const auto& lease : delivery_test_leases) passed &= lease.expired();
+                delivery_test_done = true;
+                LL_INFOS("TextureDeliveryTest") << (passed ? "PASS" : "FAIL")
+                    << " first image, replacement, narrow image, downsize, redundant upload, reservation cleanup; asynchronous="
+                    << LLImageGLThread::sEnabledTextures << LL_ENDL;
+            }
+        }
+    }
+#endif
+
     static LLFrameTimer focus_memory_timer;
     static bool previous_focus = gFocusMgr.getAppHasFocus();
     const bool focused = gFocusMgr.getAppHasFocus();
@@ -859,12 +975,19 @@ void LLViewerTextureList::updateImages(F32 max_time)
     {
         focus_memory_timer.reset();
         previous_focus = focused;
+        const auto delivery_stats = LLTextureDeliveryBudget::statistics();
         LL_INFOS("FocusMemory") << "focused=" << focused
             << " frame_mean_seconds=" << (frame_samples ? frame_sum / frame_samples : 0.)
             << " frame_max_seconds=" << frame_max
             << " frame_samples=" << frame_samples
             << " downscale_pending=" << mDownScaleQueue.size()
             << " create_pending=" << mCreateTextureList.size()
+            << " upload_pending=" << mPendingUploads.size()
+            << " delivery_reserved_bytes=" << LLTextureDeliveryBudget::used()
+            << " delivery_budget_bytes=" << LLTextureDeliveryBudget::limit()
+            << " admission_deferred_attempts=" << delivery_stats.deferredAttempts
+            << " urgent_admission_deferred_attempts=" << delivery_stats.urgentDeferredAttempts
+            << " decode_allowance_returned_bytes=" << delivery_stats.trimmedBytes
             << " discard_bias=" << LLViewerTexture::sDesiredDiscardBias
             << LL_ENDL;
         LLMemory::logMemoryInfo(true);
@@ -1077,6 +1200,7 @@ void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imag
             }
         }
 
+        imagep->mDeliveryOnScreen = on_screen || face_count > max_faces_to_check;
         imagep->addTextureStats(max_vsize);
     }
 
@@ -1146,6 +1270,133 @@ void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imag
     imagep->processTextureStats();
 }
 
+void LLViewerTextureList::completeTextureUploads(bool drain)
+{
+    for (auto it = mPendingUploads.begin(); it != mPendingUploads.end();)
+    {
+        auto& upload = **it;
+        if (drain)
+        {
+            // Shutdown only. The shared context and worker are still alive.
+            while (!upload.submitted.load(std::memory_order_acquire))
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (!upload.submitted.load(std::memory_order_acquire)) { ++it; continue; }
+        GLenum status = GL_ALREADY_SIGNALED;
+        if (upload.fence)
+        {
+            do
+            {
+                status = glClientWaitSync(upload.fence, 0, drain ? 1000000 : 0);
+            } while (drain && status == GL_TIMEOUT_EXPIRED);
+        }
+        if (status == GL_TIMEOUT_EXPIRED) { ++it; continue; }
+        if (upload.fence) glDeleteSync(upload.fence);
+#if LL_IMAGEGL_THREAD_CHECK
+        upload.image->mActiveThread = LLThread::currentID();
+#endif
+        if (!drain && upload.success && status != GL_WAIT_FAILED)
+        {
+            // Demand can change again while the GPU is busy. Keep an existing
+            // image that already satisfies it rather than installing a stale upgrade.
+            if (!upload.texture->hasGLTexture() ||
+                (upload.texture->getDiscardLevel() > upload.texture->getDesiredDiscardLevel() &&
+                 upload.image->getDiscardLevel() <= upload.texture->getDiscardLevel()))
+            {
+                upload.texture->getGLTexture()->adoptUploadImage(*upload.image);
+                static bool logged_delivery = false;
+                if (!logged_delivery)
+                {
+                    LL_INFOS("TextureDelivery") << "Shared-context texture delivery active; first completed upload published." << LL_ENDL;
+                    logged_delivery = true;
+                }
+            }
+        }
+        else if (!drain)
+        {
+            LL_WARNS("TextureDelivery") << "Asynchronous texture upload failed; retaining previous image" << LL_ENDL;
+        }
+        // Raw data, reservations and the previous GL image remain alive until
+        // the worker is done. No main-thread wait occurs during normal frames.
+        if (drain)
+        {
+            // Pipeline shutdown precedes texture-list shutdown: do not schedule
+            // sculpt rebuilds or normal publication callbacks while draining.
+            upload.texture->mNeedsCreateTexture = false;
+            upload.texture->destroyRawImage();
+        }
+        else
+        {
+            upload.texture->postCreateTexture();
+        }
+        upload.texture->mCreatePending = false;
+        mPendingUploadBytes -= upload.bytes;
+        it = mPendingUploads.erase(it);
+    }
+}
+
+LLViewerTextureList::UploadStart LLViewerTextureList::startTextureUpload(LLViewerFetchedTexture* texture)
+{
+    auto queue = LL::WorkQueue::getInstance("LLImageGL");
+    if (!queue || !LLImageGLThread::sEnabledTextures) return UploadStart::Unavailable;
+    auto upload = std::make_unique<PendingUpload>();
+    upload->texture = texture;
+    upload->image = texture->getGLTexture()->makeUploadImage();
+    upload->raw = texture->mRawImage;
+    upload->reservation = upload->raw->mDeliveryReservation;
+    upload->bytes = U64(upload->raw->getDataSize()) * 2;
+    // Locally generated/raw readback images bypass fetching. Account their
+    // upload preparation too; their caller-owned source memory is pre-existing.
+    if (!upload->reservation)
+    {
+        upload->reservation = LLTextureDeliveryBudget::reserve(upload->bytes,
+            texture->isFirstVisibleDelivery() || LLTimer::getTotalSeconds() - texture->mDeliveryQueuedAt >= 20.);
+        if (!upload->reservation) return UploadStart::Busy;
+    }
+    upload->discard = texture->mRawDiscardLevel;
+    upload->targetDiscard = upload->discard;
+    // Never reduce raw data needed for callbacks or sculpt geometry. Prepare a
+    // separate image on the worker; the fetcher's shared raw data is immutable.
+    if (!texture->needsToSaveRawImage() && !texture->mForSculpt && !texture->mNeedsAux &&
+        texture->mRawImage->getComponents() != 2)
+    {
+        upload->targetDiscard = deliveryDiscardForRaw(*upload->raw, upload->discard,
+            texture->getDesiredDiscardLevel());
+    }
+    upload->category = texture->getBoostLevel();
+    auto job = upload.get();
+    if (!queue->tryPost([job]()
+    {
+#if LL_IMAGEGL_THREAD_CHECK
+        job->image->mActiveThread = LLThread::currentID();
+#endif
+        try
+        {
+            LLPointer<LLImageRaw> prepared = job->raw;
+            if (job->targetDiscard > job->discard)
+            {
+                const S32 shift = job->targetDiscard - job->discard;
+                prepared = job->raw->scaled(llmax(1, job->raw->getWidth() >> shift),
+                                           llmax(1, job->raw->getHeight() >> shift));
+            }
+            job->success = prepared && job->image->createGLTexture(
+                job->targetDiscard, prepared, 0, true, job->category);
+            job->fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            glFlush();
+            if (!job->fence) job->success = false;
+        }
+        catch (const std::exception& error)
+        {
+            LL_WARNS("TextureDelivery") << "Upload preparation failed: " << error.what() << LL_ENDL;
+            job->success = false;
+        }
+        job->submitted.store(true, std::memory_order_release);
+    })) return UploadStart::Busy;
+    mPendingUploadBytes += upload->bytes;
+    mPendingUploads.push_back(std::move(upload));
+    return UploadStart::Started;
+}
+
 F32 LLViewerTextureList::updateImagesCreateTextures(F32 max_time)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
@@ -1158,13 +1409,29 @@ F32 LLViewerTextureList::updateImagesCreateTextures(F32 max_time)
 
     LLTimer create_timer;
 
+    const F64 now = LLTimer::getTotalSeconds();
+    auto rank = [now](const auto& image)
+    {
+        if (now - image->mDeliveryQueuedAt >= 20. || image->isFirstVisibleDelivery()) return 0;
+        return image->isVisibleDelivery() ? 1 : 2;
+    };
+    std::stable_sort(mCreateTextureList.begin(), mCreateTextureList.end(),
+        [&](const auto& a, const auto& b)
+        {
+            const auto ar = rank(a), br = rank(b);
+            return ar != br ? ar < br : a->mDeliveryQueuedAt < b->mDeliveryQueuedAt;
+        });
+
     while (!mCreateTextureList.empty())
     {
+        // Limit outstanding driver work as well as decoded memory. Leave jobs
+        // in the priority queue so new visible blanks can pass waiting upgrades.
+        if (mPendingUploads.size() >= 16 || mPendingUploadBytes >= 64 * LLTextureDeliveryBudget::MiB) break;
         // Hold a smart pointer to keep the texture alive throughout processing,
         // even if side effects (e.g. pipeline rebuilds, GL operations) indirectly
         // cause other references to be released. (see: #5426)
         LLPointer<LLViewerFetchedTexture> imagep = mCreateTextureList.front();
-        mCreateTextureList.pop();
+        mCreateTextureList.pop_front();
 
         if (!imagep)
         {
@@ -1180,7 +1447,18 @@ F32 LLViewerTextureList::updateImagesCreateTextures(F32 max_time)
 
         if (!redundant_load)
         {
-           imagep->createTexture();
+            const auto result = startTextureUpload(imagep);
+            if (result == UploadStart::Started)
+            {
+                if (create_timer.getElapsedTimeF32() > max_time) break;
+                continue;
+            }
+            if (result == UploadStart::Busy)
+            {
+                mCreateTextureList.push_front(imagep);
+                break; // pressure must not turn into a synchronous upload stall
+            }
+            imagep->createTexture(); // shared context unavailable
         }
 
         imagep->postCreateTexture();
@@ -1227,7 +1505,7 @@ F32 LLViewerTextureList::updateImagesCreateTextures(F32 max_time)
             llassert(image->mDownScalePending);
 
             LLImageGL* img = image->getGLTexture();
-            if (img && img->getHasGLTexture())
+            if (img && img->getHasGLTexture() && !image->retainAvatarDetail())
             {
                 img->scaleDown(image->getDesiredDiscardLevel());
             }
@@ -1262,7 +1540,6 @@ F32 LLViewerTextureList::updateImagesLoadingFastCache(F32 max_time)
     //
 
     LLTimer timer;
-    image_list_t::iterator enditer = mFastCacheList.begin();
     {
         // Prelock fast cache mutex to avoid waiting multiple times.
         LLMutexTrylock fast_cache_lock(LLAppViewer::getTextureCache()->getFastCacheMutex());
@@ -1279,18 +1556,24 @@ F32 LLViewerTextureList::updateImagesLoadingFastCache(F32 max_time)
         for (image_list_t::iterator iter = mFastCacheList.begin();
             iter != mFastCacheList.end();)
         {
-            image_list_t::iterator curiter = iter++;
-            enditer = iter;
-            LLViewerFetchedTexture* imagep = *curiter;
-            imagep->loadFromFastCache();
-            // <FS:Ansariel> Fast cache stats
-            sNumFastCacheReads++;
-            // </FS:Ansariel>
+            LLViewerFetchedTexture* imagep = *iter;
+            if (imagep->loadFromFastCache())
+            {
+                iter = mFastCacheList.erase(iter);
+                // <FS:Ansariel> Fast cache stats
+                sNumFastCacheReads++;
+                // </FS:Ansariel>
+            }
+            else
+            {
+                // An offscreen request cannot consume reserved headroom. Keep
+                // looking for first-visible requests instead of blocking them.
+                ++iter;
+            }
             if (timer.getElapsedTimeF32() > max_time)
                 break;
         }
     }
-    mFastCacheList.erase(mFastCacheList.begin(), enditer);
     return timer.getElapsedTimeF32();
 }
 

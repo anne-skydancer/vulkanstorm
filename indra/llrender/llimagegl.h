@@ -141,6 +141,12 @@ public:
     // a lambda to main thread to swap mNewTexName and mTexName
     void syncToMainThread(LLGLuint new_tex_name);
 
+    // Private upload objects are never bound by rendering or globally traversed.
+    // Construct on main; use exclusively on worker; adopt after its fence signals.
+    LLPointer<LLImageGL> makeUploadImage() const;
+    void adoptUploadImage(LLImageGL& image);
+
+
     // Read back a raw image for this discard level, if it exists
     bool readBackRaw(S32 discard_level, LLImageRaw* imageraw, bool compressed_ok) const;
     void destroyGLTexture();
@@ -258,6 +264,7 @@ private:
     S8       mCurrentDiscardLevel;
 
     bool mAllowCompression;
+    bool mDetachedUpload = false;
 
 protected:
     LLGLenum mTarget;       // Normally GL_TEXTURE2D, sometimes something else (ex. cube maps)

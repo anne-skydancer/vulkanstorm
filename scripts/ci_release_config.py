@@ -29,7 +29,7 @@ for key in sorted(enabled | disabled):
     if actual not in valid:
         errors.append(f"{key}: expected {'ON' if key in enabled else 'OFF'}, got {actual}")
 for key, expected in {"CMAKE_BUILD_TYPE": "RelWithDebInfo" if development else "Release", "ADDRESS_SIZE": "64",
-                      "VIEWER_CHANNEL": "Vulkanstorm-Release", "BUGSPLAT_DB": ""}.items():
+                      "VIEWER_CHANNEL": "Vulkanstorm-RelWithDebInfo" if development else "Vulkanstorm-Release", "BUGSPLAT_DB": ""}.items():
     if values.get(key) != expected:
         errors.append(f"{key}: expected {expected}, got {values.get(key)}")
 if errors:

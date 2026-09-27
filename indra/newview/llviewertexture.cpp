@@ -59,6 +59,8 @@
 #include "lltexturemanagerbridge.h"
 #include "llmediaentry.h"
 #include "llvovolume.h"
+#include "llvoavatar.h"
+#include "llagent.h"
 #include "llviewermedia.h"
 #include "lltexturecache.h"
 #include "llviewerwindow.h"
@@ -1275,13 +1277,15 @@ void LLViewerFetchedTexture::cleanup()
 }
 
 //access the fast cache
-void LLViewerFetchedTexture::loadFromFastCache()
+bool LLViewerFetchedTexture::loadFromFastCache()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     if(!mInFastCacheList)
     {
-        return; //no need to access the fast cache.
+        return true; //no need to access the fast cache.
     }
+    auto reservation = LLTextureDeliveryBudget::reserve(2 * 16 * 16 * 4, isFirstVisibleDelivery());
+    if (!reservation) return false;
     mInFastCacheList = false;
 
     add(LLTextureFetch::sCacheAttempt, 1.0);
@@ -1290,6 +1294,7 @@ void LLViewerFetchedTexture::loadFromFastCache()
     mRawImage = LLAppViewer::getTextureCache()->readFromFastCache(getID(), mRawDiscardLevel);
     if(mRawImage.notNull())
     {
+        mRawImage->mDeliveryReservation = std::move(reservation);
         F32 cachReadTime = fastCacheTimer.getElapsedTimeF32();
 
         add(LLTextureFetch::sCacheHit, 1.0);
@@ -1342,6 +1347,7 @@ void LLViewerFetchedTexture::loadFromFastCache()
     {
         record(LLTextureFetch::sCacheHitRate, LLUnits::Ratio::fromValue(0));
     }
+    return true;
 }
 
 void LLViewerFetchedTexture::setForSculpt()
@@ -1432,7 +1438,6 @@ void LLViewerFetchedTexture::addToCreateTexture()
         // We've changed the number of components, so we need to move any
         // objects using this pool to a different pool.
         mComponents = mRawImage->getComponents();
-        mGLTexturep->setComponents(mComponents);
         force_update = true;
 
         for (U32 j = 0; j < LLRender::NUM_TEXTURE_CHANNELS; ++j)
@@ -1665,81 +1670,84 @@ void LLViewerFetchedTexture::postCreateTexture()
     mNeedsCreateTexture = false;
 }
 
+bool LLViewerFetchedTexture::retainAvatarDetail()
+{
+    if (!hasGLTexture() || isSystemMemoryLow())
+    {
+        mAvatarDetailRetentionStarted = -1.;
+        return false;
+    }
+
+    static LLCachedControl<F32> draw_distance(gSavedSettings, "RenderFarClip", 128.f);
+    const F32 range = llmax(0.f, F32(draw_distance));
+    F64 retention_seconds = 0.;
+
+    // Camera visibility must not evict detail already loaded for worn items.
+    // Inspect current face ownership so detaching an item removes protection,
+    // including child prims and material maps in every texture channel.
+    for (U32 channel = 0; channel < LLRender::NUM_TEXTURE_CHANNELS; ++channel)
+    {
+        for (S32 index = 0; index < getNumFaces(channel); ++index)
+        {
+            LLFace* face = (*getFaceList(channel))[index];
+            LLViewerObject* object = face ? face->getViewerObject() : nullptr;
+            if (object && !object->isDead())
+            {
+                LLVOAvatar* avatar = object->asAvatar();
+                if (!avatar) avatar = object->getAvatarAncestor();
+                if (!avatar || avatar->isDead()) continue;
+                if (avatar->isSelf() && object->getRootEdit()->isAttachment()) return true;
+                const F32 distance_squared = (avatar->getPositionAgent() - gAgent.getPositionAgent()).lengthSquared();
+                if (distance_squared <= range * range)
+                {
+                    if (distance_squared <= 100.f) retention_seconds = 60.;
+                    else if (distance_squared < 400.f) retention_seconds = llmax(retention_seconds, 30.);
+                }
+            }
+        }
+    }
+    if (retention_seconds == 0.)
+    {
+        mAvatarDetailRetentionStarted = -1.;
+        return false;
+    }
+    // Start once when lower detail is requested, not on each retry. Changing
+    // bands adjusts this same deadline; it must not indefinitely renew it.
+    const F64 now = LLTimer::getTotalSeconds();
+    if (mAvatarDetailRetentionStarted < 0.) mAvatarDetailRetentionStarted = now;
+    return now - mAvatarDetailRetentionStarted < retention_seconds;
+}
+
+bool LLViewerFetchedTexture::isVisibleDelivery() const
+{
+    // Use the existing face traversal's visibility result, not its retained
+    // virtual size (offscreen faces deliberately retain resolution demand).
+    S32 faces = 0;
+    for (U32 channel = 0; channel < LLRender::NUM_TEXTURE_CHANNELS; ++channel)
+        faces += mNumFaces[channel];
+    return mDeliveryOnScreen || mBoostLevel >= BOOST_HIGH ||
+        (faces == 0 && mMaxVirtualSize > 0.f); // includes GPU particle demand
+}
+
+bool LLViewerFetchedTexture::isFirstVisibleDelivery() const
+{
+    return !hasGLTexture() && isVisibleDelivery();
+}
+
 void LLViewerFetchedTexture::scheduleCreateTexture()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
-
     if (!mNeedsCreateTexture)
     {
         mNeedsCreateTexture = true;
         if (preCreateTexture())
         {
-#if LL_IMAGEGL_THREAD_CHECK
-            //grab a copy of the raw image data to make sure it isn't modified pending texture creation
-            U8* data = mRawImage->getData();
-            U8* data_copy = nullptr;
-            S32 size = mRawImage->getDataSize();
-            if (data != nullptr && size > 0)
-            {
-                data_copy = new U8[size];
-                memcpy(data_copy, data, size);
-            }
-#endif
             mNeedsCreateTexture = true;
-            auto mainq = LLImageGLThread::sEnabledTextures ? mMainQueue.lock() : nullptr;
-            if (mainq)
+            if (!mCreatePending)
             {
-                ref();
-                mainq->postTo(
-                    mImageQueue,
-                    // work to be done on LLImageGL worker thread
-#if LL_IMAGEGL_THREAD_CHECK
-                    [this, data, data_copy, size]()
-                    {
-                        mGLTexturep->mActiveThread = LLThread::currentID();
-                        //verify data is unmodified
-                        llassert(data == mRawImage->getData());
-                        llassert(mRawImage->getDataSize() == size);
-                        llassert(memcmp(data, data_copy, size) == 0);
-#else
-                    [this]()
-                    {
-#endif
-                        //actually create the texture on a background thread
-                        createTexture();
-
-#if LL_IMAGEGL_THREAD_CHECK
-                        //verify data is unmodified
-                        llassert(data == mRawImage->getData());
-                        llassert(mRawImage->getDataSize() == size);
-                        llassert(memcmp(data, data_copy, size) == 0);
-#endif
-                    },
-                    // callback to be run on main thread
-#if LL_IMAGEGL_THREAD_CHECK
-                        [this, data, data_copy, size]()
-                    {
-                        mGLTexturep->mActiveThread = LLThread::currentID();
-                        llassert(data == mRawImage->getData());
-                        llassert(mRawImage->getDataSize() == size);
-                        llassert(memcmp(data, data_copy, size) == 0);
-                        delete[] data_copy;
-#else
-                        [this]()
-                        {
-#endif
-                        //finalize on main thread
-                        postCreateTexture();
-                        unref();
-                    });
-            }
-            else
-            {
-                if (!mCreatePending)
-                {
-                    mCreatePending = true;
-                    gTextureList.mCreateTextureList.push(this);
-                }
+                mCreatePending = true;
+                mDeliveryQueuedAt = LLTimer::getTotalSeconds();
+                gTextureList.mCreateTextureList.push_back(this);
             }
         }
     }
@@ -2159,7 +2167,7 @@ bool LLViewerFetchedTexture::updateFetch()
             if (decode_priority > 0.0f || mStopFetchingTimer.getElapsedTimeF32() > MAX_HOLD_TIME)
             {
                 mStopFetchingTimer.reset();
-                LLAppViewer::getTextureFetch()->updateRequestPriority(mID, decode_priority);
+                LLAppViewer::getTextureFetch()->updateRequestPriority(mID, decode_priority, isFirstVisibleDelivery());
             }
         }
     }
@@ -2235,7 +2243,7 @@ bool LLViewerFetchedTexture::updateFetch()
         S32 fetch_request_response = -1;
         S32 worker_discard = -1;
         fetch_request_response = LLAppViewer::getTextureFetch()->createRequest(mFTType, mUrl, getID(), getTargetHost(), decode_priority,
-            w, h, c, desired_discard, needsAux(), mCanUseHTTP);
+            w, h, c, desired_discard, needsAux(), mCanUseHTTP, isFirstVisibleDelivery());
 
         if (fetch_request_response >= 0) // positive values and 0 are discard values
         {
@@ -3206,6 +3214,12 @@ void LLViewerLODTexture::processTextureStats()
         mDesiredDiscardLevel = llmin(mDesiredDiscardLevel, (S8)mDesiredSavedRawDiscardLevel);
     }
 
+    if (mDesiredDiscardLevel <= getDiscardLevel())
+    {
+        // Current detail is needed again (or the reduction has completed).
+        mAvatarDetailRetentionStarted = -1.;
+    }
+
     // selection manager will immediately reset BOOST_SELECTED but never unsets it
     // unset it immediately after we consume it
     if (getBoostLevel() == BOOST_SELECTED)
@@ -3223,6 +3237,8 @@ extern LLGLSLShader gCopyProgram;
 
 bool LLViewerLODTexture::scaleDown()
 {
+    if (retainAvatarDetail()) return false;
+
     if (mGLTexturep.isNull() || !mGLTexturep->getHasGLTexture())
     {
         return false;
