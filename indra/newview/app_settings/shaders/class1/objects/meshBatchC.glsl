@@ -2,17 +2,18 @@
 #version 430 core
 layout(local_size_x=64) in;
 struct Command { uint count; uint instances; uint firstIndex; int baseVertex; uint baseInstance; };
-struct Candidate { uvec4 slot; vec4 minimum; vec4 maximum; };
+struct Bounds { vec4 minimum; vec4 maximum; };
 layout(std430, binding=0) readonly buffer Source { Command source[]; };
-layout(std430, binding=1) readonly buffer Candidates { Candidate candidates[]; };
+layout(std430, binding=1) readonly buffer Candidates { uint candidates[]; };
 layout(std430, binding=2) writeonly buffer Output { Command commands[]; };
+layout(std430, binding=3) readonly buffer ResidentBounds { Bounds bounds[]; };
 uniform uint candidateCount;
 uniform uint sourceCount;
 uniform mat4 clipFromBuffer;
 // Depth-clamped shadow passes clip only against the four lateral planes.
 uniform uint clipPlaneMask;
 
-bool visible(Candidate c)
+bool visible(Bounds c)
 {
     if (any(isnan(c.minimum.xyz)) || any(isinf(c.minimum.xyz)) ||
         any(isnan(c.maximum.xyz)) || any(isinf(c.maximum.xyz)) ||
@@ -39,13 +40,13 @@ void main()
 {
     uint i=gl_GlobalInvocationID.x;
     if (i>=candidateCount) return;
-    Candidate c=candidates[i];
-    if (c.slot.x>=sourceCount)
+    uint slot=candidates[i];
+    if (slot>=sourceCount)
     {
         commands[i]=Command(0u,0u,0u,0,0u);
         return;
     }
-    Command command=source[c.slot.x];
-    if (!visible(c)) command.instances=0u;
+    Command command=source[slot];
+    if (!visible(bounds[slot])) command.instances=0u;
     commands[i]=command;
 }

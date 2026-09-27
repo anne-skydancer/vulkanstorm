@@ -107,3 +107,17 @@ observable draw/material operations: 520 records, the 256-command boundary,
 nonresident and material breaks, and successful/failed GPU submission in both
 textured and untextured passes. Native AMD and Mesa/Zink shader tests cover both
 clip masks and distinct pass cameras. This does not replace in-world shadow QA.
+
+### Resident visibility metadata checkpoint
+
+Bounds now live in a slot-indexed GPU table (32 bytes per resident slot, 256 KiB
+at the current 8192-slot capacity). Publication uploads changed bounds together
+with LOD metadata; shader reload reconstructs the table from its CPU copy.
+A render pass uploads only four-byte slot IDs instead of 48-byte records with
+repeated bounds. This removes the two per-candidate CPU bound copies and reduces
+that per-pass input upload by 12x. It is not a measured frame-time improvement.
+The GPU tests exercise a bound update without republishing candidate IDs.
+
+Candidate enumeration is still CPU work. Moving bounds into persistent storage
+is preparation for persistent registration, not a claim that CPU culling or
+transform conversion has been removed.

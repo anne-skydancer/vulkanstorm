@@ -68,6 +68,9 @@ U64 byteBudget()
 struct Entry { F32 centerRadius[4] = {}; U32 ranges[4][4] = {}; U32 owner[4] = {}; };
 static_assert(sizeof(Entry) == 96, "std430 mesh layout");
 std::array<Entry, CAPACITY> entries;
+struct Bounds { F32 minimum[4] = {}, maximum[4] = {}; };
+static_assert(sizeof(Bounds) == 32, "std430 bounds layout");
+std::array<Bounds, CAPACITY> resident_bounds;
 std::array<LLComputeMesh::Resident*, CAPACITY> owners = {};
 std::vector<U32> available;
 U32 extent = 0, generation = 1;
@@ -79,7 +82,7 @@ F32 lod_policy[4] = {};
 U64 resident_bytes = 0, resource_epoch = 0;
 std::vector<std::weak_ptr<LLComputeMesh::Page>> pages;
 void cancelPreparation(LLVOVolume& object);
-GLuint program = 0, buffers[5] = {};
+GLuint program = 0, buffers[6] = {};
 GLuint demand_readback = 0;
 GLsync demand_fence = nullptr;
 LLTimer demand_timer;
@@ -90,8 +93,7 @@ GLuint batch_program = 0, batch_buffers[2] = {};
 bool batch_failed = false;
 GLint batch_count = -1, batch_source_count = -1, batch_matrix = -1, batch_clip_planes = -1;
 constexpr U32 BATCH_CAPACITY = 256;
-struct BatchCandidate { U32 slot[4] = {}; F32 minimum[4] = {}, maximum[4] = {}; };
-static_assert(sizeof(BatchCandidate) == 48, "std430 batch layout");
+// Passes upload only slot IDs; bounds are published once with resident geometry.
 bool failed = false;
 LLTimer report_timer;
 U32 draws = 0, dispatches = 0, bypasses = 0;
@@ -179,7 +181,7 @@ bool initialize()
         return false;
     }
     Bindings saved;
-    glGenBuffers(5, buffers);
+    glGenBuffers(6, buffers);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[0]);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(entries), entries.data(), GL_DYNAMIC_DRAW);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[1]);
@@ -190,6 +192,8 @@ bool initialize()
     glBufferData(GL_SHADER_STORAGE_BUFFER, AVATAR_CAPACITY * sizeof(U32), nullptr, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[4]);
     glBufferData(GL_SHADER_STORAGE_BUFFER, CAPACITY * sizeof(U32), nullptr, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[5]);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(resident_bounds), resident_bounds.data(), GL_DYNAMIC_DRAW);
     glGenBuffers(1, &demand_readback);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, demand_readback);
     glBufferData(GL_SHADER_STORAGE_BUFFER, CAPACITY * sizeof(U32), nullptr, GL_STREAM_READ);
@@ -197,8 +201,8 @@ bool initialize()
     {
         glDeleteProgram(linked);
         glDeleteBuffers(1, &demand_readback); demand_readback = 0;
-        glDeleteBuffers(5, buffers);
-        buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = 0;
+        glDeleteBuffers(6, buffers);
+        buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = buffers[5] = 0;
         return false;
     }
     program = linked;
@@ -252,7 +256,7 @@ bool initializeBatch()
     Bindings saved;
     glGenBuffers(2, batch_buffers);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, batch_buffers[0]);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, BATCH_CAPACITY*sizeof(BatchCandidate), nullptr, GL_STREAM_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, BATCH_CAPACITY*sizeof(U32), nullptr, GL_STREAM_DRAW);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, batch_buffers[1]);
     glBufferData(GL_SHADER_STORAGE_BUFFER, BATCH_CAPACITY*5*sizeof(U32), nullptr, GL_STREAM_DRAW);
     if (glGetError() != GL_NO_ERROR)
@@ -346,7 +350,11 @@ bool dispatch()
         {
             const U64 bytes = (end - dirty_begin) * sizeof(Entry);
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, dirty_begin * sizeof(Entry), bytes, entries.data() + dirty_begin);
-            uploaded += bytes;
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffers[5]);
+            const U64 bounds_bytes = (end - dirty_begin) * sizeof(Bounds);
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, dirty_begin * sizeof(Bounds), bounds_bytes,
+                            resident_bounds.data() + dirty_begin);
+            uploaded += bytes + bounds_bytes;
         }
         dirty_begin = CAPACITY; dirty_end = 0;
     }
@@ -916,6 +924,8 @@ BuildResult advanceJob(BuildJob& job)
             owners[record->slot] = record.get();
         }
         entries[record->slot] = staged.entry;
+        std::copy(staged.minimum, staged.minimum+4, resident_bounds[record->slot].minimum);
+        std::copy(staged.maximum, staged.maximum+4, resident_bounds[record->slot].maximum);
         dirty(record->slot);
         record->available_lods = job.ready_mask;
         record->failed_lods = job.failed_mask;
@@ -1132,14 +1142,8 @@ bool LLComputeMesh::drawBatch(const std::vector<LLDrawInfo*>& batch)
     const auto& first = *batch.front();
     for (const auto* info : batch) if (!info || !compatibleBatch(first, *info)) return false;
     if (!dispatch() || !initializeBatch()) return false;
-    std::array<BatchCandidate, BATCH_CAPACITY> candidates;
-    for (size_t i=0; i<batch.size(); ++i)
-    {
-        const auto& record = *batch[i]->mComputeLOD;
-        candidates[i].slot[0] = record.slot;
-        std::copy(record.minimum, record.minimum+4, candidates[i].minimum);
-        std::copy(record.maximum, record.maximum+4, candidates[i].maximum);
-    }
+    std::array<U32, BATCH_CAPACITY> candidates;
+    for (size_t i=0; i<batch.size(); ++i) candidates[i] = batch[i]->mComputeLOD->slot;
     gGL.flush();
     const glm::mat4 clip = gGL.getProjectionMatrix() * gGL.getModelviewMatrix();
     {
@@ -1149,10 +1153,11 @@ bool LLComputeMesh::drawBatch(const std::vector<LLDrawInfo*>& batch)
         // Order both shader reads and writes after preceding consumers.
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, batch_buffers[0]);
-        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, batch.size()*sizeof(BatchCandidate), candidates.data());
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, batch.size()*sizeof(U32), candidates.data());
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, buffers[1]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, batch_buffers[0]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, batch_buffers[1]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, buffers[5]);
         glUniform1ui(batch_count, U32(batch.size()));
         glUniform1ui(batch_source_count, extent);
         glUniform1ui(batch_clip_planes, glIsEnabled(GL_DEPTH_CLAMP) ? 15u : 63u);
@@ -1258,9 +1263,9 @@ void LLComputeMesh::reloadLOD()
     demand_fence = nullptr;
     if (demand_readback) glDeleteBuffers(1, &demand_readback);
     demand_readback = 0;
-    if (buffers[0]) glDeleteBuffers(5, buffers);
+    if (buffers[0]) glDeleteBuffers(6, buffers);
     if (program) glDeleteProgram(program);
-    program = buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = 0;
+    program = buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = buffers[5] = 0;
     failed = false;
     dispatched_frame = ~0u;
 }
@@ -1290,6 +1295,7 @@ void LLComputeMesh::destroyLOD()
     pages.clear();
     owners.fill(nullptr);
     entries.fill(Entry{});
+    resident_bounds.fill(Bounds{});
     available.clear();
     extent = 0;
     ++generation;
@@ -1297,9 +1303,9 @@ void LLComputeMesh::destroyLOD()
     demand_fence = nullptr;
     if (demand_readback) glDeleteBuffers(1, &demand_readback);
     demand_readback = 0;
-    if (buffers[0]) glDeleteBuffers(5, buffers);
+    if (buffers[0]) glDeleteBuffers(6, buffers);
     if (program) glDeleteProgram(program);
-    program = buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = 0;
+    program = buffers[0] = buffers[1] = buffers[2] = buffers[3] = buffers[4] = buffers[5] = 0;
     failed = false;
     dirty_begin = CAPACITY; dirty_end = 0;
     dispatched_frame = ~0u;
