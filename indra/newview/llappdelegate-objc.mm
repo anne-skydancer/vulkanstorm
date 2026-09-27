@@ -39,6 +39,12 @@
 #include "llappviewermacosx-for-objc.h"
 #include <Carbon/Carbon.h> // Used for Text Input Services ("Safe" API - it's supported)
 
+// <FS:TJ> Launch new instance option from macOS dock
+#include <unordered_map>
+#include "linden_common.h"
+#include "lltrans.h"
+// </FS:TJ>
+
 @implementation LLAppDelegate
 
 @synthesize window;
@@ -155,9 +161,10 @@
 // <FS:TJ> Launch new instance option from macOS dock
 - (NSMenu *) applicationDockMenu:(NSApplication *)sender
 {
+    std::string new_instance_label = LLTrans::getString("FSMacOSNewViewerInstance");
     NSMenu *dockMenu = [[[NSMenu alloc] init] autorelease];
     NSMenuItem *newInstanceItem =
-        [[[NSMenuItem alloc] initWithTitle:@"New Viewer Instance"
+        [[[NSMenuItem alloc] initWithTitle:[NSString stringWithUTF8String:new_instance_label.c_str()]
                                      action:@selector(launchNewInstance:)
                               keyEquivalent:@""] autorelease];
 
