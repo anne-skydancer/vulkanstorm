@@ -295,6 +295,10 @@ set(viewer_SOURCE_FILES
     lldrawpoolmaterials.cpp
     llcomputemesh.cpp
     llcomputelod.cpp
+    llparticlecompute.cpp
+    llparticlepipeline.cpp
+    llparticletexture.cpp
+    llparticleviewer.cpp
     lldrawpoolpbropaque.cpp
     lldrawpoolsimple.cpp
     lldrawpoolsky.cpp
@@ -1162,6 +1166,11 @@ set(viewer_HEADER_FILES
     lldrawpoolbump.h
     lldrawpoolmaterials.h
     llcomputemesh.h
+    llparticlecompute.h
+    llparticlepipeline.h
+    llparticletexture.h
+    llparticleviewer.h
+    llparticlepipelinelayout.h
     llcomputedependencies.h
     lldrawpoolpbropaque.h
     lldrawpoolsimple.h

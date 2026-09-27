@@ -29,6 +29,8 @@
 #include <optional>
 
 #include "lldrawpoolalpha.h"
+#include "llparticleviewer.h"
+#include "llviewerpartsim.h"
 
 #include "llglheaders.h"
 #include "llviewercontrol.h"
@@ -917,10 +919,12 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
     // </FS>
 
     // <FS> for (LLCullResult::sg_iterator i = begin; i != end; ++i)
+
+    std::vector<std::pair<LLSpatialGroup*,bool>> walk;
     while (iter != iter_end || rigged_iter != rigged_end)
     // </FS>
     {
-        LL_PROFILE_ZONE_NAMED_CATEGORY_DRAWPOOL("renderAlpha - group");
+
         // <FS> in merged mode, take the farther of the two stream heads; an
         // ensemble's groups share one avatar depth, so each avatar drains
         // contiguously -- rigged run first (ties go rigged), then its unrigged
@@ -958,6 +962,44 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
         }
 
         LLSpatialGroup* group = rigged ? *rigged_iter++ : *iter++;
+
+        walk.emplace_back(group,rigged);
+    }
+
+    bool particlePass = LLParticleViewer::active() && stream != EAlphaStream::RIGGED &&
+        (oit_phase == ALPHA_OIT_NONE || oit_phase == ALPHA_OIT_RESIDUAL) &&
+        gPipeline.sRenderParticles && LLViewerPartSim::getMaxPartCount()>0 &&
+        gPipeline.hasRenderType(LLPipeline::sRenderingHUDs ? LLPipeline::RENDER_TYPE_HUD_PARTICLES : LLPipeline::RENDER_TYPE_PARTICLES);
+    if (particlePass)
+    {
+        std::vector<float> boundaries;
+        boundaries.reserve(walk.size());
+        for (const auto& entry : walk)
+            // Only the merged stream is sorted by avatar/ensemble depth. The
+            // stock and OIT residual world streams retain bounds-depth order.
+            boundaries.push_back(merged ? (entry.second ? entry.first->mAvatarDepth : entry.first->worldAlphaDepth()) : entry.first->mDepth);
+        gGL.matrixMode(LLRender::MM_MODELVIEW);
+        gGL.pushMatrix(); gGL.loadMatrix(gGLModelView);
+        particlePass = LLParticleViewer::beginView(boundaries, LLPipeline::sRenderingHUDs);
+        gGL.popMatrix();
+    }
+    U32 particleInterval = 0;
+    auto drawParticles = [&]()
+    {
+        if (!particlePass) return;
+        auto& shader = LLPipeline::sRenderingHUDs ? gParticleHUDAlphaProgram : gParticleAlphaProgram;
+        LLGLSLShader* previous = current_shader;
+        prepare_alpha_shader(&shader, true, above_water ? 1.f : -1.f);
+        if (depth_only) shader.setMinimumAlpha(0.33f);
+        if (previous) previous->bind(); else LLGLSLShader::unbind();
+        particlePass = LLParticleViewer::draw(particleInterval++, shader, write_depth_always,
+            depth_only, getType() != LLDrawPool::POOL_ALPHA_PRE_WATER);
+    };
+    for (const auto& entry : walk)
+    {
+        drawParticles();
+        LLSpatialGroup* group = entry.first;
+        rigged = entry.second;
         // </FS>
         llassert(group);
         llassert(group->getSpatialPartition());
@@ -1336,6 +1378,8 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
             }
         }
     }
+
+    drawParticles();
 
     gGL.setSceneBlendType(LLRender::BT_ALPHA);
 

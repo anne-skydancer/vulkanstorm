@@ -79,16 +79,9 @@ public:
 
     /*virtual*/ LLDrawable* createDrawable(LLPipeline *pipeline);
     /*virtual*/ bool        updateGeometry(LLDrawable *drawable);
-    void        getGeometry(const LLViewerPart& part,
+    // On-demand CPU intersection geometry only; rendering uses compute.
+    void        getPickingGeometry(const LLViewerPart& part,
                                 LLStrider<LLVector4a>& verticesp);
-
-                void        getGeometry(S32 idx,
-                                LLStrider<LLVector4a>& verticesp,
-                                LLStrider<LLVector3>& normalsp,
-                                LLStrider<LLVector2>& texcoordsp,
-                                LLStrider<LLColor4U>& colorsp,
-                                LLStrider<LLColor4U>& emissivep,
-                                LLStrider<U16>& indicesp);
 
     void updateFaceSize(S32 idx) { }
     F32 getPartSize(S32 idx);

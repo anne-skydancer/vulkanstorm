@@ -748,6 +748,8 @@ void LLImageGL::setImage(const LLImageRaw* imageraw)
 
 bool LLImageGL::setImage(const U8* data_in, bool data_hasmips /* = false */, S32 usename /* = 0 */)
 {
+    ++mContentRevision; // Invalidate immutable GPU consumer snapshots.
+
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
 
     const bool is_compressed = isCompressed();
@@ -1124,6 +1126,8 @@ void sub_image_lines(U32 target, S32 miplevel, S32 x_offset, S32 y_offset, S32 w
 
 bool LLImageGL::setSubImage(const U8* datap, S32 data_width, S32 data_height, S32 x_pos, S32 y_pos, S32 width, S32 height, bool force_fast_update /* = false */, LLGLuint use_name)
 {
+    ++mContentRevision; // Invalidate immutable GPU consumer snapshots.
+
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     if (!width || !height)
     {
@@ -1240,6 +1244,8 @@ bool LLImageGL::setSubImage(const LLImageRaw* imageraw, S32 x_pos, S32 y_pos, S3
 // Copy sub image from frame buffer
 bool LLImageGL::setSubImageFromFrameBuffer(S32 fb_x, S32 fb_y, S32 x_pos, S32 y_pos, S32 width, S32 height)
 {
+    ++mContentRevision; // Invalidate immutable GPU consumer snapshots.
+
     if (gGL.getTexUnit(0)->bind(this, false, true))
     {
         glCopyTexSubImage2D(GL_TEXTURE_2D, 0, fb_x, fb_y, x_pos, y_pos, width, height);
@@ -1800,6 +1806,8 @@ void LLImageGL::syncToMainThread(LLGLuint new_tex_name)
 
 void LLImageGL::syncTexName(LLGLuint texname)
 {
+    ++mContentRevision; // Invalidate immutable GPU consumer snapshots.
+
     if (texname != 0)
     {
         if (mTexName != 0 && mTexName != texname)
@@ -1943,6 +1951,8 @@ bool LLImageGL::readBackRaw(S32 discard_level, LLImageRaw* imageraw, bool compre
 
 void LLImageGL::destroyGLTexture()
 {
+    ++mContentRevision; // Invalidate immutable GPU consumer snapshots.
+
     checkActiveThread();
 
     if (mTexName != 0)
@@ -1979,6 +1989,7 @@ void LLImageGL::setAddressMode(LLTexUnit::eTextureAddressMode mode)
 {
     if (mAddressMode != mode)
     {
+        ++mContentRevision;
         mTexOptionsDirty = true;
         mAddressMode = mode;
     }
@@ -1994,6 +2005,7 @@ void LLImageGL::setFilteringOption(LLTexUnit::eTextureFilterOptions option)
 {
     if (mFilterOption != option)
     {
+        ++mContentRevision;
         mTexOptionsDirty = true;
         mFilterOption = option;
     }

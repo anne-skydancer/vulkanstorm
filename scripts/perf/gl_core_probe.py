@@ -61,6 +61,14 @@ def main():
         assert values['profile'] & 1
         for name in ['glDispatchCompute','glMemoryBarrier','glMultiDrawElementsIndirect']:
             extension(name,None)
+        get_indexed=extension('glGetStringi',c.c_char_p,c.c_uint,c.c_uint)
+        count=c.c_int(); get(0x821D,c.byref(count))
+        extensions={get_indexed(0x1F03,i).decode() for i in range(count.value)}
+        required={'GL_ARB_fragment_shader_interlock','GL_ARB_bindless_texture',
+                  'GL_ARB_shader_draw_parameters','GL_ARB_indirect_parameters'}
+        values['particle_extensions_available']=sorted(required & extensions)
+        values['particle_extensions_missing']=sorted(required - extensions)
+        values['particle_gpu_eligible']=(values['major'],values['minor']) >= (4,5) and required <= extensions
         get_string=api(gl,'glGetString',c.c_char_p,c.c_uint)
         values.update({name:get_string(token).decode() for name,token in [('vendor',0x1F00),('renderer',0x1F01),('version',0x1F02)]})
         texture=c.c_uint()

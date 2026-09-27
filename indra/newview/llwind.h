@@ -49,6 +49,8 @@ public:
 
     void decompress(LLBitPack &bitpack, LLGroupHeader *group_headerp);
     LLVector3 getAverage();
+    const F32* getVelocityX() const { return mVelX; }
+    const F32* getVelocityY() const { return mVelY; }
 
     void setOriginGlobal(const LLVector3d &origin_global);
 private:
