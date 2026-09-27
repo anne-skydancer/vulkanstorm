@@ -37,6 +37,16 @@ private signing/upload services, macOS jobs and alternate grid/CPU matrices are
 not part of this fork's default build. Tag-triggered releases still publish
 Windows/Linux installer artifacts; installers are unsigned, as on the local PC.
 
+Successful non-PR Release builds in the Vulkanstorm repository also refresh the
+`latest` GitHub release with the Windows installer, Linux archive, and SHA-256
+checksums from that same CI run. Both matrix entries must succeed before this
+publication job can run. It moves the `latest` tag to the source commit only
+after uploading both binaries and their checksums. Publication is serialized;
+older CI runs and builds of source older than the published tag cannot replace
+a newer release. GitHub updates assets and tags through separate API calls, so
+publication is not atomic; a failed publication can be retried by rerunning the
+job. Existing maintainer release notes and unrelated assets are preserved.
+
 Dependency changes retained from the separately requested portability/decoder
 work: SoLoud revision 3 adds the Linux archive without changing upstream source;
 OpenJPEG is updated to the published 2.5.4-r1 packages. These are dependency
