@@ -257,7 +257,7 @@ bool LLParticlePipeline::initializePool(const std::vector<Particle>& initialSlot
     allocate(SOURCE_TAILS, tails.size() * sizeof(tails[0]), tails.data());
     allocate(VERTICES, size * 4 * sizeof(Vertex), nullptr);
     allocate(PICK_RESULT, 2 * sizeof(U32), nullptr);
-    allocate(REGIONS, sizeof(Region), nullptr);
+    allocate(REGIONS, sizeof(LLParticlePipeline::Region), nullptr);
     allocate(BOUNDS_DATA, size*8*sizeof(float), nullptr);
     std::vector<U32> demand(MAX_CAPACITY,0);
     allocate(TEXTURE_DEMAND,demand.size()*sizeof(U32),demand.data());
@@ -539,12 +539,12 @@ bool LLParticlePipeline::pick(const std::array<float,3>& start, const std::array
     return checkErrors("particle picking");
 }
 
-bool LLParticlePipeline::publishRegions(const std::vector<Region>& regions)
+bool LLParticlePipeline::publishRegions(const std::vector<LLParticlePipeline::Region>& regions)
 {
     if (!capacity || failed || regions.size()>1024) return false;
     gGL.flush(); Bindings saved;
-    Region empty{};
-    allocate(REGIONS, std::max<size_t>(sizeof(Region),regions.size()*sizeof(Region)),regions.empty()?&empty:regions.data());
+    LLParticlePipeline::Region empty{};
+    allocate(REGIONS, std::max<size_t>(sizeof(LLParticlePipeline::Region),regions.size()*sizeof(LLParticlePipeline::Region)),regions.empty()?&empty:regions.data());
     regionCount=U32(regions.size());
     return checkErrors("region publication");
 }
