@@ -1785,7 +1785,10 @@ void LLVertexBuffer::setBuffer()
     U32 data_mask = LLGLSLShader::sCurBoundShaderPtr->mAttributeMask;
 
     // this Vertex Buffer must provide all necessary attributes for currently bound shader
-    llassert_msg((data_mask & mTypeMask) == data_mask,
+    // Texture/object indices alias the fourth lane of the position stream;
+    // every MAP_VERTEX buffer physically provides that lane.
+    const U32 provided_mask = mTypeMask | ((mTypeMask & MAP_VERTEX) ? MAP_TEXTURE_INDEX : 0);
+    llassert_msg((data_mask & provided_mask) == data_mask,
         "Attribute mask mismatch! mTypeMask should be a superset of data_mask.  data_mask: 0x"
                 << std::hex << data_mask << " mTypeMask: 0x" << mTypeMask << " Missing: 0x" << (data_mask & ~mTypeMask) <<  std::dec);
 

@@ -43,6 +43,9 @@ struct Object
 };
 std::shared_ptr<Resident> prepareFace(LLFace& face);
 bool ownsLOD(LLVOVolume& object);
+// True only when position changes can preserve all resident local-space ranges.
+bool canUpdateTransform(LLVOVolume& object);
+void updateTransform(LLVOVolume& object);
 bool preserveLODOnMeshLoad(LLVOVolume& object);
 void invalidateLOD(LLVOVolume& object);
 void notifyLODDependency(LLVOVolume& object, unsigned changed);

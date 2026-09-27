@@ -2253,6 +2253,7 @@ void LLVOVolume::updateRelativeXform(bool force_identity)
 
         mRelativeXformInvTrans.transpose();
     }
+    LLComputeMesh::updateTransform(*this);
 }
 
 bool LLVOVolume::lodOrSculptChanged(LLDrawable *drawable, bool &compiled, bool &should_update_octree_bounds)
@@ -6030,7 +6031,8 @@ void LLVolumeGeometryManager::rebuildGeom(LLSpatialGroup* group)
         // object's resident geometry. Only the object's own dirty state retires
         // its generation; neighbours must not trigger repeated LOD conversion.
         if (drawable && drawable->getVOVolume() &&
-            drawable->isState(LLDrawable::REBUILD_ALL | LLDrawable::RIGGED))
+            drawable->isState(LLDrawable::REBUILD_ALL | LLDrawable::RIGGED) &&
+                !LLComputeMesh::canUpdateTransform(*drawable->getVOVolume()))
             LLComputeMesh::invalidateLOD(*drawable->getVOVolume());
     }
     group->clearDrawMap();
@@ -6576,7 +6578,7 @@ void LLVolumeGeometryManager::rebuildMesh(LLSpatialGroup* group)
                     LLVOVolume* vobj = drawablep->getVOVolume();
 
                     if (!vobj) continue;
-                    LLComputeMesh::invalidateLOD(*vobj);
+                    if (!LLComputeMesh::canUpdateTransform(*vobj)) LLComputeMesh::invalidateLOD(*vobj);
 
                     if (vobj->isNoLOD()) continue;
 

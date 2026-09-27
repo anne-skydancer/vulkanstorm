@@ -3340,7 +3340,8 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
     if (drawablep && drawablep->getVOVolume() && (flag & LLDrawable::REBUILD_ALL))
     {
         auto* volume = drawablep->getVOVolume();
-        if (volume->mComputeLOD)
+        if (volume->mComputeLOD &&
+            !(flag == LLDrawable::REBUILD_POSITION && LLComputeMesh::canUpdateTransform(*volume)))
         {
             static U64 reasons[4] = {};
             static LLFrameTimer reason_timer;

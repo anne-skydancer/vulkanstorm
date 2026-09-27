@@ -361,6 +361,8 @@ public:
         // </FS:Beq>
 
         ALPHA_PEEL_DEPTH,                   // "alpha_peel_depth"
+        MESH_TRANSFORMS,                    // "mesh_transforms"
+        MESH_TRANSFORM_ENABLED,             // "mesh_transform_enabled"
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on

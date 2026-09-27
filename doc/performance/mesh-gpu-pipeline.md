@@ -65,11 +65,14 @@ Invalid bounds fail open. No per-frame command-count readback is introduced.
 Clean unrigged neighbours now retain resident geometry across spatial-group
 repacking. Rigged records still invalidate under the established policy.
 
-Remaining implementation: object-space residency and transform-only metadata
-updates; replacement of eligible CPU visibility/draw-list traversal.
+Remaining implementation: replacement of eligible CPU visibility/draw-list
+traversal and retirement of routine direct-buffer maintenance. Object-space
+residency and resident transform-only updates are connected below.
 Batch submission now includes the untextured depth/shadow consumers. Current draw lists still come
 from CPU culling, so GPU culling is not yet a replacement of that CPU work.
-Initial conversion, transform-driven rebuilds and direct-path buffers remain.
+Initial topology/UV conversion and direct-path buffers remain. Resident local
+geometry now survives eligible position-only updates; fallback geometry still
+uses its established CPU update path.
 There is no claim of finished CPU offload or measured frame-time improvement.
 
 Validation so far:
@@ -121,3 +124,44 @@ The GPU tests exercise a bound update without republishing candidate IDs.
 Candidate enumeration is still CPU work. Moving bounds into persistent storage
 is preparation for persistent registration, not a claim that CPU culling or
 transform conversion has been removed.
+
+### Local-space transform checkpoint
+
+Unrigged resident pages now hold local-space positions, normals and tangents.
+The initial converter copies these attributes and packs the immutable resident
+slot into the existing fourth position lane; it does not multiply them by the
+object matrices. PBR color/reflection and opaque shadow vertex shaders fetch the
+position and inverse-transpose normal transforms from a buffer texture. Tangent
+handedness is preserved. Rigged bind-shape conversion remains unchanged.
+
+The table uses seven RGBA32F texels per slot (896 KiB at 8192 slots), below the
+[OpenGL minimum buffer-texture capacity](https://wikis.khronos.org/opengl/Buffer_Texture).
+This adds no requirement beyond the viewer's OpenGL 4.3 baseline. The compute
+visibility pass reads the same matrices and transforms local bounds on the GPU.
+Texture bindings, active texture unit and the transform enable flag are restored
+before ordinary draws. Shader reload reconstructs metadata alongside commands.
+
+Eligible position-only updates preserve resident page ranges and publish compact
+matrix/LOD metadata; unchanged transforms do not mark uploads dirty. Geometry,
+material, planar-texgen, legacy bump, selection and eligibility changes retain
+invalidation. The initial static/unrigged/opaque-PBR eligibility is unchanged.
+
+**CPU work still present:** the ordinary face buffers are maintained for selection,
+unsupported passes and failure recovery; initial topology/UV/color preparation,
+scene traversal and candidate enumeration also remain. This checkpoint removes
+resident vertex transformation/repacking, not every CPU fallback conversion.
+Persistent registration and retirement of routine fallback-buffer maintenance
+remain implementation work, as does in-world performance/visual acceptance.
+
+Validation adds production admission/publication and scoped binding tests, plus
+native AMD and Mesa/Zink color/depth comparisons for the production transform
+helper with nonuniform/mirrored scales and nonzero resident slots. Compute tests
+move a local bound by updating only the transform record.
+
+The transform checkpoint compiled and linked successfully with Autobuild
+RelWithDebInfo and passed the Release feature/dependency configuration check.
+The complete staged executable and linked binary have SHA-256
+`39B55C864868CC8315EF6949D56F1B7FF53E392280865D8DC2FBF41B3AF36E2A`.
+Isolated native AMD Core-profile and Mesa/Zink starts loaded the viewer shaders,
+reached login, passed the existing texture self-test and exited with code 0.
+These startup tests do not exercise in-world resident mesh publication.

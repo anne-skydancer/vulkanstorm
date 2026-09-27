@@ -27,8 +27,10 @@ uniform mat4 modelview_projection_matrix;
 
 in vec3 position;
 
+vec3 residentMeshPosition(vec3 position);
+
 void main()
 {
     //transform vertex
-    gl_Position = modelview_projection_matrix*vec4(position.xyz, 1.0);
+    gl_Position = modelview_projection_matrix*vec4(residentMeshPosition(position.xyz), 1.0);
 }
