@@ -221,10 +221,8 @@ public:
     F32 getScore() const { return mScore; }
     LLMeshStreaming::RequestLane getLane() const { return mLane; }
     void promote(LLMeshStreaming::RequestLane lane) { mLane = std::min(mLane, lane); }
-    F32 getAge() const { return mSortAge; }
     void checkScore()
     {
-        mSortAge = mAge.getElapsedTimeF32();
         constexpr F32 EXPIRE_TIME_SECS = 8.f;
         if (mScoreTimer.getElapsedTimeF32() > EXPIRE_TIME_SECS || mScoreDirty)
         {
@@ -246,8 +244,6 @@ public:
 protected:
     void updateScore();
     LLMeshStreaming::RequestLane mLane = LLMeshStreaming::RequestLane::RESIDENCY;
-    LLTimer mAge;
-    F32 mSortAge = 0.f;
 
     LLUUID mId;
     F32 mScore;
@@ -973,7 +969,6 @@ public:
 
     typedef std::vector <std::shared_ptr<PendingRequestBase> > pending_requests_vec;
     pending_requests_vec mPendingRequests;
-    LLMeshStreaming::RequestScheduler mRequestScheduler;
 
     //list of mesh ids awaiting skin info
     typedef std::unordered_map<LLUUID, MeshLoadData > skin_load_map;
