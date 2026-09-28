@@ -49,3 +49,37 @@ multi-minute interval with no mesh completions. In-world validation is required.
 `test_mesh_request_priority.py` exercises the production selection block for
 score ordering, bounded/zero admission, queue preservation when all requests fit,
 and worker class priority.
+
+## HTTP delivery recovery
+
+Mesh downloads now use parallel HTTP/1.1 connections: AP_MESH2 no longer opts
+into pipelining, and both small and large mesh requests explicitly request
+HTTP/1.1. The ordinary mesh connection default remains eight; large downloads
+retain their separate two-connection policy. Textures, uploads, and other callers
+keep their existing transport policy. Upstream request prioritization is retained.
+
+Mesh options enable curl's low-speed timeout at less than one byte per second
+for a twenty-second window. This covers a silent response and a transfer that
+stops after receiving data without imposing a short total deadline on slow,
+progressing downloads. Curl's speed accounting means this is not an exact
+twenty-second timer since the last byte. DNS/connection setup retains its separate
+connection timeout. Overall small/large transfer limits remain 120/600 seconds;
+the small-mesh pipeline multiplier no longer applies.
+
+Existing bounded retries, exponential backoff and Retry-After behavior remain.
+For mesh requests, eligible retries alternate with fresh queued work, including
+when only one connection slot becomes free per service iteration. Other callers
+retain retry-first service. Retries still count as outstanding mesh requests;
+this does not cancel obsolete in-flight assets or guarantee successful delivery
+from an unavailable server.
+
+Ordinary MeshHTTP messages report failed attempts and successful recoveries:
+policy, attempt number, status, negotiated protocol enum, elapsed/connect/first-byte
+timing, and downloaded bytes. They omit capability URLs and asset identifiers.
+These timings describe curl attempts, not time waiting in the repository queue.
+
+Validation: test_mesh_http.py runs the production option block against a local
+HTTP server using the bundled curl on Windows, exercising silent and partial
+stalls and progressing transfers. It also exercises the production retry-selection
+block for one-slot fairness, delayed retries, empty queues, and unchanged default
+retry-first ordering. These checks do not substitute for in-world measurements.

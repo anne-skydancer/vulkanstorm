@@ -89,8 +89,8 @@ static const struct
         "MeshMaxConcurrentRequests",
         "mesh fetch"
     },
-    { // AP_MESH2
-        8,      1,      32,     0,      true,
+    { // AP_MESH2: parallel connections, no HTTP/1 pipeline head-of-line blocking
+        8,      1,      32,     0,      false,
         "Mesh2MaxConcurrentRequests",
         "mesh2 fetch"
     },

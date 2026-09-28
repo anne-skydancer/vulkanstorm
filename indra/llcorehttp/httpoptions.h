@@ -98,6 +98,14 @@ public:
         return mTransferTimeout;
     }
 
+    // Disabled by default; asset callers can opt into bounded stall recovery.
+    void setLowSpeedTime(unsigned int seconds) { mLowSpeedTime = seconds; }
+    unsigned int getLowSpeedTime() const { return mLowSpeedTime; }
+    void setHttp11Only(bool enabled) { mHttp11Only = enabled; }
+    bool getHttp11Only() const { return mHttp11Only; }
+    void setFairRetries(bool enabled) { mFairRetries = enabled; }
+    bool getFairRetries() const { return mFairRetries; }
+
     /// Sets the number of retries on an LLCore::HTTPRequest before the
     /// request fails.
     // Default:  5
@@ -196,6 +204,9 @@ protected:
     int                 mTracing;
     unsigned int        mTimeout;
     unsigned int        mTransferTimeout;
+    unsigned int        mLowSpeedTime;
+    bool                mHttp11Only;
+    bool                mFairRetries;
     unsigned int        mRetries;
     HttpTime            mMinRetryBackoff;
     HttpTime            mMaxRetryBackoff;
