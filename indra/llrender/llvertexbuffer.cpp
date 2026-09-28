@@ -953,7 +953,8 @@ void LLVertexBuffer::drawIndirect(U32 mode, U32 command_offset, U32 draw_count) 
 void LLVertexBuffer::copyResidentRange(const LLVertexBuffer& source, U32 source_vertex, U32 source_index,
     U32 vertices, U32 indices, U32 target_vertex, U32 target_index)
 {
-    llassert(this != &source);
+    llassert(this != &source || target_vertex >= source_vertex+vertices || source_vertex >= target_vertex+vertices);
+    llassert(this != &source || target_index >= source_index+indices || source_index >= target_index+indices);
     llassert(mTypeMask == source.mTypeMask && mIndicesType == GL_UNSIGNED_SHORT && source.mIndicesType == GL_UNSIGNED_SHORT);
     llassert(source_vertex+vertices <= source.mNumVerts && target_vertex+vertices <= mNumVerts);
     llassert(source_index+indices <= source.mNumIndices && target_index+indices <= mNumIndices);
@@ -1761,7 +1762,10 @@ void LLVertexBuffer::setBuffer()
     U32 data_mask = LLGLSLShader::sCurBoundShaderPtr->mAttributeMask;
 
     // this Vertex Buffer must provide all necessary attributes for currently bound shader
-    llassert_msg((data_mask & mTypeMask) == data_mask,
+    // Texture/object indices alias the fourth lane of the position stream;
+    // every MAP_VERTEX buffer physically provides that lane.
+    const U32 provided_mask = mTypeMask | ((mTypeMask & MAP_VERTEX) ? MAP_TEXTURE_INDEX : 0);
+    llassert_msg((data_mask & provided_mask) == data_mask,
         "Attribute mask mismatch! mTypeMask should be a superset of data_mask.  data_mask: 0x"
                 << std::hex << data_mask << " mTypeMask: 0x" << mTypeMask << " Missing: 0x" << (data_mask & ~mTypeMask) <<  std::dec);
 

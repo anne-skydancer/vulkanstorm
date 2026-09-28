@@ -320,4 +320,171 @@ for wanted,distance in ((0,100),(1,20),(2,8),(3,2)):
 assert get_error()==0
 print('PASS: four GPU-copied/rebased refinement ranges match original color and depth',flush=True)
 
+
+# Gather source commands in arbitrary order and cull against the actual view.
+batch_program=program([(0x91B9,shader_path.with_name('meshBatchC.glsl').read_text())])
+batch_buffers=(U*5)();gen(5,batch_buffers)
+source_commands=[(3,1,12,0,0),(6,1,30,0,0),(0,1,42,0,0)]
+blob=C.create_string_buffer(b''.join(struct.pack('<IIIiI',*row) for row in source_commands))
+bind(SSBO,batch_buffers[0]);data(SSBO,len(blob)-1,blob,0x88E4);base(SSBO,0,batch_buffers[0])
+# Bounds inside, outside, intersecting, exact boundary, invalid, empty LOD,
+# stale slot and a workgroup tail. No visibility readback precedes production draws.
+cases=[(1,(-.5,-.5,-.5),(.5,.5,.5),True),
+       (0,(2,2,2),(3,3,3),False),
+       (0,(-2,-2,-2),(2,2,2),True),
+       (0,(1,-.5,-.5),(2,.5,.5),True),
+       (1,(float('nan'),0,0),(1,1,1),True),
+       (2,(-.5,-.5,-.5),(.5,.5,.5),True),
+       (99,(-.5,-.5,-.5),(.5,.5,.5),False),
+       (0,(-.2,-.2,2),(.2,.2,3),False),
+       (1,(-.2,-.2,-3),(.2,.2,-2),False)]
+for i in range(65):
+    x=float(i)-32
+    cases.append((i%3,(x,-.2,-.2),(x+.4,.2,.2),-1.4<=x<=1))
+# Each resident slot has immutable bounds shared by every view. Give each case
+# its own slot, including cases that use identical source draw commands.
+original_commands=source_commands
+source_commands=[original_commands[slot] if slot<len(original_commands) else (0,0,0,0,0) for slot,_,_,_ in cases]
+cases=[(i if slot<len(original_commands) else 99,lo,hi,expected) for i,(slot,lo,hi,expected) in enumerate(cases)]
+blob=C.create_string_buffer(b''.join(struct.pack('<IIIiI',*row) for row in source_commands))
+bind(SSBO,batch_buffers[0]);data(SSBO,len(blob)-1,blob,0x88E4)
+payload=b''.join(struct.pack('<I',slot) for slot,_,_,_ in cases)
+blob=C.create_string_buffer(payload);bind(SSBO,batch_buffers[1]);data(SSBO,len(payload),blob,0x88E4);base(SSBO,1,batch_buffers[1])
+bounds_payload=b''.join(struct.pack('<8f',*lo,0,*hi,0) for _,lo,hi,_ in cases)
+blob=C.create_string_buffer(bounds_payload);bind(SSBO,batch_buffers[3]);data(SSBO,len(bounds_payload),blob,0x88E4);base(SSBO,3,batch_buffers[3])
+identity_transform=struct.pack('<28f',1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,1,0)
+blob=C.create_string_buffer(identity_transform*len(cases));bind(SSBO,batch_buffers[4]);data(SSBO,len(blob)-1,blob,0x88E4);base(SSBO,4,batch_buffers[4])
+use(batch_program);uniform(location(batch_program,b'candidateCount'),len(cases));uniform(location(batch_program,b'sourceCount'),len(source_commands))
+matrix_uniform=fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))
+for translation, depth_clamp in ((0.,False),(10.,False),(0.,True),(10.,True)):
+    uniform(location(batch_program,b'clipPlaneMask'),15 if depth_clamp else 63)
+    matrix=(C.c_float*16)(1,0,0,0,0,1,0,0,0,0,1,0,translation,0,0,1)
+    matrix_uniform(location(batch_program,b'clipFromBuffer'),1,0,matrix)
+    initial=b'\xcd'*(20*(len(cases)+1));blob=C.create_string_buffer(initial)
+    bind(SSBO,batch_buffers[2]);data(SSBO,len(initial),blob,0x88E0);base(SSBO,2,batch_buffers[2])
+    dispatch((len(cases)+63)//64,1,1);barrier(0x200|0x40)
+    result=C.create_string_buffer(len(initial));read(SSBO,0,len(initial),result)
+    assert result.raw[-20:]==b'\xcd'*20
+    for i,(slot,lo,hi,_) in enumerate(cases):
+        if slot>=len(source_commands): expected=(0,0,0,0,0)
+        else:
+            invalid=not all(math.isfinite(v) for v in (*lo,*hi))
+            visible=invalid or all(lo[a]+(translation if a==0 else 0)<=1.00001 and hi[a]+(translation if a==0 else 0)>=-1.00001 for a in range(2 if depth_clamp else 3))
+            count,instances,first,vertex,instance=source_commands[slot]
+            expected=(count,instances if visible else 0,first,vertex,instance)
+        actual=struct.unpack_from('<IIIiI',result.raw,i*20)
+        assert actual==expected,('batch gather/view',translation,depth_clamp,i,actual,expected)
+# A resident bound update changes visibility without re-uploading the candidate
+# list. This also exercises slot reuse/publication independent of pass cameras.
+use(batch_program);uniform(location(batch_program,b'clipPlaneMask'),63)
+matrix=(C.c_float*16)(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)
+matrix_uniform(location(batch_program,b'clipFromBuffer'),1,0,matrix)
+changed=C.create_string_buffer(struct.pack('<8f',4,4,4,0,5,5,5,0))
+bind(SSBO,batch_buffers[3]);sub_data(SSBO,0,32,changed)
+dispatch((len(cases)+63)//64,1,1);barrier(0x200|0x40)
+bind(SSBO,batch_buffers[2]);result=C.create_string_buffer(20);read(SSBO,0,20,result)
+assert struct.unpack('<IIIiI',result.raw)==(source_commands[0][0],0,*source_commands[0][2:]), 'resident bounds update'
+# Restore local bounds, then move only the object transform out of the view.
+blob=C.create_string_buffer(bounds_payload[:32]);bind(SSBO,batch_buffers[3]);sub_data(SSBO,0,32,blob)
+shifted=bytearray(identity_transform);struct.pack_into('<f',shifted,48,4)
+blob=C.create_string_buffer(bytes(shifted));bind(SSBO,batch_buffers[4]);sub_data(SSBO,0,112,blob)
+dispatch((len(cases)+63)//64,1,1);barrier(0x200|0x40)
+bind(SSBO,batch_buffers[2]);read(SSBO,0,20,result)
+assert struct.unpack('<IIIiI',result.raw)==(source_commands[0][0],0,*source_commands[0][2:]), 'local bounds transform'
+blob=C.create_string_buffer(identity_transform);bind(SSBO,batch_buffers[4]);sub_data(SSBO,0,112,blob)
+# Consume gathered commands as multi-draw, with a rejected draw between visible
+# ones and page-local nonzero firstIndex. Compare full color/depth attachments.
+triangles=(-.8,-.8,-.1,-.8,-.45,.5, .1,-.8,.8,-.8,.45,.5)
+blob=C.create_string_buffer(struct.pack('<12f',*triangles));bind(0x8892,mesh[0]);data(0x8892,48,blob,0x88E4)
+fn('glVertexAttribPointer',None,U,I,U,C.c_ubyte,I,P)(0,2,0x1406,0,8,None)
+blob=C.create_string_buffer(struct.pack('<6H',0,1,2,3,4,5));bind(0x8893,mesh[1]);data(0x8893,12,blob,0x88E4)
+commands=[(3,1,3,0,0),(3,1,0,0,0),(3,1,3,0,0)]
+blob=C.create_string_buffer(b''.join(struct.pack('<IIIiI',*row) for row in commands));bind(SSBO,batch_buffers[0]);data(SSBO,len(blob)-1,blob,0x88E4)
+payload=struct.pack('<3I',1,2,0)
+blob=C.create_string_buffer(payload);bind(SSBO,batch_buffers[1]);data(SSBO,len(payload),blob,0x88E4)
+payload=b''.join(struct.pack('<8f',*lo,0,*hi,0) for lo,hi in
+    [((-1,-1,-1),(1,1,1)),((-1,-1,-1),(1,1,1)),((4,4,4),(5,5,5))])
+blob=C.create_string_buffer(payload);bind(SSBO,batch_buffers[3]);data(SSBO,len(payload),blob,0x88E4)
+use(batch_program);uniform(location(batch_program,b'clipPlaneMask'),63);uniform(location(batch_program,b'candidateCount'),3);uniform(location(batch_program,b'sourceCount'),3)
+matrix=(C.c_float*16)(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)
+matrix_uniform(location(batch_program,b'clipFromBuffer'),1,0,matrix)
+dispatch(1,1,1);barrier(0x40)
+use(render);clear(0x4100);bind(0x8F3F,batch_buffers[2])
+fn('glMultiDrawElementsIndirect',None,U,U,P,I,I)(4,0x1403,None,3,20)
+actual=pixels();actual_depth=depth_pixels()
+clear(0x4100)
+fn('glDrawElements',None,U,I,U,P)(4,3,0x1403,None)
+fn('glDrawElements',None,U,I,U,P)(4,3,0x1403,C.c_void_p(6))
+assert actual==pixels() and actual_depth==depth_pixels(), 'gathered multi-draw color/depth mismatch'
+assert get_error()==0
+print('PASS: batch gather/MDI pixels, conservative visibility, distinct views, depth-clamped shadows, stale slots and dispatch tails',flush=True)
+
+# Local-space resident attributes use the production transform helper. Compare
+# full color/depth against CPU-transformed vertices, then change only metadata.
+helper=shader_path.with_name('meshTransformV.glsl').read_text().replace('in uint texture_index;', 'layout(location=1) in uint texture_index;')
+vertex='#version 430 core\n'+helper+"""
+layout(location=0) in vec3 position;
+layout(location=2) in vec3 normal;
+layout(location=3) in vec4 tangent;
+out vec4 shade;
+void main(){
+ gl_Position=vec4(residentMeshPosition(position),1);
+ vec3 n=normalize(residentMeshNormal(normal));
+ vec3 t=normalize(residentMeshNormal(tangent.xyz));
+ shade=vec4(0.5+0.25*(n+t),0.5+0.25*tangent.w);
+}
+"""
+transform_program=program([(0x8B31,vertex),(0x8B30,'#version 430 core\nin vec4 shade;out vec4 color;void main(){color=shade;}')])
+transform_buffer=U();gen(1,C.byref(transform_buffer))
+bind(0x8C2A,transform_buffer);data(0x8C2A,224,None,0x88E4)
+transform_texture=U();fn('glGenTextures',None,I,C.POINTER(U))(1,C.byref(transform_texture))
+fn('glActiveTexture',None,U)(0x84C0)
+fn('glBindTexture',None,U,U)(0x8C2A,transform_texture)
+fn('glTexBuffer',None,U,U,U)(0x8C2A,0x8814,transform_buffer)
+use(transform_program)
+uniform_i=fn('glUniform1i',None,I,I)
+uniform_i(location(transform_program,b'mesh_transforms'),0)
+# Interleaved XYZ/object-slot, normal, tangent. Slot 1 exercises a nonzero TBO offset.
+points=[(-.4,-.4,.1),(.4,-.4,.1),(0,.4,.1)]
+normal=(.3,.4,.5);tangent=(.7,-.2,.1)
+def vertices(transformed=None):
+    output=b''
+    for p in points:
+        n=normal;t=tangent
+        if transformed:
+            sx,sy,sz,tx,ty,angle=transformed;c=math.cos(angle);q=math.sin(angle)
+            p=(c*sx*p[0]-q*sy*p[1]+tx,q*sx*p[0]+c*sy*p[1]+ty,sz*p[2])
+            def rotate(v):return(c*v[0]/sx-q*v[1]/sy,q*v[0]/sx+c*v[1]/sy,v[2]/sz)
+            n=rotate(n);t=rotate(t)
+        output+=struct.pack('<3fI8f',*p,1,*n,0,*t,-1)
+    return output
+blob=C.create_string_buffer(struct.pack('<3H',0,1,2));bind(0x8893,mesh[1]);data(0x8893,6,blob,0x88E4)
+bind(0x8892,mesh[0])
+for attribute,size,offset in ((0,3,0),(2,3,16),(3,4,32)):
+    fn('glVertexAttribPointer',None,U,I,U,C.c_ubyte,I,P)(attribute,size,0x1406,0,48,C.c_void_p(offset))
+    fn('glEnableVertexAttribArray',None,U)(attribute)
+fn('glVertexAttribIPointer',None,U,I,U,I,P)(1,1,0x1405,48,C.c_void_p(12));fn('glEnableVertexAttribArray',None,U)(1)
+fn('glDisable',None,U)(0x0BE2) # exact attribute colors, no blending
+transform_checks=0
+for transform in ((1,1,1,0,0,0),(.5,1.5,2,.2,-.1,.4),(-1,.75,.5,-.2,.2,-.7)):
+    sx,sy,sz,tx,ty,angle=transform;c=math.cos(angle);q=math.sin(angle)
+    packed=(c*sx,q*sx,0,0,-q*sy,c*sy,0,0,0,0,sz,0,tx,ty,0,1,
+            c/sx,q/sx,0,0,-q/sy,c/sy,0,0,0,0,1/sz,0)
+    blob=C.create_string_buffer(bytes(112)+struct.pack('<28f',*packed))
+    bind(0x8C2A,transform_buffer);data(0x8C2A,224,blob,0x88E4)
+    local=vertices();blob=C.create_string_buffer(local);bind(0x8892,mesh[0]);data(0x8892,len(local),blob,0x88E4)
+    uniform_i(location(transform_program,b'mesh_transform_enabled'),1)
+    clear(0x4100);fn('glDrawElements',None,U,I,U,P)(4,3,0x1403,None)
+    actual=pixels();actual_depth=depth_pixels()
+    baked=vertices(transform);blob=C.create_string_buffer(baked);data(0x8892,len(baked),blob,0x88E4)
+    uniform_i(location(transform_program,b'mesh_transform_enabled'),0)
+    clear(0x4100);fn('glDrawElements',None,U,I,U,P)(4,3,0x1403,None)
+    assert actual==pixels(),('resident transform color',transform)
+    assert any(actual[i] for i in range(0,len(actual),4)), 'transform test rendered no fragments'
+    expected_depth=depth_pixels()
+    assert all(abs(x-y)<2e-6 for x,y in zip(struct.unpack('<1024f',actual_depth),struct.unpack('<1024f',expected_depth))),('resident transform depth',transform)
+    transform_checks+=1
+assert get_error()==0
+print(f'PASS: {transform_checks} production local-space transform color/depth comparisons; nonuniform/mirrored scales and tangent handedness',flush=True)
+
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)

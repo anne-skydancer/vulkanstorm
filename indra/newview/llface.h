@@ -163,7 +163,8 @@ public:
                             U16 index_offset,
                             bool force_rebuild = false,
                             bool no_debug_assert = false,
-                            bool rebuild_for_gltf = false);
+                            bool rebuild_for_gltf = false,
+                            U32 resident_slot = ~0u);
 
     // For avatar
     U16          getGeometryAvatar(

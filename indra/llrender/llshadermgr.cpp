@@ -1610,6 +1610,8 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("alpha_peel_depth");
     // </FS>
 
+    mReservedUniforms.push_back("mesh_transforms");
+    mReservedUniforms.push_back("mesh_transform_enabled");
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 
     std::set<std::string> dupe_check;

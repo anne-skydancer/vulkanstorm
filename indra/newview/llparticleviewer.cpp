@@ -230,6 +230,15 @@ bool publish()
     }
     return publishSources(snapshots, winds) && publishRegions(regions);
 }
+LLImageGL* publishedParticleImage(LLImageGL* requested, LLImageGL* particleDefault, LLImageGL* viewerDefault)
+{
+    // The particle default is itself fetched asynchronously. A missing source
+    // is normal while loading; use the same resident fallback as LLTexUnit.
+    for (LLImageGL* candidate : {requested, particleDefault, viewerDefault})
+        if (candidate && candidate->getTexName()) return candidate;
+    return nullptr;
+}
+
 bool updateMaterials()
 {
     if (!materialsDirty) return true;
@@ -255,9 +264,17 @@ bool updateMaterials()
         if (image->hasParcelMedia() && image->getParcelMedia()->isPlaying()) image = image->getParcelMedia();
         // Source-level texture demand survives without CPU LLFace objects.
         image->addTextureStats(m.textureArea);
-        LLImageGL* glimage = image->getGLTexture();
-        if (!glimage || !glimage->getTexName()) glimage = LLViewerFetchedTexture::sDefaultParticleImagep->getGLTexture();
-        if (!glimage) return false;
+        LLImageGL* requested = image->getGLTexture();
+        auto* particleDefault = LLViewerFetchedTexture::sDefaultParticleImagep.get();
+        if ((!requested || !requested->getTexName()) && particleDefault)
+            particleDefault->addTextureStats(m.textureArea);
+        LLImageGL* glimage = publishedParticleImage(requested,
+            particleDefault ? particleDefault->getGLTexture() : nullptr, LLImageGL::sDefaultGLTexture);
+        if (!glimage)
+        {
+            LL_WARNS("ParticlePipeline") << "No texture or default image for material " << i << LL_ENDL;
+            return false;
+        }
         // Apply pending sampler options through the viewer's binding cache before
         // copying them. This is resource work, not a particle traversal.
         auto& texture = textures[glimage];
@@ -265,7 +282,13 @@ bool updateMaterials()
         if (used.insert(glimage).second)
         {
             gGL.getTexUnit(0)->bind(glimage);
-            if (!texture->update(glimage)) return false;
+            if (!texture->update(glimage))
+            {
+                LL_WARNS("ParticlePipeline") << "Texture snapshot failed for material " << i
+                    << " source=" << glimage->getTexName()
+                    << " revision=" << glimage->getContentRevision() << LL_ENDL;
+                return false;
+            }
         }
         records[i] = {texture->handle(), m.blend, m.flags};
     }
@@ -277,7 +300,10 @@ bool updateMaterials()
     glBufferData(GL_SHADER_STORAGE_BUFFER, std::max<size_t>(sizeof(Material), records.size()*sizeof(Material)),
         records.empty() ? nullptr : records.data(), GL_DYNAMIC_DRAW);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, previous);
-    const bool okay=glGetError() == GL_NO_ERROR;
+    const GLenum error = glGetError();
+    const bool okay = error == GL_NO_ERROR;
+    if (!okay) LL_WARNS("ParticlePipeline") << "Material publication GL error=" << error
+        << " records=" << records.size() << LL_ENDL;
     materialsDirty=!okay;
     return okay;
 }
@@ -409,9 +435,16 @@ bool LLParticleViewer::beginView(const std::vector<float>& boundaries, bool hud)
     LLVector3 forward = hud ? LLVector3(1,0,0) : LLVector3(-inverseView[2][0],-inverseView[2][1],-inverseView[2][2]);
     forward.normalize();
     const glm::mat4 projection=gGL.getProjectionMatrix()*viewMatrix;
-    if (!updateMaterials() || !prepareView({camera[0],camera[1],camera[2]},
-        {forward[0],forward[1],forward[2]}, 16.f,glm::value_ptr(projection),hud?1:0) || !prepareAlphaIntervals(boundaries, hud ? 1 : 0))
-    { failure("view preparation"); return false; }
+    if (!updateMaterials()) { failure("material preparation"); return false; }
+    if (!prepareView({camera[0],camera[1],camera[2]},
+        {forward[0],forward[1],forward[2]}, 16.f,glm::value_ptr(projection),hud?1:0))
+    {
+        LL_WARNS("ParticlePipeline") << "View rejected: hud=" << hud << " camera=" << camera
+            << " forward=" << forward << LL_ENDL;
+        failure("view ordering"); return false;
+    }
+    if (!prepareAlphaIntervals(boundaries, hud ? 1 : 0))
+    { failure("alpha interval preparation"); return false; }
     // Resource-streaming telemetry only: one aggregate per material, at most
     // once per second. Draw offsets/counts and particle state never return here.
     const U32 demand=textureDemand(LLViewerCamera::getInstance()->getPixelMeterRatio(),{camera[0],camera[1],camera[2]});

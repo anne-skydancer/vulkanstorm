@@ -1281,7 +1281,8 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
                                 U16 index_offset,
                                 bool force_rebuild,
                                 bool no_debug_assert,
-                                bool rebuild_for_gltf)
+                                bool rebuild_for_gltf,
+                                U32 resident_slot)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_FACE;
     llassert(verify());
@@ -1376,7 +1377,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
         // Recursive call the same function with the argument rebuild_for_gltf set to true
         // This call will make geometry in mVertexBuffer but in fact for mVertexBufferGLTF
         mVertexBufferGLTF.swap(mVertexBufferGLTF, mVertexBuffer);
-        getGeometryVolume(volume, face_index, mat_vert_in, mat_norm_in, index_offset, force_rebuild, no_debug_assert, true);
+        getGeometryVolume(volume, face_index, mat_vert_in, mat_norm_in, index_offset, force_rebuild, no_debug_assert, true, resident_slot);
         mVertexBufferGLTF.swap(mVertexBufferGLTF, mVertexBuffer);
         mVertexBufferGLTF->unmapBuffer();
     }
@@ -2106,13 +2107,14 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 
             LLVector4a texIdx;
 
-            S32 index = mTextureIndex < FACE_DO_NOT_BATCH_TEXTURES ? mTextureIndex : 0;
+            const bool local_geometry = resident_slot != ~0u;
+            U32 index = local_geometry ? resident_slot :
+                (mTextureIndex < FACE_DO_NOT_BATCH_TEXTURES ? mTextureIndex : 0);
 
             F32 val = 0.f;
-            S32* vp = (S32*) &val;
-            *vp = index;
+            std::memcpy(&val, &index, sizeof(index));
 
-            llassert(index < LLGLSLShader::sIndexedTextureChannels);
+            llassert(local_geometry || index < U32(LLGLSLShader::sIndexedTextureChannels));
 
             LLVector4Logical mask;
             mask.clear();
@@ -2125,7 +2127,8 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 
             while (src < end)
             {
-                mat_vert.affineTransform(*src++, res0);
+                if (local_geometry) res0 = *src++;
+                else mat_vert.affineTransform(*src++, res0);
                 tmp.setSelectWithMask(mask, texIdx, res0);
                 tmp.store4a((F32*) dst);
                 dst += 4;
@@ -2167,7 +2170,8 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 // </FS:Zi>
-                mat_normal.rotate(*src++, normal);
+                if (resident_slot != ~0u) normal = *src++;
+                else mat_normal.rotate(*src++, normal);
 // <FS:Zi> GCC12 warning: maybe-uninitialized - probably bogus
 #if defined(__GNUC__) && (__GNUC__ >= 12)
 #pragma GCC diagnostic pop
@@ -2202,7 +2206,8 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 // </FS:Zi>
-                mat_normal.rotate(*src, tangent_out);
+                if (resident_slot != ~0u) tangent_out = *src;
+                else mat_normal.rotate(*src, tangent_out);
 // <FS:Zi> GCC12 warning: maybe-uninitialized - probably bogus
 #if defined(__GNUC__) && (__GNUC__ >= 12)
 #pragma GCC diagnostic pop

@@ -3334,7 +3334,8 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
     if (drawablep && drawablep->getVOVolume() && (flag & LLDrawable::REBUILD_ALL))
     {
         auto* volume = drawablep->getVOVolume();
-        if (volume->mComputeLOD)
+        if (volume->mComputeLOD &&
+            !(flag == LLDrawable::REBUILD_POSITION && LLComputeMesh::canUpdateTransform(*volume)))
         {
             // The fast mesh update writes only the CPU-selected range. Resident
             // objects need all their ranges regenerated after a geometry edit.
@@ -3905,6 +3906,12 @@ void LLPipeline::postSort(LLCamera &camera)
             {
                 continue;
             }
+
+            // Static resident PBR records are registered when membership/state
+            // changes. Per-view CPU work visits packets, not individual faces.
+            if (j->first == LLRenderPass::PASS_GLTF_PBR && LLComputeMesh::appendSubmission(*group, *sCull,
+                    !sShadowRender && !sReflectionRender && !gCubeSnapshot))
+                continue;
 
             for (LLSpatialGroup::drawmap_elem_t::iterator k = src_vec.begin(); k != src_vec.end(); ++k)
             {

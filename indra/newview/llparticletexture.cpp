@@ -44,7 +44,11 @@ void LLParticleTexture::release()
 bool LLParticleTexture::update(LLImageGL* image)
 {
     collect();
-    if (!image || !image->getTexName()) return false;
+    if (!image || !image->getTexName())
+    {
+        LL_WARNS("ParticlePipeline") << "Texture snapshot has no published source image" << LL_ENDL;
+        return false;
+    }
     const GLuint source = image->getTexName();
     const U64 revision = image->getContentRevision();
     image->updateBindStats();
@@ -54,7 +58,12 @@ bool LLParticleTexture::update(LLImageGL* image)
     glGetTextureLevelParameteriv(source, 0, GL_TEXTURE_WIDTH, &width);
     glGetTextureLevelParameteriv(source, 0, GL_TEXTURE_HEIGHT, &height);
     glGetTextureLevelParameteriv(source, 0, GL_TEXTURE_INTERNAL_FORMAT, &format);
-    if (!width || !height) return false;
+    if (!width || !height)
+    {
+        LL_WARNS("ParticlePipeline") << "Texture snapshot has no level-zero storage: source=" << source
+            << " width=" << width << " height=" << height << " GL error=" << glGetError() << LL_ENDL;
+        return false;
+    }
     // Legacy unsized storage reports are normalized to equivalent sized formats.
     if (format == GL_RGBA) format = GL_RGBA8;
     if (format == GL_RGB) format = GL_RGB8;
@@ -107,7 +116,14 @@ bool LLParticleTexture::update(LLImageGL* image)
         mHandle = glGetTextureHandleARB(mTexture);
         glMakeTextureHandleResidentARB(mHandle);
     }
-    if (glGetError() != GL_NO_ERROR) return false;
+    const GLenum error = glGetError();
+    if (error != GL_NO_ERROR)
+    {
+        LL_WARNS("ParticlePipeline") << "Texture snapshot GL error=" << error << " source=" << source
+            << " width=" << width << " height=" << height << " levels=" << levels
+            << " format=" << format << " handle=" << mHandle << LL_ENDL;
+        return false;
+    }
     mImage = image; mSource = source; mRevision = revision;
     return true;
 }
