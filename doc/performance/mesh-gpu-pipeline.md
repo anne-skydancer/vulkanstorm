@@ -203,3 +203,17 @@ Core-profile starts reached login, passed the texture publication/readback
 self-test and exited with code 0. These are startup checks, not live-world mesh
 correctness or frame-time measurements. The local build retains version 82065;
 use this hash to distinguish it from earlier checkpoints with that build number.
+
+### Foliage-card update investigation
+
+Live testing reported foliage cards remaining visibly rectangular until moving
+the camera away and back. Inspection found that asynchronous texture delivery
+notified face consumers before publication, when component counts and alpha-mask
+classification still described the previous GL image. Completion now dirties
+the texture's attached faces after adoption when either classification changes.
+This uses the existing render-pass/rebuild mechanism without a scene-wide scan;
+unchanged detail upgrades and rejected uploads do not trigger it. Regression
+coverage includes pending fences, component changes, mask-only changes, material
+channels, and unchanged/rejected uploads. Reflection and mesh shaders are unchanged.
+The timing defect is confirmed in code; whether it explains the reported scene
+still requires retesting the foliage after rebuilding.

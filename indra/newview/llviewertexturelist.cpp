@@ -33,6 +33,7 @@
 #include "llviewertexturelist.h"
 
 #include "llagent.h"
+#include "llface.h"
 #include "llgl.h" // fot gathering stats from GL
 #include "llimagegl.h"
 #include "llimagebmp.h"
@@ -1303,7 +1304,24 @@ void LLViewerTextureList::completeTextureUploads(bool drain)
                 (upload.texture->getDiscardLevel() > upload.texture->getDesiredDiscardLevel() &&
                  upload.image->getDiscardLevel() <= upload.texture->getDiscardLevel()))
             {
-                upload.texture->getGLTexture()->adoptUploadImage(*upload.image);
+                LLImageGL* displayed = upload.texture->getGLTexture();
+                const bool classification_changed =
+                    displayed->getComponents() != upload.image->getComponents() ||
+                    displayed->getIsAlphaMask() != upload.image->getIsAlphaMask();
+                displayed->adoptUploadImage(*upload.image);
+                if (classification_changed)
+                {
+                    // addToCreateTexture notifies before the worker publishes.
+                    // At that point getComponents()/getIsAlphaMask() still
+                    // describe the old image. Reclassify consumers now that
+                    // the new alpha metadata is visible on the main thread.
+                    for (U32 channel = 0; channel < LLRender::NUM_TEXTURE_CHANNELS; ++channel)
+                    {
+                        const auto* faces = upload.texture->getFaceList(channel);
+                        for (S32 face = 0; face < upload.texture->getNumFaces(channel); ++face)
+                            (*faces)[face]->dirtyTexture();
+                    }
+                }
                 static bool logged_delivery = false;
                 if (!logged_delivery)
                 {

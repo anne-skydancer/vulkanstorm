@@ -77,7 +77,12 @@ struct LLViewerObject {
     LLViewerObject* getRootEdit() { return root; }
     LLVOAvatar* getAvatarAncestor() { return avatar; }
 };
-struct LLFace { LLViewerObject* object=nullptr; LLViewerObject* getViewerObject() { return object; } };
+struct LLFace {
+    LLViewerObject* object=nullptr;
+    int dirtied=0;
+    LLViewerObject* getViewerObject() { return object; }
+    void dirtyTexture() { ++dirtied; }
+};
 using GLsync = int*;
 constexpr GLenum GL_ALREADY_SIGNALED=1, GL_TIMEOUT_EXPIRED=2, GL_WAIT_FAILED=3;
 #define LL_IMAGEGL_THREAD_CHECK 0
@@ -156,6 +161,8 @@ struct LLImageGL {
     static constexpr int sLastFrameTime=42;
     void adoptUploadImage(LLImageGL& image);
     int getDiscardLevel() const { return mCurrentDiscardLevel; }
+    int getComponents() const { return mComponents; }
+    bool getIsAlphaMask() const { return mIsMask; }
 };
 struct LLViewerFetchedTexture {
     std::vector<LLFace*> faces[LLRender::NUM_TEXTURE_CHANNELS];
@@ -297,6 +304,9 @@ int main() {
         return texture;
     };
     auto texture=add(false);
+    LLFace foliage, materialFace;
+    texture->faces[0].push_back(&foliage);
+    texture->faces[3].push_back(&materialFace);
     list.completeTextureUploads();
     assert(waits.empty() && list.mPendingUploadBytes==1024);
     list.mPendingUploads.front()->submitted=true;
@@ -304,6 +314,7 @@ int main() {
     list.completeTextureUploads();
     assert(texture->image.mTexName==10 && texture->image.mPickMask==11);
     assert(texture->posts==0 && LLTextureDeliveryBudget::used()==1024);
+    assert(foliage.dirtied==0 && materialFace.dirtied==0);
     auto upload_image=list.mPendingUploads.front()->image;
     responses={GL_ALREADY_SIGNALED};
     list.completeTextureUploads();
@@ -314,10 +325,24 @@ int main() {
     assert(texture->posts==1 && !texture->mCreatePending);
     assert(list.mPendingUploadBytes==0 && LLTextureDeliveryBudget::used()==0);
     assert(deleted_fences==1);
+    assert(foliage.dirtied==1 && materialFace.dirtied==1);
+
+    // Mask analysis can change between mip levels without a component change.
+    auto maskChange=add(); maskChange->image.mComponents=4;
+    maskChange->faces[0].push_back(&foliage);
+    list.mPendingUploads.front()->image->mIsMask=1;
+    responses={GL_ALREADY_SIGNALED}; list.completeTextureUploads();
+    assert(foliage.dirtied==2 && maskChange->image.getIsAlphaMask());
+    auto unchanged=add(); unchanged->image.mComponents=4;
+    unchanged->faces[0].push_back(&foliage);
+    responses={GL_ALREADY_SIGNALED}; list.completeTextureUploads();
+    assert(foliage.dirtied==2); // detail-only upgrades do not rebuild geometry
 
     auto redundant=add(); redundant->desired=4;
+    redundant->faces[0].push_back(&foliage);
     responses={GL_ALREADY_SIGNALED}; list.completeTextureUploads();
     assert(redundant->image.mTexName==10 && redundant->posts==1);
+    assert(foliage.dirtied==2); // rejected uploads never reclassify consumers
     auto poorer=add(); poorer->image.mCurrentDiscardLevel=1;
     list.mPendingUploads.front()->image->mCurrentDiscardLevel=2;
     responses={GL_ALREADY_SIGNALED}; list.completeTextureUploads();
