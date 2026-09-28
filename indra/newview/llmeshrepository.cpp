@@ -1048,7 +1048,6 @@ void LLMeshRepoThread::run()
         LL_WARNS(LOG_MESH) << "Convex decomposition unable to be loaded.  Expect severe problems." << LL_ENDL;
     }
 
-    LLMeshStreaming::RequestScheduler network_scheduler;
     while (!LLApp::isExiting())
     {
         // *TODO:  Revise sleep/wake strategy and try to move away
@@ -1083,10 +1082,9 @@ void LLMeshRepoThread::run()
         }
         sRequestWaterLevel = static_cast<S32>(mHttpRequestSet.size());            // Stats data update
 
-        // Admission priority must survive the worker's queue split: draining
-        // all LODs before headers can otherwise starve first geometry. Snapshot
-        // counts bound each pass; delayed retries go to the tail and are never
-        // reconsidered repeatedly in the same pass. Fetches run without mMutex.
+        // Match upstream's worker priority: skin, LOD, then headers.
+        // Snapshot counts keep delayed retries from spinning within this pass.
+        // Fetches run without mMutex.
         std::array<size_t, 4> remaining{};
         {
             LLMutexLock lock(mMutex);
@@ -1116,8 +1114,7 @@ void LLMeshRepoThread::run()
         };
         while (mHttpRequestSet.size() < sRequestHighWater)
         {
-            const unsigned lane = network_scheduler.select(
-                {remaining[0]!=0, remaining[1]!=0, remaining[2]!=0, false});
+            const unsigned lane = remaining[1] ? 1 : remaining[2] ? 2 : remaining[0] ? 0 : 4;
             if (lane == 4) break;
             --remaining[lane];
             if (lane == 0)
@@ -4800,9 +4797,6 @@ void LLMeshRepository::notifyLoadedMeshes()
                 admission_report.reset();
             }
 
-            // Sort once per admission batch, not once per free slot. Within a
-            // lane screen importance wins until a request has waited five
-            // seconds, then oldest-first prevents small meshes starving.
             // Objects can disappear/change assets while waiting for admission.
             // Do not spend a network slot on requests with no remaining owner.
             mPendingRequests.erase(std::remove_if(mPendingRequests.begin(), mPendingRequests.end(),
@@ -4812,33 +4806,22 @@ void LLMeshRepository::notifyLoadedMeshes()
                     if (request->getRequestType() == MESH_REQUEST_LOD) --sLODPending;
                     return true;
                 }), mPendingRequests.end());
-            std::array<pending_requests_vec, 4> lanes;
-            if (push_count > 0)
+            const size_t admission_count = std::min(mPendingRequests.size(), size_t(llmax(push_count, 0)));
+            if (admission_count && mPendingRequests.size() > admission_count)
             {
-                for (auto& request : mPendingRequests)
-                {
-                    request->checkScore();
-                    lanes[unsigned(request->getLane())].push_back(request);
-                }
-                for (auto& lane : lanes)
-                {
-                    const auto count = std::min(lane.size(), size_t(push_count));
-                    std::partial_sort(lane.begin(), lane.begin()+count, lane.end(), [](const auto& a, const auto& b)
+                // Match upstream: rank the whole pending queue by screen score
+                // when demand exceeds available slots, without lane quotas or
+                // age overriding importance. Keep insertion order when all fit.
+                for (auto& request : mPendingRequests) request->checkScore();
+                std::partial_sort(mPendingRequests.begin(), mPendingRequests.begin() + admission_count,
+                    mPendingRequests.end(), [](const auto& a, const auto& b)
                     {
-                        return LLMeshStreaming::requestBefore(a->getAge(), a->getScore(), b->getAge(), b->getScore());
+                        return a->getScore() > b->getScore();
                     });
-                    lane.resize(count);
-                }
             }
-            std::array<size_t, 4> next{};
-            std::unordered_set<PendingRequestBase*> admitted;
-            while (push_count > 0)
+            for (size_t index = 0; index < admission_count; ++index)
             {
-                std::array<bool, 4> available{};
-                for (unsigned i=0; i<4; ++i) available[i] = next[i] < lanes[i].size();
-                const unsigned lane = mRequestScheduler.select(available);
-                if (lane == 4) break;
-                const auto& req_p = lanes[lane][next[lane]++];
+                const auto& req_p = mPendingRequests[index];
                 req_p->markInFlight();
                 switch (req_p->getRequestType())
                 {
@@ -4860,12 +4843,9 @@ void LLMeshRepository::notifyLoadedMeshes()
                     LL_ERRS() << "Unknown request type in LLMeshRepository::notifyLoadedMeshes" << LL_ENDL;
                     break;
                 }
-                ++admitted_by_lane[lane];
-                admitted.insert(req_p.get());
-                --push_count;
+                ++admitted_by_lane[unsigned(req_p->getLane())];
             }
-            mPendingRequests.erase(std::remove_if(mPendingRequests.begin(), mPendingRequests.end(),
-                [&](const auto& request) { return admitted.count(request.get()) != 0; }), mPendingRequests.end());
+            mPendingRequests.erase(mPendingRequests.begin(), mPendingRequests.begin() + admission_count);
         }
 
         //send decomposition requests
