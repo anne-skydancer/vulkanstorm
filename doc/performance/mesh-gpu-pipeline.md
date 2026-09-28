@@ -267,3 +267,13 @@ demand for the fetched particle default. Each frame selects the requested image
 again, so publication replaces the placeholder without restarting simulation.
 The production selector and real bindless snapshot pass the missing-source
 regression on Mesa/Zink. In-world confirmation remains pending.
+
+The fixed RelWithDebInfo viewer was compiled, linked and fully staged; the
+linked/staged SHA-256 is
+`B7907F212C59DF69EA858865699A24985873CC2ADAF7E19FDCC012D5CB52969F`.
+The texture regression passed on native AMD and Mesa/Zink, and isolated Zink
+startup reached login and exited successfully. In the subsequent live Zink
+session, GPU simulation, ordering and alpha submission activated at 06:54:56 UTC
+and no particle fallback was logged through 06:56:37 UTC, beyond the previous
+startup failure point. This confirms the observed startup case remained active;
+it is not a claim of exhaustive scene or long-session coverage.
