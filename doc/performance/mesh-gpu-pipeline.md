@@ -217,3 +217,28 @@ coverage includes pending fences, component changes, mask-only changes, material
 channels, and unchanged/rejected uploads. Reflection and mesh shaders are unchanged.
 The timing defect is confirmed in code; whether it explains the reported scene
 still requires retesting the foliage after rebuilding.
+
+### Live startup observation, 2026-09-28
+
+The tester reports improved overall performance and faster loading, with brief
+startup stalls. This is subjective acceptance feedback, not an A/B benchmark.
+The 06:05:39 UTC session used Mesa/Zink on an RX 9070 XT. Five-second reporting
+windows recorded display-scope maxima of 1434.71 ms at 06:06:18, 598.613 ms at
+06:06:23 and 1056.43 ms at 06:06:28. The swap scope reached 533.132 ms in the
+last window. These are CPU-side elapsed durations, including driver waits;
+nested scope maxima must not be added or assumed to identify the same frame.
+The broader frame-delta probe also recorded 2.40681 seconds during login.
+
+Resident preparation's reported per-frame maximum over the first minute after
+world entry was 8.5705 ms. Texture delivery retained its 2048 MiB ceiling;
+sampled reservations peaked around 861 MiB through 06:07:14 and sampled pending
+uploads were zero. Admission deferrals did occur, so these periodic samples do
+not establish that pressure never occurred between reports. The log supports
+the existence of stalls, but does not isolate first-use shader/pipeline work,
+driver synchronization or other startup tasks as their cause.
+
+Separately, the particle pipeline initialized and became active, then logged
+`Resident particle view preparation failed; restarting emission on CPU without
+a parallel simulator` at 06:06:16 UTC. This fallback needs its own investigation;
+the faster-loading observation must not be attributed to continuing GPU particle
+simulation in this session. Reflection behavior is retained unchanged.
