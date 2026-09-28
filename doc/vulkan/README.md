@@ -14,6 +14,11 @@ The invariants supersede conflicting native-renderer architecture proposals in
 older drafts. They do not change the timing/platform policy of the separate
 [OpenGL modernization strategy](opengl_modernization_strategy.md).
 
+## Mesa/Zink
+
+- [Mesa/Zink audit](mesa-zink-audit.md), 2026-09-29: redundancy, modernisation
+  and hero-probe parity findings with a recommended order of work.
+
 ## Historical design and implementation context
 
 - [Original pipeline design](design_overview.md)
