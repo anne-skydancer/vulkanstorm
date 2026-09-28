@@ -462,9 +462,20 @@ LLParticlePipeline::ViewBuffers LLParticlePipeline::viewBuffers()
 bool LLParticlePipeline::prepareAlphaIntervals(const std::vector<float>& groupDepths, U32 domain)
 {
     intervalCount = 0;
-    if (!viewReady || failed || domain > 1 || groupDepths.size() > 65536 || !initGL()) return false;
+    if (!viewReady || failed || domain > 1 || groupDepths.size() > 65536 || !initGL())
+    {
+        LL_WARNS("ParticlePipeline") << "Alpha interval prerequisites: ready=" << viewReady
+            << " failed=" << failed << " domain=" << domain << " boundaries=" << groupDepths.size() << LL_ENDL;
+        return false;
+    }
     for (size_t i = 0; i < groupDepths.size(); ++i)
-        if (!std::isfinite(groupDepths[i]) || (i && groupDepths[i] > groupDepths[i-1])) return false;
+        if (!std::isfinite(groupDepths[i]) || (i && groupDepths[i] > groupDepths[i-1]))
+        {
+            LL_WARNS("ParticlePipeline") << "Invalid alpha boundary: index=" << i
+                << " depth=" << groupDepths[i] << " previous=" << (i ? groupDepths[i-1] : 0.f)
+                << " domain=" << domain << " boundaries=" << groupDepths.size() << LL_ENDL;
+            return false;
+        }
     gGL.flush();
     Bindings saved;
     float empty = 0.f;
