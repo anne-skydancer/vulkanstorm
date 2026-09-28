@@ -464,6 +464,27 @@ bool HttpLibcurl::completeRequest(CURLM * multi_handle, CURL * handle, CURLcode 
     }
     // /</FS:ND>
 
+    // Report recovered retries as well as failed attempts; ordinary logs used
+    // to hide the retries that could occupy mesh admission for minutes.
+    // Do not log capability URLs or asset identifiers.
+    if (handle && op->mReqOptions && op->mReqOptions->getFairRetries() &&
+        (!op->mStatus || op->mPolicyRetries))
+    {
+        double total = 0., connect = 0., first_byte = 0., received = 0.;
+        long protocol = 0;
+        curl_easy_getinfo(handle, CURLINFO_TOTAL_TIME, &total);
+        curl_easy_getinfo(handle, CURLINFO_CONNECT_TIME, &connect);
+        curl_easy_getinfo(handle, CURLINFO_STARTTRANSFER_TIME, &first_byte);
+        curl_easy_getinfo(handle, CURLINFO_SIZE_DOWNLOAD, &received);
+        curl_easy_getinfo(handle, CURLINFO_HTTP_VERSION, &protocol);
+        LL_INFOS("MeshHTTP") << "policy=" << op->mReqPolicy
+            << " attempt=" << op->mPolicyRetries + 1
+            << " status=" << op->mStatus.toTerseString()
+            << " protocol=" << protocol << " total_s=" << total
+            << " connect_s=" << connect << " first_byte_s=" << first_byte
+            << " received_bytes=" << received << LL_ENDL;
+    }
+
     if (multi_handle && handle)
     {
         // Detach from multi and recycle handle

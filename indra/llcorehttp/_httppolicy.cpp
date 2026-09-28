@@ -71,6 +71,7 @@ public:
     long                mThrottleLeft;
     long                mRequestCount;
     bool                mStallStaging;
+    bool                mLastDispatchWasRetry = false;
 };
 
 
@@ -257,43 +258,20 @@ HttpService::ELoopSpeed HttpPolicy::processReadyQueue()
 
         if (needed > 0)
         {
-            // First see if we have any retries...
-            while (needed > 0 && ! retryq.empty())
+            // Opted-in downloads alternate eligible retries and fresh work,
+            // including when only one transport slot becomes free at a time.
+            while (needed > 0)
             {
-                HttpOpRequest::ptr_t op(retryq.top());
-                if (op->mPolicyRetryAt > now)
-                    break;
-
-                retryq.pop();
-
-                op->stageFromReady(mService);
-                op.reset();
-
-                ++state.mRequestCount;
-                --needed;
-                if (throttle_enabled)
-                {
-                    if (now >= state.mThrottleEnd)
-                    {
-                        // Throttle expired, move to next window
-                        LL_DEBUGS(LOG_CORE) << "Throttle expired with " << state.mThrottleLeft
-                                            << " requests to go and " << state.mRequestCount
-                                            << " requests issued." << LL_ENDL;
-                        state.mThrottleLeft = state.mOptions.mThrottleRate;
-                        state.mThrottleEnd = now + HttpTime(1000000);
-                    }
-                    if (--state.mThrottleLeft <= 0)
-                    {
-                        goto throttle_on;
-                    }
-                }
-            }
-
-            // Now go on to the new requests...
-            while (needed > 0 && ! readyq.empty())
-            {
-                HttpOpRequest::ptr_t op(readyq.top());
-                readyq.pop();
+                const bool retry_ready = !retryq.empty() && retryq.top()->mPolicyRetryAt <= now;
+                const bool fair = retry_ready && retryq.top()->mReqOptions &&
+                                  retryq.top()->mReqOptions->getFairRetries();
+                const bool take_retry = retry_ready &&
+                    (readyq.empty() || !fair || !state.mLastDispatchWasRetry);
+                if (!take_retry && readyq.empty()) break;
+                HttpOpRequest::ptr_t op(take_retry ? retryq.top() : readyq.top());
+                if (take_retry) retryq.pop();
+                else readyq.pop();
+                state.mLastDispatchWasRetry = take_retry;
 
                 op->stageFromReady(mService);
                 op.reset();

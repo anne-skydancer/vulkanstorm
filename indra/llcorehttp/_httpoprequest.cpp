@@ -776,6 +776,19 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     check_curl_easy_setopt(mCurlHandle, CURLOPT_TIMEOUT, xfer_timeout);
     check_curl_easy_setopt(mCurlHandle, CURLOPT_CONNECTTIMEOUT, timeout);
 
+    // A near-zero speed threshold protects slow but progressing downloads.
+    // Options default off, preserving other callers' transfer behavior.
+    if (mReqOptions && mReqOptions->getLowSpeedTime())
+    {
+        check_curl_easy_setopt(mCurlHandle, CURLOPT_LOW_SPEED_LIMIT, 1L);
+        check_curl_easy_setopt(mCurlHandle, CURLOPT_LOW_SPEED_TIME,
+                              long(mReqOptions->getLowSpeedTime()));
+    }
+    if (mReqOptions && mReqOptions->getHttp11Only())
+    {
+        check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_VERSION, long(CURL_HTTP_VERSION_1_1));
+    }
+
     // Request headers
     if (mReqHeaders)
     {
