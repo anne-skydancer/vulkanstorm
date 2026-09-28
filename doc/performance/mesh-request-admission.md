@@ -66,16 +66,21 @@ twenty-second timer since the last byte. DNS/connection setup retains its separa
 connection timeout. Overall small/large transfer limits remain 120/600 seconds;
 the small-mesh pipeline multiplier no longer applies.
 
-Existing bounded retries, exponential backoff and Retry-After behavior remain.
-For mesh requests, eligible retries alternate with fresh queued work, including
-when only one connection slot becomes free per service iteration. Other callers
-retain retry-first service. Retries still count as outstanding mesh requests;
-this does not cancel obsolete in-flight assets or guarantee successful delivery
-from an unavailable server.
+Transient mesh failures now return immediately to the repository rather than
+retrying inside HTTP. The handler is released, freeing active/admission capacity.
+A worker-owned deferred queue waits at least thirty seconds, then appends the
+request to its class queue's tail. Retry-After delta-seconds and HTTP dates can
+extend this cooldown. Timeout/connection failures, retryable server errors,
+HTTP 408 and HTTP 429 never become unavailable merely through retry exhaustion.
+Nonretryable failures such as 404/410 retain terminal handling. Deferred work
+retains request values only, not viewer objects or HTTP handlers, and is destroyed
+with the repository. It currently remains queued across region changes, just as
+in-flight requests do; cancellation of no-longer-needed assets is separate work.
 
-Ordinary MeshHTTP messages report failed attempts and successful recoveries:
-policy, attempt number, status, negotiated protocol enum, elapsed/connect/first-byte
-timing, and downloaded bytes. They omit capability URLs and asset identifiers.
+Ordinary MeshHTTP messages report failed attempts and deferral status, including
+policy, status, protocol enum, elapsed/connect/first-byte timing and downloaded
+bytes. They omit capability URLs and asset identifiers. Each repository retry
+creates a new HTTP operation, so its transport attempt counter restarts at one.
 These timings describe curl attempts, not time waiting in the repository queue.
 
 Validation: test_mesh_http.py runs the production option block against a local
@@ -83,3 +88,9 @@ HTTP server using the bundled curl on Windows, exercising silent and partial
 stalls and progressing transfers. It also exercises the production retry-selection
 block for one-slot fairness, delayed retries, empty queues, and unchanged default
 retry-first ordering. These checks do not substitute for in-world measurements.
+
+`test_mesh_deferred_retry.py` exercises the production failure routing and deferred
+queue drain: backoff does not populate admission queues, matured retries append
+behind existing work, LOD accounting is preserved, repeated transient failures
+remain retryable, terminal missing-asset responses remain terminal, and longer
+server-requested cooldowns delay resubmission.

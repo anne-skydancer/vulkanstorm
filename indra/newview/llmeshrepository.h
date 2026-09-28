@@ -27,6 +27,8 @@
 #ifndef LL_MESH_REPOSITORY_H
 #define LL_MESH_REPOSITORY_H
 
+#include <functional>
+#include <map>
 #include <unordered_map>
 #include <unordered_set>
 #include "llassettype.h"
@@ -545,6 +547,10 @@ public:
 
     // list of completed Physics Mesh info requests
     std::list<LLModel::Decomposition*> mPhysicsQ;
+
+    // Worker-thread-only deferred network failures. No HTTP handler is retained,
+    // so backoff does not occupy active request slots or admission capacity.
+    std::multimap<F64, std::function<void()>> mDeferredRequests;
 
     //queue of requested headers
     std::queue<HeaderRequest> mHeaderReqQ;
