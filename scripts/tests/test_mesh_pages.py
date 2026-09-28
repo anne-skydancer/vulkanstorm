@@ -37,8 +37,6 @@ struct LLVertexBuffer {
 };
 U64 resident_bytes=0, resource_epoch=0, budget=64*1024*1024;
 U64 byteBudget(){return budget;}
-struct Memory { U64 bytes=0; void add(const LLVertexBuffer& b){bytes+=b.getSize()+b.getIndicesSize();}
-void remove(const LLVertexBuffer& b){bytes-=b.getSize()+b.getIndicesSize();} } page_memory;
 namespace LLComputeMesh {
 struct Page { LLPointer<LLVertexBuffer> buffer; Ranges vertices,indices;U64 bytes=0;~Page(); };
 struct PageRange {std::shared_ptr<Page> page;U32 vertex=0,index=0,vertices=0,indices=0;~PageRange();};
@@ -61,7 +59,8 @@ int main(){
  for(size_t i=1;i<live.size();i+=2) ranges.release(live[i].first,live[i].second);
  assert(!ranges.take(65533));assert(*ranges.take(65532)==0);assert(!ranges.take(1));
  ranges.release(0,65532);assert(!ranges.take(0));assert(ranges.fits(65532));
- auto a=acquirePage(1,100,300);assert(a);auto cost=resident_bytes;assert(page_memory.bytes==cost);
+ auto a=acquirePage(1,100,300);assert(a);auto cost=resident_bytes;
+ assert(cost==a->buffer->getSize()+a->buffer->getIndicesSize());
  assert(*a->vertices.take(100)==0);assert(*a->indices.take(300)==0);
  auto b=acquirePage(1,100,300);assert(a==b && resident_bytes==cost);
  auto other=acquirePage(2,100,300);assert(other && other!=a);
@@ -89,7 +88,7 @@ int main(){
  auto retained=lease;lease.reset();assert(*a->vertices.take(64)!=oldVertex);
  retained.reset();assert(*a->vertices.take(64)==oldVertex);assert(*a->indices.take(96)==oldIndex);
  a.reset();b.reset();other.reset();large.reset();assert(resident_bytes>0); // draw records own the page
- x.mComputeLOD.reset();y.mComputeLOD.reset();assert(!resident_bytes && !page_memory.bytes);
+ x.mComputeLOD.reset();y.mComputeLOD.reset();assert(!resident_bytes);
  auto fresh=acquirePage(1,10,30);assert(fresh && pages.size()==1);fresh.reset();assert(!resident_bytes);
 }
 '''

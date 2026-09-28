@@ -1044,9 +1044,6 @@ BuildResult advanceJob(BuildJob& job)
             const U32 fallback = LLMeshStreaming::residentLevel(job.ready_mask, lod);
             std::copy(staged.entry.ranges[fallback], staged.entry.ranges[fallback]+4, staged.entry.ranges[lod]);
         }
-        if (staged.bytes)
-        {
-        }
         record->page_range = staged.page_range;
         record->page = staged.page;
         std::copy(staged.minimum, staged.minimum+4, record->minimum);

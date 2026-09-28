@@ -3,6 +3,17 @@
 Development base: `vkstorm-devel` at `7805689030`. Master is not merged into this
 branch. Windows/Linux OpenGL 4.3 remains the baseline.
 
+Master integration uses a separate branch based on `master` at `9c4756ce4b`,
+porting only the feature checkpoints and associated texture/particle fixes.
+Development profiling/capture infrastructure is excluded, including resident
+geometry memory probes; production residency-budget accounting remains intact.
+The page regression validates that production accounting directly. The release
+hook check, mesh page/registration/submission/transform and resumed-preparation
+tests, texture publication regression, and Mesa/Zink mesh/particle texture GPU
+tests pass on this integration branch. Full viewer builds and live-session
+results below refer to the development branch; the integration branch still
+needs platform build validation.
+
 ## Destination
 
 Eligible unrigged opaque PBR meshes retain object-space geometry in shared pages.
