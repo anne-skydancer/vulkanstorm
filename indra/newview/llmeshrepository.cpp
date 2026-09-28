@@ -32,6 +32,8 @@
 #include "apr_dso.h"
 #include "llhttpconstants.h"
 #include "llmeshrepository.h"
+#include <curl/curl.h>
+#include <ctime>
 #include "llmeshstreaming.h"
 #include "llcomputemesh.h"
 #include <type_traits>
@@ -694,6 +696,7 @@ public:
     LLCore::HttpHandle mHttpHandle;
     U32 mOffset;
     U32 mRequestedBytes;
+    F64 mRetryDelay = 30.;
 
 protected:
     bool mHasDataOwnership = true;
@@ -986,6 +989,8 @@ LLMeshRepoThread::LLMeshRepoThread()
         options->setHttp11Only(true);
         options->setLowSpeedTime(20); // Retry transfers below 1 byte/sec for 20 seconds.
         options->setFairRetries(true);
+        options->setRetries(0); // Return failures to repository scheduling immediately.
+        options->setWantHeaders(true); // Preserve server Retry-After instructions.
     }
     mHttpHeaders = std::make_shared<LLCore::HttpHeaders>();
     mHttpHeaders->append(HTTP_OUT_HEADER_ACCEPT, HTTP_CONTENT_VND_LL_MESH);
@@ -1087,6 +1092,17 @@ void LLMeshRepoThread::run()
             mHttpRequest->update(0L);
         }
         sRequestWaterLevel = static_cast<S32>(mHttpRequestSet.size());            // Stats data update
+
+        // Put cooled-down failures at their queue tails. These callbacks capture
+        // request values, never handlers or object pointers.
+        const F64 retry_now = LLTimer::getTotalSeconds();
+        while (!mDeferredRequests.empty() && mDeferredRequests.begin()->first <= retry_now)
+        {
+            auto retry = std::move(mDeferredRequests.begin()->second);
+            mDeferredRequests.erase(mDeferredRequests.begin());
+            LLMutexLock lock(mMutex);
+            retry();
+        }
 
         // Match upstream's worker priority: skin, LOD, then headers.
         // Snapshot counts keep delayed retries from spinning within this pass.
@@ -3609,6 +3625,23 @@ void LLMeshHandlerBase::onCompleted(LLCore::HttpHandle handle, LLCore::HttpRespo
     LLMeshRepository::sHTTPRetryCount += retries;
 
     LLCore::HttpStatus status(response->getStatus());
+    // Respect both delta-seconds and HTTP-date Retry-After values. Keep at least
+    // a thirty-second cooldown so repeated outages cannot cause a hot retry loop.
+    if (auto headers = response->getHeaders())
+    {
+        if (const auto* value = headers->find("retry-after"))
+        {
+            S32 seconds = 0;
+            if (LLStringUtil::convertToS32(*value, seconds))
+                mRetryDelay = llmax(mRetryDelay, F64(seconds));
+            else
+            {
+                const time_t until = curl_getdate(value->c_str(), nullptr);
+                if (until != time_t(-1))
+                    mRetryDelay = llmax(mRetryDelay, std::difftime(until, std::time(nullptr)));
+            }
+        }
+    }
     if (! status || MESH_HTTP_RESPONSE_FAILED)
     {
         processFailure(status);
@@ -3731,8 +3764,27 @@ LLMeshHeaderHandler::~LLMeshHeaderHandler()
     }
 }
 
+namespace
+{
+// Transport failures do not establish that an asset is missing. Drop the HTTP
+// handler now, cool down outside admission, and append a new request later.
+bool deferMeshFailure(LLCore::HttpStatus status, F64 delay, std::function<void()> retry)
+{
+    if (!status.isRetryable() && status != LLCore::HttpStatus(408) &&
+        status != LLCore::HttpStatus(429)) return false;
+    const F64 now = LLTimer::getTotalSeconds();
+    gMeshRepo.mThread->mDeferredRequests.emplace(now + delay, std::move(retry));
+    ++LLMeshRepository::sHTTPRetryCount;
+    LL_INFOS("MeshHTTP") << "Deferred transient failure: " << status.toTerseString()
+        << " cooldown_s=" << delay << " deferred=" << gMeshRepo.mThread->mDeferredRequests.size() << LL_ENDL;
+    return true;
+}
+}
+
 void LLMeshHeaderHandler::processFailure(LLCore::HttpStatus status)
 {
+    if (deferMeshFailure(status, mRetryDelay, [params = mMeshParams]() { gMeshRepo.mThread->mHeaderReqQ.emplace(params); })) return;
+
     LL_WARNS(LOG_MESH) << "Error during mesh header handling.  ID:  " << mMeshParams.getSculptID()
                        << ", Reason:  " << status.toString()
                        << " (" << status.toTerseString() << ").  Not retrying."
@@ -3877,6 +3929,12 @@ LLMeshLODHandler::~LLMeshLODHandler()
 
 void LLMeshLODHandler::processFailure(LLCore::HttpStatus status)
 {
+    if (deferMeshFailure(status, mRetryDelay, [params = mMeshParams, lod = mLOD]()
+        {
+            gMeshRepo.mThread->mLODReqQ.emplace(params, lod);
+            ++LLMeshRepository::sLODProcessing;
+        })) return;
+
     LL_WARNS(LOG_MESH) << "Error during mesh LOD handling.  ID:  " << mMeshParams.getSculptID()
                        << ", Reason:  " << status.toString()
                        << " (" << status.toTerseString() << ").  Not retrying."
@@ -3998,6 +4056,8 @@ LLMeshSkinInfoHandler::~LLMeshSkinInfoHandler()
 
 void LLMeshSkinInfoHandler::processFailure(LLCore::HttpStatus status)
 {
+    if (deferMeshFailure(status, mRetryDelay, [id = mMeshID]() { gMeshRepo.mThread->mSkinRequests.emplace_back(id); })) return;
+
     LL_WARNS(LOG_MESH) << "Error during mesh skin info handling.  ID:  " << mMeshID
                        << ", Reason:  " << status.toString()
                        << " (" << status.toTerseString() << ").  Not retrying."
@@ -4113,6 +4173,8 @@ LLMeshDecompositionHandler::~LLMeshDecompositionHandler()
 
 void LLMeshDecompositionHandler::processFailure(LLCore::HttpStatus status)
 {
+    if (deferMeshFailure(status, mRetryDelay, [id = mMeshID]() { gMeshRepo.mThread->mDecompositionRequests.emplace(id); })) return;
+
     LL_WARNS(LOG_MESH) << "Error during mesh decomposition handling.  ID:  " << mMeshID
                        << ", Reason:  " << status.toString()
                        << " (" << status.toTerseString() << ").  Not retrying."
@@ -4187,6 +4249,8 @@ LLMeshPhysicsShapeHandler::~LLMeshPhysicsShapeHandler()
 
 void LLMeshPhysicsShapeHandler::processFailure(LLCore::HttpStatus status)
 {
+    if (deferMeshFailure(status, mRetryDelay, [id = mMeshID]() { gMeshRepo.mThread->mPhysicsShapeRequests.emplace(id); })) return;
+
     LL_WARNS(LOG_MESH) << "Error during mesh physics shape handling.  ID:  " << mMeshID
                        << ", Reason:  " << status.toString()
                        << " (" << status.toTerseString() << ").  Not retrying."
