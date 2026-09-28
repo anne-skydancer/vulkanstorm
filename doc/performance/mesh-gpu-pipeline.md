@@ -242,3 +242,16 @@ Separately, the particle pipeline initialized and became active, then logged
 a parallel simulator` at 06:06:16 UTC. This fallback needs its own investigation;
 the faster-loading observation must not be attributed to continuing GPU particle
 simulation in this session. Reflection behavior is retained unchanged.
+
+Particle follow-up: the generic `view preparation` message combined failures
+from material/texture publication, GPU view ordering, and alpha intervals. No
+kernel GL-error message preceded the recorded fallback, so the existing log
+cannot identify its exact cause. The failure handler destroys resident state
+and latches CPU execution for the remainder of the session. New diagnostics
+separate those stages and report missing texture storage, snapshot GL errors,
+material-buffer errors, invalid camera inputs and nonfinite/out-of-order alpha
+boundaries. This changes failure reporting, not capability gates or fallback
+policy. Production particle texture-cache and pipeline-service tests pass on
+the same Mesa/Zink driver, including compressed/sRGB textures, shader reload,
+view culling, alpha intervals and invalid-boundary rejection. Live reproduction
+with the diagnostic build remains necessary to establish the specific cause.

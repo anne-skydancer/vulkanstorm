@@ -26,6 +26,9 @@ fixture=r'''
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include <cstdint>
+#include <iostream>
+#define LL_WARNS(channel) std::cerr
+#define LL_ENDL std::endl
 using U64=std::uint64_t;
 struct {bool mHasAnisotropic=true;} gGLManager;
 struct LLImageGL {GLuint name=0; U64 revision=1;
