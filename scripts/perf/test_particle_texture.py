@@ -4,6 +4,8 @@ helper=Path(__file__).with_name('test_particle_ordered_blend.py')
 exec(compile(helper.read_text().split('# Isolated semantic validation;')[0],str(helper),'exec'))
 import subprocess,tempfile,contextlib
 ROOT=Path(__file__).resolve().parents[2]
+viewer=(ROOT/'indra/newview/llparticleviewer.cpp').read_text()
+selection=viewer[viewer.index('LLImageGL* publishedParticleImage('):viewer.index('bool updateMaterials()')]
 API=[
  ('glClientWaitSync','GLenum','GLsync, GLbitfield, GLuint64'),
  ('glMakeTextureHandleNonResidentARB','void','GLuint64'),
@@ -65,8 +67,13 @@ extern "C" __declspec(dllexport) GLuint64 update(GLuint name,U64 revision) {
 extern "C" __declspec(dllexport) void release() {
  delete cache;cache=nullptr; LLParticleTexture::collect(true);
 }
+extern "C" __declspec(dllexport) GLuint selectSource(GLuint requested,GLuint particle,GLuint viewer) {
+ LLImageGL a,b,c;a.name=requested;b.name=particle;c.name=viewer;
+ auto* selected=publishedParticleImage(&a,&b,&c);
+ return selected?selected->getTexName():0;
+}
 '''
-        source=temp/'texture.cpp';source.write_text(fixture+declarations+header+code+setup+exports)
+        source=temp/'texture.cpp';source.write_text(fixture+declarations+header+code+selection+setup+exports)
         dll=temp/'texture.dll';cmd=temp/'build.cmd'
         cmd.write_text('@echo off\ncall "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul\n'+f'cl /nologo /LD /EHsc /std:c++17 /Od /I"{ROOT / "build-vc170-64/packages/include"}" "{source}" /Fe:"{dll}"\n')
         build=subprocess.run(['cmd','/c',str(cmd)],cwd=temp,text=True,capture_output=True)
@@ -75,6 +82,7 @@ extern "C" __declspec(dllexport) void release() {
         cleanup.callback(free,service._handle)
         service.functions.argtypes=[C.POINTER(P)];service.functions((P*len(addresses))(*addresses))
         service.update.argtypes=[U,C.c_uint64];service.update.restype=C.c_uint64;service.release.argtypes=[]
+        service.selectSource.argtypes=[U,U,U];service.selectSource.restype=U
         texture=U();fn('glGenTextures',None,I,C.POINTER(U))(1,C.byref(texture))
         bind=fn('glBindTexture',None,U,U);teximage=fn('glTexImage2D',None,U,I,I,I,I,I,U,U,P)
         param=fn('glTexParameteri',None,U,U,I);resident=fn('glIsTextureHandleResidentARB',C.c_ubyte,C.c_uint64)
@@ -82,7 +90,16 @@ extern "C" __declspec(dllexport) void release() {
         pixels=(C.c_ubyte*16)(*([255,0,0,255]*4));mip=(C.c_ubyte*4)(0,255,0,255)
         teximage(0x0DE1,0,0x8058,2,2,0,0x1908,0x1401,pixels)
         teximage(0x0DE1,1,0x8058,1,1,0,0x1908,0x1401,mip)
+        # Both fetched images can lack storage at startup. Use the resident
+        # viewer default and exercise its actual bindless snapshot creation.
+        assert service.selectSource(0,0,0)==0
+        assert service.selectSource(0,0,texture.value)==texture.value
+        assert service.selectSource(0,22,texture.value)==22
+        assert service.selectSource(33,22,texture.value)==33
+        fallback_handle=service.update(service.selectSource(0,0,texture.value),1)
+        assert fallback_handle and resident(fallback_handle)
         handle=service.update(texture.value,1);assert handle and resident(handle)
+        assert handle==fallback_handle
         assert service.update(texture.value,1)==handle
         # The source remains mutable; an unchanged allocation retains its handle.
         pixels=(C.c_ubyte*16)(*([0,0,255,255]*4));teximage(0x0DE1,0,0x8058,2,2,0,0x1908,0x1401,pixels)

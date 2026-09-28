@@ -255,3 +255,15 @@ policy. Production particle texture-cache and pipeline-service tests pass on
 the same Mesa/Zink driver, including compressed/sRGB textures, shader reload,
 view culling, alpha intervals and invalid-boundary rejection. Live reproduction
 with the diagnostic build remains necessary to establish the specific cause.
+
+The next live session identified that cause at 06:39:18 UTC: material 1 selected
+a texture snapshot with `source=0 revision=2`. Both the requested image and the
+fetched default particle image lacked published GL storage. LLTexUnit could bind
+the resident viewer default, but the snapshot still received the unpublished
+particle default and failed, permanently disabling GPU simulation for the session.
+Selection now checks each candidate's GL name and falls through to the same
+resident viewer default used by ordinary texture binding. It also maintains
+demand for the fetched particle default. Each frame selects the requested image
+again, so publication replaces the placeholder without restarting simulation.
+The production selector and real bindless snapshot pass the missing-source
+regression on Mesa/Zink. In-world confirmation remains pending.

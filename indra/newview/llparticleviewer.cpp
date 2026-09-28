@@ -231,6 +231,15 @@ bool publish()
     }
     return publishSources(snapshots, winds) && publishRegions(regions);
 }
+LLImageGL* publishedParticleImage(LLImageGL* requested, LLImageGL* particleDefault, LLImageGL* viewerDefault)
+{
+    // The particle default is itself fetched asynchronously. A missing source
+    // is normal while loading; use the same resident fallback as LLTexUnit.
+    for (LLImageGL* candidate : {requested, particleDefault, viewerDefault})
+        if (candidate && candidate->getTexName()) return candidate;
+    return nullptr;
+}
+
 bool updateMaterials()
 {
     if (!materialsDirty) return true;
@@ -256,8 +265,12 @@ bool updateMaterials()
         if (image->hasParcelMedia() && image->getParcelMedia()->isPlaying()) image = image->getParcelMedia();
         // Source-level texture demand survives without CPU LLFace objects.
         image->addTextureStats(m.textureArea);
-        LLImageGL* glimage = image->getGLTexture();
-        if (!glimage || !glimage->getTexName()) glimage = LLViewerFetchedTexture::sDefaultParticleImagep->getGLTexture();
+        LLImageGL* requested = image->getGLTexture();
+        auto* particleDefault = LLViewerFetchedTexture::sDefaultParticleImagep.get();
+        if ((!requested || !requested->getTexName()) && particleDefault)
+            particleDefault->addTextureStats(m.textureArea);
+        LLImageGL* glimage = publishedParticleImage(requested,
+            particleDefault ? particleDefault->getGLTexture() : nullptr, LLImageGL::sDefaultGLTexture);
         if (!glimage)
         {
             LL_WARNS("ParticlePipeline") << "No texture or default image for material " << i << LL_ENDL;
