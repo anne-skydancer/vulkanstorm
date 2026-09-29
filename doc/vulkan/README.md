@@ -18,6 +18,8 @@ older drafts. They do not change the timing/platform policy of the separate
 
 - [Mesa/Zink audit](mesa-zink-audit.md), 2026-09-29: redundancy, modernisation
   and hero-probe parity findings with a recommended order of work.
+- [Immediate-work engineering design](mesa-zink-actionable-design.md): hero mip
+  validity, duplicate work, backend identity and reliable Mesa packaging.
 
 ## Historical design and implementation context
 
