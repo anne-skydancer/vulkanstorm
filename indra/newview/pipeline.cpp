@@ -2852,27 +2852,7 @@ void LLPipeline::doOcclusion(LLCamera& camera)
         mCubeVB->setBuffer();
 
         mReflectionMapManager.doOcclusion();
-        mHeroProbeManager.doOcclusion();
-        gOcclusionCubeProgram.unbind();
-
-        gGL.setColorMask(true, true);
-    }
-
-    if (sReflectionProbesEnabled && sUseOcclusion > 1 && !LLPipeline::sShadowRender && !gCubeSnapshot)
-    {
-        gGL.setColorMask(false, false);
-        LLGLDepthTest depth(GL_TRUE, GL_FALSE);
-        LLGLDisable cull(GL_CULL_FACE);
-
-        gOcclusionCubeProgram.bind();
-
-        if (mCubeVB.isNull())
-        { //cube VB will be used for issuing occlusion queries
-            mCubeVB = ll_create_cube_vb(LLVertexBuffer::MAP_VERTEX);
-        }
-        mCubeVB->setBuffer();
-
-        mHeroProbeManager.doOcclusion();
+        if (RenderMirrors) mHeroProbeManager.doOcclusion();
         gOcclusionCubeProgram.unbind();
 
         gGL.setColorMask(true, true);
