@@ -631,10 +631,10 @@ void LLHeroProbeManager::initReflectionMaps()
         }
 
         const S32 resolution = gSavedSettings.getS32("RenderHeroProbeResolution");
-        if (resolution < 2 || !LLHeroProbeValidity::scratchLevels(U32(resolution)))
+        if (resolution < 4 || !LLHeroProbeValidity::scratchLevels(U32(resolution)))
         {
             invalidateHeroContents();
-            LL_WARNS_ONCE("RenderInit") << "Hero probe resolution must be a power of two >= 2." << LL_ENDL;
+            LL_WARNS_ONCE("RenderInit") << "Hero probe resolution must be a power of two >= 4." << LL_ENDL;
             return;
         }
         invalidateHeroContents();

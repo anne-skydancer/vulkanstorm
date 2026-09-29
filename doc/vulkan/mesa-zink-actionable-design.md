@@ -1,7 +1,8 @@
 # Mesa/Zink immediate work: engineering design
 
 Date: 2026-09-29. Implementation baseline: `vkstorm-devel` at `bc8a55c558`.
-Status: designed, not implemented or benchmarked. This document specifies the
+Status: implemented on `codex/zink-actionable-fixes`; visual qualification and
+package CI qualification are pending. No performance claim is made. This document specifies the
 four immediate work packages from the revised Mesa/Zink audit. The development
 checkout was clean before adding this plan; its hero-probe defects match the
 reviewed master code. No master history is to be merged into development.
@@ -275,3 +276,35 @@ as pending rather than passed. Keep profiling-only changes in development.
 The production PR is a later integration step: audit inherited development hooks,
 run `scripts/tests/check_release_hooks.py`, and select only production changes.
 Never merge master into vkstorm-devel to reconcile this work.
+
+
+## Implementation record (2026-09-29)
+
+Viewer work packages are committed on `codex/zink-actionable-fixes`, based on
+`bc8a55c558`. The three main commits are `beebf757a0` (mip/readiness), `d5f0335f51`
+(duplicate work), and `2dc6989a00` (actual backend/settings reports). No master
+history has been merged. Unknown Vulkan device identity remains explicitly unknown.
+The minimum accepted debug resolution is 4: the radiance filter divides by its
+maximum scratch LOD, so a one-level scratch chain is not valid. Normal UI choices
+(256 through 2048) are unaffected.
+
+The production layout/readiness helper passed compiled C++ tests; hero, hero+SSR
+and ordinary probe shader variants compiled under GLSL 4.30 using the production
+REF_SAMPLE_COUNT=32. RelWithDebInfo linked successfully with Tracy/LTO, and full
+manifest staging was verified against the linked executable and shader hashes.
+Autobuild configuration explicitly disables INSTALL_PROPRIETARY/HAVOK/USE_KDU,
+matching this fork's Release setup rather than Autobuild's generic defaults.
+
+Package work is on `3p-mesazink:codex/zink-package-reliability`. Sixteen tests cover
+configuration mismatch, incompatible toolchain isolation, stale destinations,
+failure markers, relocation, exact archives and platform identity. CI additionally
+builds both platforms and runs Linux's software-Vulkan smoke check. Initial Windows
+qualification exposed missing Flex and Meson's omission of subproject builtin
+options from introspection; parser generators are now installed, and static zlib
+is checked through generated targets. No replacement package has been published
+or pinned in the viewer during qualification.
+
+Pending runtime acceptance: mirrors at multiple roughnesses, first activation,
+probe switching, resolution/HDR changes, relog/teleport and mirror toggles on native
+GL and Zink; actual fallback reports; measured CPU/GPU/frame-time comparisons.
+Compile/staging success is not a claim that these visual checks have passed.
