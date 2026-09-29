@@ -1,6 +1,7 @@
 """Exercise production upload publication against a deterministic fake GL driver."""
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -18,7 +19,8 @@ for table in ('featuretable.txt', 'featuretable_linux.txt'):
                         (ROOT/'indra/newview'/table).read_text(), re.M)
     assert default and default.groups() == ('1', '1'), f'{table} disables asynchronous delivery by default'
 def method(path, signature):
-    text = (ROOT/path).read_text()
+    source = Path(sys.argv[1]) if len(sys.argv) > 1 and path == 'indra/newview/llviewertexturelist.cpp' else ROOT/path
+    text = source.read_text()
     begin = text.index(signature)
     brace = text.index('{', begin)
     depth = 1
@@ -34,6 +36,7 @@ fixture = r'''
 #include <cassert>
 #include <chrono>
 #include <deque>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -79,9 +82,10 @@ struct LLViewerObject {
 };
 struct LLFace {
     LLViewerObject* object=nullptr;
-    int dirtied=0;
     LLViewerObject* getViewerObject() { return object; }
-    void dirtyTexture() { ++dirtied; }
+    unsigned dirtied=0;
+    std::function<void()> onDirty;
+    void dirtyTexture() { ++dirtied; if (onDirty) onDirty(); }
 };
 using GLsync = int*;
 constexpr GLenum GL_ALREADY_SIGNALED=1, GL_TIMEOUT_EXPIRED=2, GL_WAIT_FAILED=3;
@@ -364,6 +368,46 @@ int main() {
     assert(slow->posts==0 && slow->destroyed_raw==1 && !slow->mNeedsCreateTexture);
     assert(slow->image.mTexName==10 && !slow->mCreatePending);
     assert(list.mPendingUploadBytes==0 && LLTextureDeliveryBudget::used()==0);
+    // Alpha classification is only usable after publication. Exercise first
+    // upload, mask changes in both directions, and component changes separately.
+    for (unsigned change=0; change<4; ++change) {
+        auto texture=add();
+        auto& incoming=*list.mPendingUploads.front()->image;
+        texture->image.mComponents=4;
+        if (change==0) texture->image.mTexName=0;
+        if (change==1) incoming.mIsMask=1;
+        if (change==2) texture->image.mIsMask=1;
+        if (change==3) texture->image.mComponents=3;
+        LLFace diffuse, material;
+        texture->faces[0].push_back(&diffuse);
+        texture->faces[3].push_back(&material);
+        const auto expected_mask=incoming.mIsMask;
+        const auto expected_components=incoming.mComponents;
+        diffuse.onDirty=[&] {
+            assert(texture->image.mTexName==20);
+            assert(texture->image.mIsMask==expected_mask);
+            assert(texture->image.mComponents==expected_components);
+        };
+        responses={GL_TIMEOUT_EXPIRED}; list.completeTextureUploads();
+        assert(diffuse.dirtied==0 && material.dirtied==0);
+        responses={GL_ALREADY_SIGNALED}; list.completeTextureUploads();
+        if (diffuse.dirtied!=1 || material.dirtied!=1) {
+            std::cerr << "Published classification must refresh affected faces\n";
+            return 1;
+        }
+    }
+    // Unchanged classification, rejected demand and failed uploads must not
+    // cause geometry churn, even when the unpublished image has a new mask.
+    for (unsigned outcome=0; outcome<3; ++outcome) {
+        auto texture=add(); LLFace unchanged;
+        texture->image.mComponents=4;
+        texture->faces[0].push_back(&unchanged);
+        if (outcome) list.mPendingUploads.front()->image->mIsMask=1;
+        if (outcome==1) texture->desired=4;
+        responses={outcome==2 ? GL_WAIT_FAILED : GL_ALREADY_SIGNALED};
+        list.completeTextureUploads();
+        assert(unchanged.dirtied==0);
+    }
     std::cout << "Texture publication: ready, pending, out-of-order, failure, stale demand and shutdown passed\n";
 }
 '''

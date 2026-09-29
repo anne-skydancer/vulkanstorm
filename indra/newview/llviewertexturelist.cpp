@@ -1305,7 +1305,7 @@ void LLViewerTextureList::completeTextureUploads(bool drain)
                  upload.image->getDiscardLevel() <= upload.texture->getDiscardLevel()))
             {
                 LLImageGL* displayed = upload.texture->getGLTexture();
-                const bool classification_changed =
+                const bool classification_changed = !upload.texture->hasGLTexture() ||
                     displayed->getComponents() != upload.image->getComponents() ||
                     displayed->getIsAlphaMask() != upload.image->getIsAlphaMask();
                 displayed->adoptUploadImage(*upload.image);
