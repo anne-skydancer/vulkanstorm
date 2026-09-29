@@ -12955,7 +12955,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderHeroProbeUpdateRate</key>
   <map>
     <key>Comment</key>
-    <string>How many frames to wait for until it's time to render the probe. E.g., every other frame (1), every two frames (2), every three frames (3) etc.</string>
+    <string>Frames per complete six-face hero probe update: 1 updates 6 faces per frame, 2 updates 3, 3 updates 2, and 6 updates 1. Values below 1 become 1; values above 3 become 6.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>

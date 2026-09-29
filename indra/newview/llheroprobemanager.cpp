@@ -667,8 +667,7 @@ void LLHeroProbeManager::initReflectionMaps()
         mDefaultProbe->mRadius = 4096.f;
         mDefaultProbe->mProbeIndex = 0;
         touch_default_probe(mDefaultProbe);
-
-        mProbes.push_back(mDefaultProbe);
+        llassert(mProbes.size() == 1);
     }
 
     if (mVertexBuffer.isNull())
@@ -716,6 +715,8 @@ void LLHeroProbeManager::cleanup()
 
 void LLHeroProbeManager::doOcclusion()
 {
+    if (!LLPipeline::RenderMirrors || mReset || mNearestHero.isNull() ||
+        mNearestHero->isDead() || gTeleportDisplay || gDisconnected) return;
     LLVector4a eye;
     eye.load3(LLViewerCamera::instance().getOrigin().mV);
 
