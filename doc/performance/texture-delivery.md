@@ -1,7 +1,7 @@
 # Bounded, asynchronous texture delivery
 
-Development branch: `codex/texture-delivery`, based on `vkstorm-devel` at
-`46c6d8c9f3`. Windows/Linux retain the OpenGL 4.3 Core contract.
+Release integration of `502f31a9f8` and `45dd2f8b98` from `vkstorm-devel`.
+Windows/Linux retain the OpenGL 4.3 Core contract.
 
 ## Purpose
 
@@ -44,11 +44,6 @@ and uploads. An obsolete result is released by the fetch worker before it seeks 
 reservation for another decode. Otherwise old results could pin the capacity
 needed to replace themselves.
 
-The development `FocusMemory` samples include cumulative `admission_deferred_attempts`,
-`urgent_admission_deferred_attempts` (first-visible or aged work) and
-`decode_allowance_returned_bytes`. Deferrals count retries, not distinct textures;
-compare increments over equal time windows. Returned bytes measure conservative
-allowance returned, not bytes freed from the process or additional upload throughput.
 Upload-preparation allowance is still retained with the output until its final
 owner releases it; separate stage ownership is not implemented here.
 
@@ -128,100 +123,35 @@ and [glClientWaitSync](https://registry.khronos.org/OpenGL-Refpages/gl4/html/glC
 Driver upload calls themselves may still block the upload worker or contend with
 rendering; asynchronous submission does not guarantee independent hardware engines.
 
+## Retention and release scope
+
+The distance-band policy already merged in PR #79 is preserved; see
+[avatar texture retention](avatar-texture-retention.md). Asynchronous completion
+also rejects a poorer replacement of an existing sharper image. Deliberate
+retention-aware downscaling remains a separate path.
+
+This integration excludes the development GPU readback self-test, periodic
+focus/frame/memory profiling, and unused admission diagnostic counters. It does
+not import other development rendering hooks or change CI publication, decoder
+selection, build channels, or global texture discard bias. The release-hook
+checker rejects the texture self-test and profiling log categories as well.
+
 ## CPU scope and validation
 
-### Avatar detail retention
+Fetch scheduling, admission, decode fallback, raw resizing, alpha/picking-mask
+preparation, upload submission, callbacks and publication still involve CPU work.
+Moving preparation onto the worker reduces main-thread work; it does not convert
+these algorithms into GPU compute kernels.
 
-Other avatars and their attachments retain already loaded detail for 60 seconds
-within 10 m of the user's avatar, 30 seconds beyond 10 m but below 20 m, and
-use normal retention at 20 m and beyond. The existing `RenderFarClip` (Draw
-Distance) setting caps proximity protection, including when changed at runtime.
-Camera position and direction do not determine the band. The timer starts on
-the first request to reduce detail, not on every retry; moving between bands
-changes the duration against that same start time. If current detail is needed
-again, the timer resets for a later reduction request. Shared textures receive
-the longest retention of their current avatar users. Both admission to the
-downscale queue and execution recheck the policy, including low system memory.
-This delays ordinary downscaling; it does not permanently pin nearby textures
-or request extra resolution. Existing general eviction remains separate.
+Run `python scripts/tests/test_texture_publication.py` to compile and exercise
+production admission, reservation trimming, discard selection, publication and
+image adoption against a deterministic GL fixture. It covers pending/ready fences,
+out-of-order completion, failures, stale/poorer replacements, narrow images,
+metadata and picking masks, shutdown, and zero-timeout normal-frame polling.
+It also runs the budget concurrency and shared-ownership tests.
 
-Windows RelWithDebInfo **7.2.5.82009** includes these bands. Compilation, linking,
-full runtime staging and configuration validation passed. The production-method
-fixture covers boundaries, expiry without renewal, live Draw Distance changes,
-avatar-relative positions, body/attachment users and low-memory bypass. Zink
-startup and GPU publication/readback checks passed with normal exit. In-world
-retention under crowded-region pressure remains to be evaluated.
-
-Camera-driven downscaling now preserves already resident detail on the user's
-own worn attachments, including linked children and all registered material
-texture channels. Ownership is checked both when requesting a downscale and
-when executing an already queued downscale. Detachment removes protection;
-low system memory allows reclamation. This does not request full resolution
-for unseen attachments or raise the delivery budget. It can retain more GPU
-memory while items remain worn; the general rendering memory estimate still
-requires separate investigation. Normal texture lifetime/eviction remains in place.
-
-Asynchronous publication also rejects a lower-resolution replacement of an
-existing sharper image. Deliberate downscaling remains a separate path.
-The publication fixture covers stale poorer uploads and attachment ownership,
-child prim/material channels, detachment, absent images and low-memory escape.
-
-Development builds use the `Vulkanstorm-RelWithDebInfo` channel; the configuration
-validator enforces that name separately from the Release channel.
-
-The retention changes were compiled and linked in Windows RelWithDebInfo build
-**7.2.5.82006**. The attachment ownership and poorer-publication regression checks
-passed; a Zink startup run passed GPU publication/readback checks and exited
-normally. Actual camera-away retention on worn attachments still needs in-world
-verification. The same build includes the X11 `Region` namespace collision fix;
-its compile regression test passes with an X11-compatible global typedef present.
-
-CPU work remains for fetch scheduling, admission, decode fallback, raw-image
-resizing, alpha/picking-mask preparation, upload submission, callbacks and final
-publication. Moving preparation to a worker reduces main-thread pressure; it does
-not turn these algorithms into GPU compute kernels.
-
-Standalone checks:
-
-- `indra/llimage/tests/lltexturedeliverybudget_test.cpp`: capacity boundaries,
-  reserved headroom, shared ownership, pressure and concurrent admission/release.
-- `python scripts/tests/test_texture_publication.py`: compiles the production
-  admission, discard selection, publication and adoption methods against a deterministic GL fixture. Covers
-  pending/ready fences, out-of-order completion, failures, stale demand, metadata
-  and mask adoption, revision invalidation and shutdown. Verifies zero normal-frame
-  wait timeouts. It also builds and runs the budget concurrency test. It is not
-  a driver or visual test.
-- RelWithDebInfo-only `VULKANSTORM_TEXTURE_DELIVERY_SELFTEST=1`: submits generated
-  textures through the real viewer queue and verifies GPU readback for a first
-  image, replacement, narrow image, reduced resolution and redundant upload;
-  checks reservation cleanup. No account login is required. This is a development
-  harness, not a user setting. The master hook-policy check rejects its inclusion.
-
-Validated on 2026-09-27 with Windows RelWithDebInfo build **7.2.5.82005**, built
-through Autobuild and fully staged without an installer. The configuration check
-confirmed the Release feature/dependency configuration. Budget/concurrency and
-publication checks passed, as did the existing particle compute and alpha checks.
-Actual GPU readback checks passed on the Radeon RX 9070 XT with native AMD OpenGL
-and Mesa/Zink, both with asynchronous delivery enabled. The synchronous fallback
-also passed in an isolated profile with background texture uploads disabled.
-All three driver test runs exited normally. These are startup and correctness
-checks, not measurements of in-world texture delivery under pressure.
-
-Build **7.2.5.82007** adds post-decode reservation trimming and admission counters.
-Windows RelWithDebInfo compilation, linking, complete staging and configuration
-validation passed. The production-method fixture verifies successful versus failed
-completion, reduced results, auxiliary storage, power-of-two padding and repeated
-admission of small results. Concurrent shrink/release tests passed. A Zink startup
-run passed GPU publication/readback checks and exited normally; real startup
-decodes returned 155,512 bytes of excess allowance. This demonstrates the path is
-active, not a crowded-region delivery speedup. In-world comparison is pending.
-
-In-world
-acceptance requires a comparable dense-region traversal on native OpenGL and Zink,
-including teleport, focus loss/recovery, avatar bakes, alpha masks, sculpt textures,
-particles and MOAP. Measure time to first usable image, delivery backlog/reserved
-bytes, process RAM, texture churn and frame-time tails. No speedup is claimed from
-unit tests or a successful build. Linux and other vendors require separate runs.
-
-Development-only hooks inherited from `vkstorm-devel` must be removed when preparing
-the eventual master integration; this branch is not itself a release branch.
+Run `python scripts/tests/test_avatar_texture_retention.py` for the existing
+retention policy and `python scripts/tests/check_release_hooks.py` for release
+policy. These tests passed on Windows/MSVC for this integration. Full Windows/Linux
+viewer builds and in-world validation of the release integration remain pending.
+The fixtures do not establish driver correctness or quantify delivery speedup.

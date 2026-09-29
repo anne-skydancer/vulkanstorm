@@ -179,17 +179,6 @@ namespace
         glyph.lsb_delta = slot->lsb_delta;
         glyph.rsb_delta = slot->rsb_delta;
         glyph.glyph_index = index;
-        // <VulkanStorm> trace zero-advance / empty glyphs (dropdown smear).
-        static const bool s_dbg_adv = getenv("VULKANSTORM_ADV_DEBUG") != nullptr;
-        if (s_dbg_adv && (slot->advance.x == 0 || width == 0))
-        {
-            LL_INFOS("Vulkan") << "VKGLYPH ch='" << (char)ch
-                               << "' adv_x=" << slot->advance.x
-                               << " w=" << width << " h=" << height
-                               << " size_metrics.x_ppem=" << font.face->size->metrics.x_ppem
-                               << " face=" << (font.face->family_name ? font.face->family_name : "?") << LL_ENDL;
-        }
-        // </VulkanStorm>
         glyph.u0 = (F32)font.pen_x / ATLAS_SIZE;
         glyph.v0 = (F32)font.pen_y / ATLAS_SIZE;
         glyph.u1 = (F32)(font.pen_x + width) / ATLAS_SIZE;
@@ -338,24 +327,6 @@ namespace LLVKText
         }
     }
 
-    // <VulkanStorm>
-    S32 debugGlyphCount(const LLFontGL* fontp)
-    {
-        if (!ready() || !fontp) return -1;
-        auto found = s_fonts.find(fontp);
-        if (found == s_fonts.end()) return -1;
-        return (S32)found->second->glyphs.size();
-    }
-
-    F32 debugMeasureAdvance(const LLFontGL* fontp, const LLWString& text)
-    {
-        if (!ready() || !fontp) return -1.f;
-        LegacyFontState* font = getFont(fontp);
-        if (!font) return -1.f;
-        return measure(*font, text);
-    }
-    // </VulkanStorm>
-
     S32 render(const LLFontGL* fontp, const LLWString& source,
                F32 x, F32 y, const LLColor4& color,
                LLFontGL::HAlign halign, LLFontGL::VAlign valign,
@@ -382,19 +353,6 @@ namespace LLVKText
         // swapchain render pass and can make later UI text disappear.
         if (font->dirty || font->texture.descriptor == VK_NULL_HANDLE)
         {
-            // <VulkanStorm> diagnostic: VULKANSTORM_TEXT_DEBUG=1 logs text
-            // that is dropped because the atlas isn't uploaded/ready.
-            static const bool s_dbg = getenv("VULKANSTORM_TEXT_DEBUG") != nullptr;
-            static int s_dbg_n = 0;
-            if (s_dbg && s_dbg_n < 24)
-            {
-                ++s_dbg_n;
-                LL_INFOS("Vulkan") << "VKTEXT-DROP dirty=" << (font->dirty ? 1 : 0)
-                                   << " desc=" << (font->texture.descriptor != VK_NULL_HANDLE ? 1 : 0)
-                                   << " x=" << x << " y=" << y
-                                   << " text='" << wstring_to_utf8str(text) << "'" << LL_ENDL;
-            }
-            // </VulkanStorm>
             return 0;
         }
 

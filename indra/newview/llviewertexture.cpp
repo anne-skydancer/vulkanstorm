@@ -1670,54 +1670,6 @@ void LLViewerFetchedTexture::postCreateTexture()
     mNeedsCreateTexture = false;
 }
 
-bool LLViewerFetchedTexture::retainAvatarDetail()
-{
-    if (!hasGLTexture() || isSystemMemoryLow())
-    {
-        mAvatarDetailRetentionStarted = -1.;
-        return false;
-    }
-
-    static LLCachedControl<F32> draw_distance(gSavedSettings, "RenderFarClip", 128.f);
-    const F32 range = llmax(0.f, F32(draw_distance));
-    F64 retention_seconds = 0.;
-
-    // Camera visibility must not evict detail already loaded for worn items.
-    // Inspect current face ownership so detaching an item removes protection,
-    // including child prims and material maps in every texture channel.
-    for (U32 channel = 0; channel < LLRender::NUM_TEXTURE_CHANNELS; ++channel)
-    {
-        for (S32 index = 0; index < getNumFaces(channel); ++index)
-        {
-            LLFace* face = (*getFaceList(channel))[index];
-            LLViewerObject* object = face ? face->getViewerObject() : nullptr;
-            if (object && !object->isDead())
-            {
-                LLVOAvatar* avatar = object->asAvatar();
-                if (!avatar) avatar = object->getAvatarAncestor();
-                if (!avatar || avatar->isDead()) continue;
-                if (avatar->isSelf() && object->getRootEdit()->isAttachment()) return true;
-                const F32 distance_squared = (avatar->getPositionAgent() - gAgent.getPositionAgent()).lengthSquared();
-                if (distance_squared <= range * range)
-                {
-                    if (distance_squared <= 100.f) retention_seconds = 60.;
-                    else if (distance_squared < 400.f) retention_seconds = llmax(retention_seconds, 30.);
-                }
-            }
-        }
-    }
-    if (retention_seconds == 0.)
-    {
-        mAvatarDetailRetentionStarted = -1.;
-        return false;
-    }
-    // Start once when lower detail is requested, not on each retry. Changing
-    // bands adjusts this same deadline; it must not indefinitely renew it.
-    const F64 now = LLTimer::getTotalSeconds();
-    if (mAvatarDetailRetentionStarted < 0.) mAvatarDetailRetentionStarted = now;
-    return now - mAvatarDetailRetentionStarted < retention_seconds;
-}
-
 bool LLViewerFetchedTexture::isVisibleDelivery() const
 {
     // Use the existing face traversal's visibility result, not its retained
@@ -3234,6 +3186,54 @@ void LLViewerLODTexture::processTextureStats()
 }
 
 extern LLGLSLShader gCopyProgram;
+
+bool LLViewerFetchedTexture::retainAvatarDetail()
+{
+    if (!hasGLTexture() || isSystemMemoryLow())
+    {
+        mAvatarDetailRetentionStarted = -1.;
+        return false;
+    }
+
+    static LLCachedControl<F32> draw_distance(gSavedSettings, "RenderFarClip", 128.f);
+    const F32 range = llmax(0.f, F32(draw_distance));
+    F64 retention_seconds = 0.;
+
+    // Camera visibility must not evict detail already loaded for worn items.
+    // Inspect current face ownership so detaching an item removes protection,
+    // including child prims and material maps in every texture channel.
+    for (U32 channel = 0; channel < LLRender::NUM_TEXTURE_CHANNELS; ++channel)
+    {
+        for (S32 index = 0; index < getNumFaces(channel); ++index)
+        {
+            LLFace* face = (*getFaceList(channel))[index];
+            LLViewerObject* object = face ? face->getViewerObject() : nullptr;
+            if (object && !object->isDead())
+            {
+                LLVOAvatar* avatar = object->asAvatar();
+                if (!avatar) avatar = object->getAvatarAncestor();
+                if (!avatar || avatar->isDead()) continue;
+                if (avatar->isSelf() && object->getRootEdit()->isAttachment()) return true;
+                const F32 distance_squared = (avatar->getPositionAgent() - gAgent.getPositionAgent()).lengthSquared();
+                if (distance_squared <= range * range)
+                {
+                    if (distance_squared <= 100.f) retention_seconds = 60.;
+                    else if (distance_squared < 400.f) retention_seconds = llmax(retention_seconds, 30.);
+                }
+            }
+        }
+    }
+    if (retention_seconds == 0.)
+    {
+        mAvatarDetailRetentionStarted = -1.;
+        return false;
+    }
+    // Start once when lower detail is requested, not on each retry. Changing
+    // bands adjusts this same deadline; it must not indefinitely renew it.
+    const F64 now = LLTimer::getTotalSeconds();
+    if (mAvatarDetailRetentionStarted < 0.) mAvatarDetailRetentionStarted = now;
+    return now - mAvatarDetailRetentionStarted < retention_seconds;
+}
 
 bool LLViewerLODTexture::scaleDown()
 {

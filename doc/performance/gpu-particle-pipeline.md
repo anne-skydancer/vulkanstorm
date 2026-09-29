@@ -1,6 +1,7 @@
 # Resident GPU particle pipeline
 
-Branch: `codex/gpu-render-offload`, based on `vkstorm-devel`. Updated 2026-09-27.
+Development: `codex/gpu-render-offload`, based on `vkstorm-devel`.
+Release integration: `codex/gpu-render-offload-release`, based on `master`. Updated 2026-09-27.
 
 ## Contract and current status
 
@@ -157,12 +158,15 @@ birth admission, geometry, intervals/indirect counts, GL state restoration,
 frustum bounds, picks, region retirement, cross-region wind and texture demand.
 The scalar kernel suite checks 366,482 simulation/order/range fields.
 
-A RelWithDebInfo-only hook, `VULKANSTORM_PARTICLE_SELFTEST=1`, runs once at login
+On the development branch only, the RelWithDebInfo hook
+`VULKANSTORM_PARTICLE_SELFTEST=1` runs once at login
 in an isolated test process. It initializes the default environment, emits two
 known HUD particles into an offscreen target and checks actual viewer color,
 depth and glow results. Search its log for `PARTICLE_SELFTEST: PASS`; reaching
 login or successfully linking shaders alone does not mean this test passed.
-The hook and other development rendering probes must stay off `master`.
+The release integration removes the hook, its invocation and declaration. The
+release policy check rejects its environment variable in runtime sources.
+Standalone kernel, dispatcher, texture, blend and integration tests remain.
 
 Completed Windows checks include native AMD and Mesa kernel/service/texture/blend
 tests, the integrated viewer pixel fixture on both drivers, and CPU fallback
@@ -194,4 +198,5 @@ fallback once the mask defect is removed.
 methods, the actual post-deferred mask call, and the particle boundary expression.
 It covers inherited on/off combinations and attachment depths that differ from
 bounds depths. The offscreen pixel fixture alone did not cover these integration
-boundaries. Logged-in confirmation of the rebuilt fix remains required.
+boundaries. The user subsequently confirmed that particles display in-world with the rebuilt
+fix. Broader appearance, lifecycle and performance acceptance remains open.

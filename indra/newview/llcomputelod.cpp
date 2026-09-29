@@ -103,28 +103,6 @@ U32 camera_frame = ~0u;
 LLVector3 lod_camera;
 F32 lod_policy[4] = {};
 U64 resident_bytes = 0, resource_epoch = 0;
-// Main-thread lifecycle counters; no per-frame scene scan or change to ownership.
-struct GeometryMemory
-{
-    U64 vertices = 0, indices = 0, cpu_vertices = 0, cpu_indices = 0;
-    U64 peak_cpu = 0, allocations = 0, releases = 0;
-    void add(const LLVertexBuffer& buffer)
-    {
-        vertices += buffer.getSize(); indices += buffer.getIndicesSize();
-        cpu_vertices += buffer.getCPUVertexBytes(); cpu_indices += buffer.getCPUIndexBytes();
-        peak_cpu = llmax(peak_cpu, cpu_vertices + cpu_indices);
-        ++allocations;
-    }
-    void remove(const LLVertexBuffer& buffer)
-    {
-        llassert(vertices >= buffer.getSize() && indices >= buffer.getIndicesSize());
-        llassert(cpu_vertices >= buffer.getCPUVertexBytes() && cpu_indices >= buffer.getCPUIndexBytes());
-        vertices -= buffer.getSize(); indices -= buffer.getIndicesSize();
-        cpu_vertices -= buffer.getCPUVertexBytes(); cpu_indices -= buffer.getCPUIndexBytes();
-        ++releases;
-    }
-};
-GeometryMemory published_memory, staged_memory, page_memory;
 std::vector<std::weak_ptr<LLComputeMesh::Page>> pages;
 std::set<GLuint> registered_buffers;
 void invalidateSubmissions(LLComputeMesh::Resident& resident)
@@ -556,7 +534,6 @@ LLComputeMesh::Page::~Page()
 {
     if (bytes)
     {
-        page_memory.remove(*buffer);
         resident_bytes -= bytes;
         ++resource_epoch;
     }
@@ -576,7 +553,6 @@ LLComputeMesh::Avatar::~Avatar()
 
 LLComputeMesh::Resident::~Resident()
 {
-    if (bytes) published_memory.remove(*buffer);
     resident_bytes -= bytes;
     if (bytes || (generation == ::generation && slot != ~0u)) ++resource_epoch;
     if (generation != ::generation || slot == ~0u) return;
@@ -686,7 +662,6 @@ std::shared_ptr<LLComputeMesh::Page> acquirePage(U32 mask, U32 vertices, U32 ind
     page->indices = LLComputeMesh::Ranges(index_capacity);
     page->bytes = page->buffer->getSize() + page->buffer->getIndicesSize();
     resident_bytes += page->bytes;
-    page_memory.add(*page->buffer);
     pages.push_back(page);
     return page;
 }
@@ -701,7 +676,7 @@ struct StagedFace
     F32 maximum[4] = {-std::numeric_limits<F32>::infinity(), -std::numeric_limits<F32>::infinity(), -std::numeric_limits<F32>::infinity(), 0};
     U64 bytes = 0;
     U32 vertex_offset = 0, index_offset = 0;
-    ~StagedFace() { if (bytes) staged_memory.remove(*buffer); resident_bytes -= bytes; if (bytes) ++resource_epoch; }
+    ~StagedFace() { resident_bytes -= bytes; if (bytes) ++resource_epoch; }
 };
 struct BuildJob
 {
@@ -1057,12 +1032,6 @@ BuildResult advanceJob(BuildJob& job)
             if (job.ready_mask & (1u<<lod)) continue;
             const U32 fallback = LLMeshStreaming::residentLevel(job.ready_mask, lod);
             std::copy(staged.entry.ranges[fallback], staged.entry.ranges[fallback]+4, staged.entry.ranges[lod]);
-        }
-        if (record->bytes) published_memory.remove(*record->buffer);
-        if (staged.bytes)
-        {
-            staged_memory.remove(*staged.buffer);
-            published_memory.add(*staged.buffer);
         }
         record->page_range = staged.page_range;
         record->page = staged.page;
@@ -1520,35 +1489,6 @@ void LLComputeMesh::beginLOD()
         {
             for (unsigned i=0; i<waiting.size(); ++i) waiting[i] += (job->waiting & (1u<<i)) != 0;
         });
-        LLPrimitive::getVolumeManager()->sampleSourceMemory();
-        LL_INFOS("ImageMemory") << "raw_owned_bytes=" << LLImageBase::getOwnedRawBytes()
-            << " raw_owned_peak_bytes=" << LLImageBase::getPeakOwnedRawBytes()
-            << " other_image_owned_bytes=" << LLImageBase::getOwnedOtherImageBytes()
-            << " raw_detached_cumulative_bytes=" << LLImageBase::getDetachedRawBytes() << LL_ENDL;
-        const U64 accounted = published_memory.vertices + published_memory.indices +
-            staged_memory.vertices + staged_memory.indices + page_memory.vertices + page_memory.indices;
-        llassert(accounted == resident_bytes);
-        LL_INFOS("GeometryMemory")
-            << "published_vertex_bytes=" << published_memory.vertices
-            << " published_index_bytes=" << published_memory.indices
-            << " published_cpu_vertex_bytes=" << published_memory.cpu_vertices
-            << " published_cpu_index_bytes=" << published_memory.cpu_indices
-            << " staged_vertex_bytes=" << staged_memory.vertices
-            << " staged_index_bytes=" << staged_memory.indices
-            << " staged_cpu_vertex_bytes=" << staged_memory.cpu_vertices
-            << " staged_cpu_index_bytes=" << staged_memory.cpu_indices
-            << " published_cpu_peak_bytes=" << published_memory.peak_cpu
-            << " staged_cpu_peak_bytes=" << staged_memory.peak_cpu
-            << " staged_allocations=" << staged_memory.allocations
-            << " staged_releases=" << staged_memory.releases
-            << " publications=" << published_memory.allocations
-            << " published_releases=" << published_memory.releases
-            << " shared_page_vertex_bytes=" << page_memory.vertices
-            << " shared_page_index_bytes=" << page_memory.indices
-            << " accounting_matches=" << (accounted == resident_bytes)
-            << " rigged_weight_bytes=" << LLRiggedVolume::sWeightBytes
-            << " rigged_weight_peak_bytes=" << LLRiggedVolume::sWeightPeakBytes
-            << " rigged_weight_faces=" << LLRiggedVolume::sWeightFaces << LL_ENDL;
         LL_INFOS("ComputeLOD") << "allocated_faces=" << extent - available.size()
             << " geometry_bytes=" << resident_bytes << " dispatches=" << dispatches
             << " indirect_draws=" << draws << " cpu_lod_bypasses=" << bypasses

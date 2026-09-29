@@ -68,7 +68,6 @@
 #include "llviewerdisplay.h"
 #include "llviewerwindow.h"
 #include "llprogressview.h"
-#include "llfocusmgr.h"
 #include "llmemory.h"
 
 ////////////////////////////////////////////////////////////////////////////
@@ -877,124 +876,6 @@ void LLViewerTextureList::updateImages(F32 max_time)
     if (!gGLManager.mIsDisabled) completeTextureUploads();
     const U64 available = U64(LLMemory::getAvailableMemKB().value()) * 1024;
     if (LLMemory::getMaxMemKB().value()) LLTextureDeliveryBudget::updateAvailableMemory(available);
-#if defined(LL_RELEASE_WITH_DEBUG_INFO)
-    // Development-only driver qualification. Remove with the other runtime
-    // harnesses when preparing master integration (check_release_hooks.py).
-    static const bool delivery_test = bool(LLStringUtil::getoptenv("VULKANSTORM_TEXTURE_DELIVERY_SELFTEST"));
-    static bool delivery_test_done = false;
-    static F64 delivery_test_started = 0.;
-    static std::vector<LLPointer<LLViewerFetchedTexture>> delivery_test_images;
-    static std::vector<std::weak_ptr<LLTextureDeliveryBudget::Reservation>> delivery_test_leases;
-    if (delivery_test && !delivery_test_done && !gGLManager.mIsDisabled)
-    {
-        if (delivery_test_images.empty())
-        {
-            delivery_test_started = LLTimer::getTotalSeconds();
-            for (S32 test = 0; test < 5; ++test)
-            {
-                LLPointer<LLViewerFetchedTexture> image = new LLViewerFetchedTexture(LLUUID::generateNewID(), FTT_LOCAL_FILE);
-                image->setBoostLevel(LLGLTexture::BOOST_UI);
-                image->getGLTexture()->setAllowCompression(false);
-                if (test == 1 || test == 4)
-                {
-                    LLPointer<LLImageRaw> old = new LLImageRaw(16, 16, 4);
-                    old->clear(211, 41, 71, 255);
-                    image->createGLTexture(2, old);
-                }
-                const S32 width = test == 2 ? 1024 : 64;
-                const S32 height = test == 2 ? 1 : 64;
-                image->mFullWidth = width;
-                image->mFullHeight = height;
-                image->mRawImage = new LLImageRaw(width, height, 4);
-                ++LLViewerTexture::sRawCount;
-                image->mRawImage->clear(37, 91, 163, 255);
-                image->mRawImage->mDeliveryReservation = LLTextureDeliveryBudget::reserve(U64(width) * height * 8, true);
-                delivery_test_leases.push_back(image->mRawImage->mDeliveryReservation);
-                image->mRawDiscardLevel = 0;
-                image->mDesiredDiscardLevel = test == 2 ? 5 : test >= 3 ? 2 : 0;
-                image->mIsRawImageValid = true;
-                image->addToCreateTexture();
-                delivery_test_images.push_back(image);
-            }
-        }
-        else
-        {
-            bool ready = true;
-            for (auto& image : delivery_test_images)
-                ready &= !image->mCreatePending && !image->mNeedsCreateTexture;
-            if (ready || LLTimer::getTotalSeconds() - delivery_test_started > 10.)
-            {
-                bool passed = ready;
-                for (S32 test = 0; test < 5 && passed; ++test)
-                {
-                    auto image = delivery_test_images[test];
-                    const S32 expected_discard = (test == 4 || (test == 3 && LLImageGLThread::sEnabledTextures)) ? 2 : 0;
-                    LLPointer<LLImageRaw> pixels = new LLImageRaw();
-                    passed = image->getDiscardLevel() == expected_discard &&
-                        image->getGLTexture()->readBackRaw(expected_discard, pixels, false);
-                    if (passed)
-                    {
-                        const S32 width = test == 2 ? 1024 : (64 >> expected_discard);
-                        const S32 height = test == 2 ? 1 : width;
-                        passed = pixels->getWidth() == width && pixels->getHeight() == height && pixels->getComponents() == 4;
-                        for (S32 offset = 0; offset < pixels->getDataSize() && passed; offset += 4)
-                        {
-                            const U8* pixel = pixels->getData() + offset;
-                            passed = pixel[0] == (test == 4 ? 211 : 37) &&
-                                pixel[1] == (test == 4 ? 41 : 91) &&
-                                pixel[2] == (test == 4 ? 71 : 163) && pixel[3] == 255;
-                        }
-                    }
-                    if (!passed) LL_WARNS("TextureDeliveryTest") << "Image case failed: " << test << LL_ENDL;
-                }
-                delivery_test_images.clear();
-                for (const auto& lease : delivery_test_leases) passed &= lease.expired();
-                delivery_test_done = true;
-                LL_INFOS("TextureDeliveryTest") << (passed ? "PASS" : "FAIL")
-                    << " first image, replacement, narrow image, downsize, redundant upload, reservation cleanup; asynchronous="
-                    << LLImageGLThread::sEnabledTextures << LL_ENDL;
-            }
-        }
-    }
-#endif
-
-    static LLFrameTimer focus_memory_timer;
-    static bool previous_focus = gFocusMgr.getAppHasFocus();
-    const bool focused = gFocusMgr.getAppHasFocus();
-    static F64 frame_sum = 0.;
-    static F32 frame_max = 0.f;
-    static U32 frame_samples = 0;
-    const F32 frame_seconds = LLFrameTimer::getFrameDeltaTimeF32();
-    // The startup frame delta may precede initialization of the frame clock.
-    if (frame_seconds > 0.f && frame_seconds < 10.f)
-    {
-        frame_sum += frame_seconds;
-        frame_max = llmax(frame_max, frame_seconds);
-        ++frame_samples;
-    }
-    if (focused != previous_focus || focus_memory_timer.getElapsedTimeF32() >= 5.f)
-    {
-        focus_memory_timer.reset();
-        previous_focus = focused;
-        const auto delivery_stats = LLTextureDeliveryBudget::statistics();
-        LL_INFOS("FocusMemory") << "focused=" << focused
-            << " frame_mean_seconds=" << (frame_samples ? frame_sum / frame_samples : 0.)
-            << " frame_max_seconds=" << frame_max
-            << " frame_samples=" << frame_samples
-            << " downscale_pending=" << mDownScaleQueue.size()
-            << " create_pending=" << mCreateTextureList.size()
-            << " upload_pending=" << mPendingUploads.size()
-            << " delivery_reserved_bytes=" << LLTextureDeliveryBudget::used()
-            << " delivery_budget_bytes=" << LLTextureDeliveryBudget::limit()
-            << " admission_deferred_attempts=" << delivery_stats.deferredAttempts
-            << " urgent_admission_deferred_attempts=" << delivery_stats.urgentDeferredAttempts
-            << " decode_allowance_returned_bytes=" << delivery_stats.trimmedBytes
-            << " discard_bias=" << LLViewerTexture::sDesiredDiscardBias
-            << LL_ENDL;
-        LLMemory::logMemoryInfo(true);
-        frame_sum = 0.; frame_max = 0.f; frame_samples = 0;
-    }
-
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     static bool cleared = false;
     if(gTeleportDisplay)

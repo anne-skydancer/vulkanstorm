@@ -35,7 +35,6 @@ public:
             {
                 mBytes.store(bytes);
                 sUsed -= previous - bytes;
-                if (bytes) sTrimmedBytes += previous - bytes;
             }
         }
         std::uint64_t bytes() const { return mBytes.load(); }
@@ -55,8 +54,6 @@ public:
         if (!bytes) return {};
         if (bytes > limit || sUsed > limit - bytes)
         {
-            ++sDeferredAttempts;
-            if (first_visible) ++sUrgentDeferredAttempts;
             return {};
         }
         auto result = Lease(new Reservation(0));
@@ -77,22 +74,9 @@ public:
     static std::uint64_t used() { std::lock_guard<std::mutex> lock(sMutex); return sUsed; }
     static std::uint64_t limit() { std::lock_guard<std::mutex> lock(sMutex); return sLimit; }
 
-    struct Statistics
-    {
-        std::uint64_t deferredAttempts, urgentDeferredAttempts, trimmedBytes;
-    };
-    static Statistics statistics()
-    {
-        std::lock_guard<std::mutex> lock(sMutex);
-        return {sDeferredAttempts, sUrgentDeferredAttempts, sTrimmedBytes};
-    }
-
 private:
     inline static std::mutex sMutex;
     inline static std::uint64_t sUsed = 0;
     inline static std::uint64_t sLimit = Ceiling;
-    inline static std::uint64_t sDeferredAttempts = 0;
-    inline static std::uint64_t sUrgentDeferredAttempts = 0;
-    inline static std::uint64_t sTrimmedBytes = 0;
 };
 #endif

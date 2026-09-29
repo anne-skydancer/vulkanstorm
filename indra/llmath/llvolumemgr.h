@@ -61,7 +61,6 @@ public:
 
     const LLVolumeParams* getVolumeParams() const { return &mVolumeParams; };
 
-    void accumulateSourceMemory(U64& arrays, U64& volumes, U64& faces, U64& octrees) const;
     F32 dump();
     friend std::ostream& operator<<(std::ostream& s, const LLVolumeLODGroup& volgroup);
 
@@ -91,8 +90,6 @@ public:
     virtual LLVolume *refVolume(const LLVolumeParams &volume_params, const S32 detail);
     virtual void unrefVolume(LLVolume *volumep);
 
-    // Main-thread diagnostic sweep: at most 64 groups per call, never takes ownership.
-    void sampleSourceMemory();
     void dump();
 
     // manually call this for mutex magic
@@ -109,10 +106,6 @@ protected:
     typedef std::map<const LLVolumeParams*, LLVolumeLODGroup*, LLVolumeParams::compare> volume_lod_group_map_t;
     volume_lod_group_map_t mVolumeLODGroups;
 
-    LLVolumeParams mMemoryCursor;
-    bool mMemorySampling = false;
-    U64 mMemoryArrays = 0, mMemoryVolumes = 0, mMemoryFaces = 0, mMemoryOctrees = 0, mMemoryGroups = 0;
-    U32 mMemorySlices = 0;
     LLMutex* mDataMutex;
 };
 

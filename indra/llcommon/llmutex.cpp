@@ -55,16 +55,6 @@ void LLMutex::lock()
     // back to the main loop.
     // NOTE: If you got here from seeing this assert in your log and you're not seeing
     // a stack trace that points here, put a breakpoint in on_main_coro and try again.
-#ifdef SHOW_ASSERT
-    if (!LLCoros::on_main_coro())
-    {
-        // Record the actual caller before the fatal dialog stops execution.
-        // The logging implementation uses std::recursive_mutex, not LLMutex.
-        LL_WARNS("CoroutineMutex") << "Thread mutex used by coroutine: name="
-            << LLCoros::getName() << " mutex=" << this
-            << "\n" << LLError::LLStacktrace() << LL_ENDL;
-    }
-#endif
     llassert(LLCoros::on_main_coro());
 
     if(isSelfLocked())

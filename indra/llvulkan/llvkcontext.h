@@ -108,10 +108,6 @@ public:
     FrameResult frameResult() const noexcept { return mFrameResult; }
     const std::string& frameError() const noexcept { return mFrameError; }
 
-    // Read the most recently presented swapchain image back into out_rgba
-    // (row-major RGBA8). For the GL<->Vulkan screenshot-diff harness.
-    bool readbackSwapchain(std::vector<uint8_t>& out_rgba, uint32_t& out_w, uint32_t& out_h);
-
     // A GPU texture + its descriptor for the 2D pipeline (set 0 / binding 0).
     struct Texture2D
     {
@@ -213,7 +209,6 @@ private:
     VkSampler             mSampler2DLinear = VK_NULL_HANDLE;  // LINEAR (GL TFO_NONE UI images)
     Texture2D             mWhiteTex;   // 1x1 white, bound for solid quads
     uint32_t         mAcquiredImageIndex = 0;
-    uint32_t         mLastPresentedImageIndex = 0;
     bool             mFrameActive = false;
     FrameResult      mFrameResult = FrameResult::Unavailable;
     std::string      mFrameError;

@@ -137,6 +137,9 @@ checks.json
 # Local build trees, smoke-test profiles, downloaded artifacts, and scratch files.
 /.tmp/
 
+# Local RenderDoc captures.
+/RenderDoc/
+
 # Excluded test paths (ignore rules do not suppress already tracked changes).
 /indra/llui/tests/llmarkdown_test.cpp
 /indra/llui/tests/llurlmatch_test.cpp

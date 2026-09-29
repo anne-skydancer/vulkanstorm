@@ -25,7 +25,6 @@
  */
 
 #include "llviewerprecompiledheaders.h"
-#include "llfocusrenderprobe.h"
 
 #include "llviewerdisplay.h"
 
@@ -35,11 +34,8 @@
 #include "llvkuirender.h"
 #include "llvkuiimage.h"
 #include "llvkui2d.h"
-#include "llvkuitestscene.h"
-// <VulkanStorm> UI A/B harness GL emitters (gl_render_ui_test_scene).
 #include "llrender2dutils.h"
 #include "lluiimage.h"
-// </VulkanStorm>
 // <VulkanStorm> widgets with Vulkan view hooks (registered below).
 #include "llprogressview.h"
 #include "lloutputmonitorctrl.h"
@@ -191,112 +187,6 @@ void render_disconnected_background();
 
 void getProfileStatsContext(boost::json::object& stats);
 std::string getProfileStatsFilename();
-
-// <VulkanStorm> UI A/B harness (env-gated, VULKANSTORM_UITEST=1): render the
-// deterministic test scene (single-sourced neutral data in llvulkan's
-// LLVKUITestScene) through the REAL GL 2D path — gl_rect_2d / gl_line_2d /
-// LLUIImage::draw — in place of the login widget tree. This is the READ-ONLY
-// reference result the Vulkan path (LLVKUITestScene::emitVulkan) is diffed
-// against. Scene coords are top-left-origin device pixels; the GL 2D ortho is
-// bottom-left y-up (gl_state_for_2d), so y converts as window_height - scene_y.
-static void gl_render_ui_test_scene()
-{
-    if (!gViewerWindow)
-    {
-        return;
-    }
-    const S32 win_h = gViewerWindow->getWindowHeightRaw();
-    if (win_h <= 0)
-    {
-        return;
-    }
-    const LLVKUITestScene::Scene& scene = LLVKUITestScene::scene();
-
-    // Same shader + state the real UI pass uses (LLViewerWindow::draw binds
-    // gUIProgram; LLGLSUIDefault is already active in display_startup).
-    gUIProgram.bind();
-    gGL.setColorMask(true, true);
-
-    // Emission order must match LLVKUITestScene::emitVulkan exactly
-    // (painter's order): rects, then lines, then images.
-    for (const LLVKUITestScene::Rect& r : scene.rects)
-    {
-        gGL.setSceneBlendType(r.opaque ? LLRender::BT_REPLACE : LLRender::BT_ALPHA);
-        gl_rect_2d((S32)r.l, win_h - (S32)r.t, (S32)r.r, win_h - (S32)r.b,
-                   LLColor4(r.cr, r.cg, r.cb, r.ca));
-    }
-    gGL.setSceneBlendType(LLRender::BT_REPLACE);
-    for (const LLVKUITestScene::Line& l : scene.lines)
-    {
-        gl_line_2d((S32)l.x0, win_h - (S32)l.y0, (S32)l.x1, win_h - (S32)l.y1,
-                   LLColor4(l.cr, l.cg, l.cb, l.ca));
-    }
-    gGL.setSceneBlendType(LLRender::BT_ALPHA);
-    for (const LLVKUITestScene::Image& img : scene.images)
-    {
-        LLUIImagePtr ui_image = LLUI::getUIImage(img.name);
-        if (ui_image.notNull())
-        {
-            // LLUIImage::draw(x, y, w, h): (x, y) is the BOTTOM-left corner in
-            // GL y-up space; honors the image's clip + 9-slice scale regions.
-            ui_image->draw((S32)img.l, win_h - (S32)img.b,
-                           (S32)(img.r - img.l), (S32)(img.b - img.t),
-                           LLColor4(img.cr, img.cg, img.cb, img.ca));
-        }
-        else
-        {
-            LL_WARNS("Vulkan") << "UI test scene: GL image not found: " << img.name << LL_ENDL;
-        }
-    }
-    gGL.flush();
-    gUIProgram.unbind();
-    gGL.setSceneBlendType(LLRender::BT_ALPHA); // restore the UI-pass default
-}
-// </VulkanStorm>
-
-#if LL_WINDOWS
-// <VulkanStorm> GL reference capture (read-only diagnostic, env-gated): dump
-// the finished GL back buffer to the same .rgba format the Vulkan harness uses
-// (8-byte LE w/h header + RGBA8, bottom-origin like glReadPixels) when
-// VULKANSTORM_CAPTURE is set. Lets the diff harness compare the Vulkan frame
-// against the GL frame for the identical login state. No behavior change.
-static void gl_capture_frame_once()
-{
-    static const char* cap = getenv("VULKANSTORM_CAPTURE");
-    if (!cap || !*cap) return;
-    // Wait until the login UI is actually up, then let it settle: early-
-    // startup frames contain only the clear + stray toasts, not the chrome.
-    if (LLStartUp::getStartupState() < STATE_LOGIN_SHOW) return;
-    static int s_frame = 0;
-    const int kSettleFrames = 90;
-    if (++s_frame != kSettleFrames) return;
-
-    S32 w = gViewerWindow->getWindowWidthRaw();
-    S32 h = gViewerWindow->getWindowHeightRaw();
-    if (w <= 0 || h <= 0)
-    {
-        LL_WARNS("Window") << "GL reference capture: degenerate size " << w << "x" << h << LL_ENDL;
-        return;
-    }
-    std::vector<U8> rgba((size_t)w * (size_t)h * 4);
-    glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
-    LLFILE* f = LLFile::fopen(cap, "wb");
-    if (f)
-    {
-        U32 header[2] = { (U32)w, (U32)h };
-        fwrite(header, sizeof(header), 1, f);
-        fwrite(rgba.data(), rgba.size(), 1, f);
-        LLFile::close(f);
-        LL_INFOS("Window") << "GL reference frame captured to " << cap << " (" << w << "x" << h << ")" << LL_ENDL;
-    }
-    else
-    {
-        LL_WARNS("Window") << "GL reference capture: fopen failed for " << cap << LL_ENDL;
-    }
-}
-// </VulkanStorm>
-
-#endif // LL_WINDOWS
 
 #if LL_WINDOWS
 // <VulkanStorm> M0 greenfield: LLMediaCtrl view hook (registered with
@@ -1026,9 +916,6 @@ static void vk_register_ui_hooks()
         // <VulkanStorm> Remaining newview chrome: progress/splash screen,
         // voice monitor, favorites drag marker, toolbar drop zones, camera
         // joysticks, color/texture pickers, chiclet scroll clip, pulldown fade.
-        // VULKANSTORM_NO_NEWVIEW_HOOKS=1 skips these (regression isolation).
-        static const bool s_no_hooks = getenv("VULKANSTORM_NO_NEWVIEW_HOOKS") != nullptr;
-        if (s_no_hooks) return;
         LLVKUIRender::registerViewPrepareHook(typeid(LLProgressView), &vk_prepare_progress_view);
         LLVKUIRender::registerViewHook(typeid(LLProgressView), &vk_render_progress_view);
         LLVKUIRender::registerViewSubtreeAlphaHook(typeid(LLProgressView), &vk_alpha_progress_view);
@@ -1069,8 +956,7 @@ void display_startup()
     // Unlike the GL path below, this does NOT gate on window focus/visibility:
     // the GL early-out exists to save power when unfocused, but the Vulkan
     // frame already handles degenerate extents (minimized) internally, and
-    // focus-independent rendering is required for automated frame-capture
-    // verification (the harness launches the viewer without foreground focus).
+    // the native startup path continues rendering while unfocused.
     if (LLVKSession::isRunning())
     {
         if (   !gViewerWindow->getWindow()
@@ -1078,7 +964,6 @@ void display_startup()
         {
             return;
         }
-        LLVKSession::armCapture(LLStartUp::getStartupState() >= STATE_LOGIN_SHOW);
         vk_register_ui_hooks();
         LLVKSession::resizeIfNeeded(gViewerWindow->getWindow());
         const LLVector2 ui_scale = LLUI::getScaleFactor();
@@ -1140,28 +1025,15 @@ void display_startup()
 
     if (gViewerWindow)
     gViewerWindow->setup2DRender();
-    // <VulkanStorm> UI A/B harness (VULKANSTORM_UITEST=1): render the fixed
-    // test scene through the real GL 2D path instead of the login UI tree.
-    if (LLVKUITestScene::enabled())
-    {
-        gl_render_ui_test_scene();
-    }
-    else if (gViewerWindow)
+    if (gViewerWindow)
     {
         gViewerWindow->draw();
     }
-    // </VulkanStorm>
     gGL.flush();
 
     LLVertexBuffer::unbind();
 
     LLGLState::checkStates();
-
-#if LL_WINDOWS
-    // <VulkanStorm> GL reference capture for the byte-exact harness (env-gated).
-    gl_capture_frame_once();
-    // </VulkanStorm>
-#endif
 
 #if LL_WINDOWS
     // <VulkanStorm> Phase-1 bring-up: isolated Vulkan self-test. Runs on the
@@ -1460,8 +1332,6 @@ static void update_tp_display(bool minimized)
 // Paint the display!
 void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 {
-    static FocusRenderProbe::Probe probe("display");
-    FocusRenderProbe::Scope measure(probe);
 #if LL_WINDOWS
     // <VulkanStorm> The Vulkan backend owns the frame end-to-end while the
     // 2D/3D pipelines are being ported. Pre-STATE_STARTED (login/startup): the
@@ -1469,7 +1339,6 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
     // login (world): clear + present until the 3D pipeline lands. No GL calls.
     if (LLVKSession::isRunning())
     {
-        LLVKSession::armCapture(LLStartUp::getStartupState() >= STATE_LOGIN_SHOW);
         LLVKSession::resizeIfNeeded(gViewerWindow->getWindow());
         if (LLStartUp::getStartupState() < STATE_STARTED)
         {
@@ -2712,8 +2581,6 @@ void render_ui(F32 zoom_factor, int subfield)
 
 void swap()
 {
-    static FocusRenderProbe::Probe probe("swap");
-    FocusRenderProbe::Scope measure(probe);
     LLPerfStats::RecordSceneTime T ( LLPerfStats::StatType_t::RENDER_SWAP ); // render time capture - Swap buffer time - can signify excessive data transfer to/from GPU
     LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Swap");
     LL_PROFILE_GPU_ZONE("swap");

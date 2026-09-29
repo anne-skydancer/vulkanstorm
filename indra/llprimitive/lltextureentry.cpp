@@ -606,18 +606,6 @@ LLGLTFMaterial* LLTextureEntry::getGLTFRenderMaterial() const
         return mGLTFRenderMaterial;
     }
 
-#ifdef SHOW_ASSERT
-    if (!isGLTFRenderMaterialReady())
-    {
-        // Capture the reader before the fatal-error dialog interrupts execution.
-        // Release behavior and the material invariant remain unchanged.
-        LL_WARNS("MaterialState") << "Unresolved render material: entry=" << this
-            << " base=" << getGLTFMaterial()
-            << " override=" << getGLTFMaterialOverride()
-            << " texture=" << getID()
-            << "\n" << LLError::LLStacktrace() << LL_ENDL;
-    }
-#endif
     llassert(getGLTFMaterialOverride() == nullptr || getGLTFMaterialOverride()->isClearedForBaseMaterial());
     return getGLTFMaterial();
 }

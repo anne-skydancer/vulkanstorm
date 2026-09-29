@@ -262,8 +262,6 @@ public:
 
     U32 getTypeMask() const                 { return mTypeMask; }
     bool hasDataType(AttributeType type) const { return ((1 << type) & getTypeMask()); }
-    U64 getCPUVertexBytes() const;
-    U64 getCPUIndexBytes() const;
     U32 getSize() const                     { return mSize; }
     // Compute writers must flush pending uploads first and provide the barriers
     // for subsequent consumers. GPU writes do not update the CPU shadow.
