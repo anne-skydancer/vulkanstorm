@@ -796,6 +796,7 @@ void LLPluginClassMedia::loadURI(const std::string &uri)
 
 void LLPluginClassMedia::loadURI(const std::string& uri, F32 audio_target, F32 audio_duration)
 {
+    clearStreamMetadata(); // <FS:ND/> belongs to the previous URI
     if (!mAudioRole.empty())
     {
         if (mAudioGeneration == std::numeric_limits<U64>::max())
@@ -1667,6 +1668,7 @@ bool LLPluginClassMedia::pluginSupportsMediaTime(void)
 
 void LLPluginClassMedia::stop()
 {
+    clearStreamMetadata(); // <FS:ND/> nothing is playing any more
     mAudioStopped = true;
     mAudioTransitionComplete = false;
     LLPluginMessage message(LLPLUGIN_MESSAGE_CLASS_MEDIA_TIME, "stop");
