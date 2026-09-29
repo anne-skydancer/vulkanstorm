@@ -1,8 +1,8 @@
 # Mesa/Zink immediate work: engineering design
 
 Date: 2026-09-29. Implementation baseline: `vkstorm-devel` at `bc8a55c558`.
-Status: implemented on `codex/zink-actionable-fixes`; visual qualification and
-package CI qualification are pending. No performance claim is made. This document specifies the
+Status: implemented on `codex/zink-actionable-fixes`; package CI qualification
+passed. In-world visual qualification remains pending. No performance claim is made. This document specifies the
 four immediate work packages from the revised Mesa/Zink audit. The development
 checkout was clean before adding this plan; its hero-probe defects match the
 reviewed master code. No master history is to be merged into development.
@@ -301,8 +301,11 @@ failure markers, relocation, exact archives and platform identity. CI additional
 builds both platforms and runs Linux's software-Vulkan smoke check. Initial Windows
 qualification exposed missing Flex and Meson's omission of subproject builtin
 options from introspection; parser generators are now installed, and static zlib
-is checked through generated targets. No replacement package has been published
-or pinned in the viewer during qualification.
+is checked through generated targets. Package commit `1ed0490` passed Windows and Linux build/package jobs, Linux's
+software-Vulkan Zink smoke test, and exact archive/shared-identity verification in
+[CI run 36532755739](https://github.com/anne-skydancer/3p-mesazink/actions/runs/36532755739).
+Publication was skipped by design; no replacement package has been published or
+pinned in the viewer. The test viewer retains the existing Mesa dependency.
 
 Pending runtime acceptance: mirrors at multiple roughnesses, first activation,
 probe switching, resolution/HDR changes, relog/teleport and mirror toggles on native
