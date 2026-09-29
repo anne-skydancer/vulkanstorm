@@ -293,6 +293,9 @@ void LLStreamingAudio_MediaPlugins::updateMetadata() noexcept
 // <FS> Icecast status sidechannel
 void LLStreamingAudio_MediaPlugins::resetMetadata()
 {
+    // Tell listeners the previous stream's information no longer applies;
+    // otherwise it stays displayed until the next stream sends its own
+    const bool had_metadata = !mMetadata.isUndefined() && mMetadata.size() > 0;
     mArtist.clear();
     mTitle.clear();
     mPluginArtist.clear();
@@ -303,6 +306,11 @@ void LLStreamingAudio_MediaPlugins::resetMetadata()
     mStatusPollDone = false;
     mStatusProbeFails = 0;
     mStatusPollTimer.reset();
+
+    if (had_metadata)
+    {
+        mMetadataUpdateSignal(mMetadata);
+    }
 }
 
 void LLStreamingAudio_MediaPlugins::emitMetadata(const std::string& artist, const std::string& title)

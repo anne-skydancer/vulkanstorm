@@ -302,21 +302,10 @@ void LLViewerAudio::stopInternetStreamWithAutoFade()
     }
     // </FS:Ansariel>
 
-    if (gAudiop && gAudiop->getStreamingAudioImpl() &&
-        gAudiop->getStreamingAudioImpl()->hasAudioFade() && !gAudiop->getInternetStreamURL().empty())
-    {
-        if (mFadeState != FADE_OUT)
-            mDone = true;
-        mFadeState = FADE_OUT;
-        mNextStreamURI.clear();
-        startFading();
-        registerIdleListener();
-        return;
-    }
-
     mFadeState = FADE_IDLE;
     mNextStreamURI = LLStringUtil::null;
     mDone = true;
+    mBackendFade = false;
 
     if (gAudiop)
     {

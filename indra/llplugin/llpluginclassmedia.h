@@ -528,6 +528,9 @@ public:
     std::string const& getTitle() const
     { return mTitle; }
 
+    void clearStreamMetadata()
+    { mArtist.clear(); mTitle.clear(); }
+
 private:
     std::string mArtist;
     std::string mTitle;
