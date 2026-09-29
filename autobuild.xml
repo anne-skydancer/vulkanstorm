@@ -1709,11 +1709,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>76c3ed2a612f0e76a88becfc3effca90462102849bb02e8908fbf2ebc80ead32</string>
+              <string>65c5118324210b06a43c452d66f1b6fadcce61f6d2ea6223ebcf79b02e58c144</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/26.3.0-devel-git.4c18bbc637-pkg2/mesazink-26.3.0-devel-git.4c18bbc637-pkg2-linux64.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/26.3.0-devel/mesazink-26.3.0-devel-linux64.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -1723,11 +1723,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>30be90eff6b05977de8fae972321ec7c576412430de6e86c3ec01366f2fdceef</string>
+              <string>fe92b7df8b266784997b4b28fba9341a37987faa087fd9e5a63ae4f32f071740</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/26.3.0-devel-git.4c18bbc637-pkg2/mesazink-26.3.0-devel-git.4c18bbc637-pkg2-windows64.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/26.3.0-devel/mesazink-26.3.0-devel-windows64.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -1740,7 +1740,7 @@
         <key>copyright</key>
         <string>Copyright (C) 1999-2007 Brian Paul. All Rights Reserved.</string>
         <key>version</key>
-        <string>26.3.0-devel-git.4c18bbc637-pkg2</string>
+        <string>26.3.0-devel</string>
         <key>name</key>
         <string>mesazink</string>
         <key>canonical_repo</key>
