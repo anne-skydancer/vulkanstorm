@@ -104,6 +104,7 @@ public:
     bool mHasNVXGpuMemoryInfo = false;
     bool mHasATIMemInfo = false;
 
+    bool mIsZink = false; // Actual GL context identity; independent of native vendor quirks.
     bool mIsAMD;
     bool mIsNVIDIA;
     bool mIsIntel;

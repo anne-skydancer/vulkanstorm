@@ -103,9 +103,14 @@ namespace
 
 void LLAppViewerLinux::selectGLBackend()
 {
+    mGLBackendSelection = {};
+    mGLBackendSelection.provider = "system-gl";
+    mGLBackendSelection.outcome = "selected";
     if (gSavedSettings.getString("RenderBackend") != "Zink") return;
+    mGLBackendSelection.outcome = "fallback";
     if (!std::getenv("DISPLAY") || !*std::getenv("DISPLAY"))
     {
+        mGLBackendSelection.reason = "no X11/XWayland display";
         LL_WARNS("RenderInit") << "Mesa/Zink requires X11 or XWayland; using system OpenGL." << LL_ENDL;
         return;
     }
@@ -116,11 +121,15 @@ void LLAppViewerLinux::selectGLBackend()
     {
         if (LLLinuxZink::activate(directory, error))
         {
+            mGLBackendSelection.provider = "bundled-mesa";
+            mGLBackendSelection.outcome = "selected";
+            mGLBackendSelection.path = directory;
             mZinkEnvironment.apply();
             LL_INFOS("RenderInit") << "GL backend: bundled Mesa/Zink from '" << directory << "'." << LL_ENDL;
             return;
         }
     }
+    mGLBackendSelection.reason = error;
     LL_WARNS("RenderInit") << "Cannot load bundled Mesa/Zink: " << error
                            << "; using system OpenGL." << LL_ENDL;
 }

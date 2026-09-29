@@ -1172,6 +1172,14 @@ bool LLGLManager::initGL()
         LLImageGL::sCompressTextures = false;
     }
 
+    // Renderer strings have been uppercased above. Do not classify all Mesa
+    // contexts as Zink or infer which Vulkan device Mesa selected.
+    mIsZink = mGLRenderer == "ZINK" || mGLRenderer.rfind("ZINK ", 0) == 0 ||
+              mGLRenderer.rfind("ZINK(", 0) == 0;
+    LL_INFOS("RenderInit") << "GL context identity: driver=" << (mIsZink ? "zink" : "other-gl")
+                          << " vendor=" << mGLVendor << " renderer=" << mGLRenderer
+                          << " underlying-vulkan-device=unknown" << LL_ENDL;
+
     // Trailing space necessary to keep "nVidia Corpor_ati_on" cards
     // from being recognized as ATI.
     // NOTE: AMD has been pretty good about not breaking this check, do not rename without good reason

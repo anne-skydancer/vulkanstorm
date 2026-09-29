@@ -3809,21 +3809,15 @@ bool LLAppViewer::initWindow()
     }
     else if (render_backend == "Zink")
     {
-        // <VulkanStorm> Mesa Zink = the OpenGL pipeline running over Vulkan
-        // via the bundled Mesa runtime. It boots the normal GL window/context
-        // path; selectGLBackend() already validated the prerequisites (bundled
-        // runtime present, Vulkan device available) and preloaded the Mesa
-        // opengl32, logging a warning and preloading native OpenGL instead if
-        // they are not met. The session therefore stays on the GL path either
-        // way; only the GL provider differs.
-        // </VulkanStorm>
+        // Mesa selects its Vulkan device during GL context creation. Provider
+        // preload fallback and actual context identity are reported separately.
     }
     else if (render_backend != "OpenGL")
     {
         LL_WARNS("AppInit") << "Unknown RenderBackend value '" << render_backend << "'; using OpenGL." << LL_ENDL;
         render_backend = "OpenGL";
     }
-    LL_INFOS("AppInit") << "Render backend: " << render_backend << LL_ENDL;
+    LL_INFOS("AppInit") << "Requested rendering path: " << render_backend << LL_ENDL;
 
     // With the Vulkan backend, the viewer window must be created WITHOUT a GL
     // context: a window belongs to exactly one graphics API for its lifetime.
@@ -3861,6 +3855,18 @@ bool LLAppViewer::initWindow()
     gViewerWindow = new LLViewerWindow(window_params);
 
     LL_INFOS("AppInit") << "gViewerwindow created." << LL_ENDL;
+    if (!vulkan_boot)
+    {
+        LL_INFOS("RenderInit") << "GL session: requested=" << gSavedSettings.getString("RenderBackend")
+            << " provider=" << mGLBackendSelection.provider
+            << " selection=" << mGLBackendSelection.outcome
+            << " path=" << mGLBackendSelection.path << " reason=" << mGLBackendSelection.reason
+            << " actual=" << (gGLManager.mIsZink ? "zink" : "other-gl")
+            << " vendor=" << gGLManager.mGLVendor << " renderer=" << gGLManager.mGLRenderer
+            << " version=" << gGLManager.mGLVersionString
+            << " mirrors=" << gSavedSettings.getBOOL("RenderMirrors")
+            << " HDR=" << gSavedSettings.getBOOL("RenderHDREnabled") << LL_ENDL;
+    }
 
 #if LL_WINDOWS
     if (vulkan_boot)
