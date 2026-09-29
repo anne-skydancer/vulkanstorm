@@ -2006,20 +2006,12 @@ void LLWindowWin32::destroySharedContext(void* contextPtr)
 
 void LLWindowWin32::toggleVSync(bool enable_vsync)
 {
-    if (wglSwapIntervalEXT == nullptr)
-    {
-        LL_INFOS("Window") << "VSync: wglSwapIntervalEXT not initialized" << LL_ENDL;
-    }
-    else if (!enable_vsync)
-    {
-        LL_INFOS("Window") << "Disabling vertical sync" << LL_ENDL;
-        wglSwapIntervalEXT(0);
-    }
-    else
-    {
-        LL_INFOS("Window") << "Enabling vertical sync" << LL_ENDL;
-        wglSwapIntervalEXT(1);
-    }
+    const int requested = enable_vsync ? 1 : 0;
+    const bool applied = wglSwapIntervalEXT && wglSwapIntervalEXT(requested);
+    LL_INFOS("RenderInit") << "WGL swap interval: requested=" << requested
+        << " setter-success=" << applied
+        << " observed=" << (wglGetSwapIntervalEXT ? std::to_string(wglGetSwapIntervalEXT()) : "unknown")
+        << " (not a Vulkan present-mode query)" << LL_ENDL;
 }
 
 void LLWindowWin32::moveWindow( const LLCoordScreen& position, const LLCoordScreen& size )

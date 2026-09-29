@@ -263,6 +263,10 @@ void LLImageGL::initClass(LLWindow* window, S32 num_catagories, bool skip_analyz
         // Construction disables both flags if a shared Core context cannot be created.
         LLImageGLThread::createInstance(window);
     }
+    LL_INFOS("RenderInit") << "GL upload workers: textures=" << LLImageGLThread::sEnabledTextures
+        << " media=" << LLImageGLThread::sEnabledMedia
+        << " requested-textures=" << thread_texture_loads
+        << " requested-media=" << thread_media_updates << LL_ENDL;
 }
 
 void LLImageGL::allocateConversionBuffer()

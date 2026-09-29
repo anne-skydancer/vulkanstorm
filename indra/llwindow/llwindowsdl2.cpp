@@ -2744,31 +2744,17 @@ void LLWindowSDL::destroySharedContext(void* context)
 
 void LLWindowSDL::toggleVSync(bool enable_vsync)
 {
-    if (enable_vsync)
+    int requested = enable_vsync ? -1 : 0;
+    int result = SDL_GL_SetSwapInterval(requested);
+    if (enable_vsync && result == -1)
     {
-        // try adaptive vsync first (-1) and if that fails, try regular vsync (1)
-        if (SDL_GL_SetSwapInterval(-1) == -1)
-        {
-            LL_INFOS() << "Failed to enable adaptive vsync, trying regular vsync" << LL_ENDL;
-            if (SDL_GL_SetSwapInterval(1) == -1)
-            {
-                LL_WARNS() << "Failed to enable vsync" << LL_ENDL;
-            }
-            else
-            {
-                LL_DEBUGS() << "Vsync enabled" << LL_ENDL;
-            }
-        }
-        else
-        {
-            LL_DEBUGS() << "Adaptive vsync enabled" << LL_ENDL;
-        }
+        requested = 1;
+        result = SDL_GL_SetSwapInterval(requested);
     }
-    else
-    {
-        SDL_GL_SetSwapInterval(0);
-        LL_DEBUGS() << "Vsync disabled" << LL_ENDL;
-    }
+    LL_INFOS("RenderInit") << "SDL swap interval: enabled-request=" << enable_vsync
+        << " requested=" << requested << " setter-success=" << (result == 0)
+        << " observed=" << SDL_GL_GetSwapInterval()
+        << " (not a Vulkan present-mode query)" << LL_ENDL;
 }
 // </FS:Zi>
 

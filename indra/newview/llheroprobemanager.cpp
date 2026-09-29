@@ -77,6 +77,7 @@ void LLHeroProbeManager::update()
 {
     if (!LLPipeline::RenderMirrors || !LLPipeline::sReflectionProbesEnabled || gTeleportDisplay || LLStartUp::getStartupState() < STATE_STARTED)
     {
+        invalidateHeroContents();
         return;
     }
 
@@ -102,13 +103,18 @@ void LLHeroProbeManager::update()
     }
 
     initReflectionMaps();
+    if (mTexture.isNull() || mDefaultProbe.isNull()) return;
 
     static LLCachedControl<bool> render_hdr(gSavedSettings, "RenderHDREnabled", true);
 
     if (!mRenderTarget.isComplete())
     {
         U32 color_fmt = render_hdr ? GL_RGBA16F : GL_RGBA8;
-        mRenderTarget.allocate(mProbeResolution, mProbeResolution, color_fmt, true);
+        if (!mRenderTarget.allocate(mProbeResolution, mProbeResolution, color_fmt, true))
+        {
+            invalidateHeroContents();
+            return;
+        }
     }
 
     if (mMipChain.empty())
@@ -119,7 +125,12 @@ void LLHeroProbeManager::update()
         mMipChain.resize(count);
         for (U32 i = 0; i < count; ++i)
         {
-            mMipChain[i].allocate(res, res, render_hdr ? GL_RGBA16F : GL_RGBA8);
+            if (!mMipChain[i].allocate(res, res, render_hdr ? GL_RGBA16F : GL_RGBA8))
+            {
+                mMipChain.clear();
+                invalidateHeroContents();
+                return;
+            }
             res /= 2;
         }
     }
@@ -185,10 +196,27 @@ void LLHeroProbeManager::update()
 
         // Don't even try to do anything if we didn't find a single mirror present.
         if (!probe_present)
+        {
+            invalidateHeroContents();
             return;
+        }
 
         if (mNearestHero != nullptr && !mNearestHero->isDead() && mNearestHero->mDrawable.notNull())
         {
+            if (mContentsProbe != mNearestHero)
+            {
+                invalidateHeroContents();
+                mContentsProbe = mNearestHero;
+                // A query for the preceding mirror cannot cull the new one.
+                if (mDefaultProbe->mOcclusionQuery)
+                {
+                    gPipeline.mReflectionMapManager.recycleQuery(mDefaultProbe->mOcclusionQuery);
+                    mDefaultProbe->mOcclusionQuery = 0;
+                }
+                mDefaultProbe->mOccluded = false;
+                mDefaultProbe->mOcclusionPendingFrames = 0;
+            }
+            mDefaultProbe->mViewerObject = mNearestHero;
             LLVector3 hero_pos = mNearestHero->getPositionAgent();
             // <FS:Beq> let's not redo work we already did
             // LLVector3 face_normal = LLVector3(0, 0, 1);
@@ -236,6 +264,7 @@ void LLHeroProbeManager::update()
     {
         mNearestHero = nullptr;
         mDefaultProbe->mViewerObject = nullptr;
+        invalidateHeroContents();
     }
 }
 
@@ -244,8 +273,11 @@ void LLHeroProbeManager::renderProbes()
     if (!LLPipeline::RenderMirrors || !LLPipeline::sReflectionProbesEnabled || gTeleportDisplay ||
         LLStartUp::getStartupState() < STATE_STARTED)
     {
+        invalidateHeroContents();
         return;
     }
+
+    if (mTexture.isNull() || mMipChain.empty() || !mRenderTarget.isComplete()) return;
 
     static LLCachedControl<S32> sDetail(gSavedSettings, "RenderHeroReflectionProbeDetail", -1);
     static LLCachedControl<S32> sLevel(gSavedSettings, "RenderHeroReflectionProbeLevel", 3);
@@ -276,7 +308,7 @@ void LLHeroProbeManager::renderProbes()
 
         S32 face = gFrameCount % 6;
 
-        if (!mProbes.empty() && !mProbes[0].isNull() && !mProbes[0]->mOccluded)
+        if (!mProbes.empty() && !mProbes[0].isNull() && (!mContents.canFilter() || !mProbes[0]->mOccluded))
         {
             LL_PROFILE_ZONE_NUM(gFrameCount % rate);
             LL_PROFILE_ZONE_NUM(rate);
@@ -287,10 +319,22 @@ void LLHeroProbeManager::renderProbes()
                 if ((gFrameCount % rate) == (i % rate))
                 { // update 6/rate faces per frame
                     LL_PROFILE_ZONE_NUM(i);
-                    updateProbeFace(mProbes[0], i, dynamic, near_clip);
+                    if (updateProbeFace(mProbes[0], i, dynamic, near_clip))
+                    {
+                        mContents.completeFace(i);
+                    }
+                    else
+                    {
+                        invalidateHeroContents();
+                        break;
+                    }
                 }
             }
-            generateRadiance(mProbes[0]);
+            if (mContents.canFilter())
+            {
+                generateRadiance(mProbes[0]);
+                mContents.publish();
+            }
         }
 
         mRenderingMirror = false;
@@ -310,10 +354,13 @@ void LLHeroProbeManager::renderProbes()
 // The next six passes render the scene with both radiance and irradiance into the same scratch space cube map and generate a simple mip chain.
 // At the end of these passes, a radiance map is generated for this probe and placed into the radiance cube map array at the index for this probe.
 // In effect this simulates single-bounce lighting.
-void LLHeroProbeManager::updateProbeFace(LLReflectionMap* probe, U32 face, bool is_dynamic, F32 near_clip)
+bool LLHeroProbeManager::updateProbeFace(LLReflectionMap* probe, U32 face, bool is_dynamic, F32 near_clip)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DISPLAY;
     LL_PROFILE_GPU_ZONE("hero probe update");
+
+    if (!gPipeline.mHeroProbeRT.screen.isComplete() ||
+        !gPipeline.mHeroProbeRT.deferredScreen.isComplete()) return false;
 
     // hacky hot-swap of camera specific render targets
     gPipeline.mRT = &gPipeline.mHeroProbeRT;
@@ -429,6 +476,7 @@ void LLHeroProbeManager::updateProbeFace(LLReflectionMap* probe, U32 face, bool 
         gGL.getTexUnit(diffuseChannel)->unbind(LLTexUnit::TT_TEXTURE);
         gReflectionMipProgram.unbind();
     }
+    return true;
 }
 
 // Separate out radiance generation as a separate stage.
@@ -458,7 +506,7 @@ void LLHeroProbeManager::generateRadiance(LLReflectionMap* probe)
 
             U32 res = mMipChain[0].getWidth();
 
-            for (int i = 0; i < mMipChain.size() / 4; ++i)
+            for (U32 i = 0; i < LLHeroProbeValidity::outputLevels(U32(mMipChain.size())); ++i)
             {
                 LL_PROFILE_GPU_ZONE("hero probe radiance gen");
                 static LLStaticHashedString sMipLevel("mipLevel");
@@ -501,7 +549,10 @@ void LLHeroProbeManager::generateRadiance(LLReflectionMap* probe)
 
 void LLHeroProbeManager::updateUniforms()
 {
-    if (!gPipeline.RenderMirrors)
+    mHeroData.heroProbeCount = 0;
+    if (!gPipeline.RenderMirrors || mReset || !mContents.ready ||
+        mNearestHero.isNull() || mNearestHero->isDead() || mContentsProbe != mNearestHero ||
+        gTeleportDisplay || gDisconnected)
     {
         return;
     }
@@ -579,6 +630,14 @@ void LLHeroProbeManager::initReflectionMaps()
             cleanup();
         }
 
+        const S32 resolution = gSavedSettings.getS32("RenderHeroProbeResolution");
+        if (resolution < 4 || !LLHeroProbeValidity::scratchLevels(U32(resolution)))
+        {
+            invalidateHeroContents();
+            LL_WARNS_ONCE("RenderInit") << "Hero probe resolution must be a power of two >= 4." << LL_ENDL;
+            return;
+        }
+        invalidateHeroContents();
         mReset = false;
         mReflectionProbeCount = count;
         mProbeResolution      = gSavedSettings.getS32("RenderHeroProbeResolution");
@@ -608,8 +667,7 @@ void LLHeroProbeManager::initReflectionMaps()
         mDefaultProbe->mRadius = 4096.f;
         mDefaultProbe->mProbeIndex = 0;
         touch_default_probe(mDefaultProbe);
-
-        mProbes.push_back(mDefaultProbe);
+        llassert(mProbes.size() == 1);
     }
 
     if (mVertexBuffer.isNull())
@@ -633,8 +691,16 @@ void LLHeroProbeManager::initReflectionMaps()
     }
 }
 
+void LLHeroProbeManager::invalidateHeroContents()
+{
+    mContents.invalidate();
+    mContentsProbe = nullptr;
+    mHeroData.heroProbeCount = 0;
+}
+
 void LLHeroProbeManager::cleanup()
 {
+    invalidateHeroContents();
     mVertexBuffer = nullptr;
     mRenderTarget.release();
 
@@ -649,6 +715,8 @@ void LLHeroProbeManager::cleanup()
 
 void LLHeroProbeManager::doOcclusion()
 {
+    if (!LLPipeline::RenderMirrors || mReset || mNearestHero.isNull() ||
+        mNearestHero->isDead() || gTeleportDisplay || gDisconnected) return;
     LLVector4a eye;
     eye.load3(LLViewerCamera::instance().getOrigin().mV);
 
@@ -663,6 +731,7 @@ void LLHeroProbeManager::doOcclusion()
 
 void LLHeroProbeManager::reset()
 {
+    invalidateHeroContents();
     mReset = true;
 }
 
@@ -691,6 +760,7 @@ void LLHeroProbeManager::unregisterViewerObject(LLVOVolume* drawablep)
     // If the unregistered object is mNearestHero, reset mNearestHero and mDefaultProbe->mViewerObject
     if (drawablep == mNearestHero)
     {
+        invalidateHeroContents();
         mNearestHero = nullptr;
         if (mDefaultProbe.notNull())
         {
