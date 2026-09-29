@@ -1709,11 +1709,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>4d1977305cb90344b3854f5716e2a09ef09494470af272e60ca2139423c3166e</string>
+              <string>76c3ed2a612f0e76a88becfc3effca90462102849bb02e8908fbf2ebc80ead32</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/26.3.0-devel-git.4c18bbc637-pkg1/mesazink-26.3.0-devel-git.4c18bbc637-pkg1-linux64.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/26.3.0-devel-git.4c18bbc637-pkg2/mesazink-26.3.0-devel-git.4c18bbc637-pkg2-linux64.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -1723,11 +1723,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>f047f7e53bc86a474084be5ac2f9d1a4821372872bfefb9b0415714426bb7d1c</string>
+              <string>30be90eff6b05977de8fae972321ec7c576412430de6e86c3ec01366f2fdceef</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/26.3.0-devel-git.4c18bbc637-pkg1/mesazink-26.3.0-devel-git.4c18bbc637-pkg1-windows64.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/26.3.0-devel-git.4c18bbc637-pkg2/mesazink-26.3.0-devel-git.4c18bbc637-pkg2-windows64.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -1740,7 +1740,7 @@
         <key>copyright</key>
         <string>Copyright (C) 1999-2007 Brian Paul. All Rights Reserved.</string>
         <key>version</key>
-        <string>26.3.0-devel-git.4c18bbc637-pkg1</string>
+        <string>26.3.0-devel-git.4c18bbc637-pkg2</string>
         <key>name</key>
         <string>mesazink</string>
         <key>canonical_repo</key>
