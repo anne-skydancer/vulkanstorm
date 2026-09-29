@@ -26,7 +26,7 @@ constexpr int GL_CULL_FACE = 1;
 struct LLGLDisable { explicit LLGLDisable(int) {} };
 struct Material { bool mDoubleSided=false; int binds=0; void bind(int){++binds;} };
 struct Mat : std::shared_ptr<Material> { using std::shared_ptr<Material>::shared_ptr; bool notNull()const{return bool(*this);} };
-struct LLDrawInfo { int id=0; int group=0; bool resident=true; bool mComputeBatch=false; Mat mGLTFMaterial; int mTexture=0; };
+struct LLDrawInfo { int id=0; int group=0; bool resident=true; bool direct=false; bool mComputeBatch=false; Mat mGLTFMaterial; int mTexture=0; };
 std::vector<int> rendered;
 std::vector<size_t> attempts;
 bool batch_success=true;
@@ -44,6 +44,17 @@ namespace LLComputeMesh {
  void submitRegistered(LLDrawInfo&,bool){assert(false);}
  bool compatibleBatch(const LLDrawInfo& a,const LLDrawInfo& b){return a.resident&&b.resident&&a.group==b.group;}
  bool drawBatch(const std::vector<LLDrawInfo*>& batch,Batch*){
+  if(!batch.front()->resident)return false;
+  attempts.push_back(batch.size());
+  if(!batch_success)return false;
+  for(auto* p:batch)rendered.push_back(p->id);
+  return true;
+ }
+}
+namespace LLMeshGeometry {
+ bool compatibleBatch(const LLDrawInfo& a,const LLDrawInfo& b){return a.direct&&b.direct&&a.group==b.group;}
+ bool drawBatch(const std::vector<LLDrawInfo*>& batch){
+  if(!batch.front()->direct)return false;
   attempts.push_back(batch.size());
   if(!batch_success)return false;
   for(auto* p:batch)rendered.push_back(p->id);
@@ -78,7 +89,8 @@ int main(){
  // A nonresident record and a material boundary must preserve submission order.
  records[258].resident=false;
  for(size_t i=260;i<records.size();++i)records[i].group=1;
- for(bool textured:{false,true})for(bool success:{false,true}){
+ for(bool direct:{false,true})for(bool textured:{false,true})for(bool success:{false,true}){
+  for(size_t i=0;i<records.size();++i){records[i].resident=!direct&&i!=258;records[i].direct=direct&&i!=258;}
   batch_success=success;rendered.clear();attempts.clear();
   setups=teardowns=models=material->binds=0;
   if(textured)LLRenderPass::pushGLTFBatches(0);

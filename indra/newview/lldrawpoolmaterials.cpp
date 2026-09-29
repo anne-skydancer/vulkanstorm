@@ -26,6 +26,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llmeshgeometry.h"
+#include "llcomputemesh.h"
 
 #include "lldrawpoolmaterials.h"
 #include "llviewershadermgr.h"
@@ -187,12 +189,21 @@ void LLDrawPoolMaterials::renderDeferred(S32 pass)
     U64 lastMeshId = 0;
     bool skipLastSkin = false;
 
+    std::vector<LLDrawInfo*> batch;
     for (LLCullResult::drawinfo_iterator i = begin; i != end; )
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_MATERIAL("materials draw loop");
         LLDrawInfo& params = **i;
 
         LLCullResult::increment_iterator(i, end);
+        batch.clear();
+        batch.push_back(&params);
+        while (i != end && batch.size() < 256 &&
+               (LLMeshGeometry::compatibleBatch(params, **i) || LLComputeMesh::compatibleBatch(params, **i)))
+        {
+            batch.push_back(*i);
+            LLCullResult::increment_iterator(i, end);
+        }
 
         if (specular > -1 && params.mSpecColor != lastSpecular)
         {
@@ -276,7 +287,7 @@ void LLDrawPoolMaterials::renderDeferred(S32 pass)
             params.mGroup->rebuildMesh();
         }*/
 
-        LLRenderPass::drawGeometry(params);
+        LLRenderPass::drawGeometryBatch(params, batch.size() > 1 ? &batch : nullptr);
 
         if (tex_setup)
         {

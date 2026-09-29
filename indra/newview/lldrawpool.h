@@ -354,6 +354,7 @@ public:
 
     // Draw the same resident LOD in color, shadow, alpha and replay passes.
     static void drawGeometry(LLDrawInfo& params);
+    static void drawGeometryBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch);
     static void applyModelMatrix(const LLDrawInfo& params);
     // For rendering that doesn't use LLDrawInfo for some reason
     static void applyModelMatrix(const LLMatrix4* model_matrix);
@@ -387,9 +388,9 @@ public:
 
     void pushMaskBatches(U32 type, bool texture = true, bool batch_textures = false);
     void pushRiggedMaskBatches(U32 type, bool texture = true, bool batch_textures = false);
-    void pushBatch(LLDrawInfo& params, bool texture, bool batch_textures = false);
-    void pushUntexturedBatch(LLDrawInfo& params);
-    void pushBumpBatch(LLDrawInfo& params, bool texture, bool batch_textures = false);
+    void pushBatch(LLDrawInfo& params, bool texture, bool batch_textures = false, const std::vector<LLDrawInfo*>* batch = nullptr);
+    void pushUntexturedBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch = nullptr);
+    void pushBumpBatch(LLDrawInfo& params, bool texture, bool batch_textures = false, const std::vector<LLDrawInfo*>* batch = nullptr);
     static bool uploadMatrixPalette(LLDrawInfo& params);
     // <FS:Beq> be defensive about UAF with skinInfo during LocalMesh
     // static bool uploadMatrixPalette(LLVOAvatar* avatar, LLMeshSkinInfo* skinInfo);
