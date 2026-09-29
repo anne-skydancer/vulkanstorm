@@ -1709,11 +1709,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>0342116e64910385547d67709491810810c20ca462c7f639b594e551d68c8bc5</string>
+              <string>65c5118324210b06a43c452d66f1b6fadcce61f6d2ea6223ebcf79b02e58c144</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/v26.3.0-devel/mesazink-26.3.0-devel-git.00e42c51b1-linux64-g00e42c51b1.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/26.3.0-devel/mesazink-26.3.0-devel-linux64.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -1723,11 +1723,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>18be8b19b8b3663bf5cef8df225753e62cc56be9</string>
+              <string>fe92b7df8b266784997b4b28fba9341a37987faa087fd9e5a63ae4f32f071740</string>
               <key>hash_algorithm</key>
-              <string>sha1</string>
+              <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/v26.3.0-devel/mesazink-26.3.0-devel-git.00e42c51b1-windows64-g00e42c51b1.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-mesazink/releases/download/26.3.0-devel/mesazink-26.3.0-devel-windows64.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -1740,13 +1740,13 @@
         <key>copyright</key>
         <string>Copyright (C) 1999-2007 Brian Paul. All Rights Reserved.</string>
         <key>version</key>
-        <string>26.3.0-devel-git.00e42c51b1</string>
+        <string>26.3.0-devel</string>
         <key>name</key>
         <string>mesazink</string>
         <key>canonical_repo</key>
         <string>https://github.com/anne-skydancer/3p-mesazink</string>
         <key>description</key>
-        <string>Mesa Zink Gallium driver for OpenGL-over-Vulkan (patched: AMD RX9000-series support, viewer crash-region fixes)</string>
+        <string>Mesa Zink OpenGL-over-Vulkan runtime with MSVC release, WGL loader initialization and defensive null-guard patches</string>
       </map>
       <key>soloud</key>
       <map>

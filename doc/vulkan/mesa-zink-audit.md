@@ -1,224 +1,307 @@
-# Mesa/Zink audit: redundancy, modernisation and hero-probe parity
+# Mesa/Zink: verified findings and implementation plan
 
-Audited 2026-09-29 against master `9a387f65b6` and the pinned package
-`mesazink 26.3.0-devel-git.00e42c51b1`. This is a read-only source audit:
-nothing was built, launched or measured for it. Statements marked
-*(inference)* are reasoning that still needs a measurement; everything else
-was verified in the viewer source, the Mesa source at the pinned commit, or
-the released package binaries.
+Revised 2026-09-29 after source review. The original audit targeted viewer
+`9a387f65b6`; the findings below were checked against current master
+`89db50a109` and local Mesa source pinned at
+`00e42c51b10d8e0769489156fa414f111897d515` with the package patches.
+The relevant feature-table and hero-manager code is unchanged between those
+viewer revisions. No viewer was built or benchmarked for this revision.
 
-## Summary
+This document replaces the original audit's performance estimates and ordering.
+**Verified** means supported by the inspected source. **Recorded** means reported
+by existing measurement notes, not reproduced here. **Candidate** means a proposed
+change whose correctness or benefit must still be demonstrated. Package release
+binary hashes have not been independently reproduced in this review.
 
-- Hero-probe changes alone cannot give Zink parity with the AMD OpenGL ICD.
-  The recorded gap (Zink about 20 presents/s, native about 34-38 on an
-  RX 9070 XT; see `doc/mesa-zink-inworld-observations.md`) was measured with
-  mirrors off, and with `RenderMirrors=0` the hero-probe code issues no GL
-  work at all.
-- Under Zink the viewer classifies the GPU vendor as `MISC`, so AMD
-  featuretable entries are not applied. Existing native-vs-Zink comparisons
-  therefore ran with different texture-upload settings.
-- On Windows, Mesa's kopper always presents with `IMMEDIATE`, and WGL emulates
-  vsync with a CPU sleep scaled by 1.75. These are the largest expected
-  presentation levers.
-- Master contains no development runtime hooks from the Zink work, but it
-  carries stale investigation documents, a re-applicable timing-hook patch
-  and some dead code. The Mesa package repository has stale source trees and
-  one ineffective patch.
+## Conclusions
 
-## 1. Redundancy and cruft
+- There are actionable hero-probe correctness and duplication defects. Fix these
+  before restructuring rendering or estimating speedups.
+- HDR hero intermediates and destination textures have different formats. Matching
+  them is a credible way to eliminate format-converting blits, subject to visual
+  validation and preservation of the non-HDR path.
+- The recorded native/Zink baseline used mirrors off and VSync off. Hero scene
+  rendering and WGL's nonzero-interval sleep do not explain that baseline.
+- Zink classification needs improvement for reliable diagnostics and deliberate
+  workaround selection. It does not establish different texture-upload settings:
+  Windows `list all` and `list AMD` both enable multithreaded texture uploads.
+- Reliable Mesa configuration and artifact assembly are immediate engineering
+  work. They prevent stale packages; they are not direct FPS optimizations.
+- Neither the CPU/GPU bottleneck nor the contribution of presentation has been
+  established. No percentage speedup or native/Zink parity is promised.
 
-### Viewer (master)
+## 1. Evidence and corrections
 
-`python scripts/tests/check_release_hooks.py` passes. The Tracy zones and
-memory-gate changes from `77698308ea` and `939919e9ff` were reverted by
-`bab6b573a2`. The checker scans only tracked `indra/` sources, so it does not
-cover `scripts/`, `tools/` or `doc/`.
+Source paths below are relative to this viewer repository unless prefixed with
+`Mesa:` or `Package:`. The latter refer to `C:/Dev/mz-src` and
+`C:/Dev/3p-mesazink` respectively. Function names are the durable references;
+line numbers from the earlier audit can drift.
 
-| Location | Finding | Recommendation |
+### Verified findings
+
+| ID | Finding and source | Consequence |
 |---|---|---|
-| `doc/mesa-*.md`, `doc/zink_performance_baseline.md` | Investigation logs that reference removed worktrees, branches and settings (`USE_TRACY_MEMORY`, `test_profiler_memory_gate.py`, `WGL_ZINK_FRAME_LATENCY`, the `-wglinit1` package id). None is linked from any index. | Fold still-valid facts (renderer identity, loader-patch rationale, measurement method) into one indexed note; move the logs to `vkstorm-devel`. |
-| `scripts/perf/notification-replay-clock.patch` | Development timing hook kept in patch form for re-application to `LLFrameTimer`/`LLAppViewer::doFrame`. Not compiled, but outside the checker's scope. | Move to `vkstorm-devel`. `tools/vulkan/diagnostic_replay_clock.h` can stay as test support. |
-| Other `scripts/perf` harnesses | Standalone tools, not compiled into the viewer; their unit tests pass. | Permitted by `AGENTS.md`. |
-| `indra/newview/llappviewerwin32.cpp:50` | Unused `llvkprobe.h` include; the comment at `:1231-1235` says Zink is not gated on `LLVKProbe`. | Remove. |
-| `llcomputelod.cpp:177`, `llparticlecompute.cpp:154`, `pipeline.cpp:919, 8115` | `#if LL_WINDOWS && !LL_MESA`; `LL_MESA` is never defined. | Simplify to `#if LL_WINDOWS`. |
-| `llwindowmesaheadless.*`, `LL_MESA_HEADLESS` guards, `BUILD_HEADLESS` | 2011-era OSMesa headless path; never built and unrelated to Zink. | Remove only in a deliberate upstream-divergence cleanup. |
-| `autobuild.xml` `mesa` 7.11.1 | Nothing calls `use_prebuilt_binary(mesa)`. | Remove, or keep only for upstream parity. |
-| `llappviewer.cpp:3787-3819` | Comments claim Vulkan-device validation that does not happen; logs "Render backend: Zink" even when the Mesa load failed and native GL is running. | Have `selectGLBackend()` return the effective provider and log that. |
-| `llfloaterpreference.cpp`, `llvkdialogs.cpp`, `llvkwindowmgr.cpp`, `llappviewer.cpp` | The `RenderBackend` "not Vulkan/Zink means OpenGL" normalisation is repeated 7+ times, with inconsistent defaults and case handling. | One shared backend enum with parse/normalise. |
-| `Copy3rdPartyLibs.cmake`, `newview/CMakeLists.txt`, `viewer_manifest.py` | Mesa file names and runtime directory hard-coded in 4+ places despite `MESAZINK_RUNTIME_DIR`/`MESAZINK_RUNTIME_FILES`. Windows stages a flat Mesa `opengl32.dll` in `sharedlibs/<cfg>/`. | Use the CMake variables; stage into a `mesa/` subdirectory. |
-| `llappviewerwin32.cpp:1244-1247` | `MESA_LOADER_DRIVER_OVERRIDE` is not read by the WGL build. | Drop it on Windows; keep `GALLIUM_DRIVER`. |
-| `llappviewerwin32.cpp:1254-1263` | `SetDllDirectoryW(mesa_dir)` is left set process-wide after a successful load. | Use `LoadLibraryExW` with `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` instead, or reset immediately. |
-| `llappviewerwin32.cpp` vs `lllinuxzink.h` | Windows sets environment only if absent and never restores it; Linux overwrites and restores. | Use one policy on both platforms. |
-| `llfloaterpreference.cpp:4042-4055` | The Zink option is offered on macOS and on `USE_MESAZINK=OFF` builds. | Gate it on the runtime files being present. |
-| `viewer_manifest.py` (Windows) | `mesazink.txt` licence is staged on Linux only. | Stage it on Windows too. |
-| `scripts/configure_firestorm.sh:104, 557` | `--zink` described as Windows-only. | Update the text. |
-| Repository root `RenderDoc/` | Untracked, not ignored capture files. | Move out of the repository or ignore. |
+| F1 | `LLHeroProbeManager::generateRadiance()` in `indra/newview/llheroprobemanager.cpp` writes `mMipChain.size()/4` output levels. At resolution 1024 that is levels 0-1. `updateUniforms()` supplies `heroMipCount=10`; `class3/deferred/reflectionProbeF.glsl::tapHeroProbe()` requests `(1-glossiness)*heroMipCount`. | Unwritten output levels can contribute. Glossiness 0.85 requests LOD 1.5 with a nonzero hero weight. This is a correctness defect; its visible manifestation has not been reproduced. |
+| F2 | `initReflectionMaps()` inserts the same default probe twice on initial allocation. `LLPipeline::doOcclusion()` has two blocks calling the hero manager. | Redundant traversal, GL state work and potentially query polling. `LLReflectionMap::doOcclusion()` can return without issuing a query, so a fixed number of saved submissions is not guaranteed. |
+| F3 | Hero `mMipChain` uses RGBA16F with HDR enabled; `LLCubeMapArray::allocate()` uses R11F_G11F_B10F for the three-component HDR cube. Mesa `zink_blit.c::try_copy_region()` and `blit_native()` reject the relevant conversion/mask combination. | The format-converting path requires a blitter fallback. Matching formats removes this obstacle to fast copies; actual command selection and savings need capture evidence. |
+| F4 | The hero cube allocation reserves four cubes; the inspected path uses output index 0 and scratch index 3. | Approximately 128 MiB at 1024, or 512 MiB at 2048, for the full HDR cube mip allocation alone. Two-cube storage could roughly halve that allocation. These are calculated texel sizes, not measured VRAM residency. |
+| F5 | `indra/llrender/llgl.cpp` classifies vendor strings; Mesa can become `MISC`, bypassing native AMD/NVIDIA branches. Linux also checks the renderer for Intel. `llappviewer.cpp` logs a requested Zink backend even after a Windows preload fallback. | Separate requested backend, loaded provider and actual context identity. Do not automatically apply native driver workarounds to Zink. |
+| F6 | `Package: build.py::build_mesa()` runs Meson setup only if `build.ninja` is absent. `assemble()` copies only when the destination timestamp is older. | Changed requested options or newer stale destination files can survive a build/package run. |
+| F7 | `Mesa: zink_kopper.c::zink_kopper_set_present_mode_for_interval()` forces IMMEDIATE on Windows. `stw_framebuffer.c::wait_swap_interval()` uses a 1.75 multiplier, and its caller skips it for interval zero. | Genuine VSync/pacing work, but not an explanation for an interval-zero benchmark. |
+| F8 | `Mesa: meson.build` disables Mesa's shader cache on Windows. `zink_screen.c` disables EDS2, dependent dynamic-state features and push descriptors for the proprietary AMD path. | Existing limitations/workarounds, not permission to enable features blindly. This does not mean all driver or in-memory caching is absent. |
 
-### Mesa package (`3p-mesazink`)
+F1 also requires checking resource initialization: allocation uses null texel data,
+and staggered face updates precede radiance generation. Do not assume every scratch
+face is valid after allocation, reset or changing the selected probe. This is an
+implementation dependency to resolve, not a separately measured visual defect.
 
-- The pinned Windows release is byte-identical to the build in the local
-  `mz-src`/`mz-package` trees (Mesa `00e42c51b1` plus all three patches), not
-  to `3p-mesazink/mesa-src`. That tree sits on the abandoned `3e2092a295`
-  bump with only two patches applied; its `build/` output, the
-  `3e2092a295` tarball, `package-results.json` and a pre-loader-patch
-  `00e42c51b1` tarball are stale.
-- The release carries two Windows assets with identical DLLs and different
-  archive hashes.
-- `build.py` does not reconfigure Meson when options change and copies
-  artifacts only when the destination looks older, so stale DLLs can be
-  packaged. Only Linux has CI; the Windows package is built by hand. The
-  version string is duplicated in the Linux workflow.
-- The `autobuild.xml` description mentions an RX 9000-series patch that does
-  not exist, and the null-guards patch header still says "PATCH 2/2".
+### Corrections to the original audit
 
-| Patch | Assessment |
+| Earlier assertion | Corrected assessment |
 |---|---|
-| `mesa-msvc-release.patch` | Needed: with `NDEBUG`, an assert-only variable in `vtn_cmat.c` trips MSVC warning-as-error C4189. Not fixed upstream; worth upstreaming. |
-| `mesa-wgl-loader-init.patch` | Correct (zero-initialises `kopper_loader_info`); no functional effect on the AMD configuration. Not fixed upstream; worth upstreaming. |
-| `mesa-zink-null-guards.patch` | Ineffective: every guard is unreachable or its callers already check for NULL. The real crash fix is upstream `3fe13b1c074` ("zink: don't draw or dispatch with a null pipeline"), which is not in the pin. Drop the patch and pick up that commit. |
+| Missing AMD classification proves different texture-upload settings. | Incorrect deduction. `featuretable.txt` enables `RenderGLMultiThreadedTextures` in both `list all` and `list AMD`. Compare actual effective settings. |
+| WGL's CPU sleep is a leading fix for the recorded uncapped gap. | Unsupported: the recorded run had VSync off, and the sleep is conditional on a nonzero interval. |
+| Six clears imply six blocking swapchain acquisitions. | Incorrect. `zink_kopper.c` returns immediately when the required image is already acquired/acquiring. A call into acquisition handling is not necessarily a new acquisition or a wait. |
+| Forty-two copies imply 84 extra render-pass boundaries. | Not established from source counts. Batching, deferred clears and driver state determine actual boundaries. |
+| Mirrors off means absolutely no hero-related GL work. | Too broad. `update()` and `renderProbes()` return early, but the duplicate pipeline occlusion setup is not guarded by `RenderMirrors`. Check retained probe state and toggle/reset behavior. Hero scene/filter optimization still does not explain the mirrors-off baseline. |
+| All proposed changes are neutral or beneficial on native GL. | Unproven. Format precision, filtering, resource hazards and temporal updates need visual and timing checks on both backends. |
+| A vkcube result uniquely attributes Composed Flip to AMD or Zink. | It narrows hypotheses. Window state, compositor policy and application differences prevent that attribution from one comparison. |
+| Upstream `3fe13b1c074` is the historical viewer crash fix; drop all null guards. | The commit exists and is absent from the pin; it guards failed Vulkan pipelines. Matching the historical crash and proving each older guard redundant are separate tasks. |
+| Hero optimizations remove most of the penalty or preserve a fixed mirrors-off performance ratio. | Neither follows from the available evidence. CPU/GPU overlap and the limiting stage can change. |
 
-The Windows build is lean and optimised: release, `-O2`, asserts compiled
-out, Zink as the only Gallium driver, no LLVM. LTO is off because Mesa
-rejects it without `allow-broken-lto`.
+### Conditional work counts
 
-## 2. Modernisation
+For resolution 1024 and update rate 2, when an eligible, non-occluded hero probe
+actually renders, the current loops update three faces, perform six blur draws,
+30 mip-chain draws and 12 radiance draws, and issue 42 cube copies. These describe
+the current implementation before F1 is fixed. They are not unconditional
+per-frame costs or a predicted saving. Scene/shadow work depends on the active
+rendering configuration. The update-rate setting selects 6/rate faces, using rates
+1, 2, 3 or 6; its description should reflect that.
 
-1. **Classify Zink explicitly in the viewer.** The Zink GL vendor string is
-   "Mesa", so `llgl.cpp:1178-1206` sets `mGLVendorShort = "MISC"` and
-   `mIsAMD`/`mIsNVIDIA` stay false on every GPU. The featuretable `list AMD`
-   (`RenderGLMultiThreadedTextures 1`) and the NVIDIA upload-fence path in
-   `llimagegl.cpp` are never applied under Zink. On Linux, the renderer-string
-   check can set `mIsIntel`. Add an explicit Zink flag, record the underlying
-   Vulkan vendor separately, and decide each vendor workaround for Zink
-   deliberately, for example with a `list Zink` featuretable entry.
-2. **Hook up the Windows present mode in kopper.**
-   `zink_kopper_set_present_mode_for_interval` (`zink_kopper.c:36-38`) forces
-   `VK_PRESENT_MODE_IMMEDIATE_KHR` under `DETECT_OS_WINDOWS` ("not hooked up
-   yet"). With a non-zero swap interval, `stw_framebuffer_swap_locked`
-   (`stw_framebuffer.c:708-762`) sleeps on the CPU before presenting, scaled by
-   a 1.75 fudge factor, then presents without vsync. Map interval 1 to FIFO (or
-   `FIFO_LATEST_READY`), skip `wait_swap_interval` for Zink, and route
-   `wglSwapIntervalEXT` to `zink_kopper_set_swap_interval`. This is a small
-   local Mesa patch and still unchanged on upstream main.
-3. **Determine why Zink gets Composed Flip.** Zink presents through a real
-   `VkSwapchainKHR` on the window (`VK_KHR_win32_surface`); no GDI or DXGI
-   path is involved. It requests 2 images, opaque alpha, and extra usage flags
-   (`SAMPLED`, `INPUT_ATTACHMENT`, `TRANSFER_SRC`), with no full-screen-exclusive
-   chaining. Run `vkcube --present_mode 0` in the same window state under
-   PresentMon. If it is also Composed Flip, the policy is in the AMD Vulkan
-   ICD: try chaining `VkSurfaceFullScreenExclusiveInfoEXT`. If it gets
-   Independent Flip, the cause is Zink-specific: try reduced usage flags and
-   3 images. *(inference)*
-4. **Rebase Mesa** to current main or the 26.3 branch point to pick up
-   `3fe13b1c074`; keep the msvc and loader-init patches, drop null-guards.
-5. **Build hygiene:** track Meson options in the checkout marker (or always
-   reconfigure), copy artifacts unconditionally, set `-Dvideo-codecs=` on
-   Windows, single-source the version string, add a Windows CI job, and
-   consolidate onto one Mesa source tree.
-6. **Known limits needing Mesa work:** the Mesa shader cache is disabled on
-   Windows (`meson.build:1254-1256`); Zink disables EDS2 (and so EDS3 and
-   vertex-input dynamic state) and push descriptors on AMD's proprietary
-   driver (`zink_screen.c:2984, 3186`); Zink has no `VK_EXT_descriptor_heap`,
-   present-wait or full-screen-exclusive support. Measure before pursuing.
+The clears in `LLViewerWindow::cubeSnapshot()` and the cube-display path are
+candidates for removal, not yet proven redundant. Trace framebuffer ownership and
+later color/depth consumers before deleting them.
 
-## 3. Hero probes
+### Package provenance and maintenance
 
-### Gating
+Local source markers identify `mz-src` as the pinned revision and
+`3p-mesazink/mesa-src` as `3e2092a295...`. This establishes different local source
+states, not which released archive contains which DLLs. Record archive and payload
+hashes before making byte-identity claims or removing old artifacts.
 
-With `RenderMirrors=0` (the default at every featuretable level),
-`LLHeroProbeManager::update()` and `renderProbes()` return early, the hero
-render target is not allocated, `HERO_PROBES` is not defined in shaders, and
-uniform/texture binding is skipped. Hero-probe optimisation therefore cannot
-affect the mirrors-off measurements.
+Retain the MSVC release and WGL loader-initialization patches while validating
+package changes. The loader patch initializes optional kopper data and the initial
+swap interval; do not claim it has no possible effect on AMD. Retain null guards
+until a call-path review establishes their redundancy. Evaluate the upstream
+null-pipeline fix separately rather than rebasing Mesa as part of build hygiene.
 
-### Per-frame cost with mirrors on
+The release-hook checker passed during review. Its scope does not prove the
+absence of every conceivable development hook. Historical documents, standalone
+tools and unapplied patches are not runtime overhead. Preserve useful evidence;
+index or mark historical material instead of moving it between branches merely
+for performance cleanup. Unused includes, old headless code, duplicate backend
+parsing and staging names are maintenance work, outside the critical path.
 
-`RenderHeroProbeUpdateRate` means faces per frame = 6 / rate (clamped); the
-`settings.xml` description is wrong. At the defaults (resolution 1024,
-rate 2) each frame performs:
+## 2. Implementation plan
 
-- 3 full deferred scene renders at probe resolution, each with a full cull at
-  main draw distance and no mirror clip plane;
-- 6 extra sun-shadow cascade renders (2 per face);
-- 6 blur draws, 30 mip-chain draws and 12 radiance draws;
-- 42 `glCopyTexSubImage3D` calls into the cube array;
-- 6 stray clears of the default framebuffer.
+This is an implementation specification, not a claim that the work is completed.
+Each numbered item should be independently reviewable and committed with its
+validation results. Start viewer implementation on a feature branch based on
+`vkstorm-devel`, auditing that branch's current code before applying these findings.
+Keep `master` and `vkstorm-devel` separate; use a reviewed PR for production changes,
+excluding development-only instrumentation. Mesa package changes belong in the
+separate `3p-mesazink` repository and receive their own commits and release identity.
 
-Resources: the cube array is an R11F_G11F_B10F mutable allocation of 4 cubes
-(24 layers, about 134 MB at 1024, 537 MB at 2048), of which only cube 0
-(output) and cube 3 (scratch) are used. `mMipChain` is ten separate RGBA16F
-2D targets; `mRenderTarget` carries an unneeded depth buffer.
+### P0 — Do now: correctness and duplicated work
 
-### Zink-specific costs
+#### P0.1 — Define and enforce valid hero-probe mip sampling
 
-1. **Copies become blitter draws.** `st_CopyTexSubImage` calls `pipe->blit`.
-   The formats differ (RGBA16F to R11F_G11F_B10F), so `try_copy_region`
-   fails; `blit_native` fails on the RGB/RGBA mask mismatch; the fallback is
-   `util_blitter_blit`, which saves state, switches framebuffer, draws and
-   restores. That is about two extra render-pass boundaries per copy, around
-   84 per frame. Zink barriers cover every mip and layer of a resource, so
-   each copy transitions the whole cube array. The regular probe manager
-   copies R11F_G11F_B10F to R11F_G11F_B10F and takes the `vkCmdCopyImage`
-   path.
-2. **Stray default-framebuffer clears.** `llviewerwindow.cpp:6697` (and,
-   *(inference)*, `llviewerdisplay.cpp:2216`) clear FBO 0 because the
-   preceding `LLRenderTarget::flush` restored it. Zink defers the clear and
-   flushes it on the next framebuffer change through
-   `zink_kopper_acquire(UINT64_MAX)`: a blocking swapchain acquire plus a
-   clear-only render pass, up to 6 times per frame.
-3. **Same-frame occlusion polling.** The default hero probe is pushed into
-   `mProbes` twice (`llheroprobemanager.cpp:598, 612`), and `doOcclusion` is
-   called from two blocks in `pipeline.cpp` (`:2849, 2869`). A query issued and
-   polled in the same frame goes through `tc_get_query_result` (threaded
-   context sync) to `zink_get_query_result`, which performs a mid-frame
-   submit. This extends the duplicate-call note in `gl-core-zink-audit.md`.
-4. **Extra scene renders** multiply Zink's per-draw overhead, including the
-   redundant texture binds from `LLTexUnit::bindFast`. *(inference)*
+Scope: `llheroprobemanager.{h,cpp}`, `reflectionProbeF.glsl` and, if required,
+the hero uniform layout and radiance shader interface.
 
-### Candidates, in priority order
+1. Establish one explicit contract for the sampling LOD scale, maximum usable
+   output LOD, generated output-level count and scratch filtering levels.
+   Derive counts from the configured resolution; do not hard-code 1024.
+2. Preserve the existing glossiness-to-LOD mapping initially. Generate every
+   output level needed by its nonzero hero contribution, including the upper
+   neighbor used by fractional LOD filtering. At 1024, the current mapping needs
+   output levels through 3 to cover values approaching LOD 2.5. Confirm this
+   against the actual sampler state before implementing the count calculation.
+3. Explicitly bound shader reads to valid generated output data. Do not simply
+   lower the shared cube texture's maximum mip level: scratch and output currently
+   occupy the same texture and the radiance filter needs deeper scratch levels.
+   A new roughness mapping is a separate visual change, not the default fix.
+4. Track scratch-face readiness across allocation/reset/probe changes. Until a
+   complete valid source and output are ready, retain ordinary reflection-probe
+   shading rather than expose undefined hero data. Invalidate readiness when its
+   resource or probe identity changes; avoid synchronous GPU readback.
+5. Keep CPU responsibilities limited to counts, readiness and scheduling. Scene
+   rendering, filtering and radiance generation remain GPU work.
 
-All are viewer-side and expected to be neutral or positive on native GL.
+Acceptance: every contributing output sample addresses initialized data at each
+supported resolution/rate; startup, relog, teleport, probe switching, mirror
+on/off and resolution changes show no undefined flashes or missing ordinary
+reflections. Check smooth roughness transitions, HDR and non-HDR on native GL and
+Zink. Add a focused test of count/LOD boundaries. More generated levels can cost
+extra GPU time: record that correctness cost before subsequent optimization.
 
-| # | Change | Expected effect | Risk |
-|---|---|---|---|
-| 1 | Allocate `mMipChain` as `GL_R11F_G11F_B10F` (`llheroprobemanager.cpp:122`), as the regular manager does | 42 copies per frame move from blitter draws to `vkCmdCopyImage` | Low |
-| 2 | Remove the stray default-framebuffer clears in cube snapshots (confirm nothing reads window depth; similar clears at `llviewerwindow.cpp:6206, 6552`) | Removes up to 6 swapchain acquires and clear passes per frame | Low |
-| 3 | Push the default probe once; drop the second hero `doOcclusion` block or skip polling a query issued this frame | Removes a threaded-context sync and mid-frame submit | Low |
-| 4 | Replace radiance mip 0 (identity sample) with one `glCopyImageSubData` over 6 layers | 6 draws and 6 copies become one copy | Low-medium |
-| 5 | Render the mip chain and radiance directly into the cube array (MRT or per-layer attachments); split scratch and output into separate textures, dropping unused cubes 1 and 2 | Removes all copies and their whole-image transitions; halves cube-array memory | Medium |
-| 6 | Update only faces the mirror can see, pass the mirror plane as the user clip plane, share one sun-shadow set per frame | About 30-50% fewer face renders on both drivers *(inference)* | Medium |
-| 7 | Run `generateRadiance` only for faces updated this frame | Up to half the radiance work | Low |
-| 8 | Trim unused tiny mips; drop the `mRenderTarget` depth buffer; `glInvalidateFramebuffer` on hero scratch; `glTexStorage3D` for the cube array | Small | Low |
+#### P0.2 — Remove duplication and make mirror gating explicit
 
-Also found: `RenderHeroProbeConservativeUpdateMultiplier` and
-`RenderHeroProbeDistance` are read but have no effect, and `cubeFaces[6]` in
-`llheroprobemanager.cpp` is unused. Only radiance mips 0-1 of the output cube
-are written, yet `reflectionProbeF.glsl:723` can sample up to LOD 2.5, reading
-unwritten mips with small weights. *(inference; needs visual confirmation)*
+Scope: `llheroprobemanager.cpp`, `pipeline.cpp`, and the update-rate description.
 
-### Parity assessment
+- Keep exactly one default-probe insertion and one hero-occlusion scheduling site;
+  retain the ordinary reflection-manager occlusion pass.
+- Ensure initialization, repeated initialization and reset preserve uniqueness.
+- Guard hero-only work when mirrors are disabled; remove the duplicate GL setup
+  block without removing state needed by ordinary probe occlusion.
+- Preserve nonblocking availability checks. If multiple legitimate callers can
+  still poll a newly issued query in the same frame, add a scoped frame guard;
+  do not change the shared query machinery without evidence it is needed.
+- Correct the setting description to explain faces per frame and the valid rates.
 
-Candidates 1-7 can plausibly remove most of the Zink-only hero penalty with
-mirrors on, but mirrors-on performance would then track the mirrors-off ratio
-rather than reach parity. Parity depends on the base path: vendor
-classification, presentation mode and flip model, redundant texture binds,
-shadow and terrain passes, and end-of-frame synchronisation.
+Acceptance: one default entry through reset cycles; at most one intended hero
+occlusion pass; ordinary probe culling unchanged; mirrors re-enable correctly.
+Observe actual query submissions when assessing the gain rather than assuming a
+fixed saving. Use existing diagnostics or development-only capture instrumentation.
 
-The regular reflection-probe manager, active in the mirrors-off baseline,
-uses the same per-mip copy and radiance/irradiance loops
-(`llreflectionmapmanager.cpp:900-1032`). Candidates 2 and 5 applied there
-could move the measured gap.
+### P1 — Do: trustworthy backend identity and Mesa builds
 
-## Recommended order
+#### P1.1 — Record the backend that actually runs
 
-1. Add explicit Zink vendor classification.
-2. Re-measure native and Zink with matched effective settings.
-3. Patch the Windows present mode and vsync sleep in Mesa.
-4. Run the `vkcube` flip-model test.
-5. Apply hero candidates 1-3 and reflection-probe candidates 2 and 5.
-6. Measure per-pass GPU time and Zink render-pass counts
-   (`ZINK_QUERY_RENDER_PASSES`) with mirrors on and off.
+Scope: `llappviewerwin32.cpp`, corresponding application declarations,
+`llappviewer.cpp`, `llgl.{h,cpp}`, and Linux backend initialization as needed.
 
-Follow the measurement rules in `doc/mesa-zink-performance-archive-review.md`:
-one change at a time, matched scenes, frame-time distributions, and visual
-qualification of probes, water and transparency before accepting a change.
+- Carry requested backend, loaded GL provider and fallback reason separately.
+  After context creation, log actual GL vendor, renderer and version once.
+- Detect Zink from the actual context identity, not just the saved preference or
+  successful Mesa preload. Environment overrides can select another driver.
+- Keep translation-backend identity separate from native vendor flags. Record the
+  underlying GPU only when its identity is reliable; use unknown otherwise. Do
+  not mistake the first independently enumerated Vulkan device for Mesa's device.
+- Record effective upload-threading, mirror, HDR and swap-interval settings needed
+  for comparisons. Distinguish requested interval from a successfully applied or
+  queried interval. Avoid per-frame logging.
+- Preserve current feature behavior. Introduce a Zink-specific feature-table rule
+  only when an independently justified rule exists.
+
+Acceptance: native, Zink, missing-runtime fallback and environment-override cases
+report the actual provider/context without contradictory backend messages. Verify
+Windows and Linux behavior; do not silently change user settings or vendor quirks.
+
+#### P1.2 — Make Mesa configuration and package assembly reliable
+
+Scope: `Package: build.py`, package metadata and Windows/Linux CI workflows.
+Can proceed independently of P0 and P1.1. Keep the current Mesa pin and patches for
+this step so build reliability is not mixed with a driver update.
+
+- Reconfigure an existing compatible Meson build with the requested options on
+  every build invocation, or compare a complete configuration fingerprint first.
+  Include source/patch identity, build options and toolchain identity; incompatible
+  changes require a fresh build directory rather than reusing old object files.
+- Copy expected DLLs and licenses unconditionally after a successful build and
+  fail if any required artifact is missing. Never package after a failed build.
+- Emit provenance containing source revision, patch hashes, effective options,
+  compiler/tool versions and payload hashes. Single-source package version data.
+- Add a Windows build/package job alongside Linux. Check archive contents and
+  licenses; use a Windows Zink smoke test on a suitable GPU runner when available,
+  clearly distinguishing packaging success from rendering validation.
+- Test changed options, a newer stale destination DLL, missing artifacts, failed
+  compilation and repeated unchanged builds. These are the failure modes to cover.
+- Give new package contents a distinct release identity; update the viewer's pin
+  only after both platform packages pass their checks. Do not overwrite an old
+  release asset or delete local source/build trees as part of this change.
+
+Acceptance: requested and effective configuration agree; packaged payload hashes
+match the successful build outputs even when old destination timestamps are newer;
+failed builds cannot publish packages. Inventory/license checks pass on both
+platforms. Windows runtime qualification must be explicit if CI lacks a GPU.
+
+### P2 — Validate and implement targeted optimizations
+
+Begin after P0 establishes the intended output. Use separate commits/measurements
+for each item; P0's new mip counts supersede the earlier 42-copy estimate.
+
+| Order | Work and dependencies | Acceptance |
+|---|---|---|
+| P2.1 | Match hero intermediate formats to their destination, following the ordinary probe path where appropriate. Preserve HDR/non-HDR behavior; inspect alpha consumers and precision before choosing formats. | Capture confirms conversion blits disappear on the intended path; bright/dim reflections, roughness transitions and cube seams remain correct on both backends. |
+| P2.2 | Trace cube-snapshot framebuffer bindings and depth/color lifetimes; remove only clears whose results are unused. Inspect ordinary probes as well because they run with mirrors off. | No depth/culling/UI regression; fewer unnecessary clear/render-pass operations. Measure actual acquire waits independently. |
+| P2.3 | Replace radiance level-zero rendering with a six-layer image copy if the shader operation is equivalent. Verify cube orientation, dimensions, compatible formats, clamping and destination offsets. | Image comparison demonstrates equivalence; capture shows removed draws/copies. Retain the shader path until equivalence is established. |
+| P2.4 | Replace four-cube allocation with explicit output/scratch indices for two cubes, after auditing all users. Do not combine this with direct rendering into layers yet. | No stale hard-coded indices; reset/switch behavior passes; calculated allocation and observed resource sizes confirm the reduction. |
+
+No optimization becomes a permanent user debug opt-in. Once qualified, it replaces
+the redundant path for applicable configurations; retain only necessary capability
+or format compatibility handling. Do not raise the viewer's GL contract for these
+changes.
+
+### P3 — Deferred engineering and experiments
+
+- Direct layer rendering and separate scratch/output textures: potentially remove
+  copies, but first design attachment lifetimes and avoid framebuffer/texture
+  feedback. Use explicit resource boundaries rather than assuming barriers cure
+  illegal feedback.
+- Face selection, clip planes and shadow reuse: prove reflected-view coverage and
+  shadow validity before reducing work. No percentage saving is established.
+- Radiance updates for only changed faces: account for cross-face filtering and
+  source mip dependencies; no unconditional half-work claim.
+- Windows VSync: separate feature work. Query supported present modes, use FIFO
+  where appropriate, and use FIFO_LATEST_READY only with required support enabled.
+  Handle interval changes, swapchain recreation and removal of duplicate CPU pacing.
+  Validate tearing, latency and frame pacing; this is not the uncapped baseline fix.
+- Presentation experiments: collect wait/queue evidence before varying swapchain
+  image counts, usage flags or fullscreen-exclusive behavior. vkcube is comparative
+  evidence, not proof of driver blame.
+- Mesa null-pipeline fix: inspect/backport and qualify independently. Do not remove
+  existing guards or rebase Mesa wholesale without reviewing the affected paths.
+- Shader cache, descriptor features and Mesa LTO: pursue only with evidence of the
+  relevant bottleneck and a supported configuration. Viewer development LTO remains
+  enabled; that is separate from enabling Mesa's allow-broken-lto option.
+- Loader search-path cleanup, environment policy, license staging, old guards and
+  backend parsing: separate maintenance changes with targeted platform checks.
+  Resetting DLL search state must account for delayed dependency loading.
+
+## 3. Validation and integration gates
+
+Before behavioral changes, preserve the baseline commit, package payload hashes,
+GPU/driver identity and effective settings. Follow the existing
+[measurement rules](../mesa-zink-performance-archive-review.md) and retain the
+[recorded observations](../mesa-zink-inworld-observations.md) as historical evidence.
+The matched Midday records were about 34.04 native versus 20.09 Zink presents/s;
+they are not a universal backend ratio or a freshly measured result.
+
+For each rendering change, compare native GL and Zink in both mirrors-off and
+mirrors-on scenes. Hold camera, draw distance, resolution, HDR, shadows, upload
+settings, VSync and frame limiting constant; separate warm steady-state runs from
+loading/compilation. Record repeated frame-time distributions, CPU preparation
+and submission time, GPU scene/filter time, and waits. Read GPU timestamps
+asynchronously from completed frames so measurement does not introduce a new stall.
+Gallium's Zink render-pass counter requires appropriate driver instrumentation; it
+is not a portable OpenGL query token.
+
+Shaders execute on the GPU; culling, scheduling and submission include CPU work.
+Only paired timings can identify the limiting stage. Report visual correctness,
+operation/resource changes and measured timings separately. Reject visual
+regressions even when a benchmark improves.
+
+Build viewer candidates through Autobuild as fully staged RelWithDebInfo viewers,
+with the development channel, Tracy and viewer LTO enabled, otherwise matching the
+Release dependency/feature configuration. Include libraries, plugins, shaders and
+assets; generate no installer. Keep new profiling probes in development only.
+Before a master PR, audit the diff for inherited development infrastructure and run
+`scripts/tests/check_release_hooks.py`. Do not merge master into vkstorm-devel.
+
+Completion order: **P0.1, P0.2, P1.1, P1.2**, then P2 changes individually.
+P1.2 can run in parallel in its separate repository. Stop an individual speculative
+optimization if validation fails; continue independent correctness/reliability work.
+
+## References
+
+- [Hero manager](../../indra/newview/llheroprobemanager.cpp)
+- [Hero sampling shader](../../indra/newview/app_settings/shaders/class3/deferred/reflectionProbeF.glsl)
+- [Radiance generation shader](../../indra/newview/app_settings/shaders/class1/interface/radianceGenF.glsl)
+- [Cube-array allocation](../../indra/llrender/llcubemaparray.cpp)
+- [Pipeline occlusion](../../indra/newview/pipeline.cpp)
+- [Probe query handling](../../indra/newview/llreflectionmap.cpp)
+- [Windows feature table](../../indra/newview/featuretable.txt)
+- [Khronos: FIFO latest-ready capability](https://docs.vulkan.org/refpages/latest/refpages/source/VkPhysicalDevicePresentModeFifoLatestReadyFeaturesKHR.html)
+- [Microsoft: presentation and Independent Flip](https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/for-best-performance--use-dxgi-flip-model)
