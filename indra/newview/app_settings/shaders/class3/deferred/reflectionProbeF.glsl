@@ -697,6 +697,8 @@ uniform samplerCubeArray   heroProbes;
 
 void tapHeroProbe(inout vec3 glossenv, vec3 pos, vec3 norm, float glossiness)
 {
+    if (heroProbeCount <= 0) return;
+
     float clipDist = dot(pos.xyz, clipPlane.xyz) + clipPlane.w;
     float w = 0;
     float dw = 0;
@@ -719,8 +721,12 @@ void tapHeroProbe(inout vec3 glossenv, vec3 pos, vec3 norm, float glossiness)
     clipDist = clipDist * 0.95 + 0.05;
     clipDist = clamp(clipDist * falloffMult, 0, 1);
     w = clamp(w * falloffMult * clipDist, 0, 1);
-    w = mix(0, w, clamp(glossiness - 0.75, 0, 1) * 4); // We only generate a quarter of the mips for the hero probes.  Linearly interpolate between normal probes and hero probes based upon glossiness.
-    glossenv = mix(glossenv, textureLod(heroProbes, vec4(env_mat * refnormpersp, 0), (1.0-glossiness)*heroMipCount).xyz, w);
+    w *= clamp((glossiness - 0.75) * 4.0, 0.0, 1.0);
+    if (w <= 0.0) return;
+    // Match LLHeroProbeValidity::outputLevels, including fractional-LOD's upper neighbor.
+    float maxHeroLod = min(float(heroMipCount - 1), ceil(float(heroMipCount) / 4.0));
+    float heroLod = clamp((1.0 - glossiness) * float(heroMipCount), 0.0, maxHeroLod);
+    glossenv = mix(glossenv, textureLod(heroProbes, vec4(env_mat * refnormpersp, 0), heroLod).xyz, w);
 }
 
 #else

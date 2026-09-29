@@ -31,6 +31,7 @@
 #include "llcubemaparray.h"
 #include "llcubemap.h"
 #include "lldrawable.h"
+#include "llheroprobevalidity.h"
 
 class LLSpatialGroup;
 class LLViewerObject;
@@ -89,7 +90,7 @@ public:
 
     LLVector3 mMirrorPosition;
     LLVector3     mMirrorNormal;
-    HeroProbeData mHeroData;
+    HeroProbeData mHeroData{};
 
 private:
     friend class LLPipeline;
@@ -116,8 +117,11 @@ private:
 
 
     // update the specified face of the specified probe
-    void updateProbeFace(LLReflectionMap* probe, U32 face, bool is_dynamic, F32 near_clip);
+    bool updateProbeFace(LLReflectionMap* probe, U32 face, bool is_dynamic, F32 near_clip);
     void generateRadiance(LLReflectionMap *probe);
+    void invalidateHeroContents();
+    LLHeroProbeValidity::Contents mContents;
+    LLPointer<LLVOVolume> mContentsProbe;
 
     // list of active reflection maps
     std::vector<LLPointer<LLReflectionMap>> mProbes;
@@ -125,7 +129,7 @@ private:
     LLPointer<LLReflectionMap> mDefaultProbe;  // default reflection probe to fall back to for pixels with no probe influences (should always be at cube index 0)
 
     // number of reflection probes to use for rendering
-    U32 mReflectionProbeCount;
+    U32 mReflectionProbeCount = 0;
 
     // resolution of reflection probes
     U32 mProbeResolution = 1024;

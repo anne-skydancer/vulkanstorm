@@ -14,6 +14,11 @@ The invariants supersede conflicting native-renderer architecture proposals in
 older drafts. They do not change the timing/platform policy of the separate
 [OpenGL modernization strategy](opengl_modernization_strategy.md).
 
+## Mesa/Zink development
+
+- [Immediate-work engineering design](mesa-zink-actionable-design.md): hero mip
+  validity, duplicate work, backend identity and reliable Mesa packaging.
+
 ## Historical design and implementation context
 
 - [Original pipeline design](design_overview.md)
