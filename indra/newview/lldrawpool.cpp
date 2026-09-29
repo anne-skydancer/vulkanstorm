@@ -38,6 +38,7 @@
 #include "lldrawpoolmaterials.h"
 #include "lldrawpoolpbropaque.h"
 #include "llcomputemesh.h"
+#include "llmeshgeometry.h"
 #include "lldrawpoolsimple.h"
 #include "lldrawpoolsky.h"
 #include "lldrawpooltree.h"
@@ -429,19 +430,40 @@ void LLRenderPass::renderRiggedGroup(LLSpatialGroup* group, U32 type, bool textu
     }
 }
 
+namespace
+{
+const std::vector<LLDrawInfo*>* gatherMeshBatch(LLDrawInfo& first,
+    LLCullResult::drawinfo_iterator& next, LLCullResult::drawinfo_iterator end,
+    std::vector<LLDrawInfo*>& batch)
+{
+    batch.clear();
+    if (!LLMeshGeometry::compatibleBatch(first, first) && !LLComputeMesh::compatibleBatch(first, first)) return nullptr;
+    batch.push_back(&first);
+    while (next != end && batch.size() < 256 &&
+           (LLMeshGeometry::compatibleBatch(first, **next) || LLComputeMesh::compatibleBatch(first, **next)))
+    {
+        batch.push_back(*next);
+        LLCullResult::increment_iterator(next, end);
+    }
+    return batch.size() > 1 ? &batch : nullptr;
+}
+}
+
 void LLRenderPass::pushBatches(U32 type, bool texture, bool batch_textures)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
     if (texture)
     {
+        std::vector<LLDrawInfo*> batch;
         auto* begin = gPipeline.beginRenderMap(type);
         auto* end = gPipeline.endRenderMap(type);
         for (LLCullResult::drawinfo_iterator i = begin; i != end; )
         {
             LLDrawInfo* pparams = *i;
             LLCullResult::increment_iterator(i, end);
+            const auto* mesh_batch = gatherMeshBatch(*pparams, i, end, batch);
 
-            pushBatch(*pparams, texture, batch_textures);
+            pushBatch(*pparams, texture, batch_textures, mesh_batch);
         }
     }
     else
@@ -453,14 +475,16 @@ void LLRenderPass::pushBatches(U32 type, bool texture, bool batch_textures)
 void LLRenderPass::pushUntexturedBatches(U32 type)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
+    std::vector<LLDrawInfo*> batch;
     auto* begin = gPipeline.beginRenderMap(type);
     auto* end = gPipeline.endRenderMap(type);
     for (LLCullResult::drawinfo_iterator i = begin; i != end; )
     {
         LLDrawInfo* pparams = *i;
         LLCullResult::increment_iterator(i, end);
+        const auto* mesh_batch = gatherMeshBatch(*pparams, i, end, batch);
 
-        pushUntexturedBatch(*pparams);
+        pushUntexturedBatch(*pparams, mesh_batch);
     }
 }
 
@@ -473,16 +497,18 @@ void LLRenderPass::pushRiggedBatches(U32 type, bool texture, bool batch_textures
         const LLVOAvatar* lastAvatar = nullptr;
         U64 lastMeshId = 0;
         bool skipLastSkin = false;
+        std::vector<LLDrawInfo*> batch;
         auto* begin = gPipeline.beginRenderMap(type);
         auto* end = gPipeline.endRenderMap(type);
         for (LLCullResult::drawinfo_iterator i = begin; i != end; )
         {
             LLDrawInfo* pparams = *i;
             LLCullResult::increment_iterator(i, end);
+            const auto* mesh_batch = gatherMeshBatch(*pparams, i, end, batch);
 
             if (uploadMatrixPalette(pparams->mAvatar, pparams->mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
             {
-                pushBatch(*pparams, texture, batch_textures);
+                pushBatch(*pparams, texture, batch_textures, mesh_batch);
             }
         }
     }
@@ -498,16 +524,18 @@ void LLRenderPass::pushUntexturedRiggedBatches(U32 type)
     const LLVOAvatar* lastAvatar = nullptr;
     U64 lastMeshId = 0;
     bool skipLastSkin = false;
+    std::vector<LLDrawInfo*> batch;
     auto* begin = gPipeline.beginRenderMap(type);
     auto* end = gPipeline.endRenderMap(type);
     for (LLCullResult::drawinfo_iterator i = begin; i != end; )
     {
         LLDrawInfo* pparams = *i;
         LLCullResult::increment_iterator(i, end);
+        const auto* mesh_batch = gatherMeshBatch(*pparams, i, end, batch);
 
         if (uploadMatrixPalette(pparams->mAvatar, pparams->mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
         {
-            pushUntexturedBatch(*pparams);
+            pushUntexturedBatch(*pparams, mesh_batch);
         }
     }
 }
@@ -515,14 +543,16 @@ void LLRenderPass::pushUntexturedRiggedBatches(U32 type)
 void LLRenderPass::pushMaskBatches(U32 type, bool texture, bool batch_textures)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
+    std::vector<LLDrawInfo*> batch;
     auto* begin = gPipeline.beginRenderMap(type);
     auto* end = gPipeline.endRenderMap(type);
     for (LLCullResult::drawinfo_iterator i = begin; i != end; )
     {
         LLDrawInfo* pparams = *i;
         LLCullResult::increment_iterator(i, end);
+        const auto* mesh_batch = gatherMeshBatch(*pparams, i, end, batch);
         LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(pparams->mAlphaMaskCutoff);
-        pushBatch(*pparams, texture, batch_textures);
+        pushBatch(*pparams, texture, batch_textures, mesh_batch);
     }
 }
 
@@ -532,6 +562,7 @@ void LLRenderPass::pushRiggedMaskBatches(U32 type, bool texture, bool batch_text
     const LLVOAvatar* lastAvatar = nullptr;
     U64 lastMeshId = 0;
     bool skipLastSkin = false;
+    std::vector<LLDrawInfo*> batch;
     auto* begin = gPipeline.beginRenderMap(type);
     auto* end = gPipeline.endRenderMap(type);
     for (LLCullResult::drawinfo_iterator i = begin; i != end; )
@@ -539,6 +570,7 @@ void LLRenderPass::pushRiggedMaskBatches(U32 type, bool texture, bool batch_text
         LLDrawInfo* pparams = *i;
 
         LLCullResult::increment_iterator(i, end);
+        const auto* mesh_batch = gatherMeshBatch(*pparams, i, end, batch);
 
         llassert(pparams);
 
@@ -546,7 +578,7 @@ void LLRenderPass::pushRiggedMaskBatches(U32 type, bool texture, bool batch_text
 
         if (uploadMatrixPalette(pparams->mAvatar, pparams->mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
         {
-            pushBatch(*pparams, texture, batch_textures);
+            pushBatch(*pparams, texture, batch_textures, mesh_batch);
         }
     }
 }
@@ -580,7 +612,14 @@ void LLRenderPass::drawGeometry(LLDrawInfo& params)
     }
 }
 
-void LLRenderPass::pushBatch(LLDrawInfo& params, bool texture, bool batch_textures)
+void LLRenderPass::drawGeometryBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch)
+{
+    if (!batch) drawGeometry(params);
+    else if (!LLComputeMesh::drawBatch(*batch) && !LLMeshGeometry::drawBatch(*batch))
+        for (auto* draw : *batch) drawGeometry(*draw);
+}
+
+void LLRenderPass::pushBatch(LLDrawInfo& params, bool texture, bool batch_textures, const std::vector<LLDrawInfo*>* batch)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
     llassert(texture);
@@ -632,7 +671,7 @@ void LLRenderPass::pushBatch(LLDrawInfo& params, bool texture, bool batch_textur
         return;
     }
     // </FS:Beq>
-    drawGeometry(params);
+    drawGeometryBatch(params, batch);
     if (tex_setup)
     {
         gGL.matrixMode(LLRender::MM_TEXTURE0);
@@ -641,7 +680,7 @@ void LLRenderPass::pushBatch(LLDrawInfo& params, bool texture, bool batch_textur
     }
 }
 
-void LLRenderPass::pushUntexturedBatch(LLDrawInfo& params)
+void LLRenderPass::pushUntexturedBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
 
@@ -652,7 +691,7 @@ void LLRenderPass::pushUntexturedBatch(LLDrawInfo& params)
 
     applyModelMatrix(params);
 
-    drawGeometry(params);
+    drawGeometryBatch(params, batch);
 }
 
 // static
@@ -797,10 +836,11 @@ void LLRenderPass::pushGLTFBatches(U32 type, bool textured)
         LLCullResult::increment_iterator(i, end);
         batch.clear();
         const std::vector<LLDrawInfo*>* resident_batch = nullptr;
-        if (LLComputeMesh::compatibleBatch(params, params))
+        if (LLComputeMesh::compatibleBatch(params, params) || LLMeshGeometry::compatibleBatch(params, params))
         {
             batch.push_back(&params);
-            while (i != end && batch.size() < 256 && LLComputeMesh::compatibleBatch(params, **i))
+            while (i != end && batch.size() < 256 &&
+                (LLComputeMesh::compatibleBatch(params, **i) || LLMeshGeometry::compatibleBatch(params, **i)))
             {
                 batch.push_back(*i);
                 LLCullResult::increment_iterator(i, end);
@@ -849,7 +889,7 @@ void LLRenderPass::pushGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInf
 
     if (batch)
     {
-        if (!LLComputeMesh::drawBatch(*batch, registered))
+        if (!LLComputeMesh::drawBatch(*batch, registered) && !LLMeshGeometry::drawBatch(*batch))
             for (auto* info : *batch) drawGeometry(*info);
     }
     else drawGeometry(params);
@@ -873,7 +913,7 @@ void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params, const std::vector
 
     if (batch)
     {
-        if (!LLComputeMesh::drawBatch(*batch, registered))
+        if (!LLComputeMesh::drawBatch(*batch, registered) && !LLMeshGeometry::drawBatch(*batch))
             for (auto* info : *batch) drawGeometry(*info);
     }
     else drawGeometry(params);
@@ -898,6 +938,7 @@ void LLRenderPass::pushRiggedGLTFBatches(U32 type)
     U64 lastMeshId = 0;
     bool skipLastSkin = false;
 
+    std::vector<LLDrawInfo*> batch;
     auto* begin = gPipeline.beginRenderMap(type);
     auto* end = gPipeline.endRenderMap(type);
     for (LLCullResult::drawinfo_iterator i = begin; i != end; )
@@ -905,8 +946,10 @@ void LLRenderPass::pushRiggedGLTFBatches(U32 type)
         LL_PROFILE_ZONE_NAMED_CATEGORY_DRAWPOOL("pushRiggedGLTFBatch");
         LLDrawInfo& params = **i;
         LLCullResult::increment_iterator(i, end);
+        const auto* mesh_batch = gatherMeshBatch(params, i, end, batch);
 
-        pushRiggedGLTFBatch(params, lastAvatar, lastMeshId, skipLastSkin);
+        if (uploadMatrixPalette(params.mAvatar, params.mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
+            pushGLTFBatch(params, mesh_batch);
     }
 }
 
@@ -917,6 +960,7 @@ void LLRenderPass::pushUntexturedRiggedGLTFBatches(U32 type)
     U64 lastMeshId = 0;
     bool skipLastSkin = false;
 
+    std::vector<LLDrawInfo*> batch;
     auto* begin = gPipeline.beginRenderMap(type);
     auto* end = gPipeline.endRenderMap(type);
     for (LLCullResult::drawinfo_iterator i = begin; i != end; )
@@ -924,8 +968,10 @@ void LLRenderPass::pushUntexturedRiggedGLTFBatches(U32 type)
         LL_PROFILE_ZONE_NAMED_CATEGORY_DRAWPOOL("pushRiggedGLTFBatch");
         LLDrawInfo& params = **i;
         LLCullResult::increment_iterator(i, end);
+        const auto* mesh_batch = gatherMeshBatch(params, i, end, batch);
 
-        pushUntexturedRiggedGLTFBatch(params, lastAvatar, lastMeshId, skipLastSkin);
+        if (uploadMatrixPalette(params.mAvatar, params.mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
+            pushUntexturedGLTFBatch(params, mesh_batch);
     }
 }
 
