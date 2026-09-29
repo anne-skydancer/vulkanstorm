@@ -49,6 +49,6 @@ void main()
         return;
     }
     Command command=source[slot];
-    if (clipPlaneMask != 0u && !visible(bounds[slot], clipFromBuffer * transforms[slot].position)) command.instances=0u;
+    if (!visible(bounds[slot], clipFromBuffer * transforms[slot].position)) command.instances=0u;
     commands[i]=command;
 }

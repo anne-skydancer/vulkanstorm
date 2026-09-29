@@ -295,7 +295,6 @@ set(viewer_SOURCE_FILES
     lldrawpoolmaterials.cpp
     llcomputemesh.cpp
     llcomputelod.cpp
-    llmeshgeometry.cpp
     llparticlecompute.cpp
     llparticlepipeline.cpp
     llparticletexture.cpp
@@ -1174,7 +1173,6 @@ set(viewer_HEADER_FILES
     lldrawpoolbump.h
     lldrawpoolmaterials.h
     llcomputemesh.h
-    llmeshgeometry.h
     llparticlecompute.h
     llparticlepipeline.h
     llparticletexture.h
@@ -1604,7 +1602,6 @@ set(viewer_HEADER_FILES
     llsnapshotlivepreview.h
     llsnapshotmodel.h
     llspatialpartition.h
-    llalphasort.h
     llstatslistener.h
     llspeakers.h
     llspeakingindicatormanager.h

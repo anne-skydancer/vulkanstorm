@@ -115,7 +115,6 @@ use(compute);uniform(location(compute,b'phase'),1);uniform(location(compute,b'ca
 checks=0
 for camera,policy in (((0,0,0),(1,2,1,1)),((2,0,0),(1,4,2,1)),((0,0,0),(.5,8,4,1)),((0,0,0),(1,2,.5,0))):
     uniform3(location(compute,b'cameraOrigin'),*camera);uniform4(location(compute,b'policy'),*policy)
-    barrier(0x2000) # order repeated writes to the resident SSBOs, as the viewer does
     dispatch((len(cases)+63)//64,1,1);barrier(0x200|0x40)
     result=C.create_string_buffer(len(initial));read(SSBO,0,len(initial),result)
     assert result.raw[-20:]==b'\xcd'*20,'dispatch tail overwritten'
@@ -375,22 +374,12 @@ for translation, depth_clamp in ((0.,False),(10.,False),(0.,True),(10.,True)):
             expected=(count,instances if visible else 0,first,vertex,instance)
         actual=struct.unpack_from('<IIIiI',result.raw,i*20)
         assert actual==expected,('batch gather/view',translation,depth_clamp,i,actual,expected)
-# Skin-deformed draws preserve the avatar LOD commands instead of testing
-# undeformed/static bounds. Stale slots still produce an empty command.
-uniform(location(batch_program,b'clipPlaneMask'),0)
-barrier(0x2000)
-dispatch((len(cases)+63)//64,1,1);barrier(0x200|0x40)
-bind(SSBO,batch_buffers[2]);read(SSBO,0,len(initial),result)
-for i,(slot,_,_,_) in enumerate(cases):
-    expected=source_commands[slot] if slot<len(source_commands) else (0,0,0,0,0)
-    assert struct.unpack_from('<IIIiI',result.raw,i*20)==expected,('rigged gather',i)
 # A resident bound update changes visibility without re-uploading the candidate
 # list. This also exercises slot reuse/publication independent of pass cameras.
 use(batch_program);uniform(location(batch_program,b'clipPlaneMask'),63)
 matrix=(C.c_float*16)(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)
 matrix_uniform(location(batch_program,b'clipFromBuffer'),1,0,matrix)
 changed=C.create_string_buffer(struct.pack('<8f',4,4,4,0,5,5,5,0))
-barrier(0x2000|0x200)
 bind(SSBO,batch_buffers[3]);sub_data(SSBO,0,32,changed)
 dispatch((len(cases)+63)//64,1,1);barrier(0x200|0x40)
 bind(SSBO,batch_buffers[2]);result=C.create_string_buffer(20);read(SSBO,0,20,result)
@@ -490,44 +479,12 @@ for transform in ((1,1,1,0,0,0),(.5,1.5,2,.2,-.1,.4),(-1,.75,.5,-.2,.2,-.7)):
     baked=vertices(transform);blob=C.create_string_buffer(baked);data(0x8892,len(baked),blob,0x88E4)
     uniform_i(location(transform_program,b'mesh_transform_enabled'),0)
     clear(0x4100);fn('glDrawElements',None,U,I,U,P)(4,3,0x1403,None)
-    expected_color=pixels()
-    assert actual==expected_color,('resident transform color',transform,
-        max(abs(a-b) for a,b in zip(actual,expected_color)),
-        sum(a!=b for a,b in zip(actual,expected_color)))
+    assert actual==pixels(),('resident transform color',transform)
     assert any(actual[i] for i in range(0,len(actual),4)), 'transform test rendered no fragments'
     expected_depth=depth_pixels()
     assert all(abs(x-y)<2e-6 for x,y in zip(struct.unpack('<1024f',actual_depth),struct.unpack('<1024f',expected_depth))),('resident transform depth',transform)
     transform_checks+=1
 assert get_error()==0
 print(f'PASS: {transform_checks} production local-space transform color/depth comparisons; nonuniform/mirrored scales and tangent handedness',flush=True)
-
-# Multiple rigged ranges in one shared page must match ordered single draws.
-# Rebind all vertex inputs because the transform test used another layout.
-use(batch_program)
-ordered=(2,0,1)
-shared_commands=[(3,1,i*3,0,0) for i in range(3)]
-for binding,payload in ((0,b''.join(struct.pack('<IIIiI',*r) for r in shared_commands)),
-                        (1,struct.pack('<3I',*ordered)),(2,bytes(60))):
-    blob=C.create_string_buffer(payload)
-    bind(SSBO,batch_buffers[binding]);data(SSBO,len(payload),blob,0x88E4);base(SSBO,binding,batch_buffers[binding])
-uniform(location(batch_program,b'candidateCount'),3);uniform(location(batch_program,b'sourceCount'),3)
-uniform(location(batch_program,b'clipPlaneMask'),0)
-dispatch(1,1,1);barrier(0x40)
-bind(0x8892,mesh[0]);fn('glVertexAttribPointer',None,U,I,U,C.c_ubyte,I,P)(0,2,0x1406,0,8,None)
-bind(0x8892,weight_buffer);fn('glVertexAttribPointer',None,U,I,U,C.c_ubyte,I,P)(weight_location,4,0x1406,0,16,None)
-fn('glEnableVertexAttribArray',None,U)(weight_location)
-bind(0x8893,copied[2]);use(skinned)
-for shift in (-.15,.2):
-    joints=(C.c_float*24)(1,0,0,shift,0,1,0,0,0,0,1,0, 1,0,0,-shift,0,1,0,shift,0,0,1,0)
-    palette(location(skinned,b'matrixPalette[0]'),2,0,joints)
-    clear(0x4100);bind(0x8F3F,batch_buffers[2])
-    fn('glMultiDrawElementsIndirect',None,U,U,P,I,I)(4,0x1403,None,3,20)
-    actual=pixels();actual_depth=depth_pixels()
-    clear(0x4100)
-    for slot in ordered: fn('glDrawElements',None,U,I,U,P)(4,3,0x1403,C.c_void_p(slot*6))
-    assert actual==pixels() and actual_depth==depth_pixels(),('shared rigged page',shift)
-    assert any(actual[i] for i in range(0,len(actual),4)),'shared rigged page empty'
-assert get_error()==0
-print('PASS: ordered shared-page rigged MDI matches separate draws in blended color and depth for two poses',flush=True)
 
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)

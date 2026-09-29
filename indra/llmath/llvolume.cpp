@@ -2026,7 +2026,6 @@ void LLVolume::genTangents(S32 face)
 {
     // generate legacy tangents for the specified face
     llassert(!isMeshAssetLoaded() || mVolumeFaces[face].mTangents != nullptr); // if this is a complete mesh asset, we should already have tangents
-    if (!mVolumeFaces[face].mTangents) ++mGeometryRevision;
     mVolumeFaces[face].createTangents();
 }
 
@@ -2341,7 +2340,6 @@ bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size)
 
 bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl)
 {
-    ++mGeometryRevision;
     {
         auto face_count = mdl.size();
 
@@ -2768,21 +2766,18 @@ void LLVolume::copyFacesTo(std::vector<LLVolumeFace> &faces) const
 
 void LLVolume::copyFacesFrom(const std::vector<LLVolumeFace> &faces)
 {
-    ++mGeometryRevision;
     mVolumeFaces = faces;
     mSculptLevel = 0;
 }
 
 void LLVolume::copyVolumeFaces(const LLVolume* volume)
 {
-    ++mGeometryRevision;
     mVolumeFaces = volume->mVolumeFaces;
     mSculptLevel = 0;
 }
 
 bool LLVolume::cacheOptimize(bool gen_tangents)
 {
-    ++mGeometryRevision;
     for (S32 i = 0; i < mVolumeFaces.size(); ++i)
     {
         if (!mVolumeFaces[i].cacheOptimize(gen_tangents))
@@ -2802,7 +2797,6 @@ S32 LLVolume::getNumFaces() const
 
 void LLVolume::createVolumeFaces()
 {
-    ++mGeometryRevision;
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
 
     if (mGenerateSingleFace)

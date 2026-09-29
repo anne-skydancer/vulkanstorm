@@ -27,7 +27,6 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llspatialpartition.h"
-#include "llalphasort.h"
 
 #include "llappviewer.h"
 #include "lltexturecache.h"
@@ -140,7 +139,6 @@ LLSpatialGroup::~LLSpatialGroup()
 void LLSpatialGroup::clearDrawMap()
 {
     mDrawMap.clear();
-    mAlphaSortOrder.reset();
     mComputeSubmission.reset();
 }
 
@@ -665,16 +663,7 @@ F32 LLSpatialPartition::calcDistance(LLSpatialGroup* group, LLCamera& camera)
 
         if (!group->hasState(LLSpatialGroup::ALPHA_DIRTY))
         {
-            if (group->mAlphaSortOrder)
-            {
-                const LLVector3& at = camera.getAtAxis();
-                if (group->mAlphaSortOrder->needsResort({at[0], at[1], at[2]}))
-                {
-                    group->setState(LLSpatialGroup::ALPHA_DIRTY);
-                    gPipeline.markRebuild(group);
-                }
-            }
-            else if (!group->getSpatialPartition()->isBridge())
+            if (!group->getSpatialPartition()->isBridge())
             {
                 LLVector4a view_angle = eye;
 

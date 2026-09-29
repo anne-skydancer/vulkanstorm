@@ -33,7 +33,6 @@
 #include "llviewershadermgr.h"
 #include "llcomputemesh.h"
 #include "llparticlecompute.h"
-#include "llmeshgeometry.h"
 #include "llparticlepipeline.h"
 #include "llviewercontrol.h"
 #include "llversioninfo.h"
@@ -668,13 +667,6 @@ void LLViewerShaderMgr::setShaders()
         return;
     }
 
-    if (!LLMeshGeometry::initGL())
-    {
-        LL_ERRS("Shader") << "Unable to load required mesh geometry compute shader." << LL_ENDL;
-        reentrance = false;
-        return;
-    }
-
     if (!LLParticleCompute::initGL())
     {
         LL_ERRS("Shader") << "Unable to load required particle compute shader, cannot continue." << LL_ENDL;
@@ -783,7 +775,6 @@ void LLViewerShaderMgr::setShaders()
 
 void LLViewerShaderMgr::unloadShaders()
 {
-    LLMeshGeometry::destroyGL();
     LLParticleCompute::destroyGL();
     LLParticlePipeline::unloadShaders();
     LLComputeMesh::reloadLOD();
