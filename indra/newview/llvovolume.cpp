@@ -53,6 +53,7 @@
 #include "lldrawpoolbump.h"
 #include "llface.h"
 #include "llspatialpartition.h"
+#include "llalphasort.h"
 #include "llhudmanager.h"
 #include "llflexibleobject.h"
 #include "llskinningutil.h"
@@ -5837,6 +5838,7 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         info->mAvatar == facep->mAvatar &&
         info->getSkinHash() == facep->getSkinHash())
     {
+        info->mMeshGeometry = info->mMeshGeometry && facep->getViewerObject()->isMesh();
         info->mCount += facep->getIndicesCount();
         info->mEnd += facep->getGeomCount();
 
@@ -5936,6 +5938,7 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
     }
 
     info->mComputeLOD = compute_resident;
+    info->mMeshGeometry = facep->getViewerObject()->isMesh();
 
     llassert(info->mGLTFMaterial == nullptr || (info->mVertexBuffer->getTypeMask() & LLVertexBuffer::MAP_TANGENT) != 0);
     llassert(type != LLPipeline::RENDER_TYPE_PASS_GLTF_PBR || info->mGLTFMaterial != nullptr);
@@ -6724,8 +6727,35 @@ U32 LLVolumeGeometryManager::genDrawInfo(LLSpatialGroup* group, U32 mask, LLFace
         }
         else
         {
-            //sort faces by distance
+            // Refresh keys from this view, including bridge-local coordinates.
+            // Do not reuse keys from a drawable's last distance update.
+            LLCamera camera = *LLViewerCamera::getInstance();
+            if (auto* bridge = group->getSpatialPartition()->asBridge())
+                camera = bridge->transformCamera(camera);
+            const LLVector3& at = camera.getAtAxis();
+            const LLAlphaSortOrder::Vector direction{at[0], at[1], at[2]};
+            auto bounds = [](LLFace* face)
+            {
+                LLAlphaSortOrder::Bounds result;
+                for (unsigned axis = 0; axis < 3; ++axis)
+                {
+                    result.center[axis] = face->mCenterLocal[axis];
+                    result.quarter_extent[axis] = (face->mExtents[1][axis] - face->mExtents[0][axis]) * 0.25f;
+                }
+                return result;
+            };
+            for (U32 i = 0; i < face_count; ++i)
+            {
+                auto relative = bounds(faces[i]);
+                for (unsigned axis = 0; axis < 3; ++axis)
+                    relative.center[axis] -= camera.getOrigin()[axis];
+                faces[i]->mDistance = LLAlphaSortOrder::depth(relative, direction);
+            }
+
             std::sort(faces, faces+face_count, LLFace::CompareDistanceGreater());
+            group->mAlphaSortOrder = std::make_unique<LLAlphaSortOrder>();
+            for (U32 i = 0; i < face_count; ++i)
+                group->mAlphaSortOrder->append(bounds(faces[i]));
         }
     }
 

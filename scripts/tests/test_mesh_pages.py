@@ -39,16 +39,20 @@ U64 resident_bytes=0, resource_epoch=0, budget=64*1024*1024;
 U64 byteBudget(){return budget;}
 struct Memory { U64 bytes=0; void add(const LLVertexBuffer& b){bytes+=b.getSize()+b.getIndicesSize();}
 void remove(const LLVertexBuffer& b){bytes-=b.getSize()+b.getIndicesSize();} } page_memory;
+struct AvatarObject {bool dead=false,loaded=true;bool isDead()const{return dead;}bool isControlAvatar()const{return false;}bool isFullyLoaded()const{return loaded;}};
+struct Avatar {AvatarObject* object=nullptr;};
 namespace LLComputeMesh {
 struct Page { LLPointer<LLVertexBuffer> buffer; Ranges vertices,indices;U64 bytes=0;~Page(); };
 struct PageRange {std::shared_ptr<Page> page;U32 vertex=0,index=0,vertices=0,indices=0;~PageRange();};
-struct Resident {bool valid=true;std::shared_ptr<Page> page;bool avatar=false;U32 generation=1;};
+struct Resident {bool valid=true;std::shared_ptr<Page> page;std::shared_ptr<Avatar> avatar;U64 skin_hash=42;U32 generation=1;};
 }
 std::vector<std::weak_ptr<LLComputeMesh::Page>> pages;
 U32 generation=1;
 struct LLGLTFMaterial {static constexpr int ALPHA_MODE_OPAQUE=0;int mAlphaMode=0;};
+struct Skin {U64 mHash=42;};
 struct LLDrawInfo {std::shared_ptr<LLComputeMesh::Resident> mComputeLOD; void* mModelMatrix=nullptr;void* mTextureMatrix=nullptr;
-LLPointer<LLGLTFMaterial> mGLTFMaterial;void* mTexture=nullptr;bool mAvatar=false;};
+LLPointer<LLGLTFMaterial> mGLTFMaterial;void* mTexture=nullptr;AvatarObject* mAvatar=nullptr;Skin* mSkinInfo=nullptr;};
+namespace LLMeshGeometry {bool compatibleState(const LLDrawInfo&a,const LLDrawInfo&b){return a.mModelMatrix==b.mModelMatrix&&a.mTextureMatrix==b.mTextureMatrix&&a.mTexture==b.mTexture&&a.mGLTFMaterial==b.mGLTFMaterial;}}
 namespace LLComputeMesh {bool compatibleBatch(const LLDrawInfo&,const LLDrawInfo&);}
 '''
 production=method('LLComputeMesh::PageRange::~PageRange()')+'\n'+method('LLComputeMesh::Page::~Page()')+'\n'+method('std::shared_ptr<LLComputeMesh::Page> acquirePage')+'\n'+method('bool LLComputeMesh::compatibleBatch')
@@ -76,8 +80,18 @@ int main(){
  y.mComputeLOD->page=other;assert(!LLComputeMesh::compatibleBatch(x,y));y.mComputeLOD->page=a;
  y.mComputeLOD->generation=2;assert(!LLComputeMesh::compatibleBatch(x,y));y.mComputeLOD->generation=1;
  y.mComputeLOD->valid=false;assert(!LLComputeMesh::compatibleBatch(x,y));y.mComputeLOD->valid=true;
- y.mAvatar=true;assert(!LLComputeMesh::compatibleBatch(x,y));y.mAvatar=false;
+ AvatarObject avatar; y.mAvatar=&avatar;assert(!LLComputeMesh::compatibleBatch(x,y));y.mAvatar=nullptr;
  x.mGLTFMaterial->mAlphaMode=1;assert(!LLComputeMesh::compatibleBatch(x,y));x.mGLTFMaterial->mAlphaMode=0;
+ x.mComputeLOD->avatar=std::make_shared<Avatar>();x.mComputeLOD->avatar->object=&avatar;
+ y.mComputeLOD->avatar=x.mComputeLOD->avatar;x.mAvatar=y.mAvatar=&avatar;
+ Skin skin1,skin2;x.mSkinInfo=&skin1;y.mSkinInfo=&skin2;
+ assert(LLComputeMesh::compatibleBatch(x,y));
+ skin2.mHash=43;assert(!LLComputeMesh::compatibleBatch(x,y));skin2.mHash=42;
+ avatar.loaded=false;assert(!LLComputeMesh::compatibleBatch(x,y));avatar.loaded=true;
+ avatar.dead=true;assert(!LLComputeMesh::compatibleBatch(x,y));avatar.dead=false;
+ y.mComputeLOD->skin_hash=43;assert(!LLComputeMesh::compatibleBatch(x,y));y.mComputeLOD->skin_hash=42;
+ y.mComputeLOD->avatar.reset();assert(!LLComputeMesh::compatibleBatch(x,y));
+ x.mComputeLOD->avatar.reset();x.mAvatar=y.mAvatar=nullptr;
  auto large=acquirePage(1,65532,200000);assert(large && large!=a);
  assert(large->vertices.take(65532));assert(large->indices.take(200000));
  budget=resident_bytes;assert(!acquirePage(3,10,30));

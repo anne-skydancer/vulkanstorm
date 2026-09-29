@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 #include "llviewerprecompiledheaders.h"
 #include "llcomputemesh.h"
+#include "llmeshgeometry.h"
 #include "llmeshranges.h"
 #include "llshadermgr.h"
 #include "llvovolume.h"
@@ -874,7 +875,6 @@ BuildResult advanceJob(BuildJob& job)
             if ((wanted & ~(loaded_mask | job.failed_mask)) == 0) return BuildResult::DONE;
             return wait(LLComputeMesh::MESH);
         }
-        U64 estimate = 0;
         U32 new_slots = 0;
         for (S32 f=0; f<count; ++f)
         {
@@ -893,11 +893,10 @@ BuildResult advanceJob(BuildJob& job)
                 if (!alias) { vertices += (vf.mNumVertices+3)&~3u; indices += vf.mNumIndices; }
             }
             if (vertices > 65535) return BuildResult::DROP;
-            estimate += U64(llmax(vertices, 4u))*llmax(128u, LLVertexBuffer::calcVertexSize(object->mDrawable->getFace(f)->getVertexBuffer()->getTypeMask())) + U64(llmax(indices, 1u))*2 + 512;
             new_slots += owner->faces[f]->slot == ~0u;
         }
-        // Include the still-visible old buffers while preparing replacements.
-        if (new_slots > CAPACITY-extent+available.size() || (rigged && resident_bytes+estimate > byteBudget())) return BuildResult::RESOURCE_LIMIT;
+        // Page admission accounts for still-visible old ranges and existing free space.
+        if (new_slots > CAPACITY-extent+available.size()) return BuildResult::RESOURCE_LIMIT;
         if (!initialize()) return BuildResult::DROP;
         job.faces.resize(count);
         job.initialized = true;
@@ -925,8 +924,6 @@ BuildResult advanceJob(BuildJob& job)
                     vertices += (vf.mNumVertices+3)&~3u; indices += vf.mNumIndices;
                 }
             }
-            if (rigged && resident_bytes+U64(llmax(vertices, 4u))*llmax(128u, LLVertexBuffer::calcVertexSize(mask))+U64(llmax(indices, 1u))*2+512 > byteBudget()) return BuildResult::RESOURCE_LIMIT;
-            if (!rigged)
             {
                 staged->page = acquirePage(mask, llmax(vertices, 4u), llmax(indices, 1u));
                 if (!staged->page) return BuildResult::RESOURCE_LIMIT;
@@ -948,15 +945,6 @@ BuildResult advanceJob(BuildJob& job)
                     record->generation = generation;
                     owners[record->slot] = record.get();
                 }
-            }
-            else
-            {
-                staged->buffer = new LLVertexBuffer(mask);
-                if (!staged->buffer->allocateBuffer(llmax(vertices, 4u), llmax(indices, 1u))) return BuildResult::RESOURCE_LIMIT;
-                staged->bytes = staged->buffer->getSize()+staged->buffer->getIndicesSize();
-                staged_memory.add(*staged->buffer);
-                resident_bytes += staged->bytes;
-                geometry_allocation_bytes += staged->bytes;
             }
             if (rigged && !record->avatar)
             {
@@ -1002,7 +990,7 @@ BuildResult advanceJob(BuildJob& job)
             if (reuse)
             {
                 const auto& old_range = entries[record->slot].ranges[lod];
-                staged.buffer->copyResidentRange(
+                LLMeshGeometry::copyResidentRange(*staged.buffer,
                     *record->buffer, old_range[3], old_range[1],
                     vf.mNumVertices, vf.mNumIndices, vertex_offset, index_offset);
                 geometry_copy_bytes += U64(vf.mNumVertices)*LLVertexBuffer::calcVertexSize(mask);
@@ -1291,7 +1279,7 @@ bool LLComputeMesh::drawLOD(LLDrawInfo& info)
         (!record->avatar->object->isControlAvatar() && !record->avatar->object->isFullyLoaded()) ||
         info.mAvatar != record->avatar->object || info.getSkinHash() != record->skin_hash)) return false;
     if (!dispatch()) return false;
-    TransformBinding transform(record->page != nullptr);
+    TransformBinding transform(record->page != nullptr && !record->avatar);
     if (!transform.ready) return false;
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buffers[1]);
     record->buffer->setBuffer();
@@ -1305,9 +1293,19 @@ bool LLComputeMesh::compatibleBatch(const LLDrawInfo& first, const LLDrawInfo& n
 {
     const auto& a = first.mComputeLOD;
     const auto& b = next.mComputeLOD;
-    return a && b && a->valid && b->valid && a->page && a->page == b->page &&
-        !a->avatar && !b->avatar && a->generation == generation && b->generation == generation &&
-        first.mModelMatrix == next.mModelMatrix && first.mTextureMatrix == next.mTextureMatrix &&
+    if (!a || !b || !a->valid || !b->valid || !a->page || a->page != b->page ||
+        a->generation != generation || b->generation != generation) return false;
+    if (a->avatar || b->avatar)
+    {
+        if (!a->avatar || a->avatar != b->avatar || a->skin_hash != b->skin_hash ||
+            first.mAvatar != a->avatar->object || next.mAvatar != b->avatar->object ||
+            !first.mSkinInfo || !next.mSkinInfo ||
+            first.mSkinInfo->mHash != a->skin_hash || next.mSkinInfo->mHash != b->skin_hash ||
+            a->avatar->object->isDead() ||
+            (!a->avatar->object->isControlAvatar() && !a->avatar->object->isFullyLoaded())) return false;
+        return LLMeshGeometry::compatibleState(first, next);
+    }
+    return first.mModelMatrix == next.mModelMatrix && first.mTextureMatrix == next.mTextureMatrix &&
         first.mGLTFMaterial == next.mGLTFMaterial && first.mTexture == next.mTexture &&
         first.mGLTFMaterial.notNull() &&
         first.mGLTFMaterial->mAlphaMode == LLGLTFMaterial::ALPHA_MODE_OPAQUE &&
@@ -1470,12 +1468,14 @@ bool LLComputeMesh::drawBatch(const std::vector<LLDrawInfo*>& batch, Batch* regi
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, buffers[6]);
         glUniform1ui(batch_count, U32(batch.size()));
         glUniform1ui(batch_source_count, extent);
-        glUniform1ui(batch_clip_planes, glIsEnabled(GL_DEPTH_CLAMP) ? 15u : 63u);
+        // Rigged commands already use the avatar GPU LOD policy; static
+        // local-space bounds cannot conservatively bound deformed skin.
+        glUniform1ui(batch_clip_planes, first.mComputeLOD->avatar ? 0u : (glIsEnabled(GL_DEPTH_CLAMP) ? 15u : 63u));
         glUniformMatrix4fv(batch_matrix, 1, GL_FALSE, glm::value_ptr(clip));
         glDispatchCompute((U32(batch.size())+63)/64, 1, 1);
         glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
     }
-    TransformBinding transform(true);
+    TransformBinding transform(!first.mComputeLOD->avatar);
     if (!transform.ready) return false;
     GLint indirect = 0;
     glGetIntegerv(GL_DRAW_INDIRECT_BUFFER_BINDING, &indirect);

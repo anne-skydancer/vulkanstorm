@@ -268,6 +268,7 @@ public:
     // Compute writers must flush pending uploads first and provide the barriers
     // for subsequent consumers. GPU writes do not update the CPU shadow.
     U32 getGLBuffer() const                 { return mGLBuffer; }
+    U32 getGLIndices() const                { return mGLIndices; }
     U32 getIndicesSize() const              { return mIndicesSize; }
     U8* getMappedData() const               { return mMappedData; }
     U8* getMappedIndices() const            { return mMappedIndexData; }

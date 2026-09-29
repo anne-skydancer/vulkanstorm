@@ -61,6 +61,7 @@ class LLSpatialBridge;
 class LLSpatialGroup;
 class LLViewerRegion;
 class LLReflectionMap;
+class LLAlphaSortOrder;
 
 void pushVerts(LLFace* face);
 //<FS:BEQ> Make helper functions externally visible for use from viewerwindow
@@ -147,6 +148,7 @@ public:
     U8   mShiny = 0;
     bool mFullbright = false;
     bool mHasGlow = false;
+    bool mMeshGeometry = false;
 
     struct CompareTexture
     {
@@ -428,6 +430,7 @@ protected:
 public:
     LLPointer<LLVertexBuffer> mVertexBuffer;
     draw_map_t mDrawMap;
+    std::unique_ptr<LLAlphaSortOrder> mAlphaSortOrder;
     std::shared_ptr<LLComputeMesh::Submission> mComputeSubmission;
 
     bridge_list_t mBridgeList;
