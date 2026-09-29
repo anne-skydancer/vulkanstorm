@@ -1130,12 +1130,14 @@ private:
     bool unpackVolumeFacesInternal(const LLSD& mdl);
 
 public:
+    U64 getGeometryRevision() const { return mGeometryRevision; }
     virtual void setMeshAssetLoaded(bool loaded);
     virtual bool isMeshAssetLoaded() const;
     virtual void setMeshAssetUnavaliable(bool unavaliable);
     virtual bool isMeshAssetUnavaliable() const;
 
  protected:
+    U64 mGeometryRevision = 0;
     bool mUnique;
     F32 mDetail;
     S32 mSculptLevel;
