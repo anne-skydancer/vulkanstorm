@@ -1506,6 +1506,10 @@ void LLVOVolume::notifySkinInfoUnavailable()
     LLComputeMesh::invalidateLOD(*this);
     mSkinInfoUnavaliable = true;
     mSkinInfo = nullptr;
+    // rebuildGeom may already have skipped this object while skin information
+    // was pending. Resolving that dependency must rebuild it even when no skin
+    // was returned; another mesh completion or user selection may never occur.
+    notifyMeshLoaded();
 }
 
 // sculpt replaces generate() for sculpted surfaces
