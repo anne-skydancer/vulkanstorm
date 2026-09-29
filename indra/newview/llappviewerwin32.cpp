@@ -1219,6 +1219,7 @@ bool LLAppViewerWin32::reportCustomToBugsplat(const std::string &description)
 // <VulkanStorm>
 void LLAppViewerWin32::selectGLBackend()
 {
+    mGLBackendSelection = {};
     std::string backend = gSavedSettings.getString("RenderBackend");
     LLStringUtil::toLower(backend);
 
@@ -1257,17 +1258,22 @@ void LLAppViewerWin32::selectGLBackend()
                                                 LOAD_WITH_ALTERED_SEARCH_PATH);
                 if (module)
                 {
+                    mGLBackendSelection.provider = "bundled-mesa";
+                    mGLBackendSelection.outcome = "selected";
+                    mGLBackendSelection.path = mesa_opengl;
                     LL_INFOS("RenderInit") << "GL backend: Mesa + Zink from '"
                                            << mesa_dir << "'." << LL_ENDL;
                     return;
                 }
 
+                mGLBackendSelection.reason = "Mesa preload failed: " + std::to_string(GetLastError());
                 LL_WARNS("RenderInit") << "Could not load bundled Mesa opengl32.dll from '"
                                        << mesa_dir << "' (GetLastError=" << GetLastError()
                                        << "); using native OpenGL." << LL_ENDL;
             }
             else
             {
+                mGLBackendSelection.reason = "Mesa DLL search directory failed: " + std::to_string(GetLastError());
                 LL_WARNS("RenderInit") << "Could not add bundled Mesa directory '"
                                        << mesa_dir << "' to the DLL search path (GetLastError="
                                        << GetLastError() << "); using native OpenGL." << LL_ENDL;
@@ -1277,6 +1283,7 @@ void LLAppViewerWin32::selectGLBackend()
         }
         else
         {
+            mGLBackendSelection.reason = "incomplete bundled Mesa runtime";
             LL_WARNS("RenderInit") << "Mesa + Zink requested, but both '"
                                    << mesa_opengl << "' and '" << mesa_gallium
                                    << "' are required; using native OpenGL." << LL_ENDL;
@@ -1290,10 +1297,15 @@ void LLAppViewerWin32::selectGLBackend()
                                     LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (module)
     {
+        mGLBackendSelection.provider = "system-gl";
+        mGLBackendSelection.path = "System32/opengl32.dll";
+        mGLBackendSelection.outcome = backend == "zink" ? "fallback" : "selected";
         LL_INFOS("RenderInit") << "GL backend: native OpenGL (System32)." << LL_ENDL;
     }
     else
     {
+        mGLBackendSelection.outcome = "failed";
+        mGLBackendSelection.reason += " native preload failed: " + std::to_string(GetLastError());
         LL_WARNS("RenderInit") << "Could not preload native opengl32.dll (GetLastError="
                                << GetLastError() << ")." << LL_ENDL;
     }

@@ -274,6 +274,13 @@ public:
 protected:
     // <VulkanStorm> Select the platform OpenGL implementation before the first
     // GL import is resolved and before the window creates its GL context.
+    struct GLBackendSelection
+    {
+        std::string provider = "unknown";
+        std::string outcome = "not-attempted";
+        std::string path;
+        std::string reason;
+    } mGLBackendSelection;
     virtual void selectGLBackend() {}
     // </VulkanStorm>
     virtual bool initWindow(); // Initialize the viewer's window.
