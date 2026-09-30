@@ -1,5 +1,9 @@
 # Progressive OpenGL mesh LOD and bounded streaming
 
+> Historical implementation: the CPU-to-GPU offload described below has been
+> retired on the CPU restoration branch. See [current restoration and validation](../performance/cpu-rendering-restoration.md).
+> Earlier AMD results do not establish NVIDIA performance gains.
+
 Development worktree: `gl-compute-mesh`, branch `codex/gl-compute-mesh`.
 
 Release integration branch: `codex/gl-compute-mesh-release`, based on `master`.

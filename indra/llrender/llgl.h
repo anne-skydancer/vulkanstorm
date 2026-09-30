@@ -119,11 +119,6 @@ public:
 #endif
 
     // Whether this version of GL is good enough for SL to use
-    // Advanced particle submission is selected automatically only when supported.
-    bool mHasFragmentShaderInterlock = false;
-    bool mHasBindlessTexture = false;
-    bool mHasShaderDrawParameters = false;
-    bool mHasIndirectParameters = false;
     bool mHasRequirements;
 
     S32 mDriverVersionMajor;

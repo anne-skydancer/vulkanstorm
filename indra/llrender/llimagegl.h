@@ -40,7 +40,6 @@
 #include "threadpool.h"
 #include "workqueue.h"
 #include <unordered_set>
-#include <atomic>
 
 #define LL_IMAGEGL_THREAD_CHECK 0 //set to 1 to enable thread debugging for ImageGL
 
@@ -177,7 +176,6 @@ public:
 
     bool getHasGLTexture() const { return mTexName != 0; }
     LLGLuint getTexName() const { return mTexName; }
-    U64 getContentRevision() const { return mContentRevision.load(std::memory_order_relaxed); }
 
     bool getIsAlphaMask() const;
 
@@ -258,7 +256,6 @@ private:
 
     bool     mGLTextureCreated ;
     LLGLuint mTexName;
-    std::atomic<U64> mContentRevision{1};
     U16      mWidth;
     U16      mHeight;
     S8       mCurrentDiscardLevel;
@@ -334,7 +331,7 @@ public:
     void setCategory(S32 category) {mCategory = category;}
     S32  getCategory()const {return mCategory;}
 
-    void setTexName(GLuint texName) { mTexName = texName; ++mContentRevision; }
+    void setTexName(GLuint texName) { mTexName = texName; }
 
     //similar to setTexName, but will call deleteTextures on mTexName if mTexName is not 0 or texname
     void syncTexName(LLGLuint texname);

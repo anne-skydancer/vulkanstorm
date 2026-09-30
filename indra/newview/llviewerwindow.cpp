@@ -186,7 +186,6 @@
 #include "llviewerstats.h"
 #include "llvoavatarself.h"
 #include "llvopartgroup.h"
-#include "llparticleviewer.h"
 #include "llvovolume.h"
 #include "llworld.h"
 #include "llworldmapview.h"
@@ -7670,11 +7669,7 @@ void LLPickInfo::fetchResults()
     { //search for closest particle to click origin out to intersection point
         S32 part_face = -1;
 
-        if (LLParticleViewer::active())
-            LLParticleViewer::pick(LLVector3(start.getF32ptr()), LLVector3(particle_end.getF32ptr()),
-                mParticleOwnerID, mParticleSourceID);
-        LLVOPartGroup* group = LLParticleViewer::active() ? nullptr :
-            gPipeline.lineSegmentIntersectParticle(start, particle_end, NULL, &part_face);
+        LLVOPartGroup* group = gPipeline.lineSegmentIntersectParticle(start, particle_end, NULL, &part_face);
         if (group)
         {
             mParticleOwnerID = group->getPartOwner(part_face);

@@ -1,5 +1,9 @@
 # GPU rendering offload: approved development scope
 
+> Historical implementation: the CPU-to-GPU offload described below has been
+> retired on the CPU restoration branch. See [current restoration and validation](cpu-rendering-restoration.md).
+> Earlier AMD results do not establish NVIDIA performance gains.
+
 > Current contract (2026-09-27 clarification): the Windows/Linux viewer baseline
 > remains **OpenGL 4.3 Core**. The advanced resident particle path uses OpenGL
 > 4.5 / GLSL 4.50 plus interlock, bindless textures, shader draw parameters and

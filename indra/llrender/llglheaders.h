@@ -56,15 +56,6 @@
 #include "GL/glext.h"
 #include "GL/glh_extensions.h"
 
-extern PFNGLMULTIDRAWARRAYSINDIRECTCOUNTARBPROC glMultiDrawArraysIndirectCountARB;
-
-// Optional GPU particle rendering entry points.
-extern PFNGLGETTEXTUREHANDLEARBPROC glGetTextureHandleARB;
-extern PFNGLGETTEXTURESAMPLERHANDLEARBPROC glGetTextureSamplerHandleARB;
-extern PFNGLMAKETEXTUREHANDLERESIDENTARBPROC glMakeTextureHandleResidentARB;
-extern PFNGLMAKETEXTUREHANDLENONRESIDENTARBPROC glMakeTextureHandleNonResidentARB;
-extern PFNGLISTEXTUREHANDLERESIDENTARBPROC glIsTextureHandleResidentARB;
-
 // WGL_AMD_gpu_association
 extern PFNWGLGETGPUIDSAMDPROC                          wglGetGPUIDsAMD;
 extern PFNWGLGETGPUINFOAMDPROC                         wglGetGPUInfoAMD;

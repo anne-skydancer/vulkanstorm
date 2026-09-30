@@ -34,7 +34,7 @@ using LLControlAvatar = LLVOAvatar;
 struct LLVOVolume {
     bool mSkinInfoUnavaliable = false, mSculptChanged = false;
     void* mSkinInfo = nullptr;
-    bool resident = false, geometryLoaded = false, visible = false;
+    bool geometryLoaded = false, visible = false;
     LLDrawable drawable;
     LLDrawable* mDrawable = &drawable;
     Volume volume;
@@ -55,12 +55,6 @@ struct Pipeline {
     void markRebuild(LLDrawable* drawable, int) { if (drawable) drawable->queued = true; }
 } gPipeline;
 struct MeshRepo { bool hasSkinInfo(LLUUID) { return true; } } gMeshRepo;
-namespace LLComputeMesh {
-enum { MESH = 1 };
-bool preserveLODOnMeshLoad(LLVOVolume& o) { return o.resident; }
-void invalidateLOD(LLVOVolume& o) { o.resident = false; }
-void notifyLODDependency(LLVOVolume&, unsigned) {}
-}
 void require(bool condition, const char* message) {
     if (!condition) { std::cerr << message << '\n'; std::exit(1); }
 }
@@ -84,14 +78,6 @@ int main() {
     skinFirst.notifyMeshLoaded();
     skinFirst.drain();
     require(skinFirst.visible, "Mesh arrival must render after earlier skin completion");
-
-    LLVOVolume resident;
-    resident.geometryLoaded = true;
-    resident.resident = true;
-    resident.notifySkinInfoUnavailable();
-    require(!resident.resident, "Stale GPU generation must be invalidated");
-    resident.drain();
-    require(resident.visible, "Invalidated resident geometry must get a direct rebuild");
 
     LLVOVolume noDrawable;
     noDrawable.mDrawable = nullptr;

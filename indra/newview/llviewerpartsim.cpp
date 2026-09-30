@@ -27,7 +27,6 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewerpartsim.h"
-#include "llparticleviewer.h"
 
 #include "llviewercontrol.h"
 
@@ -566,7 +565,6 @@ void LLViewerPartSim::enable(bool enabled)
 
 void LLViewerPartSim::destroyClass()
 {
-    LLParticleViewer::destroyGL();
     S32 i;
     S32 count;
 
@@ -585,7 +583,6 @@ void LLViewerPartSim::destroyClass()
 //static
 bool LLViewerPartSim::shouldAddPart()
 {
-    if (LLParticleViewer::active()) return sMaxParticleCount > 0 && gFPSClamped >= 4.f && LLParticleViewer::acceptsBirths();
     if (sParticleCount >= MAX_PART_COUNT)
     {
         return false;
@@ -615,7 +612,6 @@ bool LLViewerPartSim::shouldAddPart()
 
 void LLViewerPartSim::addPart(LLViewerPart* part)
 {
-    if (LLParticleViewer::active()) { LLParticleViewer::add(part); return; }
     if (LLViewerPartSim::sParticleCount < MAX_PART_COUNT)
     {
         put(part);
@@ -698,7 +694,6 @@ LLViewerPartGroup *LLViewerPartSim::createViewerPartGroup(const LLVector3 &pos_a
 
 void LLViewerPartSim::shift(const LLVector3 &offset)
 {
-    LLParticleViewer::shift(offset);
     S32 i;
     S32 count;
 
@@ -724,22 +719,6 @@ void LLViewerPartSim::updateSimulation()
     static LLFrameTimer update_timer;
 
     const F32 dt = llmin(update_timer.getElapsedTimeAndResetF32(), 0.1f);
-    const bool wasResident = LLParticleViewer::active();
-    if (LLParticleViewer::beginFrame() && !wasResident && !mViewerPartGroups.empty())
-    {
-        // One-time ownership transfer if shader availability changed after CPU
-        // particles were emitted. Emission order preserves ribbon direction.
-        std::vector<LLViewerPart*> transfer;
-        for (auto* group : mViewerPartGroups)
-        {
-            transfer.insert(transfer.end(), group->mParticles.begin(), group->mParticles.end());
-            group->mParticles.clear();
-            delete group;
-        }
-        mViewerPartGroups.clear(); sParticleCount = 0;
-        std::sort(transfer.begin(), transfer.end(), [](const auto* a,const auto* b) { return a->mPartID < b->mPartID; });
-        for (auto* part : transfer) LLParticleViewer::add(part);
-    }
 
     // <FS:LO> Dont suspend partical processing while particles are hidden, just skip over drawing them
     /*if (!(gPipeline.hasRenderType(LLPipeline::RENDER_TYPE_PARTICLES)))
@@ -824,12 +803,6 @@ void LLViewerPartSim::updateSimulation()
              i += dir;
         }
         num_updates++;
-    }
-
-    if (LLParticleViewer::active())
-    {
-        LLParticleViewer::finishFrame(dt);
-        return;
     }
 
     count = (S32) mViewerPartGroups.size();
@@ -942,7 +915,6 @@ void LLViewerPartSim::removeLastCreatedSource()
 
 void LLViewerPartSim::cleanupRegion(LLViewerRegion *regionp)
 {
-    LLParticleViewer::cleanupRegion(regionp);
     for (group_list_t::iterator i = mViewerPartGroups.begin(); i != mViewerPartGroups.end(); )
     {
         group_list_t::iterator iter = i++;
@@ -957,7 +929,6 @@ void LLViewerPartSim::cleanupRegion(LLViewerRegion *regionp)
 
 void LLViewerPartSim::clearParticlesByID(const U32 system_id)
 {
-    LLParticleViewer::kill(system_id);
     for (group_list_t::iterator g = mViewerPartGroups.begin(); g != mViewerPartGroups.end(); ++g)
     {
         (*g)->removeParticlesByID(system_id);
@@ -975,7 +946,6 @@ void LLViewerPartSim::clearParticlesByID(const U32 system_id)
 
 void LLViewerPartSim::clearParticlesByOwnerID(const LLUUID& task_id)
 {
-    LLParticleViewer::killOwner(task_id);
     for (source_list_t::iterator iter = mViewerPartSources.begin(); iter != mViewerPartSources.end(); ++iter)
     {
         if ((*iter)->getOwnerUUID() == task_id)

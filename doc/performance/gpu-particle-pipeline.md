@@ -1,5 +1,9 @@
 # Resident GPU particle pipeline
 
+> Historical implementation: the CPU-to-GPU offload described below has been
+> retired on the CPU restoration branch. See [current restoration and validation](cpu-rendering-restoration.md).
+> Earlier AMD results do not establish NVIDIA performance gains.
+
 Development: `codex/gpu-render-offload`, based on `vkstorm-devel`.
 Release integration: `codex/gpu-render-offload-release`, based on `master`. Updated 2026-09-27.
 

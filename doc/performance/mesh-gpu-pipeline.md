@@ -1,5 +1,9 @@
 # Resident mesh pipeline: design and acceptance
 
+> Historical implementation: the CPU-to-GPU offload described below has been
+> retired on the CPU restoration branch. See [current restoration and validation](cpu-rendering-restoration.md).
+> Earlier AMD results do not establish NVIDIA performance gains.
+
 Development base: `vkstorm-devel` at `7805689030`. Master is not merged into this
 branch. Windows/Linux OpenGL 4.3 remains the baseline.
 
@@ -47,8 +51,8 @@ specific contracts are migrated; this milestone must not change their semantics.
    persistent registration. Retain coarse scene/streaming traversal separately;
    GPU visibility must not merely duplicate CPU rejection.
 
-Steps 1–2 alone are infrastructure, not completion of the approved CPU offload.
-Initial conversion and CPU draw-list traversal remain until steps 3–4 are wired.
+Steps 1â€“2 alone are infrastructure, not completion of the approved CPU offload.
+Initial conversion and CPU draw-list traversal remain until steps 3â€“4 are wired.
 
 ## Correctness and performance gates
 

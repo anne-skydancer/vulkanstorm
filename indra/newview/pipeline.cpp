@@ -27,7 +27,6 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "pipeline.h"
-#include "llcomputemesh.h"
 #include "llmeshstreaming.h"
 
 // library includes
@@ -704,7 +703,6 @@ LLPipeline::~LLPipeline()
 
 void LLPipeline::cleanup()
 {
-    LLComputeMesh::destroyGL();
     assertInitialized();
 
     mGroupQ1.clear() ;
@@ -788,7 +786,6 @@ void LLPipeline::cleanup()
 
 void LLPipeline::destroyGL()
 {
-    LLComputeMesh::destroyGL();
     stop_glerror();
     unloadShaders();
     mHighlightFaces.clear();
@@ -3197,7 +3194,6 @@ void LLPipeline::markShift(LLDrawable *drawablep)
 
 void LLPipeline::shiftObjects(const LLVector3 &offset)
 {
-    LLComputeMesh::shiftLOD(offset);
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     assertInitialized();
 
@@ -3311,18 +3307,6 @@ void LLPipeline::markRebuild(LLSpatialGroup* group)
 
 void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags flag)
 {
-    if (drawablep && drawablep->getVOVolume() && (flag & LLDrawable::REBUILD_ALL))
-    {
-        auto* volume = drawablep->getVOVolume();
-        if (volume->mComputeLOD &&
-            !(flag == LLDrawable::REBUILD_POSITION && LLComputeMesh::canUpdateTransform(*volume)))
-        {
-            // The fast mesh update writes only the CPU-selected range. Resident
-            // objects need all their ranges regenerated after a geometry edit.
-            if (auto* group = drawablep->getSpatialGroup()) group->dirtyGeom();
-            LLComputeMesh::invalidateLOD(*volume);
-        }
-    }
     if (drawablep && !drawablep->isDead() && assertInitialized())
     {
         if (!drawablep->isState(LLDrawable::IN_REBUILD_Q))
@@ -3344,9 +3328,6 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
 
 void LLPipeline::stateSort(LLCamera& camera, LLCullResult &result)
 {
-    if (LLViewerCamera::sCurCameraID == LLViewerCamera::CAMERA_WORLD &&
-        !gCubeSnapshot && !sShadowRender && !sReflectionRender && !sRenderingHUDs)
-        LLComputeMesh::beginLOD();
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     LL_PROFILE_GPU_ZONE("stateSort");
 
@@ -3886,12 +3867,6 @@ void LLPipeline::postSort(LLCamera &camera)
             {
                 continue;
             }
-
-            // Static resident PBR records are registered when membership/state
-            // changes. Per-view CPU work visits packets, not individual faces.
-            if (j->first == LLRenderPass::PASS_GLTF_PBR && LLComputeMesh::appendSubmission(*group, *sCull,
-                    !sShadowRender && !sReflectionRender && !gCubeSnapshot))
-                continue;
 
             for (LLSpatialGroup::drawmap_elem_t::iterator k = src_vec.begin(); k != src_vec.end(); ++k)
             {
@@ -10285,12 +10260,7 @@ void LLPipeline::renderDeferredLighting()
         LLGLDisable blend(GL_BLEND);
 
         pushRenderTypeMask();
-        // Resident particles are submitted here, after CPU particle groups have
-        // been removed. Preserve the caller's particle visibility bits for the
-        // alpha consumer; intersecting the mask must not silently disable them.
         andRenderTypeMask(LLPipeline::RENDER_TYPE_ALPHA,
-                          LLPipeline::RENDER_TYPE_PARTICLES,
-                          LLPipeline::RENDER_TYPE_HUD_PARTICLES,
                           LLPipeline::RENDER_TYPE_ALPHA_PRE_WATER,
                           LLPipeline::RENDER_TYPE_ALPHA_POST_WATER,
                           LLPipeline::RENDER_TYPE_FULLBRIGHT,

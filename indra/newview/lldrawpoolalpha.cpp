@@ -29,9 +29,6 @@
 #include <optional>
 
 #include "lldrawpoolalpha.h"
-#include "llmeshgeometry.h"
-#include "llcomputemesh.h"
-#include "llparticleviewer.h"
 #include "llviewerpartsim.h"
 
 #include "llglheaders.h"
@@ -661,7 +658,8 @@ void LLDrawPoolAlpha::renderAlphaHighlight()
                     // </FS:Beq>
                     gGL.diffuseColor4f(1, 0, 0, 1);
                     LLRenderPass::applyModelMatrix(params);
-                    LLRenderPass::drawGeometry(params);
+                    params.mVertexBuffer->setBuffer();
+                    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
                 }
             }
         }
@@ -688,8 +686,9 @@ inline bool IsEmissive(LLDrawInfo& params)
 
 inline void Draw(LLDrawInfo* draw, U32 mask)
 {
+    draw->mVertexBuffer->setBuffer();
     LLRenderPass::applyModelMatrix(*draw);
-    LLRenderPass::drawGeometry(*draw);
+    draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
 }
 
 bool LLDrawPoolAlpha::TexSetup(LLDrawInfo* draw, bool use_material)
@@ -785,7 +784,8 @@ void LLDrawPoolAlpha::drawEmissive(LLDrawInfo* draw)
     // OIT residual replay can queue this face without drawing its normal batch.
     // Establish its transform here instead of inheriting the previous batch's.
     LLRenderPass::applyModelMatrix(*draw);
-    LLRenderPass::drawGeometry(*draw);
+    draw->mVertexBuffer->setBuffer();
+    draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
 }
 
 
@@ -794,19 +794,10 @@ void LLDrawPoolAlpha::renderEmissives(std::vector<LLDrawInfo*>& emissives)
     emissive_shader->bind();
     emissive_shader->uniform1f(LLShaderMgr::EMISSIVE_BRIGHTNESS, 1.f);
 
-    std::vector<LLDrawInfo*> batch;
-    for (size_t index = 0; index < emissives.size(); ++index)
+    for (LLDrawInfo* draw : emissives)
     {
-        LLDrawInfo* draw = emissives[index];
-        batch.clear();
-        batch.push_back(draw);
-        while (index + 1 < emissives.size() && batch.size() < 256 &&
-               (LLMeshGeometry::compatibleBatch(*draw, *emissives[index + 1]) ||
-                LLComputeMesh::compatibleBatch(*draw, *emissives[index + 1])))
-            batch.push_back(emissives[++index]);
         bool tex_setup = TexSetup(draw, false);
-        LLRenderPass::applyModelMatrix(*draw);
-        LLRenderPass::drawGeometryBatch(*draw, batch.size() > 1 ? &batch : nullptr);
+        drawEmissive(draw);
         RestoreTexSetup(tex_setup);
     }
 }
@@ -815,21 +806,14 @@ void LLDrawPoolAlpha::renderPbrEmissives(std::vector<LLDrawInfo*>& emissives)
 {
     pbr_emissive_shader->bind();
 
-    std::vector<LLDrawInfo*> batch;
-    for (size_t index = 0; index < emissives.size(); ++index)
+    for (LLDrawInfo* draw : emissives)
     {
-        LLDrawInfo* draw = emissives[index];
-        batch.clear();
-        batch.push_back(draw);
-        while (index + 1 < emissives.size() && batch.size() < 256 &&
-               (LLMeshGeometry::compatibleBatch(*draw, *emissives[index + 1]) ||
-                LLComputeMesh::compatibleBatch(*draw, *emissives[index + 1])))
-            batch.push_back(emissives[++index]);
         llassert(draw->mGLTFMaterial);
         LLGLDisable cull_face(draw->mGLTFMaterial->mDoubleSided ? GL_CULL_FACE : 0);
         draw->mGLTFMaterial->bind(draw->mTexture);
         LLRenderPass::applyModelMatrix(*draw);
-        LLRenderPass::drawGeometryBatch(*draw, batch.size() > 1 ? &batch : nullptr);
+        draw->mVertexBuffer->setBuffer();
+        draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
     }
 }
 
@@ -844,23 +828,14 @@ void LLDrawPoolAlpha::renderRiggedEmissives(std::vector<LLDrawInfo*>& emissives)
     U64 lastMeshId = 0;
     bool skipLastSkin = false;
 
-    std::vector<LLDrawInfo*> batch;
-    for (size_t index = 0; index < emissives.size(); ++index)
+    for (LLDrawInfo* draw : emissives)
     {
-        LLDrawInfo* draw = emissives[index];
-        batch.clear();
-        batch.push_back(draw);
-        while (index + 1 < emissives.size() && batch.size() < 256 &&
-               (LLMeshGeometry::compatibleBatch(*draw, *emissives[index + 1]) ||
-                LLComputeMesh::compatibleBatch(*draw, *emissives[index + 1])))
-            batch.push_back(emissives[++index]);
         LL_PROFILE_ZONE_NAMED_CATEGORY_DRAWPOOL("Emissives");
 
         if (uploadMatrixPalette(draw->mAvatar, draw->mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
         {
             bool tex_setup = TexSetup(draw, false);
-            LLRenderPass::applyModelMatrix(*draw);
-            LLRenderPass::drawGeometryBatch(*draw, batch.size() > 1 ? &batch : nullptr);
+            drawEmissive(draw);
             RestoreTexSetup(tex_setup);
         }
     }
@@ -875,16 +850,8 @@ void LLDrawPoolAlpha::renderRiggedPbrEmissives(std::vector<LLDrawInfo*>& emissiv
     U64 lastMeshId = 0;
     bool skipLastSkin = false;
 
-    std::vector<LLDrawInfo*> batch;
-    for (size_t index = 0; index < emissives.size(); ++index)
+    for (LLDrawInfo* draw : emissives)
     {
-        LLDrawInfo* draw = emissives[index];
-        batch.clear();
-        batch.push_back(draw);
-        while (index + 1 < emissives.size() && batch.size() < 256 &&
-               (LLMeshGeometry::compatibleBatch(*draw, *emissives[index + 1]) ||
-                LLComputeMesh::compatibleBatch(*draw, *emissives[index + 1])))
-            batch.push_back(emissives[++index]);
         if (!uploadMatrixPalette(draw->mAvatar, draw->mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
         { // failed to upload matrix palette, skip rendering
             continue;
@@ -893,7 +860,8 @@ void LLDrawPoolAlpha::renderRiggedPbrEmissives(std::vector<LLDrawInfo*>& emissiv
         LLGLDisable cull_face(draw->mGLTFMaterial->mDoubleSided ? GL_CULL_FACE : 0);
         draw->mGLTFMaterial->bind(draw->mTexture);
         LLRenderPass::applyModelMatrix(*draw);
-        LLRenderPass::drawGeometryBatch(*draw, batch.size() > 1 ? &batch : nullptr);
+        draw->mVertexBuffer->setBuffer();
+        draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
     }
 }
 
@@ -956,7 +924,6 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
 
     // <FS> for (LLCullResult::sg_iterator i = begin; i != end; ++i)
 
-    std::vector<std::pair<LLSpatialGroup*,bool>> walk;
     while (iter != iter_end || rigged_iter != rigged_end)
     // </FS>
     {
@@ -999,43 +966,6 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
 
         LLSpatialGroup* group = rigged ? *rigged_iter++ : *iter++;
 
-        walk.emplace_back(group,rigged);
-    }
-
-    bool particlePass = LLParticleViewer::active() && stream != EAlphaStream::RIGGED &&
-        (oit_phase == ALPHA_OIT_NONE || oit_phase == ALPHA_OIT_RESIDUAL) &&
-        gPipeline.sRenderParticles && LLViewerPartSim::getMaxPartCount()>0 &&
-        gPipeline.hasRenderType(LLPipeline::sRenderingHUDs ? LLPipeline::RENDER_TYPE_HUD_PARTICLES : LLPipeline::RENDER_TYPE_PARTICLES);
-    if (particlePass)
-    {
-        std::vector<float> boundaries;
-        boundaries.reserve(walk.size());
-        for (const auto& entry : walk)
-            // Only the merged stream is sorted by avatar/ensemble depth. The
-            // stock and OIT residual world streams retain bounds-depth order.
-            boundaries.push_back(merged ? (entry.second ? entry.first->mAvatarDepth : entry.first->worldAlphaDepth()) : entry.first->mDepth);
-        gGL.matrixMode(LLRender::MM_MODELVIEW);
-        gGL.pushMatrix(); gGL.loadMatrix(gGLModelView);
-        particlePass = LLParticleViewer::beginView(boundaries, LLPipeline::sRenderingHUDs);
-        gGL.popMatrix();
-    }
-    U32 particleInterval = 0;
-    auto drawParticles = [&]()
-    {
-        if (!particlePass) return;
-        auto& shader = LLPipeline::sRenderingHUDs ? gParticleHUDAlphaProgram : gParticleAlphaProgram;
-        LLGLSLShader* previous = current_shader;
-        prepare_alpha_shader(&shader, true, above_water ? 1.f : -1.f);
-        if (depth_only) shader.setMinimumAlpha(0.33f);
-        if (previous) previous->bind(); else LLGLSLShader::unbind();
-        particlePass = LLParticleViewer::draw(particleInterval++, shader, write_depth_always,
-            depth_only, getType() != LLDrawPool::POOL_ALPHA_PRE_WATER);
-    };
-    for (const auto& entry : walk)
-    {
-        drawParticles();
-        LLSpatialGroup* group = entry.first;
-        rigged = entry.second;
         // </FS>
         llassert(group);
         llassert(group->getSpatialPartition());
@@ -1120,12 +1050,9 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
 
             LLSpatialGroup::drawmap_elem_t& draw_info = rigged ? group->mDrawMap[LLRenderPass::PASS_ALPHA_RIGGED] : group->mDrawMap[LLRenderPass::PASS_ALPHA];
 
-            std::vector<LLDrawInfo*> mesh_batch;
             for (LLSpatialGroup::drawmap_elem_t::iterator k = draw_info.begin(); k != draw_info.end(); ++k)
             {
                 LLDrawInfo& params = **k;
-                mesh_batch.clear();
-                mesh_batch.push_back(&params);
                 if ((bool)params.mAvatar != rigged)
                 {
                     continue;
@@ -1304,17 +1231,6 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
                     continue;
                 }
 
-                // Only consume consecutive compatible draws in this group's
-                // already sorted stream. Palette/material/blend state and the
-                // group's particle insertion boundary remain unchanged.
-                auto next = k + 1;
-                while (next != draw_info.end() && mesh_batch.size() < 256 &&
-                       (LLMeshGeometry::compatibleBatch(params, **next) || LLComputeMesh::compatibleBatch(params, **next)))
-                {
-                    mesh_batch.push_back(*next);
-                    k = next++;
-                }
-
                 bool tex_setup = TexSetup(&params, (mat != nullptr));
 
                 {
@@ -1329,7 +1245,8 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
                         reset_minimum_alpha = true;
                     }
 
-                    LLRenderPass::drawGeometryBatch(params, mesh_batch.size() > 1 ? &mesh_batch : nullptr);
+                    params.mVertexBuffer->setBuffer();
+                    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
                     stop_glerror();
 
                     if (reset_minimum_alpha)
@@ -1348,22 +1265,22 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
                     {
                         if (params.mGLTFMaterial.isNull())
                         {
-                            rigged_emissives.insert(rigged_emissives.end(), mesh_batch.begin(), mesh_batch.end());
+                            rigged_emissives.push_back(&params);
                         }
                         else
                         {
-                            pbr_rigged_emissives.insert(pbr_rigged_emissives.end(), mesh_batch.begin(), mesh_batch.end());
+                            pbr_rigged_emissives.push_back(&params);
                         }
                     }
                     else
                     {
                         if (params.mGLTFMaterial.isNull())
                         {
-                            emissives.insert(emissives.end(), mesh_batch.begin(), mesh_batch.end());
+                            emissives.push_back(&params);
                         }
                         else
                         {
-                            pbr_emissives.insert(pbr_emissives.end(), mesh_batch.begin(), mesh_batch.end());
+                            pbr_emissives.push_back(&params);
                         }
                     }
                 }
@@ -1433,8 +1350,6 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, EAlphaStream stream
             }
         }
     }
-
-    drawParticles();
 
     gGL.setSceneBlendType(LLRender::BT_ALPHA);
 

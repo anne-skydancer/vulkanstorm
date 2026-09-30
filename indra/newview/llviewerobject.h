@@ -1130,6 +1130,14 @@ public:
     { mDepth = 0.f; }
 
     virtual F32 getPartSize(S32 idx);
+    virtual void getGeometry(S32 idx,
+                                LLStrider<LLVector4a>& verticesp,
+                                LLStrider<LLVector3>& normalsp,
+                                LLStrider<LLVector2>& texcoordsp,
+                                LLStrider<LLColor4U>& colorsp,
+                                LLStrider<LLColor4U>& emissivep,
+                                LLStrider<U16>& indicesp) = 0;
+
     virtual void getBlendFunc(S32 face, LLRender::eBlendFactor& src, LLRender::eBlendFactor& dst);
 
     F32 mDepth;

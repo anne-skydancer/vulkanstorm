@@ -28,7 +28,6 @@
 
 #include "lldrawable.h" // lldrawable needs to be included before llface
 #include "llface.h"
-#include "llmeshgeometry.h"
 #include "llviewertextureanim.h"
 
 #include "llviewercontrol.h"
@@ -1282,8 +1281,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
                                 U16 index_offset,
                                 bool force_rebuild,
                                 bool no_debug_assert,
-                                bool rebuild_for_gltf,
-                                U32 resident_slot)
+                                bool rebuild_for_gltf)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_FACE;
     llassert(verify());
@@ -1378,7 +1376,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
         // Recursive call the same function with the argument rebuild_for_gltf set to true
         // This call will make geometry in mVertexBuffer but in fact for mVertexBufferGLTF
         mVertexBufferGLTF.swap(mVertexBufferGLTF, mVertexBuffer);
-        getGeometryVolume(volume, face_index, mat_vert_in, mat_norm_in, index_offset, force_rebuild, no_debug_assert, true, resident_slot);
+        getGeometryVolume(volume, face_index, mat_vert_in, mat_norm_in, index_offset, force_rebuild, no_debug_assert, true);
         mVertexBufferGLTF.swap(mVertexBufferGLTF, mVertexBuffer);
         mVertexBufferGLTF->unmapBuffer();
     }
@@ -1500,15 +1498,8 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
         }
     }
 
-    const bool gpu_mesh = mVObjp->isMesh();
-
     // INDICES
-    if (full_rebuild && gpu_mesh)
-    {
-        if (!LLMeshGeometry::indices(*mVertexBuffer, volume, face_index, mIndicesIndex, num_indices, index_offset))
-            LL_ERRS("MeshGeometry") << "Cannot publish mesh indices" << LL_ENDL;
-    }
-    if (full_rebuild && !gpu_mesh)
+    if (full_rebuild)
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_FACE("getGeometryVolume - indices");
         mVertexBuffer->getIndexStrider(indicesp, mIndicesIndex, mIndicesCount);
@@ -1661,29 +1652,6 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
         }
     }
 
-    if (gpu_mesh && rebuild_pos && num_vertices > 0)
-    {
-        if (rebuild_tangent) const_cast<LLVolume&>(volume).genTangents(face_index);
-        LLMatrix4a gpu_position = mat_vert;
-        LLMatrix4a gpu_normal;
-        if (rebuild_normal || rebuild_tangent) gpu_normal = mat_normal;
-        else gpu_normal.setIdentity();
-        if (resident_slot != ~0u)
-        {
-            gpu_position.setIdentity();
-            gpu_normal.setIdentity();
-        }
-        const U32 texture_index = resident_slot != ~0u ? resident_slot :
-            (mTextureIndex < FACE_DO_NOT_BATCH_TEXTURES ? mTextureIndex : 0);
-        if (!LLMeshGeometry::generate(*mVertexBuffer, volume, face_index, mGeomIndex,
-                num_vertices, mGeomCount, texture_index, gpu_position, gpu_normal,
-                rebuild_normal, rebuild_tangent))
-        {
-            LL_ERRS("MeshGeometry") << "Cannot publish mesh geometry attributes" << LL_ENDL;
-            return false;
-        }
-    }
-
     {
         //if it's not fullbright and has no normals, bake sunlight based on face normal
         //bool bake_sunlight = !getTextureEntry()->getFullbright() &&
@@ -1805,65 +1773,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             // For GLTF materials: Transforms will be applied later
             bool do_tex_mat = tex_mode && mTextureMatrix && !gltf_mat;
 
-            if (gpu_mesh)
-            {
-                // Preserve the face/material policy above; perform every per-vertex
-                // projection, UV transform and bump offset in the compute producer.
-                if (!mat && !gltf_mat && do_bump)
-                    const_cast<LLVolume&>(volume).genTangents(face_index);
-                LLMeshGeometry::Texcoords parameters;
-                std::copy(scale.mV, scale.mV+3, parameters.scale);
-                if (mTextureMatrix) parameters.texture.loadu(*mTextureMatrix);
-                const U32 channels = do_bump ? 3 : 1;
-                for (U32 channel=0; channel<channels; ++channel)
-                {
-                    const auto attribute = static_cast<LLVertexBuffer::AttributeType>(LLVertexBuffer::TYPE_TEXCOORD0+channel);
-                    if (!mVertexBuffer->hasDataType(attribute)) continue;
-                    if (channel && mat && !tex_anim)
-                    {
-                        if (channel==1)
-                        {
-                            r=mat->getNormalRotation(); mat->getNormalOffset(os,ot); mat->getNormalRepeat(ms,mt);
-                        }
-                        else
-                        {
-                            r=mat->getSpecularRotation(); mat->getSpecularOffset(os,ot); mat->getSpecularRepeat(ms,mt);
-                        }
-                        cos_ang=cos(r); sin_ang=sin(r);
-                    }
-                    parameters.flags = texgen==LLTextureEntry::TEX_GEN_PLANAR ? 1u : 0u;
-                    const bool matrix = do_bump ? bool(tex_mode && mTextureMatrix) : do_tex_mat;
-                    if (matrix) parameters.flags |= 2u;
-                    if (do_bump ? bool(xforms & (1u<<channel)) : xforms!=XFORM_NONE) parameters.flags |= 4u;
-                    parameters.transform[0]=cos_ang; parameters.transform[1]=sin_ang;
-                    parameters.transform[2]=ms; parameters.transform[3]=mt;
-                    parameters.offset[0]=os; parameters.offset[1]=ot;
-                    if (!LLMeshGeometry::texcoords(*mVertexBuffer,volume,face_index,attribute,mGeomIndex,num_vertices,parameters))
-                        LL_ERRS("MeshGeometry") << "Cannot publish mesh texture coordinates" << LL_ENDL;
-                }
-                if (!mat && !gltf_mat && do_bump)
-                {
-                    parameters.flags |= 8u;
-                    // UV-only updates still need a valid bump normal transform.
-                    if (rigged)
-                    {
-                        glm::mat4 bind = glm::make_mat4((F32*)mSkinInfo->mBindShapeMatrix.getF32ptr());
-                        parameters.normal.loadu(glm::value_ptr(glm::transpose(glm::inverse(bind))));
-                    }
-                    else parameters.normal.loadu(mat_norm_in);
-                    if (mDrawablep->isActive())
-                    {
-                        parameters.flags |= 16u;
-                        parameters.rotation.loadu(LLMatrix4(bump_quat));
-                    }
-                    std::copy(binormal_dir.getF32ptr(),binormal_dir.getF32ptr()+3,parameters.binormal);
-                    std::copy(bump_s_primary_light_ray.getF32ptr(),bump_s_primary_light_ray.getF32ptr()+3,parameters.bump_s);
-                    std::copy(bump_t_primary_light_ray.getF32ptr(),bump_t_primary_light_ray.getF32ptr()+3,parameters.bump_t);
-                    if (!LLMeshGeometry::texcoords(*mVertexBuffer,volume,face_index,LLVertexBuffer::TYPE_TEXCOORD1,mGeomIndex,num_vertices,parameters))
-                        LL_ERRS("MeshGeometry") << "Cannot publish mesh bump coordinates" << LL_ENDL;
-                }
-            }
-            else if (!do_bump)
+            if (!do_bump)
             { //not bump mapped, might be able to do a cheap update
                 mVertexBuffer->getTexCoord0Strider(tex_coords0, mGeomIndex, mGeomCount);
 
@@ -2169,7 +2079,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             }
         }
 
-        if (rebuild_pos && !gpu_mesh)
+        if (rebuild_pos)
         {
             LLVector4a* src = vf.mPositions;
 
@@ -2196,14 +2106,13 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 
             LLVector4a texIdx;
 
-            const bool local_geometry = resident_slot != ~0u;
-            U32 index = local_geometry ? resident_slot :
-                (mTextureIndex < FACE_DO_NOT_BATCH_TEXTURES ? mTextureIndex : 0);
+            S32 index = mTextureIndex < FACE_DO_NOT_BATCH_TEXTURES ? mTextureIndex : 0;
 
             F32 val = 0.f;
-            std::memcpy(&val, &index, sizeof(index));
+            S32* vp = (S32*) &val;
+            *vp = index;
 
-            llassert(local_geometry || index < U32(LLGLSLShader::sIndexedTextureChannels));
+            llassert(index < LLGLSLShader::sIndexedTextureChannels);
 
             LLVector4Logical mask;
             mask.clear();
@@ -2216,8 +2125,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 
             while (src < end)
             {
-                if (local_geometry) res0 = *src++;
-                else mat_vert.affineTransform(*src++, res0);
+                mat_vert.affineTransform(*src++, res0);
                 tmp.setSelectWithMask(mask, texIdx, res0);
                 tmp.store4a((F32*) dst);
                 dst += 4;
@@ -2241,7 +2149,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             }
         }
 
-        if (rebuild_normal && !gpu_mesh)
+        if (rebuild_normal)
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_FACE("getGeometryVolume - normal");
 
@@ -2259,8 +2167,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 // </FS:Zi>
-                if (resident_slot != ~0u) normal = *src++;
-                else mat_normal.rotate(*src++, normal);
+                mat_normal.rotate(*src++, normal);
 // <FS:Zi> GCC12 warning: maybe-uninitialized - probably bogus
 #if defined(__GNUC__) && (__GNUC__ >= 12)
 #pragma GCC diagnostic pop
@@ -2271,7 +2178,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             }
         }
 
-        if (rebuild_tangent && !gpu_mesh)
+        if (rebuild_tangent)
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_FACE("getGeometryVolume - tangent");
             mVertexBuffer->getTangentStrider(tangent, mGeomIndex, mGeomCount);
@@ -2295,8 +2202,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 // </FS:Zi>
-                if (resident_slot != ~0u) tangent_out = *src;
-                else mat_normal.rotate(*src, tangent_out);
+                mat_normal.rotate(*src, tangent_out);
 // <FS:Zi> GCC12 warning: maybe-uninitialized - probably bogus
 #if defined(__GNUC__) && (__GNUC__ >= 12)
 #pragma GCC diagnostic pop
@@ -2310,12 +2216,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             }
         }
 
-        if (gpu_mesh && rebuild_weights && vf.mWeights)
-        {
-            if (!LLMeshGeometry::weights(*mVertexBuffer,volume,face_index,mGeomIndex,num_vertices))
-                LL_ERRS("MeshGeometry") << "Cannot publish mesh weights" << LL_ENDL;
-        }
-        if (!gpu_mesh && rebuild_weights && vf.mWeights)
+        if (rebuild_weights && vf.mWeights)
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_FACE("getGeometryVolume - weight");
             mVertexBuffer->getWeight4Strider(wght, mGeomIndex, mGeomCount);
@@ -2329,9 +2230,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             // </FS:Ansariel>
         }
 
-        if (gpu_mesh && rebuild_color && mVertexBuffer->hasDataType(LLVertexBuffer::TYPE_COLOR))
-            LLMeshGeometry::fill(*mVertexBuffer,LLVertexBuffer::TYPE_COLOR,mGeomIndex,mGeomCount,color.asRGBA());
-        if (!gpu_mesh && rebuild_color && mVertexBuffer->hasDataType(LLVertexBuffer::TYPE_COLOR) )
+        if (rebuild_color && mVertexBuffer->hasDataType(LLVertexBuffer::TYPE_COLOR) )
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_FACE("getGeometryVolume - color");
             mVertexBuffer->getColorStrider(colors, mGeomIndex, mGeomCount);
@@ -2357,12 +2256,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             }
         }
 
-        if (gpu_mesh && rebuild_emissive)
-        {
-            const U8 glow = tep ? U8(llclamp(S32(tep->getGlow()*255),0,255)) : 0;
-            LLMeshGeometry::fill(*mVertexBuffer,LLVertexBuffer::TYPE_EMISSIVE,mGeomIndex,mGeomCount,LLColor4U(0,0,0,glow).asRGBA());
-        }
-        if (!gpu_mesh && rebuild_emissive)
+        if (rebuild_emissive)
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_FACE("getGeometryVolume - emissive");
             LLStrider<LLColor4U> emissive;

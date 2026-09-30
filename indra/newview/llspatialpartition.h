@@ -47,7 +47,6 @@
 #include "llmodel.h"
 //</FS:Beq>
 #include <memory>
-namespace LLComputeMesh { struct Resident; struct Submission; struct Batch; }
 #include <functional>
 #include <queue>
 #include <unordered_map>
@@ -110,9 +109,6 @@ public:
     U32 mCount = 0;
     U32 mOffset = 0;
 
-    std::shared_ptr<LLComputeMesh::Resident> mComputeLOD;
-    std::shared_ptr<LLComputeMesh::Batch> mComputeBatch;
-
     LLPointer<LLViewerTexture>     mTexture;
     LLPointer<LLViewerTexture> mSpecularMap;
     LLPointer<LLViewerTexture> mNormalMap;
@@ -148,7 +144,6 @@ public:
     U8   mShiny = 0;
     bool mFullbright = false;
     bool mHasGlow = false;
-    bool mMeshGeometry = false;
 
     struct CompareTexture
     {
@@ -431,7 +426,6 @@ public:
     LLPointer<LLVertexBuffer> mVertexBuffer;
     draw_map_t mDrawMap;
     std::unique_ptr<LLAlphaSortOrder> mAlphaSortOrder;
-    std::shared_ptr<LLComputeMesh::Submission> mComputeSubmission;
 
     bridge_list_t mBridgeList;
     buffer_map_t mBufferMap; //used by volume buffers to attempt to reuse vertex buffers
@@ -641,8 +635,6 @@ public:
     void pushDrawable(LLDrawable* drawable);
     void pushBridge(LLSpatialBridge* bridge);
     void pushDrawInfo(U32 type, LLDrawInfo* draw_info);
-    void retainMeshSubmission(const std::shared_ptr<LLComputeMesh::Submission>& submission)
-    { mMeshSubmissions.push_back(submission); }
 
     U32 getVisibleGroupsSize()      { return mVisibleGroupsSize; }
     U32 getAlphaGroupsSize()        { return mAlphaGroupsSize; }
@@ -690,9 +682,6 @@ private:
     drawable_iterator   mVisibleListEnd;
     bridge_list_t       mVisibleBridge;
     bridge_iterator     mVisibleBridgeEnd;
-    // Render maps contain raw pointers. Keep synthetic draw packets alive even
-    // if a later view rebuilds their spatial group's registration.
-    std::vector<std::shared_ptr<LLComputeMesh::Submission>> mMeshSubmissions;
     drawinfo_list_t     mRenderMap[LLRenderPass::NUM_RENDER_TYPES];
     U32                 mRenderMapAllocated[LLRenderPass::NUM_RENDER_TYPES];
     drawinfo_iterator mRenderMapEnd[LLRenderPass::NUM_RENDER_TYPES];

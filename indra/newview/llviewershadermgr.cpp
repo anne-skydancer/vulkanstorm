@@ -31,10 +31,6 @@
 
 #include "llfeaturemanager.h"
 #include "llviewershadermgr.h"
-#include "llcomputemesh.h"
-#include "llparticlecompute.h"
-#include "llmeshgeometry.h"
-#include "llparticlepipeline.h"
 #include "llviewercontrol.h"
 #include "llversioninfo.h"
 
@@ -186,9 +182,6 @@ LLGLSLShader            gDeferredAvatarShadowProgram;
 LLGLSLShader            gDeferredAvatarAlphaShadowProgram;
 LLGLSLShader            gDeferredAvatarAlphaMaskShadowProgram;
 LLGLSLShader            gDeferredAlphaProgram;
-LLGLSLShader            gParticleAlphaProgram;
-LLGLSLShader            gParticleHUDAlphaProgram;
-LLGLSLShader gParticleDepthProgram;
 LLGLSLShader            gHUDAlphaProgram;
 LLGLSLShader            gDeferredSkinnedAlphaProgram;
 LLGLSLShader            gDeferredAlphaImpostorProgram;
@@ -439,12 +432,6 @@ void LLViewerShaderMgr::finalizeShaderList()
     mShaderList.push_back(&gHazeWaterProgram);
     mShaderList.push_back(&gDeferredSoftenProgram);
     mShaderList.push_back(&gDeferredAlphaProgram);
-    // Optional programs may be absent on the 4.3 CPU path or after a shader
-    // compilation failure. Only live programs need environment uniforms.
-    if (gParticleAlphaProgram.mProgramObject)
-        mShaderList.push_back(&gParticleAlphaProgram);
-    if (gParticleHUDAlphaProgram.mProgramObject)
-        mShaderList.push_back(&gParticleHUDAlphaProgram);
     mShaderList.push_back(&gHUDAlphaProgram);
     mShaderList.push_back(&gDeferredAlphaImpostorProgram);
     mShaderList.push_back(&gDeferredFullbrightProgram);
@@ -668,31 +655,6 @@ void LLViewerShaderMgr::setShaders()
         return;
     }
 
-    if (!LLMeshGeometry::initGL())
-    {
-        LL_ERRS("Shader") << "Unable to load required mesh geometry compute shader." << LL_ENDL;
-        reentrance = false;
-        return;
-    }
-
-    if (!LLParticleCompute::initGL())
-    {
-        LL_ERRS("Shader") << "Unable to load required particle compute shader, cannot continue." << LL_ENDL;
-        reentrance = false;
-        return;
-    }
-
-    // Resident simulation/submission is an automatic capability upgrade, not a
-    // new minimum requirement. Keep CPU particles available on other drivers.
-    if (!LLParticlePipeline::isSupported())
-    {
-        LL_INFOS("ParticlePipeline") << "Advanced particle capabilities unavailable; retaining CPU simulation and ordering." << LL_ENDL;
-    }
-    else if (!LLParticlePipeline::initGL())
-    {
-        LL_WARNS("ParticlePipeline") << "Resident particle shaders failed to initialize; retaining CPU simulation and ordering." << LL_ENDL;
-    }
-
     gPipeline.mShadersLoaded = true;
 
     bool loaded = loadShadersWater();
@@ -783,10 +745,6 @@ void LLViewerShaderMgr::setShaders()
 
 void LLViewerShaderMgr::unloadShaders()
 {
-    LLMeshGeometry::destroyGL();
-    LLParticleCompute::destroyGL();
-    LLParticlePipeline::unloadShaders();
-    LLComputeMesh::reloadLOD();
     while (!LLGLSLShader::sInstances.empty())
     {
         LLGLSLShader* shader = *(LLGLSLShader::sInstances.begin());
@@ -1436,7 +1394,6 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         gDeferredPBROpaqueProgram.mShaderFiles.clear();
         gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueV.glsl", GL_VERTEX_SHADER));
-        gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair("objects/meshTransformV.glsl", GL_VERTEX_SHADER));
         gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueF.glsl", GL_FRAGMENT_SHADER));
         gDeferredPBROpaqueProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gDeferredPBROpaqueProgram.clearPermutations();
@@ -1828,20 +1785,13 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
     if (success)
     {
-        for (int i = 0; i < 5 && success; ++i)
+        for (int i = 0; i < 3 && success; ++i)
         {
             LLGLSLShader* shader = nullptr;
             bool rigged = (i == 1);
-            bool hud = (i == 2 || i == 4);
-            bool particle = i >= 3;
-            if (particle && !LLParticlePipeline::isSupported()) continue;
+            bool hud = (i == 2);
 
-            if (particle)
-            {
-                shader = hud ? &gParticleHUDAlphaProgram : &gParticleAlphaProgram;
-                shader->mName = hud ? "Resident Particle HUD Alpha" : "Resident Particle Alpha";
-            }
-            else if (hud)
+            if (hud)
             {
                 shader = &gHUDAlphaProgram;
                 shader->mName = "HUD Alpha Shader";
@@ -1868,17 +1818,16 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             shader->mFeatures.hasGamma = true;
             shader->mFeatures.hasShadows = use_sun_shadow;
             shader->mFeatures.hasReflectionProbes = true;
-            shader->mFeatures.mIndexedTextureChannels = particle ? 0 : LLGLSLShader::sIndexedTextureChannels;
+            shader->mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
 
             shader->mShaderFiles.clear();
-            shader->mShaderFiles.push_back(make_pair(particle ? "objects/particleResidentV.glsl" : "deferred/alphaV.glsl", GL_VERTEX_SHADER));
+            shader->mShaderFiles.push_back(make_pair("deferred/alphaV.glsl", GL_VERTEX_SHADER));
             shader->mShaderFiles.push_back(make_pair("deferred/alphaF.glsl", GL_FRAGMENT_SHADER));
 
             shader->clearPermutations();
             shader->addPermutation("USE_VERTEX_COLOR", "1");
             shader->addPermutation("HAS_ALPHA_MASK", "1");
-            if (particle) shader->addPermutation("GPU_PARTICLE_RENDER", "3");
-            else shader->addPermutation("USE_INDEXED_TEX", "1");
+            shader->addPermutation("USE_INDEXED_TEX", "1");
             if (use_sun_shadow)
             {
                 shader->addPermutation("HAS_SUN_SHADOW", "1");
@@ -1898,39 +1847,13 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
             shader->mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
-            const bool created = shader->createShader();
-            if (particle)
-            {
-                if (!created)
-                {
-                    shader->unload();
-                    LL_WARNS("ParticlePipeline") << "Optional resident alpha shader unavailable; retain CPU particle path." << LL_ENDL;
-                }
-                else LL_INFOS("ParticlePipeline") << shader->mName << " initialized" << LL_ENDL;
-            }
-            else
-            {
-                success = created;
-                llassert(success);
-            }
+            success = shader->createShader();
+            llassert(success);
 
             // Hack
             shader->mFeatures.calculatesLighting = true;
             shader->mFeatures.hasLighting = true;
         }
-    }
-
-    if (success && LLParticlePipeline::isSupported())
-    {
-        gParticleDepthProgram.mName = "Resident Particle Depth Resolve";
-        gParticleDepthProgram.mFeatures.attachNothing = true;
-        gParticleDepthProgram.mShaderLevel = 1;
-        gParticleDepthProgram.clearPermutations();
-        gParticleDepthProgram.addPermutation("GPU_PARTICLE_RENDER", "3");
-        gParticleDepthProgram.mShaderFiles = {
-            {"objects/particleResidentV.glsl", GL_VERTEX_SHADER},
-            {"objects/particleDepthF.glsl", GL_FRAGMENT_SHADER}};
-        if (!gParticleDepthProgram.createShader()) gParticleDepthProgram.unload();
     }
 
     if (success)
@@ -2300,7 +2223,6 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowProgram.mName = "Deferred Shadow Shader";
         gDeferredShadowProgram.mShaderFiles.clear();
         gDeferredShadowProgram.mShaderFiles.push_back(make_pair("deferred/shadowV.glsl", GL_VERTEX_SHADER));
-        gDeferredShadowProgram.mShaderFiles.push_back(make_pair("objects/meshTransformV.glsl", GL_VERTEX_SHADER));
         gDeferredShadowProgram.mShaderFiles.push_back(make_pair("deferred/shadowF.glsl", GL_FRAGMENT_SHADER));
         gDeferredShadowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gDeferredShadowProgram.mRiggedVariant = &gDeferredSkinnedShadowProgram;

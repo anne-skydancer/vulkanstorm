@@ -141,7 +141,6 @@ void LLSpatialGroup::clearDrawMap()
 {
     mDrawMap.clear();
     mAlphaSortOrder.reset();
-    mComputeSubmission.reset();
 }
 
 bool LLSpatialGroup::isHUDGroup() const
@@ -4213,7 +4212,6 @@ void LLCullResult::clear()
         mRenderMapSize[i] = 0;
         mRenderMapEnd[i] = &render_map.front();
     }
-    mMeshSubmissions.clear();
 }
 
 LLCullResult::sg_iterator LLCullResult::beginVisibleGroups()

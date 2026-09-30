@@ -161,7 +161,6 @@ struct LLImageGL {
     int mFormatInternal=0, mFormatPrimary=0, mFormatType=0, mFormatSwapBytes=0;
     int mAutoGenMips=0, mLastBindTime=0;
     bool mTexOptionsDirty=false;
-    U64 mContentRevision=1;
     static constexpr int sLastFrameTime=42;
     void adoptUploadImage(LLImageGL& image);
     int getDiscardLevel() const { return mCurrentDiscardLevel; }
@@ -324,7 +323,7 @@ int main() {
     list.completeTextureUploads();
     assert(texture->image.mTexName==20 && texture->image.mPickMask==21);
     assert(texture->image.mWidth==2048 && texture->image.mComponents==4);
-    assert(texture->image.mContentRevision==2 && texture->image.mTexOptionsDirty);
+    assert(texture->image.mTexOptionsDirty);
     assert(upload_image->mTexName==10 && upload_image->mPickMask==11);
     assert(texture->posts==1 && !texture->mCreatePending);
     assert(list.mPendingUploadBytes==0 && LLTextureDeliveryBudget::used()==0);

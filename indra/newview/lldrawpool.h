@@ -128,8 +128,6 @@ public:
     bool mSkipRender;
 };
 
-namespace LLComputeMesh { struct Batch; }
-
 class LLRenderPass : public LLDrawPool
 {
 public:
@@ -352,9 +350,6 @@ public:
     bool isDead() { return false; }
     void resetDrawOrders() { }
 
-    // Draw the same resident LOD in color, shadow, alpha and replay passes.
-    static void drawGeometry(LLDrawInfo& params);
-    static void drawGeometryBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch);
     static void applyModelMatrix(const LLDrawInfo& params);
     // For rendering that doesn't use LLDrawInfo for some reason
     static void applyModelMatrix(const LLMatrix4* model_matrix);
@@ -381,16 +376,16 @@ public:
     void pushUntexturedRiggedGLTFBatches(U32 type);
 
     // push a single GLTF draw call
-    static void pushGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch = nullptr, LLComputeMesh::Batch* registered = nullptr);
+    static void pushGLTFBatch(LLDrawInfo& params);
     static void pushRiggedGLTFBatch(LLDrawInfo& params, const LLVOAvatar*& lastAvatar, U64& lastMeshId, bool& skipLastSkin);
-    static void pushUntexturedGLTFBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch = nullptr, LLComputeMesh::Batch* registered = nullptr);
+    static void pushUntexturedGLTFBatch(LLDrawInfo& params);
     static void pushUntexturedRiggedGLTFBatch(LLDrawInfo& params, const LLVOAvatar*& lastAvatar, U64& lastMeshId, bool& skipLastSkin);
 
     void pushMaskBatches(U32 type, bool texture = true, bool batch_textures = false);
     void pushRiggedMaskBatches(U32 type, bool texture = true, bool batch_textures = false);
-    void pushBatch(LLDrawInfo& params, bool texture, bool batch_textures = false, const std::vector<LLDrawInfo*>* batch = nullptr);
-    void pushUntexturedBatch(LLDrawInfo& params, const std::vector<LLDrawInfo*>* batch = nullptr);
-    void pushBumpBatch(LLDrawInfo& params, bool texture, bool batch_textures = false, const std::vector<LLDrawInfo*>* batch = nullptr);
+    void pushBatch(LLDrawInfo& params, bool texture, bool batch_textures = false);
+    void pushUntexturedBatch(LLDrawInfo& params);
+    void pushBumpBatch(LLDrawInfo& params, bool texture, bool batch_textures = false);
     static bool uploadMatrixPalette(LLDrawInfo& params);
     // <FS:Beq> be defensive about UAF with skinInfo during LocalMesh
     // static bool uploadMatrixPalette(LLVOAvatar* avatar, LLMeshSkinInfo* skinInfo);

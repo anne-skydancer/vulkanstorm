@@ -202,11 +202,6 @@ public:
     //      - This buffer has sufficient attributes within it to satisfy the needs of the currently bound shader
     void    setBuffer();
 
-    // A deferred GPU producer may batch work until its first vertex consumer.
-    // It must retain this buffer and clear the callback on completion/teardown.
-    // The callback must restore all GL state it changes.
-    void setBeforeBind(void (*callback)()) { mBeforeBind = callback; }
-
     // Only call each getVertexPointer, etc, once before calling unmapBuffer()
     // call unmapBuffer() after calls to getXXXStrider() before any calls to setBuffer()
     // example:
@@ -263,10 +258,6 @@ public:
     U32 getTypeMask() const                 { return mTypeMask; }
     bool hasDataType(AttributeType type) const { return ((1 << type) & getTypeMask()); }
     U32 getSize() const                     { return mSize; }
-    // Compute writers must flush pending uploads first and provide the barriers
-    // for subsequent consumers. GPU writes do not update the CPU shadow.
-    U32 getGLBuffer() const                 { return mGLBuffer; }
-    U32 getGLIndices() const                { return mGLIndices; }
     U32 getIndicesSize() const              { return mIndicesSize; }
     U8* getMappedData() const               { return mMappedData; }
     U8* getMappedIndices() const            { return mMappedIndexData; }
@@ -276,13 +267,6 @@ public:
     // Detailed error checking can be enabled by setting gDebugGL to true
     void draw(U32 mode, U32 count, U32 indices_offset) const;
     void drawArrays(U32 mode, U32 offset, U32 count) const;
-    // Commands use index elements, not byte offsets; the bound indirect buffer
-    // contains standard five-word DrawElementsIndirectCommand records.
-    void drawIndirect(U32 mode, U32 command_offset, U32 draw_count) const;
-    // Copy a resident range into a larger same-layout buffer. Attribute data is
-    // copied on the GPU; the CPU shadow and rebased 16-bit indices stay coherent.
-    void copyResidentRange(const LLVertexBuffer& source, U32 source_vertex, U32 source_index,
-        U32 vertices, U32 indices, U32 target_vertex, U32 target_index);
     void drawRange(U32 mode, U32 start, U32 end, U32 count, U32 indices_offset) const;
 
     // draw without syncing matrices.  If you're positive there have been no matrix
@@ -299,7 +283,6 @@ public:
     void clone(LLVertexBuffer& target) const;
 
 protected:
-    void (*mBeforeBind)() = nullptr;
     U32     mGLBuffer = 0;      // GL VBO handle
     U32     mGLIndices = 0;     // GL IBO handle
     U32     mNumVerts = 0;      // Number of vertices allocated

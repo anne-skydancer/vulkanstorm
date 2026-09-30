@@ -65,11 +65,6 @@ out vec3 vary_position;
 vec2 texture_transform(vec2 vertex_texcoord, vec4[2] khr_gltf_transform, mat4 sl_animation_transform);
 vec4 tangent_space_transform(vec4 vertex_tangent, vec3 vertex_normal, vec4[2] khr_gltf_transform, mat4 sl_animation_transform);
 
-#ifndef HAS_SKIN
-vec3 residentMeshPosition(vec3 position);
-vec3 residentMeshNormal(vec3 normal);
-#endif
-
 void main()
 {
 #ifdef HAS_SKIN
@@ -82,9 +77,9 @@ void main()
     gl_Position = projection_matrix*vec4(pos,1.0);
 
 #else
-    vec3 resident_position = residentMeshPosition(position.xyz);
-    vary_position = (modelview_matrix*vec4(resident_position, 1.0)).xyz;
-    gl_Position = modelview_projection_matrix * vec4(resident_position, 1.0);
+    vary_position = (modelview_matrix*vec4(position.xyz, 1.0)).xyz;
+    //transform vertex
+    gl_Position = modelview_projection_matrix * vec4(position.xyz, 1.0);
 #endif
 
     base_color_texcoord = texture_transform(texcoord0, texture_base_color_transform, texture_matrix0);
@@ -96,8 +91,8 @@ void main()
     vec3 n = (mat*vec4(normal.xyz+position.xyz,1.0)).xyz-pos.xyz;
     vec3 t = (mat*vec4(tangent.xyz+position.xyz,1.0)).xyz-pos.xyz;
 #else //HAS_SKIN
-    vec3 n = normal_matrix * residentMeshNormal(normal);
-    vec3 t = normal_matrix * residentMeshNormal(tangent.xyz);
+    vec3 n = normal_matrix * normal;
+    vec3 t = normal_matrix * tangent.xyz;
 #endif
 
     n = normalize(n);

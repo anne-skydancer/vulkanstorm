@@ -1,10 +1,9 @@
 """Offscreen PPLL regression, no viewer launch; --opengl PATH selects Mesa.
 
-Reuse the existing Windows GL bootstrap and shader compiler, stopping before
-its mesh tests. Exercise the actual append function from each shader family.
+Reuse the Windows GL bootstrap and shader compiler. Exercise the actual append function from each shader family.
 """
 from pathlib import Path
-bootstrap = Path(__file__).with_name('test_gl_compute_mesh.py').read_text().split('shader_path=')[0]
+bootstrap = Path(__file__).with_name('gl_test_context.py').read_text()
 exec(compile(bootstrap, 'gl_test_bootstrap', 'exec'))
 root = Path(__file__).resolve().parents[2]
 genbuf=fn('glGenBuffers',None,I,C.POINTER(U));bindbuf=fn('glBindBuffer',None,U,U)

@@ -25,8 +25,6 @@
  */
 
 #include "llviewerprecompiledheaders.h"
-#include "llmeshgeometry.h"
-#include "llcomputemesh.h"
 
 #include "lldrawpoolbump.h"
 
@@ -417,7 +415,8 @@ void LLDrawPoolBump::renderGroup(LLSpatialGroup* group, U32 type, bool texture =
 
         applyModelMatrix(params);
 
-        LLRenderPass::drawGeometry(params);
+        params.mVertexBuffer->setBuffer();
+        params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
     }
 }
 
@@ -564,20 +563,11 @@ void LLDrawPoolBump::renderDeferred(S32 pass)
         U64 lastMeshId = 0;
         bool skipLastSkin = false;
 
-        std::vector<LLDrawInfo*> batch;
         for (LLCullResult::drawinfo_iterator i = begin; i != end; )
         {
             LLDrawInfo& params = **i;
 
             LLCullResult::increment_iterator(i, end);
-            batch.clear();
-            batch.push_back(&params);
-            while (i != end && batch.size() < 256 &&
-                   (LLMeshGeometry::compatibleBatch(params, **i) || LLComputeMesh::compatibleBatch(params, **i)))
-            {
-                batch.push_back(*i);
-                LLCullResult::increment_iterator(i, end);
-            }
 
             LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(params.mAlphaMaskCutoff);
             LLDrawPoolBump::bindBumpMap(params, bump_channel);
@@ -586,12 +576,12 @@ void LLDrawPoolBump::renderDeferred(S32 pass)
             {
                 if (uploadMatrixPalette(params.mAvatar, params.mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
                 {
-                    pushBumpBatch(params, true, false, batch.size() > 1 ? &batch : nullptr);
+                    pushBumpBatch(params, true, false);
                 }
             }
             else
             {
-                pushBumpBatch(params, true, false, batch.size() > 1 ? &batch : nullptr);
+                pushBumpBatch(params, true, false);
             }
         }
 
@@ -1007,19 +997,9 @@ void LLDrawPoolBump::pushBumpBatches(U32 type)
     LLCullResult::drawinfo_iterator begin = gPipeline.beginRenderMap(type);
     LLCullResult::drawinfo_iterator end = gPipeline.endRenderMap(type);
 
-    std::vector<LLDrawInfo*> batch;
-    for (LLCullResult::drawinfo_iterator i = begin; i != end; )
+    for (LLCullResult::drawinfo_iterator i = begin; i != end; ++i)
     {
         LLDrawInfo& params = **i;
-        LLCullResult::increment_iterator(i, end);
-        batch.clear();
-        batch.push_back(&params);
-        while (i != end && batch.size() < 256 &&
-               (LLMeshGeometry::compatibleBatch(params, **i) || LLComputeMesh::compatibleBatch(params, **i)))
-        {
-            batch.push_back(*i);
-            LLCullResult::increment_iterator(i, end);
-        }
 
         if (LLDrawPoolBump::bindBumpMap(params))
         {
@@ -1030,12 +1010,12 @@ void LLDrawPoolBump::pushBumpBatches(U32 type)
                     continue;
                 }
             }
-            pushBumpBatch(params, false, false, batch.size() > 1 ? &batch : nullptr);
+            pushBumpBatch(params, false);
         }
     }
 }
 
-void LLRenderPass::pushBumpBatch(LLDrawInfo& params, bool texture, bool batch_textures, const std::vector<LLDrawInfo*>* batch)
+void LLRenderPass::pushBumpBatch(LLDrawInfo& params, bool texture, bool batch_textures)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
     applyModelMatrix(params);
@@ -1088,7 +1068,8 @@ void LLRenderPass::pushBumpBatch(LLDrawInfo& params, bool texture, bool batch_te
         }
     }
 
-    LLRenderPass::drawGeometryBatch(params, batch);
+    params.mVertexBuffer->setBuffer();
+    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
     if (tex_setup)
     {
