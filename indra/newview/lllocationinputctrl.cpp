@@ -633,6 +633,8 @@ void LLLocationInputCtrl::reshape(S32 width, S32 height, bool called_from_parent
 {
     LLComboBox::reshape(width, height, called_from_parent);
 
+    updateWidgetlayout();
+
     // Setting cursor to 0  to show the left edge of the text. See EXT-4967.
     mTextEntry->setCursor(0);
     if (mTextEntry->hasSelection())
@@ -1193,9 +1195,11 @@ void LLLocationInputCtrl::updateWidgetlayout()
 
     // "Add Landmark" button
     LLRect al_btn_rect = mAddLandmarkBtn->getRect();
-    al_btn_rect.translate(
+    // Use an absolute origin; the XUI rectangle already has a position.
+    al_btn_rect.setOriginAndSize(
         hist_btn_rect.mLeft - mIconHPad - al_btn_rect.getWidth(),
-        (rect.getHeight() - al_btn_rect.getHeight()) / 2);
+        (rect.getHeight() - al_btn_rect.getHeight()) / 2,
+        al_btn_rect.getWidth(), al_btn_rect.getHeight());
     mAddLandmarkBtn->setRect(al_btn_rect);
 }
 
