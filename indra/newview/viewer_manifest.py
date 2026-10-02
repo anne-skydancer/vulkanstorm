@@ -149,7 +149,7 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             self.path("*.ttf")
             self.path("*.txt")
             self.path("*.xml")
-            
+
         # <FS:AO> Include firestorm resources
         with self.prefix(src_dst="fs_resources"):
             self.path("*.lsltxt")

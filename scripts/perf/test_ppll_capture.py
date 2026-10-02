@@ -83,4 +83,3 @@ out vec4 color;
     fn('glDeleteProgram',None,U)(prog)
 print(f'{checks} PPLL cases passed: four append shaders, detached depth, equality, occlusion, overflow, reset; immutable pool verified.')
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
-

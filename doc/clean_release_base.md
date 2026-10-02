@@ -54,6 +54,13 @@ the guarded extension digest was updated for that exact header, with all
 patch anchors still required to match uniquely. The optional VLC PCM bridge
 headless test timed out. The production plugin uses `LL_VLC_PCM_AUDIO=0`.
 
-Full build/staging results are recorded below when complete. These checks do
-not establish improved viewer performance. Interactive grid login, logout,
+The Windows Autobuild RelWithDebInfo build succeeded, with AVX2, LTO, SoLoud,
+Mesa/Zink, OpenJPEG and the upstream open-source dependency configuration.
+The development executable, runtime libraries, plugins, shaders, character
+assets and complete retained skin are staged without an installer at
+`worktrees/clean-release-base/build-vc170-64/newview/RelWithDebInfo`.
+All retained character and skin runtime files were checked against their
+source paths. Linux build validation remains delegated to the Release CI
+matrix; `latest` must remain unchanged until both platform builds succeed.
+These checks do not establish improved viewer performance. Interactive grid login, logout,
 audio-device switching and visual skin/OIT qualification remain necessary.

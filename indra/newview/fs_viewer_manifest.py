@@ -139,7 +139,7 @@ class FSViewerManifest:
         pdbName = "vulkanstorm-bin.pdb"
         try:
             subprocess.check_call( [ "pdbcopy.exe" ,
-                                     self.args['configuration'] + "\\vulkanstorm-bin.pdb", 
+                                     self.args['configuration'] + "\\vulkanstorm-bin.pdb",
                                      self.args['configuration'] + "\\vulkanstorm-bin-public.pdb",
                                      "-p"
                                  ], stderr=subprocess.PIPE,stdout=subprocess.PIPE )
