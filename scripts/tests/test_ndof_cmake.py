@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class NdofCmakeTest(unittest.TestCase):
-    def configure(self, present):
+    def configure(self, present, multiple=False):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory)
             (source / 'modules').mkdir()
@@ -24,6 +24,12 @@ endfunction()
             archive.parent.mkdir(parents=True)
             if present:
                 archive.write_bytes(b'fixture')
+            directories = archive.parent.as_posix()
+            if multiple:
+                fallback = source / 'fallback/libndofdev.a'
+                fallback.parent.mkdir()
+                fallback.write_bytes(b'fallback fixture')
+                directories = f'{source.as_posix()}/missing;{directories};{fallback.parent.as_posix()}'
             (source / 'CMakeLists.txt').write_text(f'''
 cmake_minimum_required(VERSION 3.16)
 project(NdofFixture NONE)
@@ -31,7 +37,7 @@ set(LINUX TRUE)
 set(WINDOWS FALSE)
 set(DARWIN FALSE)
 set(CMAKE_MODULE_PATH "{source.as_posix()}/modules")
-set(ARCH_PREBUILT_DIRS_RELEASE "{archive.parent.as_posix()}")
+set(ARCH_PREBUILT_DIRS_RELEASE "{directories}")
 include("{ROOT.as_posix()}/indra/cmake/NDOF.cmake")
 get_target_property(linked ll::ndof INTERFACE_LINK_LIBRARIES)
 if(NOT linked STREQUAL "{archive.as_posix()}")
@@ -48,6 +54,10 @@ endif()
 
     def test_links_installed_linux_archive(self):
         result = self.configure(True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_directory_list_skips_missing_and_uses_first_existing_archive(self):
+        result = self.configure(True, multiple=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_missing_archive_fails_configuration(self):
