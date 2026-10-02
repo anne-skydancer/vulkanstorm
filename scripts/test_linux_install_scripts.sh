@@ -4,7 +4,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TOOLS="$ROOT/indra/newview/linux_tools"
 FIXTURE=$(mktemp -d)
 export FIXTURE
-for script in install handle_secondlifeprotocol refresh_desktop_app_entry; do
+for script in install handle_secondlifeprotocol refresh_desktop_app_entry wrapper; do
     bash -n "$TOOLS/$script.sh"
 done
 # Load definitions only. Never run the real root/user installation entry point.
@@ -51,21 +51,35 @@ done
 source <(sed '/^if \[\[ "\$UID"/,$d' "$TOOLS/refresh_desktop_app_entry.sh")
 install_desktop_entry "$FIXTURE/install with spaces" "$FIXTURE/menu"
 grep -Fx "Exec=\"$FIXTURE/install with spaces/firestorm\"" "$FIXTURE/menu/vulkanstorm-viewer.desktop"
+grep -Fx 'StartupWMClass=do-not-directly-run-vulkanstorm-bin' "$FIXTURE/menu/vulkanstorm-viewer.desktop"
 printf 'not a directory' > "$FIXTURE/blocked"
 if install_desktop_entry "$FIXTURE/install" "$FIXTURE/blocked/menu" > /dev/null 2>&1; then exit 1; fi
 # Both URL paths use fake executables and preserve the exact argument.
 mkdir -p "$FIXTURE/viewer with spaces/etc" "$FIXTURE/commands"
 cp "$TOOLS/handle_secondlifeprotocol.sh" "$FIXTURE/viewer with spaces/etc/"
-printf '#!/bin/bash\nexit "${PIDOF_RESULT:-1}"\n' > "$FIXTURE/commands/pidof"
+printf '#!/bin/bash\nprintf "%%s\\n" "$@" > "$FIXTURE/pidof-args"\nexit "${PIDOF_RESULT:-1}"\n' > "$FIXTURE/commands/pidof"
 printf '#!/bin/bash\nprintf "%%s\\n" "$@" > "$FIXTURE/args"\n' > "$FIXTURE/commands/dbus-send"
 cp "$FIXTURE/commands/dbus-send" "$FIXTURE/viewer with spaces/firestorm"
 chmod +x "$FIXTURE/commands/"* "$FIXTURE/viewer with spaces/firestorm"
 export PATH="$FIXTURE/commands:$PATH"
 url='secondlife://Region Name/1/2/3?x=a&y=b'
 PIDOF_RESULT=1 bash "$FIXTURE/viewer with spaces/etc/handle_secondlifeprotocol.sh" "$url"
+grep -Fx "do-not-directly-run-vulkanstorm-bin" "$FIXTURE/pidof-args"
 mapfile -t args < "$FIXTURE/args"
 [[ ${#args[@]} == 2 && ${args[0]} == -url && ${args[1]} == "$url" ]]
 PIDOF_RESULT=0 bash "$FIXTURE/viewer with spaces/etc/handle_secondlifeprotocol.sh" "$url"
+grep -Fx "do-not-directly-run-vulkanstorm-bin" "$FIXTURE/pidof-args"
 mapfile -t args < "$FIXTURE/args"
 [[ ${args[4]} == "string:$url" ]]
 echo "PASS: installer, desktop entry and URL handler fixtures ($FIXTURE)"
+
+# Exercise the shipped launcher against the executable name in the manifest.
+mkdir -p "$FIXTURE/launcher/bin"
+cp "$TOOLS/wrapper.sh" "$FIXTURE/launcher/firestorm"
+printf '#!/bin/bash\nprintf "%%s\\n" "$@" > "$FIXTURE/launched-args"\n' > "$FIXTURE/launcher/bin/do-not-directly-run-vulkanstorm-bin"
+chmod +x "$FIXTURE/launcher/bin/do-not-directly-run-vulkanstorm-bin"
+touch "$FIXTURE/launcher/FS_No_LD_Hacks.txt"
+bash "$FIXTURE/launcher/firestorm" --skip-gridargs -url "$url"
+mapfile -t args < "$FIXTURE/launched-args"
+[[ ${#args[@]} == 2 && ${args[0]} == -url && ${args[1]} == "$url" ]]
+echo 'PASS: packaged Vulkanstorm launcher'
