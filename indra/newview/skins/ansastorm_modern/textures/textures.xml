@@ -152,4 +152,15 @@
 	<texture name="Toolbar_Left_IM_Unselected" file_name="containers/TabTop_First_Flat_Off.png"/>
 	<texture name="Toolbar_Middle_IM_Unselected" file_name="containers/TabTop_Middle_Flat_Off.png"/>
 	<texture name="Toolbar_Right_IM_Unselected" file_name="containers/TabTop_Last_Flat_Off.png"/>
+    <!-- Named flat controls used by the Modern skin widget overrides. -->
+    <texture name="TabTop_First_Flat_Off" file_name="containers/TabTop_First_Flat_Off.png" />
+    <texture name="TabTop_First_Flat_Selected" file_name="containers/TabTop_First_Flat_Selected.png" />
+    <texture name="TabTop_Middle_Flat_Off" file_name="containers/TabTop_Middle_Flat_Off.png" />
+    <texture name="TabTop_Middle_Flat_Selected" file_name="containers/TabTop_Middle_Flat_Selected.png" />
+    <texture name="TabTop_Last_Flat_Off" file_name="containers/TabTop_Last_Flat_Off.png" />
+    <texture name="TabTop_Last_Flat_Selected" file_name="containers/TabTop_Last_Flat_Selected.png" />
+    <texture name="TabLeft_Flat_Off" file_name="containers/TabLeft_Flat_Off.png" />
+    <texture name="TabLeft_Flat_Selected" file_name="containers/TabLeft_Flat_Selected.png" />
+    <texture name="TextField_Highlight" file_name="widgets/TextField_Highlight.png" />
+    <texture name="TextField_Search_Highlight" file_name="widgets/TextField_Search_Highlight.png" />
 </textures>
