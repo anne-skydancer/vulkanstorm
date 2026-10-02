@@ -20,6 +20,13 @@ if (NOT DEFINED VIEWER_SHORT_VERSION) # will be true in indra/, false in indra/n
         # The build number is the source commit count, including local worktrees.
         # Autobuild IDs may be timestamps, so they must not override Git history.
         find_program(GIT git REQUIRED)
+        execute_process(COMMAND ${GIT} rev-parse --is-shallow-repository
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            RESULT_VARIABLE _version_shallow_result
+            OUTPUT_VARIABLE _version_shallow OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if (NOT _version_shallow_result EQUAL 0 OR NOT _version_shallow STREQUAL "false")
+            message(FATAL_ERROR "Full Git history is required for source-count versions; fetch --unshallow")
+        endif ()
         execute_process(COMMAND ${GIT} rev-list --count HEAD
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             RESULT_VARIABLE _version_git_result
