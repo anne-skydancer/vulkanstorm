@@ -11,7 +11,7 @@ SCRIPTSRC=$(readlink -f "$0") || exit 1
 RUN_PATH=$(dirname "$SCRIPTSRC")
 cd "$RUN_PATH" || exit 1
 
-if pidof do-not-directly-run-firestorm-bin >/dev/null 2>&1; then
+if pidof do-not-directly-run-vulkanstorm-bin >/dev/null 2>&1; then
     exec dbus-send --type=method_call --dest=com.secondlife.ViewerAppAPIService \
         /com/secondlife/ViewerAppAPI com.secondlife.ViewerAppAPI.GoSLURL "string:$URL"
 else
