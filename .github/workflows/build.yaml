@@ -124,7 +124,7 @@ jobs:
           else
             options+=(-DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=OFF)
           fi
-          cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
+          cmake --debug-find-var=NDOF_LIBRARY -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
             -DCMAKE_BUILD_TYPE:STRING=Release -DADDRESS_SIZE:STRING=64 \
             -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
@@ -138,6 +138,23 @@ jobs:
             -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
           python scripts/ci_release_config.py "$BUILD_DIRECTORY/CMakeCache.txt" "$RUNNER_OS"
           python scripts/ci_viewer_version.py "$BUILD_DIRECTORY/newview/viewer_version.txt"
+
+      - name: Inspect failed Linux dependency configuration
+        if: failure() && runner.os == 'Linux'
+        shell: bash
+        env:
+          BUILD_DIRECTORY: ${{ matrix.directory }}
+        run: |
+          set -eu
+          printf 'NDOF payload and tracking files in %s\n' "$BUILD_DIRECTORY/packages"
+          find "$BUILD_DIRECTORY/packages" -iname '*ndof*' -print || true
+          for marker in "$BUILD_DIRECTORY"/packages/cmake_tracking/*ndof*_installed; do
+            if [[ -f "$marker" ]]; then
+              printf '%s: ' "$marker"
+              cat "$marker"
+              printf '\n'
+            fi
+          done
 
       - name: Check Linux Mesa provider selection
         if: runner.os == 'Linux'
