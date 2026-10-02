@@ -199,14 +199,83 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
     // already being setup for rendering
     LLGLSLShader::unbind();
 
-    if (!LLPipeline::sRenderingHUDs)
-    {
-        // first pass, render rigged objects only and render to depth buffer
-        forwardRender(true);
-    }
+    // <FS> Vulkanstorm: PPLL capture and resolve are
+    // limited to the main post-water view. Mirrors/hero probes, cube snapshots, HUDs,
+    // impostors and pre-water alpha retain the stock path.
+    static LLCachedControl<U32> alpha_method(gSavedSettings, "RenderAlphaSortMethod", 0);
+    const bool oit_view_eligible =
+        getType() == LLDrawPool::POOL_ALPHA_POST_WATER &&
+        gPipeline.mRT == &gPipeline.mMainRT &&
+        !LLPipeline::sRenderingHUDs &&
+        !LLPipeline::sImpostorRender &&
+        !LLPipeline::sReflectionRender &&
+        !gCubeSnapshot;
 
-    // second pass, regular forward alpha rendering
-    forwardRender();
+    bool ppll_resources = true;
+    if (alpha_method == 1 && oit_view_eligible)
+    {
+        gPipeline.allocateAlphaOITBuffers(
+            gPipeline.mRT->screen.getWidth(), gPipeline.mRT->screen.getHeight());
+        ppll_resources = LLPipeline::sRenderAlphaOITSupported;
+    }
+    bool use_ppll = alpha_method == 1
+                 && oit_view_eligible
+                 && ppll_resources
+                 && LLPipeline::sRenderAlphaOITSupported;
+    if (use_ppll)
+    {
+        drawGLTFScene();
+        if (gPipeline.beginAlphaOITCapture())
+        {
+            setOITMode(1);
+            forwardRender(true, ALPHA_OIT_CAPTURE);
+            forwardRender(false, ALPHA_OIT_CAPTURE);
+            setOITMode(0);
+            gPipeline.endAlphaOITCapture();
+            gPipeline.compositeAlphaOIT();
+
+            // PPLL capture cannot write the shared scene depth: doing so would reject
+            // transparent fragments before the per-pixel resolve can order them. Restore
+            // the legacy rigged depth contribution before residual alpha and emissive
+            // replay. The legacy path establishes this depth while drawing rigged alpha;
+            // without it, avatar-linked glow is tested only against opaque scene depth
+            // and can bloom through nearby geometry as camera-dependent bright sprites.
+            {
+                LLGLDepthTest rigged_depth(GL_TRUE, GL_TRUE);
+                gGL.setColorMask(false, false);
+                renderAlpha(getVertexDataMask() | LLVertexBuffer::MAP_TEXTURE_INDEX |
+                                LLVertexBuffer::MAP_TANGENT | LLVertexBuffer::MAP_TEXCOORD1 |
+                                LLVertexBuffer::MAP_TEXCOORD2,
+                            true, true, ALPHA_OIT_NONE);
+                gGL.setColorMask(true, false);
+            }
+
+            // Particles and unsupported blend equations always remain on the stock
+            // residual path. Fullbright source-over alpha was captured with lit alpha.
+            forwardRender(true, ALPHA_OIT_RESIDUAL);
+            forwardRender(false, ALPHA_OIT_RESIDUAL);
+        }
+        else
+        {
+            if (!LLPipeline::sRenderingHUDs)
+            {
+                forwardRender(true);
+            }
+            forwardRender();
+        }
+    }
+    else
+    {
+        if (!LLPipeline::sRenderingHUDs)
+        {
+            // first pass, render rigged objects only and render to depth buffer
+            forwardRender(true);
+        }
+
+        // second pass, regular forward alpha rendering
+        forwardRender();
+    }
+    // </FS>
 
     // final pass, render to depth for depth of field effects
     if (!LLPipeline::sImpostorRender && LLPipeline::RenderDepthOfField && !gCubeSnapshot && !LLPipeline::sRenderingHUDs && getType() == LLDrawPool::POOL_ALPHA_POST_WATER)
@@ -229,24 +298,36 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
     }
 }
 
-void LLDrawPoolAlpha::forwardRender(bool rigged)
+// <FS> void LLDrawPoolAlpha::forwardRender(bool rigged)
+void LLDrawPoolAlpha::forwardRender(bool rigged, EAlphaOITPhase oit_phase)
+// </FS>
 {
     gPipeline.enableLightsDynamic();
 
     LLGLSPipelineAlpha gls_pipeline_alpha;
 
-    //enable writing to alpha for emissive effects
-    gGL.setColorMask(true, true);
+    // <FS> Vulkanstorm: capture shaders append and discard, so the framebuffer remains untouched
+    if (oit_phase != ALPHA_OIT_CAPTURE)
+    {
+        //enable writing to alpha for emissive effects
+        gGL.setColorMask(true, true);
+    }
+    // </FS>
 
-    bool write_depth = rigged ||
+    // <FS> Vulkanstorm: write_depth = rigged || ... on the stock paths; OIT capture
+    // passes never write the main depth buffer
+    bool write_depth = (oit_phase == ALPHA_OIT_NONE || oit_phase == ALPHA_OIT_RESIDUAL) &&
+        (rigged ||
         LLDrawPoolWater::sSkipScreenCopy
         // we want depth written so that rendered alpha will
         // contribute to the alpha mask used for impostors
         || LLPipeline::sImpostorRenderAlphaDepthPass
-        || getType() == LLDrawPoolAlpha::POOL_ALPHA_PRE_WATER; // needed for accurate water fog
+        || getType() == LLDrawPoolAlpha::POOL_ALPHA_PRE_WATER); // needed for accurate water fog
+    // </FS>
 
 
     LLGLDepthTest depth(GL_TRUE, write_depth ? GL_TRUE : GL_FALSE);
+    // </FS>
 
     mColorSFactor = LLRender::BF_SOURCE_ALPHA;           // } regular alpha blend
     mColorDFactor = LLRender::BF_ONE_MINUS_SOURCE_ALPHA; // }
@@ -254,8 +335,13 @@ void LLDrawPoolAlpha::forwardRender(bool rigged)
     mAlphaDFactor = LLRender::BF_ONE_MINUS_SOURCE_ALPHA;       // }
     gGL.blendFunc(mColorSFactor, mColorDFactor, mAlphaSFactor, mAlphaDFactor);
 
-    if (rigged && mType == LLDrawPool::POOL_ALPHA_POST_WATER)
+    // <FS> if (rigged && mType == LLDrawPool::POOL_ALPHA_POST_WATER)
+    // Vulkanstorm: OIT passes draw the GLTF scene to depth via drawGLTFScene() beforehand
+    if (oit_phase == ALPHA_OIT_NONE && rigged && mType == LLDrawPool::POOL_ALPHA_POST_WATER)
+    // </FS>
     { // draw GLTF scene to depth buffer before rigged alpha
+        LLGLDepthTest gltf_depth(GL_TRUE, GL_TRUE);
+        // </FS>
         LL::GLTFSceneManager::instance().render(false, false);
         LL::GLTFSceneManager::instance().render(false, true);
         LL::GLTFSceneManager::instance().render(false, false, true);
@@ -264,18 +350,93 @@ void LLDrawPoolAlpha::forwardRender(bool rigged)
 
     // If the face is more than 90% transparent, then don't update the Depth buffer for Dof
     // We don't want the nearly invisible objects to cause of DoF effects
-    renderAlpha(getVertexDataMask() | LLVertexBuffer::MAP_TEXTURE_INDEX | LLVertexBuffer::MAP_TANGENT | LLVertexBuffer::MAP_TEXCOORD1 | LLVertexBuffer::MAP_TEXCOORD2, false, rigged);
+    renderAlpha(getVertexDataMask() | LLVertexBuffer::MAP_TEXTURE_INDEX | LLVertexBuffer::MAP_TANGENT | LLVertexBuffer::MAP_TEXCOORD1 | LLVertexBuffer::MAP_TEXCOORD2, false, rigged, oit_phase);
 
-    gGL.setColorMask(true, false);
+    // <FS> Vulkanstorm: the capture pass left the color mask untouched above
+    if (oit_phase != ALPHA_OIT_CAPTURE)
+    {
+        gGL.setColorMask(true, false);
+    }
+    // </FS>
 
-    if (!rigged && getType() == LLDrawPoolAlpha::POOL_ALPHA_POST_WATER)
-    { //render "highlight alpha" on final non-rigged pass
+    // <FS> if (!rigged && (LLPipeline::sRenderingHUDs || getType() == LLDrawPoolAlpha::POOL_ALPHA_POST_WATER))
+    if (!rigged &&
+        (oit_phase == ALPHA_OIT_NONE || oit_phase == ALPHA_OIT_RESIDUAL) &&
+        (LLPipeline::sRenderingHUDs || getType() == LLDrawPoolAlpha::POOL_ALPHA_POST_WATER))
+    // </FS>
+    { //render "highlight alpha" on final non-rigged pass for non-HUDs (HUDs only run pre-water alpha pass)
         // NOTE -- hacky call here protected by !rigged instead of alongside "forwardRender"
         // so renderDebugAlpha is executed while gls_pipeline_alpha and depth GL state
         // variables above are still in scope
         renderDebugAlpha();
     }
 }
+
+void LLDrawPoolAlpha::drawGLTFScene()
+{
+    if (getType() != LLDrawPool::POOL_ALPHA_POST_WATER)
+    {
+        return;
+    }
+
+    LLGLDepthTest depth(GL_TRUE, GL_TRUE);
+    LL::GLTFSceneManager::instance().render(false, false);
+    LL::GLTFSceneManager::instance().render(false, true);
+    LL::GLTFSceneManager::instance().render(false, false, true);
+    LL::GLTFSceneManager::instance().render(false, true, true);
+}
+
+// <FS> Vulkanstorm: push the OIT mode/uniforms (and the opaque-depth
+// sampler) into every alpha shader variant used by this pool
+void LLDrawPoolAlpha::setOITMode(S32 mode)
+{
+    static const LLStaticHashedString sOITMode("oit_mode");
+    static const LLStaticHashedString sOITNodeCap("oit_node_cap");
+    const S32 node_cap = (S32)llmin<U32>(gPipeline.getAlphaOITNodeCap(), 0x7fffffffu);
+    mAlphaOpaqueDepth = mode == 1 ? gPipeline.getAlphaOITOpaqueDepth() : nullptr;
+
+    auto apply = [&](LLGLSLShader* shader)
+    {
+        if (!shader)
+        {
+            return;
+        }
+        shader->bind();
+        shader->uniform1i(sOITMode, mode);
+        shader->uniform1i(sOITNodeCap, node_cap);
+        if (mAlphaOpaqueDepth)
+        {
+            shader->bindTexture(LLShaderMgr::ALPHA_OIT_OPAQUE_DEPTH, mAlphaOpaqueDepth,
+                                true, LLTexUnit::TFO_POINT);
+        }
+        if (shader->mRiggedVariant && shader->mRiggedVariant != shader)
+        {
+            shader->mRiggedVariant->bind();
+            shader->mRiggedVariant->uniform1i(sOITMode, mode);
+            shader->mRiggedVariant->uniform1i(sOITNodeCap, node_cap);
+            if (mAlphaOpaqueDepth)
+            {
+                shader->mRiggedVariant->bindTexture(LLShaderMgr::ALPHA_OIT_OPAQUE_DEPTH, mAlphaOpaqueDepth,
+                                                    true, LLTexUnit::TFO_POINT);
+            }
+        }
+    };
+
+    apply(simple_shader);
+    apply(fullbright_shader);
+    apply(pbr_shader);
+
+    LLGLSLShader* material_shader = gDeferredMaterialProgram;
+    for (S32 i = 0; i < LLMaterial::SHADER_COUNT * 2; ++i)
+    {
+        if ((i & 0x3) == 1)
+        {
+            apply(&material_shader[i]);
+        }
+    }
+    LLGLSLShader::unbind();
+}
+// </FS>
 
 void LLDrawPoolAlpha::renderDebugAlpha()
 {
@@ -502,6 +663,9 @@ void LLDrawPoolAlpha::drawEmissive(LLDrawInfo* draw)
 {
     LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::EMISSIVE_BRIGHTNESS, 1.f);
     draw->mVertexBuffer->setBuffer();
+    // OIT residual replay can queue this face without drawing its normal batch.
+    // Establish its transform here instead of inheriting the previous batch's.
+    LLRenderPass::applyModelMatrix(*draw);
     draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
 }
 
@@ -529,6 +693,7 @@ void LLDrawPoolAlpha::renderPbrEmissives(std::vector<LLDrawInfo*>& emissives)
         LLGLDisable cull_face(draw->mGLTFMaterial->mDoubleSided ? GL_CULL_FACE : 0);
         draw->mGLTFMaterial->bind(draw->mTexture);
         draw->mVertexBuffer->setBuffer();
+        LLRenderPass::applyModelMatrix(*draw);
         draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
     }
 }
@@ -576,11 +741,14 @@ void LLDrawPoolAlpha::renderRiggedPbrEmissives(std::vector<LLDrawInfo*>& emissiv
         LLGLDisable cull_face(draw->mGLTFMaterial->mDoubleSided ? GL_CULL_FACE : 0);
         draw->mGLTFMaterial->bind(draw->mTexture);
         draw->mVertexBuffer->setBuffer();
+        LLRenderPass::applyModelMatrix(*draw);
         draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
     }
 }
 
-void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
+// <FS> void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
+void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlphaOITPhase oit_phase)
+// </FS>
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
     bool initialized_lighting = false;
@@ -591,19 +759,8 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
     const LLGLSLShader* lastAvatarShader = nullptr;
     bool skipLastSkin = false;
 
-    LLCullResult::sg_iterator begin;
-    LLCullResult::sg_iterator end;
-
-    if (rigged)
-    {
-        begin = gPipeline.beginRiggedAlphaGroups();
-        end = gPipeline.endRiggedAlphaGroups();
-    }
-    else
-    {
-        begin = gPipeline.beginAlphaGroups();
-        end = gPipeline.endAlphaGroups();
-    }
+    LLCullResult::sg_iterator begin = rigged ? gPipeline.beginRiggedAlphaGroups() : gPipeline.beginAlphaGroups();
+    LLCullResult::sg_iterator end = rigged ? gPipeline.endRiggedAlphaGroups() : gPipeline.endAlphaGroups();
 
     LLEnvironment& env = LLEnvironment::instance();
     F32 water_height = env.getWaterHeight();
@@ -613,7 +770,6 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
     {
         above_water = !above_water;
     }
-
 
     for (LLCullResult::sg_iterator i = begin; i != end; ++i)
     {
@@ -660,6 +816,16 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
             bool is_particle_or_hud_particle = group->getSpatialPartition()->mPartitionType == LLViewerRegion::PARTITION_PARTICLE
                                                       || group->getSpatialPartition()->mPartitionType == LLViewerRegion::PARTITION_HUD_PARTICLE;
 
+            // <FS> Vulkanstorm: particle partitions are always rendered by the stock alpha
+            // path. They must never consume PPLL nodes, even when their
+            // batches happen to be fullbright.
+            if ((oit_phase == ALPHA_OIT_CAPTURE) &&
+                is_particle_or_hud_particle)
+            {
+                continue;
+            }
+            // </FS>
+
             // <FS:LO> Dont suspend partical processing while particles are hidden, just skip over drawing them
             if(!(gPipeline.sRenderParticles) && (
                                                  group->getSpatialPartition()->mPartitionType == LLViewerRegion::PARTITION_PARTICLE ||
@@ -682,6 +848,42 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
                     continue;
                 }
 
+                // <FS> Vulkanstorm: OIT phase filtering. Capture passes skip residual
+                // (particle or custom-blend) draws; the residual pass skips captured draws
+                // but preserves their additive glow contribution.
+                const bool custom_blend =
+                    params.mBlendFuncSrc != LLRender::BF_SOURCE_ALPHA ||
+                    params.mBlendFuncDst != LLRender::BF_ONE_MINUS_SOURCE_ALPHA;
+                const bool residual_draw = is_particle_or_hud_particle || custom_blend;
+
+                if (oit_phase == ALPHA_OIT_CAPTURE && residual_draw)
+                {
+                    continue;
+                }
+
+
+                if (oit_phase == ALPHA_OIT_RESIDUAL && !residual_draw)
+                {
+                    // Standard source-over fullbright and lit alpha were both captured.
+                    // Preserve their independent additive glow contribution here without
+                    // repeating material setup or RGB blending.
+                    if (!depth_only &&
+                        getType() != LLDrawPool::POOL_ALPHA_PRE_WATER &&
+                        params.mVertexBuffer->hasDataType(LLVertexBuffer::TYPE_EMISSIVE))
+                    {
+                        if (params.mAvatar)
+                        {
+                            (params.mGLTFMaterial.isNull() ? rigged_emissives : pbr_rigged_emissives).push_back(&params);
+                        }
+                        else
+                        {
+                            (params.mGLTFMaterial.isNull() ? emissives : pbr_emissives).push_back(&params);
+                        }
+                    }
+                    continue;
+                }
+                // </FS>
+
                 LL_PROFILE_ZONE_NAMED_CATEGORY_DRAWPOOL("ra - push batch");
 
                 LLRenderPass::applyModelMatrix(params);
@@ -703,6 +905,14 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
                     if (current_shader != target_shader)
                     {
                         gPipeline.bindDeferredShaderFast(*target_shader);
+                        // <FS> Vulkanstorm: texture units are global state; restore the
+                        // selected-depth sampler on every shader transition
+                        if (mAlphaOpaqueDepth)
+                        {
+                            target_shader->bindTexture(LLShaderMgr::ALPHA_OIT_OPAQUE_DEPTH,
+                                                       mAlphaOpaqueDepth, true, LLTexUnit::TFO_POINT);
+                        }
+                        // </FS>
                     }
 
                     params.mGLTFMaterial->bind(params.mTexture);
@@ -760,6 +970,15 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
                     {// If we need shaders, and we're not ALREADY using the proper shader, then bind it
                     // (this way we won't rebind shaders unnecessarily).
                         gPipeline.bindDeferredShaderFast(*target_shader);
+
+                        // <FS> Vulkanstorm: texture units are global state; restore the
+                        // selected-depth sampler on every shader transition
+                        if (mAlphaOpaqueDepth)
+                        {
+                            target_shader->bindTexture(LLShaderMgr::ALPHA_OIT_OPAQUE_DEPTH,
+                                                       mAlphaOpaqueDepth, true, LLTexUnit::TFO_POINT);
+                        }
+                        // </FS>
 
                         if (params.mFullbright)
                         { // make sure the bind the exposure map for fullbright shaders so they can cancel out exposure
@@ -821,7 +1040,9 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
                 }
 
                 // If this alpha mesh has glow, then draw it a second time to add the destination-alpha (=glow).  Interleaving these state-changing calls is expensive, but glow must be drawn Z-sorted with alpha.
-                if (getType() != LLDrawPool::POOL_ALPHA_PRE_WATER &&
+                // <FS> Vulkanstorm: capture passes emit no glow; the residual pass re-adds it
+                if ((oit_phase == ALPHA_OIT_NONE || oit_phase == ALPHA_OIT_RESIDUAL) &&
+                    getType() != LLDrawPool::POOL_ALPHA_PRE_WATER &&
                     params.mVertexBuffer->hasDataType(LLVertexBuffer::TYPE_EMISSIVE))
                 {
                     if (params.mAvatar != nullptr)
@@ -858,7 +1079,9 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
             }
 
             // render emissive faces into alpha channel for bloom effects
-            if (!depth_only)
+            // <FS> Vulkanstorm: capture passes emit no glow; residual re-adds it
+            if (!depth_only &&
+                (oit_phase == ALPHA_OIT_NONE || oit_phase == ALPHA_OIT_RESIDUAL))
             {
                 gPipeline.enableLightsDynamic();
 
