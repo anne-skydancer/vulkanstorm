@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <system_error>
 
 namespace LLViewerVersion
 {
@@ -24,7 +25,7 @@ inline std::optional<Components> parse(std::string_view text)
         if (result.ec != std::errc{})
             return std::nullopt;
         text.remove_prefix(result.ptr - text.data());
-        if (i == 2 && text.starts_with("-canary"))
+        if (i == 2 && text.substr(0, 7) == "-canary")
             text.remove_prefix(7);
         if (i < 3)
         {

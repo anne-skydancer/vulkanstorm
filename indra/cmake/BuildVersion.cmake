@@ -24,7 +24,10 @@ if (NOT DEFINED VIEWER_SHORT_VERSION) # will be true in indra/, false in indra/n
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             RESULT_VARIABLE _version_shallow_result
             OUTPUT_VARIABLE _version_shallow OUTPUT_STRIP_TRAILING_WHITESPACE)
-        if (NOT _version_shallow_result EQUAL 0 OR NOT _version_shallow STREQUAL "false")
+        if (NOT _version_shallow_result EQUAL 0)
+            message(FATAL_ERROR "Source-count versions require a readable Git repository")
+        endif ()
+        if (NOT _version_shallow STREQUAL "false")
             message(FATAL_ERROR "Full Git history is required for source-count versions; fetch --unshallow")
         endif ()
         execute_process(COMMAND ${GIT} rev-list --count HEAD
