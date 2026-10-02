@@ -1022,7 +1022,134 @@ class Windows_x86_64_Manifest(ViewerManifest):
             return '<NO-URL>'
         
 
+    def inno_file_commands(self):
+        # <VulkanStorm> Build the explicit [Files] list for the Inno installer
+        # from the packaged file_list. Shipping an explicit list (rather than a
+        # wildcard sweep of the staging dir) keeps development artifacts and
+        # stray executables out of the installation. Modeled on
+        # nsi_file_commands. PDB files are never shipped in a release install.
+        def quote(value):
+            return value.replace('"', '""')
+
+        result = []
+        dest_files = [pair[1] for pair in self.file_list if pair[0] and os.path.isfile(pair[1]) and not pair[1].endswith(".pdb")]
+        dest_files.sort()
+        for pkg_file in dest_files:
+            rel_file = os.path.normpath(pkg_file.replace(self.get_dst_prefix()+os.path.sep,''))
+            destination = os.path.dirname(rel_file).replace('/', '\\')
+            destination = "{app}" if not destination else "{app}\\" + destination
+            result.append('Source: "%s"; DestDir: "%s"; Flags: ignoreversion' %
+                          (quote(os.path.normpath(pkg_file)), quote(destination)))
+
+        return '\n'.join(result)
+
+    def inno_package_finish(self):
+        """Package the viewer using Inno Setup 7 (replaces legacy NSIS).
+
+        Produces a modern installer that shows the LGPL-2.1 license agreement
+        up front and offers a "Launch Vulkanstorm" option on the finish page.
+        """
+
+        installer_base = self.fs_installer_basename()
+        installer_file = installer_base + "_Setup.exe"
+        final_exe = self.final_exe()
+
+        # Sign the compiled binaries before they are packed into the installer.
+        self.fs_sign_win_binaries()
+
+        # Read the Inno template and substitute the tokens.
+        src_prefix = self.get_src_prefix()
+        template_path = os.path.join(src_prefix, 'installers', 'windows', 'installer_template.iss')
+        license_file = os.path.abspath(os.path.join(src_prefix, '..', '..', 'doc', 'LGPL-license.txt'))
+        icon_suffix = "_os" if self.fs_is_opensim() else ""
+        setup_icon = os.path.join(src_prefix, 'installers', 'windows', 'firestorm_icon%s.ico' % icon_suffix)
+
+        with open(template_path, 'r') as f:
+            script = f.read()
+
+        app_name_oneword = self.app_name_oneword()
+
+        # Inno VersionInfoVersion requires 4 numeric components each <= 65535;
+        # the viewer build number (4th component) can exceed that. Use the first
+        # three components with a zero fourth (AppVersion keeps the full string).
+        version_parts = self.args['version']
+        version_info = '.'.join(version_parts[:3]) + '.0' if len(version_parts) >= 3 else '.'.join(version_parts) + '.0'
+
+        replacements = {
+            '%%APP_NAME%%': self.app_name(),
+            '%%APP_NAME_ONEWORD%%': app_name_oneword,
+            '%%FRIENDLY_APP_NAME%%': self.friendly_app_name(),
+            '%%VERSION%%': '.'.join(self.args['version']),
+            '%%VERSION_INFO%%': version_info,
+            '%%FINAL_EXE%%': final_exe,
+            '%%IS_OPENSIM%%': '1' if self.fs_is_opensim() else '0',
+            '%%INSTALL_FILES%%': self.inno_file_commands(),
+            '%%INSTALLER_FILE%%': installer_file,
+            '%%INSTALLER_OUT%%': installer_base + '_Setup',
+            '%%SOURCE_DIR%%': self.get_dst_prefix(),
+            '%%LICENSE_FILE%%': license_file,
+            '%%SETUP_ICON%%': setup_icon,
+            '%%DL_URL%%': self.dl_url_from_channel(),
+        }
+        for token, value in replacements.items():
+            script = script.replace(token, str(value))
+
+        iss_file = "vulkanstorm_setup.iss"
+        iss_path = self.dst_path_of(iss_file)
+        with open(iss_path, 'w') as f:
+            f.write(script)
+            f.flush()
+            os.fsync(f.fileno())
+
+        # Locate the Inno Setup compiler (ISCC.exe).
+        iscc = None
+        for candidate in (
+            os.path.expandvars(r'${ProgramFiles}\Inno Setup 7\ISCC.exe'),
+            os.path.expandvars(r'${ProgramFiles(x86)}\Inno Setup 7\ISCC.exe'),
+            os.path.expandvars(r'${ProgramFiles}\Inno Setup 6\ISCC.exe'),
+            os.path.expandvars(r'${ProgramFiles(x86)}\Inno Setup 6\ISCC.exe'),
+        ):
+            if os.path.exists(candidate):
+                iscc = candidate
+                break
+        if iscc is None:
+            raise ManifestError("Inno Setup compiler (ISCC.exe) not found; install Inno Setup 6/7 or do not use --inno")
+
+        # Remove any stale installer so the recursion guard and the result check
+        # below operate on a clean state. Match ONLY installer outputs
+        # ("*_Setup.exe"); never the staged viewer exe (Vulkanstorm-Release.exe).
+        for stale in glob.glob(self.dst_path_of(installer_base + '*_Setup.exe')):
+            try:
+                os.remove(stale)
+            except OSError:
+                pass
+
+        # Compile the installer. The .iss pins OutputDir to the dest prefix.
+        # Retry a few times: ISCC can briefly fail to open the just-written .iss
+        # if the OS/AV scanner has not released it yet.
+        last_err = None
+        for attempt in range(5):
+            try:
+                self.run_command([iscc, '/Q', iss_path])
+                last_err = None
+                break
+            except Exception as err:
+                last_err = err
+                time.sleep(2)
+        if last_err is not None:
+            raise last_err
+
+        # Sign the resulting installer.
+        self.fs_sign_win_installer({'installer_file': installer_file})
+
+        self.created_path(self.dst_path_of(installer_file))
+        self.package_file = installer_file
+
+
     def package_finish(self):
+        if self.args.get('inno', 'ON') == 'ON':
+            self.inno_package_finish()
+            return
         # Check if we should use Velopack instead of NSIS
         # Note: as of 2026.01's release, we will be building with Velopack's one click install.
         # We maintain the legacy NSIS packaging mainly for TPVs at this point.
@@ -2588,6 +2715,7 @@ if __name__ == "__main__":
         dict(name='openal', description="""Indication openal libraries are needed""", default='OFF'),
         dict(name='soloud', description="""Include SoLoud package licenses""", default='OFF'),
         dict(name='tracy', description="""Indication tracy profiler is enabled""", default='OFF'),
+        dict(name='inno', description="Use Inno Setup for Windows installers", default='ON'),
         dict(name='velopack', description="""Use Velopack installer instead of NSIS""", default='OFF'),
         dict(name='avx2', description="""Indication avx2 instruction set is enabled""", default='OFF'),
         ]
