@@ -9,10 +9,10 @@ ROOT = Path(__file__).resolve().parents[2]
 MODULE = ROOT / 'indra/cmake/BuildVersion.cmake'
 
 class VersionSchemaTest(unittest.TestCase):
-    def configure(self, base, repository=None):
-        with tempfile.TemporaryDirectory(dir=repository or ROOT) as directory:
+    def configure(self, base, repository=None, initialize=True):
+        with tempfile.TemporaryDirectory(dir=repository or (ROOT if initialize else None)) as directory:
             source = Path(directory)
-            if repository is None:
+            if repository is None and initialize:
                 subprocess.run(['git', 'init', str(source)], check=True, capture_output=True)
                 for message in ('first', 'second'):
                     subprocess.run(['git', '-C', str(source), '-c', 'user.name=VersionTest',
@@ -55,6 +55,12 @@ file(WRITE "{source.as_posix()}/result.txt" "${{VIEWER_SHORT_VERSION}}.${{VIEWER
                 result, _ = self.configure(base)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('Invalid viewer version', result.stderr)
+
+    def test_non_repository_reports_source_requirement(self):
+        result, _ = self.configure('1.0.0', initialize=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Source-count versions require a readable Git repository', result.stderr)
+        self.assertNotIn('fetch --unshallow', result.stderr)
 
     def test_rejects_shallow_history(self):
         with tempfile.TemporaryDirectory(dir=ROOT) as directory:
