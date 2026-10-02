@@ -19,6 +19,17 @@ names, so the viewer reported missing local images. Registering the assets makes
 the existing blue selection artwork available. The unsupported `text_pad_top`
 folder-view attribute was also removed.
 
+A further audit of Modern and inherited default XUI, registered texture files,
+color aliases and literal C++ UI-image requests found two more missing texture
+names (`Refresh_Over` and `Combobox_Over`), three missing list-view colors, three
+misspelled color references and four unsupported `none` image references. These
+now resolve to existing artwork and palette entries, or use an empty image name
+to disable the image. List-view aliases are refreshed after the Modern palette
+loads so selection uses its blue color. Static checks cannot cover dynamically
+constructed names or replace runtime inspection of every window.
+The scan includes all translation overlays; duplicate tooltip attributes in the
+Russian texture panel were removed so that overlay parses successfully.
+
 Graphics preference tabs use the labels `Rendering 1` and `Rendering 2`,
 including the Italian override, while retaining their internal control names.
 

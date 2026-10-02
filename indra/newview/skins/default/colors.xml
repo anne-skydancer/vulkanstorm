@@ -1411,4 +1411,8 @@
   <color
     name="MentionFlashBgColor"
     value="1 1 0 0.5" />
+  <!-- List-view widgets follow the active skin's scroll-list palette. -->
+  <color name="ListViewBgColor" reference="ScrollBgWriteableColor" />
+  <color name="ListViewSelectedBgColor" reference="ScrollSelectedBGColor" />
+  <color name="ListViewSelectedFgColor" reference="ScrollSelectedFGColor" />
 </colors>
