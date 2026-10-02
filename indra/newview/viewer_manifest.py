@@ -355,7 +355,7 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         global CHANNEL_VENDOR_BASE
         # a standard map of strings for replacing in the templates
         #<FS:TS> tag "OS" after CHANNEL_VENDOR_BASE and before any suffix
-        channel_base = "Phoenix-" + CHANNEL_VENDOR_BASE
+        channel_base = CHANNEL_VENDOR_BASE
         if self.fs_is_opensim():
             channel_base = channel_base + "OS"
         #</FS:TS>
@@ -658,7 +658,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
         relpkgdir = os.path.join(pkgdir, "lib", "release")
         debpkgdir = os.path.join(pkgdir, "lib", "debug")
 
-        if self.is_packaging_viewer() or 'copy' in self.args['actions']:
+        if self.is_packaging_viewer():
             # Find vulkanstorm-bin.exe in the 'configuration' dir, then rename it to the result of final_exe.
             self.path(src='%s/vulkanstorm-bin.exe' % self.args['configuration'], dst=self.final_exe())
 

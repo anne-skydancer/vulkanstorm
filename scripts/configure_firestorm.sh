@@ -54,7 +54,7 @@ WANTS_BUILD=$FALSE
 WANTS_CRASHREPORTING=$FALSE
 WANTS_CACHE=$FALSE
 TARGET_PLATFORM="darwin" # darwin, windows, linux
-BTYPE="Release"
+BTYPE="RelWithDebInfo"
 CHANNEL="" # will be overwritten later with platform-specific values unless manually specified.
 LL_ARGS_PASSTHRU=""
 JOBS="0"
@@ -78,7 +78,7 @@ showUsage()
     echo "  --build                  : Build Firestorm"
     echo "  --version                : Update version number"
     echo "  --chan  [Release|Beta|Private]   : Private is the default, sets channel"
-    echo "  --btype [Release|RelWithDebInfo] : Release is default, whether to use symbols"
+    echo "  --btype [Release|RelWithDebInfo] : RelWithDebInfo is default, whether to use symbols"
     echo "  --kdu                    : Build with KDU"
     echo "  --package                : Build installer"
     echo "  --velopack               : Build with velopack (Overrides --package)"
