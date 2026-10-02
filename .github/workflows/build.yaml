@@ -18,6 +18,7 @@ jobs:
       - uses: actions/checkout@v7
       - run: node --test scripts/tests/ci_publish_latest.test.cjs
       - run: python3 scripts/tests/test_windows_symbol_archive.py
+      - run: python3 scripts/tests/test_version_schema.py
       - name: Keep development hooks out of release
         if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release'
         run: python3 scripts/tests/check_release_hooks.py
