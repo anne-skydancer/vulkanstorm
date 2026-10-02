@@ -1060,11 +1060,9 @@ static void ensure_update_manager(bool allow_downgrade)
             bundle_root = resolved;
         }
 
-        // Construct a version string in Velopack SemVer format: major.minor.patch-build
+        // Use the same dotted source-count version as the viewer and packager.
         const LLVersionInfo& vi = LLVersionInfo::instance();
-        const std::string short_version = vi.getShortVersion();
-        const std::string separator = short_version.ends_with("-canary") ? "." : "-";
-        std::string current_version = short_version + separator + std::to_string(vi.getBuild());
+        std::string current_version = vi.getVersion();
 
         // Create a minimal sq.version manifest so Velopack knows our version.
         // Proper vpk-packaged builds have this in the bundle already.

@@ -1182,8 +1182,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
         # packId determines install folder: %LocalAppData%\{packId}
         # Uses same naming as NSIS INSTNAME for channel separation
         pack_id = self.app_name_oneword()  # "SecondLife", "SecondLifeBeta", etc.
-        # Velopack requires SemVer2. Use major.minor.patch-buildnumber so that
-        # Velopack can distinguish builds and order them correctly.
+        # Keep the viewer's dotted source-count version in package metadata.
         pack_version = _velopack_pack_version(self.args['version'])
         pack_title = pack_id  # Wrapper executable name
         pack_dir = self.get_dst_prefix()
@@ -2216,8 +2215,7 @@ class Darwin_x86_64_Manifest(ViewerManifest):
         """
         # packId determines install identification - same as Windows for consistency
         pack_id = self.app_name_oneword()  # "SecondLife", "SecondLifeBeta", etc.
-        # Velopack requires SemVer2. Use major.minor.patch-buildnumber so that
-        # Velopack can distinguish builds and order them correctly.
+        # Keep the viewer's dotted source-count version in package metadata.
         pack_version = _velopack_pack_version(self.args['version'])
         pack_title = self.app_name()  # Display name with spaces
 
