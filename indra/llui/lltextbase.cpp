@@ -32,6 +32,7 @@
 #include "llemojidictionary.h"
 #include "llemojihelper.h"
 #include "lllocalcliprect.h"
+#include "llmarkdown.h"
 #include "llmenugl.h"
 #include "llscrollcontainer.h"
 #include "llspellcheck.h"
@@ -194,7 +195,8 @@ LLTextBase::Params::Params()
     // </FS:Ansariel> Optional icon position
     parse_urls("parse_urls", false),
     force_urls_external("force_urls_external", false),
-    parse_highlights("parse_highlights", false)
+    parse_highlights("parse_highlights", false),
+    parse_markdown("parse_markdown", false)
 {
     addSynonym(track_end, "track_bottom");
     addSynonym(wrap, "word_wrap");
@@ -259,6 +261,7 @@ LLTextBase::LLTextBase(const LLTextBase::Params &p)
     mParseHTML(p.parse_urls),
     mForceUrlsExternal(p.force_urls_external),
     mParseHighlights(p.parse_highlights),
+    mParseMarkdown(p.parse_markdown),
     mBGVisible(p.bg_visible),
     mScroller(NULL),
     // <FS:Ansariel> Optional icon position
@@ -2768,6 +2771,59 @@ void LLTextBase::appendText(const std::string &new_text, bool prepend_newline, c
 
     if(prepend_newline)
         appendLineBreakSegment(input_params);
+    if (mParseMarkdown && !input_params.is_link &&
+        (new_text.find('_') != std::string::npos || new_text.find("**") != std::string::npos))
+    {
+        LLStyle::Params message_params(getStyleParams());
+        message_params.overwriteFrom(input_params);
+        const U8 base_flags = LLFontGL::getStyleFromString(message_params.font.style());
+        U8 emote_flags = base_flags;
+        LLMarkdown::literal_ranges_t literal_ranges;
+        std::string remaining = new_text;
+        size_t offset = 0;
+        LLUrlMatch match;
+        while (mParseHTML && LLUrlRegistry::instance().findUrl(remaining, match))
+        {
+            const size_t end = match.getEnd() + 1;
+            if (end == 0 || end > remaining.size()) break;
+            literal_ranges.emplace_back(offset + match.getStart(), offset + end);
+            offset += end;
+            remaining.erase(0, end);
+        }
+        for (const auto& span : LLMarkdown::parseEmphasis(new_text, message_params.markdown_emote, literal_ranges))
+        {
+            U8 flags = message_params.markdown_emote ? emote_flags : base_flags;
+            switch (span.mType)
+            {
+                case LLMarkdown::ESpanType::EMPHASIS_DELIM:
+                case LLMarkdown::ESpanType::STRONG_DELIM:
+                    continue;
+                case LLMarkdown::ESpanType::EMOTE_DELIM:
+                    emote_flags ^= LLFontGL::ITALIC;
+                    continue;
+                case LLMarkdown::ESpanType::EMPHASIS:
+                    flags |= LLFontGL::ITALIC;
+                    break;
+                case LLMarkdown::ESpanType::STRONG:
+                    flags |= LLFontGL::BOLD;
+                    break;
+                case LLMarkdown::ESpanType::EMOTE_TOGGLE_ON:
+                    flags |= LLFontGL::ITALIC;
+                    emote_flags = flags;
+                    break;
+                case LLMarkdown::ESpanType::EMOTE_TOGGLE_OFF:
+                    flags &= ~LLFontGL::ITALIC;
+                    emote_flags = flags;
+                    break;
+                default:
+                    break;
+            }
+            LLStyle::Params span_params(message_params);
+            span_params.font.style(LLFontGL::getStringFromStyle(flags));
+            appendTextImpl(span.mText, span_params);
+        }
+        return;
+    }
     appendTextImpl(new_text,input_params);
 }
 
