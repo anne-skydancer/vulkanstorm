@@ -31,6 +31,7 @@
 #include "llstring.h"
 #include "llcorehttputil.h"
 #include "llversioninfo.h"
+#include "llversionparser.h"
 
 #include <boost/json.hpp>
 #include <fstream>
@@ -1001,25 +1002,13 @@ static void on_vpk_log(void* p_user_data,
 // Version comparison helper
 //
 
-// Compare running version against a VVM version string "major.minor.patch.build".
-// Returns -1 if running < vvm, 0 if equal, 1 if running > vvm.
-static int compare_running_version(const std::string& vvm_version)
+// Compare complete stable/canary VVM versions; malformed input is not a rollback.
+static std::optional<int> compare_running_version(const std::string& vvm_version)
 {
-    S32 major = 0, minor = 0, patch = 0;
-    U64 build = 0;
-    sscanf(vvm_version.c_str(), "%d.%d.%d.%llu", &major, &minor, &patch, &build);
-
     const LLVersionInfo& vi = LLVersionInfo::instance();
-    S32 cur_major = vi.getMajor();
-    S32 cur_minor = vi.getMinor();
-    S32 cur_patch = vi.getPatch();
-    U64 cur_build = vi.getBuild();
-
-    if (cur_major != major) return cur_major < major ? -1 : 1;
-    if (cur_minor != minor) return cur_minor < minor ? -1 : 1;
-    if (cur_patch != patch) return cur_patch < patch ? -1 : 1;
-    if (cur_build != build) return cur_build < build ? -1 : 1;
-    return 0;
+    return LLViewerVersion::compare({static_cast<std::uint64_t>(vi.getMajor()),
+        static_cast<std::uint64_t>(vi.getMinor()), static_cast<std::uint64_t>(vi.getPatch()),
+        static_cast<std::uint64_t>(vi.getBuild())}, vvm_version);
 }
 
 //
@@ -1073,8 +1062,9 @@ static void ensure_update_manager(bool allow_downgrade)
 
         // Construct a version string in Velopack SemVer format: major.minor.patch-build
         const LLVersionInfo& vi = LLVersionInfo::instance();
-        std::string current_version = llformat("%d.%d.%d-%llu",
-            vi.getMajor(), vi.getMinor(), vi.getPatch(), vi.getBuild());
+        const std::string short_version = vi.getShortVersion();
+        const std::string separator = short_version.ends_with("-canary") ? "." : "-";
+        std::string current_version = short_version + separator + std::to_string(vi.getBuild());
 
         // Create a minimal sq.version manifest so Velopack knows our version.
         // Proper vpk-packaged builds have this in the bundle already.
@@ -1312,7 +1302,13 @@ void velopack_check_for_updates(const std::string& required_version, const std::
     // Allow downgrades only for rollbacks: VVM requires a version that's
     // strictly lower than what we're running (e.g., a retracted build).
     bool has_required = !required_version.empty();
-    int ver_cmp = has_required ? compare_running_version(required_version) : 0;
+    const auto comparison = has_required ? compare_running_version(required_version) : std::optional<int>{0};
+    if (!comparison)
+    {
+        LL_WARNS("Velopack") << "Invalid required viewer version: " << required_version << LL_ENDL;
+        return;
+    }
+    const int ver_cmp = *comparison;
     bool allow_downgrade = ver_cmp > 0; // running > required → rollback scenario
     ensure_update_manager(allow_downgrade);
     if (!sUpdateManager)
