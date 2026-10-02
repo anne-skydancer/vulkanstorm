@@ -8,8 +8,8 @@ from viewer_manifest import _velopack_pack_version
 
 
 class VelopackVersionTest(unittest.TestCase):
-    def test_stable_build_uses_hyphen_before_count(self):
-        self.assertEqual(_velopack_pack_version(['1', '0', '0', '123']), '1.0.0-123')
+    def test_stable_build_uses_dot_before_count(self):
+        self.assertEqual(_velopack_pack_version(['1', '0', '0', '123']), '1.0.0.123')
 
     def test_canary_build_uses_dot_before_count(self):
         self.assertEqual(_velopack_pack_version(['1', '0', '0-canary', '123']), '1.0.0-canary.123')
