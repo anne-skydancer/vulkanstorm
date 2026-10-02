@@ -1079,7 +1079,10 @@ class Windows_x86_64_Manifest(ViewerManifest):
         # the viewer build number (4th component) can exceed that. Use the first
         # three components with a zero fourth (AppVersion keeps the full string).
         version_parts = self.args['version']
-        version_info = '.'.join(version_parts[:3]) + '.0' if len(version_parts) >= 3 else '.'.join(version_parts) + '.0'
+        numeric_core = '.'.join(version_parts[:3]).removesuffix('-canary')
+        if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', numeric_core):
+            raise ManifestError('Invalid numeric installer version: %s' % numeric_core)
+        version_info = numeric_core + '.0'
 
         replacements = {
             '%%APP_NAME%%': self.app_name(),
