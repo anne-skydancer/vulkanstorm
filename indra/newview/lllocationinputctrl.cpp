@@ -217,12 +217,14 @@ LLLocationInputCtrl::Params::Params()
 
 LLLocationInputCtrl::LLLocationInputCtrl(const LLLocationInputCtrl::Params& p)
 :   LLComboBox(p),
-    mIconHPad(p.icon_hpad),
-    mAddLandmarkHPad(p.add_landmark_hpad),
-    mLocationContextMenu(NULL),
-    mAddLandmarkBtn(NULL),
-    mForSaleBtn(NULL),
-    mInfoBtn(NULL),
+mLocationContextMenu(NULL),
+mAddLandmarkBtn(NULL),
+mForSaleBtn(NULL),
+mInfoBtn(NULL),
+mIconHPad(p.icon_hpad),
+mAddLandmarkHPad(p.add_landmark_hpad),
+mAddLandmarkBtnInitialLeft(0),
+mWidgetLayoutInitialized(false),
     mRegionCrossingSlot(),
     mNavMeshSlot(),
     mIsNavMeshDirty(false),
@@ -1184,11 +1186,9 @@ void LLLocationInputCtrl::updateContextMenu(){
 // [/RLVa:KB]
     }
 }
-void LLLocationInputCtrl::onVkArrowImageWidthChanged(S32 delta_left)
+void LLLocationInputCtrl::onVkArrowImageWidthChanged(S32)
 {
-    // Preserve the release layout's XUI offsets when Vulkan learns the arrow
-    // image width after construction. Do not repeat its initial translation.
-    mAddLandmarkBtn->translate(delta_left, 0);
+    updateWidgetlayout();
     refreshParcelIcons();
 }
 
@@ -1201,9 +1201,20 @@ void LLLocationInputCtrl::updateWidgetlayout()
 
     // "Add Landmark" button
     LLRect al_btn_rect = mAddLandmarkBtn->getRect();
-    al_btn_rect.translate(
-        hist_btn_rect.mLeft - mIconHPad - al_btn_rect.getWidth(),
-        (rect.getHeight() - al_btn_rect.getHeight()) / 2);
+    if (!mWidgetLayoutInitialized)
+    {
+        mAddLandmarkBtnInitialLeft = al_btn_rect.mLeft;
+        al_btn_rect.translate(
+            hist_btn_rect.mLeft - mIconHPad - al_btn_rect.getWidth(),
+            (rect.getHeight() - al_btn_rect.getHeight()) / 2);
+        mWidgetLayoutInitialized = true;
+    }
+    else
+    {
+        const S32 left = hist_btn_rect.mLeft - mIconHPad -
+                         al_btn_rect.getWidth() + mAddLandmarkBtnInitialLeft;
+        al_btn_rect.translate(left - al_btn_rect.mLeft, 0);
+    }
     mAddLandmarkBtn->setRect(al_btn_rect);
 }
 

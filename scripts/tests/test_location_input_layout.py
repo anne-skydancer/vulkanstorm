@@ -15,7 +15,6 @@ UPSTREAM = "10bd3c9f930c76e1427ddd4ecece6cdf36b4406d"
 FUNCTION_DIGESTS = {
     "LLLocationInputCtrl::LLLocationInputCtrl(": "d67f2b096cef9ed55eb0b3a48d2f037461410aebd7dfe780ef79422e08761f19",
     "void LLLocationInputCtrl::reshape(": "949ef881d7172bf22fa38cb7e16f7baf0dd5dd3e980f4ab688691607455584f0",
-    "void LLLocationInputCtrl::updateWidgetlayout()": "d14db21250f8e0a0891403bb4f64ea7d3a58790fb8858d8f7dc8e79d5aa4eff8",
     "void LLLocationInputCtrl::refreshParcelIcons()": "601dfec0276b65844f9c7e2f412e81b510221d64ae7d950902d8084baffab089",
 }
 WIDGET_DIGESTS = {
@@ -119,6 +118,9 @@ class DeferredLayout:
         self.star = Rect(left, bottom, 18, 18)
         self.mVkArrowImageWidth = image_width
         self.notifications = self.parcel_updates = 0
+        self.layout_updates = 0
+        self.widget_layout_initialized = False
+        self.add_landmark_initial_left = 0
         self.imageLoaded()
         self.updateWidgetlayout()
 
@@ -138,8 +140,23 @@ class DeferredLayout:
             deduction, {}, dict(scope, BTN_DROP_SHADOW=SHADOW))
 
     def updateWidgetlayout(self):
-        layout(self.star, self.rect.getWidth(), self.rect.getHeight(),
-               self.dropdown.getWidth(), 2)
+        self.layout_updates += 1
+        production = body(SOURCE, "void LLLocationInputCtrl::updateWidgetlayout()")
+        if not self.widget_layout_initialized:
+            self.add_landmark_initial_left = self.star.mLeft
+            layout(self.star, self.rect.getWidth(), self.rect.getHeight(),
+                   self.dropdown.getWidth(), 2)
+            self.widget_layout_initialized = True
+            return
+        expression = re.search(r"const S32 left = (.*?);", production, re.S)[1]
+        expression = re.sub(r"\s+", " ", expression)
+        desired_left = eval(expression, {}, {
+            "hist_btn_rect": self.dropdown,
+            "al_btn_rect": self.star,
+            "mIconHPad": 2,
+            "mAddLandmarkBtnInitialLeft": self.add_landmark_initial_left,
+        })
+        self.star.apply((desired_left - self.star.mLeft, 0))
 
     def translateStar(self, dx, dy):
         self.star.apply((dx, dy))
@@ -176,11 +193,13 @@ class LocationLayoutTest(unittest.TestCase):
                     for image_width in (16, 16, 24, 8, 0, -1, 8, 18, 16):
                         previous, count = owner.mVkArrowImageWidth, owner.notifications
                         old_left = owner.dropdown.mLeft
+                        layout_count = owner.layout_updates
                         owner.set_width(image_width)
                         effective = image_width if image_width > 0 else previous
                         oracle = DeferredLayout(width, height, effective)
                         changed = owner.dropdown.mLeft != old_left
                         self.assertEqual(owner.notifications, count + changed)
+                        self.assertEqual(owner.layout_updates, layout_count + changed)
                         self.assertEqual(vars(owner.star), vars(oracle.star))
                         self.assertLess(owner.star.mRight * scale, owner.dropdown.mLeft * scale)
                         self.assertGreaterEqual(owner.star.mLeft * scale, 0)
@@ -242,6 +261,7 @@ class LocationLayoutTest(unittest.TestCase):
                         prepare.index("for (LLView::child_list_const_iter_t"))
         self.assertIn("combo->getDropdownButton()", prepare)
         native_hook = body(SOURCE, "void LLLocationInputCtrl::onVkArrowImageWidthChanged(")
+        self.assertIn("updateWidgetlayout();", native_hook)
         self.assertNotIn("refreshMaturityButton", native_hook)
 
     def test_release_widget_xui_and_address_bar_geometry(self):

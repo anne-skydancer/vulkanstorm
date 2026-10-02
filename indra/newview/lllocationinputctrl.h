@@ -185,6 +185,8 @@ private:
     LLButton*               mInfoBtn;
     S32                     mIconHPad;          // pad between all icons
     S32                     mAddLandmarkHPad;   // pad to left of landmark star
+    S32                     mAddLandmarkBtnInitialLeft;
+    bool                    mWidgetLayoutInitialized;
 
     LLButton*   mMaturityButton;
     LLIconCtrl* mParcelIcon[ICON_COUNT];
