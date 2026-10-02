@@ -1,10 +1,10 @@
 """Offscreen PPLL regression, no viewer launch; --opengl PATH selects Mesa.
 
-Reuse the existing Windows GL bootstrap and shader compiler, stopping before
-its mesh tests. Exercise the actual append function from each shader family.
+Reuse the standalone Windows GL bootstrap and shader compiler.
+Exercise the actual append function from each shader family.
 """
 from pathlib import Path
-bootstrap = Path(__file__).with_name('test_gl_compute_mesh.py').read_text().split('shader_path=')[0]
+bootstrap = Path(__file__).with_name('gl_test_context.py').read_text()
 exec(compile(bootstrap, 'gl_test_bootstrap', 'exec'))
 root = Path(__file__).resolve().parents[2]
 genbuf=fn('glGenBuffers',None,I,C.POINTER(U));bindbuf=fn('glBindBuffer',None,U,U)
@@ -61,8 +61,10 @@ out vec4 color;
         fn('glGetTexImage',None,U,I,U,U,P)(0x0DE1,0,0x1902,0x1406,snapshot)
         assert all(abs(a-b)<1e-6 for a,b in zip(snapshot,depth))
         for cap in (8,1):
+            image(0,0,0,0,0,0x88BA,0x8236)
             barrier(0xFFFFFFFF);zero=U(0);empty=U(0xffffffff)
             bindbuf(0x92C0,buffers[1]);sub(0x92C0,0,4,C.byref(zero));cleartex(textures[2],0,0x8D94,0x1405,C.byref(empty))
+            barrier(0xFFFFFFFF)
             base(0x92C0,0,buffers[1]);base(0x90D2,0,buffers[0])
             image(0,textures[2],0,0,0,0x88BA,0x8236)
             use(prog);uniform(loc(prog,b'oit_node_cap'),cap);uniform(loc(prog,b'alpha_oit_opaque_depth'),0)
@@ -76,7 +78,7 @@ out vec4 color;
             bindtex(0x0DE1,textures[2]);heads=(U*3)();fn('glGetTexImage',None,U,I,U,U,P)(0x0DE1,0,0x8D94,0x1405,heads)
             assert count.value==2,('heads',list(heads))
             assert heads[0 if cycle%2==0 else 2]==0xffffffff,'hidden fragment allocated a node'
-            assert sum(h!=0xffffffff for h in heads)==min(cap,2)
+            assert sum(h!=0xffffffff for h in heads)==min(cap,2), (rel, cycle, cap, list(heads))
             bindtex(0x0DE1,textures[1]);assert geterror()==0;checks+=1
     fn('glDeleteProgram',None,U)(prog)
 print(f'{checks} PPLL cases passed: four append shaders, detached depth, equality, occlusion, overflow, reset; immutable pool verified.')

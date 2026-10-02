@@ -454,12 +454,13 @@ fi
 if [ \( $WANTS_VERSION -eq $TRUE \) -o \( $WANTS_CONFIG -eq $TRUE \) ] ; then
     echo "Versioning..."
     pushd ..
-    if [ -d .git ]
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1
     then
         buildVer=`git rev-list --count HEAD`
     else
         buildVer=`hg summary | head -1 | cut -d " "  -f 2 | cut -d : -f 1 | grep "[0-9]*"`
     fi
+    unset REVISION
     export revision=${buildVer}
 
     majorVer=`cat indra/newview/VIEWER_VERSION_FS.txt | cut -d "." -f 1`
@@ -612,6 +613,8 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         if [ $AUTOBUILD_ADDRSIZE == 32 ]
         then
             CMAKE_ARCH="-A Win32"
+        else
+            CMAKE_ARCH="-A x64"
         fi
         UNATTENDED="-DUNATTENDED=ON"
     fi
@@ -681,7 +684,7 @@ if [ $WANTS_BUILD -eq $TRUE ] ; then
           exit 1
         fi
         msbuild.exe "$SOLUTION" -p:Configuration=${BTYPE} -flp:LogFile="logs\\FirestormBuild_win-${AUTOBUILD_ADDRSIZE}.log" \
-            -flp1:"errorsonly;LogFile=logs\\FirestormBuild_win-${AUTOBUILD_ADDRSIZE}.err" -p:Platform=${AUTOBUILD_WIN_VSPLATFORM} -t:Build -p:useenv=true \
+            -flp1:"errorsonly;LogFile=logs\\FirestormBuild_win-${AUTOBUILD_ADDRSIZE}.err" -p:Platform=${AUTOBUILD_WIN_VSPLATFORM} -t:Build -p:useenv=false \
             -verbosity:normal -toolsversion:Current -p:"VCBuildAdditionalOptions= /incremental"
         build_status=$?
     fi

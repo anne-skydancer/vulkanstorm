@@ -1884,7 +1884,7 @@ void LLLineEditor::drawBackground()
             LLColor4 tmp_color = gFocusMgr.getFocusColor();
             tmp_color.setAlpha(alpha);
             image->drawBorder(0, 0, getRect().getWidth(), getRect().getHeight(),
-                selection_text_color,
+                tmp_color,
                 gFocusMgr.getFocusFlashWidth());
         }
         LLColor4 tmp_color = UI_VERTEX_COLOR;
@@ -2211,7 +2211,7 @@ void LLLineEditor::draw()
                 {
                     LLColor4 tmp_color( 1.f - text_color.mV[0], 1.f - text_color.mV[1], 1.f - text_color.mV[2], alpha );
                     mGLFont->render(mText, getCursor(), (F32)(cursor_left + lineeditor_cursor_thickness / 2), text_bottom,
-                        selection_text_color,
+                        tmp_color,
                         LLFontGL::LEFT, LLFontGL::BOTTOM,
                         0,
                         LLFontGL::NO_SHADOW,

@@ -159,7 +159,7 @@ int main() {
     normal.startInternetStreamWithAutoFade("normal");
     assert(engine.stream.target == 1 && engine.stream.duration == 3 && normal.mBackendFade);
     normal.stopInternetStreamWithAutoFade();
-    assert(engine.stream.target == 0 && engine.stream.duration == 2 && normal.mBackendFade);
+    assert(engine.url.empty() && !normal.mBackendFade && normal.mFadeState == LLViewerAudio::FADE_IDLE);
 
     engine = Engine{}; LLStartUp::state = 0; gSavedSettings.fade = false;
     LLViewerAudio no_fade;
@@ -174,7 +174,8 @@ int main() {
             cpp.write_text(harness + "\n".join(methods) + scenarios, encoding="utf-8")
             subprocess.run([compiler, "-std=c++17", str(cpp), "-o", str(binary)],
                            check=True, capture_output=True, text=True)
-            subprocess.run([str(binary)], check=True, capture_output=True, text=True)
+            result = subprocess.run([str(binary)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

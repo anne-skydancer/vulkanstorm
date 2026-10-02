@@ -68,10 +68,10 @@ foreach(failure conflict platform architecture)
         set(expected "Select one audio backend")
     elseif(failure STREQUAL platform)
         list(APPEND flags -DWINDOWS=OFF)
-        set(expected "Windows x64 only")
+        set(expected "Windows x64 and Linux x64")
     else()
         list(APPEND flags -DADDRESS_SIZE=32)
-        set(expected "Windows x64 only")
+        set(expected "Windows x64 and Linux x64")
     endif()
     execute_process(COMMAND "${CMAKE_COMMAND}" -S "${TEST_BINARY_DIR}/source"
         -B "${TEST_BINARY_DIR}/${failure}" ${flags}
