@@ -21,6 +21,10 @@ enabled.add("USE_MESAZINK")
 if development:
     enabled -= {"PACKAGE"}
     disabled |= {"PACKAGE"}
+if windows and not development:
+    enabled.add("USE_INNOSETUP")
+else:
+    disabled.add("USE_INNOSETUP")
 errors = []
 for key in sorted(enabled | disabled):
     actual = values.get(key, "<missing>").upper()

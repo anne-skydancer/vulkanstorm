@@ -48,6 +48,7 @@ include(ThreeJS)
 include(Tracy)
 include(UI)
 include(Velopack)
+include(InnoSetup)
 include(ViewerMiscLibs)
 #include(ViewerManager) # <FS:Ansariel> Remove VMP
 include(VisualLeakDetector)
@@ -2538,6 +2539,7 @@ if (WINDOWS)
               "--soloud=${USE_SOLOUD}"
               "--mesazink=${USE_MESAZINK}"
               "--tracy=${USE_TRACY}"
+              "--inno=${USE_INNOSETUP}"
               "--velopack=${USE_VELOPACK}"
               "--avx2=${USE_AVX2_OPTIMIZATION}"
               --build=${CMAKE_CURRENT_BINARY_DIR}
