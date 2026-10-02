@@ -154,7 +154,7 @@ class FSViewerManifest:
                                                                         self.address_size)                                      
         # Store windows symbols we want to keep for debugging in a tar file.
         symbolTar = tarfile.open( name=tarName, mode="w:xz")
-        symbolTar.add( "%s/Firestorm-bin.exe" % self.args['configuration'].lower(), "vulkanstorm-bin.exe" )
+        symbolTar.add( "%s/vulkanstorm-bin.exe" % self.args['configuration'].lower(), "vulkanstorm-bin.exe" )
         symbolTar.add( "%s/build_data.json" % self.args['configuration'].lower(), "build_data.json" )
         symbolTar.add( "%s/%s" % (self.args['configuration'].lower(),pdbName), pdbName )
         symbolTar.close()
