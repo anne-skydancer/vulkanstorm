@@ -27513,5 +27513,39 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>0</integer>
     </map>
+    <!-- <FS:TP> [FIRE-36987] Selectable avatar loading/bakefail cloud color -->
+    <key>FSCloudColorStart</key>
+    <map>
+      <key>Comment</key>
+      <string>Start color (and alpha) of the avatar loading/bakefail "cloud" particle effect.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Color4</string>
+      <key>Value</key>
+      <array>
+        <real>0</real>
+        <real>0.5</real>
+        <real>0.5</real>
+        <real>0.1</real>
+      </array>
+    </map>
+    <key>FSCloudColorEnd</key>
+    <map>
+      <key>Comment</key>
+      <string>End color (and alpha) of the avatar loading/bakefail "cloud" particle effect.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Color4</string>
+      <key>Value</key>
+      <array>
+        <real>0</real>
+        <real>0.5</real>
+        <real>0.5</real>
+        <real>0.9</real>
+      </array>
+    </map>
+    <!-- </FS:TP> -->
   </map>
 </llsd>
