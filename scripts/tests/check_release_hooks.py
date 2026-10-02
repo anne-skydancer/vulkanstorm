@@ -1,4 +1,4 @@
-"""Reject development harnesses in release runtime sources (run for master only).
+"""Reject development harnesses in release runtime sources (run for vkstorm-release changes).
 
 Standalone profiling tools and normal viewer debug facilities remain permitted.
 This is a branch policy check, not a rendering correctness test.

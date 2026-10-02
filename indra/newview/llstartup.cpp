@@ -833,7 +833,7 @@ bool idle_startup()
 
         gSavedSettings.setS32("LastFeatureVersion", LLFeatureManager::getInstance()->getVersion());
         gSavedSettings.setString("LastGPUString", thisGPU);
-        gSavedSettings.setString("LastGraphicsRendererFamily", LLWindow::getSkipGLContext() ? "Vulkan" : "OpenGL");
+        gSavedSettings.setString("LastGraphicsRendererFamily", "OpenGL");
 
         std::string xml_file = LLUI::locateSkin("xui_version.xml");
         LLXMLNodePtr root;

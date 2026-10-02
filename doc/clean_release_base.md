@@ -47,6 +47,8 @@ Configuration, release-hook checks, graphics identity persistence, login-music
 regression checks, audio backend selection, and publication tests passed.
 All 48 offscreen PPLL cases passed on native NVIDIA OpenGL and the preserved
 Mesa 26.3.0-devel package (git 4c18bbc637) using an RTX 5070 Ti.
+All 47 retained Markdown tokenizer unit tests passed. The SoLoud adapter passed
+for 2, 6 and 8 channels, and production VLC speaker-fill tests passed.
 The device-free VLC audio engine tests passed with the preserved SoLoud header;
 the guarded extension digest was updated for that exact header, with all
 patch anchors still required to match uniquely. The optional VLC PCM bridge

@@ -12304,17 +12304,6 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <string>OpenGL</string>
     </map>
-    <key>RenderVulkanDebug</key>
-    <map>
-      <key>Comment</key>
-      <string>Enable Vulkan validation layers and debug markers when using the Vulkan render backend.</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>Boolean</string>
-      <key>Value</key>
-      <integer>0</integer>
-    </map>
   <key>RenderDynamicLOD</key>
     <map>
       <key>Comment</key>

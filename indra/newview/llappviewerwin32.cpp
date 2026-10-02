@@ -47,7 +47,6 @@
 
 #include "llviewercontrol.h"
 #include "lldxhardware.h"
-#include "llvkprobe.h" // <VulkanStorm> Zink backend requires a Vulkan device
 
 #include "nvapi/nvapi.h"
 #include "nvapi/NvApiDriverSettings.h"

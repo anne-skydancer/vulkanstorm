@@ -136,6 +136,26 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             for directory in ("camera", "windlight", "filters", "beams", "beamsColors", "poses", "fs_static_assets"):
                 self.path(directory)
 
+        with self.prefix(src_dst="character"):
+            self.path("*.llm")
+            self.path("*.xml")
+            self.path("*.tga")
+
+        # Include our fonts
+        # <FS:Ansariel> Don't copy fonts to the source folder
+        #with self.prefix(src="../packages/fonts",src_dst="fonts"):
+        with self.prefix(src_dst="fonts"):
+        # </FS:Ansariel>
+            self.path("*.ttf")
+            self.path("*.txt")
+            self.path("*.xml")
+            
+        # <FS:AO> Include firestorm resources
+        with self.prefix(src_dst="fs_resources"):
+            self.path("*.lsltxt")
+            self.path("*.dae") # <FS:Beq> FIRE-30963 - better physics defaults
+
+
         if self.is_packaging_viewer():
             with self.prefix(src_dst="app_settings"):
                 # include the extracted list of contributors
@@ -214,25 +234,6 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                                  "settings_install.xml",
                                  src="environment")
 
-
-            with self.prefix(src_dst="character"):
-                self.path("*.llm")
-                self.path("*.xml")
-                self.path("*.tga")
-
-            # Include our fonts
-            # <FS:Ansariel> Don't copy fonts to the source folder
-            #with self.prefix(src="../packages/fonts",src_dst="fonts"):
-            with self.prefix(src_dst="fonts"):
-            # </FS:Ansariel>
-                self.path("*.ttf")
-                self.path("*.txt")
-                self.path("*.xml")
-                
-            # <FS:AO> Include firestorm resources
-            with self.prefix(src_dst="fs_resources"):
-                self.path("*.lsltxt")
-                self.path("*.dae") # <FS:Beq> FIRE-30963 - better physics defaults
 
             # skins
             with self.prefix(src_dst="skins"):
