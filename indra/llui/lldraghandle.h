@@ -46,13 +46,11 @@ public:
         Optional<S32> label_vpad;
         Optional<LLUIColor> drag_highlight_color;
         Optional<LLUIColor> drag_shadow_color;
-        Optional<S32> label_v_padding;
         Optional<const LLFontGL*> font;
         Optional<LLFontGL::ShadowType> font_shadow;     // <FS:Zi> Allow skins to override drag handle font shadow
 
         Params()
         :   label("label"),
-            label_v_padding("label_v_padding", -1),
             label_vpad("label_vpad", 7),
             drag_highlight_color("drag_highlight_color", LLUIColorTable::instance().getColor("DefaultHighlightLight")),
             drag_shadow_color("drag_shadow_color", LLUIColorTable::instance().getColor("DefaultShadowDark")),
@@ -110,7 +108,6 @@ private:
 
 // <FS:Zi> Allow skins to override drag handle font shadow
 protected:
-    S32 mLabelVPadding;
     LLFontGL::ShadowType mFontShadow;
 // </FS:Zi>
 };

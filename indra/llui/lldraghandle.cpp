@@ -62,7 +62,6 @@ LLDragHandle::LLDragHandle(const LLDragHandle::Params& p)
     mDragShadowColor(p.drag_shadow_color()),
     mMaxTitleWidth(0),
     mForeground(true),
-    mLabelVPadding(p.label_v_padding),
     mFontShadow(p.font_shadow)
 
 {
