@@ -65,8 +65,7 @@ except ImportError:
 def _velopack_pack_version(version):
     pack_version = '.'.join(version[:3])
     if len(version) > 3 and version[3]:
-        separator = '.' if version[2].endswith('-canary') else '-'
-        pack_version += separator + version[3]
+        pack_version += '.' + version[3]
     return pack_version
 
 
