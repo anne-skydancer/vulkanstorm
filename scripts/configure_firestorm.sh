@@ -545,6 +545,7 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
     fi
     if [ $WANTS_PACKAGE -eq $TRUE ] ; then
         PACKAGE="-DPACKAGE:BOOL=ON"
+        INNO="-DUSE_INNOSETUP:BOOL=ON"
         # Also delete easy-to-copy resource files, insuring that we properly refresh resoures from the source tree
         if [ -d skins ] ; then
             echo "Removing select previously packaged resources, they will refresh at build time"
@@ -556,11 +557,13 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         fi
         if [ $WANTS_VELOPACK -eq $TRUE ] ; then
             VELOPACK="-DUSE_VELOPACK:BOOL=ON"
+            INNO="-DUSE_INNOSETUP:BOOL=OFF"
         else
             VELOPACK="-DUSE_VELOPACK:BOOL=OFF"
         fi
     else
         PACKAGE="-DPACKAGE:BOOL=OFF"
+        INNO="-DUSE_INNOSETUP:BOOL=OFF"
         VELOPACK="-DUSE_VELOPACK:BOOL=OFF"
     fi
     if [ $WANTS_CRASHREPORTING -eq $TRUE ] ; then
@@ -639,7 +642,7 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         fi
     fi
 
-    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $SOLOUD $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $MESAZINK $LTO $TESTBUILD $PACKAGE $VELOPACK \
+    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $SOLOUD $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $MESAZINK $LTO $TESTBUILD $PACKAGE $INNO $VELOPACK \
           $UNATTENDED -DLL_TESTS:BOOL=OFF -DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE -DCMAKE_BUILD_TYPE:STRING=$BTYPE $CACHE_OPT \
           $CRASH_REPORTING -DVIEWER_SYMBOL_FILE:STRING="${VIEWER_SYMBOL_FILE:-}" $LL_ARGS_PASSTHRU ${VSCODE_FLAGS:-} | tee "$LOG"
     configure_status=${PIPESTATUS[0]}

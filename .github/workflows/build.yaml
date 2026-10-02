@@ -88,15 +88,18 @@ jobs:
       - name: Install build dependencies
         run: python -m pip install autobuild==3.9.3 llsd
 
+      - name: Check Inno installer payload
+        run: python scripts/tests/test_inno_payload.py
+
       - name: Check Linux installation scripts
         if: runner.os == 'Linux'
         shell: bash
         run: bash scripts/test_linux_install_scripts.sh
 
-      - name: Install NSIS
+      - name: Install Inno Setup
         if: runner.os == 'Windows'
         shell: powershell
-        run: choco install nsis --yes --no-progress
+        run: choco install innosetup --yes --no-progress
 
       - uses: actions/cache@v6
         with:
@@ -116,9 +119,9 @@ jobs:
           if [[ "$RUNNER_OS" == Windows ]]; then
             # The flags used by the successful local Release build.
             export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
-            options+=(-G 'Visual Studio 17 2022' -A x64 -DUSE_MESAZINK:BOOL=ON)
+            options+=(-G 'Visual Studio 17 2022' -A x64 -DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=ON)
           else
-            options+=(-DUSE_MESAZINK:BOOL=ON)
+            options+=(-DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=OFF)
           fi
           cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
             -DCMAKE_BUILD_TYPE:STRING=Release -DADDRESS_SIZE:STRING=64 \
