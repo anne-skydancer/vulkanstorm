@@ -195,8 +195,11 @@ LLFloater::Params::Params()
     show_title("show_title", true),
     auto_close("auto_close", false),
     positioning("positioning", LLFloaterEnums::POSITIONING_RELATIVE),
+    header_font("header_font", LLFontGL::getFontSansSerif()),
+    header_font_shadow("header_font_shadow", LLFontGL::NO_SHADOW),      // <FS:Zi> Allow skins to override drag handle font shadow
     header_height("header_height", 0),
     legacy_header_height("legacy_header_height", 0),
+    header_vpad("header_vpad", 7),
     close_image("close_image"),
     snooze_image("snooze_image"),       // <FS:Ansariel> FIRE-11724: Snooze group chat
     restore_image("restore_image"),
@@ -311,15 +314,7 @@ LLFloater::LLFloater(const LLSD& key, const LLFloater::Params& p)
     memset(mButtonsEnabled, 0, BUTTON_COUNT * sizeof(bool));
     memset(mButtons, 0, BUTTON_COUNT * sizeof(LLButton*));
 
-    // <FS:Zi> Make vertical label padding a per-skin option
-    // if no padding is set, use default from settings.xml
-    if (mLabelVPadding == -1)
-    {
-        mLabelVPadding = LLUI::getInstance()->mSettingGroups["config"]->getS32("UIFloaterTitleVPad");
-    }
-    // </FS:Zi>
-
-    addDragHandle();
+    addDragHandle(p);
     addResizeCtrls();
 
     initFromParams(p);
@@ -372,7 +367,7 @@ void LLFloater::initFloater(const Params& p)
     }
 }
 
-void LLFloater::addDragHandle()
+void LLFloater::addDragHandle(const LLFloater::Params& floater_params)
 {
     if (!mDragHandle)
     {
@@ -382,6 +377,9 @@ void LLFloater::addDragHandle()
             p.name("drag");
             p.follows.flags(FOLLOWS_ALL);
             p.label(mTitle);
+            p.font(floater_params.header_font);
+            p.font_shadow(floater_params.header_font_shadow);      // <FS:Zi> Allow skins to override drag handle font shadow
+            p.label_vpad(floater_params.header_vpad);
             mDragHandle = LLUICtrlFactory::create<LLDragHandleLeft>(p);
         }
         else // drag on top
@@ -390,7 +388,9 @@ void LLFloater::addDragHandle()
             p.name("Drag Handle");
             p.follows.flags(FOLLOWS_ALL);
             p.label(mTitle);
-            p.label_v_padding = mLabelVPadding;     // <FS:Zi> Make vertical label padding a per-skin option
+            p.font(floater_params.header_font);
+            p.font_shadow(floater_params.header_font_shadow);      // <FS:Zi> Allow skins to override drag handle font shadow
+            p.label_vpad(floater_params.header_vpad);
             mDragHandle = LLUICtrlFactory::create<LLDragHandleTop>(p);
         }
         addChild(mDragHandle);
