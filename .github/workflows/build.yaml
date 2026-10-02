@@ -16,8 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - run: node --test scripts/tests/ci_publish_latest.test.cjs
       - run: python3 scripts/tests/test_windows_symbol_archive.py
+      - run: python3 scripts/tests/test_version_schema.py
+      - run: python3 scripts/tests/test_ndof_cmake.py
+      - name: Check update version parsing
+        run: |
+          g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/viewer_version_parser_test.cpp -o "$RUNNER_TEMP/version-parser-test"
+          "$RUNNER_TEMP/version-parser-test"
       - name: Keep development hooks out of release
         if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release'
         run: python3 scripts/tests/check_release_hooks.py
@@ -88,8 +96,10 @@ jobs:
       - name: Install build dependencies
         run: python -m pip install autobuild==3.9.3 llsd
 
-      - name: Check Inno installer payload
-        run: python scripts/tests/test_inno_payload.py
+      - name: Check installer version and payload
+        run: |
+          python scripts/tests/test_inno_payload.py
+          python scripts/tests/test_velopack_version.py
 
       - name: Check Linux installation scripts
         if: runner.os == 'Linux'
