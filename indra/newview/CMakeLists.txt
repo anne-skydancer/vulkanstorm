@@ -1956,22 +1956,8 @@ if (LINUX)
     endif()
     # </FS:ND>
 
-    # Replace the icons with the appropriate ones for the channel
-    # ('test' is the default)
-    set(ICON_PATH "private")
-    string(TOLOWER ${VIEWER_CHANNEL} channel_lower)
-    if(channel_lower MATCHES "release")
-        set(ICON_PATH "release")
-    elseif(channel_lower MATCHES "beta")
-        set(ICON_PATH "beta")
-    elseif(channel_lower MATCHES "project")
-        set(ICON_PATH "project")
-    endif()
-
-    if (OPENSIM)
-        set(ICON_PATH "${ICON_PATH}-os")
-    endif (OPENSIM)
-
+    # All channels and grid variants share Vulkanstorm branding.
+    set(ICON_PATH "vulkanstorm")
     message(STATUS "Copying icons for ${ICON_PATH}")
     execute_process(
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -2008,28 +1994,8 @@ if (WINDOWS)
 # [FS]
          )
 
-    # Replace the icons with the appropriate ones for the channel
-    # ('test' is the default)
-    set(ICON_PATH "private")
-    #set(VIEWER_MACOSX_PHASE "d") # <FS:Ansariel> Moved to OSX section
-    string(TOLOWER ${VIEWER_CHANNEL} channel_lower)
-    if(channel_lower MATCHES "release")
-        set(ICON_PATH "release")
-        #set(VIEWER_MACOSX_PHASE "f") # <FS:Ansariel> Moved to OSX section
-    elseif(channel_lower MATCHES "beta")
-        set(ICON_PATH "beta")
-        #set(VIEWER_MACOSX_PHASE "b") # <FS:Ansariel> Moved to OSX section
-    elseif(channel_lower MATCHES "project")
-        set(ICON_PATH "project")
-        #set(VIEWER_MACOSX_PHASE "a") # <FS:Ansariel> Moved to OSX section
-    endif()
-
-    # <FS:Ansariel> FIRE-24335: Use different icon for OpenSim version
-    if (OPENSIM)
-        set(ICON_PATH "${ICON_PATH}-os")
-    endif (OPENSIM)
-    # <FS:Ansariel>
-
+    # All channels and grid variants share Vulkanstorm branding.
+    set(ICON_PATH "vulkanstorm")
     message(STATUS "Copying icons for ${ICON_PATH}")
     execute_process(
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
