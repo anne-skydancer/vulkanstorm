@@ -667,7 +667,13 @@ void LLComboBox::setVkArrowImageWidth(S32 width)
         return;
     }
     mVkArrowImageWidth = width;
+    const S32 previous_left = mButton->getRect().mLeft;
     imageLoaded();
+    const S32 delta_left = mButton->getRect().mLeft - previous_left;
+    if (delta_left != 0)
+    {
+        onVkArrowImageWidthChanged(delta_left);
+    }
 }
 
 // <FS:Ansariel> For setting the focus to the LLLineEditor

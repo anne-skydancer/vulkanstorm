@@ -633,8 +633,6 @@ void LLLocationInputCtrl::reshape(S32 width, S32 height, bool called_from_parent
 {
     LLComboBox::reshape(width, height, called_from_parent);
 
-    updateWidgetlayout();
-
     // Setting cursor to 0  to show the left edge of the text. See EXT-4967.
     mTextEntry->setCursor(0);
     if (mTextEntry->hasSelection())
@@ -1186,6 +1184,14 @@ void LLLocationInputCtrl::updateContextMenu(){
 // [/RLVa:KB]
     }
 }
+void LLLocationInputCtrl::onVkArrowImageWidthChanged(S32 delta_left)
+{
+    // Preserve the release layout's XUI offsets when Vulkan learns the arrow
+    // image width after construction. Do not repeat its initial translation.
+    mAddLandmarkBtn->translate(delta_left, 0);
+    refreshParcelIcons();
+}
+
 void LLLocationInputCtrl::updateWidgetlayout()
 {
     const LLRect&   rect            = getLocalRect();
@@ -1195,11 +1201,9 @@ void LLLocationInputCtrl::updateWidgetlayout()
 
     // "Add Landmark" button
     LLRect al_btn_rect = mAddLandmarkBtn->getRect();
-    // Use an absolute origin; the XUI rectangle already has a position.
-    al_btn_rect.setOriginAndSize(
+    al_btn_rect.translate(
         hist_btn_rect.mLeft - mIconHPad - al_btn_rect.getWidth(),
-        (rect.getHeight() - al_btn_rect.getHeight()) / 2,
-        al_btn_rect.getWidth(), al_btn_rect.getHeight());
+        (rect.getHeight() - al_btn_rect.getHeight()) / 2);
     mAddLandmarkBtn->setRect(al_btn_rect);
 }
 

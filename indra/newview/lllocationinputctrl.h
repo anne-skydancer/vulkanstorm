@@ -157,6 +157,7 @@ private:
     void                    updateAddLandmarkTooltip();
     void                    updateContextMenu();
     void                    updateWidgetlayout();
+    void                    onVkArrowImageWidthChanged(S32 delta_left) override;
     void                    changeLocationPresentation();
 
     void                    onInfoButtonClicked();

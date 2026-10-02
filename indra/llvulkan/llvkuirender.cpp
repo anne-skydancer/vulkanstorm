@@ -522,6 +522,25 @@ namespace
 
         if (!view->getVisible()) return;
 
+        // Resolve the owned dropdown's intrinsic width before preparing its
+        // children, so location icons and text use the same prepared layout.
+        if (LLComboBox* combo = dynamic_cast<LLComboBox*>(const_cast<LLView*>(view)))
+        {
+            if (combo->acceptsTextInput() && LLVKUIImage::ready())
+            {
+                if (const LLButton* dropdown = combo->getDropdownButton())
+                {
+                    LLColor4 color;
+                    const std::string image = dropdown->getStateImageName(color, 1.f);
+                    int image_width = 0, image_height = 0;
+                    if (LLVKUIImage::getSize(image, image_width, image_height))
+                    {
+                        combo->setVkArrowImageWidth(image_width);
+                    }
+                }
+            }
+        }
+
         // Several GL widgets finalize layout from draw(). Vulkan never calls
         // draw(), so make the same non-rendering updates before collecting
         // glyphs and before input dispatch uses their rectangles.
@@ -769,19 +788,8 @@ namespace
                 // line editor. Non-editable combos use DropDown_* as the
                 // stretchable background for the entire field.
                 const bool is_combo_button = parent_combo != nullptr &&
-                                             parent_combo->acceptsTextInput();
-                if (is_combo_button)
-                {
-                    int image_w = 0, image_h = 0;
-                    if (LLVKUIImage::getSize(imgname, image_w, image_h))
-                    {
-                        // One state update supplies the missing intrinsic
-                        // width; subsequent calls are a no-op and resizes use
-                        // LLComboBox's normal layout path.
-                        const_cast<LLComboBox*>(parent_combo)
-                            ->setVkArrowImageWidth(image_w);
-                    }
-                }
+                                             parent_combo->acceptsTextInput() &&
+                                             parent_combo->getDropdownButton() == button;
                 const LLRect button_screen = view->calcScreenRect();
                 float button_l, button_t, button_r, button_b;
                 toSinkRect(rc, button_screen,

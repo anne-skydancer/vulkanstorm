@@ -177,6 +177,7 @@ public:
     // Vulkan decodes the same skinned image independently of LLUIImage. Cache
     // its intrinsic width so the normal combo layout formula remains valid.
     void            setVkArrowImageWidth(S32 width);
+    const LLButton* getDropdownButton() const { return mButton; }
 
     // <FS:Ansariel> For setting the focus to the LLLineEditor
     void            focusEditor();
@@ -251,6 +252,8 @@ public:
     virtual void    onTextEntry(LLLineEditor* line_editor);
 
 protected:
+    virtual void onVkArrowImageWidthChanged(S32 delta_left) {}
+
     LLButton*           mButton;
     LLLineEditor*       mTextEntry;
     LLScrollListCtrl*   mList;
