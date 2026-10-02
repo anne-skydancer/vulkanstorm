@@ -60,6 +60,16 @@ try:
 except ImportError:
     from llbase import llsd
 # </FS:Beq>
+
+
+def _velopack_pack_version(version):
+    pack_version = '.'.join(version[:3])
+    if len(version) > 3 and version[3]:
+        separator = '.' if version[2].endswith('-canary') else '-'
+        pack_version += separator + version[3]
+    return pack_version
+
+
 class ViewerManifest(LLManifest,FSViewerManifest):
     def is_packaging_viewer(self):
         # Some commands, files will only be included
@@ -1175,10 +1185,8 @@ class Windows_x86_64_Manifest(ViewerManifest):
         pack_id = self.app_name_oneword()  # "SecondLife", "SecondLifeBeta", etc.
         # Velopack requires SemVer2. Use major.minor.patch-buildnumber so that
         # Velopack can distinguish builds and order them correctly.
-        pack_version = '.'.join(self.args['version'][:3])
-        if len(self.args['version']) > 3 and self.args['version'][3]:
-            pack_version += '-' + self.args['version'][3]
-        pack_title = pack_id  #Wrapper exe, don't use spaces
+        pack_version = _velopack_pack_version(self.args['version'])
+        pack_title = pack_id  # Wrapper executable name
         pack_dir = self.get_dst_prefix()
         main_exe = self.final_exe()
         # <FS:TJ> Make sure to use Firestorm naming
@@ -2211,9 +2219,7 @@ class Darwin_x86_64_Manifest(ViewerManifest):
         pack_id = self.app_name_oneword()  # "SecondLife", "SecondLifeBeta", etc.
         # Velopack requires SemVer2. Use major.minor.patch-buildnumber so that
         # Velopack can distinguish builds and order them correctly.
-        pack_version = '.'.join(self.args['version'][:3])
-        if len(self.args['version']) > 3 and self.args['version'][3]:
-            pack_version += '-' + self.args['version'][3]
+        pack_version = _velopack_pack_version(self.args['version'])
         pack_title = self.app_name()  # Display name with spaces
 
         # The .app bundle path (e.g., "/path/to/Second Life Release.app")
