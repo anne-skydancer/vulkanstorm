@@ -1454,4 +1454,8 @@
   <color
     name="HighlightPanelBackground"
     reference="AnsaStormBlue_Dk" />
+  <!-- Refresh inherited list-view aliases after applying the Modern palette. -->
+  <color name="ListViewBgColor" reference="ScrollBgWriteableColor" />
+  <color name="ListViewSelectedBgColor" reference="ScrollSelectedBGColor" />
+  <color name="ListViewSelectedFgColor" reference="ScrollSelectedFGColor" />
 </colors>

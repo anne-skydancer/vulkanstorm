@@ -93,7 +93,7 @@
       height="40"
       background_visible="true"
       background_opaque="true"
-      bg_alpha_image="none"
+      bg_alpha_image=""
       bg_alpha_color="EmphasisColor_35"
       bg_opaque_image="Marketplace_Dropzone_Background"
       border="true"
