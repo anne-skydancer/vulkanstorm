@@ -46,6 +46,10 @@ WANTS_AVX=$FALSE
 WANTS_AVX2=$FALSE
 WANTS_TESTBUILD=$FALSE
 WANTS_TRACY=$FALSE
+# <VulkanStorm> Mesa Zink (GL-over-Vulkan) runtime bundling, opt-in via --zink.
+WANTS_MESAZINK=$FALSE
+# </VulkanStorm>
+WANTS_LTO=$FALSE
 WANTS_BUILD=$FALSE
 WANTS_CRASHREPORTING=$FALSE
 WANTS_CACHE=$FALSE
@@ -89,6 +93,8 @@ showUsage()
     echo "  --avx                    : Build with Advanced Vector Extensions"
     echo "  --avx2                   : Build with Advanced Vector Extensions 2"
     echo "  --tracy                  : Build with Tracy Profiler support"
+    echo "  --zink                   : Bundle the Mesa Zink OpenGL-over-Vulkan runtime (Windows 64-bit only)"
+    echo "  --lto                    : Build with Link Time Optimization"
     echo "  --crashreporting         : Build with crash reporting enabled (Windows only)"
     echo "  --testbuild <days>       : Create time-limited test build (build date + <days>)"
     echo "  --platform <platform>    : Build for specified platform (darwin | windows | linux)"
@@ -143,6 +149,8 @@ getArgs()
           avx)            WANTS_AVX=$TRUE;;
           avx2)           WANTS_AVX2=$TRUE;;
           tracy)          WANTS_TRACY=$TRUE;;
+          zink)           WANTS_MESAZINK=$TRUE;;
+          lto)            WANTS_LTO=$TRUE;;
           crashreporting) WANTS_CRASHREPORTING=$TRUE;;
           testbuild)      WANTS_TESTBUILD=$TRUE
                           TESTBUILD_PERIOD="$OPTARG"
@@ -338,6 +346,8 @@ echo -e "          HAVOK: `b2a $WANTS_HAVOK`"                                  |
 echo -e "            AVX: `b2a $WANTS_AVX`"                                    | tee -a "$LOG"
 echo -e "           AVX2: `b2a $WANTS_AVX2`"                                   | tee -a "$LOG"
 echo -e "          TRACY: `b2a $WANTS_TRACY`"                                  | tee -a "$LOG"
+echo -e "          ZINK: `b2a $WANTS_MESAZINK`"                                 | tee -a "$LOG"
+echo -e "            LTO: `b2a $WANTS_LTO`"                                    | tee -a "$LOG"
 echo -e " CRASHREPORTING: `b2a $WANTS_CRASHREPORTING`"                         | tee -a "$LOG"
 if [ $WANTS_TESTBUILD -eq $TRUE ] ; then
     echo -e "      TESTBUILD: `b2a $WANTS_TESTBUILD` ($TESTBUILD_PERIOD days)" | tee -a "$LOG"
@@ -514,7 +524,19 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         TRACY_PROFILER="-DUSE_TRACY:BOOL=ON"
     else
         TRACY_PROFILER="-DUSE_TRACY:BOOL=OFF"
-    fi   
+    fi
+    # <VulkanStorm> Mesa Zink GL-over-Vulkan runtime (windows64 only)
+    if [ $WANTS_MESAZINK -eq $TRUE ] ; then
+        MESAZINK="-DUSE_MESAZINK:BOOL=ON"
+    else
+        MESAZINK="-DUSE_MESAZINK:BOOL=OFF"
+    fi
+    # </VulkanStorm>
+    if [ $WANTS_LTO -eq $TRUE ] ; then
+        LTO="-DUSE_LTO:BOOL=ON"
+    else
+        LTO="-DUSE_LTO:BOOL=OFF"
+    fi
     if [ $WANTS_TESTBUILD -eq $TRUE ] ; then
         TESTBUILD="-DTESTBUILD:BOOL=ON -DTESTBUILDPERIOD:STRING=$TESTBUILD_PERIOD"
     else

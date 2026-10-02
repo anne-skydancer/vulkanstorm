@@ -703,6 +703,14 @@ class Windows_x86_64_Manifest(ViewerManifest):
                 self.path("OpenAL32.dll")
                 self.path("alut.dll")
 
+            # <VulkanStorm> Mesa Zink runtime (opt-in): stage into mesa\ so the
+            # bundled opengl32.dll never shadows the native ICD by accident.
+            if self.args['mesazink'].lower() == 'on':
+                with self.prefix(dst="mesa"):
+                    self.path("opengl32.dll")
+                    self.path("libgallium_wgl.dll")
+            # </VulkanStorm>
+
             # For textures
             self.path_optional("openjp2.dll")
 
@@ -2160,6 +2168,12 @@ class LinuxManifest(ViewerManifest):
         relpkgdir = os.path.join(pkgdir, "lib", "release")
         debpkgdir = os.path.join(pkgdir, "lib", "debug")
 
+        if self.args['mesazink'].lower() == 'on':
+            with self.prefix(src=os.path.join(relpkgdir, 'mesa'), dst='lib/mesa'):
+                self.path('libGLX_vulkanstorm.so.0')
+                self.path('libgallium_vulkanstorm.so')
+            with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
+                self.path('mesazink.txt')
         self.path("licenses-linux.txt","licenses.txt")
         self.path("VivoxAUP.txt")
         self.path("LGPL-license.txt")
@@ -2542,6 +2556,7 @@ if __name__ == "__main__":
              if BugSplat crash reporting is desired""", default=''),
         dict(name='discord', description="""Indication discord social sdk libraries are needed""", default='OFF'),
         dict(name='fmodstudio', description="""Indication if fmod studio libraries are needed""", default='OFF'),
+        dict(name='mesazink', description="""Indication the Mesa Zink GL-over-Vulkan runtime is bundled""", default='OFF'),
         dict(name='openal', description="""Indication openal libraries are needed""", default='OFF'),
         dict(name='soloud', description="""Include SoLoud package licenses""", default='OFF'),
         dict(name='tracy', description="""Indication tracy profiler is enabled""", default='OFF'),

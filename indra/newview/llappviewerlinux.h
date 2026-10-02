@@ -31,6 +31,8 @@
 #include "llappviewer.h"
 #endif
 
+#include "lllinuxzink.h"
+
 class LLCommandLineParser;
 
 class LLAppViewerLinux : public LLAppViewer
@@ -47,6 +49,10 @@ public:
     bool setupSLURLHandler();
 
 protected:
+    void selectGLBackend() override;
+    bool initWindow() override;
+    LLLinuxZink::Environment mZinkEnvironment;
+
     virtual bool beingDebugged();
 
     virtual bool restoreErrorTrap();

@@ -1196,6 +1196,7 @@ bool LLAppViewer::init()
     // Initialize the window
     //
     gGLActive = true;
+    selectGLBackend(); // <VulkanStorm> resolve the GL provider before any GL import is touched
     initWindow();
     LL_INFOS("InitInfo") << "Window is initialized." << LL_ENDL ;
     // <FS:Beq> allow detected hardware to be overridden.
@@ -3735,6 +3736,17 @@ bool LLAppViewer::initWindow()
     {
         LL_WARNS("AppInit") << "RenderBackend=Vulkan requested, but the Vulkan render pipeline is not yet available in this build; falling back to OpenGL for this session." << LL_ENDL;
         render_backend = "OpenGL";
+    }
+    else if (render_backend == "Zink")
+    {
+        // <VulkanStorm> Mesa Zink = the OpenGL pipeline running over Vulkan
+        // via the bundled Mesa runtime. It boots the normal GL window/context
+        // path; selectGLBackend() already validated the prerequisites (bundled
+        // runtime present, Vulkan device available) and preloaded the Mesa
+        // opengl32, logging a warning and preloading native OpenGL instead if
+        // they are not met. The session therefore stays on the GL path either
+        // way; only the GL provider differs.
+        // </VulkanStorm>
     }
     else if (render_backend != "OpenGL")
     {

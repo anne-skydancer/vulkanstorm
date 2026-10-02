@@ -3976,30 +3976,6 @@ private:
 static LLPanelInjector<LLPanelPreferenceGraphics> t_pref_graph("panel_preference_graphics");
 static LLPanelInjector<LLPanelPreferencePrivacy> t_pref_privacy("panel_preference_privacy");
 
-// <VulkanStorm> Minimal Vulkan availability probe. Checks that the Vulkan loader
-// is present and exposes its entry points, without requiring Vulkan SDK headers.
-// Device enumeration arrives with the llvulkan backend library; until then this
-// gates whether the Vulkan item is offered in the renderer selector.
-static bool probe_vulkan_available()
-{
-#if LL_WINDOWS
-    HMODULE vulkan_loader = LoadLibraryA("vulkan-1.dll");
-    if (!vulkan_loader)
-    {
-        return false;
-    }
-    // vkEnumerateInstanceVersion requires a Vulkan 1.1+ loader; vkCreateInstance
-    // covers 1.0 loaders. Either one proves a working loader is installed.
-    bool available = (GetProcAddress(vulkan_loader, "vkEnumerateInstanceVersion") != nullptr) ||
-                     (GetProcAddress(vulkan_loader, "vkCreateInstance") != nullptr);
-    FreeLibrary(vulkan_loader);
-    return available;
-#else
-    // SDL2/macOS window backends do not create Vulkan surfaces yet.
-    return false;
-#endif
-}
-
 bool LLPanelPreferenceGraphics::postBuild()
 {
     // <FS:Ansariel> Improved graphics preferences
@@ -4051,12 +4027,6 @@ bool LLPanelPreferenceGraphics::postBuild()
     {
         refreshRenderBackendSelector();
         backend_combo->setCommitCallback(boost::bind(&LLPanelPreferenceGraphics::onRenderBackendCommit, this));
-        if (!probe_vulkan_available())
-        {
-            backend_combo->remove("Vulkan");
-            backend_combo->setToolTip(std::string("Selects the render backend used to draw the viewer. ") +
-                LLTrans::getString("VulkanNotAvailableTooltip"));
-        }
     }
     // </VulkanStorm>
 
@@ -4070,7 +4040,7 @@ void LLPanelPreferenceGraphics::refreshRenderBackendSelector()
     if (backend_combo)
     {
         std::string active_backend = gSavedSettings.getString("RenderBackend");
-        if (active_backend != "Vulkan")
+        if (active_backend != "Zink")
         {
             active_backend = "OpenGL";
         }
@@ -4083,7 +4053,7 @@ void LLPanelPreferenceGraphics::onRenderBackendCommit()
 {
     std::string selected_backend = gSavedSettings.getString("RenderBackendPending");
     std::string active_backend = gSavedSettings.getString("RenderBackend");
-    if (active_backend != "Vulkan")
+    if (active_backend != "Zink")
     {
         active_backend = "OpenGL";
     }
@@ -4106,7 +4076,7 @@ void LLPanelPreferenceGraphics::callbackRenderBackendRestart(const LLSD& notific
     if (0 == option) // Shutdown now
     {
         std::string selected_backend = gSavedSettings.getString("RenderBackendPending");
-        if (selected_backend != "Vulkan")
+        if (selected_backend != "Zink")
         {
             selected_backend = "OpenGL";
         }

@@ -46,6 +46,7 @@ public:
     bool reportCrashToBugsplat(void* pExcepInfo) override;
 
 protected:
+    void selectGLBackend() override; // <VulkanStorm> Mesa Zink / native OpenGL provider selection
     bool initWindow() override; // Override to initialize the viewer's window.
     void initLoggingAndGetLastDuration() override; // Override to clean stack_trace info.
     void initConsole() override; // Initialize OS level debugging console.

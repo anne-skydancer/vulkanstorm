@@ -32,6 +32,7 @@
 #include <boost/regex.hpp>
 
 #include "llfeaturemanager.h"
+#include "llgraphicsidentity.h"
 #include "lldir.h"
 
 #include "llsys.h"
@@ -545,6 +546,12 @@ bool LLFeatureManager::loadGPUClass()
     mGPUSupported = true;
 
     return true; // indicates that a gpu value was established
+}
+
+bool LLFeatureManager::graphicsIdentityChanged() const
+{
+    return LLGraphicsIdentity::changed(gSavedSettings.getString("LastGPUString"), mGPUString,
+        gSavedSettings.getString("LastGraphicsRendererFamily"), false);
 }
 
 void LLFeatureManager::cleanupFeatureTables()

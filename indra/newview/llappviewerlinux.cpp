@@ -101,6 +101,39 @@ namespace
 }
 
 
+void LLAppViewerLinux::selectGLBackend()
+{
+    if (gSavedSettings.getString("RenderBackend") != "Zink") return;
+    if (!std::getenv("DISPLAY") || !*std::getenv("DISPLAY"))
+    {
+        LL_WARNS("RenderInit") << "Mesa/Zink requires X11 or XWayland; using system OpenGL." << LL_ENDL;
+        return;
+    }
+    const std::string executable_dir = gDirUtilp->getExecutableDir();
+    std::string error;
+    // Installed viewer: bin/ beside lib/. Development build: mesa/ beside executable.
+    for (const auto& directory : {executable_dir + "/../lib/mesa", executable_dir + "/mesa"})
+    {
+        if (LLLinuxZink::activate(directory, error))
+        {
+            mZinkEnvironment.apply();
+            LL_INFOS("RenderInit") << "GL backend: bundled Mesa/Zink from '" << directory << "'." << LL_ENDL;
+            return;
+        }
+    }
+    LL_WARNS("RenderInit") << "Cannot load bundled Mesa/Zink: " << error
+                           << "; using system OpenGL." << LL_ENDL;
+}
+
+bool LLAppViewerLinux::initWindow()
+{
+    const bool result = LLAppViewer::initWindow();
+    // GLVND retains the provider for the viewer's X display. Do not leak our
+    // selection into subsequently launched browser/media helper processes.
+    mZinkEnvironment.restore();
+    return result;
+}
+
 static void exceptionTerminateHandler()
 {
     // reinstall default terminate() handler in case we re-terminate.
