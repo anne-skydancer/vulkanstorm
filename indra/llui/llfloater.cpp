@@ -186,7 +186,6 @@ LLFloater::Params::Params()
     can_snooze("can_snooze", false),        // <FS:Ansariel> FIRE-11724: Snooze group chat
     can_drag_on_left("can_drag_on_left", false),
     drop_shadow("drop_shadow",true),        // <FS:Zi> Optional Drop Shadows
-    label_v_padding("label_v_padding", -1), // <FS:Zi> Make vertical label padding a per-skin option
     can_tear_off("can_tear_off", true),
     save_dock_state("save_dock_state", false),
     save_rect("save_rect", false),
@@ -257,12 +256,11 @@ void LLFloater::initClass()
 }
 
 // defaults for floater param block pulled from widgets/floater.xml
-static LLWidgetNameRegistry::StaticRegistrar sRegisterFloaterParams(&typeid(LLFloater::Params), "floater");
+static LLWidgetNameRegistry::StaticRegistrar sRegisterFloaterParams(typeid(LLFloater::Params), "floater");
 
 LLFloater::LLFloater(const LLSD& key, const LLFloater::Params& p)
 :   LLPanel(),  // intentionally do not pass params here, see initFromParams
     mDragHandle(NULL),
-    mLabelVPadding(p.label_v_padding),  // <FS:Zi> Make vertical label padding a per-skin optional
     mTitle(p.title),
     mShortTitle(p.short_title),
     mSingleInstance(p.single_instance),
@@ -603,6 +601,8 @@ void LLFloater::storeRectControl()
 
 void LLFloater::storeVisibilityControl()
 {
+    // Todo: this is a bit pricey, gets called each frame
+    // on LLAppViewer::idle(), optimize!
     if( !sQuitting && mVisibilityControl.size() > 1 )
     {
         // <FS:Zi> Make sure that hosted floaters always save "not visible", so they won't

@@ -181,8 +181,7 @@ public:
         Optional<LLFontGL::ShadowType> header_font_shadow;      // <FS:Zi> Allow skins to override drag handle font shadow
         Optional<S32>           header_height,
                                 legacy_header_height, // HACK see initFromXML()
-                                header_vpad,
-                                label_v_padding;
+                                header_vpad;
 
         Optional<F32>           rel_x,
                                 rel_y;
@@ -518,7 +517,6 @@ private:
     //std::string       mInstanceName;        // Store the instance name so we can remove ourselves from the list
 
     bool            mDropShadow;        // ## Zi: Optional Drop Shadows
-    S32             mLabelVPadding; // <FS:Zi> Make vertical label padding a per-skin option
     bool            mCanTearOff;
     bool            mCanMinimize;
     bool            mCanClose;

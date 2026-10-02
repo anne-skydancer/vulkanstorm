@@ -440,7 +440,7 @@ void LLDrawPoolAlpha::setOITMode(S32 mode)
 
 void LLDrawPoolAlpha::renderDebugAlpha()
 {
-    if (sShowDebugAlpha && !gCubeSnapshot)
+    if (sShowDebugAlpha && !gCubeSnapshot && !LLPipeline::sReflectionRender)
     {
         gHighlightProgram.bind();
         gGL.diffuseColor4f(1, 0, 0, 1);
