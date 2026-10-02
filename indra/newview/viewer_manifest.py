@@ -109,6 +109,33 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             self.path("*/xui/*/*.xml")
             self.path("*/xui/*/widgets/*.xml")
 
+        with self.prefix(src_dst="skins"):
+            self.path("skins.xml")
+            self.path("*/colors.xml")
+            self.path("*/settings.xml")
+            self.path("*/toolbars.xml")
+            self.path("*/default_languages.xml")
+            self.path("*/textures/*/*.jpg")
+            self.path("*/textures/*/*.tga")
+            self.path("*/textures/*/*.png")
+            self.path("*/textures/*.tga")
+            self.path("*/textures/*.j2c")
+            self.path("*/textures/*.jpg")
+            self.path("*/textures/*.png")
+            self.path("*/textures/textures.xml")
+            self.path("*/themes/*/colors.xml")
+            self.path("*/themes/*/textures/*/*.tga")
+            self.path("*/themes/*/textures/*/*.jpg")
+            self.path("*/themes/*/textures/*/*.png")
+            self.path("*/themes/*/textures/*.tga")
+            self.path("*/themes/*/textures/*.j2c")
+            self.path("*/themes/*/textures/*.png")
+            self.path("*/themes/*/textures/textures.xml")
+            self.path("*/html/*/*/*.html")
+        with self.prefix(src_dst="app_settings"):
+            for directory in ("camera", "windlight", "filters", "beams", "beamsColors", "poses", "fs_static_assets"):
+                self.path(directory)
+
         if self.is_packaging_viewer():
             with self.prefix(src_dst="app_settings"):
                 # include the extracted list of contributors
@@ -631,9 +658,9 @@ class Windows_x86_64_Manifest(ViewerManifest):
         relpkgdir = os.path.join(pkgdir, "lib", "release")
         debpkgdir = os.path.join(pkgdir, "lib", "debug")
 
-        if self.is_packaging_viewer():
-            # Find firestorm-bin.exe in the 'configuration' dir, then rename it to the result of final_exe.
-            self.path(src='%s/firestorm-bin.exe' % self.args['configuration'], dst=self.final_exe())
+        if self.is_packaging_viewer() or 'copy' in self.args['actions']:
+            # Find vulkanstorm-bin.exe in the 'configuration' dir, then rename it to the result of final_exe.
+            self.path(src='%s/vulkanstorm-bin.exe' % self.args['configuration'], dst=self.final_exe())
 
             # <FS:Ansariel> Undo Github-Build stuff - I don't think we need this
             # GITHUB_OUTPUT = os.getenv('GITHUB_OUTPUT')
@@ -705,7 +732,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
 
             # <VulkanStorm> Mesa Zink runtime (opt-in): stage into mesa\ so the
             # bundled opengl32.dll never shadows the native ICD by accident.
-            if self.args['mesazink'].lower() == 'on':
+            if self.args.get('mesazink', 'OFF').lower() == 'on':
                 with self.prefix(dst="mesa"):
                     self.path("opengl32.dll")
                     self.path("libgallium_wgl.dll")
@@ -1021,7 +1048,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
         #installer_base = self.installer_base_name()
         #exclude_pattern = r'.*\.pdb|.*\.map|.*\.bat|.*\.exp|.*\.lib|.*\.nsi|.*\.tar\.xz|secondlife-bin\..*|.*_Setup\.exe|.*-Setup\.exe'
         installer_base = self.fs_installer_basename()
-        exclude_pattern = r'.*\.pdb|.*\.map|.*\.bat|.*\.exp|.*\.lib|.*\.nsi|.*\.tar\.xz|firestorm-bin\..*|.*_Setup\.exe|.*-Setup\.exe'
+        exclude_pattern = r'.*\.pdb|.*\.map|.*\.bat|.*\.exp|.*\.lib|.*\.nsi|.*\.tar\.xz|vulkanstorm-bin\..*|.*_Setup\.exe|.*-Setup\.exe'
         # </FS:TJ>
 
         # Channel-specific icon for the Velopack installer.
@@ -2168,7 +2195,7 @@ class LinuxManifest(ViewerManifest):
         relpkgdir = os.path.join(pkgdir, "lib", "release")
         debpkgdir = os.path.join(pkgdir, "lib", "debug")
 
-        if self.args['mesazink'].lower() == 'on':
+        if self.args.get('mesazink', 'OFF').lower() == 'on':
             with self.prefix(src=os.path.join(relpkgdir, 'mesa'), dst='lib/mesa'):
                 self.path('libGLX_vulkanstorm.so.0')
                 self.path('libgallium_vulkanstorm.so')
@@ -2193,7 +2220,7 @@ class LinuxManifest(ViewerManifest):
 
         with self.prefix(dst="bin"):
             self.path( os.path.join(os.pardir,'build_data.json'), "build_data.json" )
-            self.path("firestorm-bin","do-not-directly-run-firestorm-bin")
+            self.path("vulkanstorm-bin","do-not-directly-run-vulkanstorm-bin")
             self.path("../linux_crash_logger/linux-crash-logger","linux-crash-logger.bin")
             self.path2basename("../llplugin/slplugin", "SLPlugin")
             #this copies over the python wrapper script, associated utilities and required libraries, see SL-321, SL-322 and SL-323

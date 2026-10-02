@@ -46,7 +46,7 @@ layout(binding=0,r32ui) uniform coherent uimage2D oit_head;
 layout(std430,binding=0) buffer OITNodePool {uint oit_nodes[];};
 layout(binding=0,offset=0) uniform atomic_uint oit_counter;
 uniform int oit_node_cap;
-uniform sampler2D alpha_peel_depth;
+uniform sampler2D alpha_oit_opaque_depth;
 uniform float test_depth;
 out vec4 color;
 '''
@@ -65,7 +65,7 @@ out vec4 color;
             bindbuf(0x92C0,buffers[1]);sub(0x92C0,0,4,C.byref(zero));cleartex(textures[2],0,0x8D94,0x1405,C.byref(empty))
             base(0x92C0,0,buffers[1]);base(0x90D2,0,buffers[0])
             image(0,textures[2],0,0,0,0x88BA,0x8236)
-            use(prog);uniform(loc(prog,b'oit_node_cap'),cap);uniform(loc(prog,b'alpha_peel_depth'),0)
+            use(prog);uniform(loc(prog,b'oit_node_cap'),cap);uniform(loc(prog,b'alpha_oit_opaque_depth'),0)
             # Exactly equal to the stored middle depth, testing LEQUAL precisely.
             fn('glUniform1f',None,I,C.c_float)(loc(prog,b'test_depth'),snapshot[1])
             fn('glDrawArrays',None,U,I,I)(4,0,3);barrier(0xFFFFFFFF)

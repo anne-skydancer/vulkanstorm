@@ -111,7 +111,7 @@ getArgs()
 # $* = the options passed in from main
 {
     if [ $# -gt 0 ]; then
-            while getoptex "clean build config version package velopack inno nsis no-package fmodstudio openal soloud ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 tracy zink lto crashreporting testbuild: help chan: btype:" "$@" ; do
+            while getoptex "clean build config version package velopack no-package fmodstudio openal soloud ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 tracy zink lto crashreporting testbuild: help chan: btype:" "$@" ; do
 
           #ensure options are valid
           if [  -z "$OPTOPT"  ] ; then
@@ -416,7 +416,7 @@ if [ -z $CHANNEL ] ; then
 else
     CHANNEL=`echo $CHANNEL | sed -e "s/[^a-zA-Z0-9\-]*//g"` # strip out difficult characters from channel
 fi
-CHANNEL="Firestorm-$CHANNEL"
+CHANNEL="Vulkanstorm-$CHANNEL"
 
 if [ \( $WANTS_CLEAN -eq $TRUE \) -a \( $WANTS_BUILD -eq $FALSE \) ] ; then
     echo "Cleaning $TARGET_PLATFORM...."
@@ -636,7 +636,7 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         fi
     fi
 
-    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $SOLOUD $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $MESAZINK $LTO $TESTBUILD $PACKAGE $VELOPACK $INNO $NSIS \
+    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $SOLOUD $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $MESAZINK $LTO $TESTBUILD $PACKAGE $VELOPACK \
           $UNATTENDED -DLL_TESTS:BOOL=OFF -DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE -DCMAKE_BUILD_TYPE:STRING=$BTYPE $CACHE_OPT \
           $CRASH_REPORTING -DVIEWER_SYMBOL_FILE:STRING="${VIEWER_SYMBOL_FILE:-}" $LL_ARGS_PASSTHRU ${VSCODE_FLAGS:-} | tee "$LOG"
     configure_status=${PIPESTATUS[0]}
