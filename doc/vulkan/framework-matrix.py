@@ -14,6 +14,8 @@ Dshader='IRenderDevice::CreateShader/CreateGraphicsPipelineState/CreatePipelineR
 Bshader='shaderc SPIR-V path; createShader/createProgram/createUniform; setUniform/setTexture/setBuffer/setImage'
 rows=[]
 def add(id,meaning,d,b,gate,de='DC',be='BV'):
+    if any(api in d for api in ('CreateView', 'CreateBuffer', 'CreateTexture')) and 'DR' not in de.split('/'):
+        de += '/DR'
     rows.append(dict(record=id,baseline_contract=meaning,diligent_public_route=d,bgfx_public_route=b,
                      constraint_or_decision_test=gate,diligent_evidence=de,bgfx_evidence=be,
                      status='candidate source/API mapping; no integration or runtime qualification'))
