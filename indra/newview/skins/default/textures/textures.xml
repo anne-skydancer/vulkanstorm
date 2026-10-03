@@ -695,6 +695,8 @@ with the same filename but different name
 
 
   <texture name="Refresh_Off" file_name="icons/Refresh_Off.png" preload="true" />
+  <texture name="Refresh_Over" file_name="icons/Refresh_Press.png" preload="true" />
+  <texture name="Combobox_Over" file_name="widgets/Arrow_Down.png" preload="true" />
 
   <texture name="Resize_Corner" file_name="windows/Resize_Corner.png" preload="true" />
 
@@ -772,6 +774,7 @@ with the same filename but different name
   <texture name="Snapshot_Profile" file_name="toolbar_icons/profile.png" preload="false" />
   <texture name="startup_logo"  file_name="windows/startup_logo.png" preload="true" />
 
+  <texture name="login_vulkanstorm_logo" file_name="windows/vulkanstorm_logo.png" preload="true" />
   <texture name="login_fs_logo"  file_name="windows/login_fs_logo.png" preload="true" />
   <texture name="login_sl_logo"  file_name="windows/login_sl_logo.png" preload="true" />
   <texture name="login_sl_logo_small"  file_name="windows/login_sl_logo_small.png" preload="true" />
@@ -1199,4 +1202,15 @@ with the same filename but different name
 <texture name="LagStatus_Good" file_name="icons/green_square.png" preload="false" />
 <texture name="LagStatus_Warning" file_name="icons/yellow_square.png" preload="false" />
 <texture name="LagStatus_Critical" file_name="icons/red_square.png" preload="false" />
+
+  <!-- Flat control metadata shared with the working canary skin. -->
+  <texture name="TabLeft_Flat_Off" file_name="containers/TabLeft_Flat_Off.png" preload="true" scale.left="4" scale.top="19" scale.right="22" scale.bottom="4" />
+  <texture name="TabLeft_Flat_Selected" file_name="containers/TabLeft_Flat_Selected.png" preload="true" scale.left="4" scale.top="19" scale.right="22" scale.bottom="4" />
+  <texture name="TabTop_First_Flat_Off" file_name="containers/TabTop_First_Flat_Off.png" preload="false" scale.left="8" scale.top="8" scale.right="62" scale.bottom="9" />
+  <texture name="TabTop_First_Flat_Selected" file_name="containers/TabTop_First_Flat_Selected.png" preload="false" scale.left="8" scale.top="8" scale.right="62" scale.bottom="9" />
+  <texture name="TabTop_Last_Flat_Off" file_name="containers/TabTop_Last_Flat_Off.png" preload="false" scale.left="8" scale.top="8" scale.right="62" scale.bottom="9" />
+  <texture name="TabTop_Last_Flat_Selected" file_name="containers/TabTop_Last_Flat_Selected.png" preload="false" scale.left="8" scale.top="8" scale.right="62" scale.bottom="9" />
+  <texture name="TabTop_Middle_Flat_Off" file_name="containers/TabTop_Middle_Flat_Off.png" preload="false" scale.left="8" scale.top="8" scale.right="62" scale.bottom="9" />
+  <texture name="TabTop_Middle_Flat_Selected" file_name="containers/TabTop_Middle_Flat_Selected.png" preload="false" scale.left="8" scale.top="8" scale.right="62" scale.bottom="9" />
+  <texture name="TextField_Highlight" file_name="widgets/TextField_Highlight.png" preload="true" scale.left="9" scale.top="12" scale.right="248" scale.bottom="12" />
 </textures>

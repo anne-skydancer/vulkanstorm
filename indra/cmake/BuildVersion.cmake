@@ -28,7 +28,29 @@ if (NOT DEFINED VIEWER_SHORT_VERSION) # will be true in indra/, false in indra/n
             message(FATAL_ERROR "Source-count versions require a readable Git repository")
         endif ()
         if (NOT _version_shallow STREQUAL "false")
-            message(FATAL_ERROR "Full Git history is required for source-count versions; fetch --unshallow")
+            # Archived or unrelated refs can retain shallow boundaries even
+            # when this source branch has complete history. Only a boundary
+            # reachable from HEAD can truncate the source commit count.
+            execute_process(COMMAND ${GIT} rev-parse --git-path shallow
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                RESULT_VARIABLE _version_shallow_path_result
+                OUTPUT_VARIABLE _version_shallow_path OUTPUT_STRIP_TRAILING_WHITESPACE)
+            execute_process(COMMAND ${GIT} rev-list HEAD
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                RESULT_VARIABLE _version_ancestry_result
+                OUTPUT_VARIABLE _version_ancestry OUTPUT_STRIP_TRAILING_WHITESPACE)
+            if (NOT _version_shallow_path_result EQUAL 0 OR NOT _version_ancestry_result EQUAL 0)
+                message(FATAL_ERROR "Cannot verify source Git history")
+            endif ()
+            get_filename_component(_version_shallow_path "${_version_shallow_path}" ABSOLUTE
+                BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+            file(STRINGS "${_version_shallow_path}" _version_boundaries)
+            foreach (_version_boundary IN LISTS _version_boundaries)
+                string(FIND "\n${_version_ancestry}\n" "\n${_version_boundary}\n" _version_boundary_index)
+                if (NOT _version_boundary_index EQUAL -1)
+                    message(FATAL_ERROR "Full Git history is required for source-count versions; fetch --unshallow")
+                endif ()
+            endforeach ()
         endif ()
         execute_process(COMMAND ${GIT} rev-list --count HEAD
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
