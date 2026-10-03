@@ -14,11 +14,18 @@ The archive's obsolete
 Firestorm/grey skin selection and languages without current translations were
 not restored.
 
-The Modern skin included eight flat tab textures and two text-field highlight
-textures without named registry entries. Its widget definitions requested those
-names, so the viewer reported missing local images. Registering the assets makes
-the existing blue selection artwork available. The unsupported `text_pad_top`
+Release and devel needed registrations for eight flat-tab textures and two
+text-field highlights. Canary already contains those declarations, including
+their scaling metadata, in its inherited default registry. This integration
+preserves both canary texture registries and only adds the missing camera-reset,
+dropdown-arrow and branded-login entries. The unsupported `text_pad_top`
 folder-view attribute was also removed.
+
+The canary integration selects six commits from PR #105 and omits
+`25c3c5aab1`, whose registry correction is already present in canary. Conflicts
+were resolved to retain canary's newer settings and metadata, color keys, and
+Modern/Hybrid/Text login modes in all nine language overlays. The redundant
+Modern registry additions in the initial commit were omitted as well.
 
 A further audit of Modern and inherited default XUI, registered texture files,
 color aliases and literal C++ UI-image requests found two more missing texture
