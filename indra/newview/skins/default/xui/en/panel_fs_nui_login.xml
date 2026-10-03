@@ -73,6 +73,7 @@
             reserve_scroll_corner="false" >
             <panel
               name="login_content"
+              focus_root="true"
               follows="left|top"
               layout="topleft"
               left="0"
