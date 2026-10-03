@@ -1,0 +1,15 @@
+{
+  "vulkan": {
+    "version": "1.4.365",
+    "sources": {
+      "vulkan-headers": {"url": "https://github.com/KhronosGroup/Vulkan-Headers.git", "revision": "c46850864f4661461b0f6cb9922c058ffea4915e"},
+      "vulkan-loader": {"url": "https://github.com/KhronosGroup/Vulkan-Loader.git", "revision": "f866657ff687a36d767cd7783bab800e31ebafaa"}
+    }
+  },
+  "diligentcore": {
+    "version": "2.5.6-bcb8b11e",
+    "sources": {
+      "diligentcore": {"url": "https://github.com/DiligentGraphics/DiligentCore.git", "revision": "bcb8b11eecd0899962c330b798ebe3e786b02bbb", "recursive": true}
+    }
+  }
+}

@@ -79,6 +79,12 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         return 'package' in self.args['actions']
 
     def construct(self):
+        if self.args.get('diligentcore', 'OFF').lower() == 'on':
+            pkgdir = os.path.join(self.args['build'], os.pardir, 'packages')
+            with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses/vulkan-ghi'):
+                self.path('DiligentCore')
+                self.path('Vulkan-Headers-*.txt')
+                self.path('Vulkan-Loader-*')
         super(ViewerManifest, self).construct()
         self.path(src="../../scripts/messages/message_template.msg", dst="app_settings/message_template.msg")
         
@@ -740,6 +746,10 @@ class Windows_x86_64_Manifest(ViewerManifest):
                     self.path("opengl32.dll")
                     self.path("libgallium_wgl.dll")
             # </VulkanStorm>
+
+            if self.args.get('diligentcore', 'OFF').lower() == 'on':
+                self.path("GraphicsEngineVk_64r.dll")
+                self.path("vulkan-1.dll")
 
             # For textures
             self.path_optional("openjp2.dll")
@@ -2327,6 +2337,11 @@ class LinuxManifest(ViewerManifest):
                 self.path('libgallium_vulkanstorm.so')
             with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
                 self.path('mesazink.txt')
+        if self.args.get('diligentcore', 'OFF').lower() == 'on':
+            with self.prefix(src=relpkgdir, dst='lib'):
+                self.path('libGraphicsEngineVk.so')
+                self.path('libvulkan.so.1')
+                self.path('libvulkan.so')
         self.path("licenses-linux.txt","licenses.txt")
         self.path("VivoxAUP.txt")
         self.path("LGPL-license.txt")
@@ -2709,6 +2724,7 @@ if __name__ == "__main__":
              if BugSplat crash reporting is desired""", default=''),
         dict(name='discord', description="""Indication discord social sdk libraries are needed""", default='OFF'),
         dict(name='fmodstudio', description="""Indication if fmod studio libraries are needed""", default='OFF'),
+        dict(name='diligentcore', description='Bundle the DiligentCore Vulkan GHI and loader', default='OFF'),
         dict(name='mesazink', description="""Indication the Mesa Zink GL-over-Vulkan runtime is bundled""", default='OFF'),
         dict(name='openal', description="""Indication openal libraries are needed""", default='OFF'),
         dict(name='soloud', description="""Include SoLoud package licenses""", default='OFF'),

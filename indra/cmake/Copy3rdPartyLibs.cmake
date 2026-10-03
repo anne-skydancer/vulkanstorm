@@ -12,6 +12,7 @@ endif ()
 include(OPENAL)
 include(FMODSTUDIO)
 include(MesaZink) # <VulkanStorm>
+include(DiligentCore)
 
 # When we copy our dependent libraries, we almost always want to copy them to
 # both the Release and the RelWithDebInfo staging directories. This has
@@ -336,6 +337,10 @@ to_staging_dirs(
     third_party_targets
     ${release_files}
     )
+
+if(USE_DILIGENTCORE)
+    to_staging_dirs("${DILIGENTCORE_RUNTIME_DIR}" third_party_targets ${DILIGENTCORE_RUNTIME_FILES})
+endif()
 
 add_custom_target(
         stage_third_party_libs ALL
