@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<panel name="panel_login">
+  <panel.string name="forgot_password_url">http://secondlife.com/account/request.php?lang=pt</panel.string>
+  <string name="ServerComboTooltip">Uma grade conhecida ou uma URI de grade</string>
+  <layout_stack name="ui_stack">
+    <layout_panel name="ui_container">
+      <layout_stack name="vert_stack_left">
+        <layout_panel name="1st_row">
+          <layout_stack name="1st_row_stack">
+            <layout_panel name="login">
+              <combo_box name="username_combo" label="Nome de usuário" tool_tip="Nome de usuário escolhido no cadastro, como &quot;berndschmidt12&quot; ou &quot;Love Sun&quot;" />
+              <check_box name="remember_username_check" label="Salvar nome de usuário" />
+            </layout_panel>
+            <layout_panel name="delete_container">
+              <button name="remove_user_btn" tool_tip="Excluir este nome de usuário" />
+            </layout_panel>
+            <layout_panel name="password_container">
+              <line_editor name="password_edit" label="Senha" />
+              <check_box name="remember_check" label="Salvar senha" />
+            </layout_panel>
+            <layout_panel name="start_location_panel">
+              <combo_box name="start_location_combo" label="Iniciar em:">
+                <combo_box.item name="MyLastLocation" label="Última localização" />
+                <combo_box.item name="MyHome" label="Casa" />
+                <combo_box.item name="Typeregionname" label="&lt;digite uma região&gt;" />
+              </combo_box>
+            </layout_panel>
+          </layout_stack>
+        </layout_panel>
+        <layout_panel name="2nd_row">
+          <layout_stack name="2nd_row_stack">
+            <layout_panel name="grid_panel">
+              <text name="grid_login_text">Grade:</text>
+            </layout_panel>
+            <layout_panel name="mode_selection">
+              <text name="mode_selection_text">Modo:</text>
+              <combo_box name="mode_combo" tool_tip="Escolha o estilo de viewer que você conhece melhor para ajustar os padrões às suas necessidades.">
+                <combo_box.item name="Hybrid" label="Hibrido" />
+                <combo_box.item name="Text" label="Texto" />
+              </combo_box>
+            </layout_panel>
+          </layout_stack>
+        </layout_panel>
+      </layout_stack>
+      <button name="connect_btn" label="Entrar" />
+      <text name="create_new_account_text">Criar conta</text>
+      <text name="forgot_password_text">Esqueceu a senha?</text>
+    </layout_panel>
+  </layout_stack>
+</panel>
