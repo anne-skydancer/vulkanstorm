@@ -79,5 +79,25 @@ file(WRITE "{source.as_posix()}/result.txt" "${{VIEWER_SHORT_VERSION}}.${{VIEWER
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('Full Git history is required', result.stderr)
 
+    def test_unrelated_shallow_ref_does_not_truncate_source_history(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            repository = Path(directory)
+            subprocess.run(['git', 'init', str(repository)], check=True, capture_output=True)
+            command = ['git', '-C', str(repository), '-c', 'user.name=VersionTest',
+                       '-c', 'user.email=version-test@example.invalid']
+            for message in ('first', 'second'):
+                subprocess.run(command + ['commit', '--allow-empty', '-m', message],
+                               check=True, capture_output=True)
+            head = subprocess.check_output(command + ['rev-parse', 'HEAD'], text=True).strip()
+            subprocess.run(command + ['checkout', '--orphan', 'archived'], check=True, capture_output=True)
+            subprocess.run(command + ['commit', '--allow-empty', '-m', 'archived'],
+                           check=True, capture_output=True)
+            boundary = subprocess.check_output(command + ['rev-parse', 'HEAD'], text=True).strip()
+            (repository / '.git/shallow').write_text(boundary + '\n')
+            subprocess.run(command + ['checkout', '--detach', head], check=True, capture_output=True)
+            result, output = self.configure('1.0.0', repository)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(output, '1.0.0.2;1,0,0;')
+
 if __name__ == '__main__':
     unittest.main()

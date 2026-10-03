@@ -885,6 +885,16 @@ void FSPanelLogin::loadLoginPage()
 
     // allow users (testers really) to specify a different login content URL
     std::string force_login_url = gSavedSettings.getString("ForceLoginURL");
+    // Ship our welcome page with the viewer. Keep grid-provided splash pages
+    // and explicit tester overrides, but replace the inherited Firestorm page.
+    if (force_login_url.empty() &&
+        (login_page.asString() == "http://phoenixviewer.com/app/loginV3/" ||
+         login_page.asString() == "https://phoenixviewer.com/app/loginV3/"))
+    {
+        sInstance->getChild<LLMediaCtrl>("login_html")->navigateToLocalPage(
+            "common", "vulkanstorm/welcome.html");
+        return;
+    }
     if ( force_login_url.length() > 0 )
     {
         LLNotificationsUtil::add("WarnForceLoginURL", LLSD(), LLSD(), [](const LLSD&notif, const LLSD&resp)
