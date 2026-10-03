@@ -17,7 +17,10 @@ not restored.
 The Modern skin included eight flat tab textures and two text-field highlight
 textures without named registry entries. Its widget definitions requested those
 names, so the viewer reported missing local images. Registering the assets makes
-the existing blue selection artwork available. The unsupported `text_pad_top`
+the existing blue selection artwork available. The inherited default registry
+uses the ten declarations from the working `vkstorm-canary` skin, including its
+preload and nine-slice scaling metadata. Modern inherits those entries without
+shadowing them with incomplete declarations. The unsupported `text_pad_top`
 folder-view attribute was also removed.
 
 A further audit of Modern and inherited default XUI, registered texture files,
