@@ -1,5 +1,13 @@
 # Compatible component designs and traceability
 
+Current mandate: DiligentCore is the user-selected GHI, with pinned dependency
+preparation on `vkstorm-vulkan`. Library-selection comparisons below describe the
+historical audit, not a requirement to choose again. These responsibility-level
+designs do not establish a complete insertion catalog. The
+[current insertion audit](diligent-insertion-catalog.md) must cover every necessary
+point and keep unresolved in-scope paths as acceptance blockers. Runtime parity
+and platform/GPU qualification remain separate from source coverage.
+
 These are proposed designs for the GL contracts in [source-audit.md](source-audit.md). They use the interfaces in [architecture.md](architecture.md), implemented through a qualified mature GHI. DiligentCore leads qualification and bgfx is the comparator; bespoke backend machinery is infeasible under current capacity. Delegate backend infrastructure rather than recreate it behind these semantic interfaces. The exact paired API mapping and unresolved constraints for every listed record are in [framework-contract-matrix.csv](framework-contract-matrix.csv), with complete adapter designs in [framework-comparison.md](framework-comparison.md). No backend is integrated. CPU-only work remains CPU work. All formats/usages are queried before enabling a feature; no measured performance or runtime parity is claimed.
 
 The default functional renderer remains independently controlled. Vendor-origin supporting utilities are eligible when actual capabilities, licensing/build compatibility and measured outcomes qualify, with equivalent independent functional fallback. This includes potential NVIDIA/AMD helpers and standard Vulkan allocation utilities. Optional NVIDIA-only NVRHI remains a separate adapter exception requiring all component contracts equally and a complete independent AMD/Intel path; NVIDIA also retains the common GHI path. Existing shader helpers are evaluated for quality/parity and dependency scope, not rejected for origin. No helper or backend is automatically selected or implemented.

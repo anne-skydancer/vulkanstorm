@@ -1,0 +1,239 @@
+# Current DiligentCore insertion audit
+
+This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
+source `07d3476e7c340cf59fa98de96355c261b6dd4d94`. DiligentCore is the selected
+GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
+does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
+Intel first-class; macOS/Metal are outside the selected product scope.
+
+**Acceptance status: insertion locations and responsibilities reconciled for the declared current-source scope.** The generated ledger has no unmapped or unreviewed in-scope candidate. This combines source-reviewed roots and callback obligations, facade/interface proofs, exact typed receiver exceptions and bounded exclusions. It does not mean that every algorithm has been ported, that every shader permutation has been compiled, or that runtime parity is measured. Runtime parity, performance and hardware qualification remain unmeasured.
+
+## Evidence and interpretation
+
+* [Insertion records](diligent-insertion-records.json) define current ownership,
+  exact root evidence, public Diligent API routes, work packages and mappings of
+  all 73 prior responsibility records. I24 is explicitly a triage bucket, not a
+  completed implementation seam or an approved exclusion.
+* [Insertion sites](diligent-insertion-sites.csv) list source path, line,
+  out-of-class function context where lexically recognizable, source statement,
+  record mapping and semantic review disposition. A declaration/macro/inline
+  context is labeled instead of being assigned to an unrelated prior function.
+* [Summary](diligent-insertion-summary.json) is generated from current tracked
+  source. Candidate counts include false positives, types, headers and config
+  variants; they are not counts of edits, features or active runtime paths.
+* [Checker](check_diligent_insertions.py) reconciles every previous GL candidate,
+  verifies every previous shader registration at its actual source line, rejects
+  stale reviewed-source hashes and separates mechanical mapping from reviewed
+  source coverage. It cannot preprocess C++, resolve arbitrary dynamic dispatch,
+  inspect opaque binary implementations or prove runtime behavior.
+
+Discovery scans tracked code beyond the original `indra` GL-call inventory:
+registry-validated GL calls, state/resource wrapper users, GL types/constants,
+proc-address macros, WGL/GLX/SDL GL operations, renderer interface includes,
+virtual draw/render/lifecycle roots, GPU profiler macros, indirect snapshot and
+resource calls, all GLSL modules, shader registrations, settings/feature tables,
+platform/build switches and runtime staging. Source review must additionally
+follow dynamic/callback and producer/consumer edges; lexical completeness is not
+semantic completeness.
+
+The prior inventory establishes 73 overlapping responsibility records, 71
+active/conditional and two dormant, not 73 independent features. Its 223 GL
+candidate files, 225 GLSL modules and 690 registrations are historical census
+bounds. Current rendering source remains unchanged from that audit; dependency,
+packaging and login/preferences changes do not change this fact.
+
+## Insertion ownership and dependency order
+
+| Package | Required locations and responsibilities | Acceptance gate |
+|---|---|---|
+| WP0 | Current-source catalog; resolve every candidate to a reviewed seam or evidence-backed CPU/dormant/test/platform exclusion; immutable source and public API evidence | No unreviewed in-scope path, unknown callback or unmatched original contract; unknown external implementations explicitly bounded |
+| WP1 | I01/I02: process backend, native window factory, context-independent handles, device/swapchain, feature identity, resize, failure and complete teardown | Native diagnostic window/clear without GL context; resize/minimize/DPI/fullscreen/present/failure/teardown checked |
+| WP2 | I03–I07: draw/state/resource/shader/target substrate; immutable generations and ABI; upload/readback and multi-view lifetime | Shader reflection and producer schema agree; GPU-delay replacement tests; resources and CPU byte owners retained through actual completion |
+| WP3 | I08–I10: ordered XUI/widget/image/text and browser/media path, glyph atlases and lazy uploads | Useful native branded login plus Preferences/browser pixels, input and presentation; explicit world-entry gate until world exists |
+| WP4 | I11–I15: CPU scene snapshots and query feedback; main/cube/HUD frame roots; pools/materials/glTF/avatar/terrain/particle producers | Constrained world tier visibly matches supported contracts; unsupported routes disclosed; complete per-draw state |
+| WP5 | I16/I17: shadows, probes/mirrors, deferred lighting, water/exclusion, sorted alpha/glow, PPLL fallback, post/history | Per-pass/temporal comparisons and valid cross-view/subresource dependencies; exact blend/mask/color and overflow semantics |
+| WP6 | I18–I22: all preview/bake/impostor/map/tool/label/query/capture/pathing/profiling producers and consumers | No reachable GL callback in native path; synchronous CPU consumers wait for submitted completion; all facilities covered or capability-gated |
+| WP7 | I23: actual platform packages, staging, manifests, capability policy and vendor/driver matrix | Fully staged Autobuild viewer and Release qualification; public Vulkan selection only after full supported renderer acceptance |
+| WP8 | Optional vendor/common utilities, parallel recording, queues, compute/batching changes | Measured benefit and maintained visual/lifetime parity with independent equivalent functional fallback |
+
+These are ownership/dependency boundaries, not time estimates. Diligent owns
+backend memory/descriptors/PSOs/commands/submission/barrier lowering/retirement
+machinery. Viewer glue owns asset generations, semantic packets, pass ordering,
+per-view histories, settings and consumer contracts. Do not recreate a generic
+Vulkan RHI behind a thin Diligent wrapper.
+
+## Source-backed seams that the small initial catalog missed
+
+### Window creation precedes every render resource
+
+`LLAppViewer::init` selects the GL provider before `initWindow`; backend
+resolution must therefore move before that selection. `LLViewerWindow` constructs
+the OS window, then immediately compiles shaders and creates GL buffers, fonts,
+images and shared-context workers. Replacing only `swapBuffers` cannot enter a
+native path.
+
+`LLWindowManager::createWindow` is in `indra/llwindow/llwindow.cpp`, not a separate
+manager source. Its `use_gl=false` path creates a headless window. On Linux both
+SDL constructors ignore the existing flag, and default SDL2 creates an
+`SDL_WINDOW_OPENGL` plus `SDL_GL_CreateContext`. Win32 independently loads
+`opengl32.dll` in its constructor. A real backend/window mode must cross the
+factory and platform constructors, rather than reinterpret a boolean intended
+for headless behavior.
+
+Win32 exposes HWND. SDL2 `getPlatformWindow()` returns null; its native extraction
+currently caches Xlib handles and warns on non-X11. Diligent's
+`LinuxNativeWindow` has XCB/Xlib/Wayland fields, but that does not implement the
+viewer input/clipboard/native-window behavior for Wayland. Start supported Linux
+qualification with SDL2/X11 and distinguish native Wayland additional scope.
+
+### Public texture APIs and CPU-facing interfaces also carry GL
+
+`LLTexture::getGLTexture`, `bindDefaultImage`, `bindDebugImage` and immediate
+update contracts feed `LLGLTexture`, whose public constructors/creation methods,
+target/format parameters and texture-name setters expose GL types. The
+`LLTextureManagerBridge` abstract factory returns `LLGLTexture` and requests GL
+creation; the viewer implementation is in `llviewertexture.cpp`. The substrate
+must decouple these public boundaries, not merely replace `LLImageGL` internals.
+
+Ordinary thumbnail/UI/asset callers may remain unchanged behind a compatible
+semantic interface. That is a reviewed backend-transparency decision, not an
+assumption that every texture reference requires a Diligent object or that every
+CPU-facing caller is safe to exclude.
+
+`LLImageRaw::setSubImage` is a genuine namesake false positive: its implementation
+locks CPU storage and copies rows with `memcpy`; the reviewed range is recorded.
+Pixel data alone does not establish GPU work.
+
+### Text measurement can create/upload a glyph
+
+`LLFontGL::getWidthF32`/drawable-character helpers call `getGlyphInfo`; a miss
+calls `LLFontFreetype::addGlyph`/`addGlyphFromFont`, allocates/extends an atlas via
+`LLFontBitmapCache` and calls `LLImageGL::setSubImage`. Font metric users therefore
+cannot all be marked CPU-only. Keep rasterization/metrics, but split atlas CPU
+updates from image generation publication and draw lifetime. Reset/destroy paths
+retain raw atlas ownership while safely retiring GPU generations.
+
+`LLScreenClipRect::updateScissorRegion` flushes draws before changing pixel-scaled
+GL scissor; `LLLocalClipRect` depends on the font/UI origin. Native UI packets must
+capture that order, scale, clipping and origin, including ordinary derived
+widgets, previewed floaters and editor line-number/selection drawing.
+
+### Settings callbacks and diagnostics can recreate live resources
+
+`llviewercontrol.cpp` setting listeners release/create GL buffers, resize
+screen/shadow targets, reset probes/hero probes, refresh shader/environment and
+other render state. Settings/menu/pipeline-listener and telemetry call sites are
+part of the insertion catalog. They must publish a new renderer generation or
+request a graph rebuild, without deleting resources used by submitted work.
+
+Feature-manager GPU benchmark, GL version/vendor masks, OpenGL renderer-family
+persistence in startup, adapter diagnostics and skinning palette limits need
+backend-aware services. A Vulkan dependency flag must not stand in for queried
+device features or implemented renderer availability.
+
+### Captures include three different roots and nested views
+
+`LLViewerWindow::rawSnapshot` owns tile/aspect/UI/HUD/depth/no-post capture.
+`LLFloater360Capture::capture360Images` changes the camera six times and calls
+`simpleSnapshot`, which renders multiple offscreen frames and reads RGB.
+`LLViewerWindow::cubeSnapshot` supplies reflection/probe faces with masks,
+clipping and view-state restoration. They are not interchangeable calls to a
+single final framebuffer readback. Explicit capture/view requests and completed
+host transfers must preserve these contracts and consumer encodings.
+
+### Appearance baking includes a second library's rendering
+
+Beyond `newview/llviewertexlayer.cpp`, `llappearance/lltexlayer.cpp` and
+`lltexlayerparams.cpp` implement layer blends, morph masks and readback.
+`renderMorphMasks` has an Intel `glGetTexImage` fallback and normal
+`glReadPixels`; alpha-mask arithmetic and the separate morph channel are consumer
+contracts. These paths belong to I18 rather than a blanket CPU-appearance
+exclusion. Avatar-joint debug geometry belongs additionally to I22.
+
+### Profiling macros hide backend calls
+
+`llcommon/llprofiler.h` enables Tracy OpenGL GPU macros in Tracy configurations;
+`llrender/llglheaders.h` includes `TracyOpenGL.hpp`. Every
+`LL_PROFILE_GPU*`/`LL_PROFILER_GPU*`, context creation and collect site is a
+conditional native insertion/gating point. Retain CPU profiling; do not let a
+Vulkan scope execute hidden OpenGL profiling. `USE_TRACY_GPU` alone is not proof
+that those header/macro expansions are absent.
+
+### Optional pathing callbacks cannot be inferred from the open-source stub
+
+The open-source `LLPathingLibStubImpl::getInstance()` returns null and render
+methods are empty. Viewer facilities gate on that instance. The public interface
+also exposes navmesh/VBO draws and callbacks accepting `LLRender`; optional
+binary implementations may bypass viewer-owned packet seams. Bound that
+configuration at `LLPathingLib`, `LLRenderNavPrim` and the viewer callback roots.
+Qualify the actual selected package/interface or explicitly report Vulkan
+unavailability for the optional facility. Do not claim equivalent proprietary
+pathing behavior from an empty stub.
+
+## Exact library boundary and qualification constraints
+
+Pinned DiligentCore revision:
+`bcb8b11eecd0899962c330b798ebe3e786b02bbb`.
+
+* [Factory/device/swapchain creation](https://github.com/DiligentGraphics/DiligentCore/blob/bcb8b11eecd0899962c330b798ebe3e786b02bbb/Graphics/GraphicsEngineVulkan/interface/EngineFactoryVk.h)
+  and [Linux native window](https://github.com/DiligentGraphics/DiligentCore/blob/bcb8b11eecd0899962c330b798ebe3e786b02bbb/Platforms/Linux/interface/LinuxNativeWindow.h)
+  supply platform mechanisms; the viewer owns native handles and event lifetime.
+* [Device resource/PSO creation](https://github.com/DiligentGraphics/DiligentCore/blob/bcb8b11eecd0899962c330b798ebe3e786b02bbb/Graphics/GraphicsEngine/interface/RenderDevice.h)
+  and [context APIs](https://github.com/DiligentGraphics/DiligentCore/blob/bcb8b11eecd0899962c330b798ebe3e786b02bbb/Graphics/GraphicsEngine/interface/DeviceContext.h)
+  supply draw, copy, map, query, transition and completion routes listed in each
+  insertion record. Named shader-resource signatures normally remap reflected
+  SPIR-V bindings; signature index is not a GLSL descriptor set number.
+* `EnqueueSignal` does not flush. Vulkan staging texture mapping does not wait for
+  the GPU. Signal, submit/flush, completion and map are distinct steps.
+  `FinishFrame` retires dynamic context resources and invalidates committed
+  bindings; offscreen-only work cannot assume primary-swapchain Present always
+  services it.
+* Divergent face/mip states need explicit subresource transitions; whole-texture
+  tracking cannot safely claim one state for heterogeneous subresources. UAV to
+  UAV can still require a dependency. Do not emit transitions inside an active
+  explicit render pass or treat `SetState` as an emitted barrier.
+* API headers 1.4.365 do not impose a 1.4 GPU minimum. Baseline requirements,
+  optional atomics/format support, depth formats, shader layouts and device-loss
+  behavior must be queried and qualified separately. Optional FSR/DLSS providers
+  are disabled in the current package, not integrated viewer optimizations.
+
+Primary Khronos references accessed 2026-10-03:
+[synchronization examples](https://docs.vulkan.org/guide/latest/synchronization_examples.html)
+support explicit upload/pass/readback dependencies;
+[shader memory layout](https://docs.vulkan.org/guide/latest/shader_memory_layout.html)
+supports preserving/reflection-checking block offsets and strides;
+[depth](https://docs.vulkan.org/guide/latest/depth.html) supports coordinated clip,
+depth-format and reconstruction conversion;
+[swapchain semaphore reuse](https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html)
+distinguishes presentation completion from graphics fences. These are
+requirements/guidance, not measured viewer results.
+
+## Verification and remaining implementation qualification
+
+Run from the repository root:
+
+```powershell
+python doc/vulkan/check_diligent_insertions.py --write
+python doc/vulkan/check_diligent_insertions.py
+python doc/vulkan/check_diligent_insertions.py --accept
+python doc/vulkan/test_diligent_insertions.py
+```
+
+The first regenerates audit artifacts only. The second checks reproducibility
+against current source. The third accepts only the reconciled insertion-location scope and rejects any new unresolved site. The tests exercise ambiguity, unknown owner, stale provenance and disposition rejection. Reviewed ranges carry exact source-byte hashes, bounded line ranges,
+record IDs, disposition and a specific ownership/trace reason. Generic file
+prefix assignments cannot complete this audit. Runtime validation, native
+presentation, pixel/temporal comparisons, GPU/vendor/driver portability, memory
+budgets and performance remain future qualification even after source acceptance.
+
+There is no outstanding insertion-location gap in the current declared source scope. Optional proprietary pathing internals remain a bounded implementation qualification: the native path must qualify the selected package or gate that facility at the recorded interface/callback roots. Shader ABI, media pixel ownership, format/atomics capability policy, native platform lifetime, visual parity and performance are implementation experiments at identified locations, not missing catalog locations.
+
+## Facade proofs and exceptions
+
+The site ledger distinguishes executable escapes from compile-time references. Active includes are interface dependencies; commented includes are discarded. Ordinary wrapper/type consumers map to the definition that owns backend publication, state or draw lowering. A mapped statement does not certify the surrounding function CPU-only. Explicit raw GL/API loader/type/profiling expressions remain rewrite/gating sites with both subsystem and operation ownership.
+
+Generic method spelling alone does not resolve `setBuffer`, `drawArrays`, `drawRange` or `uniform*`: typed global shader receivers are declared in `llviewershadermgr.h`; local/member exceptions have individual hashed site reviews citing the actual declaration. In particular, pipeline screen/cube buffers (`pipeline.h`817/820), probe members, sky strip iterators, model preview locals, avatar joint buffers and terrain bake locals feed I04. Matrix/light/diffuse and query shader locals feed I06. FSPanelFace image-format/alpha decisions feed I05 metadata rather than a GPU draw or blanket UI exclusion.
+
+Widget dispatch is bounded by the source-derived LLView inheritance graph, including FS-prefixed and final classes. Text-segment dispatch is bounded by LLTextSegment inheritance; separator helpers, embedded images and expandable labels feed I08/I09. `LLTextureView`/bars/preview/tooltips are UI/debug consumers; `LLTexturePipelineTester`/test sessions observe resource statistics; `LLTextureKey` is identity/callback bookkeeping. `LLTextureBridge` actions invoke preview/save roots, `LLTextureUploadData` holds asset/resource ownership, and `LLTextureMaskData` holds avatar callback identity/discard state; these retain the I05/I18 publication/cancellation obligations even when the statement itself is CPU bookkeeping.
+
+Dynamic edges are explicit responsibilities: LLGLUpdate queued virtual updates/cancellation feed I03/I05/I12; LLShaderMgr::updateShaderUniforms feeds I06 and environment/group producers; LLTextureManagerBridge factory and loaded texture callbacks feed I05; LLView/text-segment/font callbacks feed I08/I09; dynamic preview/bake/view callbacks feed I18/I19. Media borrowing/reset/upload/main-thread publication and resource retirement must preserve ownership across those callbacks. The checker cannot resolve arbitrary C++ dynamic dispatch; these source-reviewed boundary contracts supply that evidence.
