@@ -35,6 +35,7 @@ include(LLPhysicsExtensions)
 include(LLPrimitive)
 include(LLWindow)
 include(MesaZink)
+include(DiligentCore)
 include(NDOF)
 include(NVAPI)
 include(OPENAL)
@@ -2423,6 +2424,7 @@ if (WINDOWS)
         "--openal=${USE_OPENAL}"
         "--soloud=${USE_SOLOUD}"
         "--mesazink=${USE_MESAZINK}"
+        "--diligentcore=${USE_DILIGENTCORE}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"
         --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2536,6 +2538,7 @@ if (WINDOWS)
               "--openal=${USE_OPENAL}"
               "--soloud=${USE_SOLOUD}"
               "--mesazink=${USE_MESAZINK}"
+              "--diligentcore=${USE_DILIGENTCORE}"
               "--tracy=${USE_TRACY}"
               "--inno=${USE_INNOSETUP}"
               "--velopack=${USE_VELOPACK}"
@@ -2777,6 +2780,7 @@ if (LINUX)
         "--openal=${USE_OPENAL}"
         "--soloud=${USE_SOLOUD}"
         "--mesazink=${USE_MESAZINK}"
+        "--diligentcore=${USE_DILIGENTCORE}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"        
         --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2808,6 +2812,7 @@ if (LINUX)
       "--openal=${USE_OPENAL}"
       "--soloud=${USE_SOLOUD}"
         "--mesazink=${USE_MESAZINK}"
+        "--diligentcore=${USE_DILIGENTCORE}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
       --build=${CMAKE_CURRENT_BINARY_DIR}
