@@ -70,7 +70,6 @@
 #include "llgltfmateriallist.h"
 #include "llimageworker.h"
 #include "llregex.h"
-#include "lluri.h"
 
 #include "llloginflags.h"
 #include "llmd5.h"
@@ -1039,19 +1038,16 @@ bool idle_startup()
             {
                 url = "https://phoenixviewer.com/app/fsdata/grids.xml";
             }
-            if (LLURI(url).scheme() == "https")
+            LLCore::HttpOptions::ptr_t options;
+            // Authenticate the stock feed; retain existing options for custom feeds.
+            if (url == "https://phoenixviewer.com/app/fsdata/grids.xml")
             {
-                auto options = std::make_shared<LLCore::HttpOptions>();
+                options = std::make_shared<LLCore::HttpOptions>();
                 options->setSSLVerifyPeer(true);
                 options->setSSLVerifyHost(true);
                 options->setFollowRedirects(false);
-                FSCoreHttpUtil::callbackHttpGet(url, last_modified, boost::bind(downloadGridlistComplete, _1), boost::bind(downloadGridlistError, _1, url), options);
             }
-            else
-            {
-                LL_WARNS("AppInit") << "Grid-list download requires an HTTPS URL" << LL_ENDL;
-                sGridListRequestReady = true;
-            }
+            FSCoreHttpUtil::callbackHttpGet(url, last_modified, boost::bind(downloadGridlistComplete, _1), boost::bind(downloadGridlistError, _1, url), options);
         }
 #else
         sGridListRequestReady = true;
