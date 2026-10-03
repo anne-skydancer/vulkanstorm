@@ -479,10 +479,10 @@
      reference="Yellow" />
     <color
      name="AvatarListItemBeyondShoutRange"
-     reference="Red" />
+     reference="LtRed" />
     <color
      name="AvatarListItemAgeAlert"
-     reference="Red" />
+     reference="LtRed" />
     <color
      name="BackgroundChatColor"
      reference="DkGray" />
