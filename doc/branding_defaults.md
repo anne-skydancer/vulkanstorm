@@ -9,7 +9,8 @@ implementation or history was merged into the active branch.
 Restored values cover chat persistence and formatting, chat and typing animations,
 camera position and focus offsets, cache size, keyboard movement behavior, RLVa,
 OpenGL core context and texture threading, and camera texture boost. The Modern
-skin and its blue theme remain the Vulkanstorm default. The archive's obsolete
+skin remains the Vulkanstorm default, now using Kokua's purple color palette.
+The archive's obsolete
 Firestorm/grey skin selection and languages without current translations were
 not restored.
 
@@ -25,10 +26,18 @@ names (`Refresh_Over` and `Combobox_Over`), three missing list-view colors, thre
 misspelled color references and four unsupported `none` image references. These
 now resolve to existing artwork and palette entries, or use an empty image name
 to disable the image. List-view aliases are refreshed after the Modern palette
-loads so selection uses its blue color. Static checks cannot cover dynamically
+loads so selection follows its active palette. Static checks cannot cover dynamically
 constructed names or replace runtime inspection of every window.
 The scan includes all translation overlays; duplicate tooltip attributes in the
 Russian texture panel were removed so that overlay parses successfully.
+
+The default and Modern color tables import all 394 unique entries from Kokua
+commit `20493b5e73`. Vulkanstorm-specific entries remain available, with Modern
+accent and highlight aliases adapted to Kokua. Repeated source names use their
+last definition; the named `NotifyBoxColor` value is normalized to a reference,
+and a stray comma in `SyntaxLslDeprecated` is removed. This imports the color
+scheme; existing control artwork remains in the skin. The supplied application
+icon remains blue.
 
 Graphics preference tabs use the labels `Rendering 1` and `Rendering 2`,
 including the Italian override, while retaining their internal control names.
