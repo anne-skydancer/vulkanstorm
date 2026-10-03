@@ -49,6 +49,7 @@
 #include "llfloaterpreference.h"
 #include "llfocusmgr.h"
 #include "lllineeditor.h"
+#include "llscrollcontainer.h"
 #include "llnotificationsutil.h"
 #include "llsecapi.h"
 #include "llstartup.h"
@@ -467,6 +468,21 @@ void FSPanelLogin::giveFocus()
             combo->focusEditor();
         }
     }
+}
+
+void FSPanelLogin::onUpdateScrollToChild(const LLUICtrl* control)
+{
+    LLScrollContainer* scroll = findChild<LLScrollContainer>("login_scroll");
+    LLPanel* content = findChild<LLPanel>("login_content");
+    if (scroll && content && control && control->hasAncestor(content))
+    {
+        LLRect rect;
+        if (control->localRectToOtherView(control->getLocalRect(), &rect, content))
+        {
+            scroll->scrollToShowRect(rect);
+        }
+    }
+    LLPanel::onUpdateScrollToChild(control);
 }
 
 // static
