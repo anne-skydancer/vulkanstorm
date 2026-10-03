@@ -143,7 +143,7 @@
   <color name="ButtonBorderColor" reference="Unused?" />
   <color name="ButtonCautionImageColor" reference="Unused?" />
   <color name="ButtonColor" reference="Unused?" />
-  <color name="ButtonFlashBgColor" reference="Unused?" />
+  <color name="ButtonFlashBgColor" value="0.4980392156862745 0.4980392156862745 1 1" />
   <color name="ButtonImageColor" reference="White" />
   <color name="ButtonLabelColor" reference="LtGray" />
   <color name="ButtonLabelDisabledColor" reference="White_25" />
