@@ -1034,7 +1034,21 @@ bool idle_startup()
             }
 
             std::string url = gSavedSettings.getString("GridListDownloadURL");
-            FSCoreHttpUtil::callbackHttpGet(url, last_modified, boost::bind(downloadGridlistComplete, _1), boost::bind(downloadGridlistError, _1, url));
+            // Upgrade saved copies of the stock URL without disabling grid discovery.
+            if (url == "http://phoenixviewer.com/app/fsdata/grids.xml")
+            {
+                url = "https://phoenixviewer.com/app/fsdata/grids.xml";
+            }
+            LLCore::HttpOptions::ptr_t options;
+            // Authenticate the stock feed; retain existing options for custom feeds.
+            if (url == "https://phoenixviewer.com/app/fsdata/grids.xml")
+            {
+                options = std::make_shared<LLCore::HttpOptions>();
+                options->setSSLVerifyPeer(true);
+                options->setSSLVerifyHost(true);
+                options->setFollowRedirects(false);
+            }
+            FSCoreHttpUtil::callbackHttpGet(url, last_modified, boost::bind(downloadGridlistComplete, _1), boost::bind(downloadGridlistError, _1, url), options);
         }
 #else
         sGridListRequestReady = true;

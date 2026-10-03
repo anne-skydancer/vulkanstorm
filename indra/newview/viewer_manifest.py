@@ -422,15 +422,8 @@ class ViewerManifest(LLManifest,FSViewerManifest):
     # </FS:Ansariel>
 
     def icon_path(self):
-        # <FS:ND> Add -os for oss builds
-        chan = self.channel_type()
-        if chan in ['alpha', 'nightly','manual', 'profiling']:
-            chan = 'test'
-
-        if self.fs_is_opensim():
-            return "icons/" + chan + "-os"
-        # </FS:ND>
-        return "icons/" + chan
+        # Every channel and grid uses the supplied Vulkanstorm artwork.
+        return "icons/vulkanstorm"
 
     def extract_names(self,src):
         """Extract contributor names from source file, returns string"""
@@ -1076,8 +1069,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
         src_prefix = self.get_src_prefix()
         template_path = os.path.join(src_prefix, 'installers', 'windows', 'installer_template.iss')
         license_file = os.path.abspath(os.path.join(src_prefix, '..', '..', 'doc', 'LGPL-license.txt'))
-        icon_suffix = "_os" if self.fs_is_opensim() else ""
-        setup_icon = os.path.join(src_prefix, 'installers', 'windows', 'firestorm_icon%s.ico' % icon_suffix)
+        setup_icon = os.path.join(src_prefix, self.icon_path(), 'firestorm_icon.ico')
 
         with open(template_path, 'r') as f:
             script = f.read()
@@ -2350,7 +2342,7 @@ class LinuxManifest(ViewerManifest):
             self.path("VivoxAUP.txt")
         # </FS:TJ>
         self.path("LGPL-license.txt")
-        self.path("res/firestorm_icon.png","firestorm_icon.png")
+        self.path(os.path.join(self.icon_path(), "firestorm_512.png"), "firestorm_icon.png")
         with self.prefix("linux_tools"):
             self.path("client-readme.txt","README-linux.txt")
             self.path("FIRESTORM_DESKTOPINSTALL.txt","FIRESTORM_DESKTOPINSTALL.txt")

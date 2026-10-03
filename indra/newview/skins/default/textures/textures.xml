@@ -706,6 +706,8 @@ with the same filename but different name
 
 
   <texture name="Refresh_Off" file_name="icons/Refresh_Off.png" preload="true" />
+  <texture name="Refresh_Over" file_name="icons/Refresh_Press.png" preload="true" />
+  <texture name="Combobox_Over" file_name="widgets/Arrow_Down.png" preload="true" />
 
   <texture name="Resize_Corner" file_name="windows/Resize_Corner.png" preload="true" />
 
@@ -785,6 +787,7 @@ with the same filename but different name
   <texture name="Snapshot_Profile" file_name="toolbar_icons/profile.png" preload="false" />
   <texture name="startup_logo"  file_name="windows/startup_logo.png" preload="true" />
 
+  <texture name="login_vulkanstorm_logo" file_name="windows/vulkanstorm_logo.png" preload="true" />
   <texture name="login_fs_logo"  file_name="windows/login_fs_logo.png" preload="true" />
   <texture name="login_sl_logo"  file_name="windows/login_sl_logo.png" preload="true" />
   <texture name="login_sl_logo_horizontal"  file_name="windows/login_sl_logo_horizontal.png" preload="true" />

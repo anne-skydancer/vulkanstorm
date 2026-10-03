@@ -1,0 +1,75 @@
+# Vulkanstorm defaults and branding restoration
+
+The pre-reset settings were recovered from archived development commit
+`7c2c201134905184971e82fb313da462fc880f77` in
+`H:\vulkanstorm\archive-2026-10-02-clean-base\git-metadata`.
+Only values of supported current settings were copied; no archived renderer
+implementation or history was merged into the active branch.
+
+Restored values cover chat persistence and formatting, chat and typing animations,
+camera position and focus offsets, cache size, keyboard movement behavior, RLVa,
+OpenGL core context and texture threading, and camera texture boost. The Modern
+skin remains the Vulkanstorm default, now using Kokua's purple color palette.
+The archive's obsolete
+Firestorm/grey skin selection and languages without current translations were
+not restored.
+
+Release and devel needed registrations for eight flat-tab textures and two
+text-field highlights. Canary already contains those declarations, including
+their scaling metadata, in its inherited default registry. This integration
+preserves both canary texture registries and only adds the missing camera-reset,
+dropdown-arrow and branded-login entries. The unsupported `text_pad_top`
+folder-view attribute was also removed.
+
+The canary integration selects six commits from PR #105 and omits
+`25c3c5aab1`, whose registry correction is already present in canary. Conflicts
+were resolved to retain canary's newer settings and metadata, color keys, and
+Modern/Hybrid/Text login modes in all nine language overlays. The redundant
+Modern registry additions in the initial commit were omitted as well.
+
+A further audit of Modern and inherited default XUI, registered texture files,
+color aliases and literal C++ UI-image requests found two more missing texture
+names (`Refresh_Over` and `Combobox_Over`), three missing list-view colors, three
+misspelled color references and four unsupported `none` image references. These
+now resolve to existing artwork and palette entries, or use an empty image name
+to disable the image. List-view aliases are refreshed after the Modern palette
+loads so selection follows its active palette. Static checks cannot cover dynamically
+constructed names or replace runtime inspection of every window.
+The scan includes all translation overlays; duplicate tooltip attributes in the
+Russian texture panel were removed so that overlay parses successfully.
+
+The default and Modern color tables import all 394 unique entries from Kokua
+commit `20493b5e73`. Vulkanstorm-specific entries remain available, with Modern
+accent and highlight aliases adapted to Kokua. Repeated source names use their
+last definition; the named `NotifyBoxColor` value is normalized to a reference,
+and a stray comma in `SyntaxLslDeprecated` is removed. This imports the color
+scheme; existing control artwork remains in the skin. The supplied application
+icon remains blue.
+
+Graphics preference tabs use the labels `Rendering 1` and `Rendering 2`,
+including the Italian override, while retaining their internal control names.
+
+The default login layout adapts Kokua's sidebar structure from local source
+commit `20493b5e73`, preserving Vulkanstorm's username removal, password visibility,
+grid selection, viewer modes and saved locations. All eight translation overlays
+follow the new hierarchy and retain their translated content. Grid-provided
+splash pages and explicit URL overrides are preserved; the inherited Firestorm
+default splash is replaced by a bundled Vulkanstorm welcome page.
+
+The project owner's supplied blue VK icon master and both Windows ICO variants
+are in `indra/newview/icons/vulkanstorm`. All channels share this icon directory.
+Derived PNG, BMP and ICNS resources cover the viewer executable, installers,
+macOS bundles, Linux desktop and notification icons, login and startup logos.
+macOS disk-image backgrounds also carry Vulkanstorm branding. Some internal
+resource filenames retain their inherited Firestorm names for compatibility.
+
+Qualification encountered unrelated archived shallow refs in an otherwise
+complete source branch. The version check now rejects only shallow boundaries
+reachable from HEAD. Its test suite exercises both a truncated source branch and
+a complete source branch with an unrelated shallow ref.
+
+Windows development qualification uses the canonical Autobuild RelWithDebInfo
+variables, Release dependencies and runtime staging, with installer generation
+disabled. Linux and macOS packaging paths and image formats are checked on
+Windows; builds and physical runtime acceptance on those platforms remain
+separate requirements.
