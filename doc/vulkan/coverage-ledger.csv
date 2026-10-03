@@ -70,5 +70,5 @@ H06,shader-contracts.md,shader-contracts.md,source-backed family/responsibility;
 H07,shader-contracts.md,shader-contracts.md,source-backed family/responsibility; active or conditional,source reasoning only; runtime unqualified; detailed source gaps remain
 H08,shader-contracts.md,shader-contracts.md,source-backed family/responsibility; active or conditional,source reasoning only; runtime unqualified; detailed source gaps remain
 H09,shader-contracts.md,shader-contracts.md,source-backed family/responsibility; active or conditional,source reasoning only; runtime unqualified; detailed source gaps remain
-H10,shader-contracts.md,shader-contracts.md,source-backed family/responsibility; active or conditional,source reasoning only; runtime unqualified; detailed source gaps remain
+H10,shader-contracts.md,shader-contracts.md,dormant error-shader fallback; #if 0; no required production output,source reasoning only; runtime unqualified; detailed source gaps remain
 H11,shader-contracts.md,shader-contracts.md,source-backed family/responsibility; active or conditional,source reasoning only; runtime unqualified; detailed source gaps remain

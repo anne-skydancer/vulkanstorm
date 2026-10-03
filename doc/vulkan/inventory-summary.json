@@ -14,8 +14,8 @@
     "shared-header": 2,
     "windlight": 8
   },
-  "GL_candidate_source_files": 282,
+  "GL_candidate_source_files": 223,
   "shader_registration_rows": 690,
   "draw_pool_cpp": 13,
-  "inventory_scope": "tracked indra; comments stripped lexically, not C++ preprocessing or control-flow analysis"
+  "inventory_scope": "tracked indra; registry-validated GL candidates and global GLSL declarations; lexical only, not preprocessing or control-flow analysis"
 }
