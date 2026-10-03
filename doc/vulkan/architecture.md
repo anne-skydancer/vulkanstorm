@@ -1,5 +1,13 @@
 # Pipeline choice and architecture
 
+Current mandate: DiligentCore is the user-selected GHI, with pinned dependency
+preparation on `vkstorm-vulkan`. Library-selection comparisons below describe the
+historical audit, not a requirement to choose again. These responsibility-level
+designs do not establish a complete insertion catalog. The
+[current insertion audit](diligent-insertion-catalog.md) must cover every necessary
+point and keep unresolved in-scope paths as acceptance blockers. Runtime parity
+and platform/GPU qualification remain separate from source coverage.
+
 ## Recommendation and its confidence
 
 For Windows/Linux, the [in-depth paired design](framework-comparison.md) and [73-record API matrix](framework-contract-matrix.csv) support **qualifying DiligentCore first**, with bgfx remaining a credible alternative. Both were examined through immutable public interfaces and implementation routes; this ranking is conditional, not predetermined or runtime-qualified. Keep viewer ownership of scene snapshots, multi-view pass semantics and material/shader contracts; delegate device creation, allocation, descriptors, PSOs, command recording/submission, barriers and resource lifetime infrastructure to the mature library where it satisfies those contracts. This is a candidate recommendation, not adoption or verified suitability.

@@ -1,18 +1,39 @@
 # Vulkan pipeline audit and design
 
-Audited source baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Target: **Windows and Linux**. User mandate: compare all suitable architectures, including native Vulkan and general graphics abstractions. This report changes no viewer code and includes no runtime measurements, GPU captures, native implementation or build qualification.
+Current insertion-catalog baseline: **`07d3476e7c340cf59fa98de96355c261b6dd4d94`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting; it includes no native viewer implementation or runtime qualification.
 
-This baseline belongs to `vkstorm-devel`. Publishing the same findings on `vkstorm-release` and `vkstorm-canary` makes the reference design available there; it does not certify those branches' renderer source parity with the audited baseline.
+Historical comparative audit baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Its mandate compared suitable architectures, including native Vulkan and general graphics abstractions. Those reports contain no runtime measurements, GPU captures, native implementation or build qualification.
 
-The [paired in-depth design](framework-comparison.md) evaluates both DiligentCore and bgfx against all 73 records. It favors **DiligentCore for qualification**, based on explicit UAV/subresource transitions, GLSL/SPIR-V signatures and fence readback; bgfx has credible graphics storage support but additional shader-container, pass-boundary and frame-readback gates. The viewer retains scene/pass/material semantics; the library supplies device/resource allocation, descriptors, PSOs, commands, barriers and lifetime infrastructure. Remaining GL decoupling and custom shader/effect/auxiliary migration are substantial, not automatic.
+The historical baseline belongs to `vkstorm-devel`. Publishing those findings on `vkstorm-release` and `vkstorm-canary` made the reference design available there; it did not certify those branches' renderer source parity with the audited baseline. The current insertion audit is scoped to its pinned feature-branch source.
 
-Sustainable implementation/maintenance capacity excludes a bespoke Vulkan RHI as the primary implementation or default fallback. Native escapes must be exceptional and bounded. DiligentCore is not yet adopted or proven suitable; if no mature abstraction qualifies, the implementation decision is blocked by feasibility and GL/Zink remains operational. See [architecture comparison](architecture.md).
+The historical [paired in-depth design](framework-comparison.md) evaluated both DiligentCore and bgfx against the 73 listed records. It favored **DiligentCore for qualification**, based on explicit UAV/subresource transitions, GLSL/SPIR-V signatures and fence readback; bgfx has credible graphics storage support but additional shader-container, pass-boundary and frame-readback gates. The viewer retains scene/pass/material semantics; the library supplies device/resource allocation, descriptors, PSOs, commands, barriers and lifetime infrastructure. Remaining GL decoupling and custom shader/effect/auxiliary migration are substantial, not automatic.
+
+Sustainable implementation/maintenance capacity excludes a bespoke Vulkan RHI as the primary implementation or default fallback. Native escapes must be exceptional and bounded. The user has selected DiligentCore as the GHI. Its pinned dependencies are prepared on `vkstorm-vulkan`; native rendering, compatibility and parity remain unqualified. GL/Zink remains the reference renderer. See [architecture comparison](architecture.md).
 
 The shared rendering architecture and default functional path remain independent and fully support NVIDIA/AMD/Intel. **Vendor-origin supporting utilities are eligible** and should be used when qualified to improve outcomes, with equivalent independent functional fallback. Evaluate actual capabilities, licenses/build compatibility, quality and measured benefit; origin or vendor ID alone neither excludes nor selects a helper. AMD VMA is a supporting-utility candidate, not automatically adopted. Pinned DiligentCore source now verifies integrated optional FSR1 and NVIDIA DLSS Vulkan providers, with explicit input/state/glow-alpha and platform/build constraints in the comparison; bgfx also supplies an adaptable FSR1 compute example. Availability is not viewer integration or measured benefit.
 
 Use the same qualified common abstraction on NVIDIA, AMD and Intel. Optional NVIDIA-only NVRHI requires an equivalent independent AMD/Intel path, isolated adapter dependencies, and tangible benefit exceeding duplicate adapter/testing costs; defer it until the common path qualifies. NVIDIA retains the common path. Equivalence means practical functionality, quality, lifecycle and comparable qualification goals, not identical FPS. Utility permission does not authorize a vendor-controlled universal rendering core.
 
 Qualify Windows all three vendors and Linux Mesa AMD/Intel plus NVIDIA proprietary drivers, including hybrid/mixed-adapter selection. Shared core independence and qualified vendor utilities are compatible requirements. Actual runtime compatibility remains untested.
+
+
+## Current DiligentCore insertion audit
+
+The user selected DiligentCore, and `vkstorm-vulkan` now includes pinned package
+recipes, runtime staging and a disabled Vulkan selector entry. None constitutes
+native viewer rendering. The old 73-record assessment does not establish all
+insertion points. Acceptance requires the [insertion catalog](diligent-insertion-catalog.md),
+its [records](diligent-insertion-records.json) and [site ledger](diligent-insertion-sites.csv)
+to reconcile the current tracked source and transitive rendering responsibilities.
+The current ledger reconciles **28,263 source witnesses in 1,731 files**, all
+**225 shader modules** and **690 historical registration rows**, with no
+unmapped or unreviewed entries. These are source-accounting counts, not counts
+of edits or features. Source-reviewed roots, callback obligations, interface
+boundaries and typed exceptions support the location mapping.
+Run `python doc/vulkan/check_diligent_insertions.py --accept` to check documented
+acceptance status and reproducible accounting. A passing mechanical coverage
+check alone is insufficient: unexplained in-scope paths and discovery gaps must
+remain blockers. Native rendering and runtime parity remain unqualified.
 
 ## Reports and evidence
 
@@ -35,9 +56,9 @@ There are **73 listed contract/design records**: 27 core frame/draw records (F01
 
 The lexical inventory contains **225 GLSL files**, **690 shader registration/variant rows**, **223 GL candidate source files**, and **13 draw-pool implementation files**. Parent scope cross-checks include 26 draw-pool `.cpp/.h`, 51 llrender, 42 llwindow and 233 llui source files. Counts establish inventory scope only. Critical source boundaries were traced, but all branches, all realized shader permutations, all callbacks and per-pixel arithmetic were not exhaustively proven.
 
-Six explicit architecture decisions remain open (U-D1–U-D6): library revision/adoption, depth formats, shader binding/vertex ABI, history/probe reset visibility, media/bake ownership and cancellation, and measurement-dependent optimizations. Additional source gaps include whole-tree raw-state reconciliation, realized shader routes/uniform producers, media plugin protocol, every preview subclass, full bake-mask arithmetic, glTF extensions, asset/cache failures, specialized debug/pathing branches and historical platform reachability. Each report preserves its own detailed gaps. Runtime parity, performance, memory budgets, driver portability and failure handling are entirely unqualified here.
+The historical reports record six architecture decisions (U-D1–U-D6). Library adoption and revision are now settled by the selected, pinned DiligentCore preparation. Depth formats, shader binding/vertex ABI, history/probe reset behavior, media/bake ownership and cancellation, and measurement-dependent optimizations still need implementation qualification. The historical source-gap lists describe the earlier audit; the current insertion catalog supersedes their insertion-location accounting. Locating every required seam does not qualify realized shader permutations, bake arithmetic, glTF compatibility, asset/cache failure behavior or an optional proprietary pathing implementation. Runtime parity, performance, memory budgets, driver portability and failure handling remain unqualified.
 
-Thus this is a complete inventory/contract/design catalog **for the listed records**, with a substantive end-to-end architecture assessment. It is not a certificate of exhaustive behavioral coverage or a qualified Vulkan renderer.
+The 73-record catalog is an earlier partial responsibility-level assessment. It is **not accepted as a complete DiligentCore insertion catalog**. Every necessary insertion point must have a source-backed mapping or justified exclusion; unresolved in-scope paths and discovery blind spots block acceptance. Runtime qualification is a separate requirement.
 
 ## Reproduce the inventory
 
@@ -45,4 +66,4 @@ From the repository root at the pinned baseline, run `python doc/vulkan/inventor
 
 Primary Khronos and framework references were accessed on 3 October 2026. Moving documentation links and framework main branches support the architectural assessment; implementation must pin immutable SDK/framework/tool revisions. Source links use the audited commit. The proposed API floor is Vulkan 1.3 with explicitly queried/enabled features, while the consulted normative documentation reports revision 1.4.365; these are different facts.
 
-The comparative upstream snapshots are DiligentCore `bcb8b11eecd0899962c330b798ebe3e786b02bbb` and bgfx `abf165d8a78f962ad05da05f10adf0380bce286d`. These are source-analysis pins, not adopted dependencies. [framework-matrix.py](framework-matrix.py) regenerates the curated paired matrix and checks its IDs against the existing coverage ledger; it is design data, not automated behavioral analysis.
+The comparative upstream snapshots are DiligentCore `bcb8b11eecd0899962c330b798ebe3e786b02bbb` and bgfx `abf165d8a78f962ad05da05f10adf0380bce286d`. DiligentCore is now the selected, pinned dependency; the bgfx snapshot remains historical comparison evidence. [framework-matrix.py](framework-matrix.py) regenerates the curated paired matrix and checks its IDs against the existing coverage ledger; it is design data, not automated behavioral analysis.

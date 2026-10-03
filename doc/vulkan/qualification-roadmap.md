@@ -1,5 +1,13 @@
 # Qualification and implementation roadmap
 
+Current mandate: DiligentCore is the user-selected GHI, with pinned dependency
+preparation on `vkstorm-vulkan`. Library-selection comparisons below describe the
+historical audit, not a requirement to choose again. These responsibility-level
+designs do not establish a complete insertion catalog. The
+[current insertion audit](diligent-insertion-catalog.md) must cover every necessary
+point and keep unresolved in-scope paths as acceptance blockers. Runtime parity
+and platform/GPU qualification remain separate from source coverage.
+
 Baseline: `1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`. Target: Windows/Linux Vulkan. This is a proposed plan; none of the experiments, builds, captures or measurements below has been performed in this audit. Qualification must precede library commitment and renderer implementation.
 
 The shared architecture/default functional path stays independent and supports NVIDIA/AMD/Intel. Vendor-origin supporting utilities, including NVIDIA/AMD and candidate AMD VMA, are eligible when qualified with independent functional fallback. Optional NVIDIA-only NVRHI still requires a complete equivalent independent path and isolated adapter dependencies. No universal vendor-controlled renderer is approved. Hardware support, utility support and architecture governance are separate checks.

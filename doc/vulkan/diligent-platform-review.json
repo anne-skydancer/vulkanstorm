@@ -1,0 +1,376 @@
+{
+  "source_commit": "07d3476e7c340cf59fa98de96355c261b6dd4d94",
+  "reviewer": "root",
+  "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
+  "reviewed_ranges": [
+    {
+      "path": "indra/llwindow/llwindow.cpp",
+      "start": 410,
+      "end": 521,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "LLWindowManager factory selects OS window only under use_gl; false selects headless. Add explicit backend/window mode; close/delete follows ownership; LLCoordGL conversions below are CPU coordinate conventions.",
+      "sha256": "e3aa22b206f4b7eab4fc82f18288aa89d3aeec784648de0414dacfbea6a6a6ae"
+    },
+    {
+      "path": "indra/llwindow/llwindow.h",
+      "start": 59,
+      "end": 188,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Virtual contract separates OS input/clipboard/gamma/size from GL shared-context/current-context/swap and opaque platform handle. Add typed handle and renderer lifecycle; LLCoordGL is CPU coordinates, not a context requirement.",
+      "sha256": "2733e94b8eb74b20347c6ad13c6a57914f1f39beaa2a5001cf551c9e46097343"
+    },
+    {
+      "path": "indra/llwindow/llwindowwin32.cpp",
+      "start": 489,
+      "end": 953,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Constructor owns window thread, keyboard/dragdrop/icons and display policy; unconditional opengl32 load and switchContext require backend gate. OS input/affinity/display setup remains platform-owned.",
+      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae"
+    },
+    {
+      "path": "indra/llwindow/llwindowwin32.cpp",
+      "start": 1010,
+      "end": 1141,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "close shuts GL and WGL before wakeAndDestroy of HWND thread, then resets gamma. Native path must release swapchain/submitted consumers before HWND destruction; ordinary size/visibility methods stay OS-owned.",
+      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae"
+    },
+    {
+      "path": "indra/llwindow/llwindowwin32.cpp",
+      "start": 1197,
+      "end": 1987,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "switchContext creates dummy/WGL pixel-format/context, reprobes GL and recreates HWND on owned window thread. Replace native mode lifecycle while retaining fullscreen/input; recreateWindow waits promise before publishing handle. Shared contexts are GL-only upload infrastructure.",
+      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae"
+    },
+    {
+      "path": "indra/llwindow/llwindowwin32.cpp",
+      "start": 3870,
+      "end": 3890,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "SwapBuffers(mhDC) and Tracy GL collect are backend-specific presentation/profiling; Diligent Present plus backend-aware profiling replaces selected native path.",
+      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae"
+    },
+    {
+      "path": "indra/llwindow/llwindowwin32.cpp",
+      "start": 4121,
+      "end": 4132,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "getPlatformWindow returns actual HWND, unlike SDL legacy handle; preserve owned lifetime and typed export.",
+      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl2.cpp",
+      "start": 379,
+      "end": 511,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Constructor ignores use_gl, creates GL context then gGLManager, cursors and X11 clipboard. Backend mode must separate SDL OS window and native resource creation; input/clipboard remain SDL/X11.",
+      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl2.cpp",
+      "start": 666,
+      "end": 1026,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "createContext sets SDL_WINDOW_OPENGL and SDL_GL attributes, creates GL context/surface-dependent fullscreen sizing, cached X11 handles, clear/present; switch destroys and reopens; destroyContext invalidates X11 and quits video. Native mode needs Vulkan flags, surface-independent dimensions, typed handles and swapchain retirement before SDL window/video teardown.",
+      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl2.cpp",
+      "start": 1146,
+      "end": 1184,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "SDL_GL_SwapWindow is selected presentation seam; size/FSAA/gamma values are platform/future attachment policy, not native GL execution requirements.",
+      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl2.cpp",
+      "start": 2550,
+      "end": 2570,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "getPlatformWindow NULL; add typed SDL WM export instead of legacy media handle; external-file launch remains OS functionality.",
+      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl2.cpp",
+      "start": 2688,
+      "end": 2729,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "GL shared contexts, swap interval and make-current must stay only on GL path; native uploads use renderer ownership, not shared SDL GL contexts.",
+      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl.cpp",
+      "start": 1004,
+      "end": 1105,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "USE_SDL1 conditional legacy context rebuild and SDL video shutdown require explicit backend policy; no implicit native support from default SDL2 changes.",
+      "sha256": "4e62320420f2dc63afe796ea0f1162d76d15abcb258e2a8a3bf37d7d7986be0d"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl.cpp",
+      "start": 2883,
+      "end": 2907,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Legacy GTK/LLMOZLIB platform-window API returns GTK layout or NULL, not Vulkan Xlib surface; requires typed export if SDL1 tier supported.",
+      "sha256": "4e62320420f2dc63afe796ea0f1162d76d15abcb258e2a8a3bf37d7d7986be0d"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl.cpp",
+      "start": 3027,
+      "end": 3044,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "SDL1 shared context methods only warn/return NULL; preserve conditional limitations, do not interpret as native-ready uploads.",
+      "sha256": "4e62320420f2dc63afe796ea0f1162d76d15abcb258e2a8a3bf37d7d7986be0d"
+    },
+    {
+      "path": "indra/llwindow/llwindowheadless.cpp",
+      "start": 1,
+      "end": 53,
+      "record": "I25",
+      "disposition": "conditional",
+      "reason": "Actual constructor only creates headless keyboard; swapBuffers empty. Factory headless mode is not a visible Vulkan window. Diagnostic offscreen target requires its own documented device/no-swapchain contract.",
+      "sha256": "8347f768b3324c66c5dbe80eacd51b3c2a98e0cb2420839908385befc98d821e"
+    },
+    {
+      "path": "indra/llwindow/llwindowheadless.h",
+      "start": 33,
+      "end": 115,
+      "record": "I25",
+      "disposition": "conditional",
+      "reason": "Headless virtual OS/context methods are no-ops/false/null and do not provide WSI. Preserve independently gated headless mode, no inference of a visible native viewer.",
+      "sha256": "55e8822a8631556e1daa65e6875e00994891c64fb23c6b722b7005adaf2ffbfa"
+    },
+    {
+      "path": "indra/newview/llappviewerlinux.cpp",
+      "start": 104,
+      "end": 135,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "selectGLBackend only activates Zink GLVND environment under DISPLAY; initWindow restores it before helper process use. Native path must not activate GL provider environment; preserve reference/helper isolation.",
+      "sha256": "72b20f153d3b82a6e56b8ce7f53cf000985a0d548ec4b15673aeb72c42065982"
+    },
+    {
+      "path": "indra/newview/llappviewerwin32.cpp",
+      "start": 1098,
+      "end": 1179,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "selectGLBackend preloads Mesa/Gallium or system opengl32 before any GL imports; select native owner before this call and gate GL provider selection.",
+      "sha256": "9e0ad0de3d7643b949a4a95f7c5c737b7acf3426676bc183667ba205330ac449"
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 1190,
+      "end": 1345,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "init calls selectGLBackend before initWindow, then GL VRAM overrides/info/requirements/driver warnings and self-registered callbacks. Native capability/identity owner must precede callbacks and prevent GL probes; CPU SSE/RAM/input policies remain.",
+      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 2409,
+      "end": 2495,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Shutdown stops fetch/cache/decode/thread pools before shutdownGL then viewer window deletion. Native path must cancel/retain producers and drain submitted work before resource/device/window destruction; keyboard remains until views destroyed.",
+      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 3719,
+      "end": 3857,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "initWindow currently coerces Vulkan to GL, creates LLViewerWindow then pipeline/initGLDefaults with persisted RenderInitError. Replace backend capability/error ownership; preserve startup diagnostics and reference route.",
+      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4041,
+      "end": 4135,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "getViewerInfo directly glGetString vendor/renderer/version plus GL VRAM/vendor-based WMI; replace with cached actual Vulkan adapter/driver/backend identity, safe during teardown. CPU/network/library diagnostics remain.",
+      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 6760,
+      "end": 6790,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "forceErrorDriverCrash calls glDeleteTextures(1,NULL). Legacy crash injection must be gated/disabled/adapted for native backend rather than executing GL with no context.",
+      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+    },
+    {
+      "path": "indra/newview/llviewerwindow.cpp",
+      "start": 1990,
+      "end": 2194,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Constructor immediately creates window, GL shaders, font glyphs, VBO/gGL, feature recommendations and shared-context images before view tree. Split OS/input/CPU view setup from native resource init; retain borrowed window/font/media dependency ordering.",
+      "sha256": "944dca24a1204fed535c2817b2ecb3d47acf650f0e38f4e2878f9ce10d9e8474"
+    },
+    {
+      "path": "indra/newview/llviewerwindow.cpp",
+      "start": 2644,
+      "end": 2745,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "shutdownGL tears down fonts/images/worldmap/selection then stopGL/gGL/VBO and destructor destroys window. Native shutdown needs explicit producer/completion/resource ordering; existing GL destructor behavior is not generic recovery.",
+      "sha256": "944dca24a1204fed535c2817b2ecb3d47acf650f0e38f4e2878f9ce10d9e8474"
+    },
+    {
+      "path": "indra/newview/llviewerwindow.cpp",
+      "start": 2748,
+      "end": 2837,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "reshape updates CPU camera/aspect/UI scale, atlas resolution generation, UI viewport/tree, sim shape/settings; native extent changes must recreate attachments/swapchain without losing CPU coordinate/font invalidation behavior.",
+      "sha256": "944dca24a1204fed535c2817b2ecb3d47acf650f0e38f4e2878f9ce10d9e8474"
+    },
+    {
+      "path": "indra/newview/llviewerwindow.cpp",
+      "start": 7019,
+      "end": 7124,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "stopGL pauses decoding and destroys multiple world/UI/target/shader owners; restoreGL asserts and is explicitly deprecated. Catalog must expose generation retirement and restart/error policy, not presume full device-loss restoration exists.",
+      "sha256": "944dca24a1204fed535c2817b2ecb3d47acf650f0e38f4e2878f9ce10d9e8474"
+    },
+    {
+      "path": "indra/newview/llfeaturemanager.cpp",
+      "start": 266,
+      "end": 402,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "Feature table parser uses CPU named masks; benchmark SEH calls GPU sandbox and shader finishProfile on failure. Backend-aware benchmark/profile gate and capabilities needed, preserving CPU feature table policy.",
+      "sha256": "be11a47d3a49140c9251eecfedb00b2c6f36c688dddcdc8fa99f4742ed579404"
+    },
+    {
+      "path": "indra/newview/llfeaturemanager.cpp",
+      "start": 411,
+      "end": 595,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "loadGPUClass selects driver-specific GL workaround and bandwidth benchmark, stores raw GL GPU identity, graphicsIdentityChanged passes false native flag. Replace identity/capabilities/benchmark policy with actual selected backend; keep CPU/RAM quality bias.",
+      "sha256": "be11a47d3a49140c9251eecfedb00b2c6f36c688dddcdc8fa99f4742ed579404"
+    },
+    {
+      "path": "indra/newview/llfeaturemanager.cpp",
+      "start": 666,
+      "end": 805,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "applyBaseMasks maps vendor/GLversion/texture units/varyings/VRAM and mutates Intel GL fallback plus image-worker flags. These GL assumptions must not enable or disable Vulkan capabilities; native queried feature/format/limits policy separate.",
+      "sha256": "be11a47d3a49140c9251eecfedb00b2c6f36c688dddcdc8fa99f4742ed579404"
+    },
+    {
+      "path": "indra/newview/llstartup.cpp",
+      "start": 790,
+      "end": 847,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "Startup notifications compare graphics identity and then hardcode saved LastGraphicsRendererFamily=OpenGL. Persist actual backend family/adapter and preserve intended settings reset notification policy.",
+      "sha256": "b7cc68a72e9846d13c85c68bd4c07de8e5456aa48770be008c4b47ab952708eb"
+    },
+    {
+      "path": "indra/newview/llfloaterpreference.cpp",
+      "start": 4020,
+      "end": 4095,
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "Renderer refresh/commit/restart callbacks coerce every non-Zink choice to OpenGL. Enable supported native choices only after renderer availability, preserving pending/committed restart semantics.",
+      "sha256": "5522fd0cd8262c586a6d6ea19fa627a3dcb0bb57ee54e40f34fcbfd4ba350eca"
+    },
+    {
+      "path": "indra/cmake/DiligentCore.cmake",
+      "start": 1,
+      "end": 64,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Reviewed target/options contract: Diligent packages are optional Windows/Linux64 with pinned metadata, runtimes and imports; SDL1/SDL2 and GL reference libraries remain separate; OpenGL requirements only qualify GL; Tracy needs backend-specific GPU instrumentation rather than global OpenGL macros.",
+      "sha256": "1a15b40f7654cb145f8d3b5ad46a1f6deb4676cd1393fad3d048200743bca16a"
+    },
+    {
+      "path": "indra/cmake/LLWindow.cmake",
+      "start": 1,
+      "end": 40,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Reviewed target/options contract: Diligent packages are optional Windows/Linux64 with pinned metadata, runtimes and imports; SDL1/SDL2 and GL reference libraries remain separate; OpenGL requirements only qualify GL; Tracy needs backend-specific GPU instrumentation rather than global OpenGL macros.",
+      "sha256": "29b2cc65f4af0525a16b893f258924d65cb4ae56d6ec45974c6e0e763cfb2805"
+    },
+    {
+      "path": "indra/cmake/GLEXT.cmake",
+      "start": 1,
+      "end": 9,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Reviewed target/options contract: Diligent packages are optional Windows/Linux64 with pinned metadata, runtimes and imports; SDL1/SDL2 and GL reference libraries remain separate; OpenGL requirements only qualify GL; Tracy needs backend-specific GPU instrumentation rather than global OpenGL macros.",
+      "sha256": "325cee31fc95d6dcd9d3e3c461742e6a9a41d206391e8e7be8f4476b6651d077"
+    },
+    {
+      "path": "indra/cmake/OpenGL.cmake",
+      "start": 1,
+      "end": 30,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Reviewed target/options contract: Diligent packages are optional Windows/Linux64 with pinned metadata, runtimes and imports; SDL1/SDL2 and GL reference libraries remain separate; OpenGL requirements only qualify GL; Tracy needs backend-specific GPU instrumentation rather than global OpenGL macros.",
+      "sha256": "ef2dcf807326f6e5cf14df351406f040f2e6d9172a588f6e9851bf1e25013100"
+    },
+    {
+      "path": "indra/cmake/Tracy.cmake",
+      "start": 1,
+      "end": 41,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Reviewed target/options contract: Diligent packages are optional Windows/Linux64 with pinned metadata, runtimes and imports; SDL1/SDL2 and GL reference libraries remain separate; OpenGL requirements only qualify GL; Tracy needs backend-specific GPU instrumentation rather than global OpenGL macros.",
+      "sha256": "7c8ed735d388fe8452607a288cba00ad8d1704af44dec52e062cbe2c45c941b2"
+    },
+    {
+      "path": "indra/llwindow/CMakeLists.txt",
+      "start": 1,
+      "end": 140,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Viewer selects SDL2 by default, SDL1 conditionally, Win32 per platform and Darwin separately. llwindow links llrender/glext/SDL; native backend should isolate selected context path while retaining GL reference. BUILD_HEADLESS separate optional target.",
+      "sha256": "d7809200676cd76760c314e630ce176beb4d2707c4bd84ebb080731909899a2d"
+    },
+    {
+      "path": "indra/llcommon/llprofiler.h",
+      "start": 75,
+      "end": 99,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Tracy configuration sets OpenGL profiler flag unconditionally; backend-specific compile/runtime profiling required, CPU profiler unaffected.",
+      "sha256": "b6751e633fa46a6e674d72a4fbc83bf66f5ade48a0d44dce525e9058fcd1ee71"
+    },
+    {
+      "path": "indra/llcommon/llprofiler.h",
+      "start": 236,
+      "end": 250,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "GPU macros expand Tracy OpenGL API under flag, hidden GL execution across caller files. Native path must replace/gate GPU macros, preserving CPU diagnostics.",
+      "sha256": "b6751e633fa46a6e674d72a4fbc83bf66f5ade48a0d44dce525e9058fcd1ee71"
+    }
+  ]
+}
