@@ -991,7 +991,7 @@
          left="10"
          name="ani"
          tool_tip="This checkbox enables anisotropic filtering, which is a method to enhance the quality of textures when they are viewed at relatively large angles in relation to your camera position. Usually makes them look less blurry at greater distances."
-         top="20"
+         top_pad="12"
          width="256" />
         <check_box
          control_name="RenderCompressTextures"
