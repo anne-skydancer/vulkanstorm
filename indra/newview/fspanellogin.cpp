@@ -888,7 +888,8 @@ void FSPanelLogin::loadLoginPage()
     // Ship our welcome page with the viewer. Keep grid-provided splash pages
     // and explicit tester overrides, but replace the inherited Firestorm page.
     if (force_login_url.empty() &&
-        login_page.asString() == "https://phoenixviewer.com/app/loginV3/")
+        (login_page.asString() == "http://phoenixviewer.com/app/loginV3/" ||
+         login_page.asString() == "https://phoenixviewer.com/app/loginV3/"))
     {
         sInstance->getChild<LLMediaCtrl>("login_html")->navigateToLocalPage(
             "common", "vulkanstorm/welcome.html");
