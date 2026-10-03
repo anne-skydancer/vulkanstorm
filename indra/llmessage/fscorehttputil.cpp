@@ -138,12 +138,16 @@ void callbackHttpGetRaw(const std::string&         url,
         boost::bind(trivialGetCoroRaw, url, LLCore::HttpRequest::DEFAULT_POLICY_ID, aHeader, options, success, failure));
 }
 
-void trivialGetCoro(std::string url, time_t last_modified, completionCallback_t success, completionCallback_t failure)
+void trivialGetCoro(std::string url, time_t last_modified, completionCallback_t success, completionCallback_t failure,
+                    LLCore::HttpOptions::ptr_t httpOpts)
 {
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter =
         std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("trivialGetCoro", LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
-    LLCore::HttpOptions::ptr_t httpOpts    = std::make_shared<LLCore::HttpOptions>();
+    if (!httpOpts)
+    {
+        httpOpts = std::make_shared<LLCore::HttpOptions>();
+    }
 
     httpOpts->setWantHeaders(true);
     httpOpts->setLastModified((long)last_modified);
@@ -169,8 +173,9 @@ void trivialGetCoro(std::string url, time_t last_modified, completionCallback_t 
     }
 }
 
-void callbackHttpGet(const std::string& url, const time_t& last_modified, completionCallback_t success, completionCallback_t failure)
+void callbackHttpGet(const std::string& url, const time_t& last_modified, completionCallback_t success, completionCallback_t failure,
+                     LLCore::HttpOptions::ptr_t options)
 {
-    LLCoros::instance().launch("HttpCoroutineAdapter::genericGetCoro", boost::bind(&trivialGetCoro, url, last_modified, success, failure));
+    LLCoros::instance().launch("HttpCoroutineAdapter::genericGetCoro", boost::bind(&trivialGetCoro, url, last_modified, success, failure, options));
 }
 } // namespace FSCoreHttpUtil
