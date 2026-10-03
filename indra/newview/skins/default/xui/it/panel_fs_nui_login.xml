@@ -1,105 +1,114 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <panel
-  name="panel_login">
+  name="panel_login" >
   <string
-    name="ServerComboTooltip">
+    name="ServerComboTooltip" >
         Una griglia esistente o l'URI di una griglia
     </string>
   <layout_stack
-    name="main_stack">
+    name="main_stack" >
     <layout_panel
-      name="center_stage">
+      name="center_stage" >
       <layout_stack
-        name="ui_stack">
+        name="ui_stack" >
         <layout_panel
-          name="ui_container">
-          <panel
-            name="login">
-            <combo_box
-              label="Nome utente"
-              tool_tip="Nome utente scelto per la registrazione, come CarloRossi12 o Stella Sunshine"
-              name="username_combo" />
-            <check_box
-              label="Ricorda nome utente"
-              name="remember_username_check" />
-            <button
-              tool_tip="Rimuovi questo nome"
-              name="remove_user_btn" />
-            <line_editor
-              name="password_edit"
-              label="Password" />
-            <button
-              name="password_show_btn"
-              tool_tip="Mostra password" />
-            <button
-              name="password_hide_btn"
-              tool_tip="Nascondi password" />
-            <check_box
-              label="Ricorda password"
-              name="remember_check" />
-          </panel>
-          <layout_stack
-            name="login_stack">
-            <layout_panel
-              name="start_location_panel">
-              <combo_box
-                label="Luogo di avvio"
-                name="start_location_combo">
-                <combo_box.item
-                  label="Ultimo luogo"
-                  name="MyLastLocation" />
-                <combo_box.item
-                  label="Casa"
-                  name="MyHome" />
-                <combo_box.item
-                  label="&lt;Inserire luogo&gt;"
-                  name="Typeregionname" />
-              </combo_box>
-            </layout_panel>
-            <layout_panel
-              name="grid_panel">
-              <text
-                name="grid_login_text"
-                width="50">
+          name="ui_container" >
+          <scroll_container
+            name="login_scroll" >
+            <panel
+              name="login_content" >
+              <panel
+                name="login" >
+                <combo_box
+                  label="Nome utente"
+                  tool_tip="Nome utente scelto per la registrazione, come CarloRossi12 o Stella Sunshine"
+                  name="username_combo" />
+                <check_box
+                  label="Ricorda nome utente"
+                  name="remember_username_check" />
+                <button
+                  tool_tip="Rimuovi questo nome"
+                  name="remove_user_btn" />
+                <line_editor
+                  name="password_edit"
+                  label="Password" />
+                <button
+                  name="password_show_btn"
+                  tool_tip="Mostra password" />
+                <button
+                  name="password_hide_btn"
+                  tool_tip="Nascondi password" />
+                <check_box
+                  label="Ricorda password"
+                  name="remember_check" />
+                <text name="username_text">Nome utente</text>
+                <text name="password_text">Password</text>
+              </panel>
+              <layout_stack
+                name="login_stack" >
+                <layout_panel
+                  name="start_location_panel" >
+                  <combo_box
+                    label="Luogo di avvio"
+                    name="start_location_combo" >
+                    <combo_box.item
+                      label="Ultimo luogo"
+                      name="MyLastLocation" />
+                    <combo_box.item
+                      label="Casa"
+                      name="MyHome" />
+                    <combo_box.item
+                      label="&lt;Inserire luogo&gt;"
+                      name="Typeregionname" />
+                  </combo_box>
+                  <text name="start_location_text">Luogo di avvio</text>
+                </layout_panel>
+                <layout_panel
+                  name="grid_panel" >
+                  <text
+                    name="grid_login_text"
+                    width="50" >
                                 Griglia:
                             </text>
-              <text
-                name="grid_builder_text">
+                  <text
+                    name="grid_builder_text" >
                                 + Clicca per aggiungere altre griglie
                             </text>
-            </layout_panel>
-            <layout_panel
-              name="mode_selection">
-              <text
-                name="mode_selection_text">
+                </layout_panel>
+                <layout_panel
+                  name="mode_selection" >
+                  <text
+                    name="mode_selection_text" >
                                 Modalità:
                             </text>
-              <combo_box
-                tool_tip="Seleziona la tua modalità preferita, verranno applicate le impostazioni predefinite."
-                name="mode_combo">
-                <combo_box.item
-                  label="Ibrida"
-                  name="Hybrid" />
-                <combo_box.item
-                  label="Testo"
-                  name="Text" />
-              </combo_box>
-            </layout_panel>
-            <layout_panel
-              name="login_actions">
-              <button
-                label="Entra"
-                name="connect_btn" />
-              <text
-                name="create_new_account_text">
+                  <combo_box
+                    tool_tip="Seleziona la tua modalità preferita, verranno applicate le impostazioni predefinite."
+                    name="mode_combo" >
+                    <combo_box.item
+                      label="Ibrida"
+                      name="Hybrid" />
+                    <combo_box.item
+                      label="Testo"
+                      name="Text" />
+                  </combo_box>
+                </layout_panel>
+                <layout_panel
+                  name="login_actions" >
+                  <button
+                    label="Entra"
+                    name="connect_btn" />
+                  <text
+                    name="create_new_account_text" >
                 Crea nuovo account
             </text>
-              <text
-                name="forgot_password_text">
+                  <text
+                    name="forgot_password_text" >
                 Password dimenticata?
             </text>
-            </layout_panel>
-          </layout_stack>
+                </layout_panel>
+              </layout_stack>
+            </panel>
+          </scroll_container>
         </layout_panel>
       </layout_stack>
     </layout_panel>
