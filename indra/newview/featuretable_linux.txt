@@ -70,7 +70,7 @@ RenderFSAAType			    1	2
 RenderFSAASamples			1	3
 RenderMaxTextureIndex		1	16
 RenderGLContextCoreProfile         1   1
-RenderGLMultiThreadedTextures      1   0
+RenderGLMultiThreadedTextures      1   1
 RenderGLMultiThreadedMedia         1   1
 RenderReflectionProbeResolution 1 128
 RenderScreenSpaceReflections 1  1
@@ -424,7 +424,7 @@ RenderAnisotropic			1	0
 RenderCubeMap				0	0
 RenderFSAAType  			1	0
 RenderFSAASamples			1	0
-RenderGLContextCoreProfile  1   0
+RenderGLContextCoreProfile  1   1
 RenderGLMultiThreadedMedia  1   0
 RenderDownScaleMethod       1   0
 
