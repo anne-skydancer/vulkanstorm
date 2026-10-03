@@ -1,0 +1,21 @@
+{
+  "baseline": "1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5",
+  "shader_files": 225,
+  "shader_families": {
+    "avatar": 6,
+    "deferred": 122,
+    "effects": 4,
+    "environment": 6,
+    "gltf": 2,
+    "interface": 47,
+    "lighting": 11,
+    "objects": 14,
+    "post": 3,
+    "shared-header": 2,
+    "windlight": 8
+  },
+  "GL_candidate_source_files": 282,
+  "shader_registration_rows": 690,
+  "draw_pool_cpp": 13,
+  "inventory_scope": "tracked indra; comments stripped lexically, not C++ preprocessing or control-flow analysis"
+}
