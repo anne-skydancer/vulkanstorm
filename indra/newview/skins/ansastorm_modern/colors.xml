@@ -254,7 +254,7 @@
   <color name="LabelSelectedDisabledColor" reference="White_25" />
   <color name="LabelTextColor" reference="LtGray" />
   <color name="LoginProgressBarBgColor" reference="Unused?" />
-  <color name="LoginProgressBarFgColor" reference="Unused?" />
+  <color name="LoginProgressBarFgColor" value="0 0.6211 0.8477 0.96" />
   <color name="LoginProgressBoxBorderColor" value="0 0.12 0.24 0" />
   <color name="LoginProgressBoxCenterColor" value="0 0 0 0.78" />
   <color name="LoginProgressBoxShadowColor" value="0 0 0 0.78" />
