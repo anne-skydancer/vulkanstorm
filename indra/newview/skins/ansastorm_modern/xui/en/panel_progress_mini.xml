@@ -1,5 +1,43 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
-<panel name="mini_progress_panel">
-    <progress_bar name="progress_bar_mini"
-                  color_bar="LoginProgressBarFgColor" />
+<panel
+ background_visible="false"
+ follows="all"
+ height="20"
+ layout="topleft"
+ left="0"
+ name="mini_progress_panel"
+ top="0"
+ mouse_opaque="true"
+ width="200">
+
+<progress_bar
+ color_bar="LoginProgressBarFgColor"
+ follows="left|right|top"
+ height="20"
+ layout="topleft"
+ left="0"
+ name="progress_bar_mini"
+ right="-64"
+ top="0" />
+
+<button
+ follows="right|top"
+ height="20"
+ label="Cancel"
+ layout="topleft"
+ left_pad="4"
+ name="cancel_btn"
+ width="60" />
+
+<text
+ follows="left|right|top"
+ height="20"
+ layout="topleft"
+ left="10"
+ name="progress_text"
+ right="-64"
+ top="0"
+ valign="center"
+ value="Progress..." />
+
 </panel>
