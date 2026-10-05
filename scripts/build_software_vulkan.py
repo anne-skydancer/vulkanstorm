@@ -34,11 +34,19 @@ def checkout(destination, pin):
         run('git', '-C', destination, 'submodule', 'update', '--init', '--recursive', '--depth=1')
 
 
-def stage_manifest(manifest, destination, key):
+def stage_manifest(manifest, destination, key, installed_root=None):
     """Relocate a manifest and its binary together; cache no build/source trees."""
     data = json.loads(manifest.read_text())
     path = Path(data[key]['library_path'])
     source = path if path.is_absolute() else manifest.parent / path
+    # Installed Linux layer manifests name their library by basename, leaving
+    # loader search paths to resolve it. Relocation must use our own install,
+    # never an ambient system library with the same name.
+    if not source.is_file() and installed_root is not None and path.name == str(path):
+        matches = [candidate for candidate in installed_root.rglob(path.name) if candidate.is_file()]
+        if len(matches) != 1:
+            raise RuntimeError(f'Expected one installed manifest library: {path}, got {matches}')
+        source = matches[0]
     destination.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination / source.name)
     data[key]['library_path'] = '.' + os.sep + source.name
@@ -122,7 +130,7 @@ def main():
     if len(manifests) != 1 or len(layers) != 1:
         raise RuntimeError(f'Expected one ICD and one layer manifest: {manifests}, {layers}')
     icd = stage_manifest(manifests[0], work / 'staged/icd', 'ICD')
-    layer = stage_manifest(layers[0], work / 'staged/layers', 'layer')
+    layer = stage_manifest(layers[0], work / 'staged/layers', 'layer', work / 'validation')
     licenses = work / 'staged/licenses'; licenses.mkdir(parents=True, exist_ok=True)
     for name, source in [('validation', work / 'source/validation'),
                          (args.driver, work / ('source/swiftshader' if args.driver == 'swiftshader' else 'source/mesa-25.2.4'))]:
