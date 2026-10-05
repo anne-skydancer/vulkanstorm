@@ -1,6 +1,7 @@
 # Vulkanstorm development conventions
 
 - Prefer correct, performant, maintainable code. Report measured results and qualification limits accurately.
+- Prefer the `vs` filename prefix for new Vulkanstorm-owned `.cpp` and `.h` files, for example `vsshadercache.cpp` and `vsshadercache.h`. This distinguishes Vulkanstorm additions from upstream code, analogous to Firestorm's `fs` prefix.
 - `vkstorm-release` is the release/default branch. Incorporate new features only through PRs after qualification and testing on their feature branches.
 - Develop new features only on feature branches created from `vkstorm-devel`. Use the `codex/` prefix by default.
 - Only hotfixes, critical fixes, or security patches may be directly committed to `vkstorm-release` or `vkstorm-devel`.
