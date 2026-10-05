@@ -56,7 +56,12 @@ versions are recorded. This is repeatable testing with recorded environments,
 not a claim of bit-for-bit reproducible builds across changed OS repositories.
 
 The runner sets `VK_DRIVER_FILES` to one ICD and an isolated validation layer
-path. The executable rejects multiple devices, hardware devices, wrong software
+path. Elevated Windows loaders ignore these environment overrides. On the
+hosted Windows runner only, the runner temporarily registers the pinned ICD and
+layer manifests in the machine's Vulkan registry keys, restoring any previous
+values after the tests. Binaries stay in the isolated staging directory. No
+registration is permitted on local or self-hosted machines by this option.
+The executable rejects multiple devices, hardware devices, wrong software
 device names and missing validation. It reports actual loaded libraries; the
 runner verifies that loader/Diligent came from the test's staged directory.
 Core and synchronization validation are required. Shader features and WSI

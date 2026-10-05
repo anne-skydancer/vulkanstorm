@@ -37,6 +37,7 @@ jobs:
       - run: python scripts/tests/test_software_vulkan_runner.py
       - run: python scripts/tests/test_vulkan_ci_staging.py
       - run: python scripts/tests/test_vulkan_dependency_overlay.py
+      - run: python scripts/tests/test_software_vulkan_dependencies.py
 
   graphics:
     needs: source-evidence
@@ -80,8 +81,10 @@ jobs:
             libgl1-mesa-dev libglu1-mesa-dev libpulse-dev libssl-dev \
             libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype6-dev \
             libsdl2-dev libx11-dev libx11-xcb-dev libxcb1-dev libxshmfence-dev xvfb xauth \
+            libxcb-dri3-dev libxcb-present-dev libxcb-randr0-dev libxcb-sync-dev \
+            libxcb-xfixes0-dev libxcb-shm0-dev \
             llvm-18-dev libclang-cpp18-dev libdrm-dev libelf-dev libexpat1-dev \
-            libzstd-dev zlib1g-dev flex bison
+            libzstd-dev zlib1g-dev flex bison glslang-tools
           echo 'CC=gcc-14' >> "$GITHUB_ENV"
           echo 'CXX=g++-14' >> "$GITHUB_ENV"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -140,7 +143,7 @@ jobs:
           set -euo pipefail
           if [[ "$RUNNER_OS" == Windows ]]; then
             python scripts/run_software_vulkan_tests.py --executable .ci/test-build/RelWithDebInfo/diligent_render_test.exe \
-              --runtime .ci/runtime/runtime.json --evidence .ci/evidence
+              --runtime .ci/runtime/runtime.json --evidence .ci/evidence --register-windows-manifests
           else
             xvfb-run -a -s '-screen 0 1024x768x24' python scripts/run_software_vulkan_tests.py \
               --executable .ci/test-build/diligent_render_test --runtime .ci/runtime/runtime.json --evidence .ci/evidence

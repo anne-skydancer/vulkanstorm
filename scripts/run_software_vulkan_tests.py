@@ -1,5 +1,6 @@
 """Run staged Diligent tests with one software ICD and mandatory validation."""
 import argparse
+from contextlib import contextmanager, ExitStack
 import hashlib
 import json
 import os
@@ -8,6 +9,46 @@ import platform
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@contextmanager
+def windows_manifest_registration(runtime, enabled):
+    """Elevated hosted Windows loaders ignore environment search overrides."""
+    if not enabled:
+        yield
+        return
+    if (platform.system() != 'Windows' or os.environ.get('GITHUB_ACTIONS') != 'true'
+            or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted'):
+        raise RuntimeError('Manifest registration is restricted to hosted Windows CI')
+    import winreg
+    manifests = [('Drivers', Path(runtime['icd'])),
+                 ('ExplicitLayers', Path(runtime['layer_path']) / 'VkLayer_khronos_validation.json')]
+    access = winreg.KEY_READ | winreg.KEY_WRITE | winreg.KEY_WOW64_64KEY
+
+    def restore(key_path, name, previous):
+        with winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, key_path, 0, access) as key:
+            if previous is not None:
+                winreg.SetValueEx(key, name, 0, previous[1], previous[0])
+            else:
+                try:
+                    winreg.DeleteValue(key, name)
+                except FileNotFoundError:
+                    pass
+
+    with ExitStack() as cleanup:
+        for category, manifest in manifests:
+            if not manifest.is_file():
+                raise RuntimeError(f'Missing registered manifest: {manifest}')
+            key_path = 'SOFTWARE\\Khronos\\Vulkan\\' + category
+            name = str(manifest.resolve())
+            with winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, key_path, 0, access) as key:
+                try:
+                    previous = winreg.QueryValueEx(key, name)
+                except FileNotFoundError:
+                    previous = None
+                cleanup.callback(restore, key_path, name, previous)
+                winreg.SetValueEx(key, name, 0, winreg.REG_DWORD, 0)
+        yield
 
 
 def assess(mode, code, log):
@@ -25,6 +66,8 @@ def main():
     parser.add_argument('--executable', type=Path, required=True)
     parser.add_argument('--runtime', type=Path, required=True)
     parser.add_argument('--evidence', type=Path, required=True)
+    parser.add_argument('--register-windows-manifests', action='store_true',
+                        help='Temporarily register pinned manifests on an elevated hosted Windows runner')
     args = parser.parse_args()
     executable = args.executable.resolve()
     runtime = json.loads(args.runtime.read_text())
@@ -52,32 +95,34 @@ def main():
         env['LD_LIBRARY_PATH'] = str(executable.parent) + os.pathsep + env.get('LD_LIBRARY_PATH', '')
     expected = 'SwiftShader' if runtime['driver'] == 'swiftshader' else 'llvmpipe'
     result = {'runtime': runtime, 'executable': str(executable),
+              'windows_manifest_registration': args.register_windows_manifests,
               'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest(),
               'staged_library_sha256': {name: hashlib.sha256((executable.parent / name).read_bytes()).hexdigest() for name in libraries},
               'tests': []}
     failed = False
-    for mode in ('offscreen', 'present', 'invalid', 'invalid-sync', 'bad-pixels'):
-        directory = evidence / mode; directory.mkdir(exist_ok=True)
-        try:
-            process = subprocess.run([str(executable), expected, mode], cwd=directory, env=env,
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
-            log = process.stdout
-            passed = assess(mode, process.returncode, log)
-            code = process.returncode
+    with windows_manifest_registration(runtime, args.register_windows_manifests):
+        for mode in ('offscreen', 'present', 'invalid', 'invalid-sync', 'bad-pixels'):
+            directory = evidence / mode; directory.mkdir(exist_ok=True)
+            try:
+                process = subprocess.run([str(executable), expected, mode], cwd=directory, env=env,
+                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
+                log = process.stdout
+                passed = assess(mode, process.returncode, log)
+                code = process.returncode
+                if mode in ('offscreen', 'present'):
+                    normalized = log.replace('\\', '/').lower()
+                    passed &= all(str(executable.parent / name).replace('\\', '/').lower() in normalized for name in libraries)
+            except subprocess.TimeoutExpired as error:
+                log = (error.stdout or b'').decode(errors='replace') if isinstance(error.stdout, bytes) else (error.stdout or '')
+                log += '\nTIMEOUT\n'; passed = False; code = None
+            (directory / 'test.log').write_text(log, encoding='utf-8')
             if mode in ('offscreen', 'present'):
-                normalized = log.replace('\\', '/').lower()
-                passed &= all(str(executable.parent / name).replace('\\', '/').lower() in normalized for name in libraries)
-        except subprocess.TimeoutExpired as error:
-            log = (error.stdout or b'').decode(errors='replace') if isinstance(error.stdout, bytes) else (error.stdout or '')
-            log += '\nTIMEOUT\n'; passed = False; code = None
-        (directory / 'test.log').write_text(log, encoding='utf-8')
-        if mode in ('offscreen', 'present'):
-            passed &= all((directory / name).is_file() for name in ('first.ppm', 'replacement.ppm'))
-        result['tests'].append({'mode': mode, 'passed': passed, 'exit_code': code})
-        print(f'{mode}: {"PASS" if passed else "FAIL"}', flush=True)
-        if not passed:
-            print(log[-8000:], flush=True)
-        failed |= not passed
+                passed &= all((directory / name).is_file() for name in ('first.ppm', 'replacement.ppm'))
+            result['tests'].append({'mode': mode, 'passed': passed, 'exit_code': code})
+            print(f'{mode}: {"PASS" if passed else "FAIL"}', flush=True)
+            if not passed:
+                print(log[-8000:], flush=True)
+            failed |= not passed
     result['passed'] = not failed
     (evidence / 'results.json').write_text(json.dumps(result, indent=2) + '\n')
     raise SystemExit(1 if failed else 0)
