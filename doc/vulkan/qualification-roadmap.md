@@ -46,6 +46,13 @@ scene parity gates below apply to later deliverables unless required by the
 minimal UI/chat path. A successful first milestone establishes native UI/chat
 correctness, not full viewer parity or a performance improvement.
 
+Implementation-plan item 1 (current-source reconciliation and UI/chat
+initialization, callback and teardown audit) has its
+[acceptance record and gate contracts](milestone1-source-acceptance.md).
+The accepted source/design boundary permits a connected session while deferring
+world graphics; it does not forbid world entry. The native backend, adapters and
+gate enforcement still require implementation and runtime qualification.
+
 The following sections retain the historical full-renderer assessment. Any
 OpenGL fallback or renewed library-selection language there is superseded by
 this mandate. Independent functional alternatives for optional utilities and
