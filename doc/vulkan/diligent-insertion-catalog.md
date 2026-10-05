@@ -1,12 +1,27 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `07d3476e7c340cf59fa98de96355c261b6dd4d94`. DiligentCore is the selected
+source `e0545386296bf3ce0b722720b240008a6bef1dda`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
 
 **Acceptance status: insertion locations and responsibilities reconciled for the declared current-source scope.** The generated ledger has no unmapped or unreviewed in-scope candidate. This combines source-reviewed roots and callback obligations, facade/interface proofs, exact typed receiver exceptions and bounded exclusions. It does not mean that every algorithm has been ported, that every shader permutation has been compiled, or that runtime parity is measured. Runtime parity, performance and hardware qualification remain unmeasured.
+
+## Source pin refresh for existing UI fixes
+
+The source pin now includes the already-applied modern-skin progress panel and
+colour corrections. The two English progress panels restore the complete base
+layouts and required control names, retaining the registered blue fill colour.
+The widget uses that registered colour instead of inline component attributes.
+These fixes preserve the existing I08 UI rendering responsibilities; they are
+accepted baseline behavior, not Vulkan failures or missing patches.
+
+All four changed files have explicit I08 review entries and SHA-256 hashes in
+the insertion records. Other in-scope source is unchanged from the previous
+pin. Regenerated discovery has the same 28,263 candidates in 1,731 files; those
+counts alone do not prove XUI semantics. The progress panel tests check layout,
+required controls and colour bindings. Runtime Vulkan parity remains unqualified.
 
 ## Evidence and interpretation
 
