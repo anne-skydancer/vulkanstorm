@@ -1,0 +1,195 @@
+name: Software Vulkan qualification
+
+on:
+  push:
+    branches: [vkstorm-vulkan, vkstorm_1.1.0]
+  pull_request:
+    branches: [vkstorm-vulkan, vkstorm-devel, vkstorm_1.1.0]
+  workflow_dispatch:
+    inputs:
+      clean_dependencies:
+        description: Ignore dependency caches for reproducibility qualification
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: software-vulkan-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - run: python doc/vulkan/check_diligent_insertions.py --accept
+      - run: python doc/vulkan/check_milestone1_boundaries.py
+      - run: python -m unittest discover -s doc/vulkan -p 'test_*.py'
+      - run: python scripts/tests/test_progress_panels.py
+      - run: python scripts/tests/test_software_vulkan_runner.py
+      - run: python scripts/tests/test_vulkan_ci_staging.py
+
+  graphics:
+    needs: source-evidence
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            driver: swiftshader
+            viewer_directory: build-vc170-64
+          - os: ubuntu-24.04
+            driver: swiftshader
+            viewer_directory: build-linux-x86_64
+          - os: ubuntu-24.04
+            driver: lavapipe
+            viewer_directory: build-linux-x86_64
+    runs-on: ${{ matrix.os }}
+    env:
+      AUTOBUILD_ADDRSIZE: 64
+      AUTOBUILD_VSVER: '170'
+      AUTOBUILD_VARIABLES_FILE: ${{ github.workspace }}/.build-variables/variables
+      AUTOBUILD_INSTALLABLE_CACHE: ${{ github.workspace }}/.autobuild-installables
+      LL_SKIP_REQUIRE_SYSROOT: 1
+      CMAKE_BUILD_PARALLEL_LEVEL: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - name: Install tools
+        run: python -m pip install autobuild==3.9.3 llsd cmake==4.1.2 ninja==1.13.0 meson==1.9.0 Mako==1.3.10 PyYAML==6.0.2 packaging==25.0
+      - name: Linux build and X11 dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y gcc-14 g++-14 build-essential pkg-config \
+            libgl1-mesa-dev libglu1-mesa-dev libpulse-dev libssl-dev \
+            libxinerama-dev libxrandr-dev libfontconfig1-dev libfreetype6-dev \
+            libsdl2-dev libx11-dev libx11-xcb-dev libxcb1-dev libxshmfence-dev xvfb xauth \
+            llvm-18-dev libclang-cpp18-dev libdrm-dev libelf-dev libexpat1-dev \
+            libzstd-dev zlib1g-dev flex bison
+          echo 'CC=gcc-14' >> "$GITHUB_ENV"
+          echo 'CXX=g++-14' >> "$GITHUB_ENV"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: FirestormViewer/fs-build-variables
+          ref: c17312d38377c003977cf5b6dcc83c6042eba194
+          path: .build-variables
+          persist-credentials: false
+      - name: Identify runner image for cache compatibility
+        shell: bash
+        run: echo "CI_IMAGE_VERSION=${ImageVersion:?Runner image version missing}" >> "$GITHUB_ENV"
+      - name: Cache immutable GHI packages and software runtime
+        id: dependencies
+        if: inputs.clean_dependencies != true
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .ci/ghi/*.tar.bz2
+            .ci/ghi/autobuild.xml
+            .ci/runtime/staged
+            .ci/runtime/runtime.json
+            .autobuild-installables
+          key: software-vulkan-v1-${{ runner.os }}-${{ matrix.driver }}-${{ env.CI_IMAGE_VERSION }}-${{ hashFiles('3p/vulkan-dependencies.json', 'scripts/vulkan_ci_dependencies.json', 'scripts/build_vulkan_dependencies.py', 'scripts/build_software_vulkan.py', '.github/workflows/software_vulkan.yml') }}
+      - name: Build and install pinned Autobuild GHI packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f .ci/ghi/autobuild.xml ]]; then
+            python scripts/build_vulkan_dependencies.py --work-dir .ci/ghi --install-only --install-dir .ci/test-packages
+          else
+            python scripts/build_vulkan_dependencies.py --work-dir .ci/ghi --install-dir .ci/test-packages --jobs 3
+          fi
+      - name: Build pinned test ICD and validation layers
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f .ci/runtime/runtime.json ]]; then
+            python scripts/build_software_vulkan.py --work-dir .ci/runtime --driver '${{ matrix.driver }}' --jobs 3
+          fi
+      - name: Build standalone staged Diligent tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          options=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            options+=(-G 'Visual Studio 17 2022' -A x64)
+          else
+            options+=(-G Ninja)
+          fi
+          cmake -S tests/software_vulkan -B .ci/test-build "${options[@]}" \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAUTOBUILD_INSTALL_DIR="$GITHUB_WORKSPACE/.ci/test-packages"
+          cmake --build .ci/test-build --config RelWithDebInfo --parallel 3
+      - name: Native Vulkan tests on software device
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            python scripts/run_software_vulkan_tests.py --executable .ci/test-build/RelWithDebInfo/diligent_render_test.exe \
+              --runtime .ci/runtime/runtime.json --evidence .ci/evidence
+          else
+            xvfb-run -a -s '-screen 0 1024x768x24' python scripts/run_software_vulkan_tests.py \
+              --executable .ci/test-build/diligent_render_test --runtime .ci/runtime/runtime.json --evidence .ci/evidence
+          fi
+      - name: Install the same GHI into the viewer Autobuild directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          autobuild install -A 64 -c RelWithDebInfoFS_open --install-dir '${{ matrix.viewer_directory }}/packages'
+          python scripts/build_vulkan_dependencies.py --work-dir .ci/ghi --install-only \
+            --install-dir '${{ matrix.viewer_directory }}/packages'
+      - name: Configure and stage development viewer without installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          autobuild configure -A 64 -c RelWithDebInfoFS_open -- \
+            -DUSE_DILIGENTCORE:BOOL=ON -DUSE_MESAZINK:BOOL=OFF -DPACKAGE:BOOL=OFF \
+            -DUSE_INNOSETUP:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF -DUSE_TRACY:BOOL=OFF \
+            -DUSE_KDU:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
+            -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF
+          cmake --build '${{ matrix.viewer_directory }}' --config RelWithDebInfo --parallel 3
+          python scripts/check_vulkan_ci_staging.py '${{ matrix.viewer_directory }}'
+      - name: Record source and build environment
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .ci/evidence
+          git rev-parse HEAD > .ci/evidence/source.txt
+          git submodule status --recursive >> .ci/evidence/source.txt
+          cmake --version > .ci/evidence/toolchain.txt
+          python --version >> .ci/evidence/toolchain.txt
+          python -m pip freeze >> .ci/evidence/toolchain.txt
+          echo 'Runner image: ${{ runner.os }} ${{ runner.arch }}' >> .ci/evidence/toolchain.txt
+          echo "ImageOS=$ImageOS ImageVersion=$ImageVersion" >> .ci/evidence/toolchain.txt
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            gcc-14 --version >> .ci/evidence/toolchain.txt
+            dpkg-query -W >> .ci/evidence/toolchain.txt
+          fi
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: software-vulkan-${{ runner.os }}-${{ matrix.driver }}
+          if-no-files-found: error
+          path: |
+            .ci/evidence
+            .ci/runtime/runtime.json
+            .ci/runtime/staged/licenses
+            .ci/ghi/autobuild.xml
+            .ci/test-packages/metadata
+            .ci/test-build/CMakeCache.txt
+            ${{ matrix.viewer_directory }}/CMakeCache.txt
+            ${{ matrix.viewer_directory }}/newview/vulkan-ci-staging.json
