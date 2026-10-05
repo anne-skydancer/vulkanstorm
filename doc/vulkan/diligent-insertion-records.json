@@ -1,5 +1,5 @@
 {
-  "source_commit": "e0545386296bf3ce0b722720b240008a6bef1dda",
+  "source_commit": "0a0e611250656a7c7d4bf2ad15f41a0fb91975c5",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -2863,8 +2863,8 @@
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
       "start": 1,
-      "end": 374,
-      "sha256": "052adcb557e8f74730115cac22ab19c7e1e8651724dc1398bb8f26c09622a19a",
+      "end": 375,
+      "sha256": "60c75b0660f7a927eed254e145d3dd1605c7eec453cdad513100e3e720aa01b6",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone software-Vulkan CI executable outside viewer runtime targets. Its raw Vulkan calls are device/layer preflight and isolated negative probes; Diligent draw/lifecycle callbacks belong only to this test. Uses the viewer-pinned Autobuild packages, native HWND/SDL2-X11 and CPU readback oracle. This exclusion does not qualify viewer runtime."

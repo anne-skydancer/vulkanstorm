@@ -25,7 +25,7 @@ GL/Zink is a **GL backend**, created for AMD GPUs affected by rendering
 regressions caused by bugs in the AMD OpenGL ICD. Its use of Vulkan for driver
 translation does not make it a native Vulkan viewer backend or a Vulkan fallback.
 
-Current insertion-catalog baseline: **`e0545386296bf3ce0b722720b240008a6bef1dda`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting; it includes no native viewer implementation or runtime qualification.
+Current insertion-catalog baseline: **`0a0e611250656a7c7d4bf2ad15f41a0fb91975c5`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting; it includes no native viewer implementation or runtime qualification.
 
 Historical comparative audit baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Its mandate compared suitable architectures, including native Vulkan and general graphics abstractions. Those reports contain no runtime measurements, GPU captures, native implementation or build qualification.
 

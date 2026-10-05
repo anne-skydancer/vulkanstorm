@@ -1,5 +1,5 @@
 {
-  "source_commit": "e0545386296bf3ce0b722720b240008a6bef1dda",
+  "source_commit": "0a0e611250656a7c7d4bf2ad15f41a0fb91975c5",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "closed-admission-set; all gates are requirements for later implementation",
