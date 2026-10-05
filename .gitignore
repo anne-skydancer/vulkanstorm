@@ -130,3 +130,6 @@ firestorm.code-workspace
 .github/release.yaml
 
 checks.json
+
+# Isolated software-Vulkan CI build/cache/evidence products.
+.ci/

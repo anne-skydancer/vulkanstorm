@@ -1,0 +1,20 @@
+{
+  "swiftshader": {
+    "url": "https://swiftshader.googlesource.com/SwiftShader",
+    "revision": "1e80438d2b93ef36a7c05f8d2b81233bac0e3d16",
+    "recursive": false
+  },
+  "validation": {
+    "url": "https://github.com/KhronosGroup/Vulkan-ValidationLayers.git",
+    "revision": "0afe79ff768afd7243b6f697b07b44ee3b2f59ea",
+    "tag_revisions": {
+      "Vulkan-Headers": "b2ff582bfd4448d7b5f9ccd6a766b3ab322d59ed",
+      "Vulkan-Utility-Libraries": "68b0ae52a6cc8de7df3af7b549e9a2efa7c78d8a",
+      "mimalloc": "deac3dcf5f0614884013d411a5c07e16bec96c9f"
+    }
+  },
+  "lavapipe": {
+    "url": "https://archive.mesa3d.org/mesa-25.2.4.tar.xz",
+    "sha256": "a370b4c549cbfbe646b319e34d73edb50ed883978f5e95133f282f0eae39ab52"
+  }
+}

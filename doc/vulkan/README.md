@@ -16,6 +16,11 @@ deferred graphics gates and shutdown ownership. It accepts source analysis and
 planning only; implementing those gates and qualifying native rendering remain
 subsequent work.
 
+[Item 2 software Vulkan CI](software-vulkan-ci.md) defines the independent
+Windows/Linux software-device workflow, standalone Diligent tests, staging and
+qualification evidence. Its executable and runtime acceptance is separate from
+item 1's source-analysis acceptance.
+
 GL/Zink is a **GL backend**, created for AMD GPUs affected by rendering
 regressions caused by bugs in the AMD OpenGL ICD. Its use of Vulkan for driver
 translation does not make it a native Vulkan viewer backend or a Vulkan fallback.

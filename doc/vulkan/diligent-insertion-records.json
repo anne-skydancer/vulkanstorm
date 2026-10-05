@@ -765,7 +765,8 @@
         "indra/integration_tests/",
         "macosx",
         "osx",
-        "headless"
+        "headless",
+        "tests/software_vulkan/"
       ],
       "apis": [],
       "evidence": [],
@@ -2849,6 +2850,24 @@
       "record": "I08",
       "disposition": "mapped",
       "reason": "Replaces inline colour component attributes with the registered LoginProgressBarFgColor. Existing progress-bar primitive drawing remains owned by I08; no new GPU operation or callback."
+    },
+    {
+      "path": "tests/software_vulkan/CMakeLists.txt",
+      "start": 1,
+      "end": 39,
+      "sha256": "66699b258830a64aa142044f93a4cac1307ce58e0147eed4f21a06432ca6635a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Standalone software-Vulkan CI executable outside viewer runtime targets. Its raw Vulkan calls are device/layer preflight and isolated negative probes; Diligent draw/lifecycle callbacks belong only to this test. Uses the viewer-pinned Autobuild packages, native HWND/SDL2-X11 and CPU readback oracle. This exclusion does not qualify viewer runtime."
+    },
+    {
+      "path": "tests/software_vulkan/diligent_render_test.cpp",
+      "start": 1,
+      "end": 374,
+      "sha256": "052adcb557e8f74730115cac22ab19c7e1e8651724dc1398bb8f26c09622a19a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Standalone software-Vulkan CI executable outside viewer runtime targets. Its raw Vulkan calls are device/layer preflight and isolated negative probes; Diligent draw/lifecycle callbacks belong only to this test. Uses the viewer-pinned Autobuild packages, native HWND/SDL2-X11 and CPU readback oracle. This exclusion does not qualify viewer runtime."
     }
   ]
 }
