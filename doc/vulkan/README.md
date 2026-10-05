@@ -9,6 +9,13 @@ This objective supersedes historical selection/fallback proposals below and in
 the linked audit reports. No implementation or runtime qualification is claimed
 by this documentation update.
 
+Implementation-plan item 1 is documented in the
+[milestone source acceptance record](milestone1-source-acceptance.md): current
+catalog reconciliation, startup-to-connected-chat routes, callback admission,
+deferred graphics gates and shutdown ownership. It accepts source analysis and
+planning only; implementing those gates and qualifying native rendering remain
+subsequent work.
+
 GL/Zink is a **GL backend**, created for AMD GPUs affected by rendering
 regressions caused by bugs in the AMD OpenGL ICD. Its use of Vulkan for driver
 translation does not make it a native Vulkan viewer backend or a Vulkan fallback.
