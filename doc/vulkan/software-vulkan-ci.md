@@ -40,6 +40,13 @@ and a checksummed Mesa source archive. SwiftShader uses its vendored LLVM backen
 unused test/debugger/LLVM-submodule dependencies are disabled. These dependencies
 are isolated from the production Autobuild manifest.
 
+Qualification exposed an acquisition/layout-transition synchronization failure
+in the pinned Diligent swapchain path. The
+[hashed dependency overlay](../../3p/3p-diligentcore/acquire-layout-transition.md)
+uses a conservative acquire wait covering all commands. The `acquire1` package
+version and patch/resulting-source hashes distinguish the tested binary from
+unpatched DiligentCore. No performance benefit is claimed.
+
 Runtime cache entries include ICD/layer manifests, binaries, hashes and licenses,
 not source/build trees. Keys include host image, platform, driver, pins and build
 recipe. A cache hit still checks runtime lock agreement and binary hashes. GHI
@@ -118,7 +125,7 @@ viewer Autobuild/staging commands and archives source, package, image/toolchain,
 runtime, diagnostic, result, readback and staging evidence.
 
 Item 2 is accepted only after every matrix job succeeds, with a fresh dependency
-build (`clean_dependencies=true`) and a subsequent cached run, and all artifacts
+build (cache miss or `clean_dependencies=true`) and a subsequent cached run, and all artifacts
 are reviewed. A compiled harness or uploaded workflow alone is insufficient.
 Native viewer UI, protocol replay and real connected chat will extend this CI
 in subsequent items. Software-device results do not qualify physical devices,

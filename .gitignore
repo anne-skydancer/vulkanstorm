@@ -133,3 +133,4 @@ checks.json
 
 # Isolated software-Vulkan CI build/cache/evidence products.
 .ci/
+!3p/3p-diligentcore/*.patch

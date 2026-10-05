@@ -1,0 +1,12 @@
+diff --git a/Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp b/Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp
+--- a/Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp
++++ b/Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp
+@@ -639,7 +639,7 @@ VkResult SwapChainVkImpl::AcquireNextImage(DeviceContextVkImpl* pDeviceCtxVk)
+         // Next command in the device context must wait for the next image to be acquired.
+         // Unlike fences or events, the act of waiting for a semaphore also unsignals that semaphore.
+         // Swapchain image may be used as render target or as destination for copy command.
+-        pDeviceCtxVk->AddWaitSemaphore(ImageAcquiredSemaphore, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT);
++        pDeviceCtxVk->AddWaitSemaphore(ImageAcquiredSemaphore, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+         if (!m_SwapChainImagesInitialized[m_BackBufferIndex])
+         {
+             // Vulkan validation layers do not like uninitialized memory.

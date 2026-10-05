@@ -42,6 +42,7 @@ def main():
         env.pop(name, None)
     env['VK_DRIVER_FILES'] = runtime['icd']
     env['VK_LAYER_PATH'] = runtime['layer_path']
+    env['VK_LOADER_LAYERS_DISABLE'] = '~implicit~'
     env['VK_LOADER_DEBUG'] = 'error,warn,driver,layer'
     env['SDL_VIDEODRIVER'] = 'x11'
     settings = evidence / 'vk_layer_settings.txt'

@@ -186,15 +186,16 @@ static const Pixel background{16,32,48,255};
 
 static RefCntAutoPtr<IPipelineState> pipeline(IRenderDevice* device)
 {
-    const char* vs = R"(#version 450
+    const char* vs = R"(
 void main() { vec2 p=vec2((gl_VertexIndex<<1)&2,gl_VertexIndex&2); gl_Position=vec4(p*2.0-1.0,0,1); }
 )";
-    const char* fs = R"(#version 450
+    const char* fs = R"(
 layout(location=0) out vec4 color;
 uniform sampler2D g_Texture;
 void main() { color=texture(g_Texture,gl_FragCoord.xy/vec2(8.0)); }
 )";
     ShaderCreateInfo shaderCI{}; shaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_GLSL;
+    shaderCI.GLSLVersion = {4,5}; // Diligent inserts the single #version directive.
     shaderCI.Desc.UseCombinedTextureSamplers = true;
     shaderCI.EntryPoint = "main";
     RefCntAutoPtr<IShader> vertex, fragment;
@@ -238,10 +239,10 @@ static RefCntAutoPtr<ITexture> texture(IRenderDevice* device, bool staging, bool
 
 static void draw(IRenderDevice* device, IDeviceContext* context, ITexture* target, ITexture* readback, const Image& image)
 {
+    auto pso = pipeline(device);
     auto uploaded = texture(device, false, false);
     TextureSubResData data{}; data.pData = image.data(); data.Stride = 2 * sizeof(Pixel);
     context->UpdateTexture(uploaded, 0, 0, Box{0,2,0,2}, data, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    auto pso = pipeline(device);
     RefCntAutoPtr<IShaderResourceBinding> binding; pso->CreateShaderResourceBinding(&binding, true);
     auto* variable = binding->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture");
     require(variable != nullptr, "Texture binding missing"); variable->Set(uploaded->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
