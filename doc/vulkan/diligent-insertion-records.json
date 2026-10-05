@@ -1,5 +1,5 @@
 {
-  "source_commit": "07d3476e7c340cf59fa98de96355c261b6dd4d94",
+  "source_commit": "b98c806c1109d568af219eb17b76431d882631ac",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -2813,6 +2813,42 @@
       "disposition": "test-only",
       "sha256": "e9d0adffe1430cb2c513722cf6f71a0aba4939ad97ea94d8dddc5fcf59e8fb3d",
       "reason": "Inspected stub body: LLGLSLShader uniform3fv/uniform4fv have empty bodies; worldmap/mipmap getFetchedTexture stubs return NULL. Signature GL types require test-interface adaptation but these definitions do not submit GPU work."
+    },
+    {
+      "path": "indra/newview/skins/ansastorm_modern/colors.xml",
+      "start": 1,
+      "end": 499,
+      "sha256": "34b97c239353fc5e4bc01a3a1419395dc4d4faf58c879da7ce649cb2272b26cd",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Defines the existing LoginProgressBarFgColor as the approved blue RGBA value; no new resource, shader or callback route. UI colour semantics belong to I08."
+    },
+    {
+      "path": "indra/newview/skins/ansastorm_modern/xui/en/panel_progress.xml",
+      "start": 1,
+      "end": 200,
+      "sha256": "27faaf4f3b1f339e54352e4ac8922a972fc1da5b464312a4fb22ccde29b4b6eb",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Restores the complete default progress panel layout and postBuild control names in the modern skin, changing only the progress fill colour binding. Existing LLProgressView/XUI rendering remains owned by I08; restores missing controls rather than adding a rendering seam."
+    },
+    {
+      "path": "indra/newview/skins/ansastorm_modern/xui/en/panel_progress_mini.xml",
+      "start": 1,
+      "end": 42,
+      "sha256": "533503e8171ae1ff9ed20a5a713259aeacf1711bf86ded3fac054f8572c7c32b",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Restores the complete default mini progress panel layout and postBuild control names in the modern skin, changing only the progress fill colour binding. Existing progress widget and XUI rendering remain owned by I08."
+    },
+    {
+      "path": "indra/newview/skins/ansastorm_modern/xui/en/widgets/progress_bar.xml",
+      "start": 1,
+      "end": 9,
+      "sha256": "0eaa1464d37fd1077ee98bcb70c225a61fcd3defb12be0e4d3258d38bcf3e2f2",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Replaces inline colour component attributes with the registered LoginProgressBarFgColor. Existing progress-bar primitive drawing remains owned by I08; no new GPU operation or callback."
     }
   ]
 }
