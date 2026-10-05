@@ -1,5 +1,18 @@
 # Vulkan pipeline audit and design
 
+Current `vkstorm-vulkan` objective: **Vulkan is a peer backend; OpenGL fallback
+is not achievable.** The selected GHI candidate is **DiligentCore**. The first
+deliverable is a minimal UI and connected in-world chat interface rendered
+natively through its Vulkan backend, with **no world rendering**. See the
+[first-deliverable requirements and acceptance evidence](qualification-roadmap.md#first-deliverable-for-vkstorm-vulkan).
+This objective supersedes historical selection/fallback proposals below and in
+the linked audit reports. No implementation or runtime qualification is claimed
+by this documentation update.
+
+GL/Zink is a **GL backend**, created for AMD GPUs affected by rendering
+regressions caused by bugs in the AMD OpenGL ICD. Its use of Vulkan for driver
+translation does not make it a native Vulkan viewer backend or a Vulkan fallback.
+
 Current insertion-catalog baseline: **`07d3476e7c340cf59fa98de96355c261b6dd4d94`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting; it includes no native viewer implementation or runtime qualification.
 
 Historical comparative audit baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Its mandate compared suitable architectures, including native Vulkan and general graphics abstractions. Those reports contain no runtime measurements, GPU captures, native implementation or build qualification.
