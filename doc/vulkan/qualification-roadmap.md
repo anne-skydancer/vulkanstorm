@@ -1,5 +1,48 @@
 # Qualification and implementation roadmap
 
+## First deliverable for vkstorm-vulkan
+
+The current user mandate supersedes the historical library-selection and rollout
+plan below. DiligentCore is the selected GHI candidate; its dependency preparation
+is on `vkstorm-vulkan`. Selection and dependency preparation do not establish
+runtime suitability or a working renderer.
+
+Vulkan is a peer rendering backend to OpenGL. OpenGL fallback is not achievable
+for this deliverable and must not be promised as startup, device-loss or recovery
+behavior. An existing OpenGL viewer may supply reference images in a separate
+run, but Vulkan execution must own its rendering resources and presentation.
+GL/Zink is a GL backend created for AMD GPUs affected by rendering regressions
+caused by bugs in the AMD OpenGL ICD. It is not a Vulkan fallback.
+If Vulkan initialization or required capabilities fail, report the cause and
+stop the Vulkan session without attempting OpenGL rendering.
+
+The first executable milestone is a minimal native-Vulkan UI and in-world chat
+interface, with **no world rendering**. In-world means a connected session with
+working chat; it does not require a rendered scene or world-space chat bubbles.
+Use a clear background behind the UI. Preserve the CPU/session services needed
+for authentication, connection, incoming messages and outgoing chat.
+
+| Requirement | Acceptance evidence |
+|---|---|
+| Native Vulkan through DiligentCore | Device, surface/swapchain, UI resources, draw submission and presentation use the pinned DiligentCore Vulkan backend. No GL context, GL draw/upload callback or Zink translation is needed by the milestone's execution path. |
+| Minimal usable UI | Login/connection status, chat transcript and input render correctly. Verify fonts, UI textures, alpha blending, clipping, draw order, keyboard focus, typing and scrolling, including Unicode text. |
+| Connected chat | Log in, join a session, send and receive nearby chat, and display disconnection/errors. Record observed behavior; a mock transcript alone does not qualify. |
+| No world rendering | World geometry, avatars, terrain, sky, water, shadows, probes and world postprocessing are not submitted. World-dependent previews and auxiliary renders are deferred. Trace startup and connected-session callbacks so disabling the world draw does not leave hidden GL dependencies. |
+| Correct lifecycle | Exercise resize, minimize/restore, swapchain recreation, resource upload/retirement and shutdown. Required Vulkan validation and synchronization validation have zero unexplained errors. A device failure reports a clear failure; there is no OpenGL recovery contract. |
+| Reproducible delivery | Use Autobuild and a fully staged RelWithDebInfo viewer without an installer, including GHI/runtime libraries, shaders, plugins and UI assets. Record source/dependency revisions, OS/GPU/driver, commands and passed/failed/untested cases for Windows and Linux. Claim only the configurations actually tested. |
+
+Implement the UI/session slice before world parity work. Scope the insertion
+audit and qualification to every dependency reachable by that slice; unresolved
+in-scope paths remain blockers. World shader, PPLL, bake, media, preview and full
+scene parity gates below apply to later deliverables unless required by the
+minimal UI/chat path. A successful first milestone establishes native UI/chat
+correctness, not full viewer parity or a performance improvement.
+
+The following sections retain the historical full-renderer assessment. Any
+OpenGL fallback or renewed library-selection language there is superseded by
+this mandate. Independent functional alternatives for optional utilities and
+Vulkan algorithms are separate from an OpenGL backend fallback.
+
 Baseline: `1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`. Target: Windows/Linux Vulkan. This is a proposed plan; none of the experiments, builds, captures or measurements below has been performed in this audit. Qualification must precede library commitment and renderer implementation.
 
 The shared architecture/default functional path stays independent and supports NVIDIA/AMD/Intel. Vendor-origin supporting utilities, including NVIDIA/AMD and candidate AMD VMA, are eligible when qualified with independent functional fallback. Optional NVIDIA-only NVRHI still requires a complete equivalent independent path and isolated adapter dependencies. No universal vendor-controlled renderer is approved. Hardware support, utility support and architecture governance are separate checks.
@@ -8,7 +51,7 @@ The shared architecture/default functional path stays independent and supports N
 
 Use [both concrete framework designs](framework-comparison.md) and the [73-row paired matrix](framework-contract-matrix.csv). Run the same distinguishing cases on DiligentCore and bgfx; no shader triangle or presumed winner settles the decision.
 
-The recommended architecture is the viewer-owned graph and resource contracts in [architecture.md](architecture.md). DiligentCore is the leading mature GHI candidate to qualify, with bgfx comparator; no library is adopted. Bespoke Vulkan machinery is infeasible under current capacity and is not the fallback. Pin immutable framework, SDK and shader-tool revisions before experiments. Existing GL/Zink supplies reference behavior and a separately selectable fallback.
+The recommended architecture is the viewer-owned graph and resource contracts in [architecture.md](architecture.md). DiligentCore is the leading mature GHI candidate to qualify, with bgfx comparator; no library is adopted. Bespoke Vulkan machinery is infeasible under current capacity and is not the fallback. Pin immutable framework, SDK and shader-tool revisions before experiments. Existing GL/Zink is a separate GL backend and may supply reference behavior in a separate run; it is not a Vulkan fallback.
 
 | Gate | Representative experiment and acceptance evidence | Decision addressed |
 |---|---|---|
@@ -17,7 +60,7 @@ The recommended architecture is the viewer-owned graph and resource contracts in
 | Q2 Transparency | Run detached-depth rejection, fragment R32_UINT head atomics, bounded node allocation, explicit capture→resolve barriers, depth replay and residual particle/custom-blend/glow passes. Compare overflow and layer truncation with GL, including GPU delay and multiple flight slots. | U-D1: fragment storage support and caller-visible synchronization; U-D6: actual PPLL budget, not an assumed per-frame allocation. |
 | Q3 Views and formats | Render main MRT, shadow comparisons, cube faces/mips, hero mirror, preview, local avatar bake and tiled capture. Query each actual format/usage/filter/blend combination. Test winding, clip depth, Y orientation and color encoding using the coordinate contract. | U-D2: depth 24 versus supported depth fallback and RGB→RGBA substitutions; U-D4: history and partial-probe behavior. |
 | Q4 Publication | Delay GPU completion while replacing texture/mesh/shader generations, resizing browser media and cancelling uploads. Trace ownership through worker staging, GPU completion and render visibility. Readback must match synchronous bake/depth/capture consumer semantics without use-after-free or stale bytes. | U-D5: plugin producer protocol, completion, cancellation and blocking compatibility. |
-| Q5 WSI and teardown | Exercise Windows and Linux supported window systems, resize/minimize/restore/DPI, swapchain recreation, pending captures, shutdown with uploads, device loss and restart fallback. Prove present semaphore reuse and retirement separately from graphics completion. | U-D1: framework/platform integration feasibility. |
+| Q5 WSI and teardown | Exercise Windows and Linux supported window systems, resize/minimize/restore/DPI, swapchain recreation, pending captures, shutdown with uploads, device loss and explicit failure reporting without OpenGL fallback. Prove present semaphore reuse and retirement separately from graphics completion. | U-D1: framework/platform integration feasibility. |
 | Q6 Optional NVRHI equivalence | First complete and qualify the mature common GHI path on NVIDIA/AMD/Intel. Prove identical shared frontend/graph contracts, full feature/quality/fallback and auxiliary/UI/media/capture/recovery coverage for optional NVIDIA NVRHI; isolate build/package/load dependencies. Compare both paths on the same NVIDIA devices under sustained workloads while maintaining AMD/Intel qualification. Show tangible benefit exceeding duplicate adapter/ABI/binding/PSO/lifetime/WSI/test costs; preserve NVIDIA's common GHI choice. Comparable performance goals do not mean identical FPS across GPUs. | U-D1: optional adapter only if equivalence, independence and measured value hold; otherwise omit it. |
 
 | Q7 Utility outcome | For each concrete NVIDIA/AMD/common utility, verify available module/version/API integration and actual capabilities. Compare fair quality/resolution/settings and sustained CPU/GPU/memory/reliability outcomes with a vendor-neutral implementation. Select supported devices by capability, not vendor ID alone; some helpers may work across vendors. Test independent fallback on unsupported devices, including Intel. VMA requires allocation/lifetime/fragmentation stress against eligible library allocation alternatives, not a mandated handcrafted allocator or postprocessing image comparison. | U-D1/U-D6: adopt qualified useful utilities without changing baseline functional parity; no fabricated benefits. |
