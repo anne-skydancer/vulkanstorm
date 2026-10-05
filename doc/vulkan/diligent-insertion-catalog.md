@@ -1,7 +1,7 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `e0545386296bf3ce0b722720b240008a6bef1dda`. DiligentCore is the selected
+source `0a0e611250656a7c7d4bf2ad15f41a0fb91975c5`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
@@ -24,10 +24,18 @@ These fixes preserve the existing I08 UI rendering responsibilities; they are
 accepted baseline behavior, not Vulkan failures or missing patches.
 
 All four changed files have explicit I08 review entries and SHA-256 hashes in
-the insertion records. Other in-scope source is unchanged from the previous
-pin. Regenerated discovery has the same 28,263 candidates in 1,731 files; those
+the insertion records. At that UI refresh, regenerated discovery had the same
+28,263 candidates in 1,731 files; those
 counts alone do not prove XUI semantics. The progress panel tests check layout,
 required controls and colour bindings. Runtime Vulkan parity remains unqualified.
+
+The current refresh additionally includes software-Vulkan CI and a hashed
+Diligent acquisition synchronization overlay. The two standalone test files
+have explicit I25 whole-file reviews: they are not linked into viewer runtime.
+The current ledger has 28,277 candidates in 1,733 files, including 14 additional
+test-only candidates. Viewer rendering source and item 1's 43 route-source
+hashes are unchanged. The dependency overlay has local Windows SwiftShader
+evidence; full CI and viewer runtime qualification remain separate.
 
 ## Evidence and interpretation
 
