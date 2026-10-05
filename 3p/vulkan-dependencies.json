@@ -2,14 +2,33 @@
   "vulkan": {
     "version": "1.4.365",
     "sources": {
-      "vulkan-headers": {"url": "https://github.com/KhronosGroup/Vulkan-Headers.git", "revision": "c46850864f4661461b0f6cb9922c058ffea4915e"},
-      "vulkan-loader": {"url": "https://github.com/KhronosGroup/Vulkan-Loader.git", "revision": "f866657ff687a36d767cd7783bab800e31ebafaa"}
+      "vulkan-headers": {
+        "url": "https://github.com/KhronosGroup/Vulkan-Headers.git",
+        "revision": "c46850864f4661461b0f6cb9922c058ffea4915e"
+      },
+      "vulkan-loader": {
+        "url": "https://github.com/KhronosGroup/Vulkan-Loader.git",
+        "revision": "f866657ff687a36d767cd7783bab800e31ebafaa"
+      }
     }
   },
   "diligentcore": {
-    "version": "2.5.6-bcb8b11e",
+    "version": "2.5.6-bcb8b11e-acquire1",
     "sources": {
-      "diligentcore": {"url": "https://github.com/DiligentGraphics/DiligentCore.git", "revision": "bcb8b11eecd0899962c330b798ebe3e786b02bbb", "recursive": true}
-    }
+      "diligentcore": {
+        "url": "https://github.com/DiligentGraphics/DiligentCore.git",
+        "revision": "bcb8b11eecd0899962c330b798ebe3e786b02bbb",
+        "recursive": true
+      }
+    },
+    "patches": [
+      {
+        "path": "3p/3p-diligentcore/acquire-layout-transition.patch",
+        "sha256": "960905c4c7381f8ad10da56a93d319465a6878d482f703c186e90087839b8505",
+        "files": {
+          "Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp": "7b64fb81c1dcf385760dbeaf835d76af6d0425ae3a06da2587cbb88be5012114"
+        }
+      }
+    ]
   }
 }

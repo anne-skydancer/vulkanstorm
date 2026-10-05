@@ -41,7 +41,7 @@ def stage_manifest(manifest, destination, key):
     source = path if path.is_absolute() else manifest.parent / path
     destination.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination / source.name)
-    data[key]['library_path'] = './' + source.name
+    data[key]['library_path'] = '.' + os.sep + source.name
     target = destination / manifest.name
     target.write_text(json.dumps(data, indent=2) + '\n')
     return target

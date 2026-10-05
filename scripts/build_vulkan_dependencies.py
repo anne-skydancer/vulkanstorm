@@ -22,17 +22,34 @@ def run(*args):
     subprocess.run([str(arg) for arg in args], check=True)
 
 
-def checkout(directory, pin):
+def normalized_hash(path):
+    return hashlib.sha256(path.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+
+
+def checkout(directory, pin, overlays=()):
     if not directory.exists():
         run('git', 'clone', pin['url'], directory)
         run('git', '-C', directory, 'checkout', '--detach', pin['revision'])
     actual = subprocess.check_output(['git', '-C', str(directory), 'rev-parse', 'HEAD'], text=True).strip()
     if actual != pin['revision']:
         raise RuntimeError(f'{directory}: expected {pin["revision"]}, got {actual}')
-    if subprocess.check_output(['git', '-C', str(directory), 'status', '--porcelain'], text=True).strip():
-        raise RuntimeError(f'{directory}: source checkout is dirty')
+    status = subprocess.check_output(['git', '-C', str(directory), 'status', '--porcelain'], text=True)
+    expected_files = {name: sha for overlay in overlays for name, sha in overlay['files'].items()}
+    dirty = {line[3:] for line in status.splitlines()}
+    if dirty and (not dirty <= set(expected_files) or any(normalized_hash(directory / name) != sha for name, sha in expected_files.items())):
+        raise RuntimeError(f'{directory}: source checkout has unapproved changes')
     if pin.get('recursive'):
         run('git', '-C', directory, 'submodule', 'update', '--init', '--recursive')
+    for overlay in overlays:
+        patch = ROOT / overlay['path']
+        if normalized_hash(patch) != overlay['sha256']:
+            raise RuntimeError(f'Patch checksum mismatch: {patch}')
+        if not dirty:
+            run('git', '-C', directory, 'apply', '--check', patch)
+            run('git', '-C', directory, 'apply', patch)
+    for name, sha in expected_files.items():
+        if normalized_hash(directory / name) != sha:
+            raise RuntimeError(f'Patched source checksum mismatch: {name}')
 
 
 def copy_headers(source, destination):
@@ -88,7 +105,7 @@ def main():
     sources.mkdir(parents=True, exist_ok=True)
     for package in LOCK.values():
         for name, pin in package['sources'].items():
-            checkout(sources / name, pin)
+            checkout(sources / name, pin, package.get('patches', []) if name == 'diligentcore' else [])
     common = ['-G', 'Visual Studio 17 2022', '-A', 'x64'] if windows else ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=RelWithDebInfo']
     def build(source, name, options, target=None):
         directory = work / 'build' / name
