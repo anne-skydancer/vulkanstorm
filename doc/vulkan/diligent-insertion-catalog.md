@@ -32,7 +32,7 @@ required controls and colour bindings. Runtime Vulkan parity remains unqualified
 The current refresh additionally includes software-Vulkan CI and a hashed
 Diligent acquisition synchronization overlay. The two standalone test files
 have explicit I25 whole-file reviews: they are not linked into viewer runtime.
-The current ledger has 28,277 candidates in 1,733 files, including 14 additional
+The current ledger has 28,281 candidates in 1,733 files, including 14 additional
 test-only candidates. Viewer rendering source and item 1's 43 route-source
 hashes are unchanged. The dependency overlay has local Windows SwiftShader
 evidence; full CI and viewer runtime qualification remain separate.

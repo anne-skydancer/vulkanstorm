@@ -210,6 +210,7 @@ jobs:
             .ci/runtime/staged/licenses
             .ci/ghi/autobuild.xml
             .ci/test-packages/metadata
+            .ci/test-packages/LICENSES
             .ci/test-build/CMakeCache.txt
             ${{ matrix.viewer_directory }}/CMakeCache.txt
             ${{ matrix.viewer_directory }}/newview/vulkan-ci-staging.json
