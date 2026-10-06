@@ -1,7 +1,7 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `332158adcea12b8c89a1add19a7cad6c85f73fd5`. DiligentCore is the selected
+source `cf6e8f8b17e8c7e1e7a4c224008541082948b36d`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
@@ -32,7 +32,7 @@ required controls and colour bindings. Runtime Vulkan parity remains unqualified
 The current refresh additionally includes software-Vulkan CI and a hashed
 Diligent acquisition synchronization overlay. The two standalone test files
 have explicit I25 whole-file reviews: they are not linked into viewer runtime.
-The current ledger has 28,281 candidates in 1,733 files, including 14 additional
+The current ledger has 28,280 candidates in 1,733 files, including 14 additional
 test-only candidates. Viewer rendering source and item 1's 43 route-source
 hashes are unchanged. The dependency overlay has local Windows SwiftShader
 evidence; full CI and viewer runtime qualification remain separate.
