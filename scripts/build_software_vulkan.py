@@ -133,6 +133,7 @@ def main():
     layer = stage_manifest(layers[0], work / 'staged/layers', 'layer', work / 'validation')
     licenses = work / 'staged/licenses'; licenses.mkdir(parents=True, exist_ok=True)
     for name, source in [('validation', work / 'source/validation'),
+                         ('validation-dependencies', deps),
                          (args.driver, work / ('source/swiftshader' if args.driver == 'swiftshader' else 'source/mesa-25.2.4'))]:
         for path in source.rglob('*'):
             if path.is_file() and path.name.upper().startswith(('LICENSE', 'COPYING', 'NOTICE')) and '.git' not in path.parts:

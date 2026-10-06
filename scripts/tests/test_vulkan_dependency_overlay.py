@@ -50,6 +50,24 @@ class OverlayTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Patched source checksum'):
             builder.checkout(self.source, self.pin, [self.overlay])
 
+    def second_overlay(self):
+        overlay = self.root / 'second.patch'
+        overlay.write_text('diff --git a/file.cpp b/file.cpp\n--- a/file.cpp\n+++ b/file.cpp\n@@ -1 +1 @@\n-after\n+final\n')
+        return {'path': 'second.patch', 'sha256': builder.normalized_hash(overlay),
+                'files': {'file.cpp': hashlib.sha256(b'final\n').hexdigest()}}
+
+    def test_overlapping_stack_is_applied_and_reused(self):
+        overlays = [self.overlay, self.second_overlay()]
+        builder.checkout(self.source, self.pin, overlays)
+        builder.checkout(self.source, self.pin, overlays)
+        self.assertEqual('final\n', (self.source / 'file.cpp').read_text())
+
+    def test_intermediate_hash_cannot_be_hidden_by_final_hash(self):
+        overlays = [self.overlay, self.second_overlay()]
+        self.overlay['files']['file.cpp'] = '0' * 64
+        with self.assertRaisesRegex(RuntimeError, 'Patched source checksum'):
+            builder.checkout(self.source, self.pin, overlays)
+
 
 if __name__ == '__main__':
     unittest.main()

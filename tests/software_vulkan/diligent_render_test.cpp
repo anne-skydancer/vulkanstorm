@@ -37,11 +37,14 @@ static void DILIGENT_CALL_TYPE diagnostic(DEBUG_MESSAGE_SEVERITY severity, const
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL validation(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-    VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* data, void*)
+    VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* data, void* user)
 {
     std::cerr << "VALIDATION " << data->pMessageIdName << ": " << data->pMessage << '\n';
     if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ++validationErrors;
-    return VK_FALSE;
+    // The core probe tests validation, not undefined driver behavior. Ask the
+    // layer to abort its deliberately invalid call before dispatch to the ICD.
+    return user && *static_cast<const bool*>(user) &&
+           (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ? VK_TRUE : VK_FALSE;
 }
 
 // Independent loader/layer preflight and an isolated intentional-invalid-use probe.
@@ -58,9 +61,11 @@ static void preflight(const std::string& expected, const std::string& mode)
     const char* layer = "VK_LAYER_KHRONOS_validation";
     const char* extension = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     VkDebugUtilsMessengerCreateInfoEXT debug{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
+    bool abortInvalidCall = mode == "invalid";
     debug.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
     debug.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     debug.pfnUserCallback = validation;
+    debug.pUserData = &abortInvalidCall;
     VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
     app.apiVersion = VK_API_VERSION_1_1;
     VkInstanceCreateInfo ci{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
@@ -103,7 +108,10 @@ static void preflight(const std::string& expected, const std::string& mode)
         bufferCI.size = mode == "invalid" ? 0 : 16; // size-00912 probe
         bufferCI.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
         VkBuffer buffer{};
-        vkCreateBuffer(device, &bufferCI, nullptr, &buffer);
+        VkResult bufferResult = vkCreateBuffer(device, &bufferCI, nullptr, &buffer);
+        if (mode == "invalid")
+            require(bufferResult == VK_ERROR_VALIDATION_FAILED_EXT && buffer == VK_NULL_HANDLE,
+                    "Validation did not abort the deliberately invalid buffer call");
         VkDeviceMemory memory{};
         VkCommandPool pool{};
         if (mode == "invalid-sync")

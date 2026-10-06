@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +53,13 @@ def windows_manifest_registration(runtime, enabled):
 
 
 def assess(mode, code, log):
+    expected_validation = {'invalid': 'VUID-VkBufferCreateInfo-size-00912',
+                           'invalid-sync': 'SYNC-HAZARD-WRITE-AFTER-WRITE'}.get(mode)
+    for identifier in re.findall(r'^VALIDATION ([^:]+):', log, re.MULTILINE):
+        if identifier.startswith(('VUID-', 'SYNC-', 'UNASSIGNED-')) and identifier != expected_validation:
+            return False
+    if any(int(severity) >= 2 for severity in re.findall(r'^DILIGENT (\d+):', log, re.MULTILINE)):
+        return False
     if mode == 'invalid':
         return code == 1 and 'VUID-VkBufferCreateInfo-size-00912' in log and 'Validation reported an error' in log
     if mode == 'invalid-sync':

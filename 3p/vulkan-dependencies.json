@@ -13,7 +13,7 @@
     }
   },
   "diligentcore": {
-    "version": "2.5.6-bcb8b11e-acquire1",
+    "version": "2.5.6-bcb8b11e-acquire1-wsi1",
     "sources": {
       "diligentcore": {
         "url": "https://github.com/DiligentGraphics/DiligentCore.git",
@@ -27,6 +27,14 @@
         "sha256": "960905c4c7381f8ad10da56a93d319465a6878d482f703c186e90087839b8505",
         "files": {
           "Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp": "7b64fb81c1dcf385760dbeaf835d76af6d0425ae3a06da2587cbb88be5012114"
+        }
+      },
+      {
+        "path": "3p/3p-diligentcore/available-linux-surfaces.patch",
+        "sha256": "4e26a0c6b255bc76816de662a5463998830dfc84a7766daa773e5d2457c34ae6",
+        "files": {
+          "Graphics/GraphicsEngineVulkan/src/VulkanUtilities/Instance.cpp": "cbe66f9414e26f6a1f6a284f65d1c1eaa75818b8c6192069011d4758d6a228cf",
+          "Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp": "01624e1b3aa477bed1d0ed1926fa3f9cb6e9a481ff970af28dcf9d8fd8a3fcc6"
         }
       }
     ]

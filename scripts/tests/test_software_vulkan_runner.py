@@ -30,6 +30,14 @@ class RunnerFailureTests(unittest.TestCase):
         self.assertFalse(assess('invalid-sync', 1, 'Validation reported an error'))
         self.assertTrue(assess('invalid-sync', 1, 'SYNC-HAZARD-WRITE-AFTER-WRITE Validation reported an error'))
 
+    def test_expected_failure_does_not_hide_unrelated_validation_error(self):
+        log = ('VALIDATION VUID-VkBufferCreateInfo-size-00912: expected\n'
+               'VALIDATION VUID-vkDestroyDevice-device-00378: unrelated\n'
+               'Validation reported an error')
+        self.assertFalse(assess('invalid', 1, log))
+        self.assertFalse(assess('bad-pixels', 1, 'VALIDATION UNASSIGNED-Test: unexpected\nPixel oracle mismatch'))
+        self.assertFalse(assess('bad-pixels', 1, 'DILIGENT 2: unexpected error\nPixel oracle mismatch'))
+
 
 class WindowsRegistrationTests(unittest.TestCase):
     def setUp(self):
