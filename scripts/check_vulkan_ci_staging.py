@@ -36,7 +36,7 @@ def check(directory):
     plugin = root / ('SLPlugin.exe' if windows else 'bin/SLPlugin')
     if not plugin.is_file():
         raise RuntimeError(f'Missing staged plugin host: {plugin}')
-    plugins = root / 'llplugin'
+    plugins = root / ('llplugin' if windows else 'bin/llplugin')
     if not any(plugins.glob('media_plugin_cef.*')):
         raise RuntimeError('Missing staged media plugin')
     # Both install directories must contain the very same pinned GHI archive bytes.
