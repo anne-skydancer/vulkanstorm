@@ -838,9 +838,8 @@ class Windows_x86_64_Manifest(ViewerManifest):
                 self.path("v8_context_snapshot.bin")
                 self.path("vk_swiftshader.dll")
                 self.path("vk_swiftshader_icd.json")
-                # The opt-in GHI stage already supplies the qualified loader.
-                if self.args.get('diligentcore', 'OFF').lower() != 'on':
-                    self.path("vulkan-1.dll")
+                # CEF's private loader lives in llplugin, separate from the GHI.
+                self.path("vulkan-1.dll")
                 self.path("dullahan_host.exe")
 
             # MSVC DLLs needed for CEF and have to be in same directory as plugin

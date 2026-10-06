@@ -20,7 +20,8 @@ def check(directory):
         raise RuntimeError(f'Expected one staged viewer executable: {executable}')
     libraries = root if windows else root / 'lib'
     names = ['GraphicsEngineVk_64r.dll', 'vulkan-1.dll'] if windows else ['libGraphicsEngineVk.so', 'libvulkan.so.1']
-    required = [libraries / n for n in names] + [executable[0], root / 'app_settings/message_template.msg']
+    cef_runtime = ['llplugin/vulkan-1.dll', 'llplugin/libcef.dll', 'llplugin/dullahan_host.exe'] if windows else ['lib/libcef.so', 'bin/dullahan_host']
+    required = [libraries / n for n in names] + [executable[0], root / 'app_settings/message_template.msg'] + [root / n for n in cef_runtime]
     for path in required:
         if not path.is_file():
             raise RuntimeError(f'Missing staged file: {path}')

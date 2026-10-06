@@ -25,8 +25,9 @@ class StagingFailureTests(unittest.TestCase):
         self.library_dir = self.stage if windows else self.stage / 'lib'
         self.host = self.stage / ('SLPlugin.exe' if windows else 'bin/SLPlugin')
         self.media = self.stage / ('llplugin/media_plugin_cef.dll' if windows else 'bin/llplugin/media_plugin_cef.so')
+        self.cef_runtime = ['llplugin/vulkan-1.dll', 'llplugin/libcef.dll', 'llplugin/dullahan_host.exe'] if windows else ['lib/libcef.so', 'bin/dullahan_host']
         platform_files = ['vulkanstorm-bin.exe', *self.libraries] if windows else ['bin/vulkanstorm-bin', *(f'lib/{name}' for name in self.libraries)]
-        files = [*platform_files,
+        files = [*platform_files, *self.cef_runtime,
                  'app_settings/message_template.msg', 'skins/default/xui/en/test.xml',
                  'fonts/test.ttf', 'app_settings/shaders/test.glsl',
                  'licenses/vulkan-ghi/test.txt', str(self.host.relative_to(self.stage)), str(self.media.relative_to(self.stage))]
@@ -62,6 +63,11 @@ class StagingFailureTests(unittest.TestCase):
     def test_missing_media_plugin(self):
         self.media.unlink()
         with self.assertRaisesRegex(RuntimeError, 'media plugin'):
+            check(self.build)
+
+    def test_missing_cef_runtime(self):
+        (self.stage / self.cef_runtime[0]).unlink()
+        with self.assertRaisesRegex(RuntimeError, 'Missing staged file'):
             check(self.build)
 
     def test_installer_configuration_rejected(self):

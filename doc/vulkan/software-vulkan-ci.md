@@ -48,6 +48,9 @@ package path. When GHI is enabled, viewer staging selects the same pinned loader
 as the standalone test; CEF's copy does not overwrite it. The `ghi1` package
 revision records this install layout. The default production configuration
 continues to use its existing CEF loader.
+Windows also retains CEF's private loader beside `dullahan_host.exe` in
+`llplugin`; it serves a separate process from the viewer's tested GHI loader.
+Linux's shared runtime directory explicitly selects the tested GHI loader.
 
 Qualification exposed an acquisition/layout-transition synchronization failure
 in the pinned Diligent swapchain path. The
