@@ -229,6 +229,36 @@ alongside platform, driver and runner image. The helper/patch inputs were added
 after the checklist audit found that the included CMake helper was omitted from
 the key; dependency sources, build options and binaries are unchanged.
 
+### Standalone Diligent executable checklist (Item 3)
+
+Item 3 is satisfied by source audit and review of the fresh/cached evidence in
+37445355027 and 37445347375. The qualified executable source is
+`957481d40710848516ae04696469a5f0d86bbefd`; the test sources, GHI imports, dependency
+lock and test launcher remain byte-identical at the subsequent cache-key audit
+commit `350db290e99725cf222f8d68d19a5d72401c5b81`.
+
+| Requirement | Implementation and acceptance evidence |
+| --- | --- |
+| Standalone executable and naming | `tests/software_vulkan/diligent_render_test.cpp` has its own CMake target and is outside viewer runtime. The user's filename clarification reserves `vs` for new viewer files; standalone tools keep descriptive names. |
+| Same Autobuild libraries as the viewer | The target imports `ll::diligentcore` and `ll::vulkan` through the viewer's `DiligentCore.cmake`, using its supplied Autobuild install directory. The same archives install into test and viewer directories; staging evidence matches loader/engine SHA-256 hashes and logs identify the actually loaded staged libraries. |
+| Device, shaders and pipeline | The factory creates the selected Vulkan device/context. `pipeline()` compiles GLSL vertex/fragment shaders and creates a textured, blended, scissored graphics pipeline; missing objects and diagnostics fail the process. |
+| Upload, textured draw and readback | `draw()` uploads a 2x2 RGBA texture, binds it through a shader-resource binding and immutable nearest sampler, draws into an 8x8 RGBA8 target and copies into a CPU-readable staging texture. `compare()` maps that texture and checks every RGBA channel. |
+| Blending, clipping and orientation | The independent CPU oracle computes source-alpha color blending over the known background, checks alpha and untouched pixels, and applies asymmetric bounds (1,2)-(6,7). Asymmetric texture quadrants and interpolated UVs exercise orientation. One UNORM rounding unit is allowed; observed RGB readbacks match exactly across all three configurations and cached runs. |
+| Replacement and teardown | Two generations recreate upload textures, bindings, shaders and pipelines. Caller-owned draw resources leave scope after submission and before the explicit idle wait; separate readback textures preserve both generations for comparison. Device/context/texture ownership leaves scope before the final diagnostic assertion and successful process exit. |
+| Decisive oracle failure | `bad-pixels` and `bad-orientation` each exit normally with code 1 and the expected pixel-oracle mismatch. Both probes passed in headless and presentation-suite evidence on Windows SwiftShader, Linux SwiftShader and Linux Lavapipe. |
+
+Reviewed file SHA-256 hashes:
+
+* `tests/software_vulkan/CMakeLists.txt`: `aa6ff80d6e1450aa7593229e9a15d67f7248661f583d8a82d28e1ecbd66884c8`.
+* `tests/software_vulkan/diligent_render_test.cpp`: `60a36ed066b336299be29d0120a9cd28543dcd4d65424abdb4d0ea18a809b326`.
+
+Evidence covers this deterministic RGBA8 fixture and normal resource lifecycle,
+not every shader/texture format or stress under prolonged GPU load. PPM artifacts
+contain RGB; alpha is checked in-process by the RGBA oracle. No hardware host is
+required, and no vendor-specific execution or native viewer UI/chat result is
+claimed. Item 4's native presentation contract remains a separate acceptance
+audit; offscreen success does not substitute for it.
+
 ### General headless implementation qualification
 
 The extension at `957481d40710848516ae04696469a5f0d86bbefd` has now passed fresh
