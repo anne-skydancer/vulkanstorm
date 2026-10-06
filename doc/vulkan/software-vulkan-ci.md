@@ -163,3 +163,23 @@ are reviewed. A compiled harness or uploaded workflow alone is insufficient.
 Native viewer UI, protocol replay and real connected chat will extend this CI
 in subsequent items. Software-device results do not qualify physical devices,
 driver performance or live-session behavior.
+
+## Qualification record
+
+Acceptance remains pending as of 2026-10-06. The fresh Windows SwiftShader job in
+[run 37401120832](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37401120832)
+passed all six native checks and the complete viewer staging check. Its cache
+miss and subsequent cache save are recorded in the job log. Artifact review
+verified the staged viewer/test GHI library hashes, the pinned loaded ICD and
+validation layer, 21 runtime license hashes and 26 GHI license files. CEF's
+private Windows loader remains separate from the viewer's tested GHI loader.
+
+Both Linux jobs in that run passed all six native checks. Their original and
+replacement readbacks exactly match Windows, including asymmetric clipping.
+Full Linux viewer compilation exposed an existing unqualified `isnan` assertion;
+it now uses the existing portable `llisnan` helper. The corrected source and
+catalog are in
+[run 37404552157](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37404552157).
+The local Windows viewer rebuild and staging check also passed with that fix.
+Successful Linux staging and a subsequent successful cached matrix are still
+required before accepting item 2.
