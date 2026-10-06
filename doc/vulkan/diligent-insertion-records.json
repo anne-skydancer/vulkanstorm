@@ -1,5 +1,5 @@
 {
-  "source_commit": "83153fb5e81cc2c177d43dae00de21c9aec3527a",
+  "source_commit": "58de3df37545878e9d675944087e93ccdc4cc2d1",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
