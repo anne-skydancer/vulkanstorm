@@ -838,7 +838,9 @@ class Windows_x86_64_Manifest(ViewerManifest):
                 self.path("v8_context_snapshot.bin")
                 self.path("vk_swiftshader.dll")
                 self.path("vk_swiftshader_icd.json")
-                self.path("vulkan-1.dll")
+                # The opt-in GHI stage already supplies the qualified loader.
+                if self.args.get('diligentcore', 'OFF').lower() != 'on':
+                    self.path("vulkan-1.dll")
                 self.path("dullahan_host.exe")
 
             # MSVC DLLs needed for CEF and have to be in same directory as plugin
@@ -2338,7 +2340,7 @@ class LinuxManifest(ViewerManifest):
             with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
                 self.path('mesazink.txt')
         if self.args.get('diligentcore', 'OFF').lower() == 'on':
-            with self.prefix(src=relpkgdir, dst='lib'):
+            with self.prefix(src=os.path.join(relpkgdir, 'vulkan-ghi'), dst='lib'):
                 self.path('libGraphicsEngineVk.so')
                 self.path('libvulkan.so.1')
                 self.path('libvulkan.so')

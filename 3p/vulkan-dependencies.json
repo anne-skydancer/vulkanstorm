@@ -1,6 +1,6 @@
 {
   "vulkan": {
-    "version": "1.4.365",
+    "version": "1.4.365-ghi1",
     "sources": {
       "vulkan-headers": {
         "url": "https://github.com/KhronosGroup/Vulkan-Headers.git",
@@ -13,7 +13,7 @@
     }
   },
   "diligentcore": {
-    "version": "2.5.6-bcb8b11e-acquire1-wsi1",
+    "version": "2.5.6-bcb8b11e-acquire1-wsi1-ghi1",
     "sources": {
       "diligentcore": {
         "url": "https://github.com/DiligentGraphics/DiligentCore.git",

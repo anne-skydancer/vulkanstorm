@@ -39,17 +39,18 @@ set_target_properties(ll::diligentcore PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${AUTOBUILD_INSTALL_DIR}/include"
   INTERFACE_COMPILE_DEFINITIONS "DILIGENT_VK_SHARED=1")
 if(WINDOWS)
-  set(DILIGENTCORE_RUNTIME_DIR "${AUTOBUILD_INSTALL_DIR}/bin/release")
+  # CEF owns its own loader in bin/release. Keep GHI package ownership separate.
+  set(DILIGENTCORE_RUNTIME_DIR "${AUTOBUILD_INSTALL_DIR}/bin/release/vulkan-ghi")
   set(DILIGENTCORE_RUNTIME_FILES GraphicsEngineVk_64r.dll vulkan-1.dll)
   set_target_properties(ll::vulkan PROPERTIES
     IMPORTED_LOCATION "${DILIGENTCORE_RUNTIME_DIR}/vulkan-1.dll"
-    IMPORTED_IMPLIB "${AUTOBUILD_INSTALL_DIR}/lib/release/vulkan-1.lib")
+    IMPORTED_IMPLIB "${AUTOBUILD_INSTALL_DIR}/lib/release/vulkan-ghi/vulkan-1.lib")
   set_target_properties(ll::diligentcore PROPERTIES
     IMPORTED_LOCATION "${DILIGENTCORE_RUNTIME_DIR}/GraphicsEngineVk_64r.dll"
-    IMPORTED_IMPLIB "${AUTOBUILD_INSTALL_DIR}/lib/release/GraphicsEngineVk_64r.lib")
+    IMPORTED_IMPLIB "${AUTOBUILD_INSTALL_DIR}/lib/release/vulkan-ghi/GraphicsEngineVk_64r.lib")
   target_compile_definitions(ll::diligentcore INTERFACE PLATFORM_WIN32=1)
 else()
-  set(DILIGENTCORE_RUNTIME_DIR "${AUTOBUILD_INSTALL_DIR}/lib/release")
+  set(DILIGENTCORE_RUNTIME_DIR "${AUTOBUILD_INSTALL_DIR}/lib/release/vulkan-ghi")
   set(DILIGENTCORE_RUNTIME_FILES libGraphicsEngineVk.so libvulkan.so.1 libvulkan.so)
   set_target_properties(ll::vulkan PROPERTIES
     IMPORTED_LOCATION "${DILIGENTCORE_RUNTIME_DIR}/libvulkan.so.1")
