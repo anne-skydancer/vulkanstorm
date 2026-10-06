@@ -16,8 +16,9 @@ deferred graphics gates and shutdown ownership. It accepts source analysis and
 planning only; implementing those gates and qualifying native rendering remain
 subsequent work.
 
-[Item 2 software Vulkan CI](software-vulkan-ci.md) defines the independent
-Windows/Linux software-device workflow, standalone Diligent tests, staging and
+[Item 2 Vulkan implementation CI](software-vulkan-ci.md) defines the independent
+Windows/Linux workflow using software devices to test general Vulkan correctness,
+automatic driver selection, headless standalone Diligent tests, staging and
 qualification evidence. Its executable and runtime acceptance is separate from
 item 1's source-analysis acceptance.
 

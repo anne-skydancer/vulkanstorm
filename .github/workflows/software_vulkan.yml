@@ -1,4 +1,4 @@
-name: Software Vulkan qualification
+name: Vulkan qualification
 
 on:
   push:
@@ -138,6 +138,7 @@ jobs:
           cmake -S tests/software_vulkan -B .ci/test-build "${options[@]}" \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAUTOBUILD_INSTALL_DIR="$GITHUB_WORKSPACE/.ci/test-packages"
           cmake --build .ci/test-build --config RelWithDebInfo --parallel 3
+          ctest --test-dir .ci/test-build -C RelWithDebInfo --output-on-failure
       - name: Native Vulkan tests on software device
         shell: bash
         run: |
@@ -149,6 +150,18 @@ jobs:
             xvfb-run -a -s '-screen 0 1024x768x24' python scripts/run_software_vulkan_tests.py \
               --executable .ci/test-build/diligent_render_test --runtime .ci/runtime/runtime.json --evidence .ci/evidence
           fi
+      - name: Software tests without a display
+        shell: bash
+        run: |
+          set -euo pipefail
+          options=()
+          executable=.ci/test-build/diligent_render_test
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            executable=.ci/test-build/RelWithDebInfo/diligent_render_test.exe
+            options+=(--register-windows-manifests)
+          fi
+          python scripts/run_software_vulkan_tests.py --executable "$executable" \
+            --runtime .ci/runtime/runtime.json --evidence .ci/headless-evidence --headless "${options[@]}"
       - name: Install the same GHI into the viewer Autobuild directory
         shell: bash
         run: |
@@ -206,6 +219,7 @@ jobs:
           if-no-files-found: error
           path: |
             .ci/evidence
+            .ci/headless-evidence
             .ci/runtime/runtime.json
             .ci/runtime/staged/licenses
             .ci/ghi/autobuild.xml

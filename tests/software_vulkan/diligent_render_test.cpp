@@ -13,6 +13,7 @@
 #include <vector>
 #if PLATFORM_WIN32
 #include <windows.h>
+#include <tlhelp32.h>
 #else
 #include <SDL.h>
 #include <SDL_syswm.h>
@@ -49,7 +50,53 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL validation(VkDebugUtilsMessageSeverityFlag
 
 // Independent loader/layer preflight and an isolated intentional-invalid-use probe.
 // Actual rendering, resource ownership and presentation below use DiligentCore.
-static void preflight(const std::string& expected, const std::string& mode)
+static uint32_t selectDevice(const std::vector<VkPhysicalDeviceProperties>& devices,
+                             const std::string& expected, const std::string& name)
+{
+    const uint32_t vendor = expected == "amd" ? 0x1002 : expected == "nvidia" ? 0x10de : 0;
+    uint32_t selected = static_cast<uint32_t>(devices.size());
+    int best = -1;
+    unsigned matches = 0;
+    for (uint32_t i = 0; i < devices.size(); ++i)
+    {
+        const auto& info = devices[i];
+        const bool gpu = info.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU || info.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+        const bool compatible = expected == "auto" || (vendor ? gpu && info.vendorID == vendor :
+            info.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU && std::string(info.deviceName).find(expected) != std::string::npos);
+        if (!compatible || (!name.empty() && std::string(info.deviceName).find(name) == std::string::npos)) continue;
+        ++matches;
+        const int priority = info.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? 3 :
+            info.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? 2 : info.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU ? 1 : 0;
+        if (priority > best) { selected = i; best = priority; }
+    }
+    require(matches > 0, "No matching Vulkan device available");
+    require(expected == "auto" || matches == 1, "Multiple matching devices; specify a unique device name");
+    return selected;
+}
+
+static void selectionTests()
+{
+    std::vector<VkPhysicalDeviceProperties> devices(3);
+    devices[0].deviceType = VK_PHYSICAL_DEVICE_TYPE_CPU;
+    std::strcpy(devices[0].deviceName, "SwiftShader");
+    devices[1].deviceType = VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU; devices[1].vendorID = 0x1002;
+    std::strcpy(devices[1].deviceName, "AMD test device");
+    devices[2].deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU; devices[2].vendorID = 0x10de;
+    std::strcpy(devices[2].deviceName, "NVIDIA test device");
+    require(selectDevice(devices, "auto", "") == 2, "Automatic selection must prefer available hardware");
+    require(selectDevice(devices, "auto", "AMD") == 1, "Device-name selection ignored");
+    require(selectDevice(devices, "amd", "") == 1, "Explicit vendor selection ignored");
+    require(selectDevice(devices, "SwiftShader", "") == 0, "Software isolation ignored");
+    devices.resize(1);
+    require(selectDevice(devices, "auto", "") == 0, "Software-only Vulkan discovery failed");
+    bool rejected = false;
+    try { selectDevice(devices, "nvidia", ""); } catch (const std::runtime_error&) { rejected = true; }
+    require(rejected, "Missing vendor must not silently use another driver");
+    std::cout << "PASS device-selection\n";
+}
+
+static VkPhysicalDeviceProperties preflight(const std::string& expected, const std::string& mode,
+                                           const std::string& name)
 {
     uint32_t count = 0;
     require(vkEnumerateInstanceLayerProperties(&count, nullptr) == VK_SUCCESS, "Layer enumeration failed");
@@ -80,14 +127,16 @@ static void preflight(const std::string& expected, const std::string& mode)
     require(createDebug && destroyDebug, "Debug-utils functions missing");
     VkDebugUtilsMessengerEXT messenger{};
     require(createDebug(instance, &debug, nullptr, &messenger) == VK_SUCCESS, "Debug messenger failed");
-    require(vkEnumeratePhysicalDevices(instance, &count, nullptr) == VK_SUCCESS && count == 1, "Expected exactly one software device");
-    VkPhysicalDevice physical{};
-    require(vkEnumeratePhysicalDevices(instance, &count, &physical) == VK_SUCCESS, "Device enumeration failed");
-    VkPhysicalDeviceProperties properties{};
-    vkGetPhysicalDeviceProperties(physical, &properties);
-    std::cout << "ICD_DEVICE=" << properties.deviceName << " API=" << properties.apiVersion << " DRIVER=" << properties.driverVersion << '\n';
-    require(properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU, "Hardware device selected");
-    require(std::string(properties.deviceName).find(expected) != std::string::npos, "Unexpected ICD device name");
+    require(vkEnumeratePhysicalDevices(instance, &count, nullptr) == VK_SUCCESS && count > 0, "No Vulkan devices available");
+    std::vector<VkPhysicalDevice> devices(count);
+    require(vkEnumeratePhysicalDevices(instance, &count, devices.data()) == VK_SUCCESS, "Device enumeration failed");
+    std::vector<VkPhysicalDeviceProperties> available(count);
+    for (uint32_t i = 0; i < count; ++i) vkGetPhysicalDeviceProperties(devices[i], &available[i]);
+    const auto index = selectDevice(available, expected, name);
+    const auto physical = devices[index];
+    const auto properties = available[index];
+    std::cout << "ICD_DEVICE=" << properties.deviceName << " API=" << properties.apiVersion << " DRIVER=" << properties.driverVersion
+              << " VENDOR=" << properties.vendorID << " DEVICE=" << properties.deviceID << " TYPE=" << properties.deviceType << '\n';
     if (mode == "invalid" || mode == "invalid-sync")
     {
         uint32_t queues = 0;
@@ -143,6 +192,7 @@ static void preflight(const std::string& expected, const std::string& mode)
     destroyDebug(instance, messenger, nullptr);
     vkDestroyInstance(instance, nullptr);
     require(validationErrors == 0, "Validation reported an error");
+    return properties;
 }
 
 struct TestWindow
@@ -308,12 +358,17 @@ static void compare(IDeviceContext* context, ITexture* texture, const Image& ima
 static void loadedLibraries()
 {
 #if PLATFORM_WIN32
-    for (const char* module : {"vulkan-1.dll", "GraphicsEngineVk_64r.dll", "vk_swiftshader.dll", "VkLayer_khronos_validation.dll"})
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, GetCurrentProcessId());
+    require(snapshot != INVALID_HANDLE_VALUE, "Loaded module snapshot failed");
+    MODULEENTRY32W entry{}; entry.dwSize = sizeof(entry);
+    if (Module32FirstW(snapshot, &entry)) do
     {
-        char path[MAX_PATH]{};
-        auto handle = GetModuleHandleA(module);
-        if (handle && GetModuleFileNameA(handle, path, MAX_PATH)) std::cout << "LOADED=" << path << '\n';
-    }
+        char path[4 * MAX_PATH]{};
+        require(WideCharToMultiByte(CP_UTF8, 0, entry.szExePath, -1, path, sizeof(path), nullptr, nullptr) != 0,
+                "Loaded module path conversion failed");
+        std::cout << "LOADED=" << path << '\n';
+    } while (Module32NextW(snapshot, &entry));
+    CloseHandle(snapshot);
 #else
     for (auto symbol : {reinterpret_cast<void*>(&vkEnumerateInstanceVersion), reinterpret_cast<void*>(&GetEngineFactoryVk)})
     {
@@ -330,10 +385,13 @@ int main(int argc, char** argv)
 {
     try
     {
-        require(argc == 3, "Usage: diligent_render_test DRIVER {offscreen|present|invalid|invalid-sync|bad-pixels|bad-orientation}");
+        if (argc == 2 && std::string(argv[1]) == "--test-selection") { selectionTests(); return 0; }
+        require(argc == 3 || argc == 4, "Usage: diligent_render_test {auto|SwiftShader|llvmpipe|amd|nvidia} MODE [DEVICE_NAME]");
+        require(std::string(argv[1]) == "SwiftShader" || std::string(argv[1]) == "llvmpipe" ||
+                std::string(argv[1]) == "amd" || std::string(argv[1]) == "nvidia" || std::string(argv[1]) == "auto", "Unknown device selector");
         const std::string mode = argv[2];
         require(mode == "offscreen" || mode == "present" || mode == "invalid" || mode == "invalid-sync" || mode == "bad-pixels" || mode == "bad-orientation", "Unknown mode");
-        preflight(argv[1], mode);
+        const auto selected = preflight(argv[1], mode, argc == 4 ? argv[3] : "");
 #if PLATFORM_WIN32
         auto* factory = LoadAndGetEngineFactoryVk();
 #else
@@ -345,10 +403,22 @@ int main(int argc, char** argv)
             const char* layer = "VK_LAYER_KHRONOS_validation";
             EngineVkCreateInfo ci{}; ci.EnableValidation = true;
             ci.InstanceLayerCount = 1; ci.ppInstanceLayerNames = &layer;
+            Uint32 adapterCount = 0;
+            factory->EnumerateAdapters({1,1}, adapterCount, nullptr);
+            require(adapterCount > 0, "No Diligent Vulkan adapters available");
+            std::vector<GraphicsAdapterInfo> adapters(adapterCount);
+            factory->EnumerateAdapters({1,1}, adapterCount, adapters.data());
+            unsigned matches = 0;
+            for (Uint32 i = 0; i < adapterCount; ++i)
+                if (adapters[i].VendorId == selected.vendorID && adapters[i].DeviceId == selected.deviceID &&
+                    std::string(adapters[i].Description) == selected.deviceName)
+                { if (matches == 0) ci.AdapterId = i; ++matches; }
+            require(matches > 0, "Diligent adapter does not match the preflight device");
             factory->CreateDeviceAndContextsVk(ci, &device, &context);
             require(device && context, "Diligent device creation failed");
-            require(device->GetAdapterInfo().Type == ADAPTER_TYPE_SOFTWARE, "Diligent selected hardware");
-            require(std::string(device->GetAdapterInfo().Description).find(argv[1]) != std::string::npos, "Diligent selected unexpected adapter");
+            const auto& actual = device->GetAdapterInfo();
+            require(actual.VendorId == selected.vendorID && actual.DeviceId == selected.deviceID &&
+                    std::string(actual.Description) == selected.deviceName, "Diligent selected unexpected adapter");
             std::cout << "DILIGENT_DEVICE=" << device->GetAdapterInfo().Description << '\n';
             auto target = texture(device, false, true);
             auto a = texture(device, true, false), b = texture(device, true, false);
