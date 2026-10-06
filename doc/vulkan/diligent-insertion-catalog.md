@@ -29,11 +29,13 @@ the insertion records. At that UI refresh, regenerated discovery had the same
 counts alone do not prove XUI semantics. The progress panel tests check layout,
 required controls and colour bindings. Runtime Vulkan parity remains unqualified.
 
-The current refresh additionally includes software-Vulkan CI and a hashed
+The current refresh additionally includes Vulkan implementation CI and a hashed
 Diligent acquisition synchronization overlay. The two standalone test files
 have explicit I25 whole-file reviews: they are not linked into viewer runtime.
-The current ledger has 28,280 candidates in 1,733 files, including 14 additional
-test-only candidates. Viewer rendering source and item 1's 43 route-source
+The current ledger has 28,281 candidates in 1,733 files, including 19
+test-only candidates. The standalone tool supports generic device discovery and
+headless execution; its software drivers are CI infrastructure. Viewer rendering
+source and item 1's 43 route-source
 hashes are unchanged. The dependency overlay has local Windows SwiftShader
 evidence; full CI and viewer runtime qualification remain separate.
 

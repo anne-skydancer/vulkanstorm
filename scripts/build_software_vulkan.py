@@ -1,4 +1,4 @@
-"""Build isolated, pinned test ICDs and validation layers; never install globally."""
+"""Build pinned test ICDs or validation-only metadata for normal driver discovery."""
 import argparse
 import hashlib
 import json
@@ -55,13 +55,44 @@ def stage_manifest(manifest, destination, key, installed_root=None):
     return target
 
 
+def installed_driver(manifest, library=None):
+    """Keep the vendor stack installed; record and select an exact user-supplied ICD."""
+    manifest = manifest.resolve(strict=True)
+    data = json.loads(manifest.read_text())
+    path = Path(data['ICD']['library_path'])
+    original = path if path.is_absolute() else manifest.parent / path
+    if original.is_file():
+        if library and library.resolve(strict=True) != original.resolve(strict=True):
+            raise RuntimeError('ICD library override differs from the installed manifest')
+        library = original
+    elif path.name == str(path) and library:
+        if library.name != path.name:
+            raise RuntimeError('ICD library basename differs from the installed manifest')
+    else:
+        raise RuntimeError('Provide --icd-library for the installed manifest soname')
+    library = library.resolve(strict=True)
+    return {'manifest': str(manifest), 'manifest_sha256': hashlib.sha256(manifest.read_bytes()).hexdigest(),
+            'library': str(library), 'library_sha256': hashlib.sha256(library.read_bytes()).hexdigest()}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work-dir', type=Path, required=True)
-    parser.add_argument('--driver', choices=['swiftshader', 'lavapipe'], required=True)
+    parser.add_argument('--driver', choices=['swiftshader', 'lavapipe', 'installed'], required=True)
+    parser.add_argument('--vendor', choices=['amd', 'nvidia'])
+    parser.add_argument('--icd', type=Path, help='Installed vendor ICD manifest (not copied with its driver)')
+    parser.add_argument('--icd-library', type=Path, help='Exact installed library, required for a manifest soname')
+    parser.add_argument('--device-name', default='', help='Unique device name substring if several GPUs match')
     parser.add_argument('--jobs', type=int, default=3)
     args = parser.parse_args()
+    if args.icd_library and not args.icd:
+        parser.error('--icd-library requires --icd')
+    if args.driver != 'installed' and (args.vendor or args.icd or args.icd_library or args.device_name):
+        parser.error('Installed-driver options require --driver installed')
+    installed = installed_driver(args.icd, args.icd_library) if args.icd else None
     work = args.work_dir.resolve()
+    if args.driver == 'installed' and (work / 'staged').exists():
+        raise RuntimeError('Installed-driver testing requires a fresh runtime work directory')
     windows = platform.system() == 'Windows'
     if windows and args.driver == 'lavapipe':
         parser.error('Lavapipe job is Linux only')
@@ -106,7 +137,7 @@ def main():
                           '-DSWIFTSHADER_BUILD_BENCHMARKS=OFF', '-DSWIFTSHADER_WARNINGS_AS_ERRORS=OFF',
                           '-DSWIFTSHADER_BUILD_WSI_WAYLAND=OFF'], 'vk_swiftshader')
         manifests = list(directory.rglob('vk_swiftshader_icd.json'))
-    else:
+    elif args.driver == 'lavapipe':
         archive = work / 'mesa.tar.xz'
         if not archive.exists():
             urllib.request.urlretrieve(LOCK['lavapipe']['url'], archive)
@@ -126,25 +157,40 @@ def main():
         run('meson', 'compile', '-C', directory, '-j', args.jobs)
         run('meson', 'install', '-C', directory)
         manifests = list((work / 'lavapipe').rglob('lvp_icd*.json'))
+    else:
+        manifests = [args.icd.resolve()] if args.icd else []
     layers = list((work / 'validation').rglob('VkLayer_khronos_validation.json'))
-    if len(manifests) != 1 or len(layers) != 1:
-        raise RuntimeError(f'Expected one ICD and one layer manifest: {manifests}, {layers}')
-    icd = stage_manifest(manifests[0], work / 'staged/icd', 'ICD')
+    if len(manifests) != (0 if args.driver == 'installed' and not args.icd else 1) or len(layers) != 1:
+        raise RuntimeError(f'Unexpected ICD/layer manifest count: {manifests}, {layers}')
+    if installed:
+        destination = work / 'staged/icd'; destination.mkdir(parents=True, exist_ok=True)
+        data = json.loads(manifests[0].read_text())
+        data['ICD']['library_path'] = installed['library']
+        icd = destination / manifests[0].name
+        icd.write_text(json.dumps(data, indent=2) + '\n')
+    elif manifests:
+        icd = stage_manifest(manifests[0], work / 'staged/icd', 'ICD')
+    else:
+        icd = None
     layer = stage_manifest(layers[0], work / 'staged/layers', 'layer', work / 'validation')
     licenses = work / 'staged/licenses'; licenses.mkdir(parents=True, exist_ok=True)
-    for name, source in [('validation', work / 'source/validation'),
-                         ('validation-dependencies', deps),
-                         (args.driver, work / ('source/swiftshader' if args.driver == 'swiftshader' else 'source/mesa-25.2.4'))]:
+    license_sources = [('validation', work / 'source/validation'), ('validation-dependencies', deps)]
+    if args.driver != 'installed':
+        license_sources.append((args.driver, work / ('source/swiftshader' if args.driver == 'swiftshader' else 'source/mesa-25.2.4')))
+    for name, source in license_sources:
         for path in source.rglob('*'):
             if path.is_file() and path.name.upper().startswith(('LICENSE', 'COPYING', 'NOTICE')) and '.git' not in path.parts:
                 target = licenses / name / path.relative_to(source); target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, target)
-    result = {'driver': args.driver, 'icd': str(icd), 'layer_path': str(layer.parent),
+    result = {'driver': args.driver, 'icd': str(icd) if icd else None, 'layer_path': str(layer.parent),
               'sources': LOCK, 'platform': platform.platform(),
               'staged_sha256': {str(p.relative_to(work)): hashlib.sha256(p.read_bytes()).hexdigest()
                                 for p in (work / 'staged').rglob('*') if p.is_file()},
               'validation_known_good_sha256': hashlib.sha256(
                   (pinned / 'known_good.json').read_bytes()).hexdigest()}
+    if args.driver == 'installed':
+        result.update(installed_driver=installed, vendor=args.vendor, device_name=args.device_name,
+                      driver_discovery='explicit-icd' if installed else 'system')
     (work / 'runtime.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result, indent=2))
 

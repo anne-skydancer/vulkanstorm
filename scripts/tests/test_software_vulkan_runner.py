@@ -8,10 +8,60 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from run_software_vulkan_tests import assess, windows_manifest_registration
+from run_software_vulkan_tests import assess, device_evidence, main, windows_manifest_registration
+import json
+import os
 
 
 class RunnerFailureTests(unittest.TestCase):
+    def test_generic_identity_accepts_available_software_without_vendor_requirement(self):
+        identity = device_evidence('ICD_DEVICE=SwiftShader API=4198400 DRIVER=1 VENDOR=0 DEVICE=0 TYPE=4')
+        self.assertEqual(identity['device_type'], 4)
+        with self.assertRaisesRegex(RuntimeError, 'requested hardware vendor'):
+            device_evidence('ICD_DEVICE=SwiftShader API=4198400 DRIVER=1 VENDOR=0 DEVICE=0 TYPE=4', 'amd')
+        with self.assertRaisesRegex(RuntimeError, 'Missing Vulkan device identity'):
+            device_evidence('driver enumeration failed')
+
+    def test_headless_system_discovery_does_not_force_an_icd_or_create_a_display(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            executable = root / 'test'; executable.write_bytes(b'executable')
+            libraries = ('libvulkan.so.1', 'libGraphicsEngineVk.so')
+            for name in libraries: (root / name).write_bytes(b'library')
+            runtime = root / 'runtime.json'
+            lock = Path(__file__).resolve().parents[1] / 'vulkan_ci_dependencies.json'
+            runtime.write_text(json.dumps(dict(driver='installed', vendor=None, icd=None,
+                installed_driver=None, device_name='', layer_path=str(root),
+                sources=json.loads(lock.read_text()), staged_sha256={})))
+            seen = []
+
+            def execute(command, cwd, env, **kwargs):
+                self.assertEqual(command[1], 'auto')
+                for name in ('DISPLAY', 'WAYLAND_DISPLAY', 'VK_DRIVER_FILES', 'VK_ICD_FILENAMES', 'VK_ADD_DRIVER_FILES'):
+                    self.assertNotIn(name, env)
+                mode = command[2]; seen.append(mode)
+                identity = 'ICD_DEVICE=SwiftShader API=4198400 DRIVER=1 VENDOR=0 DEVICE=0 TYPE=4\n'
+                if mode == 'offscreen':
+                    for name in ('first.ppm', 'replacement.ppm'): (cwd / name).write_bytes(b'readback')
+                    log = identity + 'DILIGENT_DEVICE=SwiftShader\n' + ''.join('LOADED='+str(root/name)+'\n' for name in libraries) + 'PASS offscreen'
+                    return SimpleNamespace(returncode=0, stdout=log)
+                diagnostic = {'invalid': 'VUID-VkBufferCreateInfo-size-00912 Validation reported an error',
+                              'invalid-sync': 'SYNC-HAZARD-WRITE-AFTER-WRITE Validation reported an error',
+                              'bad-pixels': 'Pixel oracle mismatch', 'bad-orientation': 'Pixel oracle mismatch'}[mode]
+                return SimpleNamespace(returncode=1, stdout=identity+diagnostic)
+
+            with patch('run_software_vulkan_tests.platform.system', return_value='Linux'), \
+                 patch('run_software_vulkan_tests.subprocess.run', side_effect=execute), \
+                 patch.dict(os.environ, {'DISPLAY': ':99', 'WAYLAND_DISPLAY': 'wayland-0', 'VK_DRIVER_FILES': 'decoy'}), \
+                 patch.object(sys, 'argv', ['runner', '--executable', str(executable), '--runtime', str(runtime), '--evidence', str(root/'evidence'), '--headless']):
+                with self.assertRaises(SystemExit) as result: main()
+                self.assertEqual(result.exception.code, 0)
+            result = json.loads((root/'evidence/results.json').read_text())
+            self.assertEqual(len(seen), 5)
+            self.assertNotIn('present', seen)
+            self.assertTrue(result['headless'] and result['passed'])
+            self.assertFalse(result['presentation_qualified'])
+
     def test_success_requires_device_and_loaded_library_evidence(self):
         self.assertFalse(assess('offscreen', 0, 'PASS offscreen'))
         self.assertTrue(assess('offscreen', 0, 'DILIGENT_DEVICE=SwiftShader\nLOADED=loader\nPASS offscreen'))

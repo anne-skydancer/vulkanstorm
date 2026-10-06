@@ -1,12 +1,39 @@
-# Item 2: independent software Vulkan CI
+# Item 2: independent Vulkan implementation CI
 
-The [Software Vulkan qualification workflow](../../.github/workflows/software_vulkan.yml)
+The [Vulkan qualification workflow](../../.github/workflows/software_vulkan.yml)
 is separate from production CI because this work introduces a permanent graphics
 API dependency and new pipeline logic. It runs on `vkstorm-vulkan`, relevant
 development PRs, manual dispatch and the future `vkstorm_1.1.0` name. It has no
 release publication permission, installer job or `latest` update.
 Runs on a branch are serialized without canceling an active qualification when
 new fixes are pushed, preserving its test results and diagnostic artifacts.
+
+## Scope and driver selection
+
+CI qualifies the general native Vulkan implementation through software Vulkan
+devices. SwiftShader and Lavapipe are test infrastructure, not the viewer's
+production driver policy. Assume AMD/NVIDIA hosts are never available: no vendor
+runner, physical GPU or vendor-driver result is required for Item 2 acceptance.
+The production viewer must discover and use the machine's installed Vulkan
+drivers; software ICD isolation belongs only to this standalone CI launcher.
+The native viewer backend and its integration remain subsequent work.
+
+The executable's `auto` path enumerates available Vulkan devices, preferring a
+discrete GPU, then integrated GPU, then virtual GPU, then another available
+device such as a CPU implementation. It passes the selected matching adapter to
+Diligent instead of rejecting hardware devices. CI exercises this same path
+with each isolated software ICD. A compiled policy test supplies synthetic AMD,
+NVIDIA and CPU device descriptions to check selection, software-only discovery,
+explicit selection and rejection of an unavailable requested vendor. These are
+selection-policy tests, not fabricated vendor execution results.
+
+Every graphics job also runs offscreen drawing/readback and all four negative
+probes with no display variables and without Xvfb or a native window. Native
+presentation remains a separate test using HWND or Xvfb. Headless results record
+`presentation_qualified: false`. Device/API/driver/vendor identifiers and hashes
+of actually mapped libraries are archived. This qualifies implementation
+correctness at the tested Vulkan contract; it does not establish AMD/NVIDIA
+driver-specific behavior, physical-device performance or desktop presentation.
 
 ## Branch mandate
 
@@ -30,9 +57,9 @@ CI results do not qualify native Vulkan.
 | Job | Device and display | Mandatory work |
 |---|---|---|
 | Source evidence | CPU Python checks | Catalog/boundary checks, audit regressions, accepted XUI fixes, failure-classification tests |
-| Windows x64 | SwiftShader, native HWND | Device, rendering/readback, resource replacement, native swapchain/lifecycle and negative probes; staged development viewer |
-| Linux x64 | SwiftShader, SDL2 X11 through Xvfb | Same checks; XCB connection obtained from the SDL-owned X11 display |
-| Linux x64 | Lavapipe, SDL2 X11 through Xvfb | Independent software implementation, same mandatory checks |
+| Windows x64 | SwiftShader, headless plus native HWND | Selection policy, device, rendering/readback, replacement, negative probes, separate native swapchain/lifecycle; staged development viewer |
+| Linux x64 | SwiftShader, headless plus SDL2 X11 through Xvfb | Same checks; presentation obtains XCB from the SDL-owned X11 display |
+| Linux x64 | Lavapipe, headless plus SDL2 X11 through Xvfb | Independent software implementation, same mandatory checks |
 
 The harness consumes the exact [Autobuild GHI packages](../../scripts/build_vulkan_dependencies.py)
 used by the viewer. Native shaders use Diligent's pinned GLSL compiler and Vulkan
@@ -79,8 +106,9 @@ hosted Windows runner only, the runner temporarily registers the pinned ICD and
 layer manifests in the machine's Vulkan registry keys, restoring any previous
 values after the tests. Binaries stay in the isolated staging directory. No
 registration is permitted on local or self-hosted machines by this option.
-The executable rejects multiple devices, hardware devices, wrong software
-device names and missing validation. It reports actual loaded libraries; the
+The launcher verifies the isolated software device identity; the executable
+supports normal available-device selection as well as explicit selectors.
+Missing devices and validation fail decisively. It reports actual loaded libraries; the
 runner verifies that loader/Diligent came from the test's staged directory.
 Core and synchronization validation are required. Shader features and WSI
 support are checked by running the mandatory operations, not assumed from an
@@ -157,6 +185,26 @@ Use `--driver lavapipe` for the Linux cross-check. The workflow contains complet
 viewer Autobuild/staging commands and archives source, package, image/toolchain,
 runtime, diagnostic, result, readback and staging evidence.
 
+Add `--headless` to the runner for the five no-window modes; this clears display
+variables and omits presentation. `ctest --test-dir .ci/test-build -C RelWithDebInfo
+--output-on-failure` runs the device-selection policy checks without a GPU.
+
+For normal machine-driver discovery outside CI, build validation-only runtime
+metadata in a fresh directory:
+
+```text
+python scripts/build_software_vulkan.py --work-dir .ci/system-runtime --driver installed
+python scripts/run_software_vulkan_tests.py --executable <staged diligent_render_test> --runtime .ci/system-runtime/runtime.json --evidence .ci/system-evidence --headless
+```
+
+This path builds the pinned validation layer but installs no ICD, sets no driver
+manifest override and requires no specific vendor. An optional `--icd` (and
+`--icd-library` for a manifest soname) explicitly isolates an installed driver
+and records its manifest/library hashes without copying its vendor stack.
+Optional `--vendor` and `--device-name` narrow diagnostic selection; none is an
+acceptance requirement. Hosted-only Windows registry registration is unavailable
+in this mode; use an unelevated local process so isolated layer discovery works.
+
 Item 2 is accepted only after every matrix job succeeds, with a fresh dependency
 build (cache miss or `clean_dependencies=true`) and a subsequent cached run, and all artifacts
 are reviewed. A compiled harness or uploaded workflow alone is insufficient.
@@ -166,8 +214,15 @@ driver performance or live-session behavior.
 
 ## Qualification record
 
-Item 2 is accepted following successful runs and artifact review on 2026-10-06.
-The qualified source is `1f146db5fc7ef845ec918a929bfb3baaff639a74`.
+The earlier software-only infrastructure passed runs and artifact review on
+2026-10-06 at `1f146db5fc7ef845ec918a929bfb3baaff639a74`. Calling that complete
+Item 2 acceptance was premature: it omitted generic device selection and a
+separate no-display execution contract. The scope above corrects that omission
+without imposing an unavailable hardware-host requirement. Qualification of
+the extension remains pending its fresh/cached CI evidence review. Local Windows
+verification passed the compiled selection-policy test, all six existing modes
+and all five headless modes using the previously built pinned SwiftShader runtime.
+The earlier run evidence below remains valid for the earlier source.
 Both the [complete matrix, run 37417749930](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37417749930)
 and the [subsequent cached matrix, run 37420913445](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37420913445)
 passed their source checks, all 59 regressions and every graphics job at that
@@ -206,7 +261,7 @@ their expected diagnostics. Full RelWithDebInfo viewer compilation and staging
 passed, including required assets, CEF, plugin host and the exact platform media
 plugin names; staging evidence records the required binary hashes.
 
-This accepts the independent software Vulkan CI and standalone Diligent
-infrastructure. The staging evidence retains
+These runs qualify the earlier independent software Vulkan CI and standalone
+Diligent infrastructure. The staging evidence retains
 `native_viewer_runtime_qualified: false`: native viewer UI/chat, live sessions,
 physical devices, Wayland and performance remain outside this qualification.
