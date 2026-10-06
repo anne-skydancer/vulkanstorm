@@ -17,7 +17,8 @@ permissions:
 
 concurrency:
   group: software-vulkan-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Preserve long-running qualification and its diagnostic artifacts on push.
+  cancel-in-progress: false
 
 jobs:
   source-evidence:

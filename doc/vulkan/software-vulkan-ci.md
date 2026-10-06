@@ -5,6 +5,8 @@ is separate from production CI because this work introduces a permanent graphics
 API dependency and new pipeline logic. It runs on `vkstorm-vulkan`, relevant
 development PRs, manual dispatch and the future `vkstorm_1.1.0` name. It has no
 release publication permission, installer job or `latest` update.
+Runs on a branch are serialized without canceling an active qualification when
+new fixes are pushed, preserving its test results and diagnostic artifacts.
 
 ## Branch mandate
 
