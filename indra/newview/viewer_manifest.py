@@ -2392,7 +2392,8 @@ class LinuxManifest(ViewerManifest):
         with self.prefix(src=os.path.join(pkgdir, 'lib', 'release'), dst="lib"):
             self.path( "libcef.so" )
             self.path( "libEGL*" )
-            self.path( "libvulkan*" )
+            if self.args.get('diligentcore', 'OFF').lower() != 'on':
+                self.path( "libvulkan*" )
             self.path( "libvk_swiftshader*" )
             self.path( "libGLESv2*" )
 
