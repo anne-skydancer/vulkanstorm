@@ -13,7 +13,7 @@ viewer still initializes OpenGL and world facilities. Item 1 does not accept an
 executable, a Vulkan build, rendered pixels, a live login, or hardware support.
 Those remain later implementation and qualification work.
 
-The source baseline is `72a6701bf27b9273855afe37f620368a30c85c83`.
+The source baseline is `332158adcea12b8c89a1add19a7cad6c85f73fd5`.
 The [insertion ledger](diligent-insertion-catalog.md) supplies broad source
 coverage; [the boundary manifest](milestone1-boundaries.json) adds exact source
 hashes, startup states, message registrations, settings registrations and
