@@ -1126,11 +1126,11 @@
     {
       "path": "indra/cmake/DiligentCore.cmake",
       "start": 1,
-      "end": 64,
+      "end": 65,
       "record": "I23",
       "disposition": "mapped",
       "reason": "Reviewed target/options contract: Diligent packages are optional Windows/Linux64 with pinned metadata, runtimes and imports; SDL1/SDL2 and GL reference libraries remain separate; OpenGL requirements only qualify GL; Tracy needs backend-specific GPU instrumentation rather than global OpenGL macros.",
-      "sha256": "1a15b40f7654cb145f8d3b5ad46a1f6deb4676cd1393fad3d048200743bca16a"
+      "sha256": "be912b251cf73b00aa77c821e86ebcde997ee4afe13b6389d88cd2af2ea23404"
     },
     {
       "path": "indra/cmake/LLWindow.cmake",

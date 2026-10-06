@@ -148,7 +148,7 @@ def main():
                     shutil.copytree(license, package / 'LICENSES' / ('Vulkan-Loader-' + license.name))
             products = [loader / 'loader' / 'RelWithDebInfo' / 'vulkan-1.dll', loader / 'loader' / 'RelWithDebInfo' / 'vulkan-1.lib'] if windows else [loader / 'loader/libvulkan.so.1', loader / 'loader/libvulkan.so']
             for product in products:
-                destination = package / ('bin/release' if product.suffix == '.dll' else 'lib/release') / product.name
+                destination = package / ('bin/release/vulkan-ghi' if product.suffix == '.dll' else 'lib/release/vulkan-ghi') / product.name
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(product, destination)
         else:
@@ -164,7 +164,7 @@ def main():
                 matches = [p for p in diligent.rglob(product_name) if p.is_file()]
                 if len(matches) != 1:
                     raise RuntimeError(f'Expected one {product_name}, got {matches}')
-                destination = package / ('bin/release' if product_name.endswith('.dll') else 'lib/release') / product_name
+                destination = package / ('bin/release/vulkan-ghi' if product_name.endswith('.dll') else 'lib/release/vulkan-ghi') / product_name
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(matches[0], destination)
         (package / 'metadata').mkdir()

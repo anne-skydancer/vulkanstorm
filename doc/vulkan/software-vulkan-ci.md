@@ -40,6 +40,13 @@ and a checksummed Mesa source archive. SwiftShader uses its vendored LLVM backen
 unused test/debugger/LLVM-submodule dependencies are disabled. These dependencies
 are isolated from the production Autobuild manifest.
 
+GHI runtime and import libraries install under `bin/release/vulkan-ghi` and
+`lib/release/vulkan-ghi`. CEF retains ownership of its own loader at the ordinary
+package path. When GHI is enabled, viewer staging selects the same pinned loader
+as the standalone test; CEF's copy does not overwrite it. The `ghi1` package
+revision records this install layout. The default production configuration
+continues to use its existing CEF loader.
+
 Qualification exposed an acquisition/layout-transition synchronization failure
 in the pinned Diligent swapchain path. The
 [hashed dependency overlay](../../3p/3p-diligentcore/acquire-layout-transition.md)
