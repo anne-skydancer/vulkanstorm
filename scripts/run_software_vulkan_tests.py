@@ -105,6 +105,22 @@ def loaded_library_hashes(log):
     return files
 
 
+def presentation_evidence(path, system):
+    """An offscreen PASS cannot substitute for the native WSI lifecycle."""
+    data = json.loads(path.read_text(encoding='utf-8'))
+    expected = ['create-128x128', 'present-initial', 'resize-present-160x96',
+                'zero-0x0-suspended', 'zero-0x96-suspended', 'zero-160x0-suspended',
+                'minimized-suspended', 'restore-present-128x128', 'swapchain-released', 'window-destroyed', 'device-context-released']
+    if (data.get('window_api') != ('Win32' if system == 'Windows' else 'SDL2/X11')
+            or data.get('stages') != expected or data.get('presented_frames') != 9
+            or data.get('zero_extent_skips') != 3 or data.get('minimized_skips') != 2
+            or data.get('shutdown_complete') is not True
+            or type(data.get('native_minimize_observed')) is not bool
+            or (system == 'Windows' and not data['native_minimize_observed'])):
+        raise RuntimeError('Incomplete native presentation evidence')
+    return data
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--executable', type=Path, required=True)
@@ -163,9 +179,10 @@ def main():
         selected_device = None
         for mode in modes:
             directory = evidence / mode; directory.mkdir(exist_ok=True)
-            for name in ('first.ppm', 'replacement.ppm'):
+            for name in ('first.ppm', 'replacement.ppm', 'presentation.json'):
                 (directory / name).unlink(missing_ok=True)
             mapped_libraries = {}
+            native_presentation = None
             try:
                 command = [str(executable), expected, mode]
                 if system_driver and runtime.get('device_name'):
@@ -188,8 +205,10 @@ def main():
                     if system_driver and runtime.get('installed_driver'):
                         passed &= runtime['installed_driver']['library'].replace('\\', '/').lower() in normalized
                     mapped_libraries = loaded_library_hashes(log)
-            except RuntimeError as error:
-                log += f'\nIDENTITY FAILURE: {error}\n'; passed = False
+                    if mode == 'present':
+                        native_presentation = presentation_evidence(directory / 'presentation.json', platform.system())
+            except (RuntimeError, FileNotFoundError, json.JSONDecodeError) as error:
+                log += f'\nEVIDENCE FAILURE: {error}\n'; passed = False
             except subprocess.TimeoutExpired as error:
                 log = (error.stdout or b'').decode(errors='replace') if isinstance(error.stdout, bytes) else (error.stdout or '')
                 log += '\nTIMEOUT\n'; passed = False; code = None
@@ -197,7 +216,8 @@ def main():
             if mode in ('offscreen', 'present'):
                 passed &= all((directory / name).is_file() for name in ('first.ppm', 'replacement.ppm'))
             result['tests'].append({'mode': mode, 'passed': passed, 'exit_code': code,
-                                    'loaded_library_sha256': mapped_libraries})
+                                    'loaded_library_sha256': mapped_libraries,
+                                    'presentation': native_presentation})
             print(f'{mode}: {"PASS" if passed else "FAIL"}', flush=True)
             if not passed:
                 print(log[-8000:], flush=True)

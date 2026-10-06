@@ -8,12 +8,44 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from run_software_vulkan_tests import assess, device_evidence, main, windows_manifest_registration
+from run_software_vulkan_tests import assess, device_evidence, main, presentation_evidence, windows_manifest_registration
 import json
 import os
 
 
 class RunnerFailureTests(unittest.TestCase):
+    def test_presentation_requires_native_lifecycle_not_offscreen_results(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'presentation.json'
+            with self.assertRaises(FileNotFoundError): presentation_evidence(path, 'Linux')
+            data = dict(window_api='SDL2/X11', presented_frames=9, zero_extent_skips=3,
+                minimized_skips=2, native_minimize_observed=False, shutdown_complete=True,
+                stages=['create-128x128','present-initial','resize-present-160x96',
+                        'zero-0x0-suspended','zero-0x96-suspended','zero-160x0-suspended',
+                        'minimized-suspended','restore-present-128x128','swapchain-released','window-destroyed','device-context-released'])
+            path.write_text(json.dumps(data))
+            self.assertEqual(presentation_evidence(path, 'Linux'), data)
+            for field,value in [('presented_frames',0),('zero_extent_skips',0),
+                                ('minimized_skips',0),('shutdown_complete',False),('stages',[])]:
+                with self.subTest(field=field):
+                    path.write_text(json.dumps(dict(data, **{field:value})))
+                    with self.assertRaisesRegex(RuntimeError, 'Incomplete native'):
+                        presentation_evidence(path, 'Linux')
+
+    def test_windows_presentation_requires_observed_native_minimization(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'presentation.json'
+            data = dict(window_api='Win32', presented_frames=9, zero_extent_skips=3,
+                minimized_skips=2, native_minimize_observed=False, shutdown_complete=True,
+                stages=['create-128x128','present-initial','resize-present-160x96',
+                        'zero-0x0-suspended','zero-0x96-suspended','zero-160x0-suspended',
+                        'minimized-suspended','restore-present-128x128','swapchain-released','window-destroyed','device-context-released'])
+            path.write_text(json.dumps(data))
+            with self.assertRaisesRegex(RuntimeError, 'Incomplete native'):
+                presentation_evidence(path, 'Windows')
+            data['native_minimize_observed'] = True; path.write_text(json.dumps(data))
+            self.assertEqual(presentation_evidence(path, 'Windows'), data)
+
     def test_generic_identity_accepts_available_software_without_vendor_requirement(self):
         identity = device_evidence('ICD_DEVICE=SwiftShader API=4198400 DRIVER=1 VENDOR=0 DEVICE=0 TYPE=4')
         self.assertEqual(identity['device_type'], 4)

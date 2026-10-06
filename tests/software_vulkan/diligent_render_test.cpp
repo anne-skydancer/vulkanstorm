@@ -204,16 +204,36 @@ struct TestWindow
     {
         WNDCLASSA wc{}; wc.lpfnWndProc = DefWindowProcA; wc.hInstance = GetModuleHandle(nullptr); wc.lpszClassName = "SoftwareVulkanTest";
         require(RegisterClassA(&wc) != 0, "RegisterClass failed");
+        RECT bounds{0,0,128,128};
+        require(AdjustWindowRect(&bounds, WS_OVERLAPPEDWINDOW, FALSE) != 0, "Client-size adjustment failed");
         handle = CreateWindowA(wc.lpszClassName, "Software Vulkan test", WS_OVERLAPPEDWINDOW,
-                              0, 0, 128, 128, nullptr, nullptr, wc.hInstance, nullptr);
+                              0, 0, bounds.right-bounds.left, bounds.bottom-bounds.top, nullptr, nullptr, wc.hInstance, nullptr);
         require(handle != nullptr, "Native HWND creation failed");
         native.hWnd = handle; ShowWindow(handle, SW_SHOW);
     }
     void pump() { MSG msg{}; while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessage(&msg); } }
-    void size(int w, int h) { SetWindowPos(handle, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER); pump(); }
+    void size(int w, int h)
+    {
+        RECT bounds{0,0,w,h};
+        require(AdjustWindowRect(&bounds, WS_OVERLAPPEDWINDOW, FALSE) != 0, "Client-size adjustment failed");
+        require(SetWindowPos(handle, nullptr, 0, 0, bounds.right-bounds.left, bounds.bottom-bounds.top,
+                             SWP_NOMOVE | SWP_NOZORDER) != 0, "Native window resize failed");
+        pump();
+    }
+    bool minimized() const { return IsIconic(handle) != 0; }
+    std::array<int,2> extent() const
+    {
+        RECT bounds{}; require(GetClientRect(handle, &bounds) != 0, "Client-size query failed");
+        return {bounds.right-bounds.left, bounds.bottom-bounds.top};
+    }
     void minimize() { ShowWindow(handle, SW_MINIMIZE); pump(); }
     void restore() { ShowWindow(handle, SW_RESTORE); pump(); }
-    ~TestWindow() { DestroyWindow(handle); UnregisterClassA("SoftwareVulkanTest", GetModuleHandle(nullptr)); }
+    void close()
+    {
+        require(DestroyWindow(handle) != 0, "Native window destruction failed"); handle = nullptr;
+        require(UnregisterClassA("SoftwareVulkanTest", GetModuleHandle(nullptr)) != 0, "Native window class cleanup failed");
+    }
+    ~TestWindow() { if (handle) { DestroyWindow(handle); UnregisterClassA("SoftwareVulkanTest", GetModuleHandle(nullptr)); } }
 #else
     SDL_Window* handle{};
     TestWindow()
@@ -230,11 +250,107 @@ struct TestWindow
     }
     void pump() { SDL_Event event; while (SDL_PollEvent(&event)) {} }
     void size(int w, int h) { SDL_SetWindowSize(handle, w, h); pump(); }
+    bool minimized() const { return (SDL_GetWindowFlags(handle) & SDL_WINDOW_MINIMIZED) != 0; }
+    std::array<int,2> extent() const
+    {
+        int w=0, h=0; SDL_GetWindowSize(handle, &w, &h); return {w,h};
+    }
     void minimize() { SDL_MinimizeWindow(handle); pump(); }
     void restore() { SDL_RestoreWindow(handle); pump(); }
-    ~TestWindow() { SDL_DestroyWindow(handle); SDL_Quit(); }
+    void close() { SDL_DestroyWindow(handle); handle = nullptr; SDL_Quit(); }
+    ~TestWindow() { if (handle) close(); }
 #endif
 };
+
+struct PresentationEvidence
+{
+    unsigned presented = 0;
+    unsigned zeroSkipped = 0;
+    unsigned minimizedSkipped = 0;
+    bool minimizeObserved = false;
+    std::vector<std::string> stages;
+
+    void write() const
+    {
+        std::ofstream out("presentation.json");
+        out << "{\n  \"window_api\": \"" <<
+#if PLATFORM_WIN32
+            "Win32"
+#else
+            "SDL2/X11"
+#endif
+            << "\",\n  \"presented_frames\": " << presented
+            << ",\n  \"zero_extent_skips\": " << zeroSkipped
+            << ",\n  \"minimized_skips\": " << minimizedSkipped
+            << ",\n  \"native_minimize_observed\": " << (minimizeObserved ? "true" : "false")
+            << ",\n  \"shutdown_complete\": true,\n  \"stages\": [";
+        for (size_t i=0; i<stages.size(); ++i) out << (i ? ", " : "") << '"' << stages[i] << '"';
+        out << "]\n}\n"; out.flush();
+        require(out.good(), "Presentation artifact write failed");
+    }
+};
+
+static PresentationEvidence presentation(IEngineFactoryVk* factory, IRenderDevice* device, IDeviceContext* context)
+{
+    PresentationEvidence evidence;
+    TestWindow window;
+    require(window.extent() == std::array<int,2>{128,128}, "Initial native client extent differs");
+    RefCntAutoPtr<ISwapChain> swapchain;
+    SwapChainDesc desc{}; desc.Width = desc.Height = 128; desc.DepthBufferFormat = TEX_FORMAT_UNKNOWN;
+    factory->CreateSwapChainVk(device, context, desc, window.native, &swapchain);
+    require(swapchain != nullptr, "Native swapchain failed");
+    require(swapchain->GetDesc().Width == 128 && swapchain->GetDesc().Height == 128, "Initial swapchain extent differs");
+    evidence.stages.push_back("create-128x128");
+
+    auto frame = [&](unsigned width, unsigned height, bool minimized)
+    {
+        // Zero/minimized client notifications suspend WSI operations. Vulkan
+        // forbids a zero image extent; do not issue Resize/Draw/Present for it.
+        if (width == 0 || height == 0 || minimized)
+        {
+            if (width == 0 || height == 0) ++evidence.zeroSkipped;
+            else ++evidence.minimizedSkipped;
+            return;
+        }
+        auto* rtv = swapchain->GetCurrentBackBufferRTV(); require(rtv != nullptr, "Backbuffer missing");
+        context->SetRenderTargets(1, &rtv, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        const float clear[]{0.1f,0.2f,0.3f,1}; context->ClearRenderTarget(rtv, clear, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        swapchain->Present(0); ++evidence.presented; window.pump();
+    };
+    for (unsigned i=0; i<3; ++i) frame(128,128,false);
+    evidence.stages.push_back("present-initial");
+    context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_NONE);
+    window.size(160,96); swapchain->Resize(160,96);
+    require(window.extent() == std::array<int,2>{160,96}, "Resized native client extent differs");
+    require(swapchain->GetDesc().Width == 160 && swapchain->GetDesc().Height == 96, "Resized swapchain extent differs");
+    for (unsigned i=0; i<3; ++i) frame(160,96,false);
+    evidence.stages.push_back("resize-present-160x96");
+    context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_NONE);
+    const auto beforeSuspension = evidence.presented;
+    frame(0,0,false); evidence.stages.push_back("zero-0x0-suspended");
+    frame(0,96,false); evidence.stages.push_back("zero-0x96-suspended");
+    frame(160,0,false); evidence.stages.push_back("zero-160x0-suspended");
+    window.minimize(); window.pump(); evidence.minimizeObserved = window.minimized();
+#if PLATFORM_WIN32
+    require(evidence.minimizeObserved, "Native HWND did not enter minimized state");
+#endif
+    frame(160,96,true); frame(160,96,true);
+    require(evidence.presented == beforeSuspension, "Presented while zero-sized or minimized");
+    require(swapchain->GetDesc().Width == 160 && swapchain->GetDesc().Height == 96, "Suspension resized the swapchain");
+    evidence.stages.push_back("minimized-suspended");
+    window.restore(); window.size(128,128); swapchain->Resize(128,128);
+    require(!window.minimized(), "Native window did not leave minimized state");
+    require(window.extent() == std::array<int,2>{128,128}, "Restored native client extent differs");
+    require(swapchain->GetDesc().Width == 128 && swapchain->GetDesc().Height == 128, "Restored swapchain extent differs");
+    for (unsigned i=0; i<3; ++i) frame(128,128,false);
+    evidence.stages.push_back("restore-present-128x128");
+    require(evidence.presented == 9 && evidence.zeroSkipped == 3 && evidence.minimizedSkipped == 2, "Incomplete presentation sequence");
+    context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_NONE);
+    context->WaitForIdle(); swapchain.Release();
+    evidence.stages.push_back("swapchain-released");
+    window.close(); evidence.stages.push_back("window-destroyed");
+    return evidence;
+}
 
 using Pixel = std::array<unsigned char, 4>;
 using Image = std::array<Pixel, 4>;
@@ -398,6 +514,7 @@ int main(int argc, char** argv)
         auto* factory = GetEngineFactoryVk();
 #endif
         require(factory != nullptr, "Diligent factory unavailable"); factory->SetMessageCallback(diagnostic);
+        PresentationEvidence presentationEvidence;
         {
             RefCntAutoPtr<IRenderDevice> device; RefCntAutoPtr<IDeviceContext> context;
             const char* layer = "VK_LAYER_KHRONOS_validation";
@@ -427,32 +544,12 @@ int main(int argc, char** argv)
             compare(context, a, first, "first.ppm", mode == "bad-pixels");
             compare(context, b, second, "replacement.ppm", false);
             if (mode == "present")
-            {
-                TestWindow window;
-                RefCntAutoPtr<ISwapChain> swapchain;
-                SwapChainDesc desc{}; desc.Width = desc.Height = 128; desc.DepthBufferFormat = TEX_FORMAT_UNKNOWN;
-                factory->CreateSwapChainVk(device, context, desc, window.native, &swapchain);
-                require(swapchain != nullptr, "Native swapchain failed");
-                for (unsigned frame = 0; frame < 12; ++frame)
-                {
-                    if (frame == 3) { window.size(96,80); swapchain->Resize(96,80); }
-                    if (frame == 6) { window.minimize(); window.pump(); /* no submission while minimized */ }
-                    if (frame == 7) { window.restore(); window.size(128,128); swapchain->Resize(128,128); }
-                    if (frame != 6)
-                    {
-                        auto* rtv = swapchain->GetCurrentBackBufferRTV(); require(rtv != nullptr, "Backbuffer missing");
-                        context->SetRenderTargets(1, &rtv, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                        const float clear[]{0.1f,0.2f,0.3f,1}; context->ClearRenderTarget(rtv, clear, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-                        swapchain->Present(0);
-                    }
-                    window.pump();
-                }
-                context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_NONE);
-                context->WaitForIdle(); swapchain.Release();
-            }
+                presentationEvidence = presentation(factory, device, context);
             context->WaitForIdle(); loadedLibraries();
         }
         require(errors == 0 && validationErrors == 0, "Rendering/teardown diagnostics contain errors");
+        if (mode == "present")
+        { presentationEvidence.stages.push_back("device-context-released"); presentationEvidence.write(); }
         std::cout << "PASS " << mode << '\n'; return 0;
     }
     catch (const std::exception& error) { std::cerr << "FAIL: " << error.what() << '\n'; return 1; }
