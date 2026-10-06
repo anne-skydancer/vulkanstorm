@@ -24,7 +24,7 @@ class StagingFailureTests(unittest.TestCase):
         self.libraries = ('vulkan-1.dll', 'GraphicsEngineVk_64r.dll') if windows else ('libvulkan.so.1', 'libGraphicsEngineVk.so')
         self.library_dir = self.stage if windows else self.stage / 'lib'
         self.host = self.stage / ('SLPlugin.exe' if windows else 'bin/SLPlugin')
-        self.media = self.stage / ('llplugin/media_plugin_cef.dll' if windows else 'bin/llplugin/media_plugin_cef.so')
+        self.media = self.stage / ('llplugin/media_plugin_cef.dll' if windows else 'bin/llplugin/libmedia_plugin_cef.so')
         self.cef_runtime = ['llplugin/vulkan-1.dll', 'llplugin/libcef.dll', 'llplugin/dullahan_host.exe'] if windows else ['lib/libcef.so', 'bin/dullahan_host']
         platform_files = ['vulkanstorm-bin.exe', *self.libraries] if windows else ['bin/vulkanstorm-bin', *(f'lib/{name}' for name in self.libraries)]
         files = [*platform_files, *self.cef_runtime,
@@ -76,6 +76,11 @@ class StagingFailureTests(unittest.TestCase):
 
     def test_missing_media_plugin(self):
         self.media.unlink()
+        with self.assertRaisesRegex(RuntimeError, 'media plugin'):
+            check(self.build)
+
+    def test_wrong_media_plugin_name(self):
+        self.media.rename(self.media.with_name('media_plugin_cef.so'))
         with self.assertRaisesRegex(RuntimeError, 'media plugin'):
             check(self.build)
 

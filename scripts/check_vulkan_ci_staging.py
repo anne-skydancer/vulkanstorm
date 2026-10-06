@@ -38,8 +38,10 @@ def check(directory):
     if not plugin.is_file():
         raise RuntimeError(f'Missing staged plugin host: {plugin}')
     plugins = root / ('llplugin' if windows else 'bin/llplugin')
-    if not any(plugins.glob('media_plugin_cef.*')):
+    media = plugins / ('media_plugin_cef.dll' if windows else 'libmedia_plugin_cef.so')
+    if not media.is_file():
         raise RuntimeError('Missing staged media plugin')
+    required.extend((plugin, media))
     # Both install directories must contain the very same pinned GHI archive bytes.
     packages = directory / 'packages'
     metadata = {name: json.loads((packages / 'metadata' / f'{name}.json').read_text()) for name in ('vulkan', 'diligentcore')}

@@ -181,5 +181,10 @@ it now uses the existing portable `llisnan` helper. The corrected source and
 catalog are in
 [run 37404552157](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37404552157).
 The local Windows viewer rebuild and staging check also passed with that fix.
-Successful Linux staging and a subsequent successful cached matrix are still
-required before accepting item 2.
+Linux viewer compilation then succeeded. The staging checker exposed a separate
+verification defect: Linux installs `bin/llplugin/libmedia_plugin_cef.so`, while
+the checker expected the Windows-style basename. The checker and platform
+fixtures now use the exact installed names, require actual asset files, and
+record plugin-host and media-plugin hashes. Successful corrected Linux staging
+and a subsequent successful cached matrix are still required before accepting
+item 2.
