@@ -166,25 +166,47 @@ driver performance or live-session behavior.
 
 ## Qualification record
 
-Acceptance remains pending as of 2026-10-06. The fresh Windows SwiftShader job in
-[run 37401120832](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37401120832)
-passed all six native checks and the complete viewer staging check. Its cache
-miss and subsequent cache save are recorded in the job log. Artifact review
-verified the staged viewer/test GHI library hashes, the pinned loaded ICD and
-validation layer, 21 runtime license hashes and 26 GHI license files. CEF's
-private Windows loader remains separate from the viewer's tested GHI loader.
+Item 2 is accepted following successful runs and artifact review on 2026-10-06.
+The qualified source is `1f146db5fc7ef845ec918a929bfb3baaff639a74`.
+Both the [complete matrix, run 37417749930](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37417749930)
+and the [subsequent cached matrix, run 37420913445](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37420913445)
+passed their source checks, all 59 regressions and every graphics job at that
+same source commit.
 
-Both Linux jobs in that run passed all six native checks. Their original and
-replacement readbacks exactly match Windows, including asymmetric clipping.
-Full Linux viewer compilation exposed an existing unqualified `isnan` assertion;
-it now uses the existing portable `llisnan` helper. The corrected source and
-catalog are in
-[run 37404552157](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37404552157).
-The local Windows viewer rebuild and staging check also passed with that fix.
-Linux viewer compilation then succeeded. The staging checker exposed a separate
-verification defect: Linux installs `bin/llplugin/libmedia_plugin_cef.so`, while
-the checker expected the Windows-style basename. The checker and platform
-fixtures now use the exact installed names, require actual asset files, and
-record plugin-host and media-plugin hashes. Successful corrected Linux staging
-and a subsequent successful cached matrix are still required before accepting
-item 2.
+| Configuration | Fresh dependency qualification | Cached qualification |
+| --- | --- | --- |
+| Windows SwiftShader | [37401120832](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37401120832): cache miss, six native checks and full staging passed | 37417749930 and 37420913445: cache restored, six native checks and full staging passed |
+| Linux SwiftShader | 37417749930: cache miss, six native checks, full staging and cache save passed | 37420913445: cache restored, six native checks and full staging passed |
+| Linux Lavapipe | 37417749930: cache miss, six native checks, full staging and cache save passed | 37420913445: cache restored, six native checks and full staging passed |
+
+The fresh Windows dependency build predates the portable viewer `llisnan`
+assertion and staging-checker corrections; its SDK recipe, dependency cache key
+and native test code are unchanged. Both complete matrices qualified the
+corrected viewer and checker at the source commit above.
+
+Artifact comparison verified runtime and GHI library hash identity between fresh
+and cached runs for each configuration, the loaded pinned ICD and validation
+layer, and byte-identical GHI libraries in the standalone test and viewer stages.
+Runtime license hashes were checked against the uploaded files: 21 for Windows
+SwiftShader, 20 for Linux SwiftShader and 11 for Lavapipe. Uploaded GHI license
+files also matched across runs. CEF's private Windows loader remains separate
+from the viewer's tested GHI loader.
+
+Both positive modes (offscreen and presentation) produced identical first and
+replacement RGB readbacks across all three configurations and their cached runs.
+Their SHA-256 hashes are:
+
+* First: `f1278a678c65167426e821bc1ae125df070cc005909c79b3dc14454167f3625a`.
+* Replacement: `15dcc45a3bcac94696fdabc82b2d811dbc4ababe2b38ec268c0fc8babf583099`.
+
+The CPU oracle separately checks every RGBA channel, including blending,
+asymmetric clipping and texture orientation. Core-validation, synchronization,
+wrong-pixel and reversed-orientation negative probes all failed normally with
+their expected diagnostics. Full RelWithDebInfo viewer compilation and staging
+passed, including required assets, CEF, plugin host and the exact platform media
+plugin names; staging evidence records the required binary hashes.
+
+This accepts the independent software Vulkan CI and standalone Diligent
+infrastructure. The staging evidence retains
+`native_viewer_runtime_qualified: false`: native viewer UI/chat, live sessions,
+physical devices, Wayland and performance remain outside this qualification.
