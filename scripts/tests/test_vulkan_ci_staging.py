@@ -55,6 +55,20 @@ class StagingFailureTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'asset group'):
             check(self.build)
 
+    def test_directories_do_not_count_as_assets(self):
+        for name in ('skins/default/xui/en/test.xml', 'fonts/test.ttf',
+                     'app_settings/shaders/test.glsl', 'licenses/vulkan-ghi/test.txt'):
+            with self.subTest(asset=name):
+                path = self.stage / name
+                path.unlink()
+                path.mkdir()
+                try:
+                    with self.assertRaisesRegex(RuntimeError, 'asset group'):
+                        check(self.build)
+                finally:
+                    path.rmdir()
+                    path.write_bytes(b'test')
+
     def test_missing_plugin(self):
         self.host.unlink()
         with self.assertRaisesRegex(RuntimeError, 'plugin host'):

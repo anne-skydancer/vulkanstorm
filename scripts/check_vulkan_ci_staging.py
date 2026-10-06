@@ -32,7 +32,7 @@ def check(directory):
             raise RuntimeError(f'Viewer/test harness GHI bytes differ: {name}')
     for folder, pattern in [('skins/default/xui/en', '*.xml'), ('fonts', '*.ttf'),
                             ('app_settings/shaders', '*.glsl'), ('licenses/vulkan-ghi', '*')]:
-        if not any((root / folder).rglob(pattern)):
+        if not any(path.is_file() for path in (root / folder).rglob(pattern)):
             raise RuntimeError(f'Missing staged asset group: {folder}')
     plugin = root / ('SLPlugin.exe' if windows else 'bin/SLPlugin')
     if not plugin.is_file():
