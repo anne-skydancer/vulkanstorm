@@ -94,7 +94,8 @@ it does not count Wayland as tested.
 
 Runtime cache entries include ICD/layer manifests, binaries, hashes and licenses,
 not source/build trees. Keys include host image, platform, driver, pins and build
-recipe. A cache hit still checks runtime lock agreement and binary hashes. GHI
+recipe, including the included Diligent CMake helper and dependency overlays.
+A cache hit still checks runtime lock agreement and binary hashes. GHI
 archives are reinstalled through Autobuild, not copied around its metadata checks.
 System compiler and development packages come from the runner; their actual
 versions are recorded. This is repeatable testing with recorded environments,
@@ -214,12 +215,58 @@ driver performance or live-session behavior.
 
 ## Qualification record
 
+### Dependency-lock checklist (Item 1)
+
+Item 1 is satisfied. Diligent/Vulkan pins and hashed overlays are retained in
+`3p/vulkan-dependencies.json`. SwiftShader and validation use immutable Git
+objects; validation's transitive revisions come from its pinned `known_good`
+file with immutable tag-object substitutions. Lavapipe uses Mesa 25.2.4 with an
+explicit archive SHA-256. Generated Autobuild archives and staged runtimes record
+SHA-256 hashes, source/package revisions and licenses. CI archives actual runner,
+compiler/build-tool and package metadata. Cache keys cover both locks, build
+scripts/options, the workflow, included Diligent CMake helpers and patch files,
+alongside platform, driver and runner image. The helper/patch inputs were added
+after the checklist audit found that the included CMake helper was omitted from
+the key; dependency sources, build options and binaries are unchanged.
+
+### General headless implementation qualification
+
+The extension at `957481d40710848516ae04696469a5f0d86bbefd` has now passed fresh
+and cached qualification with artifact review. No AMD/NVIDIA host is required.
+Both [37445355027](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37445355027)
+and [37445347375](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37445347375)
+concluded successfully at that source: 64 Python regressions, compiled selection
+policy checks, six presentation/offscreen modes, five no-display modes and full
+viewer staging on all three configurations.
+
+| Configuration | Fresh dependencies | Cached dependencies |
+| --- | --- | --- |
+| Windows SwiftShader | 37445347375, original successful Windows job | 37445355027 |
+| Linux Lavapipe | 37445347375, original successful Lavapipe job | 37445355027 |
+| Linux SwiftShader | 37445355027 | 37445347375, rerun of the interrupted job |
+
+The original Linux SwiftShader job in 37445347375 was interrupted by a runner
+shutdown during validation-layer compilation (exit 143), without a compiler
+diagnostic. The follow-up built its dependencies from a cache miss and saved
+them; the rerun restored that cache and passed. The original successful Windows
+and Lavapipe jobs were retained in the completed rerun.
+
+Artifact review verified lock/package revisions, toolchain metadata, runtime
+license hashes (21 Windows SwiftShader, 20 Linux SwiftShader, 11 Lavapipe), actual
+pinned ICD/layer mappings, viewer/test GHI byte identity and complete staging.
+Runtime and GHI hashes match between fresh/cached evidence, and every positive
+readback matches the first/replacement hashes below across headless and
+presentation runs on all three configurations. Headless evidence explicitly
+does not qualify presentation; native viewer runtime remains unqualified.
+
+### Earlier software-only qualification
+
 The earlier software-only infrastructure passed runs and artifact review on
 2026-10-06 at `1f146db5fc7ef845ec918a929bfb3baaff639a74`. Calling that complete
 Item 2 acceptance was premature: it omitted generic device selection and a
 separate no-display execution contract. The scope above corrects that omission
-without imposing an unavailable hardware-host requirement. Qualification of
-the extension remains pending its fresh/cached CI evidence review. Local Windows
+without imposing an unavailable hardware-host requirement. The extension's
+completed qualification is recorded above. Local Windows
 verification passed the compiled selection-policy test, all six existing modes
 and all five headless modes using the previously built pinned SwiftShader runtime.
 The earlier run evidence below remains valid for the earlier source.

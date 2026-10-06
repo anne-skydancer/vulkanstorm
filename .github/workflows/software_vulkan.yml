@@ -108,7 +108,7 @@ jobs:
             .ci/runtime/staged
             .ci/runtime/runtime.json
             .autobuild-installables
-          key: software-vulkan-v2-${{ runner.os }}-${{ matrix.driver }}-${{ env.CI_IMAGE_VERSION }}-${{ hashFiles('3p/vulkan-dependencies.json', 'scripts/vulkan_ci_dependencies.json', 'scripts/build_vulkan_dependencies.py', 'scripts/build_software_vulkan.py', '.github/workflows/software_vulkan.yml') }}
+          key: software-vulkan-v2-${{ runner.os }}-${{ matrix.driver }}-${{ env.CI_IMAGE_VERSION }}-${{ hashFiles('3p/vulkan-dependencies.json', '3p/3p-diligentcore/*.cmake', '3p/3p-diligentcore/*.patch', 'scripts/vulkan_ci_dependencies.json', 'scripts/build_vulkan_dependencies.py', 'scripts/build_software_vulkan.py', '.github/workflows/software_vulkan.yml') }}
       - name: Build and install pinned Autobuild GHI packages
         shell: bash
         run: |
