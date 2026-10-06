@@ -47,6 +47,9 @@ def checkout(directory, pin, overlays=()):
         if not dirty:
             run('git', '-C', directory, 'apply', '--check', patch)
             run('git', '-C', directory, 'apply', patch)
+            for name, sha in overlay['files'].items():
+                if normalized_hash(directory / name) != sha:
+                    raise RuntimeError(f'Patched source checksum mismatch: {name}')
     for name, sha in expected_files.items():
         if normalized_hash(directory / name) != sha:
             raise RuntimeError(f'Patched source checksum mismatch: {name}')

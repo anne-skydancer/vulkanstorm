@@ -47,6 +47,12 @@ uses a conservative acquire wait covering all commands. The `acquire1` package
 version and patch/resulting-source hashes distinguish the tested binary from
 unpatched DiligentCore. No performance benefit is claimed.
 
+Linux qualification also exposed unconditional requirements for unused Linux
+window systems. The [surface-extension overlay](../../3p/3p-diligentcore/available-linux-surfaces.md)
+enables advertised XCB/Xlib/Wayland extensions and rejects an unsupported surface
+when requested. The `wsi1` package revision retains mandatory X11 presentation;
+it does not count Wayland as tested.
+
 Runtime cache entries include ICD/layer manifests, binaries, hashes and licenses,
 not source/build trees. Keys include host image, platform, driver, pins and build
 recipe. A cache hit still checks runtime lock agreement and binary hashes. GHI
@@ -92,7 +98,9 @@ No GL window/context or GL rendering is used by the harness.
 Negative processes must fail normally with their expected diagnostic:
 
 * Zero-sized buffer: `VUID-VkBufferCreateInfo-size-00912` proves core validation
-  is loaded and reports invalid usage.
+  is loaded and reports invalid usage. Its callback requests abort before driver
+  dispatch; the probe requires `VK_ERROR_VALIDATION_FAILED_EXT`, avoiding an
+  invalid driver call that Mesa's asserted builds reject.
 * Consecutive buffer fills without a barrier: a write-after-write synchronization
   hazard proves synchronization validation is actually enabled.
 * Deliberately wrong expected pixel: oracle mismatch proves image failures are
