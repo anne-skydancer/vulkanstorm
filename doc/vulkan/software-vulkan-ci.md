@@ -90,7 +90,8 @@ linked into viewer runtime. Rendering calls use DiligentCore; raw Vulkan is
 limited to loader/device preflight and isolated intentional-invalid-use probes.
 
 The rendering oracle is an 8x8 RGBA8 target with a 2x2 asymmetric uploaded
-texture, nearest sampling, alpha blending and a central scissor. All pixels are
+texture, nearest sampling, alpha blending and an asymmetric scissor
+(left=1, top=2, right=6, bottom=7). All pixels are
 compared against independently computed CPU expectations, including untouched
 background and alpha. Interpolated vertex texture coordinates check Diligent's
 top-row convention (+NDC Y, texture V=0), rather than sampling by fragment

@@ -264,7 +264,8 @@ static void draw(IRenderDevice* device, IDeviceContext* context, ITexture* targe
     const float clear[]{16.f/255,32.f/255,48.f/255,1}; context->ClearRenderTarget(rtv, clear, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     context->SetPipelineState(pso);
     Viewport viewport{0.f,0.f,8.f,8.f}; context->SetViewports(1, &viewport, 8, 8);
-    Rect scissor{2,2,6,6}; context->SetScissorRects(1, &scissor, 8, 8);
+    // Asymmetric bounds expose scissor origin and axis conversion mistakes.
+    Rect scissor{1,2,6,7}; context->SetScissorRects(1, &scissor, 8, 8);
     context->CommitShaderResources(binding, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     DrawAttribs attributes{3, DRAW_FLAG_VERIFY_ALL}; context->Draw(attributes);
     context->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
@@ -289,7 +290,7 @@ static void compare(IDeviceContext* context, ITexture* texture, const Image& ima
         const auto* pixel = static_cast<const unsigned char*>(mapped.pData) + y * mapped.Stride + x * 4;
         output.write(reinterpret_cast<const char*>(pixel), 3);
         Pixel expected = background;
-        if (x >= 2 && x < 6 && y >= 2 && y < 6)
+        if (x >= 1 && x < 6 && y >= 2 && y < 7)
         {
             auto& source = image[(y / 4) * 2 + x / 4];
             for (unsigned c = 0; c < 3; ++c)
