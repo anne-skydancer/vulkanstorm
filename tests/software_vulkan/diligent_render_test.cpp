@@ -192,22 +192,27 @@ static const Image first{{Pixel{255,0,0,128}, Pixel{0,255,0,128}, Pixel{0,0,255,
 static const Image second{{Pixel{0,255,255,128}, Pixel{255,0,255,128}, Pixel{255,255,0,128}, Pixel{0,0,0,128}}};
 static const Pixel background{16,32,48,255};
 
-static RefCntAutoPtr<IPipelineState> pipeline(IRenderDevice* device)
+static RefCntAutoPtr<IPipelineState> pipeline(IRenderDevice* device, bool flipOrientation)
 {
-    const char* vs = R"(
-void main() { vec2 p=vec2((gl_VertexIndex<<1)&2,gl_VertexIndex&2); gl_Position=vec4(p*2.0-1.0,0,1); }
+    // Diligent's Vulkan viewport maps +NDC Y to the top row. Interpolated
+    // texture V must therefore be zero at +Y; this exercises that convention.
+    const std::string vs = std::string{R"(
+layout(location=0) out vec2 texUV;
+void main() { vec2 p=vec2((gl_VertexIndex<<1)&2,gl_VertexIndex&2); texUV=vec2(p.x,)"} +
+        (flipOrientation ? "p.y" : "1.0-p.y") + R"(); gl_Position=vec4(p*2.0-1.0,0,1); }
 )";
     const char* fs = R"(
+layout(location=0) in vec2 texUV;
 layout(location=0) out vec4 color;
 uniform sampler2D g_Texture;
-void main() { color=texture(g_Texture,gl_FragCoord.xy/vec2(8.0)); }
+void main() { color=texture(g_Texture,texUV); }
 )";
     ShaderCreateInfo shaderCI{}; shaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_GLSL;
     shaderCI.GLSLVersion = {4,5}; // Diligent inserts the single #version directive.
     shaderCI.Desc.UseCombinedTextureSamplers = true;
     shaderCI.EntryPoint = "main";
     RefCntAutoPtr<IShader> vertex, fragment;
-    shaderCI.Desc.Name = "Test vertex"; shaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX; shaderCI.Source = vs;
+    shaderCI.Desc.Name = "Test vertex"; shaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX; shaderCI.Source = vs.c_str();
     device->CreateShader(shaderCI, &vertex); require(vertex != nullptr, "Vertex shader failed");
     shaderCI.Desc.Name = "Test fragment"; shaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL; shaderCI.Source = fs;
     device->CreateShader(shaderCI, &fragment); require(fragment != nullptr, "Fragment shader failed");
@@ -245,9 +250,9 @@ static RefCntAutoPtr<ITexture> texture(IRenderDevice* device, bool staging, bool
     require(result != nullptr, "Texture creation failed"); return result;
 }
 
-static void draw(IRenderDevice* device, IDeviceContext* context, ITexture* target, ITexture* readback, const Image& image)
+static void draw(IRenderDevice* device, IDeviceContext* context, ITexture* target, ITexture* readback, const Image& image, bool flipOrientation = false)
 {
-    auto pso = pipeline(device);
+    auto pso = pipeline(device, flipOrientation);
     auto uploaded = texture(device, false, false);
     TextureSubResData data{}; data.pData = image.data(); data.Stride = 2 * sizeof(Pixel);
     context->UpdateTexture(uploaded, 0, 0, Box{0,2,0,2}, data, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -324,9 +329,9 @@ int main(int argc, char** argv)
 {
     try
     {
-        require(argc == 3, "Usage: diligent_render_test DRIVER {offscreen|present|invalid|invalid-sync|bad-pixels}");
+        require(argc == 3, "Usage: diligent_render_test DRIVER {offscreen|present|invalid|invalid-sync|bad-pixels|bad-orientation}");
         const std::string mode = argv[2];
-        require(mode == "offscreen" || mode == "present" || mode == "invalid" || mode == "invalid-sync" || mode == "bad-pixels", "Unknown mode");
+        require(mode == "offscreen" || mode == "present" || mode == "invalid" || mode == "invalid-sync" || mode == "bad-pixels" || mode == "bad-orientation", "Unknown mode");
         preflight(argv[1], mode);
 #if PLATFORM_WIN32
         auto* factory = LoadAndGetEngineFactoryVk();
@@ -346,7 +351,7 @@ int main(int argc, char** argv)
             std::cout << "DILIGENT_DEVICE=" << device->GetAdapterInfo().Description << '\n';
             auto target = texture(device, false, true);
             auto a = texture(device, true, false), b = texture(device, true, false);
-            draw(device, context, target, a, first); draw(device, context, target, b, second);
+            draw(device, context, target, a, first, mode == "bad-orientation"); draw(device, context, target, b, second);
             context->WaitForIdle();
             compare(context, a, first, "first.ppm", mode == "bad-pixels");
             compare(context, b, second, "replacement.ppm", false);

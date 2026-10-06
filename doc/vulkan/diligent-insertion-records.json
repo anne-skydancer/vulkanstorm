@@ -2863,8 +2863,8 @@
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
       "start": 1,
-      "end": 383,
-      "sha256": "95492a4bca1d16223a0b18dd7ff9a1d0ef964bf5ed0443aae3c6b485dd0a527a",
+      "end": 388,
+      "sha256": "714624c7940a5a3b7b2c66324be1b28179b2a1d60172c3c7524395c41caca3a0",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone software-Vulkan CI executable outside viewer runtime targets. Its raw Vulkan calls are device/layer preflight and isolated negative probes; Diligent draw/lifecycle callbacks belong only to this test. Uses the viewer-pinned Autobuild packages, native HWND/SDL2-X11 and CPU readback oracle. This exclusion does not qualify viewer runtime."

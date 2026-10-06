@@ -25,6 +25,8 @@ class RunnerFailureTests(unittest.TestCase):
     def test_bad_pixels_must_reach_oracle(self):
         self.assertFalse(assess('bad-pixels', 1, 'Shader compilation failed'))
         self.assertTrue(assess('bad-pixels', 1, 'Pixel oracle mismatch'))
+        self.assertFalse(assess('bad-orientation', 1, 'Shader compilation failed'))
+        self.assertTrue(assess('bad-orientation', 1, 'Pixel oracle mismatch'))
 
     def test_sync_probe_requires_actual_hazard(self):
         self.assertFalse(assess('invalid-sync', 1, 'Validation reported an error'))

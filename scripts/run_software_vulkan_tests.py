@@ -64,7 +64,7 @@ def assess(mode, code, log):
         return code == 1 and 'VUID-VkBufferCreateInfo-size-00912' in log and 'Validation reported an error' in log
     if mode == 'invalid-sync':
         return code == 1 and 'SYNC-HAZARD-WRITE-AFTER-WRITE' in log and 'Validation reported an error' in log
-    if mode == 'bad-pixels':
+    if mode in ('bad-pixels', 'bad-orientation'):
         return code == 1 and 'Pixel oracle mismatch' in log
     return code == 0 and f'PASS {mode}' in log and 'DILIGENT_DEVICE=' in log and 'LOADED=' in log
 
@@ -109,7 +109,7 @@ def main():
               'tests': []}
     failed = False
     with windows_manifest_registration(runtime, args.register_windows_manifests):
-        for mode in ('offscreen', 'present', 'invalid', 'invalid-sync', 'bad-pixels'):
+        for mode in ('offscreen', 'present', 'invalid', 'invalid-sync', 'bad-pixels', 'bad-orientation'):
             directory = evidence / mode; directory.mkdir(exist_ok=True)
             try:
                 process = subprocess.run([str(executable), expected, mode], cwd=directory, env=env,

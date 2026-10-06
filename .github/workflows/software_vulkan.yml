@@ -152,18 +152,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          autobuild install -A 64 -c RelWithDebInfoFS_open --install-dir '${{ matrix.viewer_directory }}/packages'
           python scripts/build_vulkan_dependencies.py --work-dir .ci/ghi --install-only \
             --install-dir '${{ matrix.viewer_directory }}/packages'
       - name: Configure and stage development viewer without installer
         shell: bash
         run: |
           set -euo pipefail
-          autobuild configure -A 64 -c RelWithDebInfoFS_open -- \
+          eval "$(autobuild source_environment -c RelWithDebInfoFS_open)"
+          export LL_BUILD
+          options=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
+            options+=(-G 'Visual Studio 17 2022' -A x64)
+          fi
+          # CMake's existing use_prebuilt_binary() installs only enabled viewer
+          # dependencies through Autobuild, excluding disabled local SDK URLs.
+          cmake -S indra -B '${{ matrix.viewer_directory }}' "${options[@]}" \
+            -DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo -DADDRESS_SIZE:STRING=64 \
+            -DVIEWER_CHANNEL:STRING=Vulkanstorm-Vulkan-Development -DROOT_PROJECT_NAME:STRING=Firestorm \
+            -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
             -DUSE_DILIGENTCORE:BOOL=ON -DUSE_MESAZINK:BOOL=OFF -DPACKAGE:BOOL=OFF \
             -DUSE_INNOSETUP:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF -DUSE_TRACY:BOOL=OFF \
-            -DUSE_KDU:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
-            -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF
+            -DUSE_KDU:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
+            -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
+            -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
+            -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
+            -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
+            -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
           cmake --build '${{ matrix.viewer_directory }}' --config RelWithDebInfo --parallel 3
           python scripts/check_vulkan_ci_staging.py '${{ matrix.viewer_directory }}'
       - name: Record source and build environment

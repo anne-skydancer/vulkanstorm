@@ -83,7 +83,9 @@ limited to loader/device preflight and isolated intentional-invalid-use probes.
 The rendering oracle is an 8x8 RGBA8 target with a 2x2 asymmetric uploaded
 texture, nearest sampling, alpha blending and a central scissor. All pixels are
 compared against independently computed CPU expectations, including untouched
-background and alpha. One UNORM rounding unit is permitted. Both original and
+background and alpha. Interpolated vertex texture coordinates check Diligent's
+top-row convention (+NDC Y, texture V=0), rather than sampling by fragment
+position. One UNORM rounding unit is permitted. Both original and
 replacement generations are copied to separate staging textures. The test drops
 caller-owned texture, binding and pipeline references after submission, submits
 the replacement, then waits and checks both generations. PPMs and diagnostics
@@ -105,14 +107,19 @@ Negative processes must fail normally with their expected diagnostic:
   hazard proves synchronization validation is actually enabled.
 * Deliberately wrong expected pixel: oracle mismatch proves image failures are
   decisive rather than ignored.
+* Deliberately flipped vertex texture V: the same CPU oracle must reject reversed
+  texture orientation, independently of the pixel-expectation corruption probe.
 
 A crash, timeout, unrelated error or successful invalid-use process does not
 pass a negative test. Positive tests require normal exit, device/library evidence,
 readback artifacts and no error diagnostics. Optional untested capabilities
 cannot be relabeled as passed or silently substituted with OpenGL.
 
-The viewer is built with Autobuild's `RelWithDebInfoFS_open` configuration,
-Release-equivalent dependency/feature choices and packaging disabled. Existing
+The viewer uses Autobuild's `RelWithDebInfoFS_open` environment and the existing
+CMake `use_prebuilt_binary()` installer, selecting only enabled dependencies.
+This avoids unconditional installation of disabled FMOD/Kakadu packages with
+local-only SDK URLs. Configuration follows production CI's CMake path with
+RelWithDebInfo, Release-equivalent dependency/feature choices and packaging disabled. Existing
 manifest copy targets stage libraries, plugins, shaders, fonts and XUI without
 an installer. A staging checker verifies required assets and that the viewer's
 GHI library bytes match those tested. It does not launch the existing GL viewer
