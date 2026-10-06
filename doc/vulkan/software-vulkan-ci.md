@@ -133,10 +133,23 @@ caller-owned texture, binding and pipeline references after submission, submits
 the replacement, then waits and checks both generations. PPMs and diagnostics
 are retained even when comparison fails.
 
-Native presentation exercises clear/present, resize, a skipped minimized frame,
-restore, resource completion and destruction on Win32 and SDL2/X11. Minimize
-events on a virtual display do not establish every desktop/window-manager
-behavior, nor does this test establish DPI handling or full viewer UI correctness.
+Native presentation verifies client and swapchain extents at creation (128x128),
+resize (160x96) and restoration (128x128), with three presentations at each size.
+The suspended-frame gate receives explicit zero-extent notifications (0x0,
+0x96 and 160x0) and two minimized steps; these must not resize, draw or present.
+It retains the valid swapchain until a nonzero extent is restored. This tests
+application handling of zero-size events, not creation of an invalid zero-sized
+Vulkan swapchain. HWND minimization must be observed; SDL2/X11 records whether
+the window manager honored the minimize request. Xvfb without a window manager
+can still exercise the logical suspended state, but cannot qualify a desktop
+minimize event that did not occur. Shutdown releases the swapchain before the
+native window and then releases device/context ownership.
+
+The runner requires `presentation.json` with the exact lifecycle sequence,
+frame/skip counts, platform window API and completed shutdown. Missing, stale or
+incomplete native evidence fails the presentation mode even if offscreen
+readbacks pass. Virtual-display tests do not establish every desktop/window-manager
+behavior, DPI handling or full viewer UI correctness.
 No GL window/context or GL rendering is used by the harness.
 
 Negative processes must fail normally with their expected diagnostic:
@@ -258,6 +271,28 @@ contain RGB; alpha is checked in-process by the RGBA oracle. No hardware host is
 required, and no vendor-specific execution or native viewer UI/chat result is
 claimed. Item 4's native presentation contract remains a separate acceptance
 audit; offscreen success does not substitute for it.
+
+### Native presentation checklist (Item 4)
+
+The acceptance audit found gaps in the earlier test: it skipped a minimized
+frame without explicit zero-extent cases, did not assert actual resized extents
+and supplied no presentation-specific lifecycle artifact. These are now
+implemented as described in the test contract above. Win32 client-size requests
+include window borders; the asymmetric resize uses 160x96 rather than a smaller
+size that Windows' minimum tracking constraints can clamp.
+
+Local Windows verification passed all six modes with the stronger test. Its
+native evidence reports nine presentations, three zero-extent skips, two
+minimized skips, observed HWND minimization and successful swapchain/window/device
+shutdown. The presentation runner has regression cases rejecting absent
+artifacts, incomplete sequence/counts, incomplete shutdown and an unobserved
+Windows minimized state. The headless suite remains separate.
+
+Item 4 acceptance is pending a successful updated Windows SwiftShader/Linux
+SwiftShader/Linux Lavapipe matrix and review of its presentation artifacts.
+Earlier positive runs do not establish the newly asserted native contract.
+No hardware host is an acceptance requirement; the Xvfb window-manager limit
+must remain explicit in the qualification record.
 
 ### General headless implementation qualification
 

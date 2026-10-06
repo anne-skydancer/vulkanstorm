@@ -2863,11 +2863,11 @@
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
       "start": 1,
-      "end": 459,
-      "sha256": "60a36ed066b336299be29d0120a9cd28543dcd4d65424abdb4d0ea18a809b326",
+      "end": 556,
+      "sha256": "5d64cf479cbb26f71e000d0c5fde498f99cfb566a6eef0538cd7a5ebe2bd3afb",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Its raw Vulkan calls are device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls belong only to this test. Uses viewer-pinned Autobuild packages, automatic or explicit adapter selection, headless readback and separate native HWND/SDL2-X11 presentation. Synthetic selection-policy checks do not claim vendor execution. This exclusion does not qualify viewer runtime."
+      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution."
     }
   ]
 }
