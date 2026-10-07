@@ -25,6 +25,7 @@
  */
 
 #include "linden_common.h"
+#include <stdexcept>
 
 #if LL_WINDOWS && !LL_MESA_HEADLESS
 
@@ -523,11 +524,12 @@ LLWindowWin32::LLWindowWin32(LLWindowCallbacks* callbacks,
     mMaxGLVersion(max_gl_version),
     mMaxCores(max_cores)
 {
+    mUseGL = use_gl;
     sMainThreadId = LLThread::currentID();
     mWindowThread = new LLWindowWin32Thread();
 
     //MAINT-516 -- force a load of opengl32.dll just in case windows went sideways
-    LoadLibrary(L"opengl32.dll");
+    if (mUseGL) LoadLibrary(L"opengl32.dll");
 
     // Request high-performance GPU before creating OpenGL context
     // This increases probability of discrete GPU being used when
@@ -896,7 +898,18 @@ LLWindowWin32::LLWindowWin32(LLWindowCallbacks* callbacks,
     LLCoordScreen windowPos(x,y);
     LLCoordScreen windowSize(window_rect.right - window_rect.left,
                              window_rect.bottom - window_rect.top);
-    if (!switchContext(mFullscreen, windowSize, enable_vsync, &windowPos))
+    if (!mUseGL)
+    {
+        const DWORD style = WS_OVERLAPPEDWINDOW;
+        const DWORD extended = WS_EX_APPWINDOW | WS_EX_WINDOWEDGE;
+        AdjustWindowRectEx(&window_rect, style, FALSE, extended);
+        OffsetRect(&window_rect, x, y);
+        recreateWindow(window_rect, extended, style);
+        if (!mWindowHandle) return;
+        SetWindowLongPtr(mWindowHandle, GWLP_USERDATA, (LONG_PTR)this);
+        mPostQuit = true;
+    }
+    else if (!switchContext(mFullscreen, windowSize, enable_vsync, &windowPos))
     {
         return;
     }
@@ -1026,7 +1039,7 @@ void LLWindowWin32::close()
     }
 
     // Clean up remaining GL state
-    if (gGLManager.mInited)
+    if (mUseGL && gGLManager.mInited)
     {
         LL_INFOS("Window") << "Cleaning up GL" << LL_ENDL;
         gGLManager.shutdownGL();
@@ -1049,7 +1062,7 @@ void LLWindowWin32::close()
     }
 
     // Restore gamma to the system values.
-    restoreGamma();
+    if (mUseGL) restoreGamma();
 
     LL_INFOS("Window") << "Cleanup and destruction of Window Thread" << LL_ENDL;
 
@@ -1059,6 +1072,22 @@ void LLWindowWin32::close()
     }
 
     mhDC = NULL;
+    if (!mUseGL)
+    {
+        // Vulkan teardown must observe destruction before releasing callback owners.
+        std::promise<void> destroyed;
+        auto completed = destroyed.get_future();
+        mWindowThread->Post(mWindowHandle, [this, &destroyed]()
+        {
+            SetWindowLongPtr(mWindowHandle, GWLP_USERDATA, 0);
+            mWindowThread->destroyWindow();
+            destroyed.set_value();
+        });
+        completed.get();
+        mWindowHandle = NULL;
+        mWindowThread->close();
+        return;
+    }
     mWindowHandle = NULL;
 
     if (mWindowThread->wakeAndDestroy())
@@ -1168,6 +1197,13 @@ bool LLWindowWin32::getPosition(LLCoordScreen *position)
 
 bool LLWindowWin32::getSize(LLCoordScreen *size)
 {
+    if (!mUseGL)
+    {
+        RECT rect{};
+        if (!GetWindowRect(mWindowHandle, &rect)) return false;
+        size->mX = rect.right - rect.left; size->mY = rect.bottom - rect.top;
+        return true;
+    }
     size->mX = mRect.right - mRect.left;
     size->mY = mRect.bottom - mRect.top;
     return true;
@@ -1175,6 +1211,13 @@ bool LLWindowWin32::getSize(LLCoordScreen *size)
 
 bool LLWindowWin32::getSize(LLCoordWindow *size)
 {
+    if (!mUseGL)
+    {
+        RECT rect{};
+        if (!GetClientRect(mWindowHandle, &rect)) return false;
+        size->mX = rect.right - rect.left; size->mY = rect.bottom - rect.top;
+        return true;
+    }
     size->mX = mClientRect.right - mClientRect.left;
     size->mY = mClientRect.bottom - mClientRect.top;
     return true;
@@ -1233,6 +1276,7 @@ bool LLWindowWin32::setSizeImpl(const LLCoordWindow size)
 // changing fullscreen resolution
 bool LLWindowWin32::switchContext(bool fullscreen, const LLCoordScreen& size, bool enable_vsync, const LLCoordScreen* const posp)
 {
+    if (!mUseGL) throw std::logic_error("GL context switch in native Vulkan window");
     //called from main thread
     GLuint  pixel_format;
     DEVMODE dev_mode;
@@ -1948,6 +1992,7 @@ void LLWindowWin32::recreateWindow(RECT window_rect, DWORD dw_ex_style, DWORD dw
 
 void* LLWindowWin32::createSharedContext()
 {
+    if (!mUseGL) throw std::logic_error("GL shared context in native Vulkan window");
     mMaxGLVersion = llclamp(mMaxGLVersion, 3.f, 4.6f);
 
     S32 version_major = llfloor(mMaxGLVersion);
@@ -2004,17 +2049,20 @@ void* LLWindowWin32::createSharedContext()
 
 void LLWindowWin32::makeContextCurrent(void* contextPtr)
 {
+    if (!mUseGL) throw std::logic_error("GL context binding in native Vulkan window");
     wglMakeCurrent(mhDC, (HGLRC) contextPtr);
 
 }
 
 void LLWindowWin32::destroySharedContext(void* contextPtr)
 {
+    if (!mUseGL) throw std::logic_error("GL context destruction in native Vulkan window");
     wglDeleteContext((HGLRC)contextPtr);
 }
 
 void LLWindowWin32::toggleVSync(bool enable_vsync)
 {
+    if (!mUseGL) throw std::logic_error("GL vsync in native Vulkan window");
     if (wglSwapIntervalEXT == nullptr)
     {
         LL_INFOS("Window") << "VSync: wglSwapIntervalEXT not initialized" << LL_ENDL;
@@ -3960,6 +4008,7 @@ bool LLWindowWin32::resetDisplayResolution()
 
 void LLWindowWin32::swapBuffers()
 {
+    if (!mUseGL) throw std::logic_error("GL presentation in native Vulkan window");
     {
         LL_PROFILE_ZONE_SCOPED_CATEGORY_WIN32;
         SwapBuffers(mhDC);
@@ -5486,6 +5535,7 @@ void LLWindowWin32::LLWindowWin32Thread::run()
 
 void LLWindowWin32::LLWindowWin32Thread::destroyWindow()
 {
+    if (!mWindowHandleThrd) return;
     if (mWindowHandleThrd != NULL && IsWindow(mWindowHandleThrd))
             {
                 if (mhDCThrd)

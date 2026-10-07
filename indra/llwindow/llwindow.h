@@ -308,6 +308,7 @@ constexpr S32 OSBTN_CANCEL = 3;
 class LLWindowManager
 {
 public:
+    enum class GraphicsAPI { OpenGL, Vulkan };
     static LLWindow *createWindow(
         LLWindowCallbacks* callbacks,
         const std::string& title, const std::string& name, S32 x, S32 y, S32 width, S32 height,
@@ -320,7 +321,8 @@ public:
         U32 fsaa_samples = 0,
         U32 max_cores = 0,
         F32 max_gl_version = 4.6f,
-        bool useLegacyCursors = false); // <FS:LO> Legacy cursor setting from main program
+        bool useLegacyCursors = false,
+        GraphicsAPI graphics_api = GraphicsAPI::OpenGL);
     static bool destroyWindow(LLWindow* window);
     static bool isWindowValid(LLWindow *window);
 };

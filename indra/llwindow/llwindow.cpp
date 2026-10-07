@@ -418,11 +418,32 @@ LLWindow* LLWindowManager::createWindow(
     U32 fsaa_samples,
     U32 max_cores,
     F32 max_gl_version,
-    bool useLegacyCursors) // <FS:LO> Legacy cursor setting from main program
+    bool useLegacyCursors,
+    GraphicsAPI graphics_api)
 {
     LLWindow* new_window;
 
-    if (use_gl)
+    if (graphics_api == GraphicsAPI::Vulkan)
+    {
+        if (fullscreen)
+        {
+            LL_WARNS("Vulkan") << "Native Vulkan fullscreen admission is not implemented" << LL_ENDL;
+            return nullptr;
+        }
+#if LL_WINDOWS
+        new_window = new LLWindowWin32(callbacks, title, name, x, y, width, height,
+            flags, false, clearBg, enable_vsync, false, ignore_pixel_depth,
+            0, max_cores, max_gl_version, useLegacyCursors);
+#elif LL_SDL && LL_SDL2
+        new_window = new LLWindowSDL(callbacks, title, x, y, width, height,
+            flags, false, clearBg, enable_vsync, false, ignore_pixel_depth,
+            0, useLegacyCursors);
+#else
+        LL_WARNS("Vulkan") << "Native Vulkan window mode is unsupported on this platform" << LL_ENDL;
+        return nullptr;
+#endif
+    }
+    else if (use_gl)
     {
 #if LL_MESA_HEADLESS
         new_window = new LLWindowMesaHeadless(callbacks,

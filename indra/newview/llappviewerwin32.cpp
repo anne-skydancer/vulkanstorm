@@ -873,7 +873,7 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
 
     NvDRSSessionHandle hSession = 0;
     static LLCachedControl<bool> use_nv_api(gSavedSettings, "NvAPICreateApplicationProfile", true);
-    if (use_nv_api)
+    if (!viewer_app_ptr->isVulkanDiagnostic() && use_nv_api)
     {
         NvAPI_Status status;
 
@@ -932,7 +932,7 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
         }
 #endif
 
-        gGLActive = true;
+        if (!viewer_app_ptr->isVulkanDiagnostic()) gGLActive = true;
 
         viewer_app_ptr->cleanup();
 
@@ -949,6 +949,7 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
 #endif
 
     }
+    const int diagnostic_exit_code = viewer_app_ptr->vulkanDiagnosticExitCode();
     delete viewer_app_ptr;
     viewer_app_ptr = NULL;
 
@@ -959,7 +960,7 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
         hSession = 0;
     }
 
-    return 0;
+    return diagnostic_exit_code;
 }
 
 #if DEBUGGING_SEH_FILTER
@@ -1230,6 +1231,9 @@ static void checkTemp()
 
 bool LLAppViewerWin32::init()
 {
+#if VS_VULKAN_DIAGNOSTICS
+    if (std::getenv("VS_VULKAN_DIAGNOSTIC")) return LLAppViewer::init();
+#endif
     bool success{ false }; // <FS:ND/> For BugSplat we need to call base::init() early on or there's no access to settings.
     // Platform specific initialization.
 
@@ -1396,6 +1400,7 @@ bool LLAppViewerWin32::init()
 
 bool LLAppViewerWin32::cleanup()
 {
+    if (isVulkanDiagnostic()) return LLAppViewer::cleanup();
     bool result = LLAppViewer::cleanup();
 
     gDXHardware.cleanup();

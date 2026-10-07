@@ -28,6 +28,9 @@
 #if LL_SDL2
 
 #include "linden_common.h"
+#include <algorithm>
+#include <iterator>
+#include <stdexcept>
 
 #include "llwindowsdl.h"
 
@@ -397,8 +400,10 @@ LLWindowSDL::LLWindowSDL(LLWindowCallbacks* callbacks,
     gKeyboard->setCallbacks(callbacks);
     // Note that we can't set up key-repeat until after SDL has init'd video
 
-    // Ignore use_gl for now, only used for drones on PC
+    mUseGL = use_gl;
     mWindow = NULL;
+    mSurface = nullptr;
+    std::fill(std::begin(mSDLCursors), std::end(mSDLCursors), nullptr);
     mContext = {};
     mNeedsResize = false;
     mOverrideAspectRatio = 0.f;
@@ -427,16 +432,17 @@ LLWindowSDL::LLWindowSDL(LLWindowCallbacks* callbacks,
         mWindowTitle = title;
 
     // Create the GL context and set it up for windowed or fullscreen, as appropriate.
-    if(createContext(x, y, width, height, 32, fullscreen, enable_vsync))
+    if (mUseGL ? createContext(x, y, width, height, 32, fullscreen, enable_vsync)
+               : createNativeWindow(x, y, width, height))
     {
-        gGLManager.initGL();
+        if (mUseGL) gGLManager.initGL();
 
         //start with arrow cursor
         initCursors(useLegacyCursors); // <FS:LO> Legacy cursor setting from main program
         setCursor( UI_CURSOR_ARROW );
     }
 
-    stop_glerror();
+    if (mUseGL) stop_glerror();
 
     // Stash an object pointer for OSMessageBox()
     gWindowImplementation = this;
@@ -448,6 +454,32 @@ LLWindowSDL::LLWindowSDL(LLWindowCallbacks* callbacks,
 
     mKeyVirtualKey = 0;
     mKeyModifiers = KMOD_NONE;
+}
+
+bool LLWindowSDL::createNativeWindow(S32 x, S32 y, S32 width, S32 height)
+{
+    SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) return false;
+    mSDLFlags = SDL_WINDOW_RESIZABLE;
+    mWindow = SDL_CreateWindow(mWindowTitle.c_str(), x, y, width, height, mSDLFlags);
+    if (!mWindow) return false;
+#if LL_X11
+    SDL_SysWMinfo info{};
+    SDL_VERSION(&info.version);
+    if (!SDL_GetWindowWMInfo(mWindow, &info) || info.subsystem != SDL_SYSWM_X11)
+    {
+        LL_WARNS("Vulkan") << "Native Vulkan viewer currently requires SDL2/X11" << LL_ENDL;
+        SDL_DestroyWindow(mWindow);
+        mWindow = nullptr;
+        return false;
+    }
+    mSDL_Display = info.info.x11.display;
+    mSDL_XWindowID = info.info.x11.window;
+    SDL_StartTextInput();
+    return true;
+#else
+    return false;
+#endif
 }
 
 static SDL_Surface *Load_BMP_Resource(const char *basename)
@@ -923,6 +955,7 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
 // changing fullscreen resolution, or switching between windowed and fullscreen mode.
 bool LLWindowSDL::switchContext(bool fullscreen, const LLCoordScreen &size, bool enable_vsync, const LLCoordScreen * const posp)
 {
+    if (!mUseGL) throw std::logic_error("GL context switch in native Vulkan window");
     const bool needsRebuild = true;  // Just nuke the context and start over.
     bool result = true;
 
@@ -961,11 +994,13 @@ void LLWindowSDL::destroyContext()
 
     // Clean up remaining GL state before blowing away window
     LL_INFOS() << "shutdownGL begins" << LL_ENDL;
-    gGLManager.shutdownGL();
+    if (mUseGL && gGLManager.mInited) gGLManager.shutdownGL();
+    if (!mUseGL && mWindow) SDL_DestroyWindow(mWindow);
     LL_INFOS() << "SDL_QuitSS/VID begins" << LL_ENDL;
     SDL_QuitSubSystem(SDL_INIT_VIDEO);  // *FIX: this might be risky...
 
     mWindow = NULL;
+    mSurface = nullptr;
 }
 
 LLWindowSDL::~LLWindowSDL()
@@ -984,23 +1019,27 @@ LLWindowSDL::~LLWindowSDL()
 
 void LLWindowSDL::show()
 {
+    if (!mUseGL && mWindow) SDL_ShowWindow(mWindow);
     // *FIX: What to do with SDL?
 }
 
 void LLWindowSDL::hide()
 {
+    if (!mUseGL && mWindow) SDL_HideWindow(mWindow);
     // *FIX: What to do with SDL?
 }
 
 //virtual
 void LLWindowSDL::minimize()
 {
+    if (!mUseGL && mWindow) SDL_MinimizeWindow(mWindow);
     // *FIX: What to do with SDL?
 }
 
 //virtual
 void LLWindowSDL::restore()
 {
+    if (!mUseGL && mWindow) SDL_RestoreWindow(mWindow);
     // *FIX: What to do with SDL?
 }
 
@@ -1090,6 +1129,11 @@ bool LLWindowSDL::getPosition(LLCoordScreen *position)
 
 bool LLWindowSDL::getSize(LLCoordScreen *size)
 {
+    if (!mUseGL && mWindow)
+    {
+        SDL_GetWindowSize(mWindow, &size->mX, &size->mY);
+        return true;
+    }
     if (mSurface)
     {
         size->mX = mSurface->w;
@@ -1102,6 +1146,11 @@ bool LLWindowSDL::getSize(LLCoordScreen *size)
 
 bool LLWindowSDL::getSize(LLCoordWindow *size)
 {
+    if (!mUseGL && mWindow)
+    {
+        SDL_GetWindowSize(mWindow, &size->mX, &size->mY);
+        return true;
+    }
     if (mSurface)
     {
         size->mX = mSurface->w;
@@ -1159,6 +1208,7 @@ bool LLWindowSDL::setSizeImpl(const LLCoordWindow size)
 
 void LLWindowSDL::swapBuffers()
 {
+    if (!mUseGL) throw std::logic_error("GL presentation in native Vulkan window");
     if (mWindow)
     {
         SDL_GL_SwapWindow( mWindow );
@@ -1495,7 +1545,9 @@ bool LLWindowSDL::convertCoords(LLCoordGL from, LLCoordWindow *to)
         return false;
 
     to->mX = from.mX;
-    to->mY = mSurface->h - from.mY - 1;
+    LLCoordWindow size;
+    if (!getSize(&size)) return false;
+    to->mY = size.mY - from.mY - 1;
 
     return true;
 }
@@ -1506,7 +1558,9 @@ bool LLWindowSDL::convertCoords(LLCoordWindow from, LLCoordGL* to)
         return false;
 
     to->mX = from.mX;
-    to->mY = mSurface->h - from.mY - 1;
+    LLCoordWindow size;
+    if (!getSize(&size)) return false;
+    to->mY = size.mY - from.mY - 1;
 
     return true;
 }
@@ -2021,7 +2075,7 @@ void LLWindowSDL::gatherInput()
 
                     S32 width = llmax(event.window.data1, (S32)mMinWindowWidth);
                     S32 height = llmax(event.window.data2, (S32)mMinWindowHeight);
-                    mSurface = SDL_GetWindowSurface( mWindow );
+                    if (mUseGL) mSurface = SDL_GetWindowSurface( mWindow );
 
                     // *FIX: I'm not sure this is necessary!
                     // <FS:ND> I think is is not
@@ -2558,7 +2612,7 @@ void LLWindowSDL::openFile(const std::string& file_name)
 
 void *LLWindowSDL::getPlatformWindow()
 {
-    return NULL;
+    return mUseGL ? nullptr : mWindow;
 }
 
 void LLWindowSDL::bringToFront()
@@ -2687,6 +2741,7 @@ class sharedContext
 
 void* LLWindowSDL::createSharedContext()
 {
+    if (!mUseGL) throw std::logic_error("GL shared context in native Vulkan window");
     sharedContext* sc = new sharedContext();
     sc->mContext = SDL_GL_CreateContext(mWindow);
     if (sc->mContext)
@@ -2716,12 +2771,14 @@ void* LLWindowSDL::createSharedContext()
 
 void LLWindowSDL::makeContextCurrent(void* context)
 {
+    if (!mUseGL) throw std::logic_error("GL context binding in native Vulkan window");
     LL_PROFILER_GPU_CONTEXT;
     SDL_GL_MakeCurrent(mWindow, ((sharedContext*)context)->mContext);
 }
 
 void LLWindowSDL::destroySharedContext(void* context)
 {
+    if (!mUseGL) throw std::logic_error("GL context destruction in native Vulkan window");
     sharedContext* sc = (sharedContext*)context;
 
     SDL_GL_DeleteContext(sc->mContext);
@@ -2731,6 +2788,7 @@ void LLWindowSDL::destroySharedContext(void* context)
 
 void LLWindowSDL::toggleVSync(bool enable_vsync)
 {
+    if (!mUseGL) throw std::logic_error("GL vsync in native Vulkan window");
     if (enable_vsync)
     {
         // try adaptive vsync first (-1) and if that fails, try regular vsync (1)
