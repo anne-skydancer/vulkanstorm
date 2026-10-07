@@ -24,7 +24,46 @@ caused by bugs in the AMD OpenGL ICD. It is not a Vulkan fallback.
 If Vulkan initialization or required capabilities fail, report the cause and
 stop the Vulkan session without attempting OpenGL rendering.
 
-The first executable milestone is a minimal native-Vulkan UI and in-world chat
+### Scope expansion: viewer world presentation
+
+The user expanded the first deliverable on 7 October 2026 to include native
+Vulkan world rendering and presentation in the viewer, alongside UI and
+connected nearby chat. The earlier UI/chat-only milestone below is retained as
+an intermediate implementation checkpoint; its no-world boundary no longer
+defines completion of the first deliverable.
+
+World acceptance must exercise the viewer's own startup, native window,
+device/swapchain ownership, CPU scene and asset producers, shader/resource
+contracts, world frame submission, UI composition, presentation and teardown.
+A standalone Diligent harness supplies prerequisite evidence but cannot accept
+viewer integration or world rendering. The user requires **full supported
+rendering parity**, including lighting, shadows, water, transparency and
+post-processing. A reduced world feature tier is an intermediate checkpoint,
+not acceptance of this deliverable. Reconcile supported legacy/PBR materials,
+geometry, avatars, terrain, sky, HUD, shadows/probes/mirrors, water, sorted
+transparency and supported PPLL behavior, glow, temporal effects and all
+supported post-processing routes against the existing parity matrix.
+
+The current insertion catalog's WP1/WP2 provide platform and rendering
+infrastructure, WP3 UI/chat, and WP4/WP5 world production and composition.
+Supported WP6 auxiliary consumers (including previews, bakes and captures)
+also require parity; the old UI/chat exclusions do not authorize dropping
+supported viewer functionality from the expanded deliverable. Capability-based
+alternatives must preserve the supported functional contract, with explicit
+evidence for limitations. The existing UI/chat source acceptance remains valid only
+for its original scope; it does not accept expanded world routes or turn its
+proposed gates into implemented code. Extend route and shader accounting for
+the world tier, using the existing component designs and render-graph outline.
+
+Software-device CI remains the general correctness infrastructure, with normal
+machine-driver discovery in the viewer. AMD/NVIDIA hosts are not a prerequisite
+for implementation acceptance; actual vendor-driver compatibility and physical
+GPU performance remain unmeasured unless tested. Vulkan remains a peer backend
+with no OpenGL fallback.
+
+### Intermediate UI/chat checkpoint (original scope)
+
+The original first executable milestone is a minimal native-Vulkan UI and in-world chat
 interface, with **no world rendering**. In-world means a connected session with
 working chat; it does not require a rendered scene or world-space chat bubbles.
 Use a clear background behind the UI. Preserve the CPU/session services needed
