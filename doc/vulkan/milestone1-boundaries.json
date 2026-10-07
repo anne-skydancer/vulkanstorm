@@ -1,5 +1,5 @@
 {
-  "source_commit": "ed93e08e753863e4908e31767e91b2da3fe0290d",
+  "source_commit": "b24f6e3ff5cf63a7b3a0b17db954f9522b71ec1d",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "closed-admission-set for future UI/chat; a separate native window/clear diagnostic is implemented; full UI/chat gate contracts remain requirements",
@@ -341,7 +341,7 @@
       ]
     },
     "indra/newview/vsvulkandiagnostic.cpp": {
-      "sha256": "84675ee708322fe8314a05412d24f253b4720dd86f1094decb2b16fa3d283703",
+      "sha256": "21729fced39bf0dc2b1ef04cbcc1f098cbd47c918d97917096b131f26279dba5",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -4768,7 +4768,7 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "ed93e08e753863e4908e31767e91b2da3fe0290d",
+    "source_commit": "b24f6e3ff5cf63a7b3a0b17db954f9522b71ec1d",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
