@@ -1,6 +1,6 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-Source: `f2317bc04f99e653e62e31abe6e10880a9259d9a` on `vkstorm-vulkan`.
+Source: `8435085e8c141b449b58bc51b9d2f2c415b4b2ce` on `vkstorm-vulkan`.
 Status: implemented development diagnostic; local Windows SwiftShader execution
 passed. Updated Windows/Linux CI and artifact review remain required for
 cross-platform acceptance. No UI/chat or world rendering acceptance is claimed.
@@ -45,7 +45,7 @@ The diagnostic requires Khronos validation. Software ICD isolation and
 synchronization-validation settings are supplied by the CI launcher; they do
 not change normal machine-driver discovery into a software-only product policy.
 
-The source is [vsvulkandiagnostic.cpp](../../indra/newview/vsvulkandiagnostic.cpp).
+The source is [vsvkdiag.cpp](../../indra/newview/vsvkdiag.cpp).
 Its window integration is reusable infrastructure; its scripted frame progression,
 fault injections and development entry controls are qualification facilities.
 The later usable UI/chat backend must add its actual resources and scheduling;
