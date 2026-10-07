@@ -1,6 +1,6 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-Source: `b24f6e3ff5cf63a7b3a0b17db954f9522b71ec1d` on `vkstorm-vulkan`.
+Source: `f2317bc04f99e653e62e31abe6e10880a9259d9a` on `vkstorm-vulkan`.
 Status: implemented development diagnostic; local Windows SwiftShader execution
 passed. Updated Windows/Linux CI and artifact review remain required for
 cross-platform acceptance. No UI/chat or world rendering acceptance is claimed.
@@ -10,6 +10,16 @@ Linux Lavapipe viewer build failed because the diagnostic used unqualified SDL
 headers. The corrected includes use `SDL2/SDL.h` and `SDL2/SDL_syswm.h`, matching
 the viewer's Autobuild include root and existing SDL2 window implementation.
 Linux build and runtime acceptance remain pending the corrected CI run.
+
+The next Linux build reached Diligent parsing and exposed inherited X11
+`Bool`/`True`/`False` and `sys/mman.h` `MAP_TYPE` macro collisions. The diagnostic
+now saves, undefines and restores those macros around its Diligent includes.
+Its evidence label uses a preprocessor platform branch because `LL_WINDOWS`
+is undefined on Linux. A local Clang syntax probe using the pinned SDK's Linux
+interfaces passed with all four conflicting macros defined, verified Diligent
+structure sizes and the readback mapping signature, and checked that the
+platform macros were restored. This is a header compatibility check on Windows;
+the complete Linux viewer build and execution still require CI evidence.
 
 ## Implemented integration
 

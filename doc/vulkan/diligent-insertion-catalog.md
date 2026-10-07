@@ -1,7 +1,7 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `b24f6e3ff5cf63a7b3a0b17db954f9522b71ec1d`. DiligentCore is the selected
+source `f2317bc04f99e653e62e31abe6e10880a9259d9a`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
