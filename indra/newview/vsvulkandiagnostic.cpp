@@ -5,8 +5,22 @@
 #include "llwindowcallbacks.h"
 #include "llkeyboard.h"
 #include "llgl.h"
+// The viewer PCH imports X11 and sys/mman.h macros with Diligent type names.
+// Preserve the platform definitions while parsing the GHI's C++ interfaces.
+#pragma push_macro("Bool")
+#pragma push_macro("False")
+#pragma push_macro("True")
+#pragma push_macro("MAP_TYPE")
+#undef Bool
+#undef False
+#undef True
+#undef MAP_TYPE
 #include <DiligentCore/Graphics/GraphicsEngineVulkan/interface/EngineFactoryVk.h>
 #include <DiligentCore/Common/interface/RefCntAutoPtr.hpp>
+#pragma pop_macro("MAP_TYPE")
+#pragma pop_macro("True")
+#pragma pop_macro("False")
+#pragma pop_macro("Bool")
 #include <vulkan/vulkan.h>
 #include <boost/json.hpp>
 #include <atomic>
@@ -324,10 +338,15 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     }
     void write()
     {
+#if LL_WINDOWS
+        constexpr const char* window_api = "Win32";
+#else
+        constexpr const char* window_api = "SDL2/X11";
+#endif
         boost::json::object record{{"schema", 1}, {"mode", "viewer-native-diagnostic"},
             {"application_lifecycle", "LLAppViewer::init/frame/cleanup"},
             {"window_factory", "LLWindowManager::createWindow"},
-            {"window_api", LL_WINDOWS ? "Win32" : "SDL2/X11"},
+            {"window_api", window_api},
             {"device", identity}, {"stages", stages}, {"presented_frames", frames},
             {"zero_extent_skips", zero_skips}, {"minimized_skips", minimized_skips},
             {"native_minimize_observed", minimized_observed}, {"resize_events", resize_events},
