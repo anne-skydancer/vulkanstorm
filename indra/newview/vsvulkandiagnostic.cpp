@@ -21,8 +21,8 @@
 #if LL_WINDOWS
 #include <tlhelp32.h>
 #else
-#include <SDL.h>
-#include <SDL_syswm.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_syswm.h>
 #include <X11/Xlib-xcb.h>
 #endif
 
