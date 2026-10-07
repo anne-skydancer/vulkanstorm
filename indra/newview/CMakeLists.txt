@@ -2261,7 +2261,7 @@ endif()
 
 list(APPEND viewer_SOURCE_FILES ${viewer_HEADER_FILES})
 if(VS_VULKAN_DIAGNOSTICS)
-  list(APPEND viewer_SOURCE_FILES vsvulkandiagnostic.cpp vsvulkandiagnostic.h)
+  list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h)
 endif()
 
 add_executable(${VIEWER_BINARY_NAME}
