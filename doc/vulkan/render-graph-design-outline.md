@@ -189,6 +189,11 @@ the pass-plan and render-graph sections are required downstream, not optional).
    `run_software_vulkan_tests.py`, evidence artifacts, headless mode) on a
    Windows/Linux x SwiftShader/Lavapipe software-GPU matrix, plus a staged
    development viewer built with `-DUSE_DILIGENTCORE=ON`. Architectural
-   containment enforced by `check_diligent_insertions.py` and
-   `check_milestone1_boundaries.py` in CI. Remaining gap: hardware-GPU
-   qualification (NVIDIA/AMD/Intel); software-device qualification is live.
+   containment has source-accounting checks through
+   `check_diligent_insertions.py` and `check_milestone1_boundaries.py` in CI;
+   these checks do not enforce runtime gates. Hardware-GPU
+   compatibility/performance measurements (NVIDIA/AMD/Intel) remain
+   unmeasured and are not an implementation acceptance requirement. Assume
+   AMD/NVIDIA hosts are unavailable. The immediate implementation gap is the
+   native viewer path, covered by [viewer-integration-plan.md](viewer-integration-plan.md);
+   software-device harness qualification does not close that gap.
