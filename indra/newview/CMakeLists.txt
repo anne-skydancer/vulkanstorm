@@ -35,6 +35,13 @@ include(LLPrimitive)
 include(LLWindow)
 include(MesaZink)
 include(DiligentCore)
+option(VS_VULKAN_DIAGNOSTICS "Build development-only native Vulkan viewer diagnostics" OFF)
+if(VS_VULKAN_DIAGNOSTICS AND NOT USE_DILIGENTCORE)
+  message(FATAL_ERROR "VS_VULKAN_DIAGNOSTICS requires the pinned DiligentCore GHI")
+endif()
+if(VS_VULKAN_DIAGNOSTICS AND NOT CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+  message(FATAL_ERROR "Native viewer diagnostics require a RelWithDebInfo development build")
+endif()
 include(NDOF)
 include(NVAPI)
 include(OPENAL)
@@ -2253,6 +2260,9 @@ if( DEFINED LLSTARTUP_COMPILE_FLAGS )
 endif()
 
 list(APPEND viewer_SOURCE_FILES ${viewer_HEADER_FILES})
+if(VS_VULKAN_DIAGNOSTICS)
+  list(APPEND viewer_SOURCE_FILES vsvulkandiagnostic.cpp vsvulkandiagnostic.h)
+endif()
 
 add_executable(${VIEWER_BINARY_NAME}
     WIN32
@@ -2603,6 +2613,15 @@ endif (WINDOWS)
 # variables, PNG_PRELOAD_ARCHIVES and ZLIBNG_PRELOAD_ARCHIVES, get the archives
 # dumped into the target binary and runtime lookup will find the most
 # modern version.
+
+if(VS_VULKAN_DIAGNOSTICS)
+  target_compile_definitions(${VIEWER_BINARY_NAME} PRIVATE VS_VULKAN_DIAGNOSTICS=1)
+  target_link_libraries(${VIEWER_BINARY_NAME} ll::diligentcore ll::vulkan)
+  if(LINUX)
+    find_library(VS_X11_XCB_LIBRARY X11-xcb REQUIRED)
+    target_link_libraries(${VIEWER_BINARY_NAME} ${VS_X11_XCB_LIBRARY})
+  endif()
+endif()
 
 target_link_libraries(${VIEWER_BINARY_NAME}
         llaudio

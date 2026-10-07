@@ -257,6 +257,7 @@ protected:
     bool isSystemAppDarkMode();
     void setCustomIcon();
     bool mCurrentDarkMode { false };
+    bool mUseGL;
 
     struct LLWindowWin32Thread;
     LLWindowWin32Thread* mWindowThread = nullptr;

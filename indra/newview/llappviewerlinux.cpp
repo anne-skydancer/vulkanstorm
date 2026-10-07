@@ -189,9 +189,10 @@ int main( int argc, char **argv )
         //
         viewer_app_ptr->cleanup();
     }
+    const int diagnostic_exit_code = viewer_app_ptr->vulkanDiagnosticExitCode();
     delete viewer_app_ptr;
     viewer_app_ptr = NULL;
-    return 0;
+    return diagnostic_exit_code;
 }
 
 LLAppViewerLinux::LLAppViewerLinux()
@@ -265,6 +266,7 @@ bool LLAppViewerLinux::init()
     // really early in app startup!
 
     bool success = LLAppViewer::init();
+    if (isVulkanDiagnostic()) return success;
 
 #if LL_SEND_CRASH_REPORTS
     S32 nCrashSubmitBehavior = gCrashSettings.getS32("CrashSubmitBehavior");

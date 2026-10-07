@@ -237,6 +237,8 @@ private:
     std::string mInputType;
 
     bool mUseLegacyCursors; // <FS:LO> Legacy cursor setting from main program
+    bool mUseGL;
+    bool createNativeWindow(S32 x, S32 y, S32 width, S32 height);
 
 public:
 #if LL_X11

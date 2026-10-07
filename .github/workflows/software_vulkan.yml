@@ -36,6 +36,7 @@ jobs:
       - run: python -m unittest discover -s doc/vulkan -p 'test_*.py'
       - run: python scripts/tests/test_progress_panels.py
       - run: python scripts/tests/test_software_vulkan_runner.py
+      - run: python scripts/tests/test_vulkan_viewer_diagnostic.py
       - run: python scripts/tests/test_vulkan_ci_staging.py
       - run: python scripts/tests/test_vulkan_dependency_overlay.py
       - run: python scripts/tests/test_software_vulkan_dependencies.py
@@ -185,7 +186,7 @@ jobs:
             -DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo -DADDRESS_SIZE:STRING=64 \
             -DVIEWER_CHANNEL:STRING=Vulkanstorm-Vulkan-Development -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
-            -DUSE_DILIGENTCORE:BOOL=ON -DUSE_MESAZINK:BOOL=OFF -DPACKAGE:BOOL=OFF \
+            -DUSE_DILIGENTCORE:BOOL=ON -DVS_VULKAN_DIAGNOSTICS:BOOL=ON -DUSE_MESAZINK:BOOL=OFF -DPACKAGE:BOOL=OFF \
             -DUSE_INNOSETUP:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF -DUSE_TRACY:BOOL=OFF \
             -DUSE_KDU:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
             -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
@@ -195,6 +196,21 @@ jobs:
             -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
           cmake --build '${{ matrix.viewer_directory }}' --config RelWithDebInfo --parallel 3
           python scripts/check_vulkan_ci_staging.py '${{ matrix.viewer_directory }}'
+      - name: Native Vulkan presentation through the staged viewer
+        shell: bash
+        run: |
+          set -euo pipefail
+          options=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            options+=(--register-windows-manifests)
+            python scripts/run_vulkan_viewer_diagnostic.py \
+              --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+              --harness-evidence .ci/evidence/results.json --evidence .ci/viewer-evidence "${options[@]}"
+          else
+            xvfb-run -a -s '-screen 0 1024x768x24' python scripts/run_vulkan_viewer_diagnostic.py \
+              --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+              --harness-evidence .ci/evidence/results.json --evidence .ci/viewer-evidence
+          fi
       - name: Record source and build environment
         if: always()
         shell: bash
@@ -220,6 +236,7 @@ jobs:
           path: |
             .ci/evidence
             .ci/headless-evidence
+            .ci/viewer-evidence
             .ci/runtime/runtime.json
             .ci/runtime/staged/licenses
             .ci/ghi/autobuild.xml

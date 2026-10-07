@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llappviewer.h"
+#if VS_VULKAN_DIAGNOSTICS
+#include "vsvulkandiagnostic.h"
+#endif
 
 // Viewer includes
 #include "llversioninfo.h"
@@ -810,7 +813,10 @@ LLAppViewer::LLAppViewer()
 
     gLoggedInTime.stop();
 
-    processMarkerFiles();
+#if VS_VULKAN_DIAGNOSTICS
+    if (!std::getenv("VS_VULKAN_DIAGNOSTIC"))
+#endif
+        processMarkerFiles();
     //
     // OK to write stuff to logs now, we've now crash reported if necessary
     //
@@ -844,7 +850,7 @@ LLAppViewer::~LLAppViewer()
     destroyMainloopTimeout();
 
     // If we got to this destructor somehow, the app didn't hang.
-    removeMarkerFiles();
+    if (!isVulkanDiagnostic()) removeMarkerFiles();
 }
 
 class LLUITranslationBridge : public LLTranslationBridge
@@ -857,8 +863,36 @@ public:
 };
 
 
+bool LLAppViewer::isVulkanDiagnostic() const
+{
+#if VS_VULKAN_DIAGNOSTICS
+    return mVulkanDiagnostic != nullptr;
+#else
+    return false;
+#endif
+}
+
+int LLAppViewer::vulkanDiagnosticExitCode() const
+{
+#if VS_VULKAN_DIAGNOSTICS
+    return mVulkanDiagnostic ? mVulkanDiagnostic->exitCode() : 0;
+#else
+    return 0;
+#endif
+}
+
 bool LLAppViewer::init()
 {
+#if VS_VULKAN_DIAGNOSTICS
+    if (const char* evidence = std::getenv("VS_VULKAN_DIAGNOSTIC"))
+    {
+        // Closed diagnostic admission before GL, UI, scene or worker bootstrap.
+        gGLActive = false;
+        mVulkanDiagnostic = std::make_unique<VSVulkanDiagnostic>(evidence);
+        mVulkanDiagnostic->initialize();
+        return true; // Initialization failures still traverse owned cleanup.
+    }
+#endif
     setupErrorHandling(mSecondInstance);
 
     nd::octree::debug::setOctreeLogFilename( gDirUtilp->getExpandedFilename(LL_PATH_LOGS, "octree.log" ) ); // <FS:ND/> Filename to log octree options to.
@@ -1520,6 +1554,9 @@ LLTrace::BlockTimerStatHandle FTM_FRAME("Frame");
 
 bool LLAppViewer::frame()
 {
+#if VS_VULKAN_DIAGNOSTICS
+    if (mVulkanDiagnostic) return mVulkanDiagnostic->frame();
+#endif
     bool ret = false;
 
     if (gSimulateMemLeak)
@@ -1996,6 +2033,13 @@ void LLAppViewer::flushLFSIO()
 
 bool LLAppViewer::cleanup()
 {
+#if VS_VULKAN_DIAGNOSTICS
+    if (mVulkanDiagnostic)
+    {
+        mVulkanDiagnostic->cleanup();
+        return mVulkanDiagnostic->exitCode() == 0;
+    }
+#endif
 #if LL_VELOPACK
     // Apply any pending Velopack update before shutdown
     if (velopack_is_update_pending())

@@ -52,6 +52,11 @@
 #include "threadpool_fwd.h"
 
 #include <boost/signals2.hpp>
+#include <memory>
+
+#if VS_VULKAN_DIAGNOSTICS
+class VSVulkanDiagnostic;
+#endif
 
 class LLCommandLineParser;
 class LLFrameTimer;
@@ -102,6 +107,13 @@ public:
     virtual bool init();            // Override to do application initialization
     virtual bool cleanup();         // Override to do application cleanup
     virtual bool frame(); // Override for application body logic
+    bool isVulkanDiagnostic() const;
+    int vulkanDiagnosticExitCode() const;
+#if VS_VULKAN_DIAGNOSTICS
+private:
+    std::unique_ptr<VSVulkanDiagnostic> mVulkanDiagnostic;
+public:
+#endif
 
     // Application control
     void flushLFSIO(); // waits for lfs transfers to complete
