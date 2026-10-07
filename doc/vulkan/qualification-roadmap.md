@@ -30,7 +30,20 @@ The user expanded the first deliverable on 7 October 2026 to include native
 Vulkan world rendering and presentation in the viewer, alongside UI and
 connected nearby chat. The earlier UI/chat-only milestone below is retained as
 an intermediate implementation checkpoint; its no-world boundary no longer
-defines completion of the first deliverable.
+defines completion of the first deliverable. Implementation remains incremental:
+**UI/chat first, then gradually add world rendering elements**. Full supported
+parity is the final target, not a prerequisite for accepting each intermediate
+checkpoint.
+
+First implement and qualify the native viewer window/device/presentation path
+and the existing UI/chat slice without world rendering. Then introduce bounded
+world slices in dependency order, extending scene admission, resource/shader
+contracts and frame composition for each slice. Qualify each increment in the
+viewer and retain UI/chat and lifecycle regression coverage before proceeding.
+Deferred world routes remain gated until their implementation is admitted;
+the gates evolve as elements are added rather than being removed wholesale.
+The existing WP4/WP5 designs supply the world dependency order; detailed slice
+boundaries and acceptance cases must be planned before each increment.
 
 World acceptance must exercise the viewer's own startup, native window,
 device/swapchain ownership, CPU scene and asset producers, shader/resource
@@ -81,7 +94,7 @@ for authentication, connection, incoming messages and outgoing chat.
 Implement the UI/session slice before world parity work. Scope the insertion
 audit and qualification to every dependency reachable by that slice; unresolved
 in-scope paths remain blockers. World shader, PPLL, bake, media, preview and full
-scene parity gates below apply to later deliverables unless required by the
+scene parity gates below apply to later implementation checkpoints unless required by the
 minimal UI/chat path. A successful first milestone establishes native UI/chat
 correctness, not full viewer parity or a performance improvement.
 
