@@ -21,6 +21,11 @@ deferred graphics gates and shutdown ownership. It accepts source analysis and
 planning only; implementing those gates and qualifying native rendering remain
 subsequent work.
 
+The [viewer integration plan](viewer-integration-plan.md) closes the separate
+harness-to-viewer implementation gap: native viewer window/presentation,
+UI/chat, then qualified world increments toward full supported parity. It
+defines dependencies and viewer-specific exit evidence, not completed code.
+
 [Item 2 Vulkan implementation CI](software-vulkan-ci.md) defines the independent
 Windows/Linux workflow using software devices to test general Vulkan correctness,
 automatic driver selection, headless standalone Diligent tests, staging and

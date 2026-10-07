@@ -45,6 +45,11 @@ the gates evolve as elements are added rather than being removed wholesale.
 The existing WP4/WP5 designs supply the world dependency order; detailed slice
 boundaries and acceptance cases must be planned before each increment.
 
+The [viewer integration plan](viewer-integration-plan.md) makes that sequence
+concrete, with native viewer window/presentation, UI/chat and incremental world
+stages. Its acceptance evidence must execute viewer code; standalone GHI tests
+cannot close the viewer integration gap.
+
 World acceptance must exercise the viewer's own startup, native window,
 device/swapchain ownership, CPU scene and asset producers, shader/resource
 contracts, world frame submission, UI composition, presentation and teardown.
