@@ -1,6 +1,9 @@
 # Native Vulkan viewer integration plan
 
 Status: implementation plan, not implemented or runtime-qualified.
+V1/V2 now have an [implemented native viewer diagnostic](viewer-native-presentation.md)
+with local Windows execution evidence and cross-platform CI acceptance pending.
+The remaining UI/chat and world stages are still planned work.
 Planning source: `417e32891aee7bddf73a1ac1bbf7226133f78286` on
 `vkstorm-vulkan`, reviewed on 7 October 2026. Continue authorized implementation
 on that branch. New viewer-owned C++ files use the `vs` prefix; standalone tools

@@ -1,7 +1,7 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `48dcecfd18de92e01a23c70a22497ce85e0acd3d`. DiligentCore is the selected
+source `ed93e08e753863e4908e31767e91b2da3fe0290d`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
@@ -38,6 +38,20 @@ headless execution; its software drivers are CI infrastructure. Viewer rendering
 source and item 1's 43 route-source
 hashes are unchanged. The dependency overlay has local Windows SwiftShader
 evidence; full CI and viewer runtime qualification remain separate.
+
+## Native viewer checkpoint refresh
+
+The current source now implements a development-only native viewer
+window/clear/presentation path. Its [implementation and qualification record](viewer-native-presentation.md)
+distinguishes actual viewer execution from standalone harness evidence. Native
+UI/chat and world rendering remain unimplemented. The diagnostic source has
+whole-file I02 reviews; affected factory, platform and startup/cleanup ranges
+were re-reviewed and their positions/hashes refreshed. The current generated
+ledger has 28,302 candidates in 1,734 files (19 standalone test-only candidates).
+The UI/chat boundary manifest now covers 51 hashed source files, including the
+new diagnostic and its application/window interfaces. Registry admission and
+the complete proposed UI/chat gate set remain implementation requirements.
+Local Windows diagnostic evidence does not establish cross-platform parity.
 
 ## Evidence and interpretation
 

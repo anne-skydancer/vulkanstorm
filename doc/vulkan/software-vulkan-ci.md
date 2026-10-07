@@ -16,7 +16,9 @@ production driver policy. Assume AMD/NVIDIA hosts are never available: no vendor
 runner, physical GPU or vendor-driver result is required for Item 2 acceptance.
 The production viewer must discover and use the machine's installed Vulkan
 drivers; software ICD isolation belongs only to this standalone CI launcher.
-The native viewer backend and its integration remain subsequent work.
+The native viewer now has a [development window/clear/presentation checkpoint](viewer-native-presentation.md).
+Its staged execution is a separate required workflow step. UI/chat and world
+backend integration remain subsequent work; harness success does not qualify them.
 
 The executable's `auto` path enumerates available Vulkan devices, preferring a
 discrete GPU, then integrated GPU, then virtual GPU, then another available

@@ -23,6 +23,16 @@ XUI is the accepted baseline. Identical XUI with those fixes is successful.
 
 ## Configuration and retained behavior
 
+Current-source refresh on 7 October 2026: the catalog and manifest are pinned
+to `ed93e08e753863e4908e31767e91b2da3fe0290d`. A separate native viewer diagnostic
+branches before normal bootstrap and exercises window/device/presentation and
+owned cleanup. Its [qualification record](viewer-native-presentation.md) is
+separate from this UI/chat acceptance. Changed source/ranges were reviewed;
+51 source hashes now include the diagnostic and platform/application interfaces.
+The complete UI/chat gate set remains unimplemented and this manifest retains
+`gates_implemented=false`. The earlier baseline/counts below are historical
+source acceptance, not current native UI/chat or world execution evidence.
+
 Implement on `vkstorm-vulkan`, with the pinned DiligentCore Vulkan backend.
 Vulkan is a peer backend. Failed initialization or device recovery terminates
 the Vulkan session with a useful error; there is no OpenGL fallback. GL/Zink

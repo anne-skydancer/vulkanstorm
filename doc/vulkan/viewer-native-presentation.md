@@ -1,0 +1,111 @@
+# Native presentation in the viewer: first implementation checkpoint
+
+Source: `ed93e08e753863e4908e31767e91b2da3fe0290d` on `vkstorm-vulkan`.
+Status: implemented development diagnostic; local Windows SwiftShader execution
+passed. Updated Windows/Linux CI and artifact review remain required for
+cross-platform acceptance. No UI/chat or world rendering acceptance is claimed.
+
+## Implemented integration
+
+The staged viewer executable now has a development-only native Vulkan mode.
+`LLAppViewer::init` admits it before the normal GL/UI/world/worker bootstrap;
+`frame` runs its event/presentation lifecycle; `cleanup` releases only its owned
+resources. Platform entry points return its actual failure code and skip normal
+GL/NVAPI startup and unowned platform cleanup. The diagnostic does not save user
+settings or create/remove normal viewer run markers.
+
+`LLWindowManager::GraphicsAPI::Vulkan` creates the real Win32 or SDL2 viewer
+window; legacy `use_gl=false` without this explicit mode still means headless.
+Win32 avoids the GL provider/context and queries actual native client geometry.
+SDL2 creates a resizable X11 window without `SDL_WINDOW_OPENGL`, exports its
+owned SDL handle for native extraction, and uses window dimensions rather than a
+GL/software SDL surface for input-coordinate conversion. Unsupported Vulkan
+fullscreen admission is rejected. Native GL context/swap/vsync entry points
+throw before entering the GL API.
+
+The diagnostic owns the pinned Diligent factory/device/context/swapchain, uses
+queried adapter identities and prefers an available machine GPU over software.
+The diagnostic requires Khronos validation. Software ICD isolation and
+synchronization-validation settings are supplied by the CI launcher; they do
+not change normal machine-driver discovery into a software-only product policy.
+
+The source is [vsvulkandiagnostic.cpp](../../indra/newview/vsvulkandiagnostic.cpp).
+Its window integration is reusable infrastructure; its scripted frame progression,
+fault injections and development entry controls are qualification facilities.
+The later usable UI/chat backend must add its actual resources and scheduling;
+the diagnostic does not implement them.
+
+## Cases and evidence
+
+The positive viewer case presents three frames each at initial 320x240,
+resized 640x360 and restored 320x240. It suspends three injected zero-extent
+notifications and two minimized frame attempts without presenting. Win32 must
+observe actual HWND minimization. SDL2/X11 records whether a window manager
+honored the request; Xvfb alone cannot qualify an absent minimize event.
+
+A copy/readback of the viewer's final clear backbuffer verifies RGB (16,32,48)
+within one UNORM unit and alpha 255, accounting explicitly for RGBA/BGRA surface
+storage. `viewer-clear.ppm` preserves that image. Uniform clear pixels do not
+qualify UI/text orientation, blending or world drawing; those remain later tests.
+
+Seven failure stages (`before-window`, `after-window`, `after-device`,
+`after-swapchain`, `frame`, `shutdown`, `gl-trap`) and a wrong-clear-pixel case
+prove that expected errors reach the process exit and CI runner while owned
+cleanup completes. These are application fault injections, not claims of actual
+driver device-loss or OS allocation-failure qualification.
+
+Shutdown unbinds targets, waits for submitted work, releases the swapchain,
+destroys the native viewer window (joining its Win32 thread), then releases
+device/context ownership. JSON lifecycle evidence and module mappings are
+required. Missing validation, wrong selected device/library, crashes, timeouts,
+unexpected diagnostics or missing/stale evidence fail the launcher. The native
+window entry traps and GL-manager state assertions cover this bounded path;
+they do not establish that the later full viewer callback closure is GL-free.
+
+Local verification on 7 October 2026:
+
+* Full Autobuild-backed `RelWithDebInfo` viewer build and complete runtime,
+  plugin and asset staging passed without generating an installer.
+* All nine viewer cases passed on the pinned local Windows SwiftShader runtime;
+  that runtime retains its earlier prototype-recipe qualification limit.
+* The positive case observed HWND minimization, recorded 9 presentations,
+  3 zero-extent skips and 2 minimized skips, verified the clear readback, and
+  completed shutdown with zero Diligent/validation errors.
+* The runner verified actual mapped GHI/loader/ICD/layer hashes and matching
+  selected device identity against prerequisite harness evidence.
+
+Local artifacts are in `.tmp/viewer-vulkan-diagnostic-local`; they are not a
+substitute for archived CI evidence. Linux runtime behavior is pending CI.
+
+## Reproduction and CI
+
+Use the existing Vulkan Autobuild packages and viewer feature configuration,
+with `USE_DILIGENTCORE=ON`, `VS_VULKAN_DIAGNOSTICS=ON`, `PACKAGE=OFF` and
+`CMAKE_BUILD_TYPE=RelWithDebInfo`. Diagnostics default OFF and are not compiled
+into ordinary production builds. The option requires the pinned GHI and a
+RelWithDebInfo development configuration.
+
+The [dedicated workflow](../../.github/workflows/software_vulkan.yml) builds and
+stages the viewer first, then launches the same executable from its staged
+directory through [run_vulkan_viewer_diagnostic.py](../../scripts/run_vulkan_viewer_diagnostic.py).
+The Windows case uses hosted-only temporary manifest registration; Linux uses
+Xvfb. Release publishing and `latest` remain untouched.
+
+Local Windows commands after configuring the existing build:
+
+```text
+cmake --build build-vulkan-ci-local --config RelWithDebInfo --parallel 3
+python scripts/check_vulkan_ci_staging.py build-vulkan-ci-local
+python scripts/run_vulkan_viewer_diagnostic.py --build-directory build-vulkan-ci-local --runtime .tmp/software-vulkan-runtime/runtime.json --harness-evidence .tmp/vulkan-presentation-item4-local/results.json --evidence .tmp/viewer-vulkan-diagnostic-local
+```
+
+The launcher supplies `VS_VULKAN_DIAGNOSTIC` as a fresh evidence directory and
+`VS_VULKAN_DIAGNOSTIC_FAIL` only for isolated negative cases. Invoke through the
+launcher for qualification: setting the diagnostic environment variable alone
+does not supply validation configuration, pin verification or evidence review.
+
+Next work is V3/V4 in the [viewer integration plan](viewer-integration-plan.md):
+native UI resources and ordered drawing, then the connected UI/chat closure.
+World elements follow incrementally after that checkpoint. This diagnostic
+closes the initial native window/clear/presentation seam, not the entire
+harness-to-viewer integration gap or full supported rendering parity.
