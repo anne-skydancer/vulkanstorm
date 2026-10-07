@@ -6,7 +6,9 @@ deliverable includes UI, connected in-world chat and **world rendering and
 presentation in the viewer**, natively through its Vulkan backend. The earlier
 UI/chat-only slice remains an intermediate checkpoint, not completion of the
 expanded deliverable. Acceptance requires **full supported rendering parity**,
-including lighting, shadows, water, transparency and post-processing. See the
+including lighting, shadows, water, transparency and post-processing. Implement
+and qualify **UI/chat first, then gradually add world rendering elements**;
+full parity is the final target of that incremental sequence. See the
 [first-deliverable requirements and acceptance evidence](qualification-roadmap.md#first-deliverable-for-vkstorm-vulkan).
 This objective supersedes historical selection/fallback proposals below and in
 the linked audit reports. No implementation or runtime qualification is claimed
