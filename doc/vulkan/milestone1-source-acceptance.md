@@ -24,7 +24,7 @@ XUI is the accepted baseline. Identical XUI with those fixes is successful.
 ## Configuration and retained behavior
 
 Current-source refresh on 7 October 2026: the catalog and manifest are pinned
-to `b24f6e3ff5cf63a7b3a0b17db954f9522b71ec1d`. A separate native viewer diagnostic
+to `f2317bc04f99e653e62e31abe6e10880a9259d9a`. A separate native viewer diagnostic
 branches before normal bootstrap and exercises window/device/presentation and
 owned cleanup. Its [qualification record](viewer-native-presentation.md) is
 separate from this UI/chat acceptance. Changed source/ranges were reviewed;
