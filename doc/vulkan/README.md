@@ -2,8 +2,11 @@
 
 Current `vkstorm-vulkan` objective: **Vulkan is a peer backend; OpenGL fallback
 is not achievable.** The selected GHI candidate is **DiligentCore**. The first
-deliverable is a minimal UI and connected in-world chat interface rendered
-natively through its Vulkan backend, with **no world rendering**. See the
+deliverable includes UI, connected in-world chat and **world rendering and
+presentation in the viewer**, natively through its Vulkan backend. The earlier
+UI/chat-only slice remains an intermediate checkpoint, not completion of the
+expanded deliverable. Acceptance requires **full supported rendering parity**,
+including lighting, shadows, water, transparency and post-processing. See the
 [first-deliverable requirements and acceptance evidence](qualification-roadmap.md#first-deliverable-for-vkstorm-vulkan).
 This objective supersedes historical selection/fallback proposals below and in
 the linked audit reports. No implementation or runtime qualification is claimed
