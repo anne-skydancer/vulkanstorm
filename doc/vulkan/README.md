@@ -36,7 +36,7 @@ GL/Zink is a **GL backend**, created for AMD GPUs affected by rendering
 regressions caused by bugs in the AMD OpenGL ICD. Its use of Vulkan for driver
 translation does not make it a native Vulkan viewer backend or a Vulkan fallback.
 
-Current insertion-catalog baseline: **`48dcecfd18de92e01a23c70a22497ce85e0acd3d`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting; it includes no native viewer implementation or runtime qualification.
+Current insertion-catalog baseline: **`ed93e08e753863e4908e31767e91b2da3fe0290d`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; UI/chat and world rendering remain unimplemented, and cross-platform diagnostic acceptance is pending CI.
 
 Historical comparative audit baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Its mandate compared suitable architectures, including native Vulkan and general graphics abstractions. Those reports contain no runtime measurements, GPU captures, native implementation or build qualification.
 
@@ -61,7 +61,7 @@ native viewer rendering. The old 73-record assessment does not establish all
 insertion points. Acceptance requires the [insertion catalog](diligent-insertion-catalog.md),
 its [records](diligent-insertion-records.json) and [site ledger](diligent-insertion-sites.csv)
 to reconcile the current tracked source and transitive rendering responsibilities.
-The current ledger reconciles **28,263 source witnesses in 1,731 files**, all
+The current ledger reconciles **28,302 source witnesses in 1,734 files**, all
 **225 shader modules** and **690 historical registration rows**, with no
 unmapped or unreviewed entries. These are source-accounting counts, not counts
 of edits or features. Source-reviewed roots, callback obligations, interface

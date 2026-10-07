@@ -1,5 +1,5 @@
 {
-  "source_commit": "48dcecfd18de92e01a23c70a22497ce85e0acd3d",
+  "source_commit": "ed93e08e753863e4908e31767e91b2da3fe0290d",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -17,7 +17,8 @@
         "indra/newview/llviewercontrol",
         "indra/newview/llviewermenu",
         "indra/newview/llviewerstats",
-        "indra/newview/llpipelinelistener"
+        "indra/newview/llpipelinelistener",
+        "indra/newview/vsvulkandiagnostic"
       ],
       "apis": [
         "IEngineFactory::EnumerateAdapters",
@@ -46,7 +47,8 @@
       "title": "Native window, context, present, resize and platform handles",
       "paths": [
         "indra/llwindow/",
-        "indra/newview/llviewerwindow.*"
+        "indra/newview/llviewerwindow.*",
+        "indra/newview/vsvulkandiagnostic"
       ],
       "apis": [
         "IEngineFactoryVk::CreateSwapChainVk",
@@ -66,9 +68,13 @@
         {
           "path": "indra/newview/llviewerwindow.cpp",
           "symbol": "void LLViewerWindow::shutdownGL()"
+        },
+        {
+          "path": "indra/newview/vsvulkandiagnostic.cpp",
+          "symbol": "struct VSVulkanDiagnostic::Impl"
         }
       ],
-      "responsibility": "Separate OS input/window ownership from GL context creation; typed HWND/Xlib/Wayland handle export; Vulkan SDL mode; zero extent suspend; stop producers and retire submitted work before destroying device/window. SDL2 currently ignores use_gl and returns null platform handle. LLWindowManager::createWindow in llwindow.cpp currently routes use_gl=false to headless, so add explicit backend mode to factory; Win32 constructor loads opengl32.dll independently of later context setup.",
+      "responsibility": "Separate OS input/window ownership from GL context creation; native HWND and SDL2/X11 handle ownership, zero extent suspension, producer shutdown and submitted-work retirement. Explicit GraphicsAPI::Vulkan factory admission creates a real Win32/SDL2 window without GL; legacy use_gl=false remains headless. SDL2 exposes its owned SDL window only in native mode for X11/XCB extraction. Win32 avoids opengl32 loading/context creation and joins native window destruction. The development viewer diagnostic exercises these seams and Diligent presentation/readback; normal UI/chat/world bootstrap remains GL and unimplemented for Vulkan.",
       "contracts": [
         "P02",
         "P03"
@@ -829,11 +835,11 @@
     {
       "path": "indra/llwindow/llwindow.cpp",
       "start": 410,
-      "end": 521,
+      "end": 542,
       "record": "I02",
       "disposition": "mapped",
-      "reason": "LLWindowManager factory selects OS window only under use_gl; false selects headless. Add explicit backend/window mode; close/delete follows ownership; LLCoordGL conversions below are CPU coordinate conventions.",
-      "sha256": "e3aa22b206f4b7eab4fc82f18288aa89d3aeec784648de0414dacfbea6a6a6ae"
+      "reason": "LLWindowManager factory selects OS window only under use_gl; false selects headless. Add explicit backend/window mode; close/delete follows ownership; LLCoordGL conversions below are CPU coordinate conventions. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "ae6dd9ad27805b290767e33bf2e36b80d012bd450ac0ad52b941ecbfd2535ee2"
     },
     {
       "path": "indra/llwindow/llwindow.h",
@@ -841,98 +847,98 @@
       "end": 188,
       "record": "I02",
       "disposition": "mapped",
-      "reason": "Virtual contract separates OS input/clipboard/gamma/size from GL shared-context/current-context/swap and opaque platform handle. Add typed handle and renderer lifecycle; LLCoordGL is CPU coordinates, not a context requirement.",
-      "sha256": "2733e94b8eb74b20347c6ad13c6a57914f1f39beaa2a5001cf551c9e46097343"
+      "reason": "Virtual contract separates OS input/clipboard/gamma/size from GL shared-context/current-context/swap and opaque platform handle. Add typed handle and renderer lifecycle; LLCoordGL is CPU coordinates, not a context requirement. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "e753eeb13ca9bfc0ceb3300e38bfe090bb44281a9674bf1992a9d59b20993787"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 489,
-      "end": 953,
+      "start": 490,
+      "end": 966,
       "record": "I02",
       "disposition": "mapped",
-      "reason": "Constructor owns window thread, keyboard/dragdrop/icons and display policy; unconditional opengl32 load and switchContext require backend gate. OS input/affinity/display setup remains platform-owned.",
-      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae"
+      "reason": "Constructor owns window thread, keyboard/dragdrop/icons and display policy; unconditional opengl32 load and switchContext require backend gate. OS input/affinity/display setup remains platform-owned. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 1010,
-      "end": 1141,
-      "record": "I02",
-      "disposition": "mapped",
-      "reason": "close shuts GL and WGL before wakeAndDestroy of HWND thread, then resets gamma. Native path must release swapchain/submitted consumers before HWND destruction; ordinary size/visibility methods stay OS-owned.",
-      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae"
-    },
-    {
-      "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 1197,
-      "end": 1987,
-      "record": "I02",
-      "disposition": "mapped",
-      "reason": "switchContext creates dummy/WGL pixel-format/context, reprobes GL and recreates HWND on owned window thread. Replace native mode lifecycle while retaining fullscreen/input; recreateWindow waits promise before publishing handle. Shared contexts are GL-only upload infrastructure.",
-      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae"
-    },
-    {
-      "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3870,
-      "end": 3890,
-      "record": "I02",
-      "disposition": "mapped",
-      "reason": "SwapBuffers(mhDC) and Tracy GL collect are backend-specific presentation/profiling; Diligent Present plus backend-aware profiling replaces selected native path.",
-      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae"
-    },
-    {
-      "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 4121,
-      "end": 4132,
-      "record": "I02",
-      "disposition": "mapped",
-      "reason": "getPlatformWindow returns actual HWND, unlike SDL legacy handle; preserve owned lifetime and typed export.",
-      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae"
-    },
-    {
-      "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 379,
-      "end": 511,
-      "record": "I02",
-      "disposition": "mapped",
-      "reason": "Constructor ignores use_gl, creates GL context then gGLManager, cursors and X11 clipboard. Backend mode must separate SDL OS window and native resource creation; input/clipboard remain SDL/X11.",
-      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4"
-    },
-    {
-      "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 666,
-      "end": 1026,
-      "record": "I02",
-      "disposition": "mapped",
-      "reason": "createContext sets SDL_WINDOW_OPENGL and SDL_GL attributes, creates GL context/surface-dependent fullscreen sizing, cached X11 handles, clear/present; switch destroys and reopens; destroyContext invalidates X11 and quits video. Native mode needs Vulkan flags, surface-independent dimensions, typed handles and swapchain retirement before SDL window/video teardown.",
-      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4"
-    },
-    {
-      "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 1146,
+      "start": 1023,
       "end": 1184,
       "record": "I02",
       "disposition": "mapped",
-      "reason": "SDL_GL_SwapWindow is selected presentation seam; size/FSAA/gamma values are platform/future attachment policy, not native GL execution requirements.",
-      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4"
+      "reason": "close shuts GL and WGL before wakeAndDestroy of HWND thread, then resets gamma. Native path must release swapchain/submitted consumers before HWND destruction; ordinary size/visibility methods stay OS-owned. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f"
+    },
+    {
+      "path": "indra/llwindow/llwindowwin32.cpp",
+      "start": 1240,
+      "end": 2035,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "switchContext creates dummy/WGL pixel-format/context, reprobes GL and recreates HWND on owned window thread. Replace native mode lifecycle while retaining fullscreen/input; recreateWindow waits promise before publishing handle. Shared contexts are GL-only upload infrastructure. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f"
+    },
+    {
+      "path": "indra/llwindow/llwindowwin32.cpp",
+      "start": 3918,
+      "end": 3939,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "SwapBuffers(mhDC) and Tracy GL collect are backend-specific presentation/profiling; Diligent Present plus backend-aware profiling replaces selected native path. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f"
+    },
+    {
+      "path": "indra/llwindow/llwindowwin32.cpp",
+      "start": 4170,
+      "end": 4181,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "getPlatformWindow returns actual HWND, unlike SDL legacy handle; preserve owned lifetime and typed export. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f"
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 2550,
-      "end": 2570,
+      "start": 382,
+      "end": 543,
       "record": "I02",
       "disposition": "mapped",
-      "reason": "getPlatformWindow NULL; add typed SDL WM export instead of legacy media handle; external-file launch remains OS functionality.",
-      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4"
+      "reason": "Constructor ignores use_gl, creates GL context then gGLManager, cursors and X11 clipboard. Backend mode must separate SDL OS window and native resource creation; input/clipboard remain SDL/X11. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "70b36a5bf389be6761bdac99b2c504f30961501d1672b06bd0db703d9c314236"
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 2688,
-      "end": 2729,
+      "start": 698,
+      "end": 1065,
       "record": "I02",
       "disposition": "mapped",
-      "reason": "GL shared contexts, swap interval and make-current must stay only on GL path; native uploads use renderer ownership, not shared SDL GL contexts.",
-      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4"
+      "reason": "createContext sets SDL_WINDOW_OPENGL and SDL_GL attributes, creates GL context/surface-dependent fullscreen sizing, cached X11 handles, clear/present; switch destroys and reopens; destroyContext invalidates X11 and quits video. Native mode needs Vulkan flags, surface-independent dimensions, typed handles and swapchain retirement before SDL window/video teardown. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "70b36a5bf389be6761bdac99b2c504f30961501d1672b06bd0db703d9c314236"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl2.cpp",
+      "start": 1195,
+      "end": 1234,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "SDL_GL_SwapWindow is selected presentation seam; size/FSAA/gamma values are platform/future attachment policy, not native GL execution requirements. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "70b36a5bf389be6761bdac99b2c504f30961501d1672b06bd0db703d9c314236"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl2.cpp",
+      "start": 2604,
+      "end": 2624,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "getPlatformWindow NULL; add typed SDL WM export instead of legacy media handle; external-file launch remains OS functionality. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "70b36a5bf389be6761bdac99b2c504f30961501d1672b06bd0db703d9c314236"
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl2.cpp",
+      "start": 2742,
+      "end": 2786,
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "GL shared contexts, swap interval and make-current must stay only on GL path; native uploads use renderer ownership, not shared SDL GL contexts. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "70b36a5bf389be6761bdac99b2c504f30961501d1672b06bd0db703d9c314236"
     },
     {
       "path": "indra/llwindow/llwindowsdl.cpp",
@@ -985,62 +991,62 @@
       "end": 135,
       "record": "I01",
       "disposition": "mapped",
-      "reason": "selectGLBackend only activates Zink GLVND environment under DISPLAY; initWindow restores it before helper process use. Native path must not activate GL provider environment; preserve reference/helper isolation.",
-      "sha256": "72b20f153d3b82a6e56b8ce7f53cf000985a0d548ec4b15673aeb72c42065982"
+      "reason": "selectGLBackend only activates Zink GLVND environment under DISPLAY; initWindow restores it before helper process use. Native path must not activate GL provider environment; preserve reference/helper isolation. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "f5270dbbdd1666c5772d4603f4223c535c8a22880de32dc6c1b44593ce4d313f"
     },
     {
       "path": "indra/newview/llappviewerwin32.cpp",
-      "start": 1098,
-      "end": 1179,
+      "start": 1103,
+      "end": 1184,
       "record": "I01",
       "disposition": "mapped",
-      "reason": "selectGLBackend preloads Mesa/Gallium or system opengl32 before any GL imports; select native owner before this call and gate GL provider selection.",
-      "sha256": "9e0ad0de3d7643b949a4a95f7c5c737b7acf3426676bc183667ba205330ac449"
+      "reason": "selectGLBackend preloads Mesa/Gallium or system opengl32 before any GL imports; select native owner before this call and gate GL provider selection. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "ed3968692794612bd10baeefdb8fb20cf62771e9fc6461f3fb8487eb24fe64ef"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1190,
-      "end": 1345,
+      "start": 1224,
+      "end": 1379,
       "record": "I01",
       "disposition": "mapped",
-      "reason": "init calls selectGLBackend before initWindow, then GL VRAM overrides/info/requirements/driver warnings and self-registered callbacks. Native capability/identity owner must precede callbacks and prevent GL probes; CPU SSE/RAM/input policies remain.",
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+      "reason": "init calls selectGLBackend before initWindow, then GL VRAM overrides/info/requirements/driver warnings and self-registered callbacks. Native capability/identity owner must precede callbacks and prevent GL probes; CPU SSE/RAM/input policies remain. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 2409,
-      "end": 2495,
+      "start": 2453,
+      "end": 2539,
       "record": "I02",
       "disposition": "mapped",
-      "reason": "Shutdown stops fetch/cache/decode/thread pools before shutdownGL then viewer window deletion. Native path must cancel/retain producers and drain submitted work before resource/device/window destruction; keyboard remains until views destroyed.",
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+      "reason": "Shutdown stops fetch/cache/decode/thread pools before shutdownGL then viewer window deletion. Native path must cancel/retain producers and drain submitted work before resource/device/window destruction; keyboard remains until views destroyed. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 3719,
-      "end": 3857,
+      "start": 3763,
+      "end": 3901,
       "record": "I01",
       "disposition": "mapped",
-      "reason": "initWindow currently coerces Vulkan to GL, creates LLViewerWindow then pipeline/initGLDefaults with persisted RenderInitError. Replace backend capability/error ownership; preserve startup diagnostics and reference route.",
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+      "reason": "initWindow currently coerces Vulkan to GL, creates LLViewerWindow then pipeline/initGLDefaults with persisted RenderInitError. Replace backend capability/error ownership; preserve startup diagnostics and reference route. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4041,
-      "end": 4135,
+      "start": 4085,
+      "end": 4179,
       "record": "I01",
       "disposition": "mapped",
-      "reason": "getViewerInfo directly glGetString vendor/renderer/version plus GL VRAM/vendor-based WMI; replace with cached actual Vulkan adapter/driver/backend identity, safe during teardown. CPU/network/library diagnostics remain.",
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+      "reason": "getViewerInfo directly glGetString vendor/renderer/version plus GL VRAM/vendor-based WMI; replace with cached actual Vulkan adapter/driver/backend identity, safe during teardown. CPU/network/library diagnostics remain. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 6760,
-      "end": 6790,
+      "start": 6804,
+      "end": 6834,
       "record": "I01",
       "disposition": "mapped",
-      "reason": "forceErrorDriverCrash calls glDeleteTextures(1,NULL). Legacy crash injection must be gated/disabled/adapted for native backend rather than executing GL with no context.",
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+      "reason": "forceErrorDriverCrash calls glDeleteTextures(1,NULL). Legacy crash injection must be gated/disabled/adapted for native backend rather than executing GL with no context. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
+      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3"
     },
     {
       "path": "indra/newview/llviewerwindow.cpp",
@@ -2858,7 +2864,7 @@
       "sha256": "aa6ff80d6e1450aa7593229e9a15d67f7248661f583d8a82d28e1ecbd66884c8",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Its raw Vulkan calls are device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls belong only to this test. Uses viewer-pinned Autobuild packages, automatic or explicit adapter selection, headless readback and separate native HWND/SDL2-X11 presentation. Synthetic selection-policy checks do not claim vendor execution. This exclusion does not qualify viewer runtime."
+      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Its raw Vulkan calls are device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls belong only to this test. Uses viewer-pinned Autobuild packages, automatic or explicit adapter selection, headless readback and separate native HWND/SDL2-X11 presentation. Synthetic selection-policy checks do not claim vendor execution. This exclusion does not qualify viewer runtime. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate."
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
@@ -2867,7 +2873,25 @@
       "sha256": "5d64cf479cbb26f71e000d0c5fde498f99cfb566a6eef0538cd7a5ebe2bd3afb",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution."
+      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate."
+    },
+    {
+      "path": "indra/newview/vsvulkandiagnostic.cpp",
+      "start": 1,
+      "end": 362,
+      "sha256": "84675ee708322fe8314a05412d24f253b4720dd86f1094decb2b16fa3d283703",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity."
+    },
+    {
+      "path": "indra/newview/vsvulkandiagnostic.h",
+      "start": 1,
+      "end": 18,
+      "sha256": "0d22ef97c9c5b16265ad665c0fe195fa6efa566a3e7ac0a2847447d4af5f45e6",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity."
     }
   ]
 }

@@ -1,8 +1,8 @@
 {
-  "source_commit": "48dcecfd18de92e01a23c70a22497ce85e0acd3d",
+  "source_commit": "ed93e08e753863e4908e31767e91b2da3fe0290d",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
-  "policy": "closed-admission-set; all gates are requirements for later implementation",
+  "policy": "closed-admission-set for future UI/chat; a separate native window/clear diagnostic is implemented; full UI/chat gate contracts remain requirements",
   "gates": [
     "G-AUX",
     "G-BACKEND",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3",
+      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -48,13 +48,13 @@
       ]
     },
     "indra/llwindow/llwindow.cpp": {
-      "sha256": "e3aa22b206f4b7eab4fc82f18288aa89d3aeec784648de0414dacfbea6a6a6ae",
+      "sha256": "ae6dd9ad27805b290767e33bf2e36b80d012bd450ac0ad52b941ecbfd2535ee2",
       "anchors": [
         "LLWindowManager::createWindow"
       ]
     },
     "indra/llwindow/llwindowwin32.cpp": {
-      "sha256": "02a7dcb6f9d3720f568358068ee9e2d0402d7f860bd37a0d728c0588ea8c21ae",
+      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f",
       "anchors": [
         "LLWindowWin32::LLWindowWin32",
         "opengl32.dll",
@@ -62,7 +62,7 @@
       ]
     },
     "indra/llwindow/llwindowsdl2.cpp": {
-      "sha256": "ff48a9034a54b709e261f481386014af5988762395e3d90f161a48fb7ef82fa4",
+      "sha256": "70b36a5bf389be6761bdac99b2c504f30961501d1672b06bd0db703d9c314236",
       "anchors": [
         "LLWindowSDL::LLWindowSDL",
         "SDL_WINDOW_OPENGL",
@@ -339,6 +339,66 @@
         "LLDestroyClass<LLInventoryCallbackManager>",
         "LLDestroyClass<LLInventoryCallbackManager>"
       ]
+    },
+    "indra/newview/vsvulkandiagnostic.cpp": {
+      "sha256": "84675ee708322fe8314a05412d24f253b4720dd86f1094decb2b16fa3d283703",
+      "anchors": [
+        "VSVulkanDiagnostic::Impl",
+        "CreateDeviceAndContextsVk",
+        "CreateSwapChainVk",
+        "WaitForIdle",
+        "destroyWindow"
+      ]
+    },
+    "indra/newview/vsvulkandiagnostic.h": {
+      "sha256": "0d22ef97c9c5b16265ad665c0fe195fa6efa566a3e7ac0a2847447d4af5f45e6",
+      "anchors": [
+        "class VSVulkanDiagnostic",
+        "initialize",
+        "cleanup"
+      ]
+    },
+    "indra/newview/llappviewer.h": {
+      "sha256": "bdafd02b0540be1db546de5fa4ebf5c2a0b010b1ab9ba51afaf4a99d1e1d7af3",
+      "anchors": [
+        "isVulkanDiagnostic",
+        "vulkanDiagnosticExitCode"
+      ]
+    },
+    "indra/newview/llappviewerwin32.cpp": {
+      "sha256": "ed3968692794612bd10baeefdb8fb20cf62771e9fc6461f3fb8487eb24fe64ef",
+      "anchors": [
+        "LLAppViewerWin32::init",
+        "LLAppViewerWin32::cleanup",
+        "vulkanDiagnosticExitCode"
+      ]
+    },
+    "indra/newview/llappviewerlinux.cpp": {
+      "sha256": "f5270dbbdd1666c5772d4603f4223c535c8a22880de32dc6c1b44593ce4d313f",
+      "anchors": [
+        "LLAppViewerLinux::init",
+        "vulkanDiagnosticExitCode"
+      ]
+    },
+    "indra/llwindow/llwindow.h": {
+      "sha256": "e753eeb13ca9bfc0ceb3300e38bfe090bb44281a9674bf1992a9d59b20993787",
+      "anchors": [
+        "GraphicsAPI",
+        "createWindow"
+      ]
+    },
+    "indra/llwindow/llwindowwin32.h": {
+      "sha256": "f0dbc5bb27ce08a023da3a9c64da199e1d6d820991cae261205310d77f8388da",
+      "anchors": [
+        "mUseGL"
+      ]
+    },
+    "indra/llwindow/llwindowsdl2.h": {
+      "sha256": "f2b86cdbe7fe681a5ab5e9666195d064c176cecf1f578a827bba8de9363eb0f6",
+      "anchors": [
+        "mUseGL",
+        "createNativeWindow"
+      ]
     }
   },
   "routes": {
@@ -350,7 +410,15 @@
         "indra/llwindow/llwindowwin32.cpp",
         "indra/llwindow/llwindowsdl2.cpp",
         "indra/llcommon/llprofiler.h",
-        "indra/llrender/llglheaders.h"
+        "indra/llrender/llglheaders.h",
+        "indra/newview/vsvulkandiagnostic.cpp",
+        "indra/newview/vsvulkandiagnostic.h",
+        "indra/newview/llappviewer.h",
+        "indra/newview/llappviewerwin32.cpp",
+        "indra/newview/llappviewerlinux.cpp",
+        "indra/llwindow/llwindow.h",
+        "indra/llwindow/llwindowwin32.h",
+        "indra/llwindow/llwindowsdl2.h"
       ],
       "gates": [
         "G-BACKEND",
@@ -480,7 +548,9 @@
         "indra/newview/llviewerwindow.cpp",
         "indra/newview/llviewertexture.cpp",
         "indra/newview/llviewermedia.cpp",
-        "indra/llrender/llfontgl.cpp"
+        "indra/llrender/llfontgl.cpp",
+        "indra/newview/vsvulkandiagnostic.cpp",
+        "indra/newview/vsvulkandiagnostic.h"
       ],
       "gates": [
         "G-RESOURCE",
@@ -495,7 +565,9 @@
         "indra/newview/llviewerwindow.cpp",
         "indra/newview/llstartup.cpp",
         "indra/llcommon/llinitdestroyclass.h",
-        "indra/llcommon/llinitdestroyclass.cpp"
+        "indra/llcommon/llinitdestroyclass.cpp",
+        "indra/newview/vsvulkandiagnostic.cpp",
+        "indra/newview/vsvulkandiagnostic.h"
       ],
       "gates": [
         "G-LIFETIME"
@@ -4694,5 +4766,13 @@
       "caller_route": "R12",
       "disposition": "defer"
     }
-  ]
+  ],
+  "native_diagnostic": {
+    "source_commit": "ed93e08e753863e4908e31767e91b2da3fe0290d",
+    "implemented": true,
+    "default_enabled": false,
+    "ui_chat_implemented": false,
+    "world_implemented": false,
+    "qualification": "Local Windows SwiftShader; cross-platform CI pending"
+  }
 }
