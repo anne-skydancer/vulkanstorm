@@ -1,9 +1,15 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-Source: `ed93e08e753863e4908e31767e91b2da3fe0290d` on `vkstorm-vulkan`.
+Source: `b24f6e3ff5cf63a7b3a0b17db954f9522b71ec1d` on `vkstorm-vulkan`.
 Status: implemented development diagnostic; local Windows SwiftShader execution
 passed. Updated Windows/Linux CI and artifact review remain required for
 cross-platform acceptance. No UI/chat or world rendering acceptance is claimed.
+
+The first CI run passed the Windows build and native viewer diagnostic. Its
+Linux Lavapipe viewer build failed because the diagnostic used unqualified SDL
+headers. The corrected includes use `SDL2/SDL.h` and `SDL2/SDL_syswm.h`, matching
+the viewer's Autobuild include root and existing SDL2 window implementation.
+Linux build and runtime acceptance remain pending the corrected CI run.
 
 ## Implemented integration
 
