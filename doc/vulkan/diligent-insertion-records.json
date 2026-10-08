@@ -1,5 +1,5 @@
 {
-  "source_commit": "3a62bad6cc4de364fa01a47c9dcae402e7b7148a",
+  "source_commit": "dcb74d7a2339da44e28d88c8de55f019dd578f08",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -266,7 +266,9 @@
         "indra/newview/fsfloaterprimfeed",
         "indra/newview/llfloateruipreview",
         "indra/newview/llscripteditor",
-        "indra/newview/vsuirenderer"
+        "indra/newview/vsuirenderer",
+        "indra/newview/vsuiresources",
+        "indra/llui/vsuiadmission"
       ],
       "apis": [
         "IDeviceContext::SetScissorRects",
@@ -287,7 +289,7 @@
           "symbol": "void VSUIRenderer::draw"
         }
       ],
-      "responsibility": "Preserve virtual widget traversal, painter order, scale, clipping and image/text generation; ordinary callers need no library objects; backend-neutral facade captures UI state. Lazy font/atlas and image uploads remain explicit producer seams. V3 first slice supplies ordered native packets with texture generation, affine/top-left/DPI state, explicit sampler/blend/scissor and fence-based retirement; existing XUI producers and widget admission are not integrated yet.",
+      "responsibility": "Preserve virtual widget traversal, paint order, clipping, scale and image/text generations with native ordered packets and immutable Diligent resources. VSUIResources adapts CPU image publication and the LLUIImage draw facade, including masks/nine-slices. Native construction policy guards generic/custom panel and floater factories before allocation/callbacks. Required XUI allowlists, skin image provider, primitive/matrix/nested clip and input integration remain open.",
       "contracts": [
         "U01"
       ]
@@ -320,7 +322,7 @@
           "symbol": "VSUIFont::Glyph VSUIFont::rasterize"
         }
       ],
-      "responsibility": "Retain FreeType/metrics/kerning/fallback/emoji; getGlyphInfo may lazily reach addGlyphFromFont and setSubImage. Separate atlas CPU edits from GPU publication; retain atlas generation through ordered glyph draws; reset/destroy retire safely. VSUIFont is a separate CPU-only FreeType scalar rasterizer; native GPU publication uses VSUIRenderer without LLFontBitmapCache/LLImageGL. Existing font producer adaptation, fallback/shaping policy and atlas caching remain open.",
+      "responsibility": "Retain viewer FreeType metrics, kerning, fallback, emoji and style geometry. Explicit CPU-only atlas backing bypasses LLImageGL allocation/subimage upload; scoped LLFontGL publication sends triangles and CPU atlas generations to VSUIResources. Changed CPU pixels publish only their bounding patch into a fresh Diligent generation. VSUIFontCache separately implements lazy page packing/reuse/reset. Existing GL font defaults remain unchanged; full fallback/style, reset and XUI coverage remains open.",
       "contracts": [
         "U02"
       ]
@@ -2895,8 +2897,8 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1,
-      "end": 543,
-      "sha256": "e95c22f30906628a44fc9f5bce2f398734d5d3285acf1c5c13f96dd652b50a03",
+      "end": 678,
+      "sha256": "07d8a48ecaaf4f0f613823e0fd1d5cd178d222f1a42c5dac24ff823f432ff7b0",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity. Opt-in V3 fixtures now exercise native UI packets, CPU glyph publication and swapchain readback; normal XUI/login/world bootstrap remains outside this diagnostic."
@@ -2913,8 +2915,8 @@
     {
       "path": "indra/newview/vsuirenderer.cpp",
       "start": 1,
-      "end": 213,
-      "sha256": "5cbbf064fb57dbd46e45a477572df0ebf33a440a7735fbde1d74270ffd71d9c0",
+      "end": 266,
+      "sha256": "20d78932579a33f5b4a6ef4abca154e179bde4946444a0ca35255a67fb0c05f3",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native viewer UI packet/resource substrate: Diligent immutable texture generations, shared shader and per-state pipeline cache, ordered single-buffer vertex publication, explicit DPI/affine/scissor/sampler/alpha state and GPU-fence retirement. Diagnostic fixtures use these APIs in the viewer lifecycle; existing XUI producers/admission are not yet adapted."
@@ -2922,8 +2924,8 @@
     {
       "path": "indra/newview/vsuirenderer.h",
       "start": 1,
-      "end": 45,
-      "sha256": "095aa030781815bf16d3c7c3ea48e1497e36c87547d766ea77950221c832ce2f",
+      "end": 51,
+      "sha256": "fe2e6e7b7848b8555d927ff08848770a6bcc4be5793975091179ecc6733e42fc",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native UI packet and opaque generation ownership contract. No GL resource facade is retained; caller owns target/presentation and idle-at-teardown boundary."
@@ -2954,6 +2956,213 @@
       "record": "I01",
       "disposition": "mapped",
       "reason": "Shared renderer identity and normal-session availability policy: Vulkan remains distinct from OpenGL/Zink, but normal native UI/chat sessions are unavailable until implemented. Diagnostic compilation does not enable session admission."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.h",
+      "start": 1,
+      "end": 51,
+      "sha256": "fe2e6e7b7848b8555d927ff08848770a6bcc4be5793975091179ecc6733e42fc",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/llrender/lluiimage.cpp",
+      "start": 1,
+      "end": 192,
+      "sha256": "7fe1395973a29714dc400835e37df55b83745cb5fabd571483c5a336734fbc97",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/llrender/llfontgl.h",
+      "start": 1,
+      "end": 268,
+      "sha256": "a0ecd112c2aca2aaf3ad52c5179e96f90d49dc461e6474abc42c3bba964e778c",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Reviewed native font producer adaptation: each new atlas captures CPU/GPU backing policy; CPU-only faces rasterize and write LLImageRaw without LLImageGL allocation/upload. Existing LLFontGL geometry, metrics/kerning/fallback/styles are published through an explicit scoped callback. Native publication rejects GL-backed caches and world depth. The default GL producer remains mapped to I09; this file is not CPU-only. Complete XUI/input coverage remains open."
+    },
+    {
+      "path": "indra/newview/vsuifontbridge.cpp",
+      "start": 1,
+      "end": 31,
+      "sha256": "deae4bdafc6807cd53cb9c5e74908f63eb33916880e83ab11bed4ade395ecede",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Reviewed native font producer adaptation: each new atlas captures CPU/GPU backing policy; CPU-only faces rasterize and write LLImageRaw without LLImageGL allocation/upload. Existing LLFontGL geometry, metrics/kerning/fallback/styles are published through an explicit scoped callback. Native publication rejects GL-backed caches and world depth. The default GL producer remains mapped to I09; this file is not CPU-only. Complete XUI/input coverage remains open."
+    },
+    {
+      "path": "indra/llrender/llfontgl.cpp",
+      "start": 1,
+      "end": 1483,
+      "sha256": "e9d0974606f12743f3c25d2a29019f498d44fcda3536b3fe3c1228e589c89363",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Reviewed native font producer adaptation: each new atlas captures CPU/GPU backing policy; CPU-only faces rasterize and write LLImageRaw without LLImageGL allocation/upload. Existing LLFontGL geometry, metrics/kerning/fallback/styles are published through an explicit scoped callback. Native publication rejects GL-backed caches and world depth. The default GL producer remains mapped to I09; this file is not CPU-only. Complete XUI/input coverage remains open."
+    },
+    {
+      "path": "indra/newview/vsuifontbridge.h",
+      "start": 1,
+      "end": 14,
+      "sha256": "7eca40c205473807dcbebd8f08746e92a529045186b9c8c6f24a6f4319c2c19b",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Reviewed native font producer adaptation: each new atlas captures CPU/GPU backing policy; CPU-only faces rasterize and write LLImageRaw without LLImageGL allocation/upload. Existing LLFontGL geometry, metrics/kerning/fallback/styles are published through an explicit scoped callback. Native publication rejects GL-backed caches and world depth. The default GL producer remains mapped to I09; this file is not CPU-only. Complete XUI/input coverage remains open."
+    },
+    {
+      "path": "indra/newview/vsuifontcache.cpp",
+      "start": 1,
+      "end": 57,
+      "sha256": "7587313ef7e7929777572d97a1dc4336fb057578a19d4ac8565753bda1c57dc8",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Reviewed native font producer adaptation: each new atlas captures CPU/GPU backing policy; CPU-only faces rasterize and write LLImageRaw without LLImageGL allocation/upload. Existing LLFontGL geometry, metrics/kerning/fallback/styles are published through an explicit scoped callback. Native publication rejects GL-backed caches and world depth. The default GL producer remains mapped to I09; this file is not CPU-only. Complete XUI/input coverage remains open."
+    },
+    {
+      "path": "indra/llui/lluictrlfactory.h",
+      "start": 1,
+      "end": 331,
+      "sha256": "fe629af95f141faa4319ff6cb57cc9938f9cc05175203bfba5351b8c9a8e5974",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/llui/llfloaterreg.h",
+      "start": 1,
+      "end": 195,
+      "sha256": "55a7a6a8520d4c9044cbd16485fbdd4e0a59b9ed15c69cf5590943ab32037f49",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/newview/vsuiresources.h",
+      "start": 1,
+      "end": 34,
+      "sha256": "104202293a44b244a93d3f28d9ce19b30b18c08369634fa36f06e037ad63b2f8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/llrender/lluiimage.h",
+      "start": 1,
+      "end": 157,
+      "sha256": "672627347f23b787259c638a3741b04b3a717ccf02205a7cb7c448b8c3fcc045",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/llui/llpanel.cpp",
+      "start": 1,
+      "end": 855,
+      "sha256": "4f1895f29ca39c22ac8a892c20c50b71dc347e1e4a71f11ed827a50615a80075",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/llui/vsuiadmission.h",
+      "start": 1,
+      "end": 30,
+      "sha256": "6f1ad756a03e1164a14159381312706607fabfd1fdc500130895fcdfd1afb5d8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/llrender/llfontbitmapcache.cpp",
+      "start": 1,
+      "end": 193,
+      "sha256": "3e0afe9ed0e6cac32b223d2546ef9f7d965c07375bec90f59022d5db4ed0f23b",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Reviewed native font producer adaptation: each new atlas captures CPU/GPU backing policy; CPU-only faces rasterize and write LLImageRaw without LLImageGL allocation/upload. Existing LLFontGL geometry, metrics/kerning/fallback/styles are published through an explicit scoped callback. Native publication rejects GL-backed caches and world depth. The default GL producer remains mapped to I09; this file is not CPU-only. Complete XUI/input coverage remains open."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1,
+      "end": 678,
+      "sha256": "07d8a48ecaaf4f0f613823e0fd1d5cd178d222f1a42c5dac24ff823f432ff7b0",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 1,
+      "end": 255,
+      "sha256": "79866ec3d9b98b13fdbbe2f6d1302d6159a86ab6999d7d1758e58723938528a9",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.cpp",
+      "start": 1,
+      "end": 266,
+      "sha256": "20d78932579a33f5b4a6ef4abca154e179bde4946444a0ca35255a67fb0c05f3",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/newview/vsuifontcache.h",
+      "start": 1,
+      "end": 27,
+      "sha256": "3c9d751ff8bdd6570433986be0621ac369c70fd171af81a66d05d50a0455fa2f",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Reviewed native font producer adaptation: each new atlas captures CPU/GPU backing policy; CPU-only faces rasterize and write LLImageRaw without LLImageGL allocation/upload. Existing LLFontGL geometry, metrics/kerning/fallback/styles are published through an explicit scoped callback. Native publication rejects GL-backed caches and world depth. The default GL producer remains mapped to I09; this file is not CPU-only. Complete XUI/input coverage remains open."
+    },
+    {
+      "path": "indra/llui/llfloaterreg.cpp",
+      "start": 1,
+      "end": 691,
+      "sha256": "391c8f87c8c34fdace9d87646d091b74d89481b65058cbc7d7ff15b62887a7bb",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/llui/llpanel.h",
+      "start": 1,
+      "end": 331,
+      "sha256": "3c6a0b35851c5b4ff10cfcaa2cad382cbf283a636d73d725b4fc31146adbe922",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/llrender/lluiimage.inl",
+      "start": 1,
+      "end": 87,
+      "sha256": "60cf1cfb474967578bb9887692cfa7a0eba4b61aea9eff21ec19441658b70acc",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
+    },
+    {
+      "path": "indra/llrender/llfontbitmapcache.h",
+      "start": 1,
+      "end": 87,
+      "sha256": "ecf47d5cedcd6e937cd5f74fdd8be55e9861cfc17bb315671f15a1cee39b5654",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Reviewed native font producer adaptation: each new atlas captures CPU/GPU backing policy; CPU-only faces rasterize and write LLImageRaw without LLImageGL allocation/upload. Existing LLFontGL geometry, metrics/kerning/fallback/styles are published through an explicit scoped callback. Native publication rejects GL-backed caches and world depth. The default GL producer remains mapped to I09; this file is not CPU-only. Complete XUI/input coverage remains open."
+    },
+    {
+      "path": "indra/llrender/llfontfreetype.cpp",
+      "start": 1,
+      "end": 971,
+      "sha256": "2452dba64a3ce93dd9611919de19ef8471fbc546c90d46b20458038afff2d4aa",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Reviewed native font producer adaptation: each new atlas captures CPU/GPU backing policy; CPU-only faces rasterize and write LLImageRaw without LLImageGL allocation/upload. Existing LLFontGL geometry, metrics/kerning/fallback/styles are published through an explicit scoped callback. Native publication rejects GL-backed caches and world depth. The default GL producer remains mapped to I09; this file is not CPU-only. Complete XUI/input coverage remains open."
     }
   ]
 }

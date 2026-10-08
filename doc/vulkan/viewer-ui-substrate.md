@@ -1,7 +1,7 @@
 # V3: viewer UI resource and packet substrate
 
-Source: `f622b9ff1e2c294f3e62a6e4840710d8419b3f64` on `vkstorm-vulkan`.
-Status: first implementation slice; full V3 acceptance remains open. This code
+Source: `dcb74d7a2339da44e28d88c8de55f019dd578f08` on `vkstorm-vulkan`.
+Status: resource and producer integration underway; full V3 acceptance remains open. This code
 runs in the staged viewer's native diagnostic lifecycle. Existing XUI widget
 construction, focus, IME, scrolling and connected chat are not yet admitted.
 
@@ -13,8 +13,8 @@ their exact immutable texture generation; replacing a producer handle cannot
 change already queued draws. A Diligent completion fence controls retirement,
 without a per-draw idle wait. The lifecycle owner waits for idle at teardown.
 There is one vertex buffer upload per ordered packet list, with six vertices
-per quad; draws preserve paint order. This is a correctness substrate, without
-atlas packing or draw-call coalescing yet.
+per quad; draws preserve paint order. Lazy atlas packing is implemented;
+draw-call coalescing remains future work.
 
 Each packet supplies logical bounds, UV bounds, tint, a half-open clip, affine
 transform, straight or premultiplied alpha blending, and nearest or linear
@@ -39,7 +39,7 @@ are unchanged. This is not a new widget toolkit or an XUI replacement.
 
 The existing nine WSI cases are retained. The runner adds `ui-positive`,
 `bad-ui` and `ui-orientation`. UI fixtures draw into the actual restored
-320Ãƒâ€”240 viewer swapchain before presentation, at explicit 1Ãƒâ€” and 2Ãƒâ€” scales.
+320 by 240 viewer swapchain before presentation, at explicit 1x and 2x scales.
 They exercise asymmetric texture orientation, clipping, paint order, affine
 translation, both alpha modes, both sampler pipelines, ASCII/Greek/Cyrillic
 glyph coverage, replacement glyph sizes, immutable texture replacement, and
@@ -62,11 +62,12 @@ qualify OS DPI events, keyboard focus or IME.
 
 ## Remaining V3 work
 
-1. Connect image decode/asset publication and lazy glyph caching to neutral
-   viewer facades, with atlas/subimage updates and generation-aware consumers.
-2. Adapt existing UI image/font/draw producers to ordered packets. Preserve
-   corrected XUI behavior and implement optional-widget admission before
-   construction, including direct factories and restored floaters.
+1. Complete skin asset lookup/provider and existing primitive, transform and
+   nested-clip adapters. Image and font producer fixtures alone do not qualify
+   existing widget traversal.
+2. Define and own the required widget/panel/floater admission sets in the native
+   lifecycle. Gate mechanisms are implemented; fixtures denying every widget
+   do not establish that the required widgets can be safely admitted.
 3. Admit the login, status/progress, nearby transcript/input and required
    alerts/agreements through the native lifecycle; remove their reachable GL
    resource publication paths.
@@ -77,7 +78,51 @@ Full G-RESOURCE/G-UI closure and V3 exit remain open until these integrations
 and their viewer-level checks pass. Connected transport/login/chat acceptance
 is the subsequent V4 checkpoint.
 
-## Local verification, 8 October 2026
+## Expanded resource and producer integration
+
+`VSUIResources` publishes decoded `LLImageRaw` pixels through native `LLUIImage`
+facades without constructing `LLTexture` or `LLImageGL`. Bottom-row-first CPU
+storage becomes canonical top-left RGBA. One to four component images are
+supported. The facade emits ordered normal, alpha-mask and nine-slice packets;
+attempts to obtain a GL texture or draw a native UI image in 3D fail explicitly.
+GPU replacement copies the old texture, uploads only the changed rectangle and
+retains both generations until the completion fence.
+
+`VSUIFontCache` packs lazily rasterized glyphs into pages with transparent
+gutters. Repeated glyph lookup does not rasterize or upload again. Reset removes
+producer entries while queued draws retain their immutable GPU generations.
+
+`VSUIFontBridge` connects the existing `LLFontGL` geometry publisher to packets.
+New font caches capture an explicit CPU-only backing policy; FreeType writes
+their raw atlases without allocating or updating GL images. The existing font
+layout code supplies kerning, alignment, fallback and style geometry. Native
+publication rejects a GL-backed cache or nonzero world depth. Atlas generation
+changes compare CPU pixels against the published snapshot and upload the
+bounding changed region. Font producer teardown removes its page registry;
+queued/submitted packets still own their generations. The resources must outlive
+the bridge, and its font faces/registry must be destroyed before the bridge
+releases an owned FreeType manager. Styles and fallback paths need further
+fixture coverage; preserving their producer code is not runtime qualification
+of every path.
+
+`VSUIAdmission` supplies exclusive scoped widget, floater and panel-factory
+policies. Generic builders, direct floater builders, custom panel builders,
+specialized panel callbacks and restored floater admission check policy before
+construction. Denied floater show requests also stop before validation callbacks.
+With no native owner, the original GL admission behavior is retained. Required
+native allowlists are not implemented yet.
+
+The expanded viewer fixture exercises real TGA encode/decode and image facade
+draws, partial replacement, masks and nine-slice scaling, lazy atlas reuse,
+rollover/reset and the existing font producer's ASCII/Greek/Cyrillic geometry
+and subsequent glyph upload. It also invokes denied registered panel and direct
+floater factories. Device-free tests execute the actual restored-floater loop
+with counters, proving denial before settings reads/callbacks and safe handling
+of a failed allowed construction. The launcher requires explicit evidence for
+the facade, atlas, font producer and admission checks. This remains a diagnostic
+fixture; actual login/chat XUI, focus, scrolling and OS IME/DPI events remain open.
+
+## Initial-slice local verification, 8 October 2026
 
 The full Windows RelWithDebInfo viewer build and complete staging check passed.
 All twelve viewer cases passed using the pinned local SwiftShader runtime with
@@ -115,3 +160,23 @@ this change. All 73 regression tests passed, including compilation/execution of
 the actual preference callbacks with device-free fixtures: peer identity, Vulkan
 rejection, supported restart commit, cancel restoration, and early startup
 guard ordering. These checks do not claim an interactive native XUI session.
+
+## Expanded-slice verification, 8 October 2026
+
+The full Windows RelWithDebInfo build and staging check passed. All twelve
+viewer diagnostic cases passed on the pinned SwiftShader runtime, including
+facade/atlas/font/admission evidence, both pixel readbacks, both intentional UI
+pixel failures, zero validation errors and complete teardown. The 1x/2x images
+were visually inspected. Local results record executable/font hashes and a
+modified documentation worktree; this is not cross-platform CI qualification.
+
+All 75 related regression tests passed after the catalog refresh. Discovery
+reconciles 28,338 witnesses in 1,741 files; the boundary manifest hashes 73
+source files. A renderer syntax probe against the Autobuild Linux Diligent
+interfaces passed (with a host `_countof` macro warning); it does not substitute
+for a Linux build or runtime test. The existing dedicated workflow executes the
+expanded cases without changing production CI, release publication or `latest`.
+
+Required XUI construction/traversal, native image-provider asset lookup and
+primitive/transform/nested-clip adapters remain open, along with focus, editing,
+scrolling, platform DPI and IME qualification. Full V3 acceptance is not claimed.

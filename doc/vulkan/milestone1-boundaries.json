@@ -1,5 +1,5 @@
 {
-  "source_commit": "3a62bad6cc4de364fa01a47c9dcae402e7b7148a",
+  "source_commit": "dcb74d7a2339da44e28d88c8de55f019dd578f08",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "closed-admission-set for future UI/chat; native window/clear and opt-in UI substrate fixtures are implemented; full UI/chat gate contracts remain requirements",
@@ -185,14 +185,14 @@
       ]
     },
     "indra/llui/llfloaterreg.cpp": {
-      "sha256": "62d86b05b5d297c9cedd36e4f2dbd90f891b6a644d098ba1810ecdb394d99077",
+      "sha256": "391c8f87c8c34fdace9d87646d091b74d89481b65058cbc7d7ff15b62887a7bb",
       "anchors": [
         "LLFloaterReg::getInstance",
         "LLFloaterReg::showInitialVisibleInstances"
       ]
     },
     "indra/llui/lluictrlfactory.h": {
-      "sha256": "5bda33957a9f515a74cba28fea1f384ad833d89976d8ed8c495789eeb50c3a92",
+      "sha256": "fe629af95f141faa4319ff6cb57cc9938f9cc05175203bfba5351b8c9a8e5974",
       "anchors": [
         "create"
       ]
@@ -234,7 +234,7 @@
       ]
     },
     "indra/llrender/llfontgl.cpp": {
-      "sha256": "dd6bbb7a536540095b3ae823c26ffc7b28958f9cb97dc9dd39857b92b05c0205",
+      "sha256": "e9d0974606f12743f3c25d2a29019f498d44fcda3536b3fe3c1228e589c89363",
       "anchors": [
         "LLFontGL"
       ]
@@ -341,7 +341,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "e95c22f30906628a44fc9f5bce2f398734d5d3285acf1c5c13f96dd652b50a03",
+      "sha256": "07d8a48ecaaf4f0f613823e0fd1d5cd178d222f1a42c5dac24ff823f432ff7b0",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -403,7 +403,7 @@
       ]
     },
     "indra/newview/vsuirenderer.cpp": {
-      "sha256": "5cbbf064fb57dbd46e45a477572df0ebf33a440a7735fbde1d74270ffd71d9c0",
+      "sha256": "20d78932579a33f5b4a6ef4abca154e179bde4946444a0ca35255a67fb0c05f3",
       "anchors": [
         "VSUIRenderer::upload",
         "VSUIRenderer::draw",
@@ -412,7 +412,7 @@
       ]
     },
     "indra/newview/vsuirenderer.h": {
-      "sha256": "095aa030781815bf16d3c7c3ea48e1497e36c87547d766ea77950221c832ce2f",
+      "sha256": "fe2e6e7b7848b8555d927ff08848770a6bcc4be5793975091179ecc6733e42fc",
       "anchors": [
         "class VSUIRenderer",
         "struct Packet",
@@ -439,6 +439,121 @@
       "anchors": [
         "normalize",
         "canStartSession"
+      ]
+    },
+    "indra/newview/vsuiresources.cpp": {
+      "sha256": "79866ec3d9b98b13fdbbe2f6d1302d6159a86ab6999d7d1758e58723938528a9",
+      "anchors": [
+        "VSUIResources::publish",
+        "VSUIResources::fontBatch",
+        "VSUIResources::releaseFontPages"
+      ]
+    },
+    "indra/newview/vsuiresources.h": {
+      "sha256": "104202293a44b244a93d3f28d9ce19b30b18c08369634fa36f06e037ad63b2f8",
+      "anchors": [
+        "class VSUIResources"
+      ]
+    },
+    "indra/newview/vsuifontcache.cpp": {
+      "sha256": "7587313ef7e7929777572d97a1dc4336fb057578a19d4ac8565753bda1c57dc8",
+      "anchors": [
+        "VSUIFontCache::get",
+        "VSUIFontCache::reset"
+      ]
+    },
+    "indra/newview/vsuifontcache.h": {
+      "sha256": "3c9d751ff8bdd6570433986be0621ac369c70fd171af81a66d05d50a0455fa2f",
+      "anchors": [
+        "class VSUIFontCache"
+      ]
+    },
+    "indra/newview/vsuifontbridge.cpp": {
+      "sha256": "deae4bdafc6807cd53cb9c5e74908f63eb33916880e83ab11bed4ade395ecede",
+      "anchors": [
+        "VSUIFontBridge::VSUIFontBridge",
+        "setNativeDraw"
+      ]
+    },
+    "indra/newview/vsuifontbridge.h": {
+      "sha256": "7eca40c205473807dcbebd8f08746e92a529045186b9c8c6f24a6f4319c2c19b",
+      "anchors": [
+        "class VSUIFontBridge"
+      ]
+    },
+    "indra/llui/vsuiadmission.h": {
+      "sha256": "6f1ad756a03e1164a14159381312706607fabfd1fdc500130895fcdfd1afb5d8",
+      "anchors": [
+        "class VSUIAdmission",
+        "static bool widget",
+        "static bool floater"
+      ]
+    },
+    "indra/llrender/llfontbitmapcache.cpp": {
+      "sha256": "3e0afe9ed0e6cac32b223d2546ef9f7d965c07375bec90f59022d5db4ed0f23b",
+      "anchors": [
+        "LLFontBitmapCache::nextOpenPos",
+        "mGPUBacking"
+      ]
+    },
+    "indra/llrender/llfontbitmapcache.h": {
+      "sha256": "ecf47d5cedcd6e937cd5f74fdd8be55e9861cfc17bb315671f15a1cee39b5654",
+      "anchors": [
+        "hasGPUBacking",
+        "setDefaultGPUBacking"
+      ]
+    },
+    "indra/llrender/llfontfreetype.cpp": {
+      "sha256": "2452dba64a3ce93dd9611919de19ef8471fbc546c90d46b20458038afff2d4aa",
+      "anchors": [
+        "LLFontFreetype::addGlyphFromFont",
+        "hasGPUBacking"
+      ]
+    },
+    "indra/llrender/llfontgl.h": {
+      "sha256": "a0ecd112c2aca2aaf3ad52c5179e96f90d49dc461e6474abc42c3bba964e778c",
+      "anchors": [
+        "native_draw_t",
+        "setNativeDraw"
+      ]
+    },
+    "indra/llrender/lluiimage.cpp": {
+      "sha256": "7fe1395973a29714dc400835e37df55b83745cb5fabd571483c5a336734fbc97",
+      "anchors": [
+        "LLUIImage::LLUIImage",
+        "mNativeDraw"
+      ]
+    },
+    "indra/llrender/lluiimage.h": {
+      "sha256": "672627347f23b787259c638a3741b04b3a717ccf02205a7cb7c448b8c3fcc045",
+      "anchors": [
+        "native_draw_t"
+      ]
+    },
+    "indra/llrender/lluiimage.inl": {
+      "sha256": "60cf1cfb474967578bb9887692cfa7a0eba4b61aea9eff21ec19441658b70acc",
+      "anchors": [
+        "mNativeDraw"
+      ]
+    },
+    "indra/llui/llfloaterreg.h": {
+      "sha256": "55a7a6a8520d4c9044cbd16485fbdd4e0a59b9ed15c69cf5590943ab32037f49",
+      "anchors": [
+        "VSUIAdmission::widget"
+      ]
+    },
+    "indra/llui/llpanel.cpp": {
+      "sha256": "4f1895f29ca39c22ac8a892c20c50b71dc347e1e4a71f11ed827a50615a80075",
+      "anchors": [
+        "LLPanel::fromXML",
+        "VSUIAdmission::panelFactory"
+      ]
+    },
+    "indra/llui/llpanel.h": {
+      "sha256": "3c6a0b35851c5b4ff10cfcaa2cad382cbf283a636d73d725b4fc31146adbe922",
+      "anchors": [
+        "VSUIAdmission::widget",
+        "VSUIAdmission::panelFactory"
       ]
     }
   },
@@ -591,7 +706,24 @@
         "indra/newview/llviewermedia.cpp",
         "indra/llrender/llfontgl.cpp",
         "indra/newview/vsvkdiag.cpp",
-        "indra/newview/vsvulkandiagnostic.h"
+        "indra/newview/vsvulkandiagnostic.h",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsuiresources.h",
+        "indra/newview/vsuifontcache.cpp",
+        "indra/newview/vsuifontcache.h",
+        "indra/newview/vsuifontbridge.cpp",
+        "indra/newview/vsuifontbridge.h",
+        "indra/llui/vsuiadmission.h",
+        "indra/llrender/llfontbitmapcache.cpp",
+        "indra/llrender/llfontbitmapcache.h",
+        "indra/llrender/llfontfreetype.cpp",
+        "indra/llrender/llfontgl.h",
+        "indra/llrender/lluiimage.cpp",
+        "indra/llrender/lluiimage.h",
+        "indra/llrender/lluiimage.inl",
+        "indra/llui/llfloaterreg.h",
+        "indra/llui/llpanel.cpp",
+        "indra/llui/llpanel.h"
       ],
       "gates": [
         "G-RESOURCE",
@@ -608,7 +740,24 @@
         "indra/llcommon/llinitdestroyclass.h",
         "indra/llcommon/llinitdestroyclass.cpp",
         "indra/newview/vsvkdiag.cpp",
-        "indra/newview/vsvulkandiagnostic.h"
+        "indra/newview/vsvulkandiagnostic.h",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsuiresources.h",
+        "indra/newview/vsuifontcache.cpp",
+        "indra/newview/vsuifontcache.h",
+        "indra/newview/vsuifontbridge.cpp",
+        "indra/newview/vsuifontbridge.h",
+        "indra/llui/vsuiadmission.h",
+        "indra/llrender/llfontbitmapcache.cpp",
+        "indra/llrender/llfontbitmapcache.h",
+        "indra/llrender/llfontfreetype.cpp",
+        "indra/llrender/llfontgl.h",
+        "indra/llrender/lluiimage.cpp",
+        "indra/llrender/lluiimage.h",
+        "indra/llrender/lluiimage.inl",
+        "indra/llui/llfloaterreg.h",
+        "indra/llui/llpanel.cpp",
+        "indra/llui/llpanel.h"
       ],
       "gates": [
         "G-LIFETIME"
@@ -4809,11 +4958,11 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "3a62bad6cc4de364fa01a47c9dcae402e7b7148a",
+    "source_commit": "dcb74d7a2339da44e28d88c8de55f019dd578f08",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
     "world_implemented": false,
-    "qualification": "Windows SwiftShader and Linux Lavapipe CI passed; Linux SwiftShader early teardown correction pending CI"
+    "qualification": "Earlier packet slice passed Windows SwiftShader and Linux SwiftShader/Lavapipe CI. Expanded image/font producers and admission require fresh CI; full XUI/input acceptance remains open."
   }
 }
