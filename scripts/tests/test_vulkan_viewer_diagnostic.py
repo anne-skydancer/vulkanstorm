@@ -10,7 +10,7 @@ from render_backend_selector_fixture import SelectorTests
 from test_vulkan_ui_oracle import OracleTest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from run_vulkan_viewer_diagnostic import assess, STAGES
+from run_vulkan_viewer_diagnostic import assess, STAGES, skin_cases
 
 
 def record():
@@ -24,6 +24,161 @@ def record():
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_skin_matrix_requires_catalog_assets_and_preserves_all_theme_selections(self):
+        with tempfile.TemporaryDirectory() as temp:
+            stage = Path(temp)
+            translated = stage / 'skins/default/xui/de'
+            translated.mkdir(parents=True)
+            for filename in ('strings.xml', 'panel_progress_mini.xml'):
+                (translated / filename).write_text('<xml/>')
+            (stage / 'skins/modern/themes/blue').mkdir(parents=True)
+            catalog = stage / 'skins/skins.xml'
+            catalog.write_text('''<llsd><array><map><key>folder</key><string>modern</string>
+<key>themes</key><array><map><key>folder</key><string/></map>
+<map><key>folder</key><string>blue</string></map></array></map></array></llsd>''')
+            cases = skin_cases(stage)
+            self.assertEqual(cases['skin-modern-base'], ('modern', '', 'en'))
+            self.assertEqual(cases['skin-modern-blue'], ('modern', 'blue', 'en'))
+            self.assertEqual(cases['skin-default-de'], ('default', '', 'de'))
+            (translated / 'strings.xml').unlink()
+            with self.assertRaisesRegex(RuntimeError, 'German XUI overlay is missing'):
+                skin_cases(stage)
+            (translated / 'strings.xml').write_text('<xml/>')
+            (stage / 'skins/modern/themes/blue').rmdir()
+            with self.assertRaisesRegex(RuntimeError, 'directory is missing'):
+                skin_cases(stage)
+            catalog.write_text('<llsd><array/></llsd>')
+            with self.assertRaisesRegex(RuntimeError, 'catalog is empty'):
+                skin_cases(stage)
+            catalog.write_text('''<llsd><array><map><key>folder</key><string>../escape</string>
+<key>themes</key><array><map><key>folder</key><string/></map></array></map></array></llsd>''')
+            with self.assertRaisesRegex(RuntimeError, 'Invalid packaged skin folder'):
+                skin_cases(stage)
+    def test_win32_button_down_uses_message_coordinates_instead_of_polled_cursor(self):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/llwindow/llwindowwin32.cpp').read_text(encoding='utf-8')
+        start = source.index('case WM_LBUTTONDOWN:')
+        start = source.index('window_imp->postMouseButtonEvent([=]()', start)
+        end = source.index('});', start) + 3
+        fixture = r"""
+#include <cassert>
+using MASK=unsigned;
+bool sHandleLeftMouseUp=false;
+struct Coord { int x=0,y=0;Coord convert() const { return *this; } };
+struct LLWinImm { static bool isAvailable() { return false; } };
+struct Keyboard { MASK currentMask(bool) const { return 0; } } keyboard;
+auto* gKeyboard=&keyboard;
+struct Callbacks {
+    Coord hover,down;
+    void handleMouseMove(void*,Coord p,MASK) { hover=p; }
+    void handleMouseDown(void*,Coord p,MASK) { down=p; }
+};
+struct Window {
+    Coord mCursorPosition{900,800};void* mPreeditor=nullptr;
+    Callbacks callbacks;Callbacks* mCallbacks=&callbacks;
+    void interruptLanguageTextInput() {}
+    template<class F>void postMouseButtonEvent(F f) { f(); }
+};
+int main() {
+    Window window;Window* window_imp=&window;const Coord window_coord{25,65};
+""" + source[start:end] + r"""
+    assert(sHandleLeftMouseUp);
+    assert(window.callbacks.hover.x==25 && window.callbacks.hover.y==65);
+    assert(window.callbacks.down.x==25 && window.callbacks.down.y==65);
+    assert(window.mCursorPosition.x==25 && window.mCursorPosition.y==65);
+}
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'button_coordinates.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            exe = path.with_suffix('.exe')
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_native_text_bypasses_gl_display_list_collection_and_replay(self):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/llrender/llfontvertexbuffer.cpp').read_text(encoding='utf-8')
+        # Compile the production cache implementation, with only GPU/font endpoints stubbed.
+        start = source.index('bool LLFontVertexBuffer::sEnableBufferCollection')
+        end = source.index('void LLFontVertexBuffer::renderBuffers()', start)
+        font = r"""
+#pragma once
+#include <list>
+#include <string>
+#include <climits>
+#include <cassert>
+using S32=int;using F32=float;using U8=unsigned char;using LLWString=std::wstring;
+constexpr int S32_MAX=INT_MAX;
+struct LLCoordGL { int value=0;bool operator!=(const LLCoordGL& o) const { return value!=o.value; } };
+struct LLColor4 { int value=0;bool operator!=(const LLColor4& o) const { return value!=o.value; } };
+struct LLRect { int mLeft=0,mTop=0,mRight=0,mBottom=0; };
+struct LLRectf {
+    float mLeft,mTop,mRight,mBottom;
+    LLRectf(float l,float t,float r,float b):mLeft(l),mTop(t),mRight(r),mBottom(b) {}
+    float getCenterY() const { return (mTop+mBottom)/2; }
+    float getWidth() const { return mRight-mLeft; }
+};
+struct LLVertexBufferData {};
+struct LLFontGL {
+    enum HAlign { LEFT };enum VAlign { TOP,VCENTER,BASELINE,BOTTOM };
+    enum ShadowType { NO_SHADOW };enum { NORMAL };
+    inline static bool sDisplayFont=true,native=false;
+    inline static float sScaleX=1,sScaleY=1,sVertDPI=96,sHorizDPI=96;
+    inline static int sResolutionGeneration=0;
+    inline static LLCoordGL sCurOrigin;
+    mutable int draws=0;
+    static bool hasNativeDraw() { return native; }
+    int getCacheGeneration() const { return 1; }
+    int render(const LLWString&,int,float,float,const LLColor4&,HAlign,VAlign,U8,ShadowType,
+               int,int,float* right,bool,bool) const { ++draws;if(right)*right=42;return 7; }
+};
+"""
+        fixture = r"""
+#include "llfontvertexbuffer.h"
+struct Render {
+    int collections=0;
+    void beginList(std::list<LLVertexBufferData>* list) { ++collections;list->emplace_back(); }
+    void endList() {}
+} gGL;
+int replays=0;
+""" + source[start:end] + r"""
+void LLFontVertexBuffer::renderBuffers() { ++replays; }
+int main() {
+    LLFontGL font;LLFontVertexBuffer buffer;LLColor4 color;float right=0;
+    auto draw=[&] { return buffer.render(&font,L"native",0,1.f,2.f,color,LLFontGL::LEFT,
+        LLFontGL::BASELINE,0,LLFontGL::NO_SHADOW,100,100,&right,false,true); };
+    // A populated legacy cache must not be replayed when a native owner takes over.
+    assert(draw()==7 && font.draws==1 && gGL.collections==1 && right==42);
+    right=0;assert(draw()==7 && font.draws==1 && replays==1 && right==42);
+    LLFontGL::native=true;
+    for(int i=0;i<2;++i) { right=0;assert(draw()==7 && right==42); }
+    assert(font.draws==3 && gGL.collections==1 && replays==1);
+    buffer.reset();draw();assert(font.draws==4 && gGL.collections==1 && replays==1);
+    LLFontGL::native=false;draw();assert(font.draws==5 && gGL.collections==2);
+    LLFontVertexBuffer::enableBufferCollection(false);draw();
+    assert(font.draws==6 && gGL.collections==2 && replays==1);
+    LLFontGL::sDisplayFont=false;assert(draw()==6 && font.draws==6);
+}
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)
+            (path / 'llfontgl.h').write_text(font, encoding='utf-8')
+            (path / 'llfontvertexbuffer.h').write_bytes((root / 'indra/llrender/llfontvertexbuffer.h').read_bytes())
+            (path / 'font_cache.cpp').write_text(fixture, encoding='utf-8')
+            exe = path / 'font_cache.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path / 'font_cache.cpp'), '-o', str(exe)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_gl_geometry_trap_preserves_legacy_begin_and_rejects_before_mutation(self):
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)
@@ -208,6 +363,7 @@ int main() {
                     ui_admission_verified=True,ui_xui_verified=True,ui_input_verified=True,ui_focus_verified=True,
                     ui_mouse_verified=True,ui_scroll_verified=True)
         self.assertTrue(assess(good, 0, log, 'ui-positive', 'Windows'))
+        self.assertTrue(assess(good, 0, log, 'skin-modern-blue', 'Windows'))
         for key, value in [('ui_readbacks', 1), ('ui_readback_verified', False), ('ui_fixture_enabled', False),
                            ('ui_facade_verified', False), ('ui_atlas_verified', False),
                            ('ui_font_producer_verified', False), ('ui_admission_verified', False),
@@ -216,6 +372,7 @@ int main() {
             with self.subTest(key=key):
                 bad = copy.deepcopy(good); bad[key] = value
                 self.assertFalse(assess(bad, 0, log, 'ui-positive', 'Windows'))
+                self.assertFalse(assess(bad, 0, log, 'skin-modern-blue', 'Windows'))
         for case, failure in [('bad-xui','Viewer XUI pixel oracle mismatch'),
                               ('ui-construction','Injected failure: ui-construction'),
                               ('ui-gl-trap','GL geometry in native UI owner')]:

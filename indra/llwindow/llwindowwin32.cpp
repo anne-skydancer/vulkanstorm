@@ -2881,6 +2881,9 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
                         }
 
                         MASK mask = gKeyboard->currentMask(true);
+                        // A queued button event owns its client coordinates. Cursor polling
+                        // may have advanced since the preceding WM_MOUSEMOVE was delivered.
+                        window_imp->mCursorPosition = window_coord;
                         auto gl_coord = window_imp->mCursorPosition.convert();
                         window_imp->mCallbacks->handleMouseMove(window_imp, gl_coord, mask);
                         window_imp->mCallbacks->handleMouseDown(window_imp, gl_coord, mask);

@@ -7,6 +7,7 @@ from pathlib import Path
 import platform
 import re
 import subprocess
+import xml.etree.ElementTree as ET
 
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
 
@@ -18,6 +19,53 @@ STAGES = ['viewer-window-created', 'device-created', 'swapchain-created-320x240'
 FAILURES = ('before-window', 'after-window', 'after-device', 'after-swapchain',
             'frame', 'shutdown', 'gl-trap', 'bad-clear')
 UI_CASES = ('ui-positive', 'bad-ui', 'ui-orientation', 'bad-xui', 'ui-construction', 'ui-gl-trap')
+
+
+def skin_cases(stage):
+    """Qualify every packaged skin/theme; missing catalog assets cannot fall back unnoticed."""
+    def mapping(node):
+        children = list(node)
+        if node.tag != 'map' or len(children) % 2:
+            raise RuntimeError('Malformed packaged skin catalog')
+        if any(children[i].tag != 'key' for i in range(0, len(children), 2)):
+            raise RuntimeError('Malformed packaged skin catalog keys')
+        return {children[i].text: children[i + 1] for i in range(0, len(children), 2)}
+
+    def component(value, optional=False):
+        if (not value and not optional) or (value and not re.fullmatch(r'[A-Za-z0-9_-]+', value)):
+            raise RuntimeError('Invalid packaged skin folder')
+        return value
+
+    catalog = stage / 'skins/skins.xml'
+    array = ET.parse(catalog).getroot().find('array')
+    if array is None or not len(array):
+        raise RuntimeError('Packaged skin catalog is empty')
+    result = {'skin-default-base': ('default', '', 'en')}
+    for skin in array:
+        entry = mapping(skin)
+        folder = component(entry['folder'].text or '')
+        themes = entry['themes']
+        if themes.tag != 'array' or not len(themes):
+            raise RuntimeError('Packaged skin has no themes: ' + folder)
+        for theme in themes:
+            selected = component(mapping(theme)['folder'].text or '', optional=True)
+            path = stage / 'skins' / folder
+            if selected:
+                path = path / 'themes' / selected
+            if not path.is_dir():
+                raise RuntimeError('Packaged skin/theme directory is missing: ' + str(path))
+            name = 'skin-' + folder + '-' + (selected or 'base')
+            if name in result:
+                raise RuntimeError('Duplicate packaged skin/theme: ' + name)
+            result[name] = (folder, selected, 'en')
+    if not (stage / 'skins/default').is_dir():
+        raise RuntimeError('Packaged base skin is missing')
+    # A translated XUI overlay uses the same native owner and base-asset fallback.
+    for filename in ('strings.xml', 'panel_progress_mini.xml'):
+        if not (stage / 'skins/default/xui/de' / filename).is_file():
+            raise RuntimeError('Packaged German XUI overlay is missing: ' + filename)
+    result['skin-default-de'] = ('default', '', 'de')
+    return result
 
 
 def runtime_libraries(runtime):
@@ -40,7 +88,8 @@ def assess(record, code, log, case, system):
             or record.get('stages', [])[-3:] != STAGES[-3:]
             or any(int(n) >= 2 for n in re.findall(r'^DILIGENT (\d+):', log, re.M))):
         return False
-    if case not in ('positive', 'ui-positive'):
+    positive_ui = case == 'ui-positive' or case.startswith('skin-')
+    if case != 'positive' and not positive_ui:
         if case in UI_CASES and record.get('ui_fixture_enabled') is not True:
             return False
         expected = ('GL geometry in native UI owner' if case == 'ui-gl-trap' else
@@ -51,7 +100,7 @@ def assess(record, code, log, case, system):
                     else 'Injected failure: ' + case)
         return (code == 1 and record.get('passed') is False and record.get('failure') == expected
                 and 'FAIL viewer-native-diagnostic' in log)
-    if case == 'ui-positive' and (record.get('ui_fixture_enabled') is not True or
+    if positive_ui and (record.get('ui_fixture_enabled') is not True or
                                  record.get('ui_readback_verified') is not True or
                                  record.get('ui_facade_verified') is not True or
                                  record.get('ui_atlas_verified') is not True or
@@ -110,7 +159,8 @@ def main():
     env = os.environ.copy()
     for key in ('VK_ICD_FILENAMES', 'VK_ADD_DRIVER_FILES', 'VK_ADD_LAYER_PATH', 'VK_INSTANCE_LAYERS',
                 'VK_LOADER_DRIVERS_SELECT', 'VK_LOADER_DRIVERS_DISABLE', 'VK_LAYER_ENABLES', 'VK_LAYER_DISABLES',
-                'VS_VULKAN_DIAGNOSTIC', 'VS_VULKAN_DIAGNOSTIC_FAIL', 'VS_VULKAN_DIAGNOSTIC_UI'):
+                'VS_VULKAN_DIAGNOSTIC', 'VS_VULKAN_DIAGNOSTIC_FAIL', 'VS_VULKAN_DIAGNOSTIC_UI',
+                'VS_VULKAN_DIAGNOSTIC_SKIN', 'VS_VULKAN_DIAGNOSTIC_THEME', 'VS_VULKAN_DIAGNOSTIC_LANGUAGE'):
         env.pop(key, None)
     env.update(VK_DRIVER_FILES=runtime['icd'], VK_LAYER_PATH=runtime['layer_path'],
                VK_LOADER_LAYERS_DISABLE='~implicit~', VK_LOADER_DEBUG='error,warn,driver,layer')
@@ -129,16 +179,23 @@ def main():
                'tests': [], 'ui_chat_qualified': False, 'world_qualified': False,
                'ui_platform_dpi_qualified': False, 'ui_os_ime_qualified': False,
                'ui_event_source': 'synthetic-native-window-events'}
+    skins = skin_cases(stage)
+    ui_cases = (*UI_CASES, *skins)
+    results['skin_cases'] = {name: dict(zip(('skin', 'theme', 'language'), values)) for name, values in skins.items()}
     with windows_manifest_registration(runtime, args.register_windows_manifests):
-        for case in ('positive', *FAILURES, *UI_CASES):
+        for case in ('positive', *FAILURES, *ui_cases):
             directory = evidence / case; directory.mkdir(exist_ok=True)
             artifact = directory / 'viewer-presentation.json'; artifact.unlink(missing_ok=True)
             image = directory / 'viewer-clear.ppm'; image.unlink(missing_ok=True)
             for pattern in ('viewer-ui-*.ppm','viewer-xui*.ppm'):
                 for old_image in directory.glob(pattern): old_image.unlink()
             child_env = env.copy(); child_env['VS_VULKAN_DIAGNOSTIC'] = str(directory)
-            if case in UI_CASES: child_env['VS_VULKAN_DIAGNOSTIC_UI'] = '1'
-            if case not in ('positive', 'ui-positive'): child_env['VS_VULKAN_DIAGNOSTIC_FAIL'] = case
+            if case in ui_cases: child_env['VS_VULKAN_DIAGNOSTIC_UI'] = '1'
+            if case in skins:
+                for key, value in zip(('SKIN', 'THEME', 'LANGUAGE'), skins[case]):
+                    child_env['VS_VULKAN_DIAGNOSTIC_' + key] = value
+            if case not in ('positive', 'ui-positive') and case not in skins:
+                child_env['VS_VULKAN_DIAGNOSTIC_FAIL'] = case
             record = None; mapped = {}; log = ''; code = None; passed = False
             try:
                 process = subprocess.run([str(executable)], cwd=stage, env=child_env,
@@ -146,16 +203,18 @@ def main():
                 code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
                 record = json.loads(artifact.read_text())
                 passed = assess(record, code, log, case, platform.system())
-                if case in ('positive', 'ui-positive'):
+                if case in skins and tuple(record.get('ui_' + key) for key in ('skin', 'theme', 'language')) != skins[case]:
+                    raise RuntimeError('Viewer skin selection differs from the requested skin/theme/language')
+                if case in ('positive', 'ui-positive') or case in skins:
                     if not image.is_file() or image.stat().st_size != len(b'P6\n320 240\n255\n') + 320 * 240 * 3:
                         raise RuntimeError('Missing or incomplete viewer clear readback')
-                if case in UI_CASES:
-                    for scale in (('1x', '2x') if case in ('ui-positive', 'bad-xui', 'ui-construction') else ('1x',)):
+                if case in ui_cases:
+                    for scale in (('1x', '2x') if case in ('ui-positive', 'bad-xui', 'ui-construction') or case in skins else ('1x',)):
                         for suffix in ('', '-expected'):
                             path = directory / f'viewer-ui-{scale}{suffix}.ppm'
                             if not path.is_file() or path.stat().st_size != len(b'P6\n320 240\n255\n') + 320 * 240 * 3:
                                 raise RuntimeError('Missing or incomplete viewer UI readback: ' + path.name)
-                if case in ('ui-positive', 'bad-xui'):
+                if case in ('ui-positive', 'bad-xui') or case in skins:
                     for suffix in ('', '-expected'):
                         path = directory / f'viewer-xui{suffix}.ppm'
                         if not path.is_file() or path.stat().st_size != len(b'P6\n320 240\n255\n') + 320 * 240 * 3:
@@ -182,8 +241,9 @@ def main():
             results['tests'].append(dict(case=case, returncode=code, passed=passed, presentation=record,
                                          loaded_library_sha256=mapped))
             print(('PASS' if passed else 'FAIL') + ': viewer ' + case)
-    results['presentation_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] not in UI_CASES)
-    results['ui_substrate_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in UI_CASES)
+    results['presentation_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] not in ui_cases)
+    results['ui_substrate_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in ui_cases)
+    results['skin_fixture_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in skins)
     (evidence / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
     return 0 if results['presentation_qualified'] and results['ui_substrate_qualified'] else 1
 
