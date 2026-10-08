@@ -34,6 +34,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterpreference.h"
+#include "vsrenderbackend.h"
 
 #include "message.h"
 #include "llfloaterautoreplacesettings.h"
@@ -4040,10 +4041,7 @@ void LLPanelPreferenceGraphics::refreshRenderBackendSelector()
     if (backend_combo)
     {
         std::string active_backend = gSavedSettings.getString("RenderBackend");
-        if (active_backend != "Zink")
-        {
-            active_backend = "OpenGL";
-        }
+        active_backend = VSRenderBackend::normalize(active_backend);
         backend_combo->setValue(LLSD(active_backend));
         backend_combo->resetDirty();
     }
@@ -4053,9 +4051,12 @@ void LLPanelPreferenceGraphics::onRenderBackendCommit()
 {
     std::string selected_backend = gSavedSettings.getString("RenderBackendPending");
     std::string active_backend = gSavedSettings.getString("RenderBackend");
-    if (active_backend != "Zink")
+    active_backend = VSRenderBackend::normalize(active_backend);
+    if (!VSRenderBackend::canStartSession(selected_backend))
     {
-        active_backend = "OpenGL";
+        LLNotificationsUtil::add("VulkanRendererUnavailable");
+        refreshRenderBackendSelector();
+        return;
     }
     if (selected_backend == active_backend)
     {
@@ -4076,10 +4077,13 @@ void LLPanelPreferenceGraphics::callbackRenderBackendRestart(const LLSD& notific
     if (0 == option) // Shutdown now
     {
         std::string selected_backend = gSavedSettings.getString("RenderBackendPending");
-        if (selected_backend != "Zink")
+        if (!VSRenderBackend::canStartSession(selected_backend))
         {
-            selected_backend = "OpenGL";
+            LLNotificationsUtil::add("VulkanRendererUnavailable");
+            refreshRenderBackendSelector();
+            return;
         }
+        selected_backend = VSRenderBackend::normalize(selected_backend);
         gSavedSettings.setString("RenderBackend", selected_backend);
         LL_INFOS() << "User requested quit to switch render backend to " << selected_backend << LL_ENDL;
         LLAppViewer::instance()->requestQuit();

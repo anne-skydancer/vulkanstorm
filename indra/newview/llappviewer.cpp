@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llappviewer.h"
+#include "vsrenderbackend.h"
 #if VS_VULKAN_DIAGNOSTICS
 #include "vsvulkandiagnostic.h"
 #endif
@@ -1018,6 +1019,13 @@ bool LLAppViewer::init()
     }
 
     LL_INFOS("InitInfo") << "Configuration initialized." << LL_ENDL ;
+    if (!VSRenderBackend::canStartSession(gSavedSettings.getString("RenderBackend")))
+    {
+        const std::string message = LLTrans::getString("MBVulkanRendererUnavailable");
+        LL_WARNS("AppInit") << message << LL_ENDL;
+        OSMessageBox(message.c_str(), LLStringUtil::null, OSMB_OK);
+        return false;
+    }
     //set the max heap size.
     initMaxHeapSize() ;
     LLCoros::instance().setStackSize(gSavedSettings.getS32("CoroutineStackSize"));
@@ -1231,7 +1239,7 @@ bool LLAppViewer::init()
     //
     gGLActive = true;
     selectGLBackend(); // <VulkanStorm> resolve the GL provider before any GL import is touched
-    initWindow();
+    if (!initWindow()) return false;
     LL_INFOS("InitInfo") << "Window is initialized." << LL_ENDL ;
     // <FS:Beq> allow detected hardware to be overridden.
     gGLManager.mVRAMDetected = gGLManager.mVRAM;
@@ -3773,13 +3781,12 @@ bool LLAppViewer::initWindow()
     // <VulkanStorm> The render backend (OpenGL/Vulkan) is selected in
     // Preferences > Graphics > Hardware Settings and is fixed for the
     // lifetime of the process; switching it requires a viewer restart.
-    // Until the Vulkan pipeline is available, any Vulkan selection falls
-    // back to OpenGL for this session.
+    // Native Vulkan is a peer backend; unavailable sessions must not enter GL.
     std::string render_backend = gSavedSettings.getString("RenderBackend");
     if (render_backend == "Vulkan")
     {
-        LL_WARNS("AppInit") << "RenderBackend=Vulkan requested, but the Vulkan render pipeline is not yet available in this build; falling back to OpenGL for this session." << LL_ENDL;
-        render_backend = "OpenGL";
+        LL_WARNS("AppInit") << "Native Vulkan session unavailable; refusing GL window initialization." << LL_ENDL;
+        return false;
     }
     else if (render_backend == "Zink")
     {

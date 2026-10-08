@@ -2259,6 +2259,7 @@ if( DEFINED LLSTARTUP_COMPILE_FLAGS )
   # </FS:Ansariel>
 endif()
 
+list(APPEND viewer_HEADER_FILES vsrenderbackend.h)
 list(APPEND viewer_SOURCE_FILES ${viewer_HEADER_FILES})
 if(VS_VULKAN_DIAGNOSTICS)
     list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h
