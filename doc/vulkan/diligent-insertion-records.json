@@ -1,5 +1,5 @@
 {
-  "source_commit": "bb1a0840aeaf0c06ed9f8d04430a06032d6a96c1",
+  "source_commit": "e1689fbb8848553753faf22042943bb9234b521e",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -293,7 +293,7 @@
           "symbol": "void VSUIRenderer::draw"
         }
       ],
-      "responsibility": "Preserve virtual widget traversal, paint order, clipping, scale and image/text generations with native ordered packets and immutable Diligent resources. VSUIResources adapts CPU image publication and the LLUIImage draw facade, including masks/nine-slices. Native construction policy guards generic/custom panel and floater factories before allocation/callbacks. Required XUI allowlists, skin image provider, primitive/matrix/nested clip and input integration remain open. Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed.",
+      "responsibility": "Preserve virtual widget traversal, paint order, clipping, scale and image/text generations with native ordered packets and immutable Diligent resources. VSUIResources adapts CPU image publication and the LLUIImage draw facade, including masks/nine-slices. Native construction policy guards generic/custom panel and floater factories before allocation/callbacks. Required XUI allowlists, skin image provider, primitive/matrix/nested clip and input integration remain open. Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed. Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed.",
       "contracts": [
         "U01"
       ]
@@ -1235,29 +1235,11 @@
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 986,
-      "end": 986,
-      "record": "I06",
-      "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
-    },
-    {
-      "path": "indra/llrender/llrender.cpp",
-      "start": 987,
-      "end": 987,
-      "record": "I06",
-      "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
-    },
-    {
-      "path": "indra/llrender/llrender.cpp",
       "start": 988,
       "end": 988,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
@@ -1266,7 +1248,7 @@
       "end": 989,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
@@ -1275,7 +1257,7 @@
       "end": 990,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
@@ -1284,7 +1266,7 @@
       "end": 991,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
@@ -1293,25 +1275,25 @@
       "end": 992,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 996,
-      "end": 996,
+      "start": 993,
+      "end": 993,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 997,
-      "end": 997,
+      "start": 994,
+      "end": 994,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
@@ -1320,169 +1302,187 @@
       "end": 998,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1043,
-      "end": 1043,
+      "start": 999,
+      "end": 999,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1065,
-      "end": 1065,
+      "start": 1000,
+      "end": 1000,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1070,
-      "end": 1070,
+      "start": 1045,
+      "end": 1045,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1088,
-      "end": 1088,
+      "start": 1067,
+      "end": 1067,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1103,
-      "end": 1103,
+      "start": 1072,
+      "end": 1072,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1109,
-      "end": 1109,
+      "start": 1090,
+      "end": 1090,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1112,
-      "end": 1112,
+      "start": 1105,
+      "end": 1105,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1130,
-      "end": 1130,
+      "start": 1111,
+      "end": 1111,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1139,
-      "end": 1139,
+      "start": 1114,
+      "end": 1114,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1762,
-      "end": 1762,
+      "start": 1132,
+      "end": 1132,
+      "record": "I06",
+      "disposition": "mapped",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+    },
+    {
+      "path": "indra/llrender/llrender.cpp",
+      "start": 1141,
+      "end": 1141,
+      "record": "I06",
+      "disposition": "mapped",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+    },
+    {
+      "path": "indra/llrender/llrender.cpp",
+      "start": 1766,
+      "end": 1766,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::genBuffer local LLVertexBuffer* vb at1759 / drawBuffer typed parameter1784. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1786,
-      "end": 1786,
+      "start": 1790,
+      "end": 1790,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::genBuffer local LLVertexBuffer* vb at1759 / drawBuffer typed parameter1784. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 1787,
-      "end": 1787,
+      "start": 1791,
+      "end": 1791,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::genBuffer local LLVertexBuffer* vb at1759 / drawBuffer typed parameter1784. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 2026,
-      "end": 2026,
+      "start": 2030,
+      "end": 2030,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 2037,
-      "end": 2037,
+      "start": 2041,
+      "end": 2041,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 2048,
-      "end": 2048,
+      "start": 2052,
+      "end": 2052,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 2059,
-      "end": 2059,
+      "start": 2063,
+      "end": 2063,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 2070,
-      "end": 2070,
+      "start": 2074,
+      "end": 2074,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
-      "start": 2081,
-      "end": 2081,
+      "start": 2085,
+      "end": 2085,
       "record": "I06",
       "disposition": "mapped",
-      "sha256": "73218f1e6a3269d57e2225b3780aa492848da4acbc73b2f0cd3859935419baf6",
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
       "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
@@ -2901,8 +2901,8 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1,
-      "end": 784,
-      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "end": 856,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity. Opt-in V3 fixtures now exercise native UI packets, CPU glyph publication and swapchain readback; normal XUI/login/world bootstrap remains outside this diagnostic."
@@ -3090,8 +3090,8 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1,
-      "end": 784,
-      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "end": 856,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -3099,8 +3099,8 @@
     {
       "path": "indra/newview/vsuiresources.cpp",
       "start": 1,
-      "end": 277,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "end": 282,
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -3567,8 +3567,8 @@
     {
       "path": "indra/newview/vsuifixture.cpp",
       "start": 1,
-      "end": 265,
-      "sha256": "4019a95f63738fa89adeeddcfcb7ccd222a40beead29a2df22b56c8885c2abe5",
+      "end": 321,
+      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3576,8 +3576,8 @@
     {
       "path": "indra/newview/vsuifixture.h",
       "start": 1,
-      "end": 25,
-      "sha256": "f1f68420bbd1662c0b414e94a0be363822847c82b086931dd47ec72e8f678075",
+      "end": 32,
+      "sha256": "e05ae45e2da9d14507971282fc1127a4c47f5326404e8d71e8114085aa9bf7f9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3712,7 +3712,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 5,
       "end": 5,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3721,7 +3721,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 17,
       "end": 26,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3730,7 +3730,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 41,
       "end": 41,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3739,7 +3739,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 52,
       "end": 52,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3748,7 +3748,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 57,
       "end": 57,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3757,7 +3757,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 64,
       "end": 65,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3766,7 +3766,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 78,
       "end": 79,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3775,7 +3775,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 170,
       "end": 170,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3784,7 +3784,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 242,
       "end": 242,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3793,7 +3793,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 260,
       "end": 260,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3802,7 +3802,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 266,
       "end": 266,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3810,8 +3810,8 @@
     {
       "path": "indra/newview/vsuiresources.cpp",
       "start": 270,
-      "end": 277,
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "end": 282,
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3829,7 +3829,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 5,
       "end": 6,
-      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3837,53 +3837,53 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 113,
-      "end": 116,
-      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "end": 122,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 131,
-      "end": 134,
-      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "start": 137,
+      "end": 148,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 242,
-      "end": 246,
-      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "start": 256,
+      "end": 260,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 539,
-      "end": 629,
-      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "start": 553,
+      "end": 700,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 665,
-      "end": 665,
-      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "start": 736,
+      "end": 736,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 753,
-      "end": 753,
-      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "start": 824,
+      "end": 825,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3892,7 +3892,7 @@
       "path": "indra/newview/vsuifixture.cpp",
       "start": 118,
       "end": 119,
-      "sha256": "4019a95f63738fa89adeeddcfcb7ccd222a40beead29a2df22b56c8885c2abe5",
+      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3901,10 +3901,136 @@
       "path": "indra/newview/vsuifixture.cpp",
       "start": 122,
       "end": 122,
-      "sha256": "4019a95f63738fa89adeeddcfcb7ccd222a40beead29a2df22b56c8885c2abe5",
+      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender.cpp",
+      "start": 30,
+      "end": 31,
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender.cpp",
+      "start": 1576,
+      "end": 1577,
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 207,
+      "end": 253,
+      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 261,
+      "end": 262,
+      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 288,
+      "end": 294,
+      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuifixture.h",
+      "start": 17,
+      "end": 23,
+      "sha256": "e05ae45e2da9d14507971282fc1127a4c47f5326404e8d71e8114085aa9bf7f9",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 275,
+      "end": 281,
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 117,
+      "end": 122,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 141,
+      "end": 148,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 559,
+      "end": 560,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 564,
+      "end": 586,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 630,
+      "end": 662,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 736,
+      "end": 736,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 825,
+      "end": 825,
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
     }
   ]
 }

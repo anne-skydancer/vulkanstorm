@@ -1,6 +1,6 @@
 # V3: viewer UI resource and packet substrate
 
-Source: `bb1a0840aeaf0c06ed9f8d04430a06032d6a96c1` on `vkstorm-vulkan`.
+Source: `e1689fbb8848553753faf22042943bb9234b521e` on `vkstorm-vulkan`.
 Status: resource and producer integration underway; full V3 acceptance remains open. This code
 runs in the staged viewer's native diagnostic lifecycle. An initial closed widget set now constructs corrected mini-progress XUI and
 plain editors, with native window input/focus, Tab traversal, scrolling and the
@@ -229,3 +229,40 @@ integration is qualified; connected transport remains V4.
 
 The refreshed source accounting passes with 28,410 witnesses in 1,747 files
 and 90 boundary source hashes. All 76 related regression tests pass.
+
+## Native pointer input and geometry guard checkpoint, 8 October 2026
+
+The viewer window callbacks now route mouse-down/up, hover and vertical wheel
+events to the existing admitted widgets. Captured input is translated into the
+captor's local coordinates; otherwise it traverses the root. Focus loss cancels
+capture. A queued native click must focus the real editor and release capture;
+a queued wheel event must change the real transcript viewport after layout.
+Win32 injection establishes cached cursor coordinates before button-down and
+supplies screen coordinates for wheel messages. SDL2 uses its native mouse and
+wheel events. Callback owners are cleared before widget teardown.
+
+`LLRender::begin` rejects GL geometry while the native drawing owner is active,
+before changing GL renderer state. The isolated `ui-gl-trap` case proves process
+failure and clean teardown. A device-free test also verifies that ordinary GL
+begin/flush behavior is preserved outside that owner. This guard does not prove
+that every remaining control or raw GL call has been ported.
+
+Native nested clipping now preserves the existing scissor's extra physical
+pixel at 1x, 1.25x and 2x scales. The regression executes the actual clip adapter
+against known physical extents, empty clips and inactive ownership. This is
+separate from OS DPI transitions and actual XUI traversal at changed DPI.
+
+The Windows RelWithDebInfo build and full staging passed. All fifteen viewer
+cases passed on pinned SwiftShader with zero validation errors and zero XUI
+pixel mismatches; the readback was inspected. Local evidence is in
+`.tmp/viewer-vulkan-mouse-local`. The runner explicitly records synthetic native
+events and unqualified OS DPI/IME, connected UI/chat and world rendering.
+Cross-platform qualification of this checkpoint awaits the dedicated workflow.
+
+Source accounting passes with 28,415 witnesses in 1,747 files and 91 boundary
+source hashes; all 78 related regression tests pass. Full V3 remains open: required login/status/alerts/agreements,
+their media/resource and internal-control dependencies, additional interaction
+states, general native lifecycle admission and platform DPI/IME qualification.
+The earlier resource/font producer checkpoint passed all three software CI
+platforms in [run 37796771010](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37796771010);
+that run does not qualify these later XUI/input changes.
