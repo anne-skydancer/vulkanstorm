@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from render_backend_selector_fixture import SelectorTests
+from test_vulkan_ui_oracle import OracleTest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from run_vulkan_viewer_diagnostic import assess, STAGES
@@ -160,14 +161,19 @@ int main() {
         self.assertFalse(assess(good, 0, log, 'ui-positive', 'Windows'))
         good.update(ui_fixture_enabled=True, ui_readback_verified=True, ui_readbacks=2,
                     ui_facade_verified=True, ui_atlas_verified=True, ui_font_producer_verified=True,
-                    ui_admission_verified=True)
+                    ui_admission_verified=True,ui_xui_verified=True,ui_input_verified=True,ui_focus_verified=True)
         self.assertTrue(assess(good, 0, log, 'ui-positive', 'Windows'))
         for key, value in [('ui_readbacks', 1), ('ui_readback_verified', False), ('ui_fixture_enabled', False),
                            ('ui_facade_verified', False), ('ui_atlas_verified', False),
-                           ('ui_font_producer_verified', False), ('ui_admission_verified', False)]:
+                           ('ui_font_producer_verified', False), ('ui_admission_verified', False),
+                           ('ui_xui_verified', False), ('ui_input_verified', False), ('ui_focus_verified', False)]:
             with self.subTest(key=key):
                 bad = copy.deepcopy(good); bad[key] = value
                 self.assertFalse(assess(bad, 0, log, 'ui-positive', 'Windows'))
+        for case, failure in [('bad-xui','Viewer XUI pixel oracle mismatch'), ('ui-construction','Injected failure: ui-construction')]:
+            bad=copy.deepcopy(good);bad.update(passed=False,failure=failure)
+            self.assertTrue(assess(bad,1,'FAIL viewer-native-diagnostic',case,'Windows'))
+            self.assertFalse(assess(bad,0,log,case,'Windows'))
         good.update(passed=False, failure='Viewer UI pixel oracle mismatch', ui_fixture_enabled=True)
         for case in ('bad-ui', 'ui-orientation'):
             self.assertTrue(assess(good, 1, 'FAIL viewer-native-diagnostic', case, 'Windows'))

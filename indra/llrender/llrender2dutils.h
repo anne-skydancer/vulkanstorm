@@ -29,6 +29,8 @@
 
 #ifndef LL_RENDER2DUTILS_H
 #define LL_RENDER2DUTILS_H
+#include <functional>
+#include <array>
 
 #include "llpointer.h"      // LLPointer<>
 #include "llrect.h"
@@ -126,6 +128,15 @@ class LLRender2D : public LLSimpleton<LLRender2D>
 {
     LOG_CLASS(LLRender2D);
 public:
+    using native_rect_t = std::function<void(const LLRectf&,const LLColor4&)>;
+    using native_clip_t = std::function<void(const LLRect*)>;
+    static void setNativeUI(native_rect_t rectangle,native_clip_t clip);
+    static bool isNativeUI();
+    static void setSceneBlendType(U8 type);
+    static U8 nativeBlend();
+    static std::array<F32,2> nativeOrigin();
+    static void nativeRectangle(S32 left,S32 top,S32 right,S32 bottom,const LLColor4&,bool filled);
+    static void nativeClip(const LLRect*);
     LLRender2D(LLImageProviderInterface* image_provider);
     ~LLRender2D();
 

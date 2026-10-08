@@ -33,13 +33,13 @@
 
 
 LLScreenClipRect::LLScreenClipRect(const LLRect& rect, bool enabled)
-:   mScissorState(GL_SCISSOR_TEST),
+:   mScissorState(LLRender2D::isNativeUI()?0:GL_SCISSOR_TEST),
     mEnabled(enabled)
 {
     if (mEnabled)
     {
         pushClipRect(rect);
-        mScissorState.setEnabled(!sClipRectStack.empty());
+        if (!LLRender2D::isNativeUI()) mScissorState.setEnabled(!sClipRectStack.empty());
         updateScissorRegion();
     }
 }
@@ -80,6 +80,10 @@ void LLScreenClipRect::popClipRect()
 //static
 void LLScreenClipRect::updateScissorRegion()
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLRender2D::nativeClip(sClipRectStack.empty()?nullptr:&sClipRectStack.top());return;
+    }
     if (sClipRectStack.empty()) return;
 
     // finish any deferred calls in the old clipping region

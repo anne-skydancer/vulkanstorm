@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsuiresources.h"
 #include "llimage.h"
+#include "llfontgl.h"
 #include "llvector4a.h"
 #include "v2math.h"
 #include "v4coloru.h"
@@ -13,6 +14,16 @@
 namespace
 {
 void check(bool condition,const char* text) { if (!condition) throw std::runtime_error(text); }
+VSUIRenderer::Blend nativeBlend()
+{
+    if (!LLRender2D::isNativeUI()) return VSUIRenderer::Blend::StraightAlpha;
+    switch (LLRender2D::nativeBlend())
+    {
+    case LLRender::BT_ADD: return VSUIRenderer::Blend::Additive;
+    case LLRender::BT_ADD_WITH_ALPHA: return VSUIRenderer::Blend::AdditiveAlpha;
+    default: return VSUIRenderer::Blend::StraightAlpha;
+    }
+}
 }
 struct VSUIResources::Impl
 {
@@ -27,7 +38,7 @@ struct VSUIResources::Impl
     std::map<std::string,Entry> assets;
     std::vector<VSUIRenderer::Packet> packets;
     VSUIRenderer::Sampling sampling=VSUIRenderer::Sampling::Linear;
-    float logical_height=0;
+    float logical_height=0,logical_width=0;
     float dpi=1;
     struct FontPage { LLPointer<LLImageRaw> raw; S32 generation=-1; std::string key; };
     std::map<LLImageRaw*,FontPage> font_pages;
@@ -38,19 +49,20 @@ struct VSUIResources::Impl
               bool solid,const LLRectf& outer,const LLRectf& center,bool inner)
     {
         check(active,"Native UI facade draw outside packet collection");
+        const auto origin=LLRender2D::isNativeUI()?LLRender2D::nativeOrigin():std::array<F32,2>{0,0};
         if (width<=0 || height<=0) return;
         for (float v: {outer.mLeft,outer.mRight,outer.mTop,outer.mBottom,
                        center.mLeft,center.mRight,center.mTop,center.mBottom})
             check(std::isfinite(v),"Non-finite native UI image region");
-        check(outer.getWidth()>0 && outer.getHeight()>0 && center.getWidth()>=0 && center.getHeight()>=0 &&
+        check(outer.getWidth()>0 && outer.getHeight()>0 &&
               outer.mLeft>=0 && outer.mRight<=1 && outer.mBottom>=0 && outer.mTop<=1 &&
               center.mLeft>=0 && center.mRight<=1 && center.mBottom>=0 && center.mTop<=1,
               "Invalid native UI image region");
         auto quad=[&](float l,float b,float r,float t,float ul,float vb,float ur,float vt)
         {
             if (l>=r || b>=t) return;
-            VSUIRenderer::Packet p; p.image=a.image;
-            p.bounds={x+l,logical_height-y-t,x+r,logical_height-y-b};
+            VSUIRenderer::Packet p; p.blend=nativeBlend(); p.image=a.image;
+            p.bounds={x+origin[0]+l,logical_height-y-origin[1]-t,x+origin[0]+r,logical_height-y-origin[1]-b};
             p.uv={ul,1-vt,ur,1-vb}; p.clip=clip;
             std::copy_n(color.mV,4,p.color.begin());
             // drawSolid uses the image alpha mask, with RGB replaced by tint.
@@ -63,7 +75,8 @@ struct VSUIResources::Impl
         const float uw=outer.getWidth(),uh=outer.getHeight();
         LLRectf uv(outer.mLeft+center.mLeft*uw,outer.mBottom+center.mTop*uh,
                    outer.mLeft+center.mRight*uw,outer.mBottom+center.mBottom*uh);
-        // Preserve LLUIImage's existing inner/outer nine-slice geometry.
+        // Preserve LLUIImage's existing inner/outer nine-slice geometry,
+        // including collapsed or reversed center UVs in existing skin assets.
         LLRectf c(uv.mLeft*a.width,uv.mTop*a.height,uv.mRight*a.width,uv.mBottom*a.height);
         const float natural_w=std::round(a.width*uw),natural_h=std::round(a.height*uh);
         check(natural_w>0 && natural_h>0,"Empty native image natural extent");
@@ -154,7 +167,7 @@ void VSUIResources::patch(const std::string& key,unsigned x,unsigned y,unsigned 
 void VSUIResources::begin(unsigned width,unsigned height,float dpi)
 {
     check(!mImpl->active && width && height && std::isfinite(dpi) && dpi>0,"Invalid native UI collection begin");
-    mImpl->packets.clear(); mImpl->logical_height=height/dpi;
+    mImpl->packets.clear(); mImpl->logical_height=height/dpi;mImpl->logical_width=width/dpi;
     mImpl->dpi=dpi;
     mImpl->clip={0,0,width/dpi,height/dpi}; mImpl->active=true;
 }
@@ -226,7 +239,7 @@ void VSUIResources::fontBatch(LLImageRaw* raw,S32 generation,const LLVector4a* p
     auto image=c.assets.at(page.key).asset->image;
     for (S32 first=0;first<count;first+=6)
     {
-        VSUIRenderer::Packet p;p.image=image;p.clip=c.clip;p.triangles.emplace();
+        VSUIRenderer::Packet p; p.blend=nativeBlend();p.image=image;p.clip=c.clip;p.triangles.emplace();
         for (S32 i=0;i<6;++i)
         {
             const auto* pos=positions[first+i].getF32ptr();const auto& tex=uv[first+i];const auto& color=colors[first+i];
@@ -244,12 +257,21 @@ void VSUIResources::releaseFontPages()
 void VSUIResources::rectangle(const LLRectf& r,const LLColor4& color)
 {
     auto& c=*mImpl;check(c.active,"Native rectangle outside collection");
+    if (r.getWidth()<=0 || r.getHeight()<=0) return;
     const std::string key="native-solid-white";
     if (!c.assets.count(key))
     {
         LLPointer<LLImageRaw> raw=new LLImageRaw(1,1,4);raw->clear(255,255,255,255);publish(key,*raw);
     }
-    VSUIRenderer::Packet p;p.image=c.assets.at(key).asset->image;
+    VSUIRenderer::Packet p; p.blend=nativeBlend();p.image=c.assets.at(key).asset->image;
     p.bounds={r.mLeft/c.dpi,c.logical_height-r.mTop/c.dpi,r.mRight/c.dpi,c.logical_height-r.mBottom/c.dpi};
     p.clip=c.clip;std::copy_n(color.mV,4,p.color.begin());c.packets.push_back(std::move(p));
+}
+void VSUIResources::screenClip(const LLRect* rect)
+{
+    auto& c=*mImpl;check(c.active,"Native clipping outside collection");
+    if (!rect) { c.clip={0,0,c.logical_width,c.logical_height};return; }
+    if (rect->isEmpty()) { c.clip={0,0,0,0};return; }
+    c.clip={float(rect->mLeft),c.logical_height-rect->mTop-1,
+            float(rect->mRight)+1.f,c.logical_height-rect->mBottom};
 }
