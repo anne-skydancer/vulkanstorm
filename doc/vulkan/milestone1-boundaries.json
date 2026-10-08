@@ -1,5 +1,5 @@
 {
-  "source_commit": "dcb74d7a2339da44e28d88c8de55f019dd578f08",
+  "source_commit": "bb1a0840aeaf0c06ed9f8d04430a06032d6a96c1",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "closed-admission-set for future UI/chat; native window/clear and opt-in UI substrate fixtures are implemented; full UI/chat gate contracts remain requirements",
@@ -341,7 +341,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "07d8a48ecaaf4f0f613823e0fd1d5cd178d222f1a42c5dac24ff823f432ff7b0",
+      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -403,7 +403,7 @@
       ]
     },
     "indra/newview/vsuirenderer.cpp": {
-      "sha256": "20d78932579a33f5b4a6ef4abca154e179bde4946444a0ca35255a67fb0c05f3",
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
       "anchors": [
         "VSUIRenderer::upload",
         "VSUIRenderer::draw",
@@ -412,7 +412,7 @@
       ]
     },
     "indra/newview/vsuirenderer.h": {
-      "sha256": "fe2e6e7b7848b8555d927ff08848770a6bcc4be5793975091179ecc6733e42fc",
+      "sha256": "dfc5972efbbff92f9133b61d8021bbecae7c71fe43ca96695f2beb75c2ed23bd",
       "anchors": [
         "class VSUIRenderer",
         "struct Packet",
@@ -442,7 +442,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "79866ec3d9b98b13fdbbe2f6d1302d6159a86ab6999d7d1758e58723938528a9",
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -450,7 +450,7 @@
       ]
     },
     "indra/newview/vsuiresources.h": {
-      "sha256": "104202293a44b244a93d3f28d9ce19b30b18c08369634fa36f06e037ad63b2f8",
+      "sha256": "dfddbbd3e818b2abe3ff003dfc30ebfbb679f0620dd72db1901a0d4df32e20cd",
       "anchors": [
         "class VSUIResources"
       ]
@@ -554,6 +554,123 @@
       "anchors": [
         "VSUIAdmission::widget",
         "VSUIAdmission::panelFactory"
+      ]
+    },
+    "indra/llrender/llglstates.h": {
+      "sha256": "4928335cfc7c25ad3f58fca4e44b43e8569559b4ae25a846bd46281e4a1587f6",
+      "anchors": [
+        "class LLGLSUIDefault",
+        "vs_native_ui_active"
+      ]
+    },
+    "indra/llrender/llrender2dutils.cpp": {
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "anchors": [
+        "LLRender2D::setNativeUI",
+        "LLRender2D::setSceneBlendType",
+        "LLRender2D::translate"
+      ]
+    },
+    "indra/llrender/llrender2dutils.h": {
+      "sha256": "48e606993835574ce7bf76e2cfbecb3e4c90b68119950fdec2d8219bdb7dee05",
+      "anchors": [
+        "setNativeUI",
+        "setSceneBlendType"
+      ]
+    },
+    "indra/llui/lllocalcliprect.cpp": {
+      "sha256": "c705d224577d2f4c47538ecfc583ec8a09e702c90ad574fbdd14ea0817327634",
+      "anchors": [
+        "LLScreenClipRect::updateScissorRegion",
+        "nativeClip"
+      ]
+    },
+    "indra/llui/llbutton.cpp": {
+      "sha256": "4a2e43ae18a8e61b35d111b5160e31a9383af09a523c92615df27f49a899d480",
+      "anchors": [
+        "LLButton::draw",
+        "LLRender2D::setSceneBlendType"
+      ]
+    },
+    "indra/llui/llscrollbar.cpp": {
+      "sha256": "3cf919ea06a22a314c6d7be9f7dd1add432a286fc05209669819cf102a670a86",
+      "anchors": [
+        "LLScrollbar::draw",
+        "LLRender2D::setSceneBlendType"
+      ]
+    },
+    "indra/llui/llscrollcontainer.cpp": {
+      "sha256": "7a49312539b532f8be7ace2002ddbf182835233f349fe8482a1ba9ffbccd069c",
+      "anchors": [
+        "LLScrollContainer::draw",
+        "isNativeUI"
+      ]
+    },
+    "indra/llui/lltextbase.cpp": {
+      "sha256": "7425d36a353bc852f95258df538f58ef13d345ca7ea65a6d2346a7f4ae342b0c",
+      "anchors": [
+        "LLTextBase::draw",
+        "isNativeUI"
+      ]
+    },
+    "indra/llui/llviewborder.cpp": {
+      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "anchors": [
+        "LLViewBorder::drawOnePixelLines",
+        "LLViewBorder::drawTwoPixelLines"
+      ]
+    },
+    "indra/newview/vsuidrawbridge.cpp": {
+      "sha256": "6ebc64f7e78927efa143608b060b74d4acc36cbcb67bac512a77e58b92df74ce",
+      "anchors": [
+        "VSUIDrawBridge::VSUIDrawBridge",
+        "setNativeUI"
+      ]
+    },
+    "indra/newview/vsuidrawbridge.h": {
+      "sha256": "f3a3b666e27c2f927a6133decfa95d16ffa4b093bb61dc87ab27b1298d90d45a",
+      "anchors": [
+        "class VSUIDrawBridge"
+      ]
+    },
+    "indra/newview/vsuiimageprovider.cpp": {
+      "sha256": "f691b60b744c41fb3bfe0c3b0c331227597cd5649d392d6ca511d9a560683a14",
+      "anchors": [
+        "VSUIImageProvider::getUIImage",
+        "VSUIImageProvider::getUIImageByID"
+      ]
+    },
+    "indra/newview/vsuiimageprovider.h": {
+      "sha256": "a17cec78b0e38e7ae225b4534541b707ea119ef109dfde89bd4fb79f89445469",
+      "anchors": [
+        "class VSUIImageProvider"
+      ]
+    },
+    "indra/newview/vsuifixture.cpp": {
+      "sha256": "4019a95f63738fa89adeeddcfcb7ccd222a40beead29a2df22b56c8885c2abe5",
+      "anchors": [
+        "VSUIFixture::verifyInput",
+        "VSUIFixture::draw",
+        "NativeLineEditor"
+      ]
+    },
+    "indra/newview/vsuifixture.h": {
+      "sha256": "f1f68420bbd1662c0b414e94a0be363822847c82b086931dd47ec72e8f678075",
+      "anchors": [
+        "class VSUIFixture"
+      ]
+    },
+    "indra/newview/vsuipixeloracle.cpp": {
+      "sha256": "86cbd5cecff88072ef79b4450ce5702b3e0f27f9609c6902bd8398238bf3a510",
+      "anchors": [
+        "vs_ui_expected_pixels",
+        "top_left"
+      ]
+    },
+    "indra/newview/vsuipixeloracle.h": {
+      "sha256": "ae39490bcc83cf426ff945bfd5cb35db73f3567f3d74065293ff4449b8ba6c48",
+      "anchors": [
+        "vs_ui_expected_pixels"
       ]
     }
   },
@@ -723,7 +840,24 @@
         "indra/llrender/lluiimage.inl",
         "indra/llui/llfloaterreg.h",
         "indra/llui/llpanel.cpp",
-        "indra/llui/llpanel.h"
+        "indra/llui/llpanel.h",
+        "indra/llrender/llglstates.h",
+        "indra/llrender/llrender2dutils.cpp",
+        "indra/llrender/llrender2dutils.h",
+        "indra/llui/lllocalcliprect.cpp",
+        "indra/llui/llbutton.cpp",
+        "indra/llui/llscrollbar.cpp",
+        "indra/llui/llscrollcontainer.cpp",
+        "indra/llui/lltextbase.cpp",
+        "indra/llui/llviewborder.cpp",
+        "indra/newview/vsuidrawbridge.cpp",
+        "indra/newview/vsuidrawbridge.h",
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiimageprovider.h",
+        "indra/newview/vsuifixture.cpp",
+        "indra/newview/vsuifixture.h",
+        "indra/newview/vsuipixeloracle.cpp",
+        "indra/newview/vsuipixeloracle.h"
       ],
       "gates": [
         "G-RESOURCE",
@@ -757,7 +891,24 @@
         "indra/llrender/lluiimage.inl",
         "indra/llui/llfloaterreg.h",
         "indra/llui/llpanel.cpp",
-        "indra/llui/llpanel.h"
+        "indra/llui/llpanel.h",
+        "indra/llrender/llglstates.h",
+        "indra/llrender/llrender2dutils.cpp",
+        "indra/llrender/llrender2dutils.h",
+        "indra/llui/lllocalcliprect.cpp",
+        "indra/llui/llbutton.cpp",
+        "indra/llui/llscrollbar.cpp",
+        "indra/llui/llscrollcontainer.cpp",
+        "indra/llui/lltextbase.cpp",
+        "indra/llui/llviewborder.cpp",
+        "indra/newview/vsuidrawbridge.cpp",
+        "indra/newview/vsuidrawbridge.h",
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiimageprovider.h",
+        "indra/newview/vsuifixture.cpp",
+        "indra/newview/vsuifixture.h",
+        "indra/newview/vsuipixeloracle.cpp",
+        "indra/newview/vsuipixeloracle.h"
       ],
       "gates": [
         "G-LIFETIME"
@@ -4958,11 +5109,11 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "dcb74d7a2339da44e28d88c8de55f019dd578f08",
+    "source_commit": "bb1a0840aeaf0c06ed9f8d04430a06032d6a96c1",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
     "world_implemented": false,
-    "qualification": "Earlier packet slice passed Windows SwiftShader and Linux SwiftShader/Lavapipe CI. Expanded image/font producers and admission require fresh CI; full XUI/input acceptance remains open."
+    "qualification": "Windows SwiftShader passed fourteen cases including corrected mini-progress XUI, plain editor/transcript, native window input/focus, preedit contract, additive blending, pixel oracle and partial construction cleanup. Cross-platform CI for this delta and full V3 required panels/OS DPI/OS IME remain open."
   }
 }
