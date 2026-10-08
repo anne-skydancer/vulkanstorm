@@ -14,6 +14,13 @@ class VSUIFixture
     std::vector<VSUIRenderer::Packet> draw();
     bool unicode(unsigned character);
     bool key(unsigned char key, unsigned mask);
+    bool mouse(int x, int y, unsigned mask, bool down);
+    void hover(int x, int y, unsigned mask);
+    bool scroll(int x, int y, int clicks);
+    void prepareMouseInput();
+    void finishMouseInput();
+    int transcriptTop() const;
+    void prepareScrollInput();
     void verifyInput();
     void focus(bool value);
     bool focused() const;

@@ -114,6 +114,12 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     std::function<bool(llwchar)> unicode_handler;
     std::function<bool(KEY,MASK)> key_handler;
     std::function<void(bool)> focus_handler;
+    std::function<bool(LLCoordGL,MASK,bool)> mouse_handler;
+    std::function<void(LLCoordGL,MASK)> hover_handler;
+    std::function<bool(LLCoordGL,S32)> scroll_handler;
+    LLCoordGL mouse_point;
+    unsigned mouse_releases=0,mouse_moves=0,scroll_events=0;
+    bool ui_mouse_verified=false,ui_scroll_verified=false;
     bool ui_facade_verified=false,ui_atlas_verified=false,ui_font_producer_verified=false,ui_admission_verified=false;
     std::unique_ptr<VSUIRenderer> ui;
     const std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
@@ -132,6 +138,14 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     void handleFocusLost(LLWindow*) override { if (focus_handler) focus_handler(false); }
     bool handleTranslatedKeyDown(KEY key,MASK mask,bool) override { return key_handler && key_handler(key,mask); }
     bool handleUnicodeChar(llwchar c,MASK) override { return unicode_handler && unicode_handler(c); }
+    bool handleMouseDown(LLWindow*,LLCoordGL point,MASK mask) override
+    { mouse_point=point;return mouse_handler && mouse_handler(point,mask,true); }
+    bool handleMouseUp(LLWindow*,LLCoordGL point,MASK mask) override
+    { mouse_point=point;const bool handled=mouse_handler && mouse_handler(point,mask,false);if(handled) ++mouse_releases;return handled; }
+    void handleMouseMove(LLWindow*,LLCoordGL point,MASK mask) override
+    { mouse_point=point;if(hover_handler) { hover_handler(point,mask);++mouse_moves; } }
+    void handleScrollWheel(LLWindow*,S32 clicks) override
+    { if(scroll_handler && scroll_handler(mouse_point,clicks)) ++scroll_events; }
     void inject(const char* stage)
     {
         if (injected == stage) throw std::runtime_error(std::string("Injected failure: ") + stage);
@@ -542,10 +556,34 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         VSUIResources resources(*ui);
         VSUIFixture fixture(resources,window);
         fixture.verifyInput();
-        struct ClearHandler { Impl& owner; ~ClearHandler() { owner.unicode_handler={};owner.key_handler={};owner.focus_handler={}; } } guard{*this};
+        if(injected=="ui-gl-trap") gGL.begin(LLRender::TRIANGLES);
+        struct ClearHandler { Impl& owner; ~ClearHandler() { owner.unicode_handler={};owner.key_handler={};owner.focus_handler={};owner.mouse_handler={};owner.hover_handler={};owner.scroll_handler={}; } } guard{*this};
         unicode_handler=[&](llwchar c) { return fixture.unicode(c); };
         key_handler=[&](KEY key,MASK mask) { return fixture.key(key,mask); };
         focus_handler=[&](bool focus) { fixture.focus(focus); };
+        mouse_handler=[&](LLCoordGL p,MASK mask,bool down) { return fixture.mouse(p.mX,p.mY,mask,down); };
+        hover_handler=[&](LLCoordGL p,MASK mask) { fixture.hover(p.mX,p.mY,mask); };
+        scroll_handler=[&](LLCoordGL p,S32 clicks) { return fixture.scroll(p.mX,p.mY,clicks); };
+        fixture.prepareMouseInput();
+#if LL_WINDOWS
+        const auto hwnd=static_cast<HWND>(window->getPlatformWindow());
+        require(PostMessageW(hwnd,WM_MOUSEMOVE,0,MAKELPARAM(25,65)),"Cannot queue native editor hover");
+        for(unsigned attempt=0;attempt<100 && (mouse_point.mX!=25 || mouse_point.mY!=174);++attempt)
+        { window->gatherInput();std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        require(mouse_point.mX==25 && mouse_point.mY==174,"Native editor hover did not establish click coordinates");
+        require(PostMessageW(hwnd,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(25,65)) &&
+                PostMessageW(hwnd,WM_LBUTTONUP,0,MAKELPARAM(25,65)),"Cannot queue native viewer mouse input");
+#else
+        SDL_Event mouse{};mouse.type=SDL_MOUSEBUTTONDOWN;
+        mouse.button.windowID=SDL_GetWindowID(static_cast<SDL_Window*>(window->getPlatformWindow()));
+        mouse.button.button=SDL_BUTTON_LEFT;mouse.button.x=25;mouse.button.y=65;
+        require(SDL_PushEvent(&mouse)==1,"Cannot queue native viewer mouse input");
+        mouse.type=SDL_MOUSEBUTTONUP;require(SDL_PushEvent(&mouse)==1,"Cannot queue native viewer mouse release");
+#endif
+        for(unsigned attempt=0;attempt<100 && mouse_releases==0;++attempt)
+        { window->gatherInput();std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        require(mouse_releases!=0,"Native window mouse release did not reach XUI");
+        fixture.finishMouseInput();ui_mouse_verified=true;
 #if LL_WINDOWS
         require(PostMessageW(static_cast<HWND>(window->getPlatformWindow()),WM_CHAR,L'z',0),
                 "Cannot queue native viewer character input");
@@ -589,6 +627,39 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             require(fixture.focused()==focus,"Native window focus did not reach the XUI owner");
         }
         ui_focus_verified=true;
+        fixture.prepareScrollInput();
+        const auto previous_top=fixture.transcriptTop();
+        const auto previous_moves=mouse_moves;
+#if LL_WINDOWS
+        require(PostMessageW(hwnd,WM_MOUSEMOVE,0,MAKELPARAM(30,150)),"Cannot queue native viewer hover");
+#else
+        mouse={};mouse.type=SDL_MOUSEMOTION;
+        mouse.motion.windowID=SDL_GetWindowID(static_cast<SDL_Window*>(window->getPlatformWindow()));
+        mouse.motion.x=30;mouse.motion.y=150;
+        require(SDL_PushEvent(&mouse)==1,"Cannot queue native viewer hover");
+#endif
+        for(unsigned attempt=0;attempt<100 && mouse_moves==previous_moves;++attempt)
+        { window->gatherInput();std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        require(mouse_moves!=previous_moves && mouse_point.mX==30 && mouse_point.mY>=89 && mouse_point.mY<=90,
+                "Native hover coordinates did not reach XUI");
+#if LL_WINDOWS
+        POINT wheel_point{30,150};
+        require(ClientToScreen(hwnd,&wheel_point) &&
+                PostMessageW(hwnd,WM_MOUSEWHEEL,MAKEWPARAM(0,3*WHEEL_DELTA),MAKELPARAM(wheel_point.x,wheel_point.y)),
+                "Cannot queue native viewer wheel");
+#else
+        mouse={};mouse.type=SDL_MOUSEWHEEL;
+        mouse.wheel.windowID=SDL_GetWindowID(static_cast<SDL_Window*>(window->getPlatformWindow()));
+        mouse.wheel.y=3;
+        require(SDL_PushEvent(&mouse)==1,"Cannot queue native viewer wheel");
+#endif
+        for(unsigned attempt=0;attempt<100 && scroll_events==0;++attempt)
+        { window->gatherInput();std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        require(scroll_events!=0,"Native window wheel did not reach XUI");
+        fixture.draw();
+        std::cout<<"VIEWER_SCROLL_TOP="<<previous_top<<" -> "<<fixture.transcriptTop()<<'\n';
+        require(fixture.transcriptTop()!=previous_top,"Native window wheel did not move the transcript viewport");
+        ui_scroll_verified=true;
         auto packets=fixture.draw();require(!packets.empty(),"Existing XUI published no native geometry");
         auto pixels=vs_ui_expected_pixels(320,240,1,packets);
         const auto additive=(230*320+245)*4,alpha_additive=(230*320+265)*4;
@@ -662,7 +733,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             {
                 require(frames == 9 && zero_skips == 3 && minimized_skips == 2,
                     "Viewer lifecycle counters differ");
-                require(!ui_mode || (ui_verified && ui_xui_verified && ui_input_verified && ui_focus_verified),"Viewer UI fixture sequence incomplete");
+                require(!ui_mode || (ui_verified && ui_xui_verified && ui_input_verified && ui_focus_verified && ui_mouse_verified && ui_scroll_verified),"Viewer UI fixture sequence incomplete");
                 if (injected == "gl-trap") window->swapBuffers();
                 return true;
             }
@@ -751,6 +822,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             {"ui_fixture_enabled", ui_mode}, {"ui_readback_verified", ui_verified},
             {"ui_readbacks", ui_readbacks},
             {"ui_xui_verified",ui_xui_verified},{"ui_input_verified",ui_input_verified},{"ui_focus_verified",ui_focus_verified},
+            {"ui_mouse_verified",ui_mouse_verified},{"ui_scroll_verified",ui_scroll_verified},
             {"ui_facade_verified",ui_facade_verified},{"ui_atlas_verified",ui_atlas_verified},
             {"ui_font_producer_verified",ui_font_producer_verified},
             {"ui_admission_verified",ui_admission_verified},

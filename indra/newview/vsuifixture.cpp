@@ -204,6 +204,53 @@ bool VSUIFixture::key(unsigned char key, unsigned mask)
     auto *focus = gFocusMgr.getKeyboardFocus();
     return focus && focus->handleKey(key, mask, false);
 }
+bool VSUIFixture::mouse(int x, int y, unsigned mask, bool down)
+{
+    auto *handler = gFocusMgr.getMouseCapture();
+    if (!handler)
+        handler = mImpl->root.get();
+    S32 local_x, local_y;
+    handler->screenPointToLocal(x, y, &local_x, &local_y);
+    return down ? handler->handleMouseDown(local_x, local_y, mask) : handler->handleMouseUp(local_x, local_y, mask);
+}
+void VSUIFixture::hover(int x, int y, unsigned mask)
+{
+    auto *handler = gFocusMgr.getMouseCapture();
+    if (!handler)
+        handler = mImpl->root.get();
+    S32 local_x, local_y;
+    handler->screenPointToLocal(x, y, &local_x, &local_y);
+    handler->handleHover(local_x, local_y, mask);
+}
+bool VSUIFixture::scroll(int x, int y, int clicks)
+{
+    auto *handler = gFocusMgr.getMouseCapture();
+    if (!handler)
+        handler = mImpl->root.get();
+    S32 local_x, local_y;
+    handler->screenPointToLocal(x, y, &local_x, &local_y);
+    return handler->handleScrollWheel(local_x, local_y, clicks);
+}
+void VSUIFixture::prepareMouseInput()
+{
+    mImpl->input->setFocus(false);
+}
+void VSUIFixture::finishMouseInput()
+{
+    require(!gFocusMgr.getMouseCapture(), "Native mouse release retained widget capture");
+    require(focused(), "Native mouse click did not focus the editor");
+    mImpl->input->deselect();
+    mImpl->input->setCursorToEnd();
+}
+int VSUIFixture::transcriptTop() const
+{
+    return mImpl->transcript->getVisibleDocumentRect().mTop;
+}
+void VSUIFixture::prepareScrollInput()
+{
+    draw(); // Complete root traversal and scroller layout before fixing the starting position.
+    mImpl->transcript->setCursorAndScrollToEnd();
+}
 std::string VSUIFixture::inputText() const
 {
     return mImpl->input->getText();
@@ -211,6 +258,8 @@ std::string VSUIFixture::inputText() const
 void VSUIFixture::focus(bool value)
 {
     gFocusMgr.setAppHasFocus(value);
+    if (!value)
+        gFocusMgr.setMouseCapture(nullptr);
 }
 bool VSUIFixture::focused() const
 {
@@ -236,6 +285,13 @@ void VSUIFixture::verifyInput()
     preedit.resetPreedit();
     preedit.getPreeditRange(&position, &length);
     require(length == 0, "Native preedit cancellation failed");
+    require(mouse(25, 174, MASK_NONE, true) && gFocusMgr.getMouseCapture(),
+            "Native editor mouse-down did not acquire capture");
+    focus(false);
+    require(!gFocusMgr.getMouseCapture(), "Native focus loss retained widget capture");
+    focus(true);
+    c.input->deselect();
+    c.input->setCursorToEnd();
     c.transcript->setCursorAndScrollToEnd();
     c.resources.begin(320, 240, 1);
     c.transcript->draw(); // establish line layout before testing scrolling

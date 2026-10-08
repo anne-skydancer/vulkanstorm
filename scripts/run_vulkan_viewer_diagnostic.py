@@ -17,7 +17,7 @@ STAGES = ['viewer-window-created', 'device-created', 'swapchain-created-320x240'
           'viewer-window-destroyed', 'device-context-released']
 FAILURES = ('before-window', 'after-window', 'after-device', 'after-swapchain',
             'frame', 'shutdown', 'gl-trap', 'bad-clear')
-UI_CASES = ('ui-positive', 'bad-ui', 'ui-orientation', 'bad-xui', 'ui-construction')
+UI_CASES = ('ui-positive', 'bad-ui', 'ui-orientation', 'bad-xui', 'ui-construction', 'ui-gl-trap')
 
 
 def runtime_libraries(runtime):
@@ -43,7 +43,8 @@ def assess(record, code, log, case, system):
     if case not in ('positive', 'ui-positive'):
         if case in UI_CASES and record.get('ui_fixture_enabled') is not True:
             return False
-        expected = ('Viewer XUI pixel oracle mismatch' if case == 'bad-xui' else
+        expected = ('GL geometry in native UI owner' if case == 'ui-gl-trap' else
+                    'Viewer XUI pixel oracle mismatch' if case == 'bad-xui' else
                     'Viewer UI pixel oracle mismatch' if case in ('bad-ui', 'ui-orientation') else
                     'Viewer clear pixel oracle mismatch' if case == 'bad-clear' else
                     'GL presentation in native Vulkan window' if case == 'gl-trap'
@@ -59,6 +60,8 @@ def assess(record, code, log, case, system):
                                  record.get('ui_xui_verified') is not True or
                                  record.get('ui_input_verified') is not True or
                                  record.get('ui_focus_verified') is not True or
+                                 record.get('ui_mouse_verified') is not True or
+                                 record.get('ui_scroll_verified') is not True or
                                  record.get('ui_readbacks') != 2):
         return False
     return (code == 0 and record.get('passed') is True and record.get('failure') == ''
@@ -123,7 +126,9 @@ def main():
                'executable': str(executable), 'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest(),
                'ui_font': 'fonts/DejaVuSans.ttf',
                'ui_font_sha256': hashlib.sha256((stage / 'fonts/DejaVuSans.ttf').read_bytes()).hexdigest(),
-               'tests': [], 'ui_chat_qualified': False, 'world_qualified': False}
+               'tests': [], 'ui_chat_qualified': False, 'world_qualified': False,
+               'ui_platform_dpi_qualified': False, 'ui_os_ime_qualified': False,
+               'ui_event_source': 'synthetic-native-window-events'}
     with windows_manifest_registration(runtime, args.register_windows_manifests):
         for case in ('positive', *FAILURES, *UI_CASES):
             directory = evidence / case; directory.mkdir(exist_ok=True)

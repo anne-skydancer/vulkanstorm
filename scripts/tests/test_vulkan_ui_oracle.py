@@ -6,6 +6,69 @@ import tempfile
 import unittest
 
 class OracleTest(unittest.TestCase):
+    def test_native_clip_preserves_physical_pixel_margin_at_fractional_dpi(self):
+        root = Path(__file__).resolve().parents[2]
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        source = (root / 'indra/newview/vsuiresources.cpp').read_text(encoding='utf-8')
+        start = source.index('void VSUIResources::screenClip(')
+        opening = source.index('{', start)
+        end, depth = opening + 1, 1
+        while depth:
+            depth += (source[end] == '{') - (source[end] == '}')
+            end += 1
+        fixture = r'''
+#include <array>
+#include <cassert>
+#include <cmath>
+#include <stdexcept>
+struct LLRect {
+    int mLeft,mTop,mRight,mBottom;
+    bool isEmpty() const { return mRight<=mLeft || mTop<=mBottom; }
+    int getWidth() const { return mRight-mLeft; }
+    int getHeight() const { return mTop-mBottom; }
+};
+void check(bool condition,const char* message) { if(!condition) throw std::logic_error(message); }
+struct VSUIResources {
+    struct Impl { bool active=true;float logical_width=100,logical_height=100,dpi=1;std::array<float,4> clip{}; } impl;
+    Impl* mImpl=&impl;
+    void screenClip(const LLRect*);
+};
+''' + source[start:end] + r'''
+int main() {
+    VSUIResources resources;
+    LLRect rect{3,13,10,4};
+    for(float dpi : {1.f,1.25f,2.f}) {
+        resources.impl.dpi=dpi;resources.screenClip(&rect);
+        const auto clip=resources.impl.clip;
+        // Known physical scissors: (3,4,8,10), (3,5,10,13), (6,8,15,19).
+        const float x=dpi==1?3:dpi==1.25f?3:6;
+        const float y=dpi==1?4:dpi==1.25f?5:8;
+        const float width=dpi==1?8:dpi==1.25f?10:15;
+        const float height=dpi==1?10:dpi==1.25f?13:19;
+        assert(std::abs(clip[0]*dpi-x)<.001f);
+        assert(std::abs((100-clip[3])*dpi-y)<.001f);
+        assert(std::abs((clip[2]-clip[0])*dpi-width)<.001f);
+        assert(std::abs((clip[3]-clip[1])*dpi-height)<.001f);
+    }
+    rect={2,3,2,0};resources.screenClip(&rect);
+    assert((resources.impl.clip==std::array<float,4>{0,0,0,0}));
+    resources.screenClip(nullptr);
+    assert((resources.impl.clip==std::array<float,4>{0,0,100,100}));
+    resources.impl.active=false;
+    bool rejected=false;try { resources.screenClip(nullptr); } catch(const std::logic_error&) { rejected=true; }
+    assert(rejected);
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'native_clip.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            exe = Path(temp) / 'native_clip.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_texture_orientation_clip_blend_and_triangle_edges(self):
         root=Path(__file__).resolve().parents[2]
         compiler=shutil.which('clang++') or shutil.which('g++')

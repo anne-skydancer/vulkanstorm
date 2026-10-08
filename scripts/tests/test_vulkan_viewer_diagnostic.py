@@ -24,6 +24,50 @@ def record():
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_gl_geometry_trap_preserves_legacy_begin_and_rejects_before_mutation(self):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/llrender/llrender.cpp').read_text(encoding='utf-8')
+        start = source.index('void LLRender::begin(const GLuint& mode)')
+        end = source.index('\nvoid LLRender::end()', start)
+        fixture = r'''
+#include <cassert>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#define LL_ERRS() std::cerr
+#define LL_ENDL std::endl
+using GLuint=unsigned;
+struct LLRender2D { inline static bool native=false;static bool isNativeUI() { return native; } };
+struct LLRender {
+    enum { LINES=1,TRIANGLES=2,POINTS=3 };
+    unsigned mMode=LINES,mCount=0,flushes=0;
+    void flush() { ++flushes;mCount=0; }
+    void begin(const GLuint& mode);
+};
+''' + source[start:end] + r'''
+int main() {
+    LLRender render;render.begin(LLRender::TRIANGLES);
+    assert(render.mMode==LLRender::TRIANGLES && render.flushes==1);
+    render.begin(LLRender::TRIANGLES);assert(render.flushes==1);
+    LLRender2D::native=true;render.mCount=6;
+    bool trapped=false;try { render.begin(LLRender::LINES); }
+    catch(const std::logic_error& e) { trapped=std::string(e.what())=="GL geometry in native UI owner"; }
+    assert(trapped && render.mCount==6 && render.mMode==LLRender::TRIANGLES && render.flushes==1);
+    LLRender2D::native=false;render.begin(LLRender::LINES);
+    assert(render.mMode==LLRender::LINES && render.mCount==0 && render.flushes==2);
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'native_gl_trap.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            exe = Path(temp) / 'native_gl_trap.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_restored_floaters_are_denied_before_settings_and_callbacks(self):
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler, 'A C++ compiler is required')
@@ -161,16 +205,20 @@ int main() {
         self.assertFalse(assess(good, 0, log, 'ui-positive', 'Windows'))
         good.update(ui_fixture_enabled=True, ui_readback_verified=True, ui_readbacks=2,
                     ui_facade_verified=True, ui_atlas_verified=True, ui_font_producer_verified=True,
-                    ui_admission_verified=True,ui_xui_verified=True,ui_input_verified=True,ui_focus_verified=True)
+                    ui_admission_verified=True,ui_xui_verified=True,ui_input_verified=True,ui_focus_verified=True,
+                    ui_mouse_verified=True,ui_scroll_verified=True)
         self.assertTrue(assess(good, 0, log, 'ui-positive', 'Windows'))
         for key, value in [('ui_readbacks', 1), ('ui_readback_verified', False), ('ui_fixture_enabled', False),
                            ('ui_facade_verified', False), ('ui_atlas_verified', False),
                            ('ui_font_producer_verified', False), ('ui_admission_verified', False),
-                           ('ui_xui_verified', False), ('ui_input_verified', False), ('ui_focus_verified', False)]:
+                           ('ui_xui_verified', False), ('ui_input_verified', False), ('ui_focus_verified', False),
+                           ('ui_mouse_verified', False), ('ui_scroll_verified', False)]:
             with self.subTest(key=key):
                 bad = copy.deepcopy(good); bad[key] = value
                 self.assertFalse(assess(bad, 0, log, 'ui-positive', 'Windows'))
-        for case, failure in [('bad-xui','Viewer XUI pixel oracle mismatch'), ('ui-construction','Injected failure: ui-construction')]:
+        for case, failure in [('bad-xui','Viewer XUI pixel oracle mismatch'),
+                              ('ui-construction','Injected failure: ui-construction'),
+                              ('ui-gl-trap','GL geometry in native UI owner')]:
             bad=copy.deepcopy(good);bad.update(passed=False,failure=failure)
             self.assertTrue(assess(bad,1,'FAIL viewer-native-diagnostic',case,'Windows'))
             self.assertFalse(assess(bad,0,log,case,'Windows'))
