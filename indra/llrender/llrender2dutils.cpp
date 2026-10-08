@@ -40,6 +40,53 @@
 // Project includes
 #include "llrender2dutils.h"
 #include "lluiimage.h"
+#include <stdexcept>
+
+namespace
+{
+LLRender2D::native_rect_t native_rectangle;
+LLRender2D::native_clip_t native_clip;
+std::vector<std::array<F32,2>> native_origins;
+F32 native_line_width=1.f;
+U8 native_blend=LLRender::BT_ALPHA;
+}
+void LLRender2D::setNativeUI(native_rect_t rectangle,native_clip_t clip)
+{
+    if (bool(rectangle)!=bool(clip) || (rectangle && native_rectangle))
+        throw std::logic_error("Native UI drawing requires exclusive rectangle/clip ownership");
+    native_rectangle=std::move(rectangle);native_clip=std::move(clip);
+    native_blend=LLRender::BT_ALPHA;native_line_width=1.f;native_origins.clear();if (native_rectangle) native_origins.push_back({0,0});
+}
+bool LLRender2D::isNativeUI() { return bool(native_rectangle); }
+void LLRender2D::setSceneBlendType(U8 type)
+{
+    if (!isNativeUI()) { gGL.setSceneBlendType(static_cast<LLRender::eBlendType>(type));return; }
+    if (type!=LLRender::BT_ALPHA && type!=LLRender::BT_ADD && type!=LLRender::BT_ADD_WITH_ALPHA)
+        throw std::logic_error("Native UI blend mode is not admitted");
+    native_blend=type;
+}
+U8 LLRender2D::nativeBlend() { return native_blend; }
+bool vs_native_ui_active() { return LLRender2D::isNativeUI(); }
+std::array<F32,2> LLRender2D::nativeOrigin() { return native_origins.back(); }
+void LLRender2D::nativeClip(const LLRect* rect) { native_clip(rect); }
+void LLRender2D::nativeRectangle(S32 left,S32 top,S32 right,S32 bottom,const LLColor4& color,bool filled)
+{
+    const auto draw=[&](S32 l,S32 t,S32 r,S32 b)
+    {
+        if (r<=l || t<=b) return;
+        const auto origin=nativeOrigin();
+        native_rectangle(LLRectf((static_cast<F32>(l)+origin[0])*LLFontGL::sScaleX,
+            (static_cast<F32>(t)+origin[1])*LLFontGL::sScaleY,(static_cast<F32>(r)+origin[0])*LLFontGL::sScaleX,
+            (static_cast<F32>(b)+origin[1])*LLFontGL::sScaleY),color);
+    };
+    if (right<=left || top<=bottom) return;
+    if (filled) draw(left,top,right,bottom);
+    else
+    {
+        draw(left,top,right,top-1);draw(left,bottom+1,right,bottom);
+        draw(left,top-1,left+1,bottom+1);draw(right-1,top-1,right,bottom+1);
+    }
+}
 
 
 //
@@ -117,6 +164,8 @@ void gl_rect_2d_offset_local( S32 left, S32 top, S32 right, S32 bottom, S32 pixe
 
 void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, bool filled )
 {
+    if (LLRender2D::isNativeUI())
+        throw std::logic_error("Native UI rectangle requires explicit color");
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     // Counterclockwise quad will face the viewer
@@ -148,6 +197,7 @@ void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, bool filled )
 
 void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, const LLColor4 &color, bool filled )
 {
+    if (LLRender2D::isNativeUI()) { LLRender2D::nativeRectangle(left,top,right,bottom,color,filled);return; }
     gGL.color4fv( color.mV );
     gl_rect_2d( left, top, right, bottom, filled );
 }
@@ -155,6 +205,7 @@ void gl_rect_2d(S32 left, S32 top, S32 right, S32 bottom, const LLColor4 &color,
 
 void gl_rect_2d( const LLRect& rect, const LLColor4& color, bool filled )
 {
+    if (LLRender2D::isNativeUI()) { LLRender2D::nativeRectangle(rect.mLeft,rect.mTop,rect.mRight,rect.mBottom,color,filled);return; }
     gGL.color4fv( color.mV );
     gl_rect_2d( rect.mLeft, rect.mTop, rect.mRight, rect.mBottom, filled );
 }
@@ -246,6 +297,7 @@ void gl_drop_shadow(S32 left, S32 top, S32 right, S32 bottom, const LLColor4 &st
 
 void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2 )
 {
+    if (LLRender2D::isNativeUI()) throw std::logic_error("Native UI line requires explicit color");
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     gGL.begin(LLRender::LINES);
@@ -256,6 +308,16 @@ void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2 )
 
 void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4 &color )
 {
+    if (LLRender2D::isNativeUI())
+    {
+        // Axis-aligned widget borders become filled quads; Vulkan wide lines
+        // are not required. Diagonal line rasterization is not admitted yet.
+        if (x1!=x2 && y1!=y2) throw std::logic_error("Native diagonal UI line is not admitted");
+        const S32 width=llmax(1,static_cast<S32>(std::ceil(native_line_width)));
+        if (x1==x2) LLRender2D::nativeRectangle(x1,llmax(y1,y2),x1+width,llmin(y1,y2),color,true);
+        else LLRender2D::nativeRectangle(llmin(x1,x2),y1+width,llmax(x1,x2),y1,color,true);
+        return;
+    }
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     gGL.color4fv( color.mV );
@@ -1764,7 +1826,9 @@ LLRender2D::~LLRender2D()
 // static
 void LLRender2D::translate(F32 x, F32 y, F32 z)
 {
-    gGL.translateUI(x,y,z);
+    if (isNativeUI() && z!=0.f) throw std::logic_error("World depth is not admitted in native UI");
+    if (!isNativeUI()) gGL.translateUI(x,y,z);
+    else { native_origins.back()[0]+=x;native_origins.back()[1]+=y; }
     LLFontGL::sCurOrigin.mX += (S32) x;
     LLFontGL::sCurOrigin.mY += (S32) y;
     LLFontGL::sCurDepth += z;
@@ -1773,14 +1837,17 @@ void LLRender2D::translate(F32 x, F32 y, F32 z)
 // static
 void LLRender2D::pushMatrix()
 {
-    gGL.pushUIMatrix();
+    if (!isNativeUI()) gGL.pushUIMatrix();
+    else native_origins.push_back(native_origins.back());
     LLFontGL::sOriginStack.push_back(std::make_pair(LLFontGL::sCurOrigin, LLFontGL::sCurDepth));
 }
 
 // static
 void LLRender2D::popMatrix()
 {
-    gGL.popUIMatrix();
+    if (isNativeUI() && LLFontGL::sOriginStack.empty()) throw std::logic_error("Unbalanced native UI matrix stack");
+    if (!isNativeUI()) gGL.popUIMatrix();
+    else { if (native_origins.size()<=1) throw std::logic_error("Unbalanced native primitive matrix stack");native_origins.pop_back(); }
     LLFontGL::sCurOrigin = LLFontGL::sOriginStack.back().first;
     LLFontGL::sCurDepth = LLFontGL::sOriginStack.back().second;
     LLFontGL::sOriginStack.pop_back();
@@ -1789,7 +1856,8 @@ void LLRender2D::popMatrix()
 // static
 void LLRender2D::loadIdentity()
 {
-    gGL.loadUIIdentity();
+    if (!isNativeUI()) gGL.loadUIIdentity();
+    else native_origins.back()={0,0};
     LLFontGL::sCurOrigin.mX = 0;
     LLFontGL::sCurOrigin.mY = 0;
     LLFontGL::sCurDepth = 0.f;
@@ -1798,6 +1866,11 @@ void LLRender2D::loadIdentity()
 // static
 void LLRender2D::setLineWidth(F32 width)
 {
+    if (isNativeUI())
+    {
+        if (!std::isfinite(width) || width<=0 || width>16) throw std::logic_error("Invalid native UI line width");
+        native_line_width=width;return;
+    }
     // <FS> Line width OGL core profile fix by Rye Mutt
     //gGL.flush();
     //// If outside the allowed range, glLineWidth fails with "invalid value".

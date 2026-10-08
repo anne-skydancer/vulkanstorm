@@ -2,6 +2,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsvulkandiagnostic.h"
 #include "vsuirenderer.h"
+#include "vsuifixture.h"
+#include "vsuipixeloracle.h"
 #include "vsuifont.h"
 #include "vsuiresources.h"
 #include "vsuifontcache.h"
@@ -108,6 +110,10 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     bool clear_readback_verified = false;
     bool ui_mode = false, ui_verified = false;
     unsigned ui_readbacks = 0;
+    bool ui_xui_verified=false,ui_input_verified=false,ui_focus_verified=false;
+    std::function<bool(llwchar)> unicode_handler;
+    std::function<bool(KEY,MASK)> key_handler;
+    std::function<void(bool)> focus_handler;
     bool ui_facade_verified=false,ui_atlas_verified=false,ui_font_producer_verified=false,ui_admission_verified=false;
     std::unique_ptr<VSUIRenderer> ui;
     const std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
@@ -122,6 +128,10 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     bool handleCloseRequest(LLWindow*, bool) override { quit = true; return false; }
     void handleQuit(LLWindow*) override { quit = true; }
     void handleResize(LLWindow*, S32, S32) override { ++resize_events; }
+    void handleFocus(LLWindow*) override { if (focus_handler) focus_handler(true); }
+    void handleFocusLost(LLWindow*) override { if (focus_handler) focus_handler(false); }
+    bool handleTranslatedKeyDown(KEY key,MASK mask,bool) override { return key_handler && key_handler(key,mask); }
+    bool handleUnicodeChar(llwchar c,MASK) override { return unicode_handler && unicode_handler(c); }
     void inject(const char* stage)
     {
         if (injected == stage) throw std::runtime_error(std::string("Injected failure: ") + stage);
@@ -229,7 +239,11 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         const float color[] = {injected == "bad-clear" ? 0.5f : 16.f / 255,
             32.f / 255, 48.f / 255, 1.0f};
         context->ClearRenderTarget(target, color, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        if (phase == 4 && phase_frames == 2) verifyClear(target->GetTexture());
+        if (phase == 4 && phase_frames == 2)
+        {
+            verifyClear(target->GetTexture());
+            if (ui_mode) verifyWidgets(target);
+        }
         if (ui_mode && phase == 4 && phase_frames < 2) verifyUI(target, phase_frames == 0 ? 1.f : 2.f);
         swapchain->Present(1);
         ++frames;
@@ -522,6 +536,97 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         ui_facade_verified=true;ui_atlas_verified=true;ui_font_producer_verified=true;ui_admission_verified=true;
         ++ui_readbacks; ui_verified=ui_readbacks == 2;
     }
+    void verifyWidgets(Diligent::ITextureView* target)
+    {
+        using namespace Diligent;
+        VSUIResources resources(*ui);
+        VSUIFixture fixture(resources,window);
+        fixture.verifyInput();
+        struct ClearHandler { Impl& owner; ~ClearHandler() { owner.unicode_handler={};owner.key_handler={};owner.focus_handler={}; } } guard{*this};
+        unicode_handler=[&](llwchar c) { return fixture.unicode(c); };
+        key_handler=[&](KEY key,MASK mask) { return fixture.key(key,mask); };
+        focus_handler=[&](bool focus) { fixture.focus(focus); };
+#if LL_WINDOWS
+        require(PostMessageW(static_cast<HWND>(window->getPlatformWindow()),WM_CHAR,L'z',0),
+                "Cannot queue native viewer character input");
+#else
+        SDL_Event event{};event.type=SDL_TEXTINPUT;
+        event.text.windowID=SDL_GetWindowID(static_cast<SDL_Window*>(window->getPlatformWindow()));
+        event.text.text[0]='z';
+        require(SDL_PushEvent(&event)==1,"Cannot queue native viewer character input");
+#endif
+        for (unsigned attempt=0;attempt<100 && fixture.inputText()!="native z";++attempt)
+        { window->gatherInput();std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        require(fixture.inputText()=="native z","Native window event did not reach the XUI editor");
+        #if LL_WINDOWS
+        require(PostMessageW(static_cast<HWND>(window->getPlatformWindow()),WM_KEYDOWN,VK_BACK,0) &&
+                PostMessageW(static_cast<HWND>(window->getPlatformWindow()),WM_KEYUP,VK_BACK,0),
+                "Cannot queue native viewer keyboard input");
+#else
+        event={};event.type=SDL_KEYDOWN;
+        event.key.windowID=SDL_GetWindowID(static_cast<SDL_Window*>(window->getPlatformWindow()));
+        event.key.keysym.sym=SDLK_BACKSPACE;event.key.keysym.scancode=SDL_SCANCODE_BACKSPACE;
+        require(SDL_PushEvent(&event)==1,"Cannot queue native viewer keyboard input");
+        event.type=SDL_KEYUP;require(SDL_PushEvent(&event)==1,"Cannot queue native viewer key release");
+#endif
+        for (unsigned attempt=0;attempt<100 && fixture.inputText()!="native ";++attempt)
+        { window->gatherInput();std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        require(fixture.inputText()=="native ","Native window key did not reach the XUI editor");
+        ui_input_verified=true;
+        for (bool focus : {false,true})
+        {
+#if LL_WINDOWS
+            require(PostMessageW(static_cast<HWND>(window->getPlatformWindow()),focus?WM_SETFOCUS:WM_KILLFOCUS,0,0),
+                    "Cannot queue native viewer focus input");
+#else
+            event={};event.type=SDL_WINDOWEVENT;
+            event.window.windowID=SDL_GetWindowID(static_cast<SDL_Window*>(window->getPlatformWindow()));
+            event.window.event=focus?SDL_WINDOWEVENT_FOCUS_GAINED:SDL_WINDOWEVENT_FOCUS_LOST;
+            require(SDL_PushEvent(&event)==1,"Cannot queue native viewer focus input");
+#endif
+            for (unsigned attempt=0;attempt<100 && fixture.focused()!=focus;++attempt)
+            { window->gatherInput();std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+            require(fixture.focused()==focus,"Native window focus did not reach the XUI owner");
+        }
+        ui_focus_verified=true;
+        auto packets=fixture.draw();require(!packets.empty(),"Existing XUI published no native geometry");
+        auto pixels=vs_ui_expected_pixels(320,240,1,packets);
+        const auto additive=(230*320+245)*4,alpha_additive=(230*320+265)*4;
+        require(std::abs(int(pixels[additive])-42)<=1 && std::abs(int(pixels[alpha_additive])-29)<=1,
+                "Native glow oracle differs from known blend pixels");
+        if (injected=="bad-xui") pixels[0]=255;
+        ui->draw(target,320,240,1,packets);
+        auto desc=target->GetTexture()->GetDesc();const bool bgra=desc.Format==TEX_FORMAT_BGRA8_UNORM;
+        desc.Name="Viewer XUI readback";desc.Usage=USAGE_STAGING;
+        desc.BindFlags=BIND_NONE;desc.CPUAccessFlags=CPU_ACCESS_READ;
+        RefCntAutoPtr<ITexture> readback;device->CreateTexture(desc,nullptr,&readback);
+        require(readback!=nullptr,"Cannot allocate existing XUI readback");
+        context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        CopyTextureAttribs copy{};copy.pSrcTexture=target->GetTexture();copy.pDstTexture=readback;
+        copy.SrcTextureTransitionMode=copy.DstTextureTransitionMode=RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        context->CopyTexture(copy);context->WaitForIdle();ui->retire();
+        MappedTextureSubresource mapped{};
+        context->MapTextureSubresource(readback,0,0,MAP_READ,MAP_FLAG_DO_NOT_WAIT,nullptr,mapped);
+        require(mapped.pData!=nullptr,"Cannot map existing XUI readback");
+        std::ofstream actual(evidence/"viewer-xui.ppm",std::ios::binary);
+        std::ofstream expected(evidence/"viewer-xui-expected.ppm",std::ios::binary);
+        actual<<"P6\n320 240\n255\n";expected<<"P6\n320 240\n255\n";
+        unsigned mismatches=0;
+        for(unsigned y=0;y<240;++y) for(unsigned x=0;x<320;++x)
+        {
+            const auto* pixel=static_cast<const unsigned char*>(mapped.pData)+y*mapped.Stride+x*4;
+            const unsigned char rgb[]{pixel[bgra?2:0],pixel[1],pixel[bgra?0:2]};
+            const auto* oracle=pixels.data()+(y*320+x)*4;
+            actual.write(reinterpret_cast<const char*>(rgb),3);
+            expected.write(reinterpret_cast<const char*>(oracle),3);
+            for(unsigned c=0;c<3;++c) if(std::abs(int(rgb[c])-int(oracle[c]))>3) ++mismatches;
+            if(pixel[3]!=255) ++mismatches;
+        }
+        context->UnmapTextureSubresource(readback,0,0);
+        require(actual.good() && expected.good(),"Cannot preserve existing XUI readbacks");
+        std::cout<<"VIEWER_XUI_MISMATCHES="<<mismatches<<'\n';
+        require(mismatches==0,"Viewer XUI pixel oracle mismatch");ui_xui_verified=true;
+    }
     bool frame()
     {
         if (!failure.empty()) return true;
@@ -557,7 +662,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             {
                 require(frames == 9 && zero_skips == 3 && minimized_skips == 2,
                     "Viewer lifecycle counters differ");
-                require(!ui_mode || ui_verified,"Viewer UI fixture sequence incomplete");
+                require(!ui_mode || (ui_verified && ui_xui_verified && ui_input_verified && ui_focus_verified),"Viewer UI fixture sequence incomplete");
                 if (injected == "gl-trap") window->swapBuffers();
                 return true;
             }
@@ -645,6 +750,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             {"clear_readback_verified", clear_readback_verified},
             {"ui_fixture_enabled", ui_mode}, {"ui_readback_verified", ui_verified},
             {"ui_readbacks", ui_readbacks},
+            {"ui_xui_verified",ui_xui_verified},{"ui_input_verified",ui_input_verified},{"ui_focus_verified",ui_focus_verified},
             {"ui_facade_verified",ui_facade_verified},{"ui_atlas_verified",ui_atlas_verified},
             {"ui_font_producer_verified",ui_font_producer_verified},
             {"ui_admission_verified",ui_admission_verified},

@@ -2265,7 +2265,9 @@ if(VS_VULKAN_DIAGNOSTICS)
     list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h
          vsuirenderer.cpp vsuirenderer.h vsuifont.cpp vsuifont.h
          vsuiresources.cpp vsuiresources.h vsuifontcache.cpp vsuifontcache.h
-         vsuifontbridge.cpp vsuifontbridge.h)
+          vsuifontbridge.cpp vsuifontbridge.h
+          vsuidrawbridge.cpp vsuidrawbridge.h vsuiimageprovider.cpp vsuiimageprovider.h
+          vsuifixture.cpp vsuifixture.h vsuipixeloracle.cpp vsuipixeloracle.h)
 endif()
 
 add_executable(${VIEWER_BINARY_NAME}

@@ -17,7 +17,7 @@ STAGES = ['viewer-window-created', 'device-created', 'swapchain-created-320x240'
           'viewer-window-destroyed', 'device-context-released']
 FAILURES = ('before-window', 'after-window', 'after-device', 'after-swapchain',
             'frame', 'shutdown', 'gl-trap', 'bad-clear')
-UI_CASES = ('ui-positive', 'bad-ui', 'ui-orientation')
+UI_CASES = ('ui-positive', 'bad-ui', 'ui-orientation', 'bad-xui', 'ui-construction')
 
 
 def runtime_libraries(runtime):
@@ -43,7 +43,8 @@ def assess(record, code, log, case, system):
     if case not in ('positive', 'ui-positive'):
         if case in UI_CASES and record.get('ui_fixture_enabled') is not True:
             return False
-        expected = ('Viewer UI pixel oracle mismatch' if case in ('bad-ui', 'ui-orientation') else
+        expected = ('Viewer XUI pixel oracle mismatch' if case == 'bad-xui' else
+                    'Viewer UI pixel oracle mismatch' if case in ('bad-ui', 'ui-orientation') else
                     'Viewer clear pixel oracle mismatch' if case == 'bad-clear' else
                     'GL presentation in native Vulkan window' if case == 'gl-trap'
                     else 'Injected failure: ' + case)
@@ -55,6 +56,9 @@ def assess(record, code, log, case, system):
                                  record.get('ui_atlas_verified') is not True or
                                  record.get('ui_font_producer_verified') is not True or
                                  record.get('ui_admission_verified') is not True or
+                                 record.get('ui_xui_verified') is not True or
+                                 record.get('ui_input_verified') is not True or
+                                 record.get('ui_focus_verified') is not True or
                                  record.get('ui_readbacks') != 2):
         return False
     return (code == 0 and record.get('passed') is True and record.get('failure') == ''
@@ -125,7 +129,8 @@ def main():
             directory = evidence / case; directory.mkdir(exist_ok=True)
             artifact = directory / 'viewer-presentation.json'; artifact.unlink(missing_ok=True)
             image = directory / 'viewer-clear.ppm'; image.unlink(missing_ok=True)
-            for old_image in directory.glob('viewer-ui-*.ppm'): old_image.unlink()
+            for pattern in ('viewer-ui-*.ppm','viewer-xui*.ppm'):
+                for old_image in directory.glob(pattern): old_image.unlink()
             child_env = env.copy(); child_env['VS_VULKAN_DIAGNOSTIC'] = str(directory)
             if case in UI_CASES: child_env['VS_VULKAN_DIAGNOSTIC_UI'] = '1'
             if case not in ('positive', 'ui-positive'): child_env['VS_VULKAN_DIAGNOSTIC_FAIL'] = case
@@ -140,11 +145,16 @@ def main():
                     if not image.is_file() or image.stat().st_size != len(b'P6\n320 240\n255\n') + 320 * 240 * 3:
                         raise RuntimeError('Missing or incomplete viewer clear readback')
                 if case in UI_CASES:
-                    for scale in (('1x', '2x') if case == 'ui-positive' else ('1x',)):
+                    for scale in (('1x', '2x') if case in ('ui-positive', 'bad-xui', 'ui-construction') else ('1x',)):
                         for suffix in ('', '-expected'):
                             path = directory / f'viewer-ui-{scale}{suffix}.ppm'
                             if not path.is_file() or path.stat().st_size != len(b'P6\n320 240\n255\n') + 320 * 240 * 3:
                                 raise RuntimeError('Missing or incomplete viewer UI readback: ' + path.name)
+                if case in ('ui-positive', 'bad-xui'):
+                    for suffix in ('', '-expected'):
+                        path = directory / f'viewer-xui{suffix}.ppm'
+                        if not path.is_file() or path.stat().st_size != len(b'P6\n320 240\n255\n') + 320 * 240 * 3:
+                            raise RuntimeError('Missing or incomplete viewer XUI readback: ' + path.name)
                 if case in ('positive', 'ui-positive') or 'device-created' in record.get('stages', []):
                     device = record['device']
                     if any(device.get(k) != expected_device[k] for k in ('name', 'vendor_id', 'device_id')):

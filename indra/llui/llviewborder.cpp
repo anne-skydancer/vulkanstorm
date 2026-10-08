@@ -123,7 +123,7 @@ void LLViewBorder::draw()
 
 void LLViewBorder::drawOnePixelLines()
 {
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+    if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     LLColor4 top_color = mHighlightLight.get();
     LLColor4 bottom_color = mHighlightLight.get();
@@ -157,20 +157,18 @@ void LLViewBorder::drawOnePixelLines()
     S32 right   = getRect().getWidth();
     S32 bottom  = 0;
 
-    gGL.color4fv( top_color.mV );
-    gl_line_2d(left, bottom, left, top);
-    gl_line_2d(left, top, right, top);
+    gl_line_2d(left, bottom, left, top, top_color);
+    gl_line_2d(left, top, right, top, top_color);
 
-    gGL.color4fv( bottom_color.mV );
-    gl_line_2d(right, top, right, bottom);
-    gl_line_2d(left, bottom, right, bottom);
+    gl_line_2d(right, top, right, bottom, bottom_color);
+    gl_line_2d(left, bottom, right, bottom, bottom_color);
 
     LLUI::setLineWidth(1.f);
 }
 
 void LLViewBorder::drawTwoPixelLines()
 {
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+    if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     LLColor4 focus_color = gFocusMgr.getFocusColor();
 
@@ -221,22 +219,21 @@ void LLViewBorder::drawTwoPixelLines()
     S32 right   = getRect().getWidth();
     S32 bottom  = 0;
 
+    // The legacy color3 calls supplied opaque alpha.
+    top_in_color.mV[VALPHA]=top_out_color.mV[VALPHA]=1.f;
+    bottom_in_color.mV[VALPHA]=bottom_out_color.mV[VALPHA]=1.f;
     // draw borders
-    gGL.color3fv( top_out_color.mV );
-    gl_line_2d(left, bottom, left, top-1);
-    gl_line_2d(left, top-1, right, top-1);
+    gl_line_2d(left, bottom, left, top-1, top_out_color);
+    gl_line_2d(left, top-1, right, top-1, top_out_color);
 
-    gGL.color3fv( top_in_color.mV );
-    gl_line_2d(left+1, bottom+1, left+1, top-2);
-    gl_line_2d(left+1, top-2, right-1, top-2);
+    gl_line_2d(left+1, bottom+1, left+1, top-2, top_in_color);
+    gl_line_2d(left+1, top-2, right-1, top-2, top_in_color);
 
-    gGL.color3fv( bottom_out_color.mV );
-    gl_line_2d(right-1, top-1, right-1, bottom);
-    gl_line_2d(left, bottom, right, bottom);
+    gl_line_2d(right-1, top-1, right-1, bottom, bottom_out_color);
+    gl_line_2d(left, bottom, right, bottom, bottom_out_color);
 
-    gGL.color3fv( bottom_in_color.mV );
-    gl_line_2d(right-2, top-2, right-2, bottom+1);
-    gl_line_2d(left+1, bottom+1, right-1, bottom+1);
+    gl_line_2d(right-2, top-2, right-2, bottom+1, bottom_in_color);
+    gl_line_2d(left+1, bottom+1, right-1, bottom+1, bottom_in_color);
 }
 
 bool LLViewBorder::getBevelFromAttribute(LLXMLNodePtr node, LLViewBorder::EBevel& bevel_style)

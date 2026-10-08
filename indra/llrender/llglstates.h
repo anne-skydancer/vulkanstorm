@@ -29,6 +29,8 @@
 #define LL_LLGLSTATES_H
 
 #include "llimagegl.h"
+#include <optional>
+bool vs_native_ui_active();
 
 //----------------------------------------------------------------------------
 
@@ -83,15 +85,20 @@ public:
 class LLGLSUIDefault
 {
 protected:
-    LLGLEnable mBlend;
-    LLGLDisable mCullFace;
-    LLGLDepthTest mDepthTest;
+    std::optional<LLGLEnable> mBlend;
+    std::optional<LLGLDisable> mCullFace;
+    std::optional<LLGLDepthTest> mDepthTest;
 public:
     LLGLSUIDefault()
-        : mBlend(GL_BLEND),
-          mCullFace(GL_CULL_FACE),
-          mDepthTest(GL_FALSE, GL_TRUE, GL_LEQUAL)
-    {}
+    {
+        // Native UI packets explicitly specify alpha, no culling and no depth.
+        // Constructing a GL state scope would issue GL calls before drawing.
+        if (!vs_native_ui_active())
+        {
+            mBlend.emplace(GL_BLEND);mCullFace.emplace(GL_CULL_FACE);
+            mDepthTest.emplace(GL_FALSE,GL_TRUE,GL_LEQUAL);
+        }
+    }
 };
 
 //----------------------------------------------------------------------------

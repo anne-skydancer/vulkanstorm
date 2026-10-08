@@ -499,7 +499,7 @@ void LLTextBase::drawHighlightsBackground(const highlight_list_t& highlights, co
         }
 
         // Draw the selection box (we're using a box instead of reversing the colors on the selected text).
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
         F32 alpha = hasFocus() ? 0.7f : 0.3f;
         alpha *= getDrawContext().mAlpha;
         LLColor4 selection_color(color.mV[VRED], color.mV[VGREEN], color.mV[VBLUE], alpha);
@@ -669,7 +669,7 @@ void LLTextBase::drawSelectionBackground()
         std::vector<LLRect> selection_rects = getSelectionRects();
 
         // Draw the selection box (we're using a box instead of reversing the colors on the selected text).
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
         const LLColor4& color = mSelectedBGColor;
         F32 alpha = hasFocus() ? 0.7f : 0.3f;
         alpha *= getDrawContext().mAlpha;
@@ -738,7 +738,7 @@ void LLTextBase::drawHighlightedBackground()
         if (highlight_rects.empty())
             return;
 
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
         LLRect content_display_rect = getVisibleDocumentRect();
 
@@ -840,12 +840,10 @@ void LLTextBase::drawCursor()
                 cursor_rect.mRight = cursor_rect.mLeft + CURSOR_THICKNESS;
             }
 
-            gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+            if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
             LLColor4 cursor_color = mCursorColor.get() % alpha;
-            gGL.color4fv( cursor_color.mV );
-
-            gl_rect_2d(cursor_rect);
+            gl_rect_2d(cursor_rect,cursor_color);
 
             if (LL_KIM_OVERWRITE == gKeyboard->getInsertMode() && !hasSelection() && text[mCursorPos] != '\n')
             {

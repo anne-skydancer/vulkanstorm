@@ -28,6 +28,7 @@ public:
     // End a font producer epoch; queued packets keep their GPU generations.
     void releaseFontPages();
     void rectangle(const LLRectf& physical_bottom_left,const LLColor4&);
+    void screenClip(const LLRect* logical_bottom_left);
 private:
     struct Impl;
     std::shared_ptr<Impl> mImpl;

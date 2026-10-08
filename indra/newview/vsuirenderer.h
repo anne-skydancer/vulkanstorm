@@ -14,7 +14,7 @@ public:
     struct Texture;
     // A packet owns its exact generation, even after its producer replaces it.
     using Image = std::shared_ptr<const Texture>;
-    enum class Blend { StraightAlpha, PremultipliedAlpha };
+    enum class Blend { StraightAlpha, PremultipliedAlpha, Additive, AdditiveAlpha };
     enum class Sampling { Nearest, Linear };
     struct Vertex { float x,y,u,v,r,g,b,a; };
     struct Packet
@@ -45,6 +45,9 @@ public:
     // The owner waits for idle before destroying this renderer.
     void retire();
     static std::uint64_t generation(const Image&);
+    // CPU publication snapshots for an independent diagnostic raster oracle.
+    static const std::vector<std::uint8_t>& imagePixels(const Image&);
+    static std::array<unsigned,2> imageExtent(const Image&);
 private:
     struct Impl;
     std::unique_ptr<Impl> mImpl;

@@ -33,13 +33,14 @@ struct VSUIRenderer::Texture
     RefCntAutoPtr<ITexture> resource;
     RefCntAutoPtr<IRenderDevice> owner;
     std::uint64_t generation;
+    std::vector<std::uint8_t> pixels;
 };
 struct VSUIRenderer::Impl
 {
     RefCntAutoPtr<IRenderDevice> device;
     RefCntAutoPtr<IDeviceContext> context;
     RefCntAutoPtr<IShader> vertex, fragments[2];
-    RefCntAutoPtr<IPipelineState> pipelines[2][2][2][2]; // format, blend, sampler, mask
+    RefCntAutoPtr<IPipelineState> pipelines[2][4][2][2]; // format, blend, sampler, mask
     std::uint64_t next_generation = 1;
     struct Submission
     {
@@ -62,7 +63,7 @@ struct VSUIRenderer::Impl
         check(format == TEX_FORMAT_RGBA8_UNORM || format == TEX_FORMAT_BGRA8_UNORM,
               "UI renderer requires an SDR UNORM target");
         auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM]
-            [blend == Blend::PremultipliedAlpha][sampling == Sampling::Linear][mask];
+            [static_cast<unsigned>(blend)][sampling == Sampling::Linear][mask];
         if (result) return result;
         const char* vs = R"(
 layout(location=0) in vec2 position;
@@ -109,8 +110,8 @@ void main() { result=vec4(color.rgb,texture(g_Texture,texUV).a*color.a); }
         const LayoutElement layout[] = {{0,0,2,VT_FLOAT32,false}, {1,0,2,VT_FLOAT32,false}, {2,0,4,VT_FLOAT32,false}};
         gp.InputLayout.LayoutElements = layout; gp.InputLayout.NumElements = 3;
         auto& rt = gp.BlendDesc.RenderTargets[0]; rt.BlendEnable = true;
-        rt.SrcBlend = blend == Blend::StraightAlpha ? BLEND_FACTOR_SRC_ALPHA : BLEND_FACTOR_ONE;
-        rt.DestBlend = BLEND_FACTOR_INV_SRC_ALPHA;
+        rt.SrcBlend = blend == Blend::StraightAlpha || blend == Blend::AdditiveAlpha ? BLEND_FACTOR_SRC_ALPHA : BLEND_FACTOR_ONE;
+        rt.DestBlend = blend == Blend::Additive || blend == Blend::AdditiveAlpha ? BLEND_FACTOR_ONE : BLEND_FACTOR_INV_SRC_ALPHA;
         rt.SrcBlendAlpha = BLEND_FACTOR_ONE; rt.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA;
         ci.PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
         SamplerDesc sampler{};
@@ -126,6 +127,9 @@ void main() { result=vec4(color.rgb,texture(g_Texture,texUV).a*color.a); }
 };
 VSUIRenderer::VSUIRenderer(IRenderDevice* d, IDeviceContext* c) : mImpl(std::make_unique<Impl>(d,c)) {}
 VSUIRenderer::~VSUIRenderer() = default;
+const std::vector<std::uint8_t>& VSUIRenderer::imagePixels(const Image& image) { return image->pixels; }
+std::array<unsigned,2> VSUIRenderer::imageExtent(const Image& image)
+{ const auto& d=image->resource->GetDesc();return {d.Width,d.Height}; }
 VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba)
 {
     check(width && height && width <= 16384 && height <= 16384 &&
@@ -139,6 +143,7 @@ VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const 
     TextureData data{&sub, 1}; mImpl->device->CreateTexture(desc, &data, &image->resource);
     check(image->resource != nullptr, "Native UI texture upload failed");
     image->generation = mImpl->next_generation++;
+    image->pixels=rgba;
     return image;
 }
 std::uint64_t VSUIRenderer::generation(const Image& image) { return image ? image->generation : 0; }
@@ -150,6 +155,10 @@ VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y
     check(width && height && x<=desc.Width && y<=desc.Height && width<=desc.Width-x && height<=desc.Height-y &&
           rgba.size()==std::size_t(width)*height*4,"Invalid native UI replacement patch");
     auto image=std::make_shared<Texture>(); image->owner=mImpl->device;
+    image->pixels=old->pixels;
+    for (unsigned row=0;row<height;++row)
+        std::copy_n(rgba.data()+std::size_t(row)*width*4,width*4,
+                    image->pixels.data()+(std::size_t(y+row)*desc.Width+x)*4);
     desc.Name="Native UI replacement generation"; desc.Usage=USAGE_DEFAULT;
     mImpl->device->CreateTexture(desc,nullptr,&image->resource);
     check(image->resource != nullptr,"Native UI replacement allocation failed");
@@ -182,7 +191,8 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
     {
         check(p.image != nullptr, "Native UI packet has no texture generation");
         check(p.image->owner.RawPtr() == mImpl->device.RawPtr(),"Native UI texture belongs to a different device");
-        check((p.blend == Blend::StraightAlpha || p.blend == Blend::PremultipliedAlpha) &&
+        check((p.blend == Blend::StraightAlpha || p.blend == Blend::PremultipliedAlpha ||
+               p.blend == Blend::Additive || p.blend == Blend::AdditiveAlpha) &&
               (p.sampling == Sampling::Nearest || p.sampling == Sampling::Linear),"Invalid native UI packet state");
         for (const auto* values : {&p.bounds, &p.uv, &p.color, &p.clip})
             for (float value : *values) check(std::isfinite(value), "Non-finite native UI packet");
