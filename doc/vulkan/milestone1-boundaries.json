@@ -1,5 +1,5 @@
 {
-  "source_commit": "bb1a0840aeaf0c06ed9f8d04430a06032d6a96c1",
+  "source_commit": "e1689fbb8848553753faf22042943bb9234b521e",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "closed-admission-set for future UI/chat; native window/clear and opt-in UI substrate fixtures are implemented; full UI/chat gate contracts remain requirements",
@@ -341,7 +341,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -442,7 +442,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -647,7 +647,7 @@
       ]
     },
     "indra/newview/vsuifixture.cpp": {
-      "sha256": "4019a95f63738fa89adeeddcfcb7ccd222a40beead29a2df22b56c8885c2abe5",
+      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
       "anchors": [
         "VSUIFixture::verifyInput",
         "VSUIFixture::draw",
@@ -655,7 +655,7 @@
       ]
     },
     "indra/newview/vsuifixture.h": {
-      "sha256": "f1f68420bbd1662c0b414e94a0be363822847c82b086931dd47ec72e8f678075",
+      "sha256": "e05ae45e2da9d14507971282fc1127a4c47f5326404e8d71e8114085aa9bf7f9",
       "anchors": [
         "class VSUIFixture"
       ]
@@ -671,6 +671,13 @@
       "sha256": "ae39490bcc83cf426ff945bfd5cb35db73f3567f3d74065293ff4449b8ba6c48",
       "anchors": [
         "vs_ui_expected_pixels"
+      ]
+    },
+    "indra/llrender/llrender.cpp": {
+      "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
+      "anchors": [
+        "void LLRender::begin",
+        "GL geometry in native UI owner"
       ]
     }
   },
@@ -857,7 +864,8 @@
         "indra/newview/vsuifixture.cpp",
         "indra/newview/vsuifixture.h",
         "indra/newview/vsuipixeloracle.cpp",
-        "indra/newview/vsuipixeloracle.h"
+        "indra/newview/vsuipixeloracle.h",
+        "indra/llrender/llrender.cpp"
       ],
       "gates": [
         "G-RESOURCE",
@@ -908,7 +916,8 @@
         "indra/newview/vsuifixture.cpp",
         "indra/newview/vsuifixture.h",
         "indra/newview/vsuipixeloracle.cpp",
-        "indra/newview/vsuipixeloracle.h"
+        "indra/newview/vsuipixeloracle.h",
+        "indra/llrender/llrender.cpp"
       ],
       "gates": [
         "G-LIFETIME"
@@ -5109,11 +5118,11 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "bb1a0840aeaf0c06ed9f8d04430a06032d6a96c1",
+    "source_commit": "e1689fbb8848553753faf22042943bb9234b521e",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
     "world_implemented": false,
-    "qualification": "Windows SwiftShader passed fourteen cases including corrected mini-progress XUI, plain editor/transcript, native window input/focus, preedit contract, additive blending, pixel oracle and partial construction cleanup. Cross-platform CI for this delta and full V3 required panels/OS DPI/OS IME remain open."
+    "qualification": "Windows SwiftShader passed fifteen cases including corrected mini-progress XUI, editor/transcript, synthetic native keyboard/focus/mouse/wheel events, capture release, direct preedit contract, additive blending, pixel oracle, partial construction cleanup and GL geometry rejection. Fractional-DPI clipping has device-free checks. Cross-platform CI for this delta and full V3 required panels/OS DPI/OS IME remain open."
   }
 }

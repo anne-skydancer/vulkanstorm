@@ -1,7 +1,7 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `bb1a0840aeaf0c06ed9f8d04430a06032d6a96c1`. DiligentCore is the selected
+source `e1689fbb8848553753faf22042943bb9234b521e`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
@@ -93,11 +93,11 @@ packaging and login/preferences changes do not change this fact.
 |---|---|---|
 | WP0 | Current-source catalog; resolve every candidate to a reviewed seam or evidence-backed CPU/dormant/test/platform exclusion; immutable source and public API evidence | No unreviewed in-scope path, unknown callback or unmatched original contract; unknown external implementations explicitly bounded |
 | WP1 | I01/I02: process backend, native window factory, context-independent handles, device/swapchain, feature identity, resize, failure and complete teardown | Native diagnostic window/clear without GL context; resize/minimize/DPI/fullscreen/present/failure/teardown checked |
-| WP2 | I03ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œI07: draw/state/resource/shader/target substrate; immutable generations and ABI; upload/readback and multi-view lifetime | Shader reflection and producer schema agree; GPU-delay replacement tests; resources and CPU byte owners retained through actual completion |
-| WP3 | I08ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œI10: ordered XUI/widget/image/text, glyph atlases and lazy uploads; browser/media remain later scope unless explicitly admitted | First slice: native login/status and connected nearby chat, input and presentation; gate world graphics and optional UI producers while retaining CPU session services. Full Preferences/browser parity is later scope. |
-| WP4 | I11ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œI15: CPU scene snapshots and query feedback; main/cube/HUD frame roots; pools/materials/glTF/avatar/terrain/particle producers | Constrained world tier visibly matches supported contracts; unsupported routes disclosed; complete per-draw state |
+| WP2 | I03â€“I07: draw/state/resource/shader/target substrate; immutable generations and ABI; upload/readback and multi-view lifetime | Shader reflection and producer schema agree; GPU-delay replacement tests; resources and CPU byte owners retained through actual completion |
+| WP3 | I08â€“I10: ordered XUI/widget/image/text, glyph atlases and lazy uploads; browser/media remain later scope unless explicitly admitted | First slice: native login/status and connected nearby chat, input and presentation; gate world graphics and optional UI producers while retaining CPU session services. Full Preferences/browser parity is later scope. |
+| WP4 | I11â€“I15: CPU scene snapshots and query feedback; main/cube/HUD frame roots; pools/materials/glTF/avatar/terrain/particle producers | Constrained world tier visibly matches supported contracts; unsupported routes disclosed; complete per-draw state |
 | WP5 | I16/I17: shadows, probes/mirrors, deferred lighting, water/exclusion, sorted alpha/glow, PPLL fallback, post/history | Per-pass/temporal comparisons and valid cross-view/subresource dependencies; exact blend/mask/color and overflow semantics |
-| WP6 | I18ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œI22: all preview/bake/impostor/map/tool/label/query/capture/pathing/profiling producers and consumers | No reachable GL callback in native path; synchronous CPU consumers wait for submitted completion; all facilities covered or capability-gated |
+| WP6 | I18â€“I22: all preview/bake/impostor/map/tool/label/query/capture/pathing/profiling producers and consumers | No reachable GL callback in native path; synchronous CPU consumers wait for submitted completion; all facilities covered or capability-gated |
 | WP7 | I23: actual platform packages, staging, manifests, capability policy and vendor/driver matrix | Fully staged Autobuild viewer and Release qualification; public Vulkan selection only after full supported renderer acceptance |
 | WP8 | Optional vendor/common utilities, parallel recording, queues, compute/batching changes | Measured benefit and maintained visual/lifetime parity with independent equivalent functional fallback |
 
@@ -287,7 +287,7 @@ Dynamic edges are explicit responsibilities: LLGLUpdate queued virtual updates/c
 
 The current source pin includes a native viewer packet renderer and a separate
 CPU-only FreeType rasterizer. I08/I09 have explicit reviewed source contracts
-and hashes; I03ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“I06 responsibilities are exercised by the native packet
+and hashes; I03–I06 responsibilities are exercised by the native packet
 implementation without replacing or reclassifying existing GL producers.
 The [V3 implementation record](viewer-ui-substrate.md) distinguishes deterministic
 viewer fixture acceptance from the still-open XUI/admission and input integration.
@@ -314,8 +314,8 @@ native panel/floater policy, additional drawing/interaction states and OS DPI/IM
 remain open. The local provider, corrected mini-progress XUI, editors/scroller
 and native window input/focus now pass in the Windows fixture.
 
-The regenerated ledger has 28,410 witnesses in 1,747 files, with no unmapped or
-unreviewed scoped candidate. The boundary manifest hashes 90 sources. These
+The regenerated ledger has 28,415 witnesses in 1,747 files, with no unmapped or
+unreviewed scoped candidate. The boundary manifest hashes 91 sources. These
 counts qualify current source accounting, not complete V3 execution. See the
 [UI substrate record](viewer-ui-substrate.md) for Windows software-device pixel
 evidence and remaining acceptance work. Fresh cross-platform CI is required.
@@ -323,3 +323,10 @@ evidence and remaining acceptance work. Fresh cross-platform CI is required.
 The XUI refresh also re-reviews I03 primitive/state adapters and I08 ordered
 widget drawing/skin asset ownership, including additive glow blending. The
 source pin is still a source-analysis acceptance; full UI/chat gates are open.
+
+The native pointer-input checkpoint adds capture-aware mouse/hover/wheel routing,
+focus-loss capture cancellation and decisive GL geometry rejection inside the
+native drawing owner. Fractional-scale clips preserve the legacy physical-pixel
+margin. Fifteen Windows viewer cases pass; full V3 and cross-platform acceptance
+for this delta remain open. The latest source accounting has 28,415 witnesses
+in 1,747 files and 91 boundary hashes.
