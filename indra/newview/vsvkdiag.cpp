@@ -120,6 +120,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     LLCoordGL mouse_point;
     unsigned mouse_releases=0,mouse_moves=0,scroll_events=0;
     bool ui_mouse_verified=false,ui_scroll_verified=false;
+    std::array<std::string,3> ui_skin_selection;
     bool ui_facade_verified=false,ui_atlas_verified=false,ui_font_producer_verified=false,ui_admission_verified=false;
     std::unique_ptr<VSUIRenderer> ui;
     const std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
@@ -555,6 +556,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         using namespace Diligent;
         VSUIResources resources(*ui);
         VSUIFixture fixture(resources,window);
+        ui_skin_selection=fixture.skinSelection();
         fixture.verifyInput();
         if(injected=="ui-gl-trap") gGL.begin(LLRender::TRIANGLES);
         struct ClearHandler { Impl& owner; ~ClearHandler() { owner.unicode_handler={};owner.key_handler={};owner.focus_handler={};owner.mouse_handler={};owner.hover_handler={};owner.scroll_handler={}; } } guard{*this};
@@ -823,6 +825,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             {"ui_readbacks", ui_readbacks},
             {"ui_xui_verified",ui_xui_verified},{"ui_input_verified",ui_input_verified},{"ui_focus_verified",ui_focus_verified},
             {"ui_mouse_verified",ui_mouse_verified},{"ui_scroll_verified",ui_scroll_verified},
+            {"ui_skin",ui_skin_selection[0]},{"ui_theme",ui_skin_selection[1]},{"ui_language",ui_skin_selection[2]},
             {"ui_facade_verified",ui_facade_verified},{"ui_atlas_verified",ui_atlas_verified},
             {"ui_font_producer_verified",ui_font_producer_verified},
             {"ui_admission_verified",ui_admission_verified},

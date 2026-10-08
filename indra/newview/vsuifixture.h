@@ -25,6 +25,7 @@ class VSUIFixture
     void focus(bool value);
     bool focused() const;
     std::string inputText() const;
+    std::array<std::string,3> skinSelection() const;
 
   private:
     struct Impl;

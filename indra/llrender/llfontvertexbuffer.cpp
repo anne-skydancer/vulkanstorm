@@ -121,9 +121,11 @@ S32 LLFontVertexBuffer::render(
     {
         return static_cast<S32>(text.length());
     }
-    if (!sEnableBufferCollection)
+    if (!sEnableBufferCollection || LLFontGL::hasNativeDraw())
     {
-        // For debug purposes and performance testing
+        // GL display lists contain GL buffers and replay GL state. Native font
+        // geometry must be republished through its owner, even when GL caching
+        // is enabled (as it is by default on Linux). The native atlas still caches glyphs.
         return fontp->render(text, begin_offset, x, y, color, halign, valign, style, shadow, max_chars, max_pixels, right_x, use_ellipses, use_color);
     }
     if (mBufferList.empty())

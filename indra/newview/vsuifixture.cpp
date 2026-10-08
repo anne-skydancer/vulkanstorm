@@ -22,7 +22,7 @@
 #include "llviewereventrecorder.h"
 #include "llviewerprecompiledheaders.h"
 #include "vsuiadmission.h"
-#include "vsuidrawbridge.h"
+#include "vsuicontext.h"
 #include "vsuiimageprovider.h"
 #include "vsuiresources.h"
 #include <filesystem>
@@ -59,61 +59,47 @@ bool widget(const std::type_info &t)
 struct VSUIFixture::Impl
 {
     VSUIResources &resources;
-    VSUIDrawBridge bridge;
     VSUIAdmission admission;
     LLControlGroup config{"NativeUIConfig"}, ignores{"NativeUIIgnores"};
-    std::unique_ptr<VSUIImageProvider> images;
-    std::unique_ptr<LLPanel> root;
+    std::unique_ptr<VSUIContext> context;
+    LLPanel *root = nullptr;
     NativeLineEditor *input = nullptr;
     LLTextEditor *transcript = nullptr;
-    bool previous_focus = gFocusMgr.getAppHasFocus();
-    bool owns_ui = false, owns_fonts = false, owns_factory = false, owns_recorder = false;
     LLError::RecorderPtr log;
     Impl(VSUIResources &r, LLWindow *window)
-        : resources(r), bridge(r, 1), admission(
-                                          widget, [](std::string_view) { return false; },
-                                          [](std::string_view name) { return name == "mini_progress_panel"; })
+        : resources(r), admission(
+                            widget, [](std::string_view) { return false; },
+                            [](std::string_view name) { return name == "mini_progress_panel"; })
     {
         try
         {
-            require(!LLUI::instanceExists(), "Native XUI fixture requires exclusive UI ownership");
-            // Static widget registration already creates the empty factory.
-            // This pre-session owner acquires its subsequently loaded defaults.
-            owns_factory = true;
             log = LLError::addGenericRecorder([](LLError::ELevel level, const std::string &message) {
                 if (level >= LLError::LEVEL_INFO)
                     std::cerr << "NATIVE_XUI " << message << '\n';
             });
             gDirUtilp->initAppDirs("VulkanstormNativeDiagnostic", std::filesystem::current_path().string());
-            gDirUtilp->setSkinFolder("default", "", "en");
             require(config.loadFromFile("app_settings/settings.xml", true, false) > 0,
                     "Native UI defaults are missing");
-            require(LLUIColorTable::instance().loadFromSettings(), "Native UI colors are missing");
-            images = std::make_unique<VSUIImageProvider>(r);
+            if (const char *skin = std::getenv("VS_VULKAN_DIAGNOSTIC_SKIN"))
+                config.setString("SkinCurrent", skin);
+            if (const char *theme = std::getenv("VS_VULKAN_DIAGNOSTIC_THEME"))
+                config.setString("SkinCurrentTheme", theme);
+            if (const char *language = std::getenv("VS_VULKAN_DIAGNOSTIC_LANGUAGE"))
+                config.setString("Language", language);
+            gDirUtilp->setSkinFolder(config.getString("SkinCurrent"), config.getString("SkinCurrentTheme"), "en");
+            const auto skin_settings = gDirUtilp->getExpandedFilename(LL_PATH_TOP_SKIN, "settings.xml");
+            if (std::filesystem::is_regular_file(skin_settings))
+                require(config.loadFromFile(skin_settings, true, false) > 0, "Native skin settings cannot be loaded");
             LLUI::settings_map_t settings{
                 {"config", &config}, {"floater", &config}, {"ignores", &ignores}, {"account", &config}};
-            LLUI::createInstance(settings, images.get(), nullptr, nullptr);
-            owns_ui = true;
-            LLUI::getInstance()->mWindow = window;
-            LLViewerEventRecorder::createInstance();
-            owns_recorder = true;
-            LLUI::setScaleFactor(LLVector2(1, 1));
-            LLXMLNodePtr strings;
-            require(LLUICtrlFactory::getLayeredXMLNode("strings.xml", strings) && LLTrans::parseStrings(strings, {}),
-                    "Native UI translations are missing");
-            owns_fonts = true;
-            LLFontGL::initClass(96, 1, 1, std::filesystem::current_path().string(), "fonts.xml", 0, true);
-            LLPanel::Params panel;
-            panel.name = "native_ui_root";
-            panel.focus_root = true;
-            panel.rect = LLRect(0, 240, 320, 0);
-            root.reset(LLUICtrlFactory::create<LLPanel>(panel));
-            require(bool(root), "Native UI root was not admitted");
+            context = std::make_unique<VSUIContext>(r, window, settings, 320u, 240u, 1.f);
+            root = context->root();
+            LL_INFOS("NativeUI") << "Selected skin: " << context->skin() << "/" << context->theme()
+                                 << " language=" << context->language() << LL_ENDL;
             if (const char *failure = std::getenv("VS_VULKAN_DIAGNOSTIC_FAIL");
                 failure && std::string_view(failure) == "ui-construction")
                 throw std::runtime_error("Injected failure: ui-construction");
-            LLUI::getInstance()->setRootView(root.get());
-            auto *progress = LLUICtrlFactory::createFromFile<LLPanel>("panel_progress_mini.xml", root.get(),
+            auto *progress = LLUICtrlFactory::createFromFile<LLPanel>("panel_progress_mini.xml", root,
                                                                       LLDefaultChildRegistry::instance());
             require(progress && progress->findChild<LLProgressBar>("progress_bar_mini") &&
                         progress->findChild<LLButton>("cancel_btn"),
@@ -124,9 +110,9 @@ struct VSUIFixture::Impl
             edit.name = "native_chat_input";
             edit.rect = LLRect(10, 190, 310, 160);
             edit.spellcheck = false;
-            edit.use_bg_color = true;
+            // Use the selected skin's text-field image and colors together.
             edit.max_length.bytes = 1024;
-            input = LLUICtrlFactory::create<NativeLineEditor>(edit, root.get());
+            input = LLUICtrlFactory::create<NativeLineEditor>(edit, root);
             require(input, "Native input was not admitted");
             LLTextEditor::Params chat;
             chat.name = "native_plain_transcript";
@@ -135,7 +121,7 @@ struct VSUIFixture::Impl
             chat.parse_urls = false;
             chat.spellcheck = false;
             chat.embedded_items = false;
-            transcript = LLUICtrlFactory::create<LLTextEditor>(chat, root.get());
+            transcript = LLUICtrlFactory::create<LLTextEditor>(chat, root);
             require(transcript, "Native transcript was not admitted");
             std::string text;
             for (unsigned i = 0; i < 30; ++i)
@@ -150,35 +136,10 @@ struct VSUIFixture::Impl
     }
     void cleanup()
     {
-        if (owns_ui)
-            LLUI::getInstance()->setRootView(nullptr);
-        root.reset();
+        context.reset();
+        root = nullptr;
         input = nullptr;
         transcript = nullptr;
-        // Default parameter blocks own native image facades and borrow font faces.
-        // Release them before the font registry, asset provider and device.
-        if (owns_factory)
-        {
-            LLUICtrlFactory::deleteSingleton();
-            owns_factory = false;
-        }
-        if (owns_recorder)
-        {
-            LLViewerEventRecorder::deleteSingleton();
-            owns_recorder = false;
-        }
-        if (owns_fonts)
-        {
-            LLFontGL::destroyDefaultFonts();
-            owns_fonts = false;
-        }
-        if (owns_ui)
-        {
-            gFocusMgr.setAppHasFocus(previous_focus);
-            LLUI::deleteSingleton();
-            owns_ui = false;
-        }
-        images.reset();
         if (log)
         {
             LLError::removeRecorder(log);
@@ -194,6 +155,10 @@ VSUIFixture::VSUIFixture(VSUIResources &r, LLWindow *w) : mImpl(std::make_unique
 {
 }
 VSUIFixture::~VSUIFixture() = default;
+std::array<std::string,3> VSUIFixture::skinSelection() const
+{
+    return {mImpl->context->skin(),mImpl->context->theme(),mImpl->context->language()};
+}
 bool VSUIFixture::unicode(unsigned character)
 {
     auto *focus = gFocusMgr.getKeyboardFocus();
@@ -208,7 +173,7 @@ bool VSUIFixture::mouse(int x, int y, unsigned mask, bool down)
 {
     auto *handler = gFocusMgr.getMouseCapture();
     if (!handler)
-        handler = mImpl->root.get();
+        handler = mImpl->root;
     S32 local_x, local_y;
     handler->screenPointToLocal(x, y, &local_x, &local_y);
     return down ? handler->handleMouseDown(local_x, local_y, mask) : handler->handleMouseUp(local_x, local_y, mask);
@@ -217,7 +182,7 @@ void VSUIFixture::hover(int x, int y, unsigned mask)
 {
     auto *handler = gFocusMgr.getMouseCapture();
     if (!handler)
-        handler = mImpl->root.get();
+        handler = mImpl->root;
     S32 local_x, local_y;
     handler->screenPointToLocal(x, y, &local_x, &local_y);
     handler->handleHover(local_x, local_y, mask);
@@ -226,7 +191,7 @@ bool VSUIFixture::scroll(int x, int y, int clicks)
 {
     auto *handler = gFocusMgr.getMouseCapture();
     if (!handler)
-        handler = mImpl->root.get();
+        handler = mImpl->root;
     S32 local_x, local_y;
     handler->screenPointToLocal(x, y, &local_x, &local_y);
     return handler->handleScrollWheel(local_x, local_y, clicks);
@@ -238,7 +203,9 @@ void VSUIFixture::prepareMouseInput()
 void VSUIFixture::finishMouseInput()
 {
     require(!gFocusMgr.getMouseCapture(), "Native mouse release retained widget capture");
-    require(focused(), "Native mouse click did not focus the editor");
+    // A synthetic button message establishes widget focus, not OS activation.
+    // The queued focus transition sequence qualifies application focus separately.
+    require(mImpl->input->hasFocus(), "Native mouse click did not focus the editor");
     mImpl->input->deselect();
     mImpl->input->setCursorToEnd();
 }
