@@ -39,7 +39,7 @@ are unchanged. This is not a new widget toolkit or an XUI replacement.
 
 The existing nine WSI cases are retained. The runner adds `ui-positive`,
 `bad-ui` and `ui-orientation`. UI fixtures draw into the actual restored
-320Ã—240 viewer swapchain before presentation, at explicit 1Ã— and 2Ã— scales.
+320Ãƒâ€”240 viewer swapchain before presentation, at explicit 1Ãƒâ€” and 2Ãƒâ€” scales.
 They exercise asymmetric texture orientation, clipping, paint order, affine
 translation, both alpha modes, both sampler pipelines, ASCII/Greek/Cyrillic
 glyph coverage, replacement glyph sizes, immutable texture replacement, and
@@ -93,3 +93,25 @@ Vulkan workflow.
 To exercise the opt-in fixture manually, add `VS_VULKAN_DIAGNOSTIC_UI=1` to an
 existing native diagnostic launch using `VS_VULKAN_DIAGNOSTIC=<evidence directory>`.
 The CI runner supplies this setting automatically for its three UI cases.
+
+## Renderer selector and normal-session admission
+
+The graphics preferences expose OpenGL, Mesa/Zink and Vulkan (in development).
+The Vulkan option preserves its backend identity; selecting it currently shows
+an availability explanation and restores the active selection, without saving
+a replacement renderer or requesting shutdown. The restart callback independently
+checks availability before saving. Mesa/Zink remains an OpenGL provider for AMD
+drivers affected by OpenGL ICD regressions, not a native Vulkan fallback.
+
+A manually persisted Vulkan selection stops normal startup after configuration
+and before GL provider selection. `initWindow` also refuses the Vulkan-to-GL
+route, and its caller checks its result. The native diagnostic launch remains
+independent; compiling its Diligent path does not qualify a usable UI/chat session.
+The shared `VSRenderBackend` policy can admit Vulkan sessions only once that
+integration is implemented.
+
+The Windows RelWithDebInfo build/staging and twelve native cases passed after
+this change. All 73 regression tests passed, including compilation/execution of
+the actual preference callbacks with device-free fixtures: peer identity, Vulkan
+rejection, supported restart commit, cancel restoration, and early startup
+guard ordering. These checks do not claim an interactive native XUI session.

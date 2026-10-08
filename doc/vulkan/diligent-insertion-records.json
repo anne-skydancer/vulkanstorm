@@ -1,5 +1,5 @@
 {
-  "source_commit": "f622b9ff1e2c294f3e62a6e4840710d8419b3f64",
+  "source_commit": "3a62bad6cc4de364fa01a47c9dcae402e7b7148a",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -19,7 +19,8 @@
         "indra/newview/llviewerstats",
         "indra/newview/llpipelinelistener",
         "indra/newview/vsvulkandiagnostic",
-        "indra/newview/vsvkdiag"
+        "indra/newview/vsvkdiag",
+        "indra/newview/vsrenderbackend"
       ],
       "apis": [
         "IEngineFactory::EnumerateAdapters",
@@ -35,6 +36,10 @@
         {
           "path": "indra/newview/llfeaturemanager.cpp",
           "symbol": "graphicsIdentityChanged"
+        },
+        {
+          "path": "indra/newview/vsrenderbackend.h",
+          "symbol": "canStartSession"
         }
       ],
       "responsibility": "Resolve process backend before any GL initialization; separate GL recommendations and capabilities from Vulkan queried requirements; initialization failure must precede publication of renderer resources. Selection actually runs before initWindow via LLAppViewer::init; do not persist LastGraphicsRendererFamily as OpenGL for a Vulkan session. Hardware benchmark, GL version/vendor feature masks, diagnostics and GPU identity require backend implementations.",
@@ -1017,48 +1022,48 @@
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1224,
-      "end": 1379,
+      "start": 1232,
+      "end": 1387,
       "record": "I01",
       "disposition": "mapped",
       "reason": "init calls selectGLBackend before initWindow, then GL VRAM overrides/info/requirements/driver warnings and self-registered callbacks. Native capability/identity owner must precede callbacks and prevent GL probes; CPU SSE/RAM/input policies remain. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3"
+      "sha256": "1c71244a7ac79d45a5db4c74301f6c7dc440eae53e3fb81211e914d928323f0a"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 2453,
-      "end": 2539,
+      "start": 2461,
+      "end": 2547,
       "record": "I02",
       "disposition": "mapped",
       "reason": "Shutdown stops fetch/cache/decode/thread pools before shutdownGL then viewer window deletion. Native path must cancel/retain producers and drain submitted work before resource/device/window destruction; keyboard remains until views destroyed. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3"
+      "sha256": "1c71244a7ac79d45a5db4c74301f6c7dc440eae53e3fb81211e914d928323f0a"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 3763,
-      "end": 3901,
+      "start": 3771,
+      "end": 3908,
       "record": "I01",
       "disposition": "mapped",
-      "reason": "initWindow currently coerces Vulkan to GL, creates LLViewerWindow then pipeline/initGLDefaults with persisted RenderInitError. Replace backend capability/error ownership; preserve startup diagnostics and reference route. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3"
+      "reason": "Normal startup rejects a persisted Vulkan choice after configuration and before selectGLBackend; initWindow independently refuses a Vulkan-to-GL route, and its caller checks failure. Native diagnostic admission remains independent and precedes normal configuration. GL reference startup capabilities/error ownership and the complete native UI/chat lifecycle remain separate obligations.",
+      "sha256": "1c71244a7ac79d45a5db4c74301f6c7dc440eae53e3fb81211e914d928323f0a"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4085,
-      "end": 4179,
+      "start": 4092,
+      "end": 4186,
       "record": "I01",
       "disposition": "mapped",
       "reason": "getViewerInfo directly glGetString vendor/renderer/version plus GL VRAM/vendor-based WMI; replace with cached actual Vulkan adapter/driver/backend identity, safe during teardown. CPU/network/library diagnostics remain. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3"
+      "sha256": "1c71244a7ac79d45a5db4c74301f6c7dc440eae53e3fb81211e914d928323f0a"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 6804,
-      "end": 6834,
+      "start": 6811,
+      "end": 6841,
       "record": "I01",
       "disposition": "mapped",
       "reason": "forceErrorDriverCrash calls glDeleteTextures(1,NULL). Legacy crash injection must be gated/disabled/adapted for native backend rather than executing GL with no context. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3"
+      "sha256": "1c71244a7ac79d45a5db4c74301f6c7dc440eae53e3fb81211e914d928323f0a"
     },
     {
       "path": "indra/newview/llviewerwindow.cpp",
@@ -1134,12 +1139,12 @@
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 4020,
-      "end": 4095,
+      "start": 4021,
+      "end": 4099,
       "record": "I01",
       "disposition": "mapped",
-      "reason": "Renderer refresh/commit/restart callbacks coerce every non-Zink choice to OpenGL. Enable supported native choices only after renderer availability, preserving pending/committed restart semantics.",
-      "sha256": "5522fd0cd8262c586a6d6ea19fa627a3dcb0bb57ee54e40f34fcbfd4ba350eca"
+      "reason": "Renderer callbacks retain OpenGL/Zink/Vulkan identity. Vulkan selection explains unavailable normal-session admission and restores the active selector without persisting or quitting; restart callbacks independently enforce availability before commit. Existing supported renderer restart/cancel semantics are preserved.",
+      "sha256": "b9fcc79339db993a109f8cd208396de489d4a8c3f90baa8260d4f007bf7c07f9"
     },
     {
       "path": "indra/cmake/DiligentCore.cmake",
@@ -2940,6 +2945,15 @@
       "record": "I09",
       "disposition": "cpu-only",
       "reason": "CPU-only glyph coverage contract without any GL or native GPU texture ownership; font cache/fallback/shaping integration remains future V3 work."
+    },
+    {
+      "path": "indra/newview/vsrenderbackend.h",
+      "start": 1,
+      "end": 17,
+      "sha256": "9329de632f15a1164b7192075ea612dac4d349505f873ba51552610e645ac73f",
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "Shared renderer identity and normal-session availability policy: Vulkan remains distinct from OpenGL/Zink, but normal native UI/chat sessions are unavailable until implemented. Diagnostic compilation does not enable session admission."
     }
   ]
 }
