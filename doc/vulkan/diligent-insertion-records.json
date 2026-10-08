@@ -1,5 +1,5 @@
 {
-  "source_commit": "dcb74d7a2339da44e28d88c8de55f019dd578f08",
+  "source_commit": "bb1a0840aeaf0c06ed9f8d04430a06032d6a96c1",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -268,7 +268,11 @@
         "indra/newview/llscripteditor",
         "indra/newview/vsuirenderer",
         "indra/newview/vsuiresources",
-        "indra/llui/vsuiadmission"
+        "indra/llui/vsuiadmission",
+        "indra/newview/vsuidrawbridge",
+        "indra/newview/vsuiimageprovider",
+        "indra/newview/vsuifixture",
+        "indra/newview/vsuipixeloracle"
       ],
       "apis": [
         "IDeviceContext::SetScissorRects",
@@ -289,7 +293,7 @@
           "symbol": "void VSUIRenderer::draw"
         }
       ],
-      "responsibility": "Preserve virtual widget traversal, paint order, clipping, scale and image/text generations with native ordered packets and immutable Diligent resources. VSUIResources adapts CPU image publication and the LLUIImage draw facade, including masks/nine-slices. Native construction policy guards generic/custom panel and floater factories before allocation/callbacks. Required XUI allowlists, skin image provider, primitive/matrix/nested clip and input integration remain open.",
+      "responsibility": "Preserve virtual widget traversal, paint order, clipping, scale and image/text generations with native ordered packets and immutable Diligent resources. VSUIResources adapts CPU image publication and the LLUIImage draw facade, including masks/nine-slices. Native construction policy guards generic/custom panel and floater factories before allocation/callbacks. Required XUI allowlists, skin image provider, primitive/matrix/nested clip and input integration remain open. Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed.",
       "contracts": [
         "U01"
       ]
@@ -2897,8 +2901,8 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1,
-      "end": 678,
-      "sha256": "07d8a48ecaaf4f0f613823e0fd1d5cd178d222f1a42c5dac24ff823f432ff7b0",
+      "end": 784,
+      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity. Opt-in V3 fixtures now exercise native UI packets, CPU glyph publication and swapchain readback; normal XUI/login/world bootstrap remains outside this diagnostic."
@@ -2915,8 +2919,8 @@
     {
       "path": "indra/newview/vsuirenderer.cpp",
       "start": 1,
-      "end": 266,
-      "sha256": "20d78932579a33f5b4a6ef4abca154e179bde4946444a0ca35255a67fb0c05f3",
+      "end": 276,
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native viewer UI packet/resource substrate: Diligent immutable texture generations, shared shader and per-state pipeline cache, ordered single-buffer vertex publication, explicit DPI/affine/scissor/sampler/alpha state and GPU-fence retirement. Diagnostic fixtures use these APIs in the viewer lifecycle; existing XUI producers/admission are not yet adapted."
@@ -2924,8 +2928,8 @@
     {
       "path": "indra/newview/vsuirenderer.h",
       "start": 1,
-      "end": 51,
-      "sha256": "fe2e6e7b7848b8555d927ff08848770a6bcc4be5793975091179ecc6733e42fc",
+      "end": 54,
+      "sha256": "dfc5972efbbff92f9133b61d8021bbecae7c71fe43ca96695f2beb75c2ed23bd",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native UI packet and opaque generation ownership contract. No GL resource facade is retained; caller owns target/presentation and idle-at-teardown boundary."
@@ -2960,8 +2964,8 @@
     {
       "path": "indra/newview/vsuirenderer.h",
       "start": 1,
-      "end": 51,
-      "sha256": "fe2e6e7b7848b8555d927ff08848770a6bcc4be5793975091179ecc6733e42fc",
+      "end": 54,
+      "sha256": "dfc5972efbbff92f9133b61d8021bbecae7c71fe43ca96695f2beb75c2ed23bd",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -3041,8 +3045,8 @@
     {
       "path": "indra/newview/vsuiresources.h",
       "start": 1,
-      "end": 34,
-      "sha256": "104202293a44b244a93d3f28d9ce19b30b18c08369634fa36f06e037ad63b2f8",
+      "end": 35,
+      "sha256": "dfddbbd3e818b2abe3ff003dfc30ebfbb679f0620dd72db1901a0d4df32e20cd",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -3086,8 +3090,8 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1,
-      "end": 678,
-      "sha256": "07d8a48ecaaf4f0f613823e0fd1d5cd178d222f1a42c5dac24ff823f432ff7b0",
+      "end": 784,
+      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -3095,8 +3099,8 @@
     {
       "path": "indra/newview/vsuiresources.cpp",
       "start": 1,
-      "end": 255,
-      "sha256": "79866ec3d9b98b13fdbbe2f6d1302d6159a86ab6999d7d1758e58723938528a9",
+      "end": 277,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -3104,8 +3108,8 @@
     {
       "path": "indra/newview/vsuirenderer.cpp",
       "start": 1,
-      "end": 266,
-      "sha256": "20d78932579a33f5b4a6ef4abca154e179bde4946444a0ca35255a67fb0c05f3",
+      "end": 276,
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -3163,6 +3167,744 @@
       "record": "I09",
       "disposition": "mapped",
       "reason": "Reviewed native font producer adaptation: each new atlas captures CPU/GPU backing policy; CPU-only faces rasterize and write LLImageRaw without LLImageGL allocation/upload. Existing LLFontGL geometry, metrics/kerning/fallback/styles are published through an explicit scoped callback. Native publication rejects GL-backed caches and world depth. The default GL producer remains mapped to I09; this file is not CPU-only. Complete XUI/input coverage remains open."
+    },
+    {
+      "path": "indra/llrender/llglstates.h",
+      "start": 32,
+      "end": 33,
+      "sha256": "4928335cfc7c25ad3f58fca4e44b43e8569559b4ae25a846bd46281e4a1587f6",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llglstates.h",
+      "start": 88,
+      "end": 90,
+      "sha256": "4928335cfc7c25ad3f58fca4e44b43e8569559b4ae25a846bd46281e4a1587f6",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llglstates.h",
+      "start": 93,
+      "end": 101,
+      "sha256": "4928335cfc7c25ad3f58fca4e44b43e8569559b4ae25a846bd46281e4a1587f6",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 43,
+      "end": 89,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 167,
+      "end": 168,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 200,
+      "end": 200,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 208,
+      "end": 208,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 300,
+      "end": 300,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 311,
+      "end": 320,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 1829,
+      "end": 1831,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 1840,
+      "end": 1841,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 1848,
+      "end": 1850,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 1859,
+      "end": 1860,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.cpp",
+      "start": 1869,
+      "end": 1873,
+      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.h",
+      "start": 32,
+      "end": 33,
+      "sha256": "48e606993835574ce7bf76e2cfbecb3e4c90b68119950fdec2d8219bdb7dee05",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llrender2dutils.h",
+      "start": 131,
+      "end": 139,
+      "sha256": "48e606993835574ce7bf76e2cfbecb3e4c90b68119950fdec2d8219bdb7dee05",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llbutton.cpp",
+      "start": 943,
+      "end": 943,
+      "sha256": "4a2e43ae18a8e61b35d111b5160e31a9383af09a523c92615df27f49a899d480",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llbutton.cpp",
+      "start": 945,
+      "end": 945,
+      "sha256": "4a2e43ae18a8e61b35d111b5160e31a9383af09a523c92615df27f49a899d480",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llbutton.cpp",
+      "start": 954,
+      "end": 954,
+      "sha256": "4a2e43ae18a8e61b35d111b5160e31a9383af09a523c92615df27f49a899d480",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llbutton.cpp",
+      "start": 956,
+      "end": 956,
+      "sha256": "4a2e43ae18a8e61b35d111b5160e31a9383af09a523c92615df27f49a899d480",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/lllocalcliprect.cpp",
+      "start": 36,
+      "end": 36,
+      "sha256": "c705d224577d2f4c47538ecfc583ec8a09e702c90ad574fbdd14ea0817327634",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/lllocalcliprect.cpp",
+      "start": 42,
+      "end": 42,
+      "sha256": "c705d224577d2f4c47538ecfc583ec8a09e702c90ad574fbdd14ea0817327634",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/lllocalcliprect.cpp",
+      "start": 83,
+      "end": 86,
+      "sha256": "c705d224577d2f4c47538ecfc583ec8a09e702c90ad574fbdd14ea0817327634",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llscrollbar.cpp",
+      "start": 550,
+      "end": 550,
+      "sha256": "3cf919ea06a22a314c6d7be9f7dd1add432a286fc05209669819cf102a670a86",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llscrollbar.cpp",
+      "start": 552,
+      "end": 552,
+      "sha256": "3cf919ea06a22a314c6d7be9f7dd1add432a286fc05209669819cf102a670a86",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llscrollbar.cpp",
+      "start": 571,
+      "end": 571,
+      "sha256": "3cf919ea06a22a314c6d7be9f7dd1add432a286fc05209669819cf102a670a86",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llscrollbar.cpp",
+      "start": 573,
+      "end": 573,
+      "sha256": "3cf919ea06a22a314c6d7be9f7dd1add432a286fc05209669819cf102a670a86",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llscrollcontainer.cpp",
+      "start": 514,
+      "end": 514,
+      "sha256": "7a49312539b532f8be7ace2002ddbf182835233f349fe8482a1ba9ffbccd069c",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/lltextbase.cpp",
+      "start": 502,
+      "end": 502,
+      "sha256": "7425d36a353bc852f95258df538f58ef13d345ca7ea65a6d2346a7f4ae342b0c",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/lltextbase.cpp",
+      "start": 672,
+      "end": 672,
+      "sha256": "7425d36a353bc852f95258df538f58ef13d345ca7ea65a6d2346a7f4ae342b0c",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/lltextbase.cpp",
+      "start": 741,
+      "end": 741,
+      "sha256": "7425d36a353bc852f95258df538f58ef13d345ca7ea65a6d2346a7f4ae342b0c",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/lltextbase.cpp",
+      "start": 843,
+      "end": 843,
+      "sha256": "7425d36a353bc852f95258df538f58ef13d345ca7ea65a6d2346a7f4ae342b0c",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/lltextbase.cpp",
+      "start": 846,
+      "end": 846,
+      "sha256": "7425d36a353bc852f95258df538f58ef13d345ca7ea65a6d2346a7f4ae342b0c",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llviewborder.cpp",
+      "start": 126,
+      "end": 126,
+      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llviewborder.cpp",
+      "start": 160,
+      "end": 161,
+      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llviewborder.cpp",
+      "start": 163,
+      "end": 164,
+      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llviewborder.cpp",
+      "start": 171,
+      "end": 171,
+      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llviewborder.cpp",
+      "start": 222,
+      "end": 224,
+      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llviewborder.cpp",
+      "start": 226,
+      "end": 227,
+      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llviewborder.cpp",
+      "start": 229,
+      "end": 230,
+      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llviewborder.cpp",
+      "start": 232,
+      "end": 233,
+      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llui/llviewborder.cpp",
+      "start": 235,
+      "end": 236,
+      "sha256": "4d3f9fd5219d8564e2936c1b8c8bcc1035b26648aeddb580d4a03872469989af",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuidrawbridge.cpp",
+      "start": 1,
+      "end": 29,
+      "sha256": "6ebc64f7e78927efa143608b060b74d4acc36cbcb67bac512a77e58b92df74ce",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuidrawbridge.h",
+      "start": 1,
+      "end": 17,
+      "sha256": "f3a3b666e27c2f927a6133decfa95d16ffa4b093bb61dc87ab27b1298d90d45a",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 1,
+      "end": 265,
+      "sha256": "4019a95f63738fa89adeeddcfcb7ccd222a40beead29a2df22b56c8885c2abe5",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuifixture.h",
+      "start": 1,
+      "end": 25,
+      "sha256": "f1f68420bbd1662c0b414e94a0be363822847c82b086931dd47ec72e8f678075",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiimageprovider.cpp",
+      "start": 1,
+      "end": 120,
+      "sha256": "f691b60b744c41fb3bfe0c3b0c331227597cd5649d392d6ca511d9a560683a14",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiimageprovider.h",
+      "start": 1,
+      "end": 18,
+      "sha256": "a17cec78b0e38e7ae225b4534541b707ea119ef109dfde89bd4fb79f89445469",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuipixeloracle.cpp",
+      "start": 1,
+      "end": 112,
+      "sha256": "86cbd5cecff88072ef79b4450ce5702b3e0f27f9609c6902bd8398238bf3a510",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuipixeloracle.h",
+      "start": 1,
+      "end": 5,
+      "sha256": "ae39490bcc83cf426ff945bfd5cb35db73f3567f3d74065293ff4449b8ba6c48",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.cpp",
+      "start": 36,
+      "end": 36,
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.cpp",
+      "start": 43,
+      "end": 43,
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.cpp",
+      "start": 66,
+      "end": 66,
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.cpp",
+      "start": 113,
+      "end": 114,
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.cpp",
+      "start": 130,
+      "end": 132,
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.cpp",
+      "start": 146,
+      "end": 146,
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.cpp",
+      "start": 158,
+      "end": 161,
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.cpp",
+      "start": 194,
+      "end": 195,
+      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.h",
+      "start": 17,
+      "end": 17,
+      "sha256": "dfc5972efbbff92f9133b61d8021bbecae7c71fe43ca96695f2beb75c2ed23bd",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.h",
+      "start": 48,
+      "end": 50,
+      "sha256": "dfc5972efbbff92f9133b61d8021bbecae7c71fe43ca96695f2beb75c2ed23bd",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 5,
+      "end": 5,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 17,
+      "end": 26,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 41,
+      "end": 41,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 52,
+      "end": 52,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 57,
+      "end": 57,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 64,
+      "end": 65,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 78,
+      "end": 79,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 170,
+      "end": 170,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 242,
+      "end": 242,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 260,
+      "end": 260,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 266,
+      "end": 266,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 270,
+      "end": 277,
+      "sha256": "7b7a0467fbb8c37da69768c9770e72fd9cacb41b382df990f0efa08cd3a5e515",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.h",
+      "start": 31,
+      "end": 31,
+      "sha256": "dfddbbd3e818b2abe3ff003dfc30ebfbb679f0620dd72db1901a0d4df32e20cd",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 5,
+      "end": 6,
+      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 113,
+      "end": 116,
+      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 131,
+      "end": 134,
+      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 242,
+      "end": 246,
+      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 539,
+      "end": 629,
+      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 665,
+      "end": 665,
+      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 753,
+      "end": 753,
+      "sha256": "b83615dd6517883221feff28301ebb078163c6399e8c2f8fc15ed87fffc958b2",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 118,
+      "end": 119,
+      "sha256": "4019a95f63738fa89adeeddcfcb7ccd222a40beead29a2df22b56c8885c2abe5",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 122,
+      "end": 122,
+      "sha256": "4019a95f63738fa89adeeddcfcb7ccd222a40beead29a2df22b56c8885c2abe5",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     }
   ]
 }

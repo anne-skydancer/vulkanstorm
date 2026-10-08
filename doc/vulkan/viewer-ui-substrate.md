@@ -1,9 +1,10 @@
 # V3: viewer UI resource and packet substrate
 
-Source: `dcb74d7a2339da44e28d88c8de55f019dd578f08` on `vkstorm-vulkan`.
+Source: `bb1a0840aeaf0c06ed9f8d04430a06032d6a96c1` on `vkstorm-vulkan`.
 Status: resource and producer integration underway; full V3 acceptance remains open. This code
-runs in the staged viewer's native diagnostic lifecycle. Existing XUI widget
-construction, focus, IME, scrolling and connected chat are not yet admitted.
+runs in the staged viewer's native diagnostic lifecycle. An initial closed widget set now constructs corrected mini-progress XUI and
+plain editors, with native window input/focus, Tab traversal, scrolling and the
+preeditor contract. Full required-panel admission and connected chat remain open.
 
 ## Implemented ownership and drawing
 
@@ -62,17 +63,18 @@ qualify OS DPI events, keyboard focus or IME.
 
 ## Remaining V3 work
 
-1. Complete skin asset lookup/provider and existing primitive, transform and
-   nested-clip adapters. Image and font producer fixtures alone do not qualify
-   existing widget traversal.
+1. Extend the implemented local skin provider, rectangle/border/transform/clip
+   and alpha/additive adapters to every required control path. Initial widget
+   traversal passes; additional primitives and interaction states remain open.
 2. Define and own the required widget/panel/floater admission sets in the native
-   lifecycle. Gate mechanisms are implemented; fixtures denying every widget
-   do not establish that the required widgets can be safely admitted.
+   lifecycle. An initial fixture set is admitted; the remaining required
+   panels and their internal widget/callback dependencies still need admission.
 3. Admit the login, status/progress, nearby transcript/input and required
    alerts/agreements through the native lifecycle; remove their reachable GL
    resource publication paths.
-4. Qualify focus, keyboard editing, scrolling, platform DPI changes and IME
-   where runners support it. Preserve explicit coverage limits.
+4. Extend the qualified focus, Tab, keyboard editing and scrolling checks to
+   the full admitted interface. Qualify platform DPI changes and OS IME where
+   runners support them; the direct preeditor contract does not qualify OS IME.
 
 Full G-RESOURCE/G-UI closure and V3 exit remain open until these integrations
 and their viewer-level checks pass. Connected transport/login/chat acceptance
@@ -109,8 +111,8 @@ of every path.
 policies. Generic builders, direct floater builders, custom panel builders,
 specialized panel callbacks and restored floater admission check policy before
 construction. Denied floater show requests also stop before validation callbacks.
-With no native owner, the original GL admission behavior is retained. Required
-native allowlists are not implemented yet.
+With no native owner, the original GL admission behavior is retained. A fixture-only allowlist is implemented; the complete required
+native panel/floater policy remains open.
 
 The expanded viewer fixture exercises real TGA encode/decode and image facade
 draws, partial replacement, masks and nine-slice scaling, lazy atlas reuse,
@@ -170,13 +172,60 @@ pixel failures, zero validation errors and complete teardown. The 1x/2x images
 were visually inspected. Local results record executable/font hashes and a
 modified documentation worktree; this is not cross-platform CI qualification.
 
-All 75 related regression tests passed after the catalog refresh. Discovery
+At this earlier checkpoint, all 75 related regression tests passed after the catalog refresh. Discovery
 reconciles 28,338 witnesses in 1,741 files; the boundary manifest hashes 73
 source files. A renderer syntax probe against the Autobuild Linux Diligent
 interfaces passed (with a host `_countof` macro warning); it does not substitute
 for a Linux build or runtime test. The existing dedicated workflow executes the
 expanded cases without changing production CI, release publication or `latest`.
 
-Required XUI construction/traversal, native image-provider asset lookup and
+At that earlier checkpoint, required XUI construction/traversal, native image-provider asset lookup and
 primitive/transform/nested-clip adapters remain open, along with focus, editing,
 scrolling, platform DPI and IME qualification. Full V3 acceptance is not claimed.
+
+## Existing XUI integration checkpoint, 8 October 2026
+
+`VSUIDrawBridge` owns native rectangle, border, matrix and nested clip adapters
+and the existing font producer. Default UI GL state scopes are bypassed only
+inside this explicit owner; packets supply the replacement raster state.
+Button/scrollbar additive and alpha-modulated additive glows have explicit native
+blend pipelines. Legacy GL behavior remains available outside the owner.
+
+`VSUIImageProvider` reads the existing skin texture declarations and overlays,
+decodes their local assets on the CPU and supplies native facades. Clip and
+inner/outer scale declarations are preserved, including collapsed/reversed
+center UV ranges. Missing/invalid assets fail; remote UUID images are excluded
+from this local provider. No GL image or texture producer is constructed.
+
+`VSUIFixture` constructs the unchanged corrected `panel_progress_mini.xml`,
+a real line editor and a read-only plain transcript with its real scroller. Its
+closed type set owns these controls and their internal views/buttons/borders.
+The fixture owns settings, translations, colors, font registry, event recorder
+and UI singleton. Widget-factory defaults are released before borrowed fonts
+and native image assets; partial construction takes the same cleanup route.
+
+Checks cover Unicode/backspace, Tab focus traversal, transcript scrolling and
+preedit installation/cancellation. Queued Win32 or SDL2 character/key/focus
+events must reach the UI owner. These are synthetic native events; OS keyboard
+layout, actual IME composition and platform DPI transitions remain unqualified.
+
+Actual swapchain readback is compared with a CPU triangle/texture/blend oracle
+(`viewer-xui*.ppm`). RGB tolerance is three bytes for interpolation/filter/blend
+rounding; opaque output alpha is exact. The oracle has separate known pixel
+cases for orientation, clips, alpha/additive blending, DPI and shared triangle
+edges. It verifies GPU execution of widget packets, not an independent reference
+for every XUI layout. Required control names, editing/focus/scroll state and
+known additive pixels are checked separately. The earlier independent fixed
+pattern and font publication oracles remain in place.
+
+The full Windows RelWithDebInfo build and complete staging passed. All fourteen
+viewer cases passed on pinned SwiftShader, including `bad-xui` and
+`ui-construction`, with zero Vulkan validation errors and zero XUI pixel
+mismatches. The XUI image was inspected. Local evidence remains separate from
+cross-platform CI and full V3 acceptance. Login/status/required alerts and
+agreements, additional control states, OS DPI/IME and full G-UI/G-RESOURCE
+closure remain open. Normal Vulkan sessions stay unavailable until their
+integration is qualified; connected transport remains V4.
+
+The refreshed source accounting passes with 28,410 witnesses in 1,747 files
+and 90 boundary source hashes. All 76 related regression tests pass.

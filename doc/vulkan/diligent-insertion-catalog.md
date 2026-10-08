@@ -1,7 +1,7 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `dcb74d7a2339da44e28d88c8de55f019dd578f08`. DiligentCore is the selected
+source `bb1a0840aeaf0c06ed9f8d04430a06032d6a96c1`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
@@ -47,8 +47,8 @@ distinguishes actual viewer execution from standalone harness evidence. Native
 UI/chat and world rendering remain unimplemented. The diagnostic source has
 whole-file I02 reviews; affected factory, platform and startup/cleanup ranges
 were re-reviewed and their positions/hashes refreshed. The current generated
-ledger has 28,338 candidates in 1,741 files (19 standalone test-only candidates).
-The UI/chat boundary manifest now covers 73 hashed source files, including the
+ledger has 28,410 candidates in 1,747 files (19 standalone test-only candidates).
+The UI/chat boundary manifest now covers 90 hashed source files, including the
 new diagnostic and its application/window interfaces. Registry admission and
 the complete proposed UI/chat gate set remain implementation requirements.
 Local Windows diagnostic evidence does not establish cross-platform parity.
@@ -291,8 +291,8 @@ and hashes; I03ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“I06 responsibilities are e
 implementation without replacing or reclassifying existing GL producers.
 The [V3 implementation record](viewer-ui-substrate.md) distinguishes deterministic
 viewer fixture acceptance from the still-open XUI/admission and input integration.
-The current ledger has 28,338 candidates in 1,741 files, and the boundary manifest
-covers 73 source hashes. Full UI/chat gates and runtime parity remain open.
+The current ledger has 28,410 candidates in 1,747 files, and the boundary manifest
+covers 90 source hashes. Full UI/chat gates and runtime parity remain open.
 
 The subsequent renderer-selector refresh adds a shared I01 identity/admission
 policy. Preferences preserve Vulkan as a peer option and explain current normal-
@@ -310,10 +310,16 @@ atlas backing. Default GL resources and font behavior remain mapped to their
 existing insertion families; their native branches do not make whole font files
 CPU-only. Construction gates cover generic builders, custom panel callbacks,
 direct floaters and restored floater settings/callback admission. The required
-native XUI policy, image provider, primitives/clips and input remain open.
+native panel/floater policy, additional drawing/interaction states and OS DPI/IME
+remain open. The local provider, corrected mini-progress XUI, editors/scroller
+and native window input/focus now pass in the Windows fixture.
 
-The regenerated ledger has 28,338 witnesses in 1,741 files, with no unmapped or
-unreviewed scoped candidate. The boundary manifest hashes 73 sources. These
+The regenerated ledger has 28,410 witnesses in 1,747 files, with no unmapped or
+unreviewed scoped candidate. The boundary manifest hashes 90 sources. These
 counts qualify current source accounting, not complete V3 execution. See the
 [UI substrate record](viewer-ui-substrate.md) for Windows software-device pixel
 evidence and remaining acceptance work. Fresh cross-platform CI is required.
+
+The XUI refresh also re-reviews I03 primitive/state adapters and I08 ordered
+widget drawing/skin asset ownership, including additive glow blending. The
+source pin is still a source-analysis acceptance; full UI/chat gates are open.
