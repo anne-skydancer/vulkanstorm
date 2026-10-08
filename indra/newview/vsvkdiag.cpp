@@ -76,6 +76,9 @@ void loadedLibraries()
 struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
 {
     LLWindow* window = nullptr;
+#if !LL_WINDOWS
+    Display* native_display = nullptr; // Borrowed from the owned SDL window.
+#endif
     Diligent::IEngineFactoryVk* factory = nullptr;
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice> device;
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context;
@@ -170,6 +173,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             info.subsystem == SDL_SYSWM_X11, "Viewer SDL window is not X11");
         native.WindowId = info.info.x11.window;
         native.pDisplay = info.info.x11.display;
+        native_display = info.info.x11.display;
         native.pXCBConnection = XGetXCBConnection(info.info.x11.display);
         require(native.pXCBConnection != nullptr, "Viewer SDL XCB connection is unavailable");
 #endif
@@ -323,11 +327,25 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             context->SetRenderTargets(0, nullptr, nullptr, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             context->WaitForIdle();
         }
+#if !LL_WINDOWS
+        // Vulkan idle does not drain asynchronous XCB surface requests. In
+        // particular, an unpresented software swapchain may still have queued
+        // shared-memory attachments that must reach X11 before memory retires.
+        if (native_display) XSync(native_display, False);
+#endif
         swapchain.Release(); stages.emplace_back("swapchain-released");
+#if !LL_WINDOWS
+        // Retire the driver's X11 detach/free requests while SDL still owns
+        // the display connection and native window.
+        if (native_display) XSync(native_display, False);
+#endif
         if (window)
         {
             require(LLWindowManager::destroyWindow(window), "Viewer native window destruction failed");
             window = nullptr;
+#if !LL_WINDOWS
+            native_display = nullptr;
+#endif
             delete gKeyboard; gKeyboard = nullptr;
         }
         stages.emplace_back("viewer-window-destroyed");
