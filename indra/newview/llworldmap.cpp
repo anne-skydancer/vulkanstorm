@@ -455,6 +455,11 @@ void LLWorldMap::reloadItems(bool force)
 bool LLWorldMap::insertRegion(U32 x_world, U32 y_world, U16 x_size, U16 y_size, std::string& name, LLUUID& image_id, U32 accesscode, U64 region_flags)
 // </FS:CR> Aurora Sim
 {
+    // Some map replies omit either extent. Preserve valid variable-region
+    // dimensions while giving each missing dimension the standard region size.
+    if (x_size == 0) x_size = REGION_WIDTH_UNITS;
+    if (y_size == 0) y_size = REGION_WIDTH_UNITS;
+
     // This region doesn't exist
     if (accesscode == 255)
     {
