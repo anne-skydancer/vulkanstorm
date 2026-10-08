@@ -1,6 +1,8 @@
 // Native viewer window/device/presentation checkpoint. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "vsvulkandiagnostic.h"
+#include "vsuirenderer.h"
+#include "vsuifont.h"
 #include "llwindow.h"
 #include "llwindowcallbacks.h"
 #include "llkeyboard.h"
@@ -25,6 +27,8 @@
 #include <boost/json.hpp>
 #include <atomic>
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -92,11 +96,15 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     unsigned zero_skips = 0, minimized_skips = 0, resize_events = 0;
     bool quit = false, minimized_observed = false, cleaned = false;
     bool clear_readback_verified = false;
+    bool ui_mode = false, ui_verified = false;
+    unsigned ui_readbacks = 0;
+    std::unique_ptr<VSUIRenderer> ui;
     const std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
 
     explicit Impl(const std::string& directory) : evidence(directory)
     {
         if (const char* value = std::getenv("VS_VULKAN_DIAGNOSTIC_FAIL")) injected = value;
+        ui_mode = std::getenv("VS_VULKAN_DIAGNOSTIC_UI") != nullptr;
         std::filesystem::create_directories(evidence);
         std::filesystem::remove(evidence / "viewer-presentation.json");
     }
@@ -191,6 +199,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         stages.emplace_back("swapchain-created-320x240");
         loadedLibraries();
         inject("after-swapchain");
+        if (ui_mode) ui = std::make_unique<VSUIRenderer>(device, context);
     }
     void render(unsigned width, unsigned height, bool minimized)
     {
@@ -210,6 +219,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             32.f / 255, 48.f / 255, 1.0f};
         context->ClearRenderTarget(target, color, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         if (phase == 4 && phase_frames == 2) verifyClear(target->GetTexture());
+        if (ui_mode && phase == 4 && phase_frames < 2) verifyUI(target, phase_frames == 0 ? 1.f : 2.f);
         swapchain->Present(1);
         ++frames;
     }
@@ -250,6 +260,136 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         require(mismatches == 0, "Viewer clear pixel oracle mismatch");
         clear_readback_verified = true;
     }
+    void verifyUI(Diligent::ITextureView* target, float dpi)
+    {
+        using namespace Diligent;
+        using Pixel = std::array<unsigned char,4>;
+        struct OracleQuad
+        {
+            unsigned width, height;
+            std::vector<unsigned char> bytes;
+            std::array<float,4> bounds, clip;
+            float dx;
+            bool premultiplied = false;
+        };
+        std::vector<VSUIRenderer::Packet> packets;
+        std::vector<OracleQuad> quads;
+        auto rejected = [](auto operation)
+        {
+            bool caught=false;
+            try { operation(); } catch (const std::runtime_error&) { caught=true; }
+            require(caught,"Invalid UI resource request was admitted");
+        };
+        rejected([&]() { ui->upload(0,1,{}); });
+        rejected([&]() { ui->upload(2,2,{0,0,0,255}); });
+        auto add = [&](unsigned w, unsigned h, std::vector<unsigned char> bytes,
+                       std::array<float,4> bounds, std::array<float,4> clip, float dx=0)
+        {
+            VSUIRenderer::Packet p;
+            p.image=ui->upload(w,h,bytes); p.bounds=bounds; p.clip=clip; p.transform[4]=dx;
+            packets.push_back(p); quads.push_back({w,h,std::move(bytes),bounds,clip,dx});
+        };
+        const std::array<float,4> full{0,0,320/dpi,240/dpi};
+        // Asymmetric UV colors, clip and overlap expose origin/order mistakes.
+        add(2,2,{255,0,0,128, 0,255,0,128, 0,0,255,128, 255,255,255,128},
+            {8,8,40,40},{12,10,36,34});
+        std::weak_ptr<const VSUIRenderer::Texture> old_generation=packets[0].image;
+        const auto first_generation=VSUIRenderer::generation(packets[0].image);
+        auto replacement=ui->upload(1,1,{0,255,255,255});
+        require(VSUIRenderer::generation(replacement) > first_generation,"UI texture generation did not advance");
+        add(1,1,{200,20,40,128},{20,16,44,36},full,2);
+        // The replacement is drawn separately; the original queued quad must
+        // still sample its old immutable bytes without a completion wait.
+        VSUIRenderer::Packet next;
+        next.image=replacement; next.bounds={46,8,54,16}; next.clip=full;
+        packets.push_back(next); quads.push_back({1,1,{0,255,255,255},next.bounds,full,0});
+        add(1,1,{100,10,20,128},{8,44,40,56},full);
+        packets.back().blend=VSUIRenderer::Blend::PremultipliedAlpha;
+        quads.back().premultiplied=true;
+        add(1,1,{20,40,200,128},{24,44,48,56},full);
+        packets.back().sampling=VSUIRenderer::Sampling::Linear;
+        VSUIFont font(std::filesystem::path("fonts") / "DejaVuSans.ttf");
+        rejected([&]() { font.rasterize(char32_t(0xd800),18); });
+        rejected([&]() { font.rasterize(U'A',0); });
+        require(font.rasterize(char32_t(0x10ffff),18).index == 0,"Missing UI glyph did not use .notdef");
+        float pen=60;
+        for (char32_t cp : {U'A',U'\u03a9',U'\u0416'})
+        {
+            auto glyph=font.rasterize(cp,18);
+            require(glyph.index && glyph.width && glyph.height,"UI fixture Unicode glyph missing");
+            std::vector<unsigned char> bytes(std::size_t(glyph.width)*glyph.height*4,255);
+            for (std::size_t i=0;i<glyph.coverage.size();++i) bytes[i*4+3]=glyph.coverage[i];
+            const float left=pen+glyph.left, top=32-float(glyph.top);
+            add(glyph.width,glyph.height,std::move(bytes),
+                {left,top,left+glyph.width,top+glyph.height},full);
+            pen+=glyph.advance;
+        }
+        auto small=font.rasterize(U'A',12), large=font.rasterize(U'A',24);
+        require(small.coverage != large.coverage,"UI glyph size replacement did not change raster bytes");
+        std::vector<unsigned char> small_bytes(std::size_t(small.width)*small.height*4,255);
+        for (std::size_t i=0;i<small.coverage.size();++i) small_bytes[i*4+3]=small.coverage[i];
+        add(small.width,small.height,std::move(small_bytes),{88,48,88.f+small.width,48.f+small.height},full);
+        const auto old_glyph_generation=VSUIRenderer::generation(packets.back().image);
+        std::weak_ptr<const VSUIRenderer::Texture> old_glyph=packets.back().image;
+        std::vector<unsigned char> large_bytes(std::size_t(large.width)*large.height*4,255);
+        for (std::size_t i=0;i<large.coverage.size();++i) large_bytes[i*4+3]=large.coverage[i];
+        add(large.width,large.height,std::move(large_bytes),{60,48,60.f+large.width,48.f+large.height},full);
+        require(VSUIRenderer::generation(packets.back().image) > old_glyph_generation,
+            "UI glyph generation did not advance");
+        if (injected == "ui-orientation") packets[0].uv={0,1,1,0};
+        ui->draw(target,320,240,dpi,packets);
+        packets.clear(); replacement.reset(); next.image.reset();
+        require(!old_generation.expired(),"UI packet generation retired before completion");
+        require(!old_glyph.expired(),"UI glyph generation retired before completion");
+        // Read the actual native swapchain image before presentation.
+        auto desc=target->GetTexture()->GetDesc();
+        const bool bgra=desc.Format == TEX_FORMAT_BGRA8_UNORM;
+        desc.Name="Viewer UI readback"; desc.Usage=USAGE_STAGING;
+        desc.BindFlags=BIND_NONE; desc.CPUAccessFlags=CPU_ACCESS_READ;
+        RefCntAutoPtr<ITexture> readback; device->CreateTexture(desc,nullptr,&readback);
+        require(readback != nullptr,"Viewer UI readback allocation failed");
+        context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        CopyTextureAttribs copy{}; copy.pSrcTexture=target->GetTexture(); copy.pDstTexture=readback;
+        copy.SrcTextureTransitionMode=copy.DstTextureTransitionMode=RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        context->CopyTexture(copy); context->WaitForIdle();
+        ui->retire(); require(old_generation.expired(),"UI generation retained beyond explicit retirement");
+        require(old_glyph.expired(),"UI glyph retained beyond fence completion");
+        MappedTextureSubresource mapped{};
+        context->MapTextureSubresource(readback,0,0,MAP_READ,MAP_FLAG_DO_NOT_WAIT,nullptr,mapped);
+        require(mapped.pData != nullptr,"Viewer UI readback mapping failed");
+        const std::string stem=dpi == 1 ? "viewer-ui-1x" : "viewer-ui-2x";
+        std::ofstream actual(evidence/(stem+".ppm"),std::ios::binary);
+        std::ofstream expected(evidence/(stem+"-expected.ppm"),std::ios::binary);
+        actual << "P6\n320 240\n255\n"; expected << "P6\n320 240\n255\n";
+        unsigned mismatches=0;
+        for (unsigned y=0;y<240;++y) for (unsigned x=0;x<320;++x)
+        {
+            Pixel oracle{16,32,48,255};
+            const double lx=(x+0.5)/dpi, ly=(y+0.5)/dpi;
+            for (const auto& q : quads)
+            {
+                if (x < std::floor(q.clip[0]*dpi) || x >= std::ceil(q.clip[2]*dpi) ||
+                    y < std::floor(q.clip[1]*dpi) || y >= std::ceil(q.clip[3]*dpi) ||
+                    lx < q.bounds[0]+q.dx || lx >= q.bounds[2]+q.dx || ly < q.bounds[1] || ly >= q.bounds[3]) continue;
+                const auto tx=unsigned((lx-q.bounds[0]-q.dx)*q.width/(q.bounds[2]-q.bounds[0]));
+                const auto ty=unsigned((ly-q.bounds[1])*q.height/(q.bounds[3]-q.bounds[1]));
+                const auto* src=q.bytes.data()+(std::size_t(ty)*q.width+tx)*4;
+                for (unsigned c=0;c<3;++c)
+                    oracle[c]=static_cast<unsigned char>(std::lround((src[c]*double(q.premultiplied?255:src[3])+oracle[c]*double(255-src[3]))/255));
+            }
+            if (injected == "bad-ui" && x == 0 && y == 0) oracle[0]=255;
+            const auto* pixel=static_cast<const unsigned char*>(mapped.pData)+y*mapped.Stride+x*4;
+            const unsigned char rgb[]{pixel[bgra?2:0],pixel[1],pixel[bgra?0:2]};
+            actual.write(reinterpret_cast<const char*>(rgb),3);
+            expected.write(reinterpret_cast<const char*>(oracle.data()),3);
+            for (unsigned c=0;c<3;++c) if (std::abs(int(rgb[c])-int(oracle[c])) > 2) ++mismatches;
+            if (pixel[3] != 255) ++mismatches;
+        }
+        context->UnmapTextureSubresource(readback,0,0);
+        require(actual.good() && expected.good(),"Cannot write viewer UI readbacks");
+        require(mismatches == 0,"Viewer UI pixel oracle mismatch");
+        ++ui_readbacks; ui_verified=ui_readbacks == 2;
+    }
     bool frame()
     {
         if (!failure.empty()) return true;
@@ -285,6 +425,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             {
                 require(frames == 9 && zero_skips == 3 && minimized_skips == 2,
                     "Viewer lifecycle counters differ");
+                require(!ui_mode || ui_verified,"Viewer UI fixture sequence incomplete");
                 if (injected == "gl-trap") window->swapBuffers();
                 return true;
             }
@@ -327,6 +468,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             context->SetRenderTargets(0, nullptr, nullptr, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             context->WaitForIdle();
         }
+        if (ui) { ui->retire(); ui.reset(); }
 #if !LL_WINDOWS
         // Vulkan idle does not drain asynchronous XCB surface requests. In
         // particular, an unpresented software swapchain may still have queued
@@ -369,6 +511,8 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             {"zero_extent_skips", zero_skips}, {"minimized_skips", minimized_skips},
             {"native_minimize_observed", minimized_observed}, {"resize_events", resize_events},
             {"clear_readback_verified", clear_readback_verified},
+            {"ui_fixture_enabled", ui_mode}, {"ui_readback_verified", ui_verified},
+            {"ui_readbacks", ui_readbacks},
             {"validation_errors", diagnostic_errors.load()}, {"shutdown_complete", cleaned},
             {"passed", failure.empty() && cleaned}, {"failure", failure}};
         std::ofstream output(evidence / "viewer-presentation.json");

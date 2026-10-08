@@ -2261,7 +2261,8 @@ endif()
 
 list(APPEND viewer_SOURCE_FILES ${viewer_HEADER_FILES})
 if(VS_VULKAN_DIAGNOSTICS)
-  list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h)
+    list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h
+         vsuirenderer.cpp vsuirenderer.h vsuifont.cpp vsuifont.h)
 endif()
 
 add_executable(${VIEWER_BINARY_NAME}
@@ -2616,7 +2617,7 @@ endif (WINDOWS)
 
 if(VS_VULKAN_DIAGNOSTICS)
   target_compile_definitions(${VIEWER_BINARY_NAME} PRIVATE VS_VULKAN_DIAGNOSTICS=1)
-  target_link_libraries(${VIEWER_BINARY_NAME} ll::diligentcore ll::vulkan)
+  target_link_libraries(${VIEWER_BINARY_NAME} ll::diligentcore ll::vulkan ll::freetype)
   if(LINUX)
     find_library(VS_X11_XCB_LIBRARY X11-xcb REQUIRED)
     target_link_libraries(${VIEWER_BINARY_NAME} ${VS_X11_XCB_LIBRARY})
