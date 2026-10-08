@@ -1,5 +1,5 @@
 {
-  "source_commit": "f622b9ff1e2c294f3e62a6e4840710d8419b3f64",
+  "source_commit": "3a62bad6cc4de364fa01a47c9dcae402e7b7148a",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "closed-admission-set for future UI/chat; native window/clear and opt-in UI substrate fixtures are implemented; full UI/chat gate contracts remain requirements",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "12b7fbec96a5d598a488cebd331d12c8f71c055dc834c2fb7caccbded1adfbb3",
+      "sha256": "1c71244a7ac79d45a5db4c74301f6c7dc440eae53e3fb81211e914d928323f0a",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -432,6 +432,13 @@
       "anchors": [
         "class VSUIFont",
         "Glyph rasterize"
+      ]
+    },
+    "indra/newview/vsrenderbackend.h": {
+      "sha256": "9329de632f15a1164b7192075ea612dac4d349505f873ba51552610e645ac73f",
+      "anchors": [
+        "normalize",
+        "canStartSession"
       ]
     }
   },
@@ -4802,7 +4809,7 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "f622b9ff1e2c294f3e62a6e4840710d8419b3f64",
+    "source_commit": "3a62bad6cc4de364fa01a47c9dcae402e7b7148a",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
