@@ -26,7 +26,7 @@ using namespace Diligent;
 namespace
 {
 void check(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
-struct Vertex { float x, y, u, v, r, g, b, a; };
+using Vertex=VSUIRenderer::Vertex;
 }
 struct VSUIRenderer::Texture
 {
@@ -38,8 +38,8 @@ struct VSUIRenderer::Impl
 {
     RefCntAutoPtr<IRenderDevice> device;
     RefCntAutoPtr<IDeviceContext> context;
-    RefCntAutoPtr<IShader> vertex, fragment;
-    RefCntAutoPtr<IPipelineState> pipelines[2][2][2]; // format, blend, sampler
+    RefCntAutoPtr<IShader> vertex, fragments[2];
+    RefCntAutoPtr<IPipelineState> pipelines[2][2][2][2]; // format, blend, sampler, mask
     std::uint64_t next_generation = 1;
     struct Submission
     {
@@ -57,12 +57,12 @@ struct VSUIRenderer::Impl
         FenceDesc desc{}; desc.Name="Native UI retirement";
         device->CreateFence(desc,&fence); check(fence != nullptr,"Native UI completion fence creation failed");
     }
-    IPipelineState* pipeline(TEXTURE_FORMAT format, Blend blend, Sampling sampling)
+    IPipelineState* pipeline(TEXTURE_FORMAT format, Blend blend, Sampling sampling,bool mask)
     {
         check(format == TEX_FORMAT_RGBA8_UNORM || format == TEX_FORMAT_BGRA8_UNORM,
               "UI renderer requires an SDR UNORM target");
         auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM]
-            [blend == Blend::PremultipliedAlpha][sampling == Sampling::Linear];
+            [blend == Blend::PremultipliedAlpha][sampling == Sampling::Linear][mask];
         if (result) return result;
         const char* vs = R"(
 layout(location=0) in vec2 position;
@@ -79,14 +79,22 @@ layout(location=0) out vec4 result;
 uniform sampler2D g_Texture;
 void main() { result=texture(g_Texture,texUV)*color; }
 )";
+        const char* mask_fs = R"(
+layout(location=0) in vec2 texUV;
+layout(location=1) in vec4 color;
+layout(location=0) out vec4 result;
+uniform sampler2D g_Texture;
+void main() { result=vec4(color.rgb,texture(g_Texture,texUV).a*color.a); }
+)";
+        auto& fragment=fragments[mask];
         if (!vertex || !fragment)
         {
             ShaderCreateInfo shader{};
             shader.SourceLanguage = SHADER_SOURCE_LANGUAGE_GLSL; shader.GLSLVersion = {4,5};
             shader.EntryPoint = "main"; shader.Desc.UseCombinedTextureSamplers = true;
             shader.Desc.Name = "Native UI vertex"; shader.Desc.ShaderType = SHADER_TYPE_VERTEX; shader.Source = vs;
-            device->CreateShader(shader, &vertex);
-            shader.Desc.Name = "Native UI fragment"; shader.Desc.ShaderType = SHADER_TYPE_PIXEL; shader.Source = fs;
+            if (!vertex) device->CreateShader(shader, &vertex);
+            shader.Desc.Name = "Native UI fragment"; shader.Desc.ShaderType = SHADER_TYPE_PIXEL; shader.Source = mask ? mask_fs : fs;
             device->CreateShader(shader, &fragment);
             check(vertex && fragment, "Native UI shader creation failed");
         }
@@ -134,6 +142,32 @@ VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const 
     return image;
 }
 std::uint64_t VSUIRenderer::generation(const Image& image) { return image ? image->generation : 0; }
+VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y,unsigned width,unsigned height,
+                                         const std::vector<std::uint8_t>& rgba)
+{
+    check(old && old->owner.RawPtr()==mImpl->device.RawPtr(),"Invalid native UI replacement source");
+    auto desc=old->resource->GetDesc();
+    check(width && height && x<=desc.Width && y<=desc.Height && width<=desc.Width-x && height<=desc.Height-y &&
+          rgba.size()==std::size_t(width)*height*4,"Invalid native UI replacement patch");
+    auto image=std::make_shared<Texture>(); image->owner=mImpl->device;
+    desc.Name="Native UI replacement generation"; desc.Usage=USAGE_DEFAULT;
+    mImpl->device->CreateTexture(desc,nullptr,&image->resource);
+    check(image->resource != nullptr,"Native UI replacement allocation failed");
+    // Copy the unmodified atlas/image on the GPU and upload only changed bytes.
+    // Retain both generations until the queued copy and patch have completed.
+    mImpl->submitted.emplace_back(); auto& submission=mImpl->submitted.back();
+    submission.images={old,image};
+    CopyTextureAttribs copy{}; copy.pSrcTexture=old->resource; copy.pDstTexture=image->resource;
+    copy.SrcTextureTransitionMode=copy.DstTextureTransitionMode=RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    mImpl->context->CopyTexture(copy);
+    TextureSubResData data{}; data.pData=rgba.data(); data.Stride=std::uint64_t(width)*4;
+    mImpl->context->UpdateTexture(image->resource,0,0,Box{x,x+width,y,y+height},data,
+        RESOURCE_STATE_TRANSITION_MODE_TRANSITION,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    image->generation=mImpl->next_generation++;
+    submission.completion=mImpl->next_completion++;
+    mImpl->context->EnqueueSignal(mImpl->fence,submission.completion);
+    return image;
+}
 void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, float dpi, const std::vector<Packet>& packets)
 {
     check(target && width && height && std::isfinite(dpi) && dpi > 0, "Invalid native UI target or DPI");
@@ -159,7 +193,26 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
         { double v = std::clamp(double(value)*dpi, 0.0, double(limit)); return int(end ? std::ceil(v) : std::floor(v)); };
         Rect clip{edge(p.clip[0],width,false), edge(p.clip[1],height,false),
                   edge(p.clip[2],width,true), edge(p.clip[3],height,true)};
-        if (clip.right <= clip.left || clip.bottom <= clip.top || p.bounds[2] == p.bounds[0] || p.bounds[3] == p.bounds[1]) continue;
+        if (clip.right <= clip.left || clip.bottom <= clip.top ||
+            (!p.triangles && (p.bounds[2] == p.bounds[0] || p.bounds[3] == p.bounds[1]))) continue;
+        if (p.triangles)
+        {
+            check(vertices.size() <= std::numeric_limits<Uint32>::max()-6,"Native UI vertex count overflow");
+            draws.push_back({&p,clip,Uint32(vertices.size())});
+            for (auto v:*p.triangles)
+            {
+                for (float value: {v.x,v.y,v.u,v.v,v.r,v.g,v.b,v.a})
+                    check(std::isfinite(value),"Non-finite native UI triangle");
+                const auto& t=p.transform;
+                const double x=(double(t[0])*v.x+double(t[2])*v.y+t[4])*dpi;
+                const double y=(double(t[1])*v.x+double(t[3])*v.y+t[5])*dpi;
+                check(std::abs(x*2/width-1)<=std::numeric_limits<float>::max() &&
+                      std::abs(1-y*2/height)<=std::numeric_limits<float>::max(),"Native UI transformed vertex overflow");
+                v.x=float(x*2/width-1);v.y=float(1-y*2/height);
+                vertices.push_back(v);
+            }
+            continue;
+        }
         Vertex corners[4];
         for (unsigned i=0; i<4; ++i)
         {
@@ -191,7 +244,7 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
     for (const auto& draw : draws)
     {
         const auto& p=*draw.packet;
-        auto* pipeline=mImpl->pipeline(desc.Format,p.blend,p.sampling);
+        auto* pipeline=mImpl->pipeline(desc.Format,p.blend,p.sampling,p.alpha_mask);
         RefCntAutoPtr<IShaderResourceBinding> binding; pipeline->CreateShaderResourceBinding(&binding,true);
         check(binding != nullptr,"Native UI resource binding creation failed");
         auto* variable=binding->GetVariableByName(SHADER_TYPE_PIXEL,"g_Texture");

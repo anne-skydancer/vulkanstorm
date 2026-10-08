@@ -31,6 +31,7 @@
 
 // Project includes
 #include "lluiimage.h"
+#include <stdexcept>
 
 LLUIImage::LLUIImage(const std::string& name, LLPointer<LLTexture> image)
 :   mName(name),
@@ -51,21 +52,40 @@ LLUIImage::~LLUIImage()
     delete mImageLoaded;
 }
 
+LLUIImage::LLUIImage(const std::string& name, S32 width, S32 height, native_draw_t draw)
+: mImageLoaded(nullptr), mName(name), mScaleRegion(0.f,1.f,1.f,0.f),
+  mClipRegion(0.f,1.f,1.f,0.f), mScaleStyle(SCALE_INNER), mCachedW(width),
+  mCachedH(height), mNativeDraw(std::move(draw)), mNativeWidth(width), mNativeHeight(height)
+{
+    if (width <= 0 || height <= 0 || !mNativeDraw) throw std::invalid_argument("Invalid native UI image");
+}
+LLPointer<LLTexture> LLUIImage::getImage()
+{
+    if (mNativeDraw) throw std::logic_error("GL texture access on a native UI image");
+    return mImage;
+}
+const LLPointer<LLTexture>& LLUIImage::getImage() const
+{
+    if (mNativeDraw) throw std::logic_error("GL texture access on a native UI image");
+    return mImage;
+}
+
 S32 LLUIImage::getWidth() const
 {
     // return clipped dimensions of actual image area
-    return ll_round((F32)mImage->getWidth(0) * mClipRegion.getWidth());
+    return ll_round((F32)(mNativeDraw ? mNativeWidth : mImage->getWidth(0)) * mClipRegion.getWidth());
 }
 
 S32 LLUIImage::getHeight() const
 {
     // return clipped dimensions of actual image area
-    return ll_round((F32)mImage->getHeight(0) * mClipRegion.getHeight());
+    return ll_round((F32)(mNativeDraw ? mNativeHeight : mImage->getHeight(0)) * mClipRegion.getHeight());
 }
 
 void LLUIImage::draw3D(const LLVector3& origin_agent, const LLVector3& x_axis, const LLVector3& y_axis,
                         const LLRect& rect, const LLColor4& color)
 {
+    if (mNativeDraw) throw std::logic_error("3D drawing is not admitted for native UI images");
     F32 border_scale = 1.f;
     F32 border_height = (1.f - mScaleRegion.getHeight()) * getHeight();
     F32 border_width = (1.f - mScaleRegion.getWidth()) * getWidth();

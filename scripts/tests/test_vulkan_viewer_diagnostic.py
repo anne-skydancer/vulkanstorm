@@ -2,6 +2,9 @@
 import copy
 from pathlib import Path
 import sys
+import shutil
+import subprocess
+import tempfile
 import unittest
 from render_backend_selector_fixture import SelectorTests
 
@@ -20,6 +23,108 @@ def record():
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_restored_floaters_are_denied_before_settings_and_callbacks(self):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler, 'A C++ compiler is required')
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/llui/llfloaterreg.cpp').read_text()
+        start = source.index('void LLFloaterReg::showInitialVisibleInstances()')
+        opening = source.index('{', start); depth = 1; end = opening + 1
+        while depth:
+            depth += (source[end] == '{') - (source[end] == '}'); end += 1
+        fixture = r'''
+#include "vsuiadmission.h"
+#include <cassert>
+#include <map>
+#include <string>
+struct LLSD {};
+struct LLUICtrl { enum { TT_INACTIVE }; };
+int settings_reads=0,callbacks=0,transparency=0;
+struct Settings {
+    bool controlExists(const std::string&) { ++settings_reads;return true; }
+    bool getBOOL(const std::string&) { ++settings_reads;return true; }
+};
+struct LLFloater {
+    static Settings* getControlGroup() { static Settings s;return &s; }
+    void updateTransparency(int) { ++transparency; }
+};
+struct LLFloaterReg {
+    using build_map_t=std::map<std::string,int>;
+    inline static build_map_t sBuildMap{{"media",0},{"agreement",0}};
+    static std::string getVisibilityControlName(const std::string& n) { return n; }
+    static LLFloater* showInstance(const std::string& n,const LLSD&) {
+        ++callbacks;static LLFloater f;return n=="media"?&f:nullptr;
+    }
+    static void showInitialVisibleInstances();
+};
+''' + source[start:end] + r'''
+int main() {
+    {
+        VSUIAdmission admission([](const std::type_info&) { return false; },
+                                [](std::string_view n) { return n=="agreement"; });
+        LLFloaterReg::showInitialVisibleInstances();
+        assert(settings_reads==2 && callbacks==1 && transparency==0);
+    }
+    settings_reads=callbacks=transparency=0;
+    LLFloaterReg::showInitialVisibleInstances();
+    assert(settings_reads==4 && callbacks==2 && transparency==1);
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'restored_floaters.cpp'; path.write_text(fixture)
+            exe = Path(temp) / 'restored_floaters.exe'
+            built = subprocess.run([compiler, '-std=c++17', '-I' + str(root / 'indra/llui'),
+                                    str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_admission_scope_is_exclusive_and_restores_legacy_policy(self):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler, 'A C++ compiler is required')
+        fixture = r'''
+#include "vsuiadmission.h"
+#include <cassert>
+struct Required {};
+struct Optional {};
+int main() {
+    assert(VSUIAdmission::widget(typeid(Optional)));
+    assert(VSUIAdmission::floater("media"));
+    assert(VSUIAdmission::panelFactory("media_panel"));
+    try {
+        VSUIAdmission scope([](const std::type_info& t) { return t==typeid(Required); },
+                            [](std::string_view n) { return n=="agreement"; });
+        assert(VSUIAdmission::widget(typeid(Required)));
+        assert(!VSUIAdmission::widget(typeid(Optional)));
+        assert(VSUIAdmission::floater("agreement"));
+        assert(!VSUIAdmission::floater("media"));
+        assert(!VSUIAdmission::panelFactory("media_panel"));
+        bool rejected=false;
+        try {
+            VSUIAdmission nested([](const std::type_info&) { return true; },
+                                 [](std::string_view) { return true; });
+        } catch (const std::logic_error&) { rejected=true; }
+        assert(rejected && !VSUIAdmission::widget(typeid(Optional)));
+        throw 7;
+    } catch (int) {}
+    assert(VSUIAdmission::widget(typeid(Optional)));
+    assert(VSUIAdmission::floater("media"));
+    assert(VSUIAdmission::panelFactory("media_panel"));
+    bool rejected=false;
+    try { VSUIAdmission incomplete({},[](std::string_view) { return true; }); }
+    catch (const std::logic_error&) { rejected=true; }
+    assert(rejected && VSUIAdmission::widget(typeid(Optional)));
+}
+'''
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / 'admission.cpp'; source.write_text(fixture)
+            exe = Path(temp) / 'admission.exe'
+            built = subprocess.run([compiler, '-std=c++17', '-I' + str(Path(__file__).resolve().parents[2] / 'indra/llui'),
+                                    str(source), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_positive_requires_actual_viewer_contract(self):
         good = record()
         log = 'PASS viewer-native-diagnostic'
@@ -53,9 +158,13 @@ class AcceptanceTests(unittest.TestCase):
         good = record()
         log = 'PASS viewer-native-diagnostic'
         self.assertFalse(assess(good, 0, log, 'ui-positive', 'Windows'))
-        good.update(ui_fixture_enabled=True, ui_readback_verified=True, ui_readbacks=2)
+        good.update(ui_fixture_enabled=True, ui_readback_verified=True, ui_readbacks=2,
+                    ui_facade_verified=True, ui_atlas_verified=True, ui_font_producer_verified=True,
+                    ui_admission_verified=True)
         self.assertTrue(assess(good, 0, log, 'ui-positive', 'Windows'))
-        for key, value in [('ui_readbacks', 1), ('ui_readback_verified', False), ('ui_fixture_enabled', False)]:
+        for key, value in [('ui_readbacks', 1), ('ui_readback_verified', False), ('ui_fixture_enabled', False),
+                           ('ui_facade_verified', False), ('ui_atlas_verified', False),
+                           ('ui_font_producer_verified', False), ('ui_admission_verified', False)]:
             with self.subTest(key=key):
                 bad = copy.deepcopy(good); bad[key] = value
                 self.assertFalse(assess(bad, 0, log, 'ui-positive', 'Windows'))

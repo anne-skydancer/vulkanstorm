@@ -38,6 +38,7 @@
 #include <boost/signals2.hpp>
 
 #include <type_traits>
+#include <functional>
 
 extern const LLColor4 UI_VERTEX_COLOR;
 
@@ -53,6 +54,11 @@ public:
     typedef boost::signals2::signal<void (void)> image_loaded_signal_t;
 
     LLUIImage(const std::string& name, LLPointer<LLTexture> image);
+    using native_draw_t = std::function<void(S32, S32, S32, S32, const LLColor4&,
+                                             bool, const LLRectf&, const LLRectf&, bool)>;
+    // Native UI images own no LLTexture/LLImageGL. The consumer supplies its
+    // packet publisher and natural pixel extent; all draw variants share it.
+    LLUIImage(const std::string& name, S32 width, S32 height, native_draw_t draw);
     virtual ~LLUIImage();
 
     LL_FORCE_INLINE void setClipRegion(const LLRectf& region)
@@ -70,8 +76,8 @@ public:
         mScaleStyle = style;
     }
 
-    LL_FORCE_INLINE LLPointer<LLTexture> getImage() { return mImage; }
-    LL_FORCE_INLINE const LLPointer<LLTexture>& getImage() const { return mImage; }
+    LLPointer<LLTexture> getImage();
+    const LLPointer<LLTexture>& getImage() const;
 
     LL_FORCE_INLINE void draw(S32 x, S32 y, S32 width, S32 height, const LLColor4& color = UI_VERTEX_COLOR) const;
     LL_FORCE_INLINE void draw(S32 x, S32 y, const LLColor4& color = UI_VERTEX_COLOR) const;
@@ -110,6 +116,8 @@ protected:
     EScaleStyle             mScaleStyle;
     mutable S32             mCachedW;
     mutable S32             mCachedH;
+    native_draw_t mNativeDraw;
+    S32 mNativeWidth = 0, mNativeHeight = 0;
 };
 
 #include "lluiimage.inl"

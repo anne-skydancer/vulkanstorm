@@ -30,6 +30,7 @@
 
 
 #include "llcallbackmap.h"
+#include "vsuiadmission.h"
 #include "lluictrl.h"
 #include "llviewborder.h"
 #include "lluiimage.h"
@@ -279,6 +280,7 @@ public:
 
     LLPanel* createPanelClass(std::string_view tag)
     {
+        if (!VSUIAdmission::panelFactory(tag)) return nullptr;
         param_name_map_t::iterator iT =  mPanelClassesNames.find(tag);
         if(iT == mPanelClassesNames.end())
             return 0;
@@ -287,6 +289,7 @@ public:
     template<typename T>
     static T* defaultPanelClassBuilder()
     {
+        if (!VSUIAdmission::widget(typeid(T))) return nullptr;
         T* pT = new T();
         return pT;
     }

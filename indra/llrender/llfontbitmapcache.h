@@ -44,6 +44,8 @@ class LLFontBitmapCache
 {
 public:
     LLFontBitmapCache();
+    static void setDefaultGPUBacking(bool enabled);
+    bool hasGPUBacking() const { return mGPUBacking; }
     ~LLFontBitmapCache();
 
     // Need to call this once, before caching any glyphs.
@@ -69,6 +71,8 @@ protected:
     static U32 getNumComponents(EFontGlyphType bitmap_type);
 
 private:
+    static bool sDefaultGPUBacking;
+    bool mGPUBacking;
     S32 mBitmapWidth = 0;
     S32 mBitmapHeight = 0;
     S32 mCurrentOffsetX[static_cast<U32>(EFontGlyphType::Count)] = { 1 };
