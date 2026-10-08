@@ -41,3 +41,22 @@ remain outside the local execution evidence.
 Integrate through a PR into canary. No release/development/Vulkan branch or
 `latest` update is part of this change. Canary remains a 7.2.5 preview integration
 branch; it is not renamed for an upstream beta tag.
+
+## Post-merge review corrections
+
+PR #134 identified two upstream defects. Voice activation called
+`workerDeployDevices(false)` without the counter increment owned by
+`deployDevices`. Activation now uses that wrapper. Map replies can provide
+zero height; `insertRegion` now normalizes each zero extent independently to
+256 meters before storage and both tracking checks, preserving nonzero
+variable-region extents.
+
+The focused regression launcher compiles the actual production methods into
+device-free task-queue and region-storage fixtures. It covers repeated voice
+enable/disable, a pending module reset overlapping activation, absent devices,
+normal/missing/variable map extents, live/down/nonexistent regions and exclusive
+upper boundaries. Both fixtures compile and fail during execution on the
+original merged source, and pass on the corrected source. All 17 Python tests
+and eight publication tests pass locally; these tests do not exercise physical
+audio devices or a live grid. The focused tests also run in the existing canary
+build workflow before the platform builds.
