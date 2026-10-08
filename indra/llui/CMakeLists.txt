@@ -124,6 +124,7 @@ set(llui_SOURCE_FILES
     
 set(llui_HEADER_FILES
     CMakeLists.txt
+    vsuiadmission.h
 
     fsregistrarutils.h
 

@@ -366,6 +366,7 @@ LLTrace::BlockTimerStatHandle FTM_PANEL_CONSTRUCTION("Panel Construction");
 
 LLView* LLPanel::fromXML(LLXMLNodePtr node, LLView* parent, LLXMLNodePtr output_node)
 {
+    if (!VSUIAdmission::widget(typeid(LLPanel))) return nullptr;
     std::string name("panel");
     node->getAttributeString("name", name);
 
@@ -834,6 +835,7 @@ bool LLPanel::buildFromFile(const std::string& filename, const LLPanel::Params& 
 //-----------------------------------------------------------------------------
 LLPanel* LLPanel::createFactoryPanel(const std::string& name)
 {
+    if (!VSUIAdmission::panelFactory(name)) return nullptr;
     std::deque<const LLCallbackMap::map_t*>::iterator itor;
     for (itor = sFactoryStack.begin(); itor != sFactoryStack.end(); ++itor)
     {

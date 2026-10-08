@@ -31,6 +31,11 @@ void LLUIImage::draw(S32 x, S32 y, const LLColor4& color) const
 
 void LLUIImage::draw(S32 x, S32 y, S32 width, S32 height, const LLColor4& color) const
 {
+    if (mNativeDraw)
+    {
+        mNativeDraw(x,y,width,height,color,false,mClipRegion,mScaleRegion,mScaleStyle == SCALE_INNER);
+        return;
+    }
     gl_draw_scaled_image_with_border(
         x, y,
         width, height,
@@ -44,6 +49,11 @@ void LLUIImage::draw(S32 x, S32 y, S32 width, S32 height, const LLColor4& color)
 
 void LLUIImage::drawSolid(S32 x, S32 y, S32 width, S32 height, const LLColor4& color) const
 {
+    if (mNativeDraw)
+    {
+        mNativeDraw(x,y,width,height,color,true,mClipRegion,mScaleRegion,mScaleStyle == SCALE_INNER);
+        return;
+    }
     gl_draw_scaled_image_with_border(
         x, y,
         width, height,

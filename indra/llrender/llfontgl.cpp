@@ -41,6 +41,7 @@
 #include "lltexture.h"
 #include "lldir.h"
 #include "llstring.h"
+#include <stdexcept>
 
 // Third party library includes
 #include <boost/tokenizer.hpp>
@@ -78,6 +79,13 @@ LLFontGL::LLFontGL()
 
 LLFontGL::~LLFontGL()
 {
+}
+LLFontGL::native_draw_t LLFontGL::sNativeDraw;
+LLFontGL::native_rect_t LLFontGL::sNativeRect;
+void LLFontGL::setNativeDraw(native_draw_t draw,native_rect_t rectangle)
+{
+    sNativeDraw=std::move(draw);sNativeRect=std::move(rectangle);
+    LLFontBitmapCache::setDefaultGPUBacking(!sNativeDraw);
 }
 
 void LLFontGL::reset()
@@ -164,7 +172,9 @@ S32 LLFontGL::render(const LLWString &wstr, S32 begin_offset, F32 x, F32 y, cons
         return 0;
     }
 
-    gGL.getTexUnit(0)->enable(LLTexUnit::TT_TEXTURE);
+    if (sNativeDraw && (mFontFreetype->getFontBitmapCache()->hasGPUBacking() || sCurDepth!=0.f))
+        throw std::logic_error("Native UI text requires CPU-only atlas backing and zero world depth");
+    if (!sNativeDraw) gGL.getTexUnit(0)->enable(LLTexUnit::TT_TEXTURE);
 
     S32 scaled_max_pixels = max_pixels == S32_MAX ? S32_MAX : llceil((F32)max_pixels * sScaleX);
 
@@ -184,15 +194,15 @@ S32 LLFontGL::render(const LLWString &wstr, S32 begin_offset, F32 x, F32 y, cons
         }
     }
 
-    gGL.pushUIMatrix();
+    if (!sNativeDraw) gGL.pushUIMatrix();
 
-    gGL.loadUIIdentity();
+    if (!sNativeDraw) gGL.loadUIIdentity();
 
     LLVector2 origin(floorf(sCurOrigin.mX*sScaleX), floorf(sCurOrigin.mY*sScaleY));
 
     // Depth translation, so that floating text appears 'in-world'
     // and is correctly occluded.
-    gGL.translatef(0.f,0.f,sCurDepth);
+    if (!sNativeDraw) gGL.translatef(0.f,0.f,sCurDepth);
 
     S32 chars_drawn = 0;
     S32 i;
@@ -210,7 +220,7 @@ S32 LLFontGL::render(const LLWString &wstr, S32 begin_offset, F32 x, F32 y, cons
     F32 cur_x, cur_y, cur_render_x, cur_render_y;
 
     // Not guaranteed to be set correctly
-    gGL.setSceneBlendType(LLRender::BT_ALPHA);
+    if (!sNativeDraw) gGL.setSceneBlendType(LLRender::BT_ALPHA);
 
     cur_x = ((F32)x * sScaleX) + origin.mV[VX];
     cur_y = ((F32)y * sScaleY) + origin.mV[VY];
@@ -297,6 +307,22 @@ S32 LLFontGL::render(const LLWString &wstr, S32 begin_offset, F32 x, F32 y, cons
 
     std::pair<EFontGlyphType, S32> bitmap_entry = std::make_pair(EFontGlyphType::Grayscale, -1);
     S32 glyph_count = 0;
+    auto flush=[&]()
+    {
+        if (!glyph_count) return;
+        if (sNativeDraw)
+        {
+            sNativeDraw(font_bitmap_cache->getImageRaw(bitmap_entry.first,bitmap_entry.second),
+                        font_bitmap_cache->getCacheGeneration(),vertices,uvs,colors,glyph_count*6);
+        }
+        else
+        {
+            gGL.begin(LLRender::TRIANGLES);
+            gGL.vertexBatchPreTransformed(vertices,uvs,colors,glyph_count*6);
+            gGL.end();
+        }
+        glyph_count=0;
+    };
     llwchar last_char = wstr[begin_offset];
     for (i = begin_offset; i < begin_offset + length; i++)
     {
@@ -321,18 +347,17 @@ S32 LLFontGL::render(const LLWString &wstr, S32 begin_offset, F32 x, F32 y, cons
             // otherwise the queued glyphs will be taken from wrong textures.
             if (glyph_count > 0)
             {
-                gGL.begin(LLRender::TRIANGLES);
-                {
-                    gGL.vertexBatchPreTransformed(vertices, uvs, colors, glyph_count * 6);
-                }
-                gGL.end();
+                flush();
                 // </FS:Ansariel>
                 glyph_count = 0;
             }
 
             bitmap_entry = next_bitmap_entry;
-            LLImageGL* font_image = font_bitmap_cache->getImageGL(bitmap_entry.first, bitmap_entry.second);
-            gGL.getTexUnit(0)->bind(font_image);
+            if (!sNativeDraw)
+            {
+                LLImageGL* font_image = font_bitmap_cache->getImageGL(bitmap_entry.first, bitmap_entry.second);
+                gGL.getTexUnit(0)->bind(font_image);
+            }
 
             // For some reason it's not enough to compare by bitmap_entry.
             // Issue hits emojis, japenese and chinese glyphs, only on first run.
@@ -360,11 +385,7 @@ S32 LLFontGL::render(const LLWString &wstr, S32 begin_offset, F32 x, F32 y, cons
 
         if (glyph_count >= GLYPH_BATCH_SIZE)
         {
-            gGL.begin(LLRender::TRIANGLES);
-            {
-                gGL.vertexBatchPreTransformed(vertices, uvs, colors, glyph_count * 6);
-            }
-            gGL.end();
+            flush();
 
             glyph_count = 0;
         }
@@ -398,11 +419,7 @@ S32 LLFontGL::render(const LLWString &wstr, S32 begin_offset, F32 x, F32 y, cons
         cur_render_y = cur_y;
     }
 
-    gGL.begin(LLRender::TRIANGLES);
-    {
-        gGL.vertexBatchPreTransformed(vertices, uvs, colors, glyph_count * 6);
-    }
-    gGL.end();
+    flush();
 
 
     if (right_x)
@@ -415,11 +432,19 @@ S32 LLFontGL::render(const LLWString &wstr, S32 begin_offset, F32 x, F32 y, cons
     {
         F32 descender = (F32)llfloor(mFontFreetype->getDescenderHeight());
 
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
-        gGL.begin(LLRender::LINES);
-        gGL.vertex2f(start_x, cur_y - descender);
-        gGL.vertex2f(cur_x, cur_y - descender);
-        gGL.end();
+        if (sNativeDraw)
+        {
+            if (!sNativeRect) throw std::logic_error("Native font underline has no rectangle publisher");
+            sNativeRect(LLRectf(start_x,cur_y-descender+1,cur_x,cur_y-descender),color);
+        }
+        else
+        {
+            gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+            gGL.begin(LLRender::LINES);
+            gGL.vertex2f(start_x, cur_y - descender);
+            gGL.vertex2f(cur_x, cur_y - descender);
+            gGL.end();
+        }
     }
 
     if (draw_ellipses)
@@ -440,7 +465,7 @@ S32 LLFontGL::render(const LLWString &wstr, S32 begin_offset, F32 x, F32 y, cons
                 use_color);
     }
 
-    gGL.popUIMatrix();
+    if (!sNativeDraw) gGL.popUIMatrix();
 
     return chars_drawn;
 }

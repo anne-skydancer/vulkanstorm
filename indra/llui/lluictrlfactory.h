@@ -28,6 +28,7 @@
 #define LLUICTRLFACTORY_H
 
 #include "llfasttimer.h"
+#include "vsuiadmission.h"
 #include "llinitparam.h"
 #include "llregistry.h"
 #include "llxuiparser.h"
@@ -133,6 +134,7 @@ public:
     template<typename T>
     static T* create(typename T::Params& params, LLView* parent = NULL)
     {
+        if (!VSUIAdmission::widget(typeid(T))) return nullptr;
         params.fillFrom(instance().mParamDefaultsMap.obtain<
                         ParamDefaults<typename T::Params, 0> >().get());
 
@@ -150,6 +152,7 @@ public:
     template<typename T>
     static T* createFromFile(const std::string &filename, LLView *parent, const widget_registry_t& registry)
     {
+        if (!VSUIAdmission::widget(typeid(T))) return nullptr;
         T* widget = NULL;
 
         instance().pushFileName(filename);
@@ -184,6 +187,7 @@ fail:
     template<class T>
     static T* getDefaultWidget(std::string_view name)
     {
+        if (!VSUIAdmission::widget(typeid(T))) return nullptr;
         typename T::Params widget_params{};
         widget_params.name = std::string(name);
         return create<T>(widget_params);
@@ -209,6 +213,7 @@ private:
     template<typename T>
     static T* createWidgetImpl(const typename T::Params& params, LLView* parent = NULL)
     {
+        if (!VSUIAdmission::widget(typeid(T))) return nullptr;
         LL_PROFILE_ZONE_SCOPED_CATEGORY_UI;
         T* widget = NULL;
 
@@ -233,6 +238,7 @@ private:
     template<typename T>
     static T* defaultBuilder(LLXMLNodePtr node, LLView *parent, LLXMLNodePtr output_node)
     {
+        if (!VSUIAdmission::widget(typeid(T))) return nullptr;
         LL_PROFILE_ZONE_SCOPED_CATEGORY_UI;
 
         typename T::Params params(getDefaultParams<T>());
@@ -256,7 +262,7 @@ private:
 
         typedef typename T::child_registry_t registry_t;
 
-        createChildren(widget, node, registry_t::instance(), output_node);
+        if (widget) createChildren(widget, node, registry_t::instance(), output_node);
 
         if (widget && !widget->postBuild())
         {

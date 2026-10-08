@@ -51,6 +51,10 @@ def assess(record, code, log, case, system):
                 and 'FAIL viewer-native-diagnostic' in log)
     if case == 'ui-positive' and (record.get('ui_fixture_enabled') is not True or
                                  record.get('ui_readback_verified') is not True or
+                                 record.get('ui_facade_verified') is not True or
+                                 record.get('ui_atlas_verified') is not True or
+                                 record.get('ui_font_producer_verified') is not True or
+                                 record.get('ui_admission_verified') is not True or
                                  record.get('ui_readbacks') != 2):
         return False
     return (code == 0 and record.get('passed') is True and record.get('failure') == ''

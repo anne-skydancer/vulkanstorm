@@ -184,6 +184,7 @@ LLFloater* LLFloaterReg::findInstance(std::string_view name, const LLSD& key)
 //static
 LLFloater* LLFloaterReg::getInstance(std::string_view name, const LLSD& key)
 {
+    if (!VSUIAdmission::floater(name)) return nullptr;
     LLFloater* res = findInstance(name, key);
     if (!res)
     {
@@ -304,6 +305,7 @@ LLFloaterReg::const_instance_list_t& LLFloaterReg::getFloaterList(std::string_vi
 //static
 bool LLFloaterReg::canShowInstance(std::string_view name, const LLSD& key)
 {
+    if (!VSUIAdmission::floater(name)) return false;
     return mValidateSignal(name, key);
 }
 // [/RLVa:KB]
@@ -311,6 +313,7 @@ bool LLFloaterReg::canShowInstance(std::string_view name, const LLSD& key)
 //static
 LLFloater* LLFloaterReg::showInstance(std::string_view name, const LLSD& key, bool focus)
 {
+    if (!VSUIAdmission::floater(name)) return nullptr;
 //  if( sBlockShowFloaters
 //          // see EXT-7090
 //          && sAlwaysShowableList.find(name) == sAlwaysShowableList.end())
@@ -372,6 +375,7 @@ void LLFloaterReg::showInitialVisibleInstances()
     for (build_map_t::iterator iter = sBuildMap.begin(); iter != sBuildMap.end(); ++iter)
     {
         const std::string& name = iter->first;
+        if (!VSUIAdmission::floater(name)) continue;
         std::string controlname = getVisibilityControlName(name);
         if (LLFloater::getControlGroup()->controlExists(controlname))
         {
@@ -381,7 +385,7 @@ void LLFloaterReg::showInitialVisibleInstances()
                 // <FS:Ansariel> Set correct window transparency at login
                 //showInstance(name, LLSD()); // keyed floaters shouldn't set save_vis to true
                 LLFloater* floater = showInstance(name, LLSD());
-                floater->updateTransparency(LLUICtrl::TT_INACTIVE);
+                if (floater) floater->updateTransparency(LLUICtrl::TT_INACTIVE);
                 // </FS:Ansariel>
             }
         }

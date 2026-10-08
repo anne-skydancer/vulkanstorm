@@ -29,7 +29,9 @@
 #include "llgl.h"
 #include "llfontbitmapcache.h"
 
-LLFontBitmapCache::LLFontBitmapCache()
+bool LLFontBitmapCache::sDefaultGPUBacking=true;
+void LLFontBitmapCache::setDefaultGPUBacking(bool enabled) { sDefaultGPUBacking=enabled; }
+LLFontBitmapCache::LLFontBitmapCache() : mGPUBacking(sDefaultGPUBacking)
 
 {
 }
@@ -117,16 +119,19 @@ bool LLFontBitmapCache::nextOpenPos(S32 width, S32& pos_x, S32& pos_y, EFontGlyp
             }
 
             // Make corresponding GL image.
-            mImageGLVec[bitmap_idx].emplace_back(new LLImageGL(image_raw, false, false));
-            LLImageGL* image_gl = getImageGL(bitmap_type, bitmap_num);
+            if (mGPUBacking)
+            {
+                mImageGLVec[bitmap_idx].emplace_back(new LLImageGL(image_raw, false, false));
+                LLImageGL* image_gl = getImageGL(bitmap_type, bitmap_num);
+                gGL.getTexUnit(0)->bind(image_gl);
+                image_gl->setFilteringOption(LLTexUnit::TFO_POINT);
+            }
 
             // Start at beginning of the new image.
             mCurrentOffsetX[bitmap_idx] = 1;
             mCurrentOffsetY[bitmap_idx] = 1;
 
             // Attach corresponding GL texture. (*TODO: is this needed?)
-            gGL.getTexUnit(0)->bind(image_gl);
-            image_gl->setFilteringOption(LLTexUnit::TFO_POINT); // was setMipFilterNearest(true, true);
         }
         else
         {

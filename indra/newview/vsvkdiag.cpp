@@ -3,6 +3,16 @@
 #include "vsvulkandiagnostic.h"
 #include "vsuirenderer.h"
 #include "vsuifont.h"
+#include "vsuiresources.h"
+#include "vsuifontcache.h"
+#include "vsuifontbridge.h"
+#include "llfontgl.h"
+#include "llfontfreetype.h"
+#include "llimage.h"
+#include "llimagetga.h"
+#include "lluictrlfactory.h"
+#include "llfloaterreg.h"
+#include "llpanel.h"
 #include "llwindow.h"
 #include "llwindowcallbacks.h"
 #include "llkeyboard.h"
@@ -98,6 +108,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     bool clear_readback_verified = false;
     bool ui_mode = false, ui_verified = false;
     unsigned ui_readbacks = 0;
+    bool ui_facade_verified=false,ui_atlas_verified=false,ui_font_producer_verified=false,ui_admission_verified=false;
     std::unique_ptr<VSUIRenderer> ui;
     const std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
 
@@ -262,6 +273,23 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     }
     void verifyUI(Diligent::ITextureView* target, float dpi)
     {
+        {
+            // No UI singleton or constructor may be reached through these denied routes.
+            VSUIAdmission admission([](const std::type_info&) { return false; },
+                                    [](std::string_view) { return false; });
+            const auto* panel_builder=LLDefaultChildRegistry::instance().getValue("panel");
+            require(panel_builder && (*panel_builder)({},nullptr,{})==nullptr,
+                    "Denied XUI widget reached construction");
+            require(LLFloaterReg::build<LLFloater>(LLSD())==nullptr,
+                    "Denied direct floater reached construction");
+            require(LLFloaterReg::getInstance("native-denied",LLSD())==nullptr &&
+                    LLFloaterReg::showInstance("native-denied",LLSD(),false)==nullptr &&
+                    !LLFloaterReg::canShowInstance("native-denied",LLSD()),
+                    "Denied floater reached registry callbacks");
+            LLFloaterReg::showInitialVisibleInstances();
+        }
+        require(VSUIAdmission::widget(typeid(LLPanel)) && VSUIAdmission::floater("native-denied"),
+                "Scoped native admission leaked into legacy UI");
         using namespace Diligent;
         using Pixel = std::array<unsigned char,4>;
         struct OracleQuad
@@ -277,7 +305,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         auto rejected = [](auto operation)
         {
             bool caught=false;
-            try { operation(); } catch (const std::runtime_error&) { caught=true; }
+            try { operation(); } catch (const std::exception&) { caught=true; }
             require(caught,"Invalid UI resource request was admitted");
         };
         rejected([&]() { ui->upload(0,1,{}); });
@@ -291,12 +319,115 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         };
         const std::array<float,4> full{0,0,320/dpi,240/dpi};
         // Asymmetric UV colors, clip and overlap expose origin/order mistakes.
-        add(2,2,{255,0,0,128, 0,255,0,128, 0,0,255,128, 255,255,255,128},
-            {8,8,40,40},{12,10,36,34});
+        VSUIResources resources(*ui);
+        LLPointer<LLImageRaw> raw=new LLImageRaw(2,2,4),decoded=new LLImageRaw;
+        const std::vector<unsigned char> pattern{255,0,0,128,0,255,0,128,0,0,255,128,255,255,255,128};
+        std::copy_n(pattern.data()+8,8,raw->getData());std::copy_n(pattern.data(),8,raw->getData()+8);
+        LLPointer<LLImageTGA> tga=new LLImageTGA;
+        require(tga->encode(raw) && tga->decode(decoded),"Viewer CPU image codec failed");
+        resources.publish("decoded",*decoded);
+        auto image=resources.region("decoded","decoded",LLRectf(0,1,1,0),VSUIRenderer::Sampling::Nearest);
+        rejected([&]() { image->getImage(); });
+        resources.begin(320,240,dpi);resources.setClip({12,10,36,34});
+        image->draw(8,int(240/dpi)-40,32,32,LLColor4::white);
+        packets=resources.finish(); require(packets.size()==1,"Native image facade did not publish one packet");
+        quads.push_back({2,2,pattern,{8,8,40,40},{12,10,36,34},0});
         std::weak_ptr<const VSUIRenderer::Texture> old_generation=packets[0].image;
         const auto first_generation=VSUIRenderer::generation(packets[0].image);
         auto replacement=ui->upload(1,1,{0,255,255,255});
         require(VSUIRenderer::generation(replacement) > first_generation,"UI texture generation did not advance");
+        const auto original=resources.generation("decoded");
+        resources.patch("decoded",0,0,1,1,{0,255,255,128});
+        require(resources.generation("decoded")>original,"UI patch did not replace its generation");
+        rejected([&]() { resources.patch("decoded",2,0,1,1,{0,0,0,255}); });
+        resources.begin(320,240,dpi);
+        auto corner=resources.region("decoded","patched-corner",LLRectf(0,1,.5f,.5f),VSUIRenderer::Sampling::Nearest);
+        corner->draw(46,int(240/dpi)-32,8,8,LLColor4::white);
+        image->drawSolid(8,int(240/dpi)-72,16,12,LLColor4(.2f,.6f,.8f,.5f));
+        auto facade_packets=resources.finish();packets.insert(packets.end(),facade_packets.begin(),facade_packets.end());
+        facade_packets.clear();
+        quads.push_back({1,1,{0,255,255,128},{46,24,54,32},full,0});
+        quads.push_back({1,1,{51,153,204,64},{8,60,24,72},full,0});
+        // Nine-slice borders use the same existing LLUIImage scaling facade.
+        LLPointer<LLImageRaw> sliced=new LLImageRaw(3,3,4);
+        std::vector<Pixel> tile;
+        for (unsigned i=0;i<9;++i) tile.push_back(Pixel{static_cast<unsigned char>(20+i*20),80,160,200});
+        for (unsigned y=0;y<3;++y) for (unsigned x=0;x<3;++x)
+            std::copy_n(tile[y*3+x].data(),4,sliced->getData()+((2-y)*3+x)*4);
+        auto nine=resources.publish("nine",*sliced);nine->setScaleRegion(LLRectf(1.f/3,2.f/3,2.f/3,1.f/3));
+        auto nearest=resources.region("nine","nine-region",LLRectf(0,1,1,0),VSUIRenderer::Sampling::Nearest);
+        nearest->setScaleRegion(LLRectf(1.f/3,2.f/3,2.f/3,1.f/3));
+        resources.begin(320,240,dpi);nearest->draw(110,int(240/dpi)-32,16,24,LLColor4::white);
+        facade_packets=resources.finish();require(facade_packets.size()==9,"UI nine-slice did not publish nine quads");
+        packets.insert(packets.end(),facade_packets.begin(),facade_packets.end());facade_packets.clear();
+        const float xs[]{110,111,125,126},ys[]{8,9,31,32};
+        for (unsigned row=0;row<3;++row) for (unsigned col=0;col<3;++col)
+            quads.push_back({1,1,std::vector<unsigned char>(tile[row*3+col].begin(),tile[row*3+col].end()),
+                            {xs[col],ys[row],xs[col+1],ys[row+1]},full,0});
+        VSUIFontCache atlas(resources,std::filesystem::path("fonts")/"DejaVuSans.ttf",32);
+        const auto& cached=atlas.get(U'A',18);const auto page_generation=resources.generation(cached.page);
+        require(&cached==&atlas.get(U'A',18) && atlas.glyphCount()==1 && resources.generation(cached.page)==page_generation,
+            "Native lazy glyph lookup republished a cached glyph");
+        resources.begin(320,240,dpi);
+        cached.image->drawSolid(110,int(240/dpi)-50-int(cached.metrics.height),cached.metrics.width,cached.metrics.height,LLColor4::white);
+        auto glyph_packets=resources.finish();require(glyph_packets.size()==1,"Native cached glyph did not draw");
+        packets.insert(packets.end(),glyph_packets.begin(),glyph_packets.end());glyph_packets.clear();
+        std::vector<unsigned char> glyph_bytes(std::size_t(cached.metrics.width)*cached.metrics.height*4,255);
+        for (std::size_t i=0;i<cached.metrics.coverage.size();++i) glyph_bytes[i*4+3]=cached.metrics.coverage[i];
+        quads.push_back({cached.metrics.width,cached.metrics.height,std::move(glyph_bytes),
+            {110,50,110.f+cached.metrics.width,50.f+cached.metrics.height},full,0});
+        for (char32_t cp=U'B';cp<=U'Z';++cp) atlas.get(cp,18);
+        require(atlas.pageCount()>1,"Native glyph atlas rollover was not exercised");
+        atlas.reset();require(atlas.glyphCount()==0 && atlas.pageCount()==0,"Native glyph atlas reset retained producers");
+        resources.erase("decoded");image=nullptr;corner=nullptr;
+        {
+            VSUIFontBridge bridge(resources);
+            struct ScaleGuard
+            {
+                float x=LLFontGL::sScaleX,y=LLFontGL::sScaleY;
+                ~ScaleGuard() { LLFontGL::sScaleX=x;LLFontGL::sScaleY=y; }
+            } scale;
+            LLFontGL::sScaleX=dpi;LLFontGL::sScaleY=dpi;
+            LLFontGL producer;
+            LLPointer<LLFontFreetype> reference=new LLFontFreetype;
+            require(producer.loadFace("fonts/DejaVuSans.ttf",13.5f,96*dpi,96*dpi,false,0) &&
+                    reference->loadFace("fonts/DejaVuSans.ttf",13.5f,96*dpi,96*dpi,false,0),
+                    "Native viewer font face load failed");
+            resources.begin(320,240,dpi);
+            const auto rendered=producer.renderUTF8("AV\xCE\xA9\xD0\x96",0,32.f,240/dpi-100,LLColor4::white,
+                LLFontGL::LEFT,LLFontGL::BASELINE,LLFontGL::NORMAL,LLFontGL::NO_SHADOW);
+            require(rendered==4,"Native viewer font producer did not render its text");
+            require(producer.renderUTF8("B",0,130.f,240/dpi-100,LLColor4::white,
+                LLFontGL::LEFT,LLFontGL::BASELINE,LLFontGL::NORMAL,LLFontGL::NO_SHADOW)==1,
+                "Native viewer lazy atlas update did not render its text");
+            auto font_packets=resources.finish();
+            require(!font_packets.empty(),"Native viewer font producer emitted no geometry");
+            require(VSUIRenderer::generation(font_packets.front().image)<
+                    VSUIRenderer::generation(font_packets.back().image),
+                    "Native viewer atlas update did not replace its GPU generation");
+            packets.insert(packets.end(),font_packets.begin(),font_packets.end());font_packets.clear();
+            float pen=32*dpi;
+            const std::array<llwchar,5> text{'A','V',0x03a9,0x0416,'B'};
+            for (std::size_t character=0;character<text.size();++character)
+            {
+                const auto cp=text[character];
+                if (character==4) pen=130*dpi;
+                const auto* glyph=reference->getGlyphInfo(cp,EFontGlyphType::Grayscale);
+                const auto* bitmap=reference->getFontBitmapCache()->getImageRaw(glyph->mBitmapEntry.first,glyph->mBitmapEntry.second);
+                std::vector<unsigned char> bytes(std::size_t(glyph->mWidth)*glyph->mHeight*4,255);
+                for (int y=0;y<glyph->mHeight;++y) for (int x=0;x<glyph->mWidth;++x)
+                    bytes[(std::size_t(y)*glyph->mWidth+x)*4+3]=bitmap->getData()[
+                        ((std::size_t(glyph->mYBitmapOffset+glyph->mHeight-1-y)*bitmap->getWidth())+glyph->mXBitmapOffset+x)*2+1];
+                const float left=std::round(pen+glyph->mXBearing)/dpi,top=100-std::round(float(glyph->mYBearing))/dpi;
+                quads.push_back({unsigned(glyph->mWidth),unsigned(glyph->mHeight),std::move(bytes),
+                    {left,top,left+glyph->mWidth/dpi,top+glyph->mHeight/dpi},full,0});
+                pen+=glyph->mXAdvance;
+                if (character<3)
+                    pen+=reference->getXKerning(glyph,reference->getGlyphInfo(text[character+1],EFontGlyphType::Grayscale));
+                pen=std::round(pen);
+            }
+            require(!gGLManager.mInited,"Existing font producer entered GL initialization");
+        }
         add(1,1,{200,20,40,128},{20,16,44,36},full,2);
         // The replacement is drawn separately; the original queued quad must
         // still sample its old immutable bytes without a completion wait.
@@ -388,6 +519,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         context->UnmapTextureSubresource(readback,0,0);
         require(actual.good() && expected.good(),"Cannot write viewer UI readbacks");
         require(mismatches == 0,"Viewer UI pixel oracle mismatch");
+        ui_facade_verified=true;ui_atlas_verified=true;ui_font_producer_verified=true;ui_admission_verified=true;
         ++ui_readbacks; ui_verified=ui_readbacks == 2;
     }
     bool frame()
@@ -513,6 +645,9 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             {"clear_readback_verified", clear_readback_verified},
             {"ui_fixture_enabled", ui_mode}, {"ui_readback_verified", ui_verified},
             {"ui_readbacks", ui_readbacks},
+            {"ui_facade_verified",ui_facade_verified},{"ui_atlas_verified",ui_atlas_verified},
+            {"ui_font_producer_verified",ui_font_producer_verified},
+            {"ui_admission_verified",ui_admission_verified},
             {"validation_errors", diagnostic_errors.load()}, {"shutdown_complete", cleaned},
             {"passed", failure.empty() && cleaned}, {"failure", failure}};
         std::ofstream output(evidence / "viewer-presentation.json");

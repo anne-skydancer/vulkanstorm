@@ -34,6 +34,7 @@
 #include "llpointer.h"
 #include "llrect.h"
 #include "v2math.h"
+#include <functional>
 
 class LLColor4;
 // Key used to request a font.
@@ -81,6 +82,10 @@ public:
 
     LLFontGL();
     ~LLFontGL();
+    using native_draw_t=std::function<void(LLImageRaw*,S32,const LLVector4a*,const LLVector2*,const LLColor4U*,S32)>;
+    using native_rect_t=std::function<void(const LLRectf&,const LLColor4&)>;
+    static void setNativeDraw(native_draw_t draw,native_rect_t rectangle={});
+    static bool hasNativeDraw() { return bool(sNativeDraw); }
 
 
     void reset(); // Reset a font after GL cleanup.  ONLY works on an already loaded font.
@@ -241,6 +246,8 @@ public:
     static std::string sAppDir;         // For loading fonts
 
 private:
+    static native_draw_t sNativeDraw;
+    static native_rect_t sNativeRect;
     friend class LLFontRegistry;
     friend class LLTextBillboard;
     friend class LLHUDText;
