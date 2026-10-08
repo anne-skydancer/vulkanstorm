@@ -1,9 +1,9 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-Source: `8435085e8c141b449b58bc51b9d2f2c415b4b2ce` on `vkstorm-vulkan`.
-Status: implemented development diagnostic; local Windows SwiftShader execution
-passed. Updated Windows/Linux CI and artifact review remain required for
-cross-platform acceptance. No UI/chat or world rendering acceptance is claimed.
+Source: `a7cb86e1f64fbb79cb75cdd39185d91511627cd0` on `vkstorm-vulkan`.
+Status: implemented development diagnostic. Windows SwiftShader and Linux
+Lavapipe CI passed; Linux SwiftShader teardown correction requires a new CI run.
+No UI/chat or world rendering acceptance is claimed.
 
 The first CI run passed the Windows build and native viewer diagnostic. Its
 Linux Lavapipe viewer build failed because the diagnostic used unqualified SDL
@@ -19,7 +19,23 @@ is undefined on Linux. A local Clang syntax probe using the pinned SDK's Linux
 interfaces passed with all four conflicting macros defined, verified Diligent
 structure sizes and the readback mapping signature, and checked that the
 platform macros were restored. This is a header compatibility check on Windows;
-the complete Linux viewer build and execution still require CI evidence.
+full Linux acceptance subsequently reached the runtime stage described below.
+
+CI run [37683689649](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37683689649)
+passed all viewer cases on Windows SwiftShader and Linux Lavapipe. Linux
+SwiftShader passed eight cases but exited with X11 `BadAccess` during the
+`after-swapchain` fault case, before writing lifecycle evidence. The archived
+log identifies extension opcode 130, minor opcode 1; the pinned SwiftShader XCB
+surface implementation queues MIT-SHM attachments asynchronously and removes
+their local mappings during swapchain destruction. The evidence and source
+indicate an attachment/retirement race for an unpresented swapchain.
+
+Diagnostic cleanup now performs an X11 round trip before releasing swapchain
+resources, then drains detach/free requests before destroying the owned SDL
+window. Vulkan device idle alone does not synchronize the X server. The display
+connection remains borrowed from SDL; cleanup does not close it independently.
+Unexpected X11 errors remain fatal. Acceptance of the correction requires
+Linux SwiftShader CI, including the unchanged early teardown fault case.
 
 ## Implemented integration
 
@@ -70,7 +86,8 @@ prove that expected errors reach the process exit and CI runner while owned
 cleanup completes. These are application fault injections, not claims of actual
 driver device-loss or OS allocation-failure qualification.
 
-Shutdown unbinds targets, waits for submitted work, releases the swapchain,
+Shutdown unbinds targets, waits for submitted work and pending X11 requests,
+releases the swapchain and drains its X11 retirement requests,
 destroys the native viewer window (joining its Win32 thread), then releases
 device/context ownership. JSON lifecycle evidence and module mappings are
 required. Missing validation, wrong selected device/library, crashes, timeouts,
