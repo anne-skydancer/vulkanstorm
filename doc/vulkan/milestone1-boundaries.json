@@ -1,8 +1,8 @@
 {
-  "source_commit": "a7cb86e1f64fbb79cb75cdd39185d91511627cd0",
+  "source_commit": "f622b9ff1e2c294f3e62a6e4840710d8419b3f64",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
-  "policy": "closed-admission-set for future UI/chat; a separate native window/clear diagnostic is implemented; full UI/chat gate contracts remain requirements",
+  "policy": "closed-admission-set for future UI/chat; native window/clear and opt-in UI substrate fixtures are implemented; full UI/chat gate contracts remain requirements",
   "gates": [
     "G-AUX",
     "G-BACKEND",
@@ -341,17 +341,19 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "0884dbca3d78b2ee644fd5ed41fe699ba5e079805b971734b15e67c2fb735433",
+      "sha256": "e95c22f30906628a44fc9f5bce2f398734d5d3285acf1c5c13f96dd652b50a03",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
         "CreateSwapChainVk",
         "WaitForIdle",
-        "destroyWindow"
+        "destroyWindow",
+        "verifyUI",
+        "ui_readback_verified"
       ]
     },
     "indra/newview/vsvulkandiagnostic.h": {
-      "sha256": "0d22ef97c9c5b16265ad665c0fe195fa6efa566a3e7ac0a2847447d4af5f45e6",
+      "sha256": "a9bd113c937932fe3d70ad7fc390ba521c86f844917a4b2ff4656035c192d70c",
       "anchors": [
         "class VSVulkanDiagnostic",
         "initialize",
@@ -398,6 +400,38 @@
       "anchors": [
         "mUseGL",
         "createNativeWindow"
+      ]
+    },
+    "indra/newview/vsuirenderer.cpp": {
+      "sha256": "5cbbf064fb57dbd46e45a477572df0ebf33a440a7735fbde1d74270ffd71d9c0",
+      "anchors": [
+        "VSUIRenderer::upload",
+        "VSUIRenderer::draw",
+        "EnqueueSignal",
+        "GetCompletedValue"
+      ]
+    },
+    "indra/newview/vsuirenderer.h": {
+      "sha256": "095aa030781815bf16d3c7c3ea48e1497e36c87547d766ea77950221c832ce2f",
+      "anchors": [
+        "class VSUIRenderer",
+        "struct Packet",
+        "using Image"
+      ]
+    },
+    "indra/newview/vsuifont.cpp": {
+      "sha256": "87d5531d43d3eeaec1021942377651d17e684ce3038c8dde13c9e7ba22ddff69",
+      "anchors": [
+        "VSUIFont::rasterize",
+        "FT_New_Memory_Face",
+        "FT_Render_Glyph"
+      ]
+    },
+    "indra/newview/vsuifont.h": {
+      "sha256": "5e91dfc602781b1da218d78b8bf0f7a17e3306213fc4c73c351454f049a63493",
+      "anchors": [
+        "class VSUIFont",
+        "Glyph rasterize"
       ]
     }
   },
@@ -4768,7 +4802,7 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "a7cb86e1f64fbb79cb75cdd39185d91511627cd0",
+    "source_commit": "f622b9ff1e2c294f3e62a6e4840710d8419b3f64",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
