@@ -1,5 +1,5 @@
 {
-  "source_commit": "8435085e8c141b449b58bc51b9d2f2c415b4b2ce",
+  "source_commit": "a7cb86e1f64fbb79cb75cdd39185d91511627cd0",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -2880,8 +2880,8 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1,
-      "end": 381,
-      "sha256": "9a018515b774b384ac3ea81585457d53e69b1ebec00f578d0c94a1a2efc59bcb",
+      "end": 399,
+      "sha256": "0884dbca3d78b2ee644fd5ed41fe699ba5e079805b971734b15e67c2fb735433",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity."

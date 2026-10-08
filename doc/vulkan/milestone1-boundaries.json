@@ -1,5 +1,5 @@
 {
-  "source_commit": "8435085e8c141b449b58bc51b9d2f2c415b4b2ce",
+  "source_commit": "a7cb86e1f64fbb79cb75cdd39185d91511627cd0",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "closed-admission-set for future UI/chat; a separate native window/clear diagnostic is implemented; full UI/chat gate contracts remain requirements",
@@ -341,7 +341,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "9a018515b774b384ac3ea81585457d53e69b1ebec00f578d0c94a1a2efc59bcb",
+      "sha256": "0884dbca3d78b2ee644fd5ed41fe699ba5e079805b971734b15e67c2fb735433",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -4768,11 +4768,11 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "8435085e8c141b449b58bc51b9d2f2c415b4b2ce",
+    "source_commit": "a7cb86e1f64fbb79cb75cdd39185d91511627cd0",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
     "world_implemented": false,
-    "qualification": "Local Windows SwiftShader; cross-platform CI pending"
+    "qualification": "Windows SwiftShader and Linux Lavapipe CI passed; Linux SwiftShader early teardown correction pending CI"
   }
 }
