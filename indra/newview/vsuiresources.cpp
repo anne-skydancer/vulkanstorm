@@ -272,6 +272,11 @@ void VSUIResources::screenClip(const LLRect* rect)
     auto& c=*mImpl;check(c.active,"Native clipping outside collection");
     if (!rect) { c.clip={0,0,c.logical_width,c.logical_height};return; }
     if (rect->isEmpty()) { c.clip={0,0,0,0};return; }
-    c.clip={float(rect->mLeft),c.logical_height-rect->mTop-1,
-            float(rect->mRight)+1.f,c.logical_height-rect->mBottom};
+    // Match the existing UI scissor convention: round the physical origin down,
+    // round its extent up and include one extra physical pixel on the far edges.
+    // Adding a logical pixel instead over-expands clips at high DPI.
+    const float left=std::floor(rect->mLeft*c.dpi),bottom=std::floor(rect->mBottom*c.dpi);
+    const float right=left+std::ceil(rect->getWidth()*c.dpi)+1.f;
+    const float top=bottom+std::ceil(rect->getHeight()*c.dpi)+1.f;
+    c.clip={left/c.dpi,c.logical_height-top/c.dpi,right/c.dpi,c.logical_height-bottom/c.dpi};
 }

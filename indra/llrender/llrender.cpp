@@ -27,6 +27,8 @@
 #include "linden_common.h"
 
 #include "llrender.h"
+#include "llrender2dutils.h"
+#include <stdexcept>
 
 #include "llvertexbuffer.h"
 #include "llcubemap.h"
@@ -1571,6 +1573,8 @@ void LLRender::endList()
 
 void LLRender::begin(const GLuint& mode)
 {
+    if (LLRender2D::isNativeUI())
+        throw std::logic_error("GL geometry in native UI owner");
     if (mode != mMode)
     {
         if (mMode == LLRender::LINES ||
