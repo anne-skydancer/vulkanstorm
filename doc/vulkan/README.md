@@ -36,7 +36,7 @@ GL/Zink is a **GL backend**, created for AMD GPUs affected by rendering
 regressions caused by bugs in the AMD OpenGL ICD. Its use of Vulkan for driver
 translation does not make it a native Vulkan viewer backend or a Vulkan fallback.
 
-Current insertion-catalog baseline: **`3a62bad6cc4de364fa01a47c9dcae402e7b7148a`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; its original nine cases passed all three CI platforms in run 37742422223. The
+Current insertion-catalog baseline: **`dcb74d7a2339da44e28d88c8de55f019dd578f08`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; its original nine cases passed all three CI platforms in run 37742422223. The
 [V3 UI substrate](viewer-ui-substrate.md) now implements native packets and CPU
 font/GPU resource publication; widget admission, full UI/chat and world
 rendering remain open.
@@ -64,7 +64,7 @@ native viewer rendering. The old 73-record assessment does not establish all
 insertion points. Acceptance requires the [insertion catalog](diligent-insertion-catalog.md),
 its [records](diligent-insertion-records.json) and [site ledger](diligent-insertion-sites.csv)
 to reconcile the current tracked source and transitive rendering responsibilities.
-The current ledger reconciles **28,307 source witnesses in 1,737 files**, all
+The current ledger reconciles **28,338 source witnesses in 1,741 files**, all
 **225 shader modules** and **690 historical registration rows**, with no
 unmapped or unreviewed entries. These are source-accounting counts, not counts
 of edits or features. Source-reviewed roots, callback obligations, interface
