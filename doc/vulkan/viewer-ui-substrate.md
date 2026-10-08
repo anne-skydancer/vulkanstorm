@@ -1,6 +1,6 @@
 # V3: viewer UI resource and packet substrate
 
-Source: `e1689fbb8848553753faf22042943bb9234b521e` on `vkstorm-vulkan`.
+Source: `8f2304bfafcaecf0d6aea3393d88b378887fe3d5` on `vkstorm-vulkan`.
 Status: resource and producer integration underway; full V3 acceptance remains open. This code
 runs in the staged viewer's native diagnostic lifecycle. An initial closed widget set now constructs corrected mini-progress XUI and
 plain editors, with native window input/focus, Tab traversal, scrolling and the
@@ -266,3 +266,62 @@ states, general native lifecycle admission and platform DPI/IME qualification.
 The earlier resource/font producer checkpoint passed all three software CI
 platforms in [run 37796771010](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37796771010);
 that run does not qualify these later XUI/input changes.
+
+## Shared native UI owner and skin checkpoint, 8 October 2026
+
+`VSUIContext` now owns the native drawing bridge, image provider, UI singleton,
+root, widget defaults, translations, color table and CPU-backed font registry.
+Its caller supplies settings and the native window; those borrowed objects and
+native resources must outlive the owner. An explicit caller admission policy
+must be installed before UI construction. Teardown releases controls and
+factory defaults before fonts, facades and the drawing bridge, including after
+partial construction. This replaces fixture-owned bootstrap with a reusable
+viewer component. The native UI/resource sources compile whenever
+`USE_DILIGENTCORE=ON`; diagnostic fixtures and readback oracles still require
+`VS_VULKAN_DIAGNOSTICS=ON`.
+
+Skin selection comes from `SkinCurrent`, `SkinCurrentTheme`, language and font
+settings. Existing `LLDir` paths resolve base, selected skin, theme, translated
+XUI and user overlays; existing texture declarations, colors and widget defaults
+are used. The editor retains the skin's text-field image together with its text
+colors. Forcing a solid background in the fixture made high-contrast text
+unreadable and has been removed. Skin/theme selection is initialized with the UI
+owner; live skin switching within an existing owner is not qualified.
+
+The staged runner enumerates every entry in `skins/skins.xml`, requires the
+listed skin/theme directories, and verifies the actual selected
+skin/theme/language in lifecycle evidence. Twenty-two catalog selections, the
+base default skin and its German XUI overlay each run the existing fixture,
+input checks and GPU readback oracle. The fifteen presentation/UI/failure cases
+remain mandatory. This qualifies skin resolution and rendering for the admitted
+controls, not every panel/control state in every skin. Required login, status,
+alerts, agreements and their media/resource dependencies remain open.
+
+The previous pointer/XUI CI [run 37822981181](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37822981181)
+passed Windows and failed both Linux jobs. Linux enabled font vertex collection,
+which entered `LLRender::beginList` before native glyph publication.
+`LLFontVertexBuffer::render` now bypasses both GL display-list construction and
+replay while the native font owner is active. A regression executes the actual
+cache implementation with stubbed GPU/font endpoints, including a populated GL
+cache followed by native publication and return to ordinary GL caching. The
+native atlas still caches glyphs. The Win32 button-down callback also uses its
+message's captured client coordinates rather than the cursor position from a
+later poll; its actual queued callback has a regression check.
+
+Local Windows qualification: the full Autobuild-backed RelWithDebInfo viewer
+build and complete staging passed. All 39 SwiftShader cases passed, with zero
+validation errors and zero XUI pixel mismatches. Representative default,
+high-contrast, Starlight and German readbacks were inspected. Evidence is in
+`.tmp/viewer-vulkan-skins-local`; it records executable/library hashes and the
+modified source worktree. This is local development evidence. Cross-platform
+runtime qualification of the Linux font correction awaits the dedicated CI.
+All 81 related regression tests pass after source-accounting refresh.
+
+Normal Vulkan startup still fails closed through `VSRenderBackend::canStartSession`.
+The new owner currently has a diagnostic consumer; extracting it does not wire
+the normal session. Next, give a native session owner the existing viewer
+settings/window and Diligent resource lifetimes, connect normal frame/reshape
+and input callbacks, then admit the required startup panels and their callbacks.
+Only open normal-session admission after that path passes lifecycle, resource,
+UI, DPI and platform-input qualification. Full V3, connected UI/chat and world
+rendering remain unqualified.

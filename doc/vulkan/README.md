@@ -36,11 +36,13 @@ GL/Zink is a **GL backend**, created for AMD GPUs affected by rendering
 regressions caused by bugs in the AMD OpenGL ICD. Its use of Vulkan for driver
 translation does not make it a native Vulkan viewer backend or a Vulkan fallback.
 
-Current insertion-catalog baseline: **`e1689fbb8848553753faf22042943bb9234b521e`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; its original nine cases passed all three CI platforms in run 37742422223. The
+Current insertion-catalog baseline: **`8f2304bfafcaecf0d6aea3393d88b378887fe3d5`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; its original nine cases passed all three CI platforms in run 37742422223. The
 [V3 UI substrate](viewer-ui-substrate.md) now implements native packets and CPU
 font/GPU resource publication, corrected mini-progress XUI, native text editing
-and window focus/input delivery. Full required-panel admission, UI/chat and world
-rendering remain open.
+and window focus/input delivery. A shared native UI owner preserves selected
+skin/theme/language/font settings; 24 skin fixture cases supplement the existing
+15 cases. Normal-session wiring, full required-panel admission, UI/chat and
+world rendering remain open.
 
 Historical comparative audit baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Its mandate compared suitable architectures, including native Vulkan and general graphics abstractions. Those reports contain no runtime measurements, GPU captures, native implementation or build qualification.
 
@@ -65,7 +67,7 @@ native viewer rendering. The old 73-record assessment does not establish all
 insertion points. Acceptance requires the [insertion catalog](diligent-insertion-catalog.md),
 its [records](diligent-insertion-records.json) and [site ledger](diligent-insertion-sites.csv)
 to reconcile the current tracked source and transitive rendering responsibilities.
-The current ledger reconciles **28,415 source witnesses in 1,747 files**, all
+The current ledger reconciles **28,422 source witnesses in 1,748 files**, all
 **225 shader modules** and **690 historical registration rows**, with no
 unmapped or unreviewed entries. These are source-accounting counts, not counts
 of edits or features. Source-reviewed roots, callback obligations, interface
