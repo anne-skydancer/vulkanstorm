@@ -972,7 +972,7 @@
          left="10"
          name="render_backend"
          top_pad="8"
-         tool_tip="Selects the render backend used to draw the viewer. Mesa/Zink runs the OpenGL pipeline over the bundled Mesa runtime on Vulkan. Changing the renderer requires shutting down and restarting the viewer."
+         tool_tip="OpenGL and native Vulkan are peer renderers. Mesa/Zink is an OpenGL provider for affected AMD drivers. Native Vulkan sessions are still in development. Changing an available renderer requires shutting down and restarting the viewer."
          width="180">
             <combo_box.item
              label="OpenGL"
@@ -983,8 +983,7 @@
              name="Zink"
              value="Zink" />
             <combo_box.item
-             enabled="false"
-             label="Vulkan (not available yet)"
+             label="Vulkan (in development)"
              name="Vulkan"
              value="Vulkan" />
         </combo_box>

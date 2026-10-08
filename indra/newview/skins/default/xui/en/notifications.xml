@@ -1726,6 +1726,14 @@ Would you like to shutdown the viewer and launch it manually again in order to a
 
   <notification
    icon="alertmodal.tga"
+   name="VulkanRendererUnavailable"
+   type="alertmodal">
+Native Vulkan is still in development and cannot run a normal viewer session yet. Your renderer selection has not changed.
+    <usetemplate name="okbutton" />
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
    name="ChangeRenderBackend"
    type="alertmodal">
 The renderer will be switched to [BACKEND] after restarting [APP_NAME].

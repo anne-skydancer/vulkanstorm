@@ -3,6 +3,7 @@ import copy
 from pathlib import Path
 import sys
 import unittest
+from render_backend_selector_fixture import SelectorTests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from run_vulkan_viewer_diagnostic import assess, STAGES
