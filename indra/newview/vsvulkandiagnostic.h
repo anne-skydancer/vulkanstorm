@@ -1,4 +1,5 @@
-// Vulkanstorm development diagnostic; no UI/world initialization is admitted.
+// Vulkanstorm development diagnostic; scripted UI fixtures are opt-in.
+// Normal XUI/login/world initialization remains outside this checkpoint.
 #pragma once
 #include <memory>
 #include <string>

@@ -48,6 +48,21 @@ class AcceptanceTests(unittest.TestCase):
         good['native_minimize_observed'] = None
         self.assertFalse(assess(good, 0, 'PASS viewer-native-diagnostic', 'positive', 'Linux'))
 
+    def test_ui_evidence_cannot_be_replaced_by_clear_success(self):
+        good = record()
+        log = 'PASS viewer-native-diagnostic'
+        self.assertFalse(assess(good, 0, log, 'ui-positive', 'Windows'))
+        good.update(ui_fixture_enabled=True, ui_readback_verified=True, ui_readbacks=2)
+        self.assertTrue(assess(good, 0, log, 'ui-positive', 'Windows'))
+        for key, value in [('ui_readbacks', 1), ('ui_readback_verified', False), ('ui_fixture_enabled', False)]:
+            with self.subTest(key=key):
+                bad = copy.deepcopy(good); bad[key] = value
+                self.assertFalse(assess(bad, 0, log, 'ui-positive', 'Windows'))
+        good.update(passed=False, failure='Viewer UI pixel oracle mismatch', ui_fixture_enabled=True)
+        for case in ('bad-ui', 'ui-orientation'):
+            self.assertTrue(assess(good, 1, 'FAIL viewer-native-diagnostic', case, 'Windows'))
+            self.assertFalse(assess(good, 0, log, case, 'Windows'))
+
 
 if __name__ == '__main__':
     unittest.main()
