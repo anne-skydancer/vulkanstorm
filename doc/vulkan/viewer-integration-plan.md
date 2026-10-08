@@ -93,6 +93,15 @@ lazy glyph creation, upload bytes, replacement and readback completion.
 Decouple GL-bearing texture facade types where required; retaining an old
 GL implementation behind a neutral name is not acceptance.
 
+Use a reusable viewer-owned UI lifecycle with the same settings, skin, theme,
+font and language selection as the OpenGL peer. Preserve base/skin/theme/user
+asset overlays and translated XUI; skin-specific text-field images and text
+colors must remain paired. Run the admitted controls through every packaged
+skin/theme plus a translated overlay, with selection identity and readback
+checks. This matrix does not qualify additional controls or live skin switching.
+The current shared owner and remaining normal-session wiring are recorded in
+[the UI substrate checkpoint](viewer-ui-substrate.md#shared-native-ui-owner-and-skin-checkpoint-8-october-2026).
+
 Submit ordered UI packets with explicit texture/sampler, blend, clip, transform,
 origin and DPI state. Preserve the corrected XUI baseline. Admit login,
 progress/status, plain nearby transcript/input and required alerts/agreements;

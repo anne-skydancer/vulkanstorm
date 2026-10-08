@@ -1,5 +1,5 @@
 {
-  "source_commit": "e1689fbb8848553753faf22042943bb9234b521e",
+  "source_commit": "8f2304bfafcaecf0d6aea3393d88b378887fe3d5",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "closed-admission-set for future UI/chat; native window/clear and opt-in UI substrate fixtures are implemented; full UI/chat gate contracts remain requirements",
@@ -54,7 +54,7 @@
       ]
     },
     "indra/llwindow/llwindowwin32.cpp": {
-      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f",
+      "sha256": "02f7f198b6d2863c15392fe2e83888cd6cb9964a49c87d412d58232ae6cfab7c",
       "anchors": [
         "LLWindowWin32::LLWindowWin32",
         "opengl32.dll",
@@ -341,7 +341,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -647,7 +647,7 @@
       ]
     },
     "indra/newview/vsuifixture.cpp": {
-      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
       "anchors": [
         "VSUIFixture::verifyInput",
         "VSUIFixture::draw",
@@ -655,7 +655,7 @@
       ]
     },
     "indra/newview/vsuifixture.h": {
-      "sha256": "e05ae45e2da9d14507971282fc1127a4c47f5326404e8d71e8114085aa9bf7f9",
+      "sha256": "3e405c2acc221bb98b36cf454be6e278b13a140baa9b832a490afe07aa8c526d",
       "anchors": [
         "class VSUIFixture"
       ]
@@ -678,6 +678,28 @@
       "anchors": [
         "void LLRender::begin",
         "GL geometry in native UI owner"
+      ]
+    },
+    "indra/newview/vsuicontext.cpp": {
+      "sha256": "d1976833b4d5a6474589e4fb4ea347ba765cc92c9e33a472ebbf45c50d7330df",
+      "anchors": [
+        "VSUIContext::VSUIContext",
+        "setSkinFolder",
+        "loadFromSettings",
+        "destroyDefaultFonts"
+      ]
+    },
+    "indra/newview/vsuicontext.h": {
+      "sha256": "ac745a858dba430eb5c41d0d6d42b59b9e9d342078aed7fdcbf0fb6663220faf",
+      "anchors": [
+        "class VSUIContext"
+      ]
+    },
+    "indra/llrender/llfontvertexbuffer.cpp": {
+      "sha256": "467a634236e9da7ffb12790c02d8700ccf625bea961a18b2febc524bf76509ad",
+      "anchors": [
+        "LLFontVertexBuffer::render",
+        "LLFontGL::hasNativeDraw()"
       ]
     }
   },
@@ -865,7 +887,10 @@
         "indra/newview/vsuifixture.h",
         "indra/newview/vsuipixeloracle.cpp",
         "indra/newview/vsuipixeloracle.h",
-        "indra/llrender/llrender.cpp"
+        "indra/llrender/llrender.cpp",
+        "indra/newview/vsuicontext.cpp",
+        "indra/newview/vsuicontext.h",
+        "indra/llrender/llfontvertexbuffer.cpp"
       ],
       "gates": [
         "G-RESOURCE",
@@ -917,7 +942,10 @@
         "indra/newview/vsuifixture.h",
         "indra/newview/vsuipixeloracle.cpp",
         "indra/newview/vsuipixeloracle.h",
-        "indra/llrender/llrender.cpp"
+        "indra/llrender/llrender.cpp",
+        "indra/newview/vsuicontext.cpp",
+        "indra/newview/vsuicontext.h",
+        "indra/llrender/llfontvertexbuffer.cpp"
       ],
       "gates": [
         "G-LIFETIME"
@@ -5118,11 +5146,11 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "e1689fbb8848553753faf22042943bb9234b521e",
+    "source_commit": "8f2304bfafcaecf0d6aea3393d88b378887fe3d5",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
     "world_implemented": false,
-    "qualification": "Windows SwiftShader passed fifteen cases including corrected mini-progress XUI, editor/transcript, synthetic native keyboard/focus/mouse/wheel events, capture release, direct preedit contract, additive blending, pixel oracle, partial construction cleanup and GL geometry rejection. Fractional-DPI clipping has device-free checks. Cross-platform CI for this delta and full V3 required panels/OS DPI/OS IME remain open."
+    "qualification": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
   }
 }

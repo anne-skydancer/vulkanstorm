@@ -24,14 +24,14 @@ XUI is the accepted baseline. Identical XUI with those fixes is successful.
 ## Configuration and retained behavior
 
 Current-source refresh on 8 October 2026: the catalog and manifest are pinned
-to `e1689fbb8848553753faf22042943bb9234b521e`. A separate native viewer diagnostic
+to `8f2304bfafcaecf0d6aea3393d88b378887fe3d5`. A separate native viewer diagnostic
 branches before normal bootstrap and exercises window/device/presentation and
 owned cleanup. Its [qualification record](viewer-native-presentation.md) is
 separate from this UI/chat acceptance. Changed source/ranges were reviewed;
-91 source hashes now include the diagnostic, platform/application interfaces,
+94 source hashes now include the diagnostic, platform/application interfaces,
 native UI resources, CPU-only font backing, real image/font publication and
-pre-construction factory gates. The required XUI admission sets and input
-integration remain open; the gates exercised in fixtures do not close G-UI.
+pre-construction factory gates and the reusable selected-skin native UI owner.
+The required XUI admission sets and normal-session wiring remain open; the gates exercised in fixtures do not close G-UI.
 The complete UI/chat gate set remains unimplemented and this manifest retains
 `gates_implemented=false`. The earlier baseline/counts below are historical
 source acceptance, not current native UI/chat or world execution evidence.

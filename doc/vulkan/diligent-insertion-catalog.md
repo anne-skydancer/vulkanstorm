@@ -1,7 +1,7 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `e1689fbb8848553753faf22042943bb9234b521e`. DiligentCore is the selected
+source `8f2304bfafcaecf0d6aea3393d88b378887fe3d5`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
@@ -43,12 +43,12 @@ evidence; full CI and viewer runtime qualification remain separate.
 
 The current source now implements a development-only native viewer
 window/clear/presentation path. Its [implementation and qualification record](viewer-native-presentation.md)
-distinguishes actual viewer execution from standalone harness evidence. Native
+distinguishes actual viewer execution from standalone harness evidence. Connected
 UI/chat and world rendering remain unimplemented. The diagnostic source has
 whole-file I02 reviews; affected factory, platform and startup/cleanup ranges
 were re-reviewed and their positions/hashes refreshed. The current generated
-ledger has 28,410 candidates in 1,747 files (19 standalone test-only candidates).
-The UI/chat boundary manifest now covers 90 hashed source files, including the
+ledger has 28,422 candidates in 1,748 files (19 standalone test-only candidates).
+The UI/chat boundary manifest now covers 94 hashed source files, including the
 new diagnostic and its application/window interfaces. Registry admission and
 the complete proposed UI/chat gate set remain implementation requirements.
 Local Windows diagnostic evidence does not establish cross-platform parity.
@@ -291,8 +291,8 @@ and hashes; I03–I06 responsibilities are exercised by the native packet
 implementation without replacing or reclassifying existing GL producers.
 The [V3 implementation record](viewer-ui-substrate.md) distinguishes deterministic
 viewer fixture acceptance from the still-open XUI/admission and input integration.
-The current ledger has 28,410 candidates in 1,747 files, and the boundary manifest
-covers 90 source hashes. Full UI/chat gates and runtime parity remain open.
+At that checkpoint the ledger had 28,410 candidates in 1,747 files, and the
+boundary manifest covered 90 source hashes. Full UI/chat gates and runtime parity remain open.
 
 The subsequent renderer-selector refresh adds a shared I01 identity/admission
 policy. Preferences preserve Vulkan as a peer option and explain current normal-
@@ -328,5 +328,25 @@ The native pointer-input checkpoint adds capture-aware mouse/hover/wheel routing
 focus-loss capture cancellation and decisive GL geometry rejection inside the
 native drawing owner. Fractional-scale clips preserve the legacy physical-pixel
 margin. Fifteen Windows viewer cases pass; full V3 and cross-platform acceptance
-for this delta remain open. The latest source accounting has 28,415 witnesses
-in 1,747 files and 91 boundary hashes.
+for this delta remain open. The current source accounting has 28,422 witnesses
+in 1,748 files and 94 boundary hashes.
+
+
+## Shared UI ownership and skin refresh
+
+The native UI bootstrap is now `VSUIContext`, a reusable viewer component built
+under `USE_DILIGENTCORE`. I08 review covers lifecycle ownership and the existing
+skin/theme/language/font overlay routes. Its current consumer is the diagnostic
+fixture; normal Vulkan session startup remains gated. The staged runner requires
+all catalog skin/theme directories and the translated German XUI assets, checks
+selection identity and runs 24 skin fixture cases in addition to the existing
+15 cases. Local Windows passed all 39 under SwiftShader. These are admitted
+control checks, not complete skin, connected-chat or world parity.
+
+I09 review covers native text bypassing the GL vertex/display-list cache,
+including replay of a previously populated legacy cache; that path caused both
+Linux XUI jobs to fail in run 37822981181. I02 review covers Win32 button-down
+using its captured event coordinates. Regressions execute the actual cache and
+button callback with endpoint stubs. Fresh cross-platform runtime qualification
+remains pending. The [UI substrate record](viewer-ui-substrate.md) describes the
+qualification limits and remaining normal-session/panel integration work.

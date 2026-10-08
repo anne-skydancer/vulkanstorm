@@ -1,6 +1,6 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-Source: `e1689fbb8848553753faf22042943bb9234b521e` on `vkstorm-vulkan`.
+Source: `8f2304bfafcaecf0d6aea3393d88b378887fe3d5` on `vkstorm-vulkan`.
 Status: implemented development diagnostic. CI run
 [37742422223](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37742422223)
 passed all nine original cases on Windows SwiftShader, Linux SwiftShader and
@@ -145,3 +145,20 @@ native UI resources and ordered drawing, then the connected UI/chat closure.
 World elements follow incrementally after that checkpoint. This diagnostic
 closes the initial native window/clear/presentation seam, not the entire
 harness-to-viewer integration gap or full supported rendering parity.
+
+## UI owner and packaged skins
+
+The diagnostic now consumes the reusable `VSUIContext`, which reads the
+selected skin/theme/language/font settings and initializes the existing overlay
+resolution, widget defaults, color table, translations and native image/font
+producers. Reusable native UI sources compile under `USE_DILIGENTCORE` rather
+than only under the diagnostic option. The fixture remains development-only;
+normal Vulkan startup is still gated pending the required session/UI closure.
+
+The runner now adds 24 skin/theme/language cases to its fifteen existing cases:
+every packaged catalog selection, base default and German default XUI. Missing
+catalog directories, incorrect selection identity, UI/input failures or missing
+readbacks fail qualification. Local Windows passed all 39 cases under
+SwiftShader with zero validation errors. This covers the fixture's admitted
+controls, not full skin functionality, normal-session wiring or OS DPI/IME.
+See [shared UI ownership and qualification limits](viewer-ui-substrate.md#shared-native-ui-owner-and-skin-checkpoint-8-october-2026).

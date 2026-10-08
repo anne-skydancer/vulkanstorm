@@ -1,5 +1,5 @@
 {
-  "source_commit": "e1689fbb8848553753faf22042943bb9234b521e",
+  "source_commit": "8f2304bfafcaecf0d6aea3393d88b378887fe3d5",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -272,7 +272,8 @@
         "indra/newview/vsuidrawbridge",
         "indra/newview/vsuiimageprovider",
         "indra/newview/vsuifixture",
-        "indra/newview/vsuipixeloracle"
+        "indra/newview/vsuipixeloracle",
+        "indra/newview/vsuicontext"
       ],
       "apis": [
         "IDeviceContext::SetScissorRects",
@@ -293,7 +294,7 @@
           "symbol": "void VSUIRenderer::draw"
         }
       ],
-      "responsibility": "Preserve virtual widget traversal, paint order, clipping, scale and image/text generations with native ordered packets and immutable Diligent resources. VSUIResources adapts CPU image publication and the LLUIImage draw facade, including masks/nine-slices. Native construction policy guards generic/custom panel and floater factories before allocation/callbacks. Required XUI allowlists, skin image provider, primitive/matrix/nested clip and input integration remain open. Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed. Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed.",
+      "responsibility": "Preserve virtual widget traversal, paint order, clipping, scale and image/text generations with native ordered packets and immutable Diligent resources. VSUIResources adapts CPU image publication and the LLUIImage draw facade, including masks/nine-slices. Native construction policy guards generic/custom panel and floater factories before allocation/callbacks. Required XUI allowlists, skin image provider, primitive/matrix/nested clip and input integration remain open. Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed. Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed. Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open.",
       "contracts": [
         "U01"
       ]
@@ -880,7 +881,7 @@
       "record": "I02",
       "disposition": "mapped",
       "reason": "Constructor owns window thread, keyboard/dragdrop/icons and display policy; unconditional opengl32 load and switchContext require backend gate. OS input/affinity/display setup remains platform-owned. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f"
+      "sha256": "02f7f198b6d2863c15392fe2e83888cd6cb9964a49c87d412d58232ae6cfab7c"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
@@ -889,7 +890,7 @@
       "record": "I02",
       "disposition": "mapped",
       "reason": "close shuts GL and WGL before wakeAndDestroy of HWND thread, then resets gamma. Native path must release swapchain/submitted consumers before HWND destruction; ordinary size/visibility methods stay OS-owned. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f"
+      "sha256": "02f7f198b6d2863c15392fe2e83888cd6cb9964a49c87d412d58232ae6cfab7c"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
@@ -898,25 +899,25 @@
       "record": "I02",
       "disposition": "mapped",
       "reason": "switchContext creates dummy/WGL pixel-format/context, reprobes GL and recreates HWND on owned window thread. Replace native mode lifecycle while retaining fullscreen/input; recreateWindow waits promise before publishing handle. Shared contexts are GL-only upload infrastructure. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f"
+      "sha256": "02f7f198b6d2863c15392fe2e83888cd6cb9964a49c87d412d58232ae6cfab7c"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3918,
-      "end": 3939,
+      "start": 3921,
+      "end": 3942,
       "record": "I02",
       "disposition": "mapped",
       "reason": "SwapBuffers(mhDC) and Tracy GL collect are backend-specific presentation/profiling; Diligent Present plus backend-aware profiling replaces selected native path. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f"
+      "sha256": "02f7f198b6d2863c15392fe2e83888cd6cb9964a49c87d412d58232ae6cfab7c"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 4170,
-      "end": 4181,
+      "start": 4173,
+      "end": 4184,
       "record": "I02",
       "disposition": "mapped",
       "reason": "getPlatformWindow returns actual HWND, unlike SDL legacy handle; preserve owned lifetime and typed export. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "d079382341443596535f7640be6cfc14691b57b65bb2aadfb237e0785d46135f"
+      "sha256": "02f7f198b6d2863c15392fe2e83888cd6cb9964a49c87d412d58232ae6cfab7c"
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
@@ -2901,8 +2902,8 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1,
-      "end": 856,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "end": 859,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity. Opt-in V3 fixtures now exercise native UI packets, CPU glyph publication and swapchain readback; normal XUI/login/world bootstrap remains outside this diagnostic."
@@ -3090,8 +3091,8 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1,
-      "end": 856,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "end": 859,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -3567,8 +3568,8 @@
     {
       "path": "indra/newview/vsuifixture.cpp",
       "start": 1,
-      "end": 321,
-      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
+      "end": 288,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3576,8 +3577,8 @@
     {
       "path": "indra/newview/vsuifixture.h",
       "start": 1,
-      "end": 32,
-      "sha256": "e05ae45e2da9d14507971282fc1127a4c47f5326404e8d71e8114085aa9bf7f9",
+      "end": 33,
+      "sha256": "3e405c2acc221bb98b36cf454be6e278b13a140baa9b832a490afe07aa8c526d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3829,7 +3830,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 5,
       "end": 6,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3837,71 +3838,71 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 113,
-      "end": 122,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "end": 123,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 137,
-      "end": 148,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "start": 138,
+      "end": 149,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 256,
-      "end": 260,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "start": 257,
+      "end": 261,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 553,
-      "end": 700,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "start": 554,
+      "end": 702,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 736,
-      "end": 736,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "start": 738,
+      "end": 738,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 824,
-      "end": 825,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "start": 826,
+      "end": 828,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuifixture.cpp",
-      "start": 118,
-      "end": 119,
-      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
+      "start": 104,
+      "end": 105,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuifixture.cpp",
-      "start": 122,
-      "end": 122,
-      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
+      "start": 108,
+      "end": 108,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -3926,27 +3927,27 @@
     },
     {
       "path": "indra/newview/vsuifixture.cpp",
-      "start": 207,
-      "end": 253,
-      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
+      "start": 172,
+      "end": 220,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuifixture.cpp",
-      "start": 261,
-      "end": 262,
-      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
+      "start": 228,
+      "end": 229,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuifixture.cpp",
-      "start": 288,
-      "end": 294,
-      "sha256": "0fab0a84b271eb66d2f6b17a8415a5100afcbfea54c25f3ebfbae1fa97cd75e8",
+      "start": 255,
+      "end": 261,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
@@ -3955,7 +3956,7 @@
       "path": "indra/newview/vsuifixture.h",
       "start": 17,
       "end": 23,
-      "sha256": "e05ae45e2da9d14507971282fc1127a4c47f5326404e8d71e8114085aa9bf7f9",
+      "sha256": "3e405c2acc221bb98b36cf454be6e278b13a140baa9b832a490afe07aa8c526d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
@@ -3972,65 +3973,326 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 117,
-      "end": 122,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "end": 123,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 141,
-      "end": 148,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "start": 142,
+      "end": 149,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 561,
+      "end": 562,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 566,
+      "end": 588,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 632,
+      "end": 664,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 738,
+      "end": 738,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 827,
+      "end": 828,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/llrender/llfontvertexbuffer.cpp",
+      "start": 124,
+      "end": 124,
+      "sha256": "467a634236e9da7ffb12790c02d8700ccf625bea961a18b2febc524bf76509ad",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/llrender/llfontvertexbuffer.cpp",
+      "start": 126,
+      "end": 128,
+      "sha256": "467a634236e9da7ffb12790c02d8700ccf625bea961a18b2febc524bf76509ad",
+      "record": "I09",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/llwindow/llwindowwin32.cpp",
+      "start": 2884,
+      "end": 2886,
+      "sha256": "02f7f198b6d2863c15392fe2e83888cd6cb9964a49c87d412d58232ae6cfab7c",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuicontext.cpp",
+      "start": 1,
+      "end": 147,
+      "sha256": "d1976833b4d5a6474589e4fb4ea347ba765cc92c9e33a472ebbf45c50d7330df",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuicontext.h",
+      "start": 1,
+      "end": 26,
+      "sha256": "ac745a858dba430eb5c41d0d6d42b59b9e9d342078aed7fdcbf0fb6663220faf",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 25,
+      "end": 25,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 62,
+      "end": 62,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 64,
+      "end": 65,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 68,
+      "end": 68,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 70,
+      "end": 72,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 76,
+      "end": 76,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 81,
+      "end": 81,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 83,
+      "end": 92,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 95,
+      "end": 98,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 102,
+      "end": 102,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 113,
+      "end": 113,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 115,
+      "end": 115,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 124,
+      "end": 124,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 139,
+      "end": 140,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 143,
+      "end": 143,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 158,
+      "end": 161,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 176,
+      "end": 176,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 185,
+      "end": 185,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 194,
+      "end": 194,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.cpp",
+      "start": 206,
+      "end": 208,
+      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsuifixture.h",
+      "start": 28,
+      "end": 28,
+      "sha256": "3e405c2acc221bb98b36cf454be6e278b13a140baa9b832a490afe07aa8c526d",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 123,
+      "end": 123,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 559,
-      "end": 560,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "end": 559,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
-      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 564,
-      "end": 586,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
+      "start": 828,
+      "end": 828,
+      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
       "record": "I02",
       "disposition": "mapped",
-      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
-    },
-    {
-      "path": "indra/newview/vsvkdiag.cpp",
-      "start": 630,
-      "end": 662,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
-      "record": "I02",
-      "disposition": "mapped",
-      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
-    },
-    {
-      "path": "indra/newview/vsvkdiag.cpp",
-      "start": 736,
-      "end": 736,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
-      "record": "I02",
-      "disposition": "mapped",
-      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
-    },
-    {
-      "path": "indra/newview/vsvkdiag.cpp",
-      "start": 825,
-      "end": 825,
-      "sha256": "23bd55e135d4d56c8c47db47d437b74dea4b4005c5fc1539f6d147c32731b50f",
-      "record": "I02",
-      "disposition": "mapped",
-      "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
+      "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
     }
   ]
 }
