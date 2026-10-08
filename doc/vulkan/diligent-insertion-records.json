@@ -1,5 +1,5 @@
 {
-  "source_commit": "a7cb86e1f64fbb79cb75cdd39185d91511627cd0",
+  "source_commit": "f622b9ff1e2c294f3e62a6e4840710d8419b3f64",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -260,7 +260,8 @@
         "indra/newview/(piemenu|lljoystickbutton|llcolorswatch|llprogressview|llmediactrl|llthumbnailctrl|lltexturectrl)",
         "indra/newview/fsfloaterprimfeed",
         "indra/newview/llfloateruipreview",
-        "indra/newview/llscripteditor"
+        "indra/newview/llscripteditor",
+        "indra/newview/vsuirenderer"
       ],
       "apis": [
         "IDeviceContext::SetScissorRects",
@@ -275,9 +276,13 @@
         {
           "path": "indra/llui/lllocalcliprect.cpp",
           "symbol": "LLLocalClipRect"
+        },
+        {
+          "path": "indra/newview/vsuirenderer.cpp",
+          "symbol": "void VSUIRenderer::draw"
         }
       ],
-      "responsibility": "Preserve virtual widget traversal, painter order, scale, clipping and image/text generation; ordinary callers need no library objects; backend-neutral facade captures UI state. Lazy font/atlas and image uploads remain explicit producer seams.",
+      "responsibility": "Preserve virtual widget traversal, painter order, scale, clipping and image/text generation; ordinary callers need no library objects; backend-neutral facade captures UI state. Lazy font/atlas and image uploads remain explicit producer seams. V3 first slice supplies ordered native packets with texture generation, affine/top-left/DPI state, explicit sampler/blend/scissor and fence-based retirement; existing XUI producers and widget admission are not integrated yet.",
       "contracts": [
         "U01"
       ]
@@ -287,7 +292,8 @@
       "package": "WP3",
       "title": "Font CPU rasterization, lazy glyph creation, atlases and draw buffers",
       "paths": [
-        "indra/llrender/llfont"
+        "indra/llrender/llfont",
+        "indra/newview/vsuifont"
       ],
       "apis": [
         "IRenderDevice::CreateTexture",
@@ -303,9 +309,13 @@
         {
           "path": "indra/llrender/llfontgl.cpp",
           "symbol": "S32 LLFontGL::render("
+        },
+        {
+          "path": "indra/newview/vsuifont.cpp",
+          "symbol": "VSUIFont::Glyph VSUIFont::rasterize"
         }
       ],
-      "responsibility": "Retain FreeType/metrics/kerning/fallback/emoji; getGlyphInfo may lazily reach addGlyphFromFont and setSubImage. Separate atlas CPU edits from GPU publication; retain atlas generation through ordered glyph draws; reset/destroy retire safely.",
+      "responsibility": "Retain FreeType/metrics/kerning/fallback/emoji; getGlyphInfo may lazily reach addGlyphFromFont and setSubImage. Separate atlas CPU edits from GPU publication; retain atlas generation through ordered glyph draws; reset/destroy retire safely. VSUIFont is a separate CPU-only FreeType scalar rasterizer; native GPU publication uses VSUIRenderer without LLFontBitmapCache/LLImageGL. Existing font producer adaptation, fallback/shaping policy and atlas caching remain open.",
       "contracts": [
         "U02"
       ]
@@ -2880,20 +2890,56 @@
     {
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1,
-      "end": 399,
-      "sha256": "0884dbca3d78b2ee644fd5ed41fe699ba5e079805b971734b15e67c2fb735433",
+      "end": 543,
+      "sha256": "e95c22f30906628a44fc9f5bce2f398734d5d3285acf1c5c13f96dd652b50a03",
       "record": "I02",
       "disposition": "mapped",
-      "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity."
+      "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity. Opt-in V3 fixtures now exercise native UI packets, CPU glyph publication and swapchain readback; normal XUI/login/world bootstrap remains outside this diagnostic."
     },
     {
       "path": "indra/newview/vsvulkandiagnostic.h",
       "start": 1,
-      "end": 18,
-      "sha256": "0d22ef97c9c5b16265ad665c0fe195fa6efa566a3e7ac0a2847447d4af5f45e6",
+      "end": 19,
+      "sha256": "a9bd113c937932fe3d70ad7fc390ba521c86f844917a4b2ff4656035c192d70c",
       "record": "I02",
       "disposition": "mapped",
-      "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity."
+      "reason": "Development-only viewer native checkpoint: LLAppViewer init/frame/cleanup owns a real LLWindowManager window, Diligent adapter/device/swapchain, clear/copy/readback, extent/minimize handling and retirement. Explicit failure/GL-entry/pixel probes exercise owned cleanup. No UI, login or world resources are admitted; this is not full native viewer parity. Opt-in V3 fixtures now exercise native UI packets, CPU glyph publication and swapchain readback; normal XUI/login/world bootstrap remains outside this diagnostic."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.cpp",
+      "start": 1,
+      "end": 213,
+      "sha256": "5cbbf064fb57dbd46e45a477572df0ebf33a440a7735fbde1d74270ffd71d9c0",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native viewer UI packet/resource substrate: Diligent immutable texture generations, shared shader and per-state pipeline cache, ordered single-buffer vertex publication, explicit DPI/affine/scissor/sampler/alpha state and GPU-fence retirement. Diagnostic fixtures use these APIs in the viewer lifecycle; existing XUI producers/admission are not yet adapted."
+    },
+    {
+      "path": "indra/newview/vsuirenderer.h",
+      "start": 1,
+      "end": 45,
+      "sha256": "095aa030781815bf16d3c7c3ea48e1497e36c87547d766ea77950221c832ce2f",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native UI packet and opaque generation ownership contract. No GL resource facade is retained; caller owns target/presentation and idle-at-teardown boundary."
+    },
+    {
+      "path": "indra/newview/vsuifont.cpp",
+      "start": 1,
+      "end": 56,
+      "sha256": "87d5531d43d3eeaec1021942377651d17e684ce3038c8dde13c9e7ba22ddff69",
+      "record": "I09",
+      "disposition": "cpu-only",
+      "reason": "Standalone CPU FreeType memory-face Unicode scalar rasterization into owned coverage/bearings/advance; no glyph atlas, GL calls or GPU resource publication. Upload is a separate native renderer operation; existing LLFontFreetype/LLFontBitmapCache paths are not reclassified as CPU-only."
+    },
+    {
+      "path": "indra/newview/vsuifont.h",
+      "start": 1,
+      "end": 27,
+      "sha256": "5e91dfc602781b1da218d78b8bf0f7a17e3306213fc4c73c351454f049a63493",
+      "record": "I09",
+      "disposition": "cpu-only",
+      "reason": "CPU-only glyph coverage contract without any GL or native GPU texture ownership; font cache/fallback/shaping integration remains future V3 work."
     }
   ]
 }

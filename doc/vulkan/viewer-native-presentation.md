@@ -1,15 +1,18 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-Source: `a7cb86e1f64fbb79cb75cdd39185d91511627cd0` on `vkstorm-vulkan`.
-Status: implemented development diagnostic. Windows SwiftShader and Linux
-Lavapipe CI passed; Linux SwiftShader teardown correction requires a new CI run.
+Source: `f622b9ff1e2c294f3e62a6e4840710d8419b3f64` on `vkstorm-vulkan`.
+Status: implemented development diagnostic. CI run
+[37742422223](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37742422223)
+passed all nine original cases on Windows SwiftShader, Linux SwiftShader and
+Linux Lavapipe. The new [V3 UI substrate slice](viewer-ui-substrate.md) has
+additional viewer cases; its cross-platform qualification is pending.
 No UI/chat or world rendering acceptance is claimed.
 
 The first CI run passed the Windows build and native viewer diagnostic. Its
 Linux Lavapipe viewer build failed because the diagnostic used unqualified SDL
 headers. The corrected includes use `SDL2/SDL.h` and `SDL2/SDL_syswm.h`, matching
 the viewer's Autobuild include root and existing SDL2 window implementation.
-Linux build and runtime acceptance remain pending the corrected CI run.
+Linux build and runtime acceptance subsequently passed in run 37742422223.
 
 The next Linux build reached Diligent parsing and exposed inherited X11
 `Bool`/`True`/`False` and `sys/mman.h` `MAP_TYPE` macro collisions. The diagnostic
@@ -34,8 +37,8 @@ Diagnostic cleanup now performs an X11 round trip before releasing swapchain
 resources, then drains detach/free requests before destroying the owned SDL
 window. Vulkan device idle alone does not synchronize the X server. The display
 connection remains borrowed from SDL; cleanup does not close it independently.
-Unexpected X11 errors remain fatal. Acceptance of the correction requires
-Linux SwiftShader CI, including the unchanged early teardown fault case.
+Unexpected X11 errors remain fatal. Run 37742422223 passed Linux SwiftShader,
+including the unchanged early teardown fault case.
 
 ## Implemented integration
 

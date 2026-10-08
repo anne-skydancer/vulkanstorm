@@ -24,7 +24,7 @@ subsequent work.
 The [viewer integration plan](viewer-integration-plan.md) closes the separate
 harness-to-viewer implementation gap: native viewer window/presentation,
 UI/chat, then qualified world increments toward full supported parity. It
-defines dependencies and viewer-specific exit evidence, not completed code.
+defines dependencies and viewer-specific exit evidence; each stage records its implementation and qualification separately.
 
 [Item 2 Vulkan implementation CI](software-vulkan-ci.md) defines the independent
 Windows/Linux workflow using software devices to test general Vulkan correctness,
@@ -36,7 +36,10 @@ GL/Zink is a **GL backend**, created for AMD GPUs affected by rendering
 regressions caused by bugs in the AMD OpenGL ICD. Its use of Vulkan for driver
 translation does not make it a native Vulkan viewer backend or a Vulkan fallback.
 
-Current insertion-catalog baseline: **`a7cb86e1f64fbb79cb75cdd39185d91511627cd0`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; UI/chat and world rendering remain unimplemented, and cross-platform diagnostic acceptance is pending CI.
+Current insertion-catalog baseline: **`f622b9ff1e2c294f3e62a6e4840710d8419b3f64`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; its original nine cases passed all three CI platforms in run 37742422223. The
+[V3 UI substrate](viewer-ui-substrate.md) now implements native packets and CPU
+font/GPU resource publication; widget admission, full UI/chat and world
+rendering remain open.
 
 Historical comparative audit baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Its mandate compared suitable architectures, including native Vulkan and general graphics abstractions. Those reports contain no runtime measurements, GPU captures, native implementation or build qualification.
 
@@ -61,7 +64,7 @@ native viewer rendering. The old 73-record assessment does not establish all
 insertion points. Acceptance requires the [insertion catalog](diligent-insertion-catalog.md),
 its [records](diligent-insertion-records.json) and [site ledger](diligent-insertion-sites.csv)
 to reconcile the current tracked source and transitive rendering responsibilities.
-The current ledger reconciles **28,302 source witnesses in 1,734 files**, all
+The current ledger reconciles **28,307 source witnesses in 1,737 files**, all
 **225 shader modules** and **690 historical registration rows**, with no
 unmapped or unreviewed entries. These are source-accounting counts, not counts
 of edits or features. Source-reviewed roots, callback obligations, interface
@@ -88,11 +91,11 @@ remain blockers. Native rendering and runtime parity remain unqualified.
 
 ## Coverage and limits
 
-There are **73 listed contract/design records**: 27 core frame/draw records (F01–F10/D01–D17), 13 resource/platform/build records (R01–R09/P01–P03/B01), 22 scene/UI/auxiliary records (S01–S10/U01–U06/A01–A06), and 11 shader-family records (H01–H11). Across the full ledger, 71 records are active/conditional and two are dormant: D16 (empty old-sky pool) and H10 (disabled error-shader fallback). The core subset has 26 active/conditional records and one dormant record. All listed records have candidate designs or explicit no-output decisions for dormant records. These groups overlap semantically; 73 is **not** a count of independent features or exhaustively traced execution paths.
+There are **73 listed contract/design records**: 27 core frame/draw records (F01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“F10/D01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“D17), 13 resource/platform/build records (R01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“R09/P01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“P03/B01), 22 scene/UI/auxiliary records (S01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“S10/U01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“U06/A01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“A06), and 11 shader-family records (H01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“H11). Across the full ledger, 71 records are active/conditional and two are dormant: D16 (empty old-sky pool) and H10 (disabled error-shader fallback). The core subset has 26 active/conditional records and one dormant record. All listed records have candidate designs or explicit no-output decisions for dormant records. These groups overlap semantically; 73 is **not** a count of independent features or exhaustively traced execution paths.
 
 The lexical inventory contains **225 GLSL files**, **690 shader registration/variant rows**, **223 GL candidate source files**, and **13 draw-pool implementation files**. Parent scope cross-checks include 26 draw-pool `.cpp/.h`, 51 llrender, 42 llwindow and 233 llui source files. Counts establish inventory scope only. Critical source boundaries were traced, but all branches, all realized shader permutations, all callbacks and per-pixel arithmetic were not exhaustively proven.
 
-The historical reports record six architecture decisions (U-D1–U-D6). Library adoption and revision are now settled by the selected, pinned DiligentCore preparation. Depth formats, shader binding/vertex ABI, history/probe reset behavior, media/bake ownership and cancellation, and measurement-dependent optimizations still need implementation qualification. The historical source-gap lists describe the earlier audit; the current insertion catalog supersedes their insertion-location accounting. Locating every required seam does not qualify realized shader permutations, bake arithmetic, glTF compatibility, asset/cache failure behavior or an optional proprietary pathing implementation. Runtime parity, performance, memory budgets, driver portability and failure handling remain unqualified.
+The historical reports record six architecture decisions (U-D1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“U-D6). Library adoption and revision are now settled by the selected, pinned DiligentCore preparation. Depth formats, shader binding/vertex ABI, history/probe reset behavior, media/bake ownership and cancellation, and measurement-dependent optimizations still need implementation qualification. The historical source-gap lists describe the earlier audit; the current insertion catalog supersedes their insertion-location accounting. Locating every required seam does not qualify realized shader permutations, bake arithmetic, glTF compatibility, asset/cache failure behavior or an optional proprietary pathing implementation. Runtime parity, performance, memory budgets, driver portability and failure handling remain unqualified.
 
 The 73-record catalog is an earlier partial responsibility-level assessment. It is **not accepted as a complete DiligentCore insertion catalog**. Every necessary insertion point must have a source-backed mapping or justified exclusion; unresolved in-scope paths and discovery blind spots block acceptance. Runtime qualification is a separate requirement.
 
