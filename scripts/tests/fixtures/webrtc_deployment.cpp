@@ -2,10 +2,12 @@
 #include <atomic>
 #include <cassert>
 #include <chrono>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -31,14 +33,33 @@ struct Device
 };
 struct Connection
 {
+    int mute_resets = 0, receiver_updates = 0;
     void enableSenderTracks(bool) {}
-    void enableReceiverTracks(bool) {}
-    void resetMute() {}
+    void enableReceiverTracks(bool) { ++receiver_updates; }
+    void resetMute() { ++mute_resets; }
 };
 struct LogSink { void OnLogMessage(const std::string&) {} };
 struct NullLog { template<class T> NullLog& operator<<(const T&) { return *this; } };
 #define RTC_LOG(severity) NullLog{}
-std::timed_mutex gAudioDeviceMutex;
+// Deterministic timed-lock outcomes exercise std::unique_lock's actual failure
+// and exception paths without sleeping or relying on OS thread scheduling.
+struct DeviceMutex
+{
+    int timeouts = 0;
+    bool throw_next = false;
+    template<class Rep, class Period>
+    bool try_lock_for(std::chrono::duration<Rep, Period>)
+    {
+        if (throw_next)
+        {
+            throw_next = false;
+            throw std::system_error(std::make_error_code(std::errc::operation_not_permitted));
+        }
+        if (timeouts) { --timeouts; return false; }
+        return true;
+    }
+    void unlock() {}
+} gAudioDeviceMutex;
 bool gWebRTCUpdateDevices = false;
 
 struct LLWebRTCImpl
@@ -55,7 +76,16 @@ struct LLWebRTCImpl
     std::atomic<bool> mDevicesDeployingNeedsReset{false};
     std::vector<std::unique_ptr<Connection>> mPeerConnections;
     int recordings = 0, playouts = 0;
-    void workerStartRecording() { ++recordings; }
+    bool fail_recording = false;
+    void workerStartRecording()
+    {
+        if (fail_recording)
+        {
+            fail_recording = false;
+            throw std::runtime_error("Device operation failed");
+        }
+        ++recordings;
+    }
     void workerStartPlayout() { ++playouts; }
     void setVoiceEnabled(bool);
     void deployDevices(bool);
@@ -104,4 +134,42 @@ int main()
     absent.setVoiceEnabled(true);
     absent.drain();
     assert(absent.recordings == 0);
+
+    LLWebRTCImpl vanished;
+    vanished.deployDevices(false);
+    vanished.mDeviceModule = nullptr; // Disappears after scheduling the attempt.
+    vanished.drain();
+    vanished.mDeviceModule = &vanished.module;
+    vanished.deployDevices(false);
+    vanished.drain();
+    assert(vanished.recordings == 1);
+
+    for (int failure = 0; failure < 3; ++failure)
+    {
+        LLWebRTCImpl recover;
+        recover.mPeerConnections.emplace_back(std::make_unique<Connection>());
+        if (failure == 0) gAudioDeviceMutex.timeouts = 1;
+        if (failure == 1) gAudioDeviceMutex.throw_next = true;
+        if (failure == 2) recover.fail_recording = true;
+        recover.deployDevices(true);
+        recover.drain(); // A failed attempt must not strand the count.
+        assert(recover.mDevicesDeployingNeedsReset);
+        assert(recover.mPeerConnections[0]->mute_resets == 0);
+        assert(recover.mPeerConnections[0]->receiver_updates == 0);
+        const int terminations = recover.module.terminated;
+        recover.deployDevices(false);
+        recover.drain();
+        assert(recover.module.terminated == terminations + 1);
+        assert(recover.recordings == 1 && !recover.mDevicesDeployingNeedsReset);
+        assert(recover.mPeerConnections[0]->mute_resets == 1);
+        assert(recover.mPeerConnections[0]->receiver_updates == 1);
+    }
+
+    LLWebRTCImpl queued;
+    gAudioDeviceMutex.timeouts = 1;
+    queued.deployDevices(true);
+    queued.deployDevices(false);
+    queued.drain(); // The queued request retries the reset after lock failure.
+    assert(queued.module.terminated == 1 && queued.recordings == 1);
+    assert(!queued.mDevicesDeployingNeedsReset);
 }

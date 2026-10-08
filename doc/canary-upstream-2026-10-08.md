@@ -60,3 +60,21 @@ original merged source, and pass on the corrected source. All 17 Python tests
 and eight publication tests pass locally; these tests do not exercise physical
 audio devices or a live grid. The focused tests also run in the existing canary
 build workflow before the platform builds.
+
+The follow-up review extended these corrections to failed deployment attempts
+and both live map decoders. Lock timeout, absent modules and caught exceptions
+now reach common deployment completion. Failed attempts retire their count
+without updating peer track state, and retain a requested module reset for the
+next pending or new request. Pending requests continue through the existing
+queue; a failure alone does not create an unbounded retry loop.
+
+Both map decoders normalize zero or misaligned extents independently before
+passing the result to region insertion. The fixtures compile their actual
+extent-reading/validation blocks and exercise them through production insertion
+and tracking. Regression coverage now includes absent size blocks, valid
+dimensions paired with zero/misaligned dimensions, deterministic lock timeout
+and lock exceptions, device-operation exceptions, module disappearance and
+recovery, pending reset retention and unchanged peer state on failed attempts.
+Both expanded fixtures fail during execution on the preceding PR source and
+pass with the corrections. Physical audio concurrency and live-grid execution
+remain outside this evidence.

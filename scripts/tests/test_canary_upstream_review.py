@@ -25,11 +25,11 @@ def method(source, signature):
 
 
 class CanaryUpstreamReviewTest(unittest.TestCase):
-    def run_fixture(self, fixture, source, signatures):
+    def run_fixture(self, fixture, source, signatures, extra=''):
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler, 'A C++ compiler is required for these regressions')
         production = (ROOT / source).read_text(encoding='utf-8')
-        functions = '\n'.join(method(production, signature) for signature in signatures)
+        functions = '\n'.join(method(production, signature) for signature in signatures) + extra
         text = (FIXTURES / fixture).read_text(encoding='utf-8')
         self.assertEqual(text.count('// PRODUCTION_METHODS'), 1)
         with tempfile.TemporaryDirectory() as temporary:
@@ -49,9 +49,19 @@ class CanaryUpstreamReviewTest(unittest.TestCase):
             'void LLWebRTCImpl::workerDeployDevices(bool reset_module)'])
 
     def test_missing_and_variable_region_extents_invalidate_or_validate_tracking(self):
+        decoders = ''
+        for name, source in [('decodeViewer', 'llworldmapmessage.cpp'),
+                             ('decodeFS', 'fsworldmapmessage.cpp')]:
+            text = (ROOT / 'indra/newview' / source).read_text(encoding='utf-8')
+            start = re.search(r'if\s*\(msg->getNumberOfBlocksFast\(_PREHASH_Size\) > 0\)', text).start()
+            end = text.index('// </FS:CR>', start)
+            # Compile the unchanged extent-reading/validation block used by each
+            # live decoder, then feed its output through production insertRegion.
+            decoders += f'\nvoid {name}(Message* msg, U16& x_size, U16& y_size) {{\nint block = 0;\n'
+            decoders += text[start:end] + '\n}\n'
         self.run_fixture('worldmap_extents.cpp', 'indra/newview/llworldmap.cpp', [
             'bool LLWorldMap::insertRegion(U32 x_world, U32 y_world, U16 x_size, U16 y_size,',
-            'bool LLWorldMap::isTrackingInRectangle(F64 x0, F64 y0, F64 x1, F64 y1)'])
+            'bool LLWorldMap::isTrackingInRectangle(F64 x0, F64 y0, F64 x1, F64 y1)'], decoders)
 
 
 if __name__ == '__main__':
