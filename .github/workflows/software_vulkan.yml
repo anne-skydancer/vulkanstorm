@@ -218,8 +218,8 @@ jobs:
           pactl info > .ci/audio/server.txt
           pactl list short sinks > .ci/audio/sinks.txt
           pactl list short sources > .ci/audio/sources.txt
-          rg -q 'vulkan_ci' .ci/audio/sinks.txt
-          rg -q 'vulkan_ci.monitor' .ci/audio/sources.txt
+          grep -Fq 'vulkan_ci' .ci/audio/sinks.txt
+          grep -Fq 'vulkan_ci.monitor' .ci/audio/sources.txt
           echo "PULSE_SERVER=$PULSE_SERVER" >> "$GITHUB_ENV"
       - name: Native Vulkan presentation through the staged viewer
         shell: bash
