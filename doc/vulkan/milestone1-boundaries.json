@@ -1,5 +1,5 @@
 {
-  "source_commit": "e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c",
+  "source_commit": "deeb3d7c934b88f54fd6b79653faf1ff25bfd32a",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Closed native V3 required widget/panel/floater admission and ordinary login/resource ownership implemented; V4 connected protocol/session/chat gate contracts remain open",
@@ -5251,7 +5251,7 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c",
+    "source_commit": "deeb3d7c934b88f54fd6b79653faf1ff25bfd32a",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,

@@ -24,7 +24,7 @@ XUI is the accepted baseline. Identical XUI with those fixes is successful.
 ## Configuration and retained behavior
 
 Current-source refresh on 9 October 2026: the catalog and manifest are pinned
-to `e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c`. V3 now implements the normal
+to `deeb3d7c934b88f54fd6b79653faf1ff25bfd32a`. V3 now implements the normal
 native login lifecycle, required skin-aware interface, production plain-chat
 controls, closed construction/action admission and native resource ownership.
 105 boundary source hashes include these viewer owners, platform adapters,

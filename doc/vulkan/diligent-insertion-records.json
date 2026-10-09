@@ -1,5 +1,5 @@
 {
-  "source_commit": "e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c",
+  "source_commit": "deeb3d7c934b88f54fd6b79653faf1ff25bfd32a",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -6850,6 +6850,15 @@
       "start": 1276,
       "end": 1276,
       "sha256": "c87ee0de29656bce9d17030b90142ff857502862675e5a2baca25f0f5547f122",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
+    },
+    {
+      "path": "indra/llwindow/llpreeditor.h",
+      "start": 31,
+      "end": 33,
+      "sha256": "956cdd0de1769581ebf4b1d55b258ee3b9317ea1bf1f3f3f22bffe9ee7b55d17",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
