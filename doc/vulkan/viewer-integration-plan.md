@@ -4,9 +4,9 @@ Status: staged implementation plan. V1/V2 have an
 [implemented native viewer diagnostic](viewer-native-presentation.md); CI run
 [37742422223](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37742422223)
 passed Windows SwiftShader, Linux SwiftShader and Linux Lavapipe.
-V3 resource/packet implementation is underway; its first slice is described in
-[viewer UI substrate](viewer-ui-substrate.md). Full V3 acceptance, connected
-UI/chat and world rendering remain open.
+V3 interface/resource implementation is complete; expanded platform acceptance
+is in progress in the [V3 completion record](viewer-ui-substrate.md#v3-completion-9-october-2026).
+Connected UI/chat (V4) and subsequent world rendering remain open.
 Planning source: `417e32891aee7bddf73a1ac1bbf7226133f78286` on
 `vkstorm-vulkan`, reviewed on 7 October 2026. Continue authorized implementation
 on that branch. New viewer-owned C++ files use the `vs` prefix; standalone tools
@@ -86,7 +86,7 @@ failure proves application handling only, not real driver device-loss recovery.
 
 ### V3: native UI rendering and resource substrate
 
-Build on V2; implement I03â€“I09/I26/I27 and G-RESOURCE/G-UI. Separate CPU image
+Build on V2; implement I03Ã¢â‚¬â€œI09/I26/I27 and G-RESOURCE/G-UI. Separate CPU image
 decode/font rasterization from GPU publication. Replace UI image/font/buffer
 and shader ownership with Diligent resources, preserving generation lifetime,
 lazy glyph creation, upload bytes, replacement and readback completion.
@@ -117,7 +117,7 @@ completion and check lifetime, not merely object creation.
 
 ### V4: connected UI/chat checkpoint
 
-Implement the full R02â€“R12/G-* closure in the source acceptance record, including
+Implement the full R02Ã¢â‚¬â€œR12/G-* closure in the source acceptance record, including
 startup-state splitting, CPU region/session state, UDP and HTTP dispatch,
 settings/observer admission, chat effects, and owned init/destroy callbacks.
 Keep world/auxiliary producers gated while preserving session transport,
@@ -133,7 +133,7 @@ cannot establish connected-chat acceptance. This checkpoint has no world draws.
 
 ### V5: world contracts and first geometry increments
 
-After V4, extend source/admission accounting for I11â€“I15 and every newly reached
+After V4, extend source/admission accounting for I11Ã¢â‚¬â€œI15 and every newly reached
 startup, message, setting and resource callback. Design the viewer-owned
 frame/pass plan using [component designs](component-designs.md),
 [shader contracts](shader-contracts.md) and the
@@ -189,7 +189,7 @@ where contractual, not assumed for all floating-point effects.
 
 ### V8: auxiliary and interaction parity
 
-Implement supported I18â€“I22 producers/consumers: previews, local bakes,
+Implement supported I18Ã¢â‚¬â€œI22 producers/consumers: previews, local bakes,
 impostors/maps, media, picking/selection/debug, queries and captures. Bring
 prerequisites forward when earlier slices require them. Keep HUD world content
 distinct from 2D UI. Verify capture re-entry, tiled/oriented readback, media
@@ -255,5 +255,5 @@ Next implementation is V1 followed by V2: the staged viewer's native diagnostic
 window and clear/presentation lifecycle. Plan their exact patch ownership before
 editing the window factory, constructors or startup. Then implement V3/V4 to
 close the original UI/chat viewer gap. World work starts incrementally after
-that checkpoint. Existing CI checklist items 4â€“6 still need their own evidence
+that checkpoint. Existing CI checklist items 4Ã¢â‚¬â€œ6 still need their own evidence
 review; even when accepted, they do not complete any viewer stage automatically.

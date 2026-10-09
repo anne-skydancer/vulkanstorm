@@ -1,8 +1,8 @@
 {
-  "source_commit": "be089272e47ca7febafeb7c299642e24a6bb4c3f",
+  "source_commit": "e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
-  "policy": "closed-admission-set for future UI/chat; native window/clear and opt-in UI substrate fixtures are implemented; full UI/chat gate contracts remain requirements",
+  "policy": "Closed native V3 required widget/panel/floater admission and ordinary login/resource ownership implemented; V4 connected protocol/session/chat gate contracts remain open",
   "gates": [
     "G-AUX",
     "G-BACKEND",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "94aee73b367a6f87b3de83068bf59298a57fc5850817fa873808df4f7193942d",
+      "sha256": "52c3386c60eeafd058343690b47237e4a6703cc83014fbd654db94b81c541daa",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -33,7 +33,7 @@
       ]
     },
     "indra/newview/llviewerwindow.cpp": {
-      "sha256": "b695b2368fc467fe42f4d73d2611c927bbe134b72cd460d8234eb2eb0579ed8a",
+      "sha256": "de9176db398539df5d11dd5d2c858de8ef20467dc9b3c3dfc5df46d0491dcaa4",
       "anchors": [
         "LLViewerWindow::LLViewerWindow",
         "LLViewerWindow::initBase",
@@ -62,7 +62,7 @@
       ]
     },
     "indra/llwindow/llwindowsdl2.cpp": {
-      "sha256": "70b36a5bf389be6761bdac99b2c504f30961501d1672b06bd0db703d9c314236",
+      "sha256": "194fbd99e5071b23ce3159f2a2a59a06a660286493e854af01c17629ec0aa3b1",
       "anchors": [
         "LLWindowSDL::LLWindowSDL",
         "SDL_WINDOW_OPENGL",
@@ -169,7 +169,7 @@
       ]
     },
     "indra/newview/llfloatertos.cpp": {
-      "sha256": "4d18079a6255a5323fbc2dcb743b4760a920caac6d68a0afd931c83657451813",
+      "sha256": "7f45f524c0ab6d291c95c1422dfb9a698a2e2495b98a1fc89ae3572a754eb13c",
       "anchors": [
         "LLFloaterTOS::postBuild",
         "EXTERNAL_TOS",
@@ -185,7 +185,7 @@
       ]
     },
     "indra/llui/llfloaterreg.cpp": {
-      "sha256": "391c8f87c8c34fdace9d87646d091b74d89481b65058cbc7d7ff15b62887a7bb",
+      "sha256": "e0df9dc0b2b1b738821af031ee9f5dd5303e579fff4beec47e1303fee541dc7a",
       "anchors": [
         "LLFloaterReg::getInstance",
         "LLFloaterReg::showInitialVisibleInstances"
@@ -341,7 +341,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "8ea82d97a5a7d21eea962ac32ebabb2e716eee1f227a5629d44f40760fefb532",
+      "sha256": "c87ee0de29656bce9d17030b90142ff857502862675e5a2baca25f0f5547f122",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -396,14 +396,14 @@
       ]
     },
     "indra/llwindow/llwindowsdl2.h": {
-      "sha256": "f2b86cdbe7fe681a5ab5e9666195d064c176cecf1f578a827bba8de9363eb0f6",
+      "sha256": "6c574b155835ff91155428521fbc6c893f5e68785f1d57b50db31df6ccd931a7",
       "anchors": [
         "mUseGL",
         "createNativeWindow"
       ]
     },
     "indra/newview/vsuirenderer.cpp": {
-      "sha256": "b9306f3830cc692d17f007a01a35d4cb2868f42d5d0ff561a105c4e158a6a140",
+      "sha256": "f2dfb2af3691c86b36f7f93c7d0669f23a2cd41f975457c245372b3af6328947",
       "anchors": [
         "VSUIRenderer::upload",
         "VSUIRenderer::draw",
@@ -482,7 +482,7 @@
       ]
     },
     "indra/llui/vsuiadmission.h": {
-      "sha256": "6f1ad756a03e1164a14159381312706607fabfd1fdc500130895fcdfd1afb5d8",
+      "sha256": "fc449e6de3ee702a5f047c52f8fce0920d0be07a607861f5c5652adc6d117c79",
       "anchors": [
         "class VSUIAdmission",
         "static bool widget",
@@ -564,7 +564,7 @@
       ]
     },
     "indra/llrender/llrender2dutils.cpp": {
-      "sha256": "047192309886fea4e08f17732e7ca60d43529251ec271b0662395a672085d9a9",
+      "sha256": "1e97c4985a7ef097488b18824378f87e7a50541548ec487ed0b9721aec4f1008",
       "anchors": [
         "LLRender2D::setNativeUI",
         "LLRender2D::setSceneBlendType",
@@ -647,11 +647,11 @@
       ]
     },
     "indra/newview/vsuifixture.cpp": {
-      "sha256": "c5e71852cf1741f2bc5d7a644c313c9101093529d5627e445efb776f12608c79",
+      "sha256": "a6d26ad0e4b00ac06efe5ab408672d6ef49cba53e070032f1c85ffa593cc684f",
       "anchors": [
         "VSUIFixture::verifyInput",
         "VSUIFixture::draw",
-        "NativeLineEditor"
+        "VSPlainChat"
       ]
     },
     "indra/newview/vsuifixture.h": {
@@ -661,14 +661,14 @@
       ]
     },
     "indra/newview/vsuipixeloracle.cpp": {
-      "sha256": "86cbd5cecff88072ef79b4450ce5702b3e0f27f9609c6902bd8398238bf3a510",
+      "sha256": "a85353d71228653f68a3daf5161f049bc8e9ba1c93fb059bd7172ae74c2c1f3b",
       "anchors": [
         "vs_ui_expected_pixels",
         "top_left"
       ]
     },
     "indra/newview/vsuipixeloracle.h": {
-      "sha256": "ae39490bcc83cf426ff945bfd5cb35db73f3567f3d74065293ff4449b8ba6c48",
+      "sha256": "3ce9cce5b4b248806b09440038d7e8f86ed0ed0a5a92c7cd18d5aada0cd767aa",
       "anchors": [
         "vs_ui_expected_pixels"
       ]
@@ -719,7 +719,7 @@
       ]
     },
     "indra/newview/vsviewerwindow.cpp": {
-      "sha256": "6b401379ff56e32e2925f2783067b92b390026348709f4ac7fd90f28530b8bef",
+      "sha256": "9126436a4ec4dc0d2e6958235d7a47b7a1df40e539c46e76f4442adfc0b5ff5f",
       "anchors": [
         "initNativeWindow",
         "initNativeBase",
@@ -728,7 +728,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "f18194421df982b4162dc33f6db73e79817c49d2afce14028b86055b06997370",
+      "sha256": "bd57eaffdd07e0bcb88539659258c77af1413e2773245847ca9f23efefe90631",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -760,6 +760,29 @@
       "anchors": [
         "ui_audio_callback",
         "deferred_ui_audio_callback"
+      ]
+    },
+    "indra/newview/vsplainchat.cpp": {
+      "sha256": "50a1f8b6115b5569e7a93b416bc87649724e753a0ce91914e487e89c3da58b96",
+      "anchors": [
+        "VSPlainChat::VSPlainChat",
+        "VSPlainChat::setSender",
+        "VSPlainChat::submit",
+        "VSPlainChat::append"
+      ]
+    },
+    "indra/newview/vsplainchat.h": {
+      "sha256": "994a128819361320cac3da620143dd83cd16cef01161b109e8e2f268acf9bc9e",
+      "anchors": [
+        "class VSChatInput",
+        "class VSPlainChat"
+      ]
+    },
+    "indra/newview/llfloaterwebcontent.cpp": {
+      "sha256": "9aa7a604435f0ddd95c6cd576d5f6139f5a92dbdc42bc2c4b99168dd545626f2",
+      "anchors": [
+        "LLFloaterWebContent::create",
+        "VSUIAdmission::floater"
       ]
     }
   },
@@ -958,7 +981,10 @@
         "indra/newview/vsmediapixels.h",
         "indra/llrender/llfontregistry.cpp",
         "indra/newview/vstranslations.h",
-        "indra/newview/vsuiaudio.h"
+        "indra/newview/vsuiaudio.h",
+        "indra/newview/vsplainchat.cpp",
+        "indra/newview/vsplainchat.h",
+        "indra/newview/llfloaterwebcontent.cpp"
       ],
       "gates": [
         "G-RESOURCE",
@@ -1021,7 +1047,10 @@
         "indra/newview/vsmediapixels.h",
         "indra/llrender/llfontregistry.cpp",
         "indra/newview/vstranslations.h",
-        "indra/newview/vsuiaudio.h"
+        "indra/newview/vsuiaudio.h",
+        "indra/newview/vsplainchat.cpp",
+        "indra/newview/vsplainchat.h",
+        "indra/newview/llfloaterwebcontent.cpp"
       ],
       "gates": [
         "G-LIFETIME"
@@ -5222,11 +5251,22 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "be089272e47ca7febafeb7c299642e24a6bb4c3f",
+    "source_commit": "e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
     "world_implemented": false,
-    "qualification": "Normal native login integration review: LLAppViewer dispatches ordinary Vulkan configuration into CPU startup services, LLViewerWindow ownership, native frame rendering, browser/event/network pumping and ordered cleanup. The existing idle_startup state machine, FSPanelLogin login_callback, credential handling, required alerts/agreements and LLLoginInstance authentication are retained. Login menus use native-compatible explicit-color primitives. Native startup avoids GL feature recommendation, texture workers and world UI owners. The connected region/chat stage remains explicitly gated before GL world creation with the existing notification/retry path. Windows software qualification covers complete staging, all 44 viewer cases, normal startup, live login browser pixel publication and clean shutdown; real-server authentication, platform-event completeness and connected chat/world parity remain unqualified."
+    "qualification": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
+  },
+  "v3": {
+    "implemented": true,
+    "gate_scope": [
+      "G-UI",
+      "G-RESOURCE"
+    ],
+    "interface": "normal native login, menus, progress/status, required alerts/agreements and production plain nearby transcript/input",
+    "qualification": "Windows SwiftShader: all 68 expanded staged-viewer cases passed; expanded Linux CI pending",
+    "connected_session_qualified": false,
+    "world_qualified": false
   }
 }
