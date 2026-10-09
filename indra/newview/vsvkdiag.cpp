@@ -115,6 +115,70 @@ void loadedLibraries()
     while (std::getline(maps, line)) std::cout << "LOADED=" << line << '\n';
 #endif
 }
+unsigned captureNativeFrame(Diligent::IRenderDevice* dev, Diligent::IDeviceContext* ctx, Diligent::ITextureView* target,
+    unsigned width, unsigned height, float dpi, const std::vector<VSUIRenderer::Packet>& packets, const std::string& prefix)
+{
+    unsigned subpixel_bits = 0;
+        using namespace Diligent;
+        require(!packets.empty(), "Native startup traversal emitted no UI packets");
+        auto desc = target->GetTexture()->GetDesc();
+        require(desc.Format == TEX_FORMAT_RGBA8_UNORM || desc.Format == TEX_FORMAT_BGRA8_UNORM, "Unsupported startup readback format");
+        const bool bgra = desc.Format == TEX_FORMAT_BGRA8_UNORM;
+        desc.Name = "Native LLViewerWindow startup readback";
+        desc.Usage = USAGE_STAGING; desc.BindFlags = BIND_NONE; desc.CPUAccessFlags = CPU_ACCESS_READ;
+        RefCntAutoPtr<ITexture> readback;
+        dev->CreateTexture(desc, nullptr, &readback);
+        require(readback != nullptr, "Native startup readback allocation failed");
+        ctx->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        CopyTextureAttribs copy{}; copy.pSrcTexture = target->GetTexture(); copy.pDstTexture = readback;
+        copy.SrcTextureTransitionMode = copy.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        ctx->CopyTexture(copy); ctx->WaitForIdle();
+        MappedTextureSubresource mapped{};
+        ctx->MapTextureSubresource(readback, 0, 0, MAP_READ, MAP_FLAG_DO_NOT_WAIT, nullptr, mapped);
+        require(mapped.pData != nullptr, "Native startup readback mapping failed");
+        RefCntAutoPtr<IRenderDeviceVk> native(dev,IID_RenderDeviceVk);
+        require(native != nullptr,"Native startup device does not expose Vulkan capabilities");
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(native->GetVkPhysicalDevice(),&properties);
+        subpixel_bits=properties.limits.subPixelPrecisionBits;
+        require(subpixel_bits>=4 && subpixel_bits<=16,"Unsupported Vulkan subpixel precision");
+        const auto expected = vs_ui_expected_pixels(width, height, dpi, packets, subpixel_bits);
+        std::ofstream image(std::filesystem::path(prefix + ".ppm"), std::ios::binary);
+        image << "P6\n" << width << ' ' << height << "\n255\n";
+        std::ofstream reference(std::filesystem::path(prefix + "-expected.ppm"), std::ios::binary);
+        reference << "P6\n" << width << ' ' << height << "\n255\n";
+
+        unsigned mismatch = 0;
+        for (unsigned y=0; y<height; ++y) for (unsigned x=0; x<width; ++x)
+        {
+            const auto* p = static_cast<const std::uint8_t*>(mapped.pData) + y*mapped.Stride + x*4;
+            const std::uint8_t rgba[]{p[bgra?2:0],p[1],p[bgra?0:2],p[3]};
+            image.write(reinterpret_cast<const char*>(rgba),3);
+            reference.write(reinterpret_cast<const char*>(expected.data()+(std::size_t(y)*width+x)*4),3);
+            for (unsigned c=0; c<4; ++c)
+                if (std::abs(int(rgba[c])-int(expected[(std::size_t(y)*width+x)*4+c])) > 3) { ++mismatch; break; }
+        }
+        ctx->UnmapTextureSubresource(readback,0,0);
+        require(image.good() && reference.good(), "Native startup readback artifact could not be saved");
+        std::cerr << "NATIVE_STARTUP_PIXELS=" << mismatch << " packets=" << packets.size() << " dpi=" << dpi << '\n';
+        if (mismatch)
+        {
+            std::ofstream state(std::filesystem::path(prefix + "-packets.txt"));
+            state.precision(9);
+            for (const auto& p:packets)
+            {
+                state << VSUIRenderer::generation(p.image) << " bounds";
+                for (auto v:p.bounds) state << ' ' << v;
+                state << " uv";for (auto v:p.uv) state << ' ' << v;
+                state << " clip";for (auto v:p.clip) state << ' ' << v;
+                state << " color";for (auto v:p.color) state << ' ' << v;
+                state << " triangles=" << bool(p.triangles) << '\n';
+            }
+        }
+        require(mismatch == 0, "Native startup pixel oracle mismatch");
+        return subpixel_bits;
+
+}
 }
 
 struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
@@ -953,63 +1017,8 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     void captureStartup(Diligent::IRenderDevice* dev, Diligent::IDeviceContext* ctx, Diligent::ITextureView* target,
         unsigned width, unsigned height, float dpi, const std::vector<VSUIRenderer::Packet>& packets)
     {
-        using namespace Diligent;
-        require(!packets.empty(), "Native startup traversal emitted no UI packets");
-        auto desc = target->GetTexture()->GetDesc();
-        require(desc.Format == TEX_FORMAT_RGBA8_UNORM || desc.Format == TEX_FORMAT_BGRA8_UNORM, "Unsupported startup readback format");
-        const bool bgra = desc.Format == TEX_FORMAT_BGRA8_UNORM;
-        desc.Name = "Native LLViewerWindow startup readback";
-        desc.Usage = USAGE_STAGING; desc.BindFlags = BIND_NONE; desc.CPUAccessFlags = CPU_ACCESS_READ;
-        RefCntAutoPtr<ITexture> readback;
-        dev->CreateTexture(desc, nullptr, &readback);
-        require(readback != nullptr, "Native startup readback allocation failed");
-        ctx->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        CopyTextureAttribs copy{}; copy.pSrcTexture = target->GetTexture(); copy.pDstTexture = readback;
-        copy.SrcTextureTransitionMode = copy.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
-        ctx->CopyTexture(copy); ctx->WaitForIdle();
-        MappedTextureSubresource mapped{};
-        ctx->MapTextureSubresource(readback, 0, 0, MAP_READ, MAP_FLAG_DO_NOT_WAIT, nullptr, mapped);
-        require(mapped.pData != nullptr, "Native startup readback mapping failed");
-        RefCntAutoPtr<IRenderDeviceVk> native(dev,IID_RenderDeviceVk);
-        require(native != nullptr,"Native startup device does not expose Vulkan capabilities");
-        VkPhysicalDeviceProperties properties{};
-        vkGetPhysicalDeviceProperties(native->GetVkPhysicalDevice(),&properties);
-        startup_subpixel_bits=properties.limits.subPixelPrecisionBits;
-        require(startup_subpixel_bits>=4 && startup_subpixel_bits<=16,"Unsupported Vulkan subpixel precision");
-        const auto expected = vs_ui_expected_pixels(width, height, dpi, packets, startup_subpixel_bits);
-        std::ofstream image(evidence / ("startup-" + std::to_string(startup_readbacks) + ".ppm"), std::ios::binary);
-        image << "P6\n" << width << ' ' << height << "\n255\n";
-        std::ofstream reference(evidence / ("startup-" + std::to_string(startup_readbacks) + "-expected.ppm"), std::ios::binary);
-        reference << "P6\n" << width << ' ' << height << "\n255\n";
-
-        unsigned mismatch = 0;
-        for (unsigned y=0; y<height; ++y) for (unsigned x=0; x<width; ++x)
-        {
-            const auto* p = static_cast<const std::uint8_t*>(mapped.pData) + y*mapped.Stride + x*4;
-            const std::uint8_t rgba[]{p[bgra?2:0],p[1],p[bgra?0:2],p[3]};
-            image.write(reinterpret_cast<const char*>(rgba),3);
-            reference.write(reinterpret_cast<const char*>(expected.data()+(std::size_t(y)*width+x)*4),3);
-            for (unsigned c=0; c<4; ++c)
-                if (std::abs(int(rgba[c])-int(expected[(std::size_t(y)*width+x)*4+c])) > 3) { ++mismatch; break; }
-        }
-        ctx->UnmapTextureSubresource(readback,0,0);
-        require(image.good() && reference.good(), "Native startup readback artifact could not be saved");
-        std::cerr << "NATIVE_STARTUP_PIXELS=" << mismatch << " packets=" << packets.size() << " dpi=" << dpi << '\n';
-        if (mismatch)
-        {
-            std::ofstream state(evidence / ("startup-"+std::to_string(startup_readbacks)+"-packets.txt"));
-            state.precision(9);
-            for (const auto& p:packets)
-            {
-                state << VSUIRenderer::generation(p.image) << " bounds";
-                for (auto v:p.bounds) state << ' ' << v;
-                state << " uv";for (auto v:p.uv) state << ' ' << v;
-                state << " clip";for (auto v:p.clip) state << ' ' << v;
-                state << " color";for (auto v:p.color) state << ' ' << v;
-                state << " triangles=" << bool(p.triangles) << '\n';
-            }
-        }
-        require(mismatch == 0, "Native startup pixel oracle mismatch");
+        startup_subpixel_bits = captureNativeFrame(dev, ctx, target, width, height, dpi, packets,
+            (evidence / ("startup-" + std::to_string(startup_readbacks))).string());
         ++startup_readbacks;
     }
     LLToastAlertPanel* startupAlertPanel()
@@ -1303,3 +1312,15 @@ void VSVulkanDiagnostic::cleanup()
     std::cout << (exitCode() == 0 ? "PASS viewer-native-diagnostic" : "FAIL viewer-native-diagnostic") << '\n';
 }
 int VSVulkanDiagnostic::exitCode() const { return mImpl->failure.empty() && mImpl->cleaned ? 0 : 1; }
+
+// Shares the same independent oracle as the V3 UI captures; one real connected chat frame.
+void vs_native_replay_capture(VSVulkanContext& context, const std::string& path, std::shared_ptr<bool> done)
+{
+    loadedLibraries();
+    context.setFrameObserver([path, done](auto* dev, auto* ctx, auto* target, auto width, auto height, auto dpi, const auto& packets)
+    {
+        if (*done) return;
+        captureNativeFrame(dev, ctx, target, width, height, dpi, packets, path + "/session-chat");
+        *done = true;
+    });
+}

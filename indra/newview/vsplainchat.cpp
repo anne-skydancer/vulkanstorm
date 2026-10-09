@@ -2,6 +2,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsplainchat.h"
 #include "lltexteditor.h"
+#include "llbutton.h"
+#include "lltextbox.h"
 #include "lltrans.h"
 #include "lluictrlfactory.h"
 #include <stdexcept>
@@ -29,7 +31,28 @@ VSPlainChat::VSPlainChat(const Params& p) : LLPanel(p)
     mInput = LLUICtrlFactory::create<VSChatInput>(edit, this);
     if (!mInput || !mTranscript) throw std::runtime_error("Required native plain chat controls were not admitted");
     mInput->setCommitCallback([this](LLUICtrl*, const LLSD&) { submit(); });
+    LLButton::Params logout;
+    logout.name = "native_logout";
+    logout.rect = LLRect(getRect().getWidth() - 100, getRect().getHeight(), getRect().getWidth(), getRect().getHeight() - 24);
+    logout.follows.flags = FOLLOWS_RIGHT | FOLLOWS_TOP;
+    logout.label = LLTrans::getString("NativeSessionLogout");
+    mLogout = LLUICtrlFactory::create<LLButton>(logout, this);
+    LLTextBox::Params region;
+    region.name = "native_region";
+    region.rect = LLRect(0, getRect().getHeight(), getRect().getWidth() - 104, getRect().getHeight() - 24);
+    region.follows.flags = FOLLOWS_LEFT | FOLLOWS_RIGHT | FOLLOWS_TOP;
+    mRegion = LLUICtrlFactory::create<LLTextBox>(region, this);
+    if (!mLogout || !mRegion) throw std::runtime_error("Required native session controls were not admitted");
+    setSession("", {});
     setSender({});
+}
+void VSPlainChat::setSession(const std::string& region, std::function<void()> logout)
+{
+    const bool connected = bool(logout);
+    mLogout->setVisible(connected); mRegion->setVisible(connected);
+    mRegion->setText(region);
+    mLogout->setCommitCallback([logout](LLUICtrl*, const LLSD&) { if (logout) logout(); });
+    mTranscript->setShape(LLRect(0, getRect().getHeight() - (connected ? 28 : 0), getRect().getWidth(), 36));
 }
 void VSPlainChat::setSender(std::function<bool(const std::string&)> sender)
 {
@@ -56,6 +79,7 @@ void VSPlainChat::append(const std::string& text)
 void VSPlainChat::clear()
 {
     setSender({});
+    setSession("", {});
     mInput->setText(LLStringExplicit(""));
     mTranscript->setText(LLStringExplicit(""));
 }

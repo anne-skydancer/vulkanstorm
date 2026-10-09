@@ -2063,6 +2063,8 @@ void LLMessageSystem::dispatch(
     LLHTTPNode::ResponsePtr responsep)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
+    if (!gMessageSystem->admitMessage(msg_name, LLHost(message["sender"].asString())))
+    { responsep->result(LLSD()); return; }
     if ((gMessageSystem->mMessageTemplates.find
             (LLMessageStringTable::getInstance()->getString(msg_name.c_str())) ==
                 gMessageSystem->mMessageTemplates.end()) &&
@@ -2980,6 +2982,7 @@ bool LLMessageSystem::callHandler(const char *name,
         return false;
     }
 
+    if (!admitMessage(name, msg->getSender())) return true; // Decoded/ACKed, semantic handler deferred.
     return msg_template->callHandlerFunc(msg);
 }
 

@@ -731,7 +731,8 @@ bool LLTemplateMessageReader::decodeData(const U8* buffer, const LLHost& sender 
             decode_timer.reset();
         }
 
-        if( !mCurrentRMessageTemplate->callHandlerFunc(gMessageSystem) )
+        if (gMessageSystem->admitMessage(mCurrentRMessageTemplate->mName, sender)
+            && !mCurrentRMessageTemplate->callHandlerFunc(gMessageSystem))
         {
             LL_WARNS() << "Message from " << sender << " with no handler function received: " << mCurrentRMessageTemplate->mName << LL_ENDL;
         }

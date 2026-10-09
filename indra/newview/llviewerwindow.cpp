@@ -38,6 +38,7 @@
 void LLViewerWindow::initNativeWindow(const Params&) { throw std::runtime_error("Native Vulkan is not built"); }
 void LLViewerWindow::initNativeBase() { throw std::runtime_error("Native Vulkan is not built"); }
 void LLViewerWindow::drawNativeUI() { throw std::runtime_error("Native Vulkan is not built"); }
+void LLViewerWindow::refreshNativeFonts() {}
 void LLViewerWindow::reshapeNative(S32, S32, F32) {}
 bool LLViewerWindow::nativeMouse(LLCoordGL, MASK, EMouseClickType, bool) { return false; }
 void LLViewerWindow::nativeHover(LLCoordGL, MASK) {}
@@ -1595,7 +1596,7 @@ void LLViewerWindow::handleMouseLeave(LLWindow *window)
 
 bool LLViewerWindow::handleCloseRequest(LLWindow *window, bool from_user)
 {
-    if (mNativeVulkan) { LLAppViewer::instance()->forceQuit(); return true; }
+    if (mNativeVulkan) { LLAppViewer::instance()->requestQuit(); return true; }
     if (!LLApp::isExiting() && !LLApp::isStopped())
     {
         if (from_user)

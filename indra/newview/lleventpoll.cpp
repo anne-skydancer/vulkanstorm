@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "lleventpoll.h"
 #include "llappviewer.h"
@@ -64,6 +67,7 @@ namespace Details
         void                            handleMessage(const LLSD &content);
 
         bool                            mDone;
+        U64                             mNativeGeneration = 0;
         LLCore::HttpRequest::ptr_t      mHttpRequest;
         LLCore::HttpRequest::policy_t   mHttpPolicy;
         std::string                     mSenderIp;
@@ -98,11 +102,22 @@ namespace Details
         mHttpRequest = std::make_shared<LLCore::HttpRequest>();
         mHttpPolicy = app_core_http.getPolicy(LLAppCoreHttp::AP_LONG_POLL);
         mSenderIp = sender.getIPandPort();
+#if VS_NATIVE_VULKAN
+        if (auto owner = VSNativeSession::active()) mNativeGeneration = owner->generation();
+#endif
     }
 
     void LLEventPollImpl::handleMessage(const std::string &msg_name, const LLSD &body)
     {
         LL_PROFILE_ZONE_SCOPED_CATEGORY_APP;
+        if (mDone || gDisconnected) return;
+#if VS_NATIVE_VULKAN
+        if (mNativeGeneration)
+        {
+            auto owner = VSNativeSession::active();
+            if (!owner || owner->generation() != mNativeGeneration) return;
+        }
+#endif
         LLSD message;
         message["sender"] = mSenderIp;
         message["body"] = body;
@@ -113,18 +128,8 @@ namespace Details
     void LLEventPollImpl::handleMessage(const LLSD& content)
     {
         LL_PROFILE_ZONE_SCOPED_CATEGORY_APP;
-        std::string msg_name = content["message"].asString();
-        LLSD message;
-        message["sender"] = mSenderIp;
-        // <FS:ND> Guard against messages with no "body"
-        // message["body"] = content["body"];
-        if (content.has("body"))
-            message["body"] = content["body"];
-        else
-            LL_WARNS() << "Malformed content? " << ll_pretty_print_sd(content) << LL_ENDL;
-        // <FS:ND>
-
-        LLMessageSystem::dispatch(msg_name, message);
+        if (!content.isMap() || !content["message"].isString() || !content["body"].isMap()) return;
+        handleMessage(content["message"].asString(), content["body"]);
     }
 
     void LLEventPollImpl::start(const std::string &url)
@@ -214,7 +219,7 @@ namespace Details
 //          LL_DEBUGS("LLEventPollImpl::eventPollCoro") << "<" << counter << "> result = "
 //              << LLSDXMLStreamer(result) << LL_ENDL;
 
-            if (gDisconnected)
+            if (mDone || gDisconnected)
             {
                 // Lost connection or disconnected during quit, don't process sim/region update
                 // messages, they might populate some cleaned up classes (LLWorld, region and object list)
@@ -395,9 +400,11 @@ namespace Details
                             // convert data to string and pass that string.
                             const LLSD body = (*i)["body"];
                             (*i)["body"].clear();
-                            work = [this, msg_name, body]()
+                            // Queued work must not retain a raw poll owner after stop/destruction.
+                            const std::weak_ptr<LLEventPollImpl> owner = shared_from_this();
+                            work = [owner, msg_name, body]()
                             {
-                                handleMessage(msg_name, body);
+                                if (auto poll = owner.lock()) poll->handleMessage(msg_name, body);
                             };
                         }
                         main_queue->post(work);

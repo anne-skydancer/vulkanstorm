@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsvulkancontext.h"
 #include "llwindow.h"
+#include "llviewercontrol.h"
 #include "vsuirenderer.h"
 #include "vsuiresources.h"
 #pragma push_macro("Bool")
@@ -161,7 +162,7 @@ struct VSVulkanContext::Impl
         auto packets = resources->finish();
         renderer->draw(target, size.mX, size.mY, dpi, packets);
         if (observer) observer(device, context, target, size.mX, size.mY, dpi, packets);
-        swapchain->Present(1);
+        swapchain->Present(gSavedSettings.getBOOL("RenderVSyncEnable") ? 1 : 0);
         renderer->retire();
         return true;
     }

@@ -4,6 +4,8 @@
 #include "lllineeditor.h"
 #include <functional>
 class LLTextEditor;
+class LLButton;
+class LLTextBox;
 
 class VSChatInput : public LLLineEditor
 {
@@ -18,6 +20,7 @@ public:
     explicit VSPlainChat(const Params&);
     // Root view ownership destroys controls and disconnects their callbacks.
     void setSender(std::function<bool(const std::string&)>);
+    void setSession(const std::string& region, std::function<void()> logout);
     void append(const std::string& text);
     void clear();
     VSChatInput* input() const { return mInput; }
@@ -26,5 +29,7 @@ public:
 private:
     VSChatInput* mInput = nullptr;
     LLTextEditor* mTranscript = nullptr;
+    LLButton* mLogout = nullptr;
+    LLTextBox* mRegion = nullptr;
     std::function<bool(const std::string&)> mSender;
 };

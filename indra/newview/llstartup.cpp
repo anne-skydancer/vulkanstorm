@@ -26,6 +26,9 @@
 
 #include "llviewerprecompiledheaders.h"
 #if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
+#if VS_NATIVE_VULKAN
 #include "vsvulkancontext.h"
 #endif
 
@@ -978,6 +981,9 @@ bool idle_startup()
 
         if(gMessageSystem && gMessageSystem->isOK())
         {
+#if VS_NATIVE_VULKAN
+            if (auto session = VSNativeSession::active()) session->install(*static_cast<LLMessageSystem*>(gMessageSystem));
+#endif
             // Initialize all of the callbacks in case of bad message
             // system data
             LLMessageSystem* msg = gMessageSystem;
@@ -2065,14 +2071,9 @@ bool idle_startup()
     {
         if (gViewerWindow->isNativeVulkan())
         {
-            // Authentication is shared; entering a region is the next, separate
-            // connected-session milestone. Return through the real retry UI
-            // rather than spinning forever or constructing the GL world.
-            LLLoginInstance::getInstance()->disconnect();
-            LLSD args;
-            args["ERROR_MESSAGE"] = LLTrans::getString("NativeVulkanRegionUnavailable");
-            LLStartUp::setStartupState(STATE_LOGIN_CONFIRM_NOTIFICATON);
-            LLNotificationsUtil::add("ErrorMessage", args, LLSD(), login_alert_done);
+#if VS_NATIVE_VULKAN
+            if (auto session = VSNativeSession::active()) session->begin();
+#endif
             return false;
         }
         set_startup_status(0.30f, LLTrans::getString("LoginInitializingWorld"), gAgent.mMOTD);
@@ -4274,6 +4275,9 @@ void LLStartUp::postStartupState()
 
 void reset_login()
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) session->reset();
+#endif
     if (!gViewerWindow || !gViewerWindow->isNativeVulkan())
     {
         gAgentWearables.cleanup();
@@ -4821,6 +4825,9 @@ bool process_login_success_response(U32 &first_sim_size_x, U32 &first_sim_size_y
 // </FS:CR> Aurora Sim
 {
     LLSD response = LLLoginInstance::getInstance()->getResponse();
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) return session->acceptLogin(response);
+#endif
 
     // <FS:Ansariel> OpenSim legacy economy support
     //mBenefitsSuccessfullyInit = init_benefits(response);

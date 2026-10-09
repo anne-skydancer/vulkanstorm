@@ -26,9 +26,15 @@
  * $/LicenseInfo$
  */
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "llnotificationsutil.h"
+#include "lltrans.h"
+#endif
 
 #include "llcommandhandler.h"
 #include "llnotificationsutil.h"
+#include "lltrans.h"
 #include "llcommanddispatcherlistener.h"
 #include "llstartup.h"
 #include "stringize.h"
@@ -227,6 +233,14 @@ bool LLCommandDispatcher::dispatch(const std::string& cmd,
                                    const std::string& nav_type,
                                    bool trusted_browser)
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active(); owner && !(cmd == "login" && owner->phase() == VSNativeSession::Phase::Login))
+    {
+        LLSD args; args["ERROR_MESSAGE"] = LLTrans::getString("NativeSessionCommandUnavailable");
+        LLNotificationsUtil::add("ErrorMessage", args); return true;
+    }
+#endif
+
     return LLCommandHandlerRegistry::instance().dispatch(
         cmd, params, query_map, grid, web, nav_type, trusted_browser);
 }

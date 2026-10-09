@@ -26,6 +26,9 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llagent.h"
 
@@ -1325,6 +1328,9 @@ LLViewerRegion *LLAgent::getRegion() const
 
 LLHost LLAgent::getRegionHost() const
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) return session->host();
+#endif
     if (mRegionp)
     {
         return mRegionp->getHost();
@@ -1355,6 +1361,9 @@ bool LLAgent::inPrelude()
 
 std::string LLAgent::getRegionCapability(const std::string &name)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) return session->capability(name);
+#endif
     if (!mRegionp)
         return std::string();
 
@@ -1375,6 +1384,10 @@ bool LLAgent::canManageEstate() const
 //-----------------------------------------------------------------------------
 void LLAgent::sendMessage()
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active())
+    { if (!gDisconnected && gMessageSystem && session->host().isOk()) gMessageSystem->sendMessage(session->host()); return; }
+#endif
     if (gDisconnected)
     {
         LL_WARNS() << "Trying to send message when disconnected!" << LL_ENDL;
@@ -1393,6 +1406,10 @@ void LLAgent::sendMessage()
 //-----------------------------------------------------------------------------
 void LLAgent::sendReliableMessage()
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active())
+    { if (!gDisconnected && gMessageSystem && session->host().isOk()) gMessageSystem->sendReliable(session->host()); return; }
+#endif
     if (gDisconnected)
     {
         LL_DEBUGS() << "Trying to send message when disconnected!" << LL_ENDL;
@@ -1452,6 +1469,9 @@ void LLAgent::setPositionAgent(const LLVector3 &pos_agent)
         mPositionGlobal = pos_agent_d + mAgentOriginGlobal;
     }
 
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return; // CPU position retained; unowned scene observers deferred.
+#endif
     if (((mLastTestGlobal - mPositionGlobal).lengthSquared() > 1.0) && !mOnPositionChanged.empty())
     {   // If the position has changed my more than 1 meter since the last time we triggered.
         // filters out some noise.

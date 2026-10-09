@@ -26,6 +26,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llurldispatcher.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "lltrans.h"
+#endif
 
 // viewer includes
 #include "llagent.h"            // teleportViaLocation()
@@ -225,6 +229,13 @@ bool LLURLDispatcherImpl::dispatchRegion(const LLSLURL& slurl, const std::string
         // <FS:Ansariel> [FS Login Panel]
         return true;
     }
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        LLSD args; args["ERROR_MESSAGE"] = LLTrans::getString("NativeSessionRegionUnavailable");
+        LLNotificationsUtil::add("ErrorMessage", args); return true;
+    }
+#endif
 // <FS:AW hypergrid support >
 //    if (!handleGrid(slurl))
 //    {
