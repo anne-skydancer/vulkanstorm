@@ -1117,11 +1117,11 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             preedit.updatePreedit(LLWString{0x0416},{1},{true},1);
             S32 pos=0,length=0;preedit.getPreeditRange(&pos,&length);
             require(length==1,"Native production chat preeditor did not install composition");
-            preedit.resetPreedit();
             chat->transcript()->setCursorAndScrollToEnd();
             const auto before=chat->transcript()->getVisibleDocumentRect();
             require(chat->transcript()->handleScrollWheel(20,20,-3),"Native production chat rejected scroll");
-            startup_window->drawNativeUI(); // Layout and compare the scrolled viewport; observer contributes a separate readback.
+            startup_window->drawNativeUI(); // Compare the scrolled viewport and visible preedit before committing/resetting it.
+            preedit.resetPreedit();
             require(before!=chat->transcript()->getVisibleDocumentRect(),"Native production chat viewport did not scroll");
 #if LL_WINDOWS
             const auto hwnd=static_cast<HWND>(window->getPlatformWindow());
