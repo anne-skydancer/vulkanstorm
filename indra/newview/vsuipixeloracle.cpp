@@ -16,7 +16,7 @@ bool top_left(const Vertex &a, const Vertex &b)
 }
 } // namespace
 std::vector<std::uint8_t> vs_ui_expected_pixels(unsigned width, unsigned height, float dpi,
-                                                const std::vector<VSUIRenderer::Packet> &packets)
+                                                const std::vector<VSUIRenderer::Packet> &packets, unsigned subpixel_bits)
 {
     std::vector<std::uint8_t> out(std::size_t(width) * height * 4);
     for (std::size_t i = 0; i < out.size(); i += 4)
@@ -65,12 +65,26 @@ std::vector<std::uint8_t> vs_ui_expected_pixels(unsigned width, unsigned height,
         for (unsigned first : {0u, 3u})
         {
             Vertex a = vertices[first], b = vertices[first + 1], c = vertices[first + 2];
+            Vertex original_a=a, original_b=b, original_c=c;
+            if (subpixel_bits)
+            {
+                // Coverage uses the device's advertised fixed-point raster grid.
+                // Keep unrounded positions for varying interpolation; subpixel
+                // coverage must not change texture coordinates or relax RGB checks.
+                const double grid=std::ldexp(1.0,int(subpixel_bits));
+                for (auto* v:{&a,&b,&c})
+                {
+                    v->x=float(std::round(v->x*grid)/grid);
+                    v->y=float(std::round(v->y*grid)/grid);
+                }
+            }
             double area = edge(a, b, c.x, c.y);
             if (area == 0)
                 continue;
             if (area < 0)
             {
                 std::swap(b, c);
+                std::swap(original_b, original_c);
                 area = -area;
             }
             const int l = std::max({0, int(std::floor(std::min({a.x, b.x, c.x}))), int(std::floor(p.clip[0] * dpi))}),
@@ -87,8 +101,12 @@ std::vector<std::uint8_t> vs_ui_expected_pixels(unsigned width, unsigned height,
                     if (e0 < 0 || e1 < 0 || e2 < 0 || (e0 == 0 && !top_left(b, c)) || (e1 == 0 && !top_left(c, a)) ||
                         (e2 == 0 && !top_left(a, b)))
                         continue;
+                    const double original_area=edge(original_a,original_b,original_c.x,original_c.y);
+                    const double w0=edge(original_b,original_c,x+.5,y+.5),
+                                 w1=edge(original_c,original_a,x+.5,y+.5),
+                                 w2=edge(original_a,original_b,x+.5,y+.5);
                     auto interpolate = [&](float Vertex::*m) {
-                        return float((e0 * (a.*m) + e1 * (b.*m) + e2 * (c.*m)) / area);
+                        return float((w0 * (original_a.*m) + w1 * (original_b.*m) + w2 * (original_c.*m)) / original_area);
                     };
                     const auto u = interpolate(&Vertex::u), v = interpolate(&Vertex::v);
                     const double alpha = sample(u, v, 3) * interpolate(&Vertex::a);

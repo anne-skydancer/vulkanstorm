@@ -47,6 +47,7 @@
 #include "llviewernetwork.h"        // FIX FIRE 3143 SJ
 #include "llcorehttputil.h"
 #include "llfloaterreg.h"
+#include "llrender2dutils.h"
 LLFloaterTOS::LLFloaterTOS(const LLSD& data)
 :   LLModalDialog( data["message"].asString() ),
     mMessage(data["message"].asString()),
@@ -220,6 +221,25 @@ LLFloaterTOS::~LLFloaterTOS()
 // virtual
 void LLFloaterTOS::draw()
 {
+    if (LLRender2D::isNativeUI() && gViewerWindow)
+    {
+        const auto available = gViewerWindow->getWindowRectScaled();
+        const S32 width = llmin(getRect().getWidth(), llmax(240,available.getWidth()-16));
+        const S32 height = llmin(getRect().getHeight(), llmax(200,available.getHeight()-16));
+        if (width != getRect().getWidth() || height != getRect().getHeight())
+        {
+            setShape(LLRect(8,available.getHeight()-8,8+width,available.getHeight()-8-height));
+            auto shape = [&](const char* name, const LLRect& rect)
+            { if (auto* view=findChild<LLView>(name)) view->setShape(rect); };
+            shape("Continue",LLRect(width-116,32,width-16,12));
+            shape("Cancel",LLRect(16,32,116,12));
+            shape("tos_text",LLRect(16,height-30,width-16,48));
+            shape("tos_heading",LLRect(16,height-20,width-16,height-75));
+            shape("tos_html",LLRect(16,height-90,width-16,110));
+            shape("agree_chk",LLRect(16,100,width-16,84));
+            shape("agree_list",LLRect(36,80,width-16,40));
+        }
+    }
     // draw children
     LLModalDialog::draw();
 }

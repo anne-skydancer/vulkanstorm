@@ -23,6 +23,7 @@
 #include "vsvulkancontext.h"
 #include "vsuicontext.h"
 #include "vsstartupui.h"
+#include "vsplainchat.h"
 #include "vsuiadmission.h"
 #include <stdexcept>
 namespace
@@ -44,7 +45,8 @@ void LLViewerWindow::initNativeWindow(const Params& p)
         mWindow->setMinSize(p.min_width, p.min_height, false);
         LLCoordWindow size;
         require(mWindow->getSize(&size), "Native viewer extent is unavailable");
-        const F32 dpi = llclamp(gSavedSettings.getF32("UIScaleFactor") * mWindow->getSystemUISize(), 0.75f, 4.f);
+        mNativeSystemScale = mWindow->getSystemUISize();
+        const F32 dpi = llclamp(gSavedSettings.getF32("UIScaleFactor") * mNativeSystemScale, 0.75f, 4.f);
         mDisplayScale.setVec(dpi, dpi);
         mWindowRectRaw       = LLRect(0, size.mY, size.mX, 0);
         mWindowRectScaled    = LLRect(0, ll_round(size.mY / dpi), ll_round(size.mX / dpi), 0);
@@ -94,6 +96,13 @@ void LLViewerWindow::initNativeBase()
     auto* login          = LLUICtrlFactory::create<LLPanel>(holder, mRootView);
     require(login != nullptr, "Native login holder creation failed");
     mLoginPanelHolder = login->getHandle();
+    LLPanel::Params chat;
+    chat.name = "native_nearby_chat";
+    chat.rect = LLRect(10, 270, 510, 10);
+    chat.follows.flags = FOLLOWS_LEFT | FOLLOWS_BOTTOM;
+    chat.visible = false; // The connected session owner supplies transport and visibility.
+    mNativeChat = LLUICtrlFactory::create<VSPlainChat>(chat, mRootView);
+    require(mNativeChat != nullptr, "Required native nearby-chat owner creation failed");
     LLViewerMenuHolderGL::Params menu_holder;
     menu_holder.name = "Menu Holder";
     menu_holder.rect = mWindowRectScaled;
@@ -142,15 +151,18 @@ void LLViewerWindow::initNativeBase()
 void LLViewerWindow::drawNativeUI()
 {
     require(mVulkanContext && mRootView, "Native viewer drawing requires initialized ownership");
-    LLLayoutStack::updateClass();
+    if (mDisplayScale.mV[VX] != llclamp(gSavedSettings.getF32("UIScaleFactor") * mNativeSystemScale, .75f, 4.f))
+        reshapeNative(mWindowRectRaw.getWidth(), mWindowRectRaw.getHeight());
+    updateUI(); // Native branch updates layout and real focus/edit-menu ownership.
     mVulkanContext->present(mDisplayScale.mV[VX], [&] { mRootView->draw(); });
 }
 
-void LLViewerWindow::reshapeNative(S32 width, S32 height)
+void LLViewerWindow::reshapeNative(S32 width, S32 height, F32 system_scale)
 {
     if (width <= 0 || height <= 0 || !mNativeUI)
         return;
-    const F32 dpi = llclamp(gSavedSettings.getF32("UIScaleFactor") * mWindow->getSystemUISize(), .75f, 4.f);
+    if (std::isfinite(system_scale) && system_scale > 0.f) mNativeSystemScale = system_scale;
+    const F32 dpi = llclamp(gSavedSettings.getF32("UIScaleFactor") * mNativeSystemScale, .75f, 4.f);
     if (dpi != mDisplayScale.mV[VX])
     {
         mVulkanContext->wait();

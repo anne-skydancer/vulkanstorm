@@ -310,7 +310,7 @@ bool LLFloaterReg::canShowInstance(std::string_view name, const LLSD& key)
 //static
 LLFloater* LLFloaterReg::showInstance(std::string_view name, const LLSD& key, bool focus)
 {
-    if (!VSUIAdmission::floater(name)) return nullptr;
+    if (!VSUIAdmission::floater(name)) { VSUIAdmission::unsupported(name); return nullptr; }
 //  if( sBlockShowFloaters
 //          // see EXT-7090
 //          && sAlwaysShowableList.find(name) == sAlwaysShowableList.end())
@@ -539,6 +539,7 @@ void LLFloaterReg::registerControlVariables()
 //static
 void LLFloaterReg::toggleInstanceOrBringToFront(const LLSD& sdname, const LLSD& key)
 {
+    if (!VSUIAdmission::floater(sdname.asString())) { VSUIAdmission::unsupported(sdname.asString()); return; }
     //
     // Floaters controlled by the toolbar behave a bit differently from others.
     // Namely they have 3-4 states as defined in the design wiki page here:
@@ -614,6 +615,7 @@ void LLFloaterReg::toggleInstanceOrBringToFront(const LLSD& sdname, const LLSD& 
 // unlike showInstance() does not trigger onOpen() if already open
 void LLFloaterReg::showInstanceOrBringToFront(const LLSD& sdname, const LLSD& key)
 {
+    if (!VSUIAdmission::floater(sdname.asString())) { VSUIAdmission::unsupported(sdname.asString()); return; }
     std::string name = sdname.asString();
     LLFloater* instance = getInstance(name, key);
 

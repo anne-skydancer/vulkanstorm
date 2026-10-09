@@ -29,6 +29,7 @@
 #include "llcombobox.h"
 #include "lliconctrl.h"
 #include "llfloaterreg.h"
+#include "vsuiadmission.h"
 #include "llhttpconstants.h"
 #include "lllayoutstack.h"
 #include "llpluginclassmedia.h"
@@ -158,6 +159,12 @@ bool LLFloaterWebContent::matchesKey(const LLSD& key)
 //static
 LLFloater* LLFloaterWebContent::create( Params p)
 {
+    if (!VSUIAdmission::floater(p.window_class()))
+    {
+        VSUIAdmission::unsupported(p.window_class());
+        if (LLViewerMedia::instanceExists() && !p.id().empty()) LLViewerMedia::instance().proxyWindowClosed(p.id());
+        return nullptr;
+    }
     preCreate(p);
     return new LLFloaterWebContent(p);
 }
