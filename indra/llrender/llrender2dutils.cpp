@@ -46,6 +46,7 @@ namespace
 {
 LLRender2D::native_rect_t native_rectangle;
 LLRender2D::native_clip_t native_clip;
+std::function<void(const LLRender2D::native_triangle_t&)> native_triangle;
 std::vector<std::array<F32,2>> native_origins;
 F32 native_line_width=1.f;
 U8 native_blend=LLRender::BT_ALPHA;
@@ -56,6 +57,23 @@ void LLRender2D::setNativeUI(native_rect_t rectangle,native_clip_t clip)
         throw std::logic_error("Native UI drawing requires exclusive rectangle/clip ownership");
     native_rectangle=std::move(rectangle);native_clip=std::move(clip);
     native_blend=LLRender::BT_ALPHA;native_line_width=1.f;native_origins.clear();if (native_rectangle) native_origins.push_back({0,0});
+}
+void LLRender2D::setNativeTriangles(std::function<void(const native_triangle_t&)> callback)
+{
+    if (callback && (!isNativeUI() || native_triangle)) throw std::logic_error("Native triangles require exclusive drawing ownership");
+    native_triangle = std::move(callback);
+}
+void LLRender2D::nativeTriangle(const native_triangle_t& vertices)
+{
+    if (!native_triangle) throw std::logic_error("Native UI triangle publication is unavailable");
+    auto physical = vertices;
+    const auto origin = nativeOrigin();
+    for (auto& v : physical)
+    {
+        v[0] = (v[0] + origin[0]) * LLFontGL::sScaleX;
+        v[1] = (v[1] + origin[1]) * LLFontGL::sScaleY;
+    }
+    native_triangle(physical);
 }
 bool LLRender2D::isNativeUI() { return bool(native_rectangle); }
 void LLRender2D::setSceneBlendType(U8 type)
@@ -215,6 +233,25 @@ void gl_rect_2d( const LLRect& rect, const LLColor4& color, bool filled )
 // and along the bottom it has height "lines".
 void gl_drop_shadow(S32 left, S32 top, S32 right, S32 bottom, const LLColor4 &start_color, S32 lines)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        --right;
+        ++bottom;
+        ++lines;
+        LLColor4 end_color = start_color;
+        end_color.mV[VALPHA] = 0.f;
+        LLRender2D::nativeTriangle({{ { F32(right), F32(top - lines), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(right), F32(bottom), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(right + lines), F32(bottom), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] } }});
+        LLRender2D::nativeTriangle({{ { F32(right), F32(top - lines), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(right + lines), F32(bottom), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] }, { F32(right + lines), F32(top - lines), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] } }});
+        LLRender2D::nativeTriangle({{ { F32(right), F32(bottom), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(left + lines), F32(bottom), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(left + lines), F32(bottom - lines), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] } }});
+        LLRender2D::nativeTriangle({{ { F32(right), F32(bottom), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(left + lines), F32(bottom - lines), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] }, { F32(right), F32(bottom - lines), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] } }});
+        LLRender2D::nativeTriangle({{ { F32(left + lines), F32(bottom), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(left), F32(bottom), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] }, { F32(left + 1), F32(bottom - lines + 1), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] } }});
+        LLRender2D::nativeTriangle({{ { F32(left + lines), F32(bottom), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(left + 1), F32(bottom - lines + 1), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] }, { F32(left + lines), F32(bottom - lines), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] } }});
+        LLRender2D::nativeTriangle({{ { F32(right), F32(bottom), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(right), F32(bottom - lines), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] }, { F32(right + lines - 1), F32(bottom - lines + 1), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] } }});
+        LLRender2D::nativeTriangle({{ { F32(right), F32(bottom), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(right + lines - 1), F32(bottom - lines + 1), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] }, { F32(right + lines), F32(bottom), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] } }});
+        LLRender2D::nativeTriangle({{ { F32(right), F32(top - lines), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(right + lines), F32(top - lines), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] }, { F32(right + lines - 1), F32(top - 1), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] } }});
+        LLRender2D::nativeTriangle({{ { F32(right), F32(top - lines), start_color.mV[0], start_color.mV[1], start_color.mV[2], start_color.mV[3] }, { F32(right + lines - 1), F32(top - 1), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] }, { F32(right), F32(top), end_color.mV[0], end_color.mV[1], end_color.mV[2], end_color.mV[3] } }});
+        return;
+    }
     stop_glerror();
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 

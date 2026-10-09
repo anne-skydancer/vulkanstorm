@@ -67,6 +67,8 @@ protected:
 
     LLSD mPayload;  // stores data that this item represents in the radio group
 };
+const std::type_info& LLRadioGroup::itemType() { return typeid(LLRadioCtrl); }
+
 static LLWidgetNameRegistry::StaticRegistrar register_radio_item(&typeid(LLRadioGroup::ItemParams), "radio_item");
 
 LLRadioGroup::Params::Params()

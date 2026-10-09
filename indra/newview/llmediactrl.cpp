@@ -28,6 +28,13 @@
 #include "lltooltip.h"
 
 #include "llmediactrl.h"
+#if VS_NATIVE_VULKAN
+#include "vsuidrawbridge.h"
+#include "vsuiresources.h"
+#include "vsmediapixels.h"
+#include "llimage.h"
+#endif
+
 
 // viewer includes
 #include "llfloaterworldmap.h"
@@ -156,6 +163,11 @@ LLMediaCtrl::LLMediaCtrl( const Params& p) :
 
 LLMediaCtrl::~LLMediaCtrl()
 {
+#if VS_NATIVE_VULKAN
+    if (auto* resources = VSUIDrawBridge::resources()) resources->erase("media:" + mMediaTextureID.asString());
+    mNativeMediaImage = nullptr;
+#endif
+
     auto menu = mContextMenuHandle.get();
     if (menu)
     {
@@ -836,6 +848,59 @@ LLPluginClassMedia* LLMediaCtrl::getMediaPlugin()
 //
 void LLMediaCtrl::draw()
 {
+#if VS_NATIVE_VULKAN
+    if (auto* resources = VSUIDrawBridge::resources())
+    {
+        if (mUpdateScrolls)
+        {
+            reshape(getRect().getWidth(), getRect().getHeight(), false);
+            mUpdateScrolls = false;
+        }
+        LLPluginClassMedia* plugin = mMediaSource && mMediaSource->hasMedia() ? mMediaSource->getMediaPlugin() : nullptr;
+        bool ready = plugin && plugin->textureValid();
+        if (ready)
+        {
+            const S32 width = plugin->getWidth(), height = plugin->getHeight();
+            if (!mNativeMediaImage || width != mNativeMediaWidth || height != mNativeMediaHeight || plugin->getDirty())
+            {
+                if (plugin->getTextureDepth() != 4 || plugin->getTextureFormatType() != GL_UNSIGNED_BYTE ||
+                    plugin->getTextureFormatSwapBytes() ||
+                    (plugin->getTextureFormatInternal() != GL_RGB && plugin->getTextureFormatInternal() != GL_RGBA) ||
+                    (plugin->getTextureFormatPrimary() != GL_RGBA && plugin->getTextureFormatPrimary() != GL_BGRA))
+                    throw std::runtime_error("Unsupported native media pixel format");
+                auto pixels = vs_media_pixels(plugin->getBitsData(), width, height, plugin->getBitsWidth(),
+                    plugin->getBitsHeight(), plugin->getTextureFormatPrimary() == GL_BGRA, plugin->getTextureCoordsOpenGL(),
+                    plugin->getTextureFormatInternal() == GL_RGB);
+                LLPointer<LLImageRaw> raw = new LLImageRaw(width, height, 4);
+                memcpy(raw->getData(), pixels.data(), pixels.size());
+                mNativeMediaImage = resources->publish("media:" + mMediaTextureID.asString(), *raw);
+                mNativeMediaWidth = width; mNativeMediaHeight = height;
+                plugin->resetDirty();
+            }
+            const F32 scale = LLUI::getScaleFactor().mV[VX];
+            if (scale != mMediaSource->getPageZoomFactor())
+            {
+                mMediaSource->setPageZoomFactor(scale);
+                mUpdateScrolls = true;
+            }
+            S32 x, y, draw_width, draw_height;
+            calcOffsetsAndSize(&x, &y, &draw_width, &draw_height);
+            mNativeMediaImage->draw(x, y, draw_width, draw_height, LLColor4::white % getDrawContext().mAlpha);
+        }
+        else
+        {
+            mNativeMediaImage = nullptr;
+            resources->erase("media:" + mMediaTextureID.asString());
+        }
+        if (mBorder && mBorder->getVisible()) mBorder->setKeyboardFocusHighlight(gFocusMgr.childHasKeyboardFocus(this));
+        const bool background = isBackgroundVisible();
+        setBackgroundVisible(!ready);
+        LLPanel::draw();
+        setBackgroundVisible(background);
+        return;
+    }
+#endif
+
     F32 alpha = getDrawContext().mAlpha;
 
     if ( gRestoreGL == 1 || mUpdateScrolls)

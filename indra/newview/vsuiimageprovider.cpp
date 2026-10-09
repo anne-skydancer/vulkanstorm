@@ -99,7 +99,10 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImage(const std::string &name, S32)
     LLPointer<LLImageRaw> raw = new LLImageRaw;
     if (path.empty() || !formatted || !formatted->load(path) || !formatted->decode(raw, 0))
         throw std::runtime_error("Native UI skin image decode failed: " + file);
-    auto image = c.resources.publish("skin:" + name, *raw);
+    c.resources.publish("skin:" + name, *raw);
+    // Controls may resolve an image again by getName(); expose the original
+    // skin declaration name while keeping GPU ownership keys private.
+    auto image = c.resources.region("skin:" + name, name, LLRectf(0.f, 1.f, 1.f, 0.f));
     auto region = [&](const LLRect &r, S32 width, S32 height) {
         return LLRectf(llclamp(static_cast<F32>(r.mLeft) / width, 0.f, 1.f),
                        llclamp(static_cast<F32>(r.mTop) / height, 0.f, 1.f),

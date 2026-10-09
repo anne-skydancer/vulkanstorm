@@ -835,7 +835,6 @@ bool LLPanel::buildFromFile(const std::string& filename, const LLPanel::Params& 
 //-----------------------------------------------------------------------------
 LLPanel* LLPanel::createFactoryPanel(const std::string& name)
 {
-    if (!VSUIAdmission::panelFactory(name)) return nullptr;
     std::deque<const LLCallbackMap::map_t*>::iterator itor;
     for (itor = sFactoryStack.begin(); itor != sFactoryStack.end(); ++itor)
     {
@@ -845,6 +844,9 @@ LLPanel* LLPanel::createFactoryPanel(const std::string& name)
         LLCallbackMap::map_const_iter_t iter = factory_map->find( name );
         if (iter != factory_map->end())
         {
+            // Named ordinary panels retain the admitted LLPanel path. Only
+            // registered factories can instantiate specialized viewer controls.
+            if (!VSUIAdmission::panelFactory(name)) return nullptr;
             // Use the factory to create the panel, instead of using a default LLPanel.
             LLPanel *ret = (LLPanel*) iter->second.mCallback( iter->second.mData );
             return ret;

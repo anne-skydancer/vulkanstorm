@@ -15,6 +15,27 @@
 #include "lluictrlfactory.h"
 #include "llfloaterreg.h"
 #include "llpanel.h"
+#include "llviewerwindow.h"
+#include "llappviewer.h"
+#include "llpluginprocessparent.h"
+#include "llnotifications.h"
+#include "llfloatertos.h"
+#include "lltoastalertpanel.h"
+#include "llviewermedia.h"
+#include "vsvulkancontext.h"
+#include "llviewercontrol.h"
+#include "llprogressview.h"
+#include "fspanellogin.h"
+#include "llsecapi.h"
+#include "llviewernetwork.h"
+#include "llrootview.h"
+#include "lllineeditor.h"
+#include "lltexteditor.h"
+#include "llbutton.h"
+#include "llfocusmgr.h"
+#include "lldir.h"
+#include "llmimetypes.h"
+#include "llerrorcontrol.h"
 #include "llwindow.h"
 #include "llwindowcallbacks.h"
 #include "llkeyboard.h"
@@ -109,6 +130,14 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     bool quit = false, minimized_observed = false, cleaned = false;
     bool clear_readback_verified = false;
     bool ui_mode = false, ui_verified = false;
+    bool startup_mode = false, startup_login = false, startup_progress = false;
+    unsigned startup_readbacks = 0;
+    std::unique_ptr<LLViewerWindow> startup_window;
+    bool startup_http = false;
+    LLNotificationPtr startup_alert;
+    LLHandle<LLFloater> startup_critical;
+    bool startup_alert_verified = false, startup_critical_verified = false;
+    LLError::RecorderPtr startup_log;
     unsigned ui_readbacks = 0;
     bool ui_xui_verified=false,ui_input_verified=false,ui_focus_verified=false;
     std::function<bool(llwchar)> unicode_handler;
@@ -129,6 +158,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     {
         if (const char* value = std::getenv("VS_VULKAN_DIAGNOSTIC_FAIL")) injected = value;
         ui_mode = std::getenv("VS_VULKAN_DIAGNOSTIC_UI") != nullptr;
+        startup_mode = std::getenv("VS_VULKAN_DIAGNOSTIC_STARTUP") != nullptr;
         std::filesystem::create_directories(evidence);
         std::filesystem::remove(evidence / "viewer-presentation.json");
     }
@@ -158,6 +188,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     }
     void initialize()
     {
+        if (startup_mode) { initializeStartup(); return; }
         using namespace Diligent;
         diagnostic_errors = 0;
         inject("before-window");
@@ -702,6 +733,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     }
     bool frame()
     {
+        if (startup_mode) return frameStartup();
         if (!failure.empty()) return true;
         require(std::chrono::steady_clock::now() - started < std::chrono::seconds(30),
             "Viewer diagnostic lifecycle timed out");
@@ -773,6 +805,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     void cleanup()
     {
         if (cleaned) return;
+        if (startup_mode) { cleanupStartup(); return; }
         if (context)
         {
             context->SetRenderTargets(0, nullptr, nullptr, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -806,8 +839,205 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         require(diagnostic_errors == 0, "Viewer Vulkan diagnostics contain errors");
         inject("shutdown");
     }
+
+    void initializeStartup()
+    {
+        startup_log = LLError::addGenericRecorder([](LLError::ELevel level, const std::string& message)
+        { if (level >= LLError::LEVEL_INFO) std::cerr << "NATIVE_STARTUP " << message << '\n'; });
+        diagnostic_errors = 0;
+        auto* engine = Diligent::LoadAndGetEngineFactoryVk();
+        require(engine != nullptr, "Native startup factory is missing");
+        engine->SetMessageCallback(diagnostic);
+        gDirUtilp->initAppDirs("VulkanstormNativeStartupDiagnostic", std::filesystem::current_path().string());
+        require(gSavedSettings.loadFromFile("app_settings/settings.xml", true, false) > 0, "Native startup settings are missing");
+        if (const char* skin = std::getenv("VS_VULKAN_DIAGNOSTIC_SKIN")) gSavedSettings.setString("SkinCurrent", skin);
+        if (const char* theme = std::getenv("VS_VULKAN_DIAGNOSTIC_THEME")) gSavedSettings.setString("SkinCurrentTheme", theme);
+        gDirUtilp->setSkinFolder(gSavedSettings.getString("SkinCurrent"), gSavedSettings.getString("SkinCurrentTheme"), "en");
+        const auto skin_settings = gDirUtilp->getExpandedFilename(LL_PATH_TOP_SKIN, "settings.xml");
+        if (std::filesystem::is_regular_file(skin_settings))
+            require(gSavedSettings.loadFromFile(skin_settings, true, false) > 0, "Native startup skin settings cannot be loaded");
+        LLAppViewer::instance()->getAppCoreHttp().init();
+        startup_http = true;
+        gSavedSettings.setBOOL("RenderDebugGLSession", true);
+        gSavedSettings.setBOOL("PluginUseReadThread", false);
+        require(gViewerWindow == nullptr, "Native startup requires exclusive viewer ownership");
+        LLViewerWindow::Params params;
+        params.title("Vulkanstorm native startup qualification").name("VulkanstormNativeStartupDiagnostic")
+            .x(100).y(100).width(640).height(480).min_width(320).min_height(240);
+        startup_window = std::make_unique<LLViewerWindow>(params, true);
+        gViewerWindow = startup_window.get();
+        window = startup_window->getWindow();
+        require(!gGLManager.mInited, "Native LLViewerWindow initialized GL");
+        stages.emplace_back("native-viewer-window-created");
+        std::cout << "DILIGENT_DEVICE=" << startup_window->nativeContext()->adapter() << '\n';
+        const auto& actual = startup_window->nativeContext()->adapterInfo();
+        identity = {{"name", actual.Description}, {"vendor_id", actual.VendorId},
+            {"device_id", actual.DeviceId}, {"adapter_type", static_cast<unsigned>(actual.Type)}};
+        loadedLibraries();
+        startup_window->nativeContext()->setFrameObserver([this](auto* dev, auto* ctx, auto* target, auto width, auto height, auto dpi, const auto& packets)
+        { captureStartup(dev, ctx, target, width, height, dpi, packets); });
+        startup_window->initBase();
+        startup_progress = startup_window->getProgressView() != nullptr;
+        require(startup_progress, "Required native progress owner is missing");
+        stages.emplace_back("native-startup-progress-created");
+        initializeSecHandler();
+        LLGridManager::instance();
+#if LL_LINUX
+        LLMIMETypes::parseMIMETypes("mime_types_linux.xml");
+#else
+        LLMIMETypes::parseMIMETypes("mime_types.xml");
+#endif
+        FSPanelLogin::show(startup_window->getWindowRectScaled(), [](S32, void*) { throw std::runtime_error("Unexpected authentication request in offline startup qualification"); }, nullptr);
+        auto* holder = startup_window->getLoginPanelHolder();
+        require(holder && holder->findChild<LLLineEditor>("password_edit") && holder->findChild<LLButton>("connect_btn") &&
+            holder->findChild<LLMediaCtrl>("login_html"), "Required existing login controls are missing");
+        startup_login = true;
+        stages.emplace_back("native-login-controller-created");
+        FSPanelLogin::giveFocus();
+        auto* password = holder->findChild<LLLineEditor>("password_edit");
+        password->setFocus(true);
+        require(startup_window->handleUnicodeChar('x', MASK_NONE) && password->getText() == "x", "Native viewer Unicode route did not edit the login control");
+        require(startup_window->handleTranslatedKeyDown(KEY_BACKSPACE, MASK_NONE, false) && password->getText().empty(), "Native viewer key route did not edit the login control");
+        startup_window->handleFocusLost(window);
+        require(!gFocusMgr.getAppHasFocus() && !gFocusMgr.getMouseCapture(), "Native viewer focus loss did not release capture");
+        startup_window->handleFocus(window);
+        window->show();
+        inject("startup-ui");
+    }
+    void captureStartup(Diligent::IRenderDevice* dev, Diligent::IDeviceContext* ctx, Diligent::ITextureView* target,
+        unsigned width, unsigned height, float dpi, const std::vector<VSUIRenderer::Packet>& packets)
+    {
+        using namespace Diligent;
+        require(!packets.empty(), "Native startup traversal emitted no UI packets");
+        auto desc = target->GetTexture()->GetDesc();
+        require(desc.Format == TEX_FORMAT_RGBA8_UNORM || desc.Format == TEX_FORMAT_BGRA8_UNORM, "Unsupported startup readback format");
+        const bool bgra = desc.Format == TEX_FORMAT_BGRA8_UNORM;
+        desc.Name = "Native LLViewerWindow startup readback";
+        desc.Usage = USAGE_STAGING; desc.BindFlags = BIND_NONE; desc.CPUAccessFlags = CPU_ACCESS_READ;
+        RefCntAutoPtr<ITexture> readback;
+        dev->CreateTexture(desc, nullptr, &readback);
+        require(readback != nullptr, "Native startup readback allocation failed");
+        ctx->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        CopyTextureAttribs copy{}; copy.pSrcTexture = target->GetTexture(); copy.pDstTexture = readback;
+        copy.SrcTextureTransitionMode = copy.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        ctx->CopyTexture(copy); ctx->WaitForIdle();
+        MappedTextureSubresource mapped{};
+        ctx->MapTextureSubresource(readback, 0, 0, MAP_READ, MAP_FLAG_DO_NOT_WAIT, nullptr, mapped);
+        require(mapped.pData != nullptr, "Native startup readback mapping failed");
+        const auto expected = vs_ui_expected_pixels(width, height, dpi, packets);
+        std::ofstream image(evidence / ("startup-" + std::to_string(startup_readbacks) + ".ppm"), std::ios::binary);
+        image << "P6\n" << width << ' ' << height << "\n255\n";
+        unsigned mismatch = 0;
+        for (unsigned y=0; y<height; ++y) for (unsigned x=0; x<width; ++x)
+        {
+            const auto* p = static_cast<const std::uint8_t*>(mapped.pData) + y*mapped.Stride + x*4;
+            const std::uint8_t rgba[]{p[bgra?2:0],p[1],p[bgra?0:2],p[3]};
+            image.write(reinterpret_cast<const char*>(rgba),3);
+            for (unsigned c=0; c<4; ++c)
+                if (std::abs(int(rgba[c])-int(expected[(std::size_t(y)*width+x)*4+c])) > 3) { ++mismatch; break; }
+        }
+        ctx->UnmapTextureSubresource(readback,0,0);
+        require(image.good(), "Native startup readback artifact could not be saved");
+        std::cerr << "NATIVE_STARTUP_PIXELS=" << mismatch << " packets=" << packets.size() << " dpi=" << dpi << '\n';
+        require(mismatch == 0, "Native startup pixel oracle mismatch");
+        ++startup_readbacks;
+    }
+    bool frameStartup()
+    {
+        if (!failure.empty()) return true;
+        require(std::chrono::steady_clock::now()-started < std::chrono::seconds(60), "Native startup qualification timed out");
+        window->gatherInput();
+        require(!gGLManager.mInited, "Native startup frame entered GL initialization");
+        inject("startup-frame");
+        if (frames == 1)
+        {
+            LLSD args;
+            args["MESSAGE"] = "Native viewer modal alert";
+            startup_alert = LLNotifications::instance().add("GenericAlert", args, LLSD());
+            require(startup_alert && !LLNotificationChannel::getInstance("AlertModal")->isEmpty(), "Native modal alert was not admitted");
+            startup_alert_verified = true;
+        }
+        if (frames == 2)
+        {
+            LLNotifications::instance().cancel(startup_alert);
+            startup_alert.reset();
+            LLSD data;
+            data["message"] = "Native viewer critical agreement message";
+            auto* critical = LLFloaterReg::showInstance("message_critical", data, true);
+            require(critical && critical->findChild<LLTextEditor>("tos_text") && critical->findChild<LLButton>("Continue"), "Required native critical-message controls are missing");
+            startup_critical = critical->getHandle();
+            startup_critical_verified = true;
+        }
+        if (frames == 3)
+        {
+            if (auto* critical = startup_critical.get()) critical->closeFloater();
+            require(window->setSize(LLCoordWindow(800,600)), "Native startup resize failed");
+            gSavedSettings.setF32("UIScaleFactor",1.25f);
+            startup_window->reshape(800,600);
+            startup_window->getProgressView()->initTextures(1,true);
+            startup_window->getProgressView()->setPercent(55.f);
+            startup_window->getProgressView()->setVisible(true);
+            stages.emplace_back("native-startup-resize-dpi-progress");
+        }
+        if (frames == 6)
+        {
+            const auto before=startup_readbacks;
+            window->minimize(); window->gatherInput();
+#if LL_WINDOWS
+            require(window->getMinimized(), "Native startup HWND did not minimize");
+#endif
+            if (window->getMinimized())
+            {
+                startup_window->drawNativeUI();
+                require(startup_readbacks == before, "Minimized native viewer submitted UI");
+            }
+            window->restore();
+            startup_window->getProgressView()->setVisible(false);
+            stages.emplace_back("native-startup-restored");
+        }
+        startup_window->drawNativeUI();
+        ++frames;
+        return frames == 9;
+    }
+    void cleanupStartup()
+    {
+        if (startup_window)
+        {
+            startup_window->nativeContext()->setFrameObserver({});
+            startup_window->shutdownViews();
+            stages.emplace_back("native-startup-ui-released");
+            startup_window->shutdownGL();
+            stages.emplace_back("native-startup-graphics-released");
+            startup_window.reset();
+            gViewerWindow=nullptr;window=nullptr;
+            delete gKeyboard;gKeyboard=nullptr;
+            stages.emplace_back("native-startup-window-released");
+        }
+        LLPluginProcessParent::shutdown();
+        clearSecHandler();
+        if (startup_http)
+        {
+            LLAppViewer::instance()->getAppCoreHttp().cleanup();
+            startup_http = false;
+        }
+        cleaned=true;
+        require(diagnostic_errors == 0, "Native startup validation contains errors");
+        inject("startup-cleanup");
+    }
+    void writeStartup()
+    {
+        boost::json::object record{{"schema",1},{"mode","viewer-native-startup"},{"device",identity},{"stages",stages},
+            {"login_controls_verified",startup_login},{"progress_owner_verified",startup_progress},
+            {"modal_alert_verified",startup_alert_verified},{"critical_dialog_verified",startup_critical_verified},
+            {"presented_frames",frames},{"readbacks",startup_readbacks},{"validation_errors",diagnostic_errors.load()},
+            {"normal_session_admitted",false},{"live_browser_qualified",false},{"authentication_qualified",false},
+            {"shutdown_complete",cleaned},{"passed",failure.empty() && cleaned && startup_readbacks == 9},{"failure",failure}};
+        std::ofstream out(evidence / "viewer-startup.json");out << boost::json::serialize(record) << '\n';
+        require(out.good(), "Cannot write native startup evidence");
+    }
     void write()
     {
+        if (startup_mode) { writeStartup(); return; }
 #if LL_WINDOWS
         constexpr const char* window_api = "Win32";
 #else

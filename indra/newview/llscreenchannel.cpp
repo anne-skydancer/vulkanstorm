@@ -69,6 +69,11 @@ LLRect LLScreenChannelBase::getChannelRect()
     LLRect chiclet_rect;
 
     mFloaterSnapRegion->localRectToScreen(mFloaterSnapRegion->getLocalRect(), &channel_rect);
+    if (!mChicletRegion && gViewerWindow->isNativeVulkan())
+    {
+        // Native startup owns alerts before any world/chiclet UI is admitted.
+        return channel_rect;
+    }
     mChicletRegion->localRectToScreen(mChicletRegion->getLocalRect(), &chiclet_rect);
 
     // <FS:Ansariel> Group notices, IMs and chiclets position

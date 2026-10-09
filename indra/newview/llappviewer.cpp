@@ -28,6 +28,8 @@
 
 #include "llappviewer.h"
 #include "vsrenderbackend.h"
+#include "vstranslations.h"
+#include "vsuiaudio.h"
 #if VS_VULKAN_DIAGNOSTICS
 #include "vsvulkandiagnostic.h"
 #endif
@@ -554,7 +556,7 @@ void idle_afk_check()
 }
 
 // A callback set in LLAppViewer::init()
-static void ui_audio_callback(const LLUUID& uuid)
+void ui_audio_callback(const LLUUID& uuid)
 {
     if (gAudiop)
     {
@@ -564,7 +566,7 @@ static void ui_audio_callback(const LLUUID& uuid)
 }
 
 // A callback set in LLAppViewer::init()
-static void deferred_ui_audio_callback(const LLUUID& uuid)
+void deferred_ui_audio_callback(const LLUUID& uuid)
 {
     if (gAudiop)
     {
@@ -3674,6 +3676,12 @@ bool LLAppViewer::initConfiguration()
 // keeps growing, necessitating a method all its own.
 void LLAppViewer::initStrings()
 {
+    vs_init_strings();
+}
+
+void vs_init_strings()
+{
+    init_default_trans_args();
     std::string strings_file = "strings.xml";
     std::string strings_path_full = gDirUtilp->findSkinnedFilenameBaseLang(LLDir::XUI, strings_file);
     if (strings_path_full.empty() || !LLFile::isfile(strings_path_full))
@@ -3785,8 +3793,10 @@ bool LLAppViewer::initWindow()
     std::string render_backend = gSavedSettings.getString("RenderBackend");
     if (render_backend == "Vulkan")
     {
-        LL_WARNS("AppInit") << "Native Vulkan session unavailable; refusing GL window initialization." << LL_ENDL;
+#if !VS_NATIVE_VULKAN
+        LL_WARNS("AppInit") << "Native Vulkan is not built; refusing GL window initialization." << LL_ENDL;
         return false;
+#endif
     }
     else if (render_backend == "Zink")
     {
@@ -3829,7 +3839,15 @@ bool LLAppViewer::initWindow()
         .ignore_pixel_depth(ignorePixelDepth)
         .first_run(mIsFirstRun);
 
-    gViewerWindow = new LLViewerWindow(window_params);
+    gViewerWindow = new LLViewerWindow(window_params, render_backend == "Vulkan");
+    if (gViewerWindow->isNativeVulkan())
+    {
+        gViewerWindow->initBase();
+        if (gSavedSettings.getBOOL("WindowMaximized")) gViewerWindow->getWindow()->maximize();
+        gViewerWindow->setCursor(UI_CURSOR_WAIT);
+        LL_INFOS("AppInit") << "Native Vulkan viewer window and startup UI initialized." << LL_ENDL;
+        return true;
+    }
 
     LL_INFOS("AppInit") << "gViewerwindow created." << LL_ENDL;
 

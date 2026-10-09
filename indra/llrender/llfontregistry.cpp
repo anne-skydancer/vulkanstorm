@@ -565,9 +565,10 @@ LLFontGL *LLFontRegistry::createFont(const LLFontDescriptor& desc)
         bool is_ft_collection = (std::find_if(font_collection_files.begin(), font_collection_files.end(),
                                               [&font_file_it](const LLFontFileInfo& ffi) { return font_file_it->FileName == ffi.FileName; }) != font_collection_files.end());
 
-        // *HACK: Fallback fonts don't render, so we can use that to suppress
-        // creation of OpenGL textures for test apps. JC
-        bool is_fallback = !is_first_found || !mCreateGLTextures;
+        // CPU-backed native heads still own glyph maps and atlas placement.
+        // Native backing is selected by the font bridge, independently of
+        // fallback identity. Keep the old no-render test-app behavior.
+        bool is_fallback = !is_first_found || (!mCreateGLTextures && !LLFontGL::hasNativeDraw());
         F32 extra_scale = (is_fallback) ? fallback_scale : 1.0f;
         F32 point_size_scale = extra_scale * point_size;
         bool is_font_loaded = false;

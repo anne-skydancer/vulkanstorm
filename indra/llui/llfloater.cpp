@@ -2473,6 +2473,26 @@ void LLFloater::drawConeToOwner(F32 &context_cone_opacity,
         owner_view->localRectToOtherView(owner_view->getLocalRect(), &owner_rect, this);
         LLRect local_rect = getLocalRect();
 
+        if (LLRender2D::isNativeUI())
+        {
+            const float inner = contex_cone_in_alpha * context_cone_opacity;
+            const float outer = contex_cone_out_alpha * context_cone_opacity;
+            const std::array<std::array<F32,6>,10> strip{{
+                {F32(owner_rect.mLeft), F32(owner_rect.mTop),0,0,0,inner},
+                {F32(local_rect.mLeft), F32(local_rect.mTop),0,0,0,outer},
+                {F32(owner_rect.mRight), F32(owner_rect.mTop),0,0,0,inner},
+                {F32(local_rect.mRight), F32(local_rect.mTop),0,0,0,outer},
+                {F32(owner_rect.mRight), F32(owner_rect.mBottom),0,0,0,inner},
+                {F32(local_rect.mRight), F32(local_rect.mBottom),0,0,0,outer},
+                {F32(owner_rect.mLeft), F32(owner_rect.mBottom),0,0,0,inner},
+                {F32(local_rect.mLeft), F32(local_rect.mBottom),0,0,0,outer},
+                {F32(owner_rect.mLeft), F32(owner_rect.mTop),0,0,0,inner},
+                {F32(local_rect.mLeft), F32(local_rect.mTop),0,0,0,outer}}};
+            for (unsigned i=0; i+2<strip.size(); ++i)
+                LLRender2D::nativeTriangle({strip[i], strip[i+1], strip[i+2]});
+        }
+        else
+        {
         gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
         LLGLEnable cull_face(GL_CULL_FACE);
         gGL.begin(LLRender::TRIANGLE_STRIP);
@@ -2499,6 +2519,8 @@ void LLFloater::drawConeToOwner(F32 &context_cone_opacity,
             gGL.vertex2i(local_rect.mLeft, local_rect.mTop);
         }
         gGL.end();
+        }
+
     }
 
     if (gFocusMgr.childHasMouseCapture(getDragHandle()))

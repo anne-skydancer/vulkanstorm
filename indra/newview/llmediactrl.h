@@ -32,6 +32,7 @@
 #include "lluictrl.h"
 #include "llframetimer.h"
 #include "llnotificationptr.h"
+#include "lluiimage.h"
 
 class LLViewBorder;
 class LLUICtrlFactory;
@@ -194,6 +195,8 @@ public:
 
         const S32 mTextureDepthBytes;
         LLUUID mMediaTextureID;
+        LLUIImagePtr mNativeMediaImage;
+        S32 mNativeMediaWidth = 0, mNativeMediaHeight = 0;
         LLViewBorder* mBorder;
         bool    mFrequentUpdates,
                 mForceUpdate,

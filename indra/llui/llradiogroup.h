@@ -40,6 +40,9 @@ class LLRadioGroup
 :   public LLUICtrl, public LLCtrlSelectionInterface
 {
 public:
+    // Private radio item identity for closed native UI admission.
+    static const std::type_info& itemType();
+
 
     struct ItemParams : public LLInitParam::Block<ItemParams, LLCheckBoxCtrl::Params>
     {

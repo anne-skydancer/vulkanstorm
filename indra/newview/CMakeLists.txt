@@ -2266,7 +2266,7 @@ if(USE_DILIGENTCORE)
          vsuiresources.cpp vsuiresources.h vsuifontcache.cpp vsuifontcache.h
           vsuifontbridge.cpp vsuifontbridge.h
           vsuidrawbridge.cpp vsuidrawbridge.h vsuiimageprovider.cpp vsuiimageprovider.h
-          vsuicontext.cpp vsuicontext.h)
+          vsuicontext.cpp vsuicontext.h vsvulkancontext.cpp vsvulkancontext.h vsstartupui.cpp vsstartupui.h vsviewerwindow.cpp)
 endif()
 if(VS_VULKAN_DIAGNOSTICS)
     list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h
@@ -2629,7 +2629,8 @@ endif()
 if(USE_DILIGENTCORE)
   target_link_libraries(${VIEWER_BINARY_NAME} ll::diligentcore ll::vulkan ll::freetype)
 endif()
-if(VS_VULKAN_DIAGNOSTICS)
+if(USE_DILIGENTCORE)
+  target_compile_definitions(${VIEWER_BINARY_NAME} PRIVATE VS_NATIVE_VULKAN=1)
   if(LINUX)
     find_library(VS_X11_XCB_LIBRARY X11-xcb REQUIRED)
     target_link_libraries(${VIEWER_BINARY_NAME} ${VS_X11_XCB_LIBRARY})

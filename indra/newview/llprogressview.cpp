@@ -25,6 +25,11 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsuidrawbridge.h"
+#include "vsuiresources.h"
+#endif
+
 
 #include "llprogressview.h"
 
@@ -33,6 +38,7 @@
 #include "llgl.h"
 #include "llrender.h"
 #include "llui.h"
+#include "lllocalcliprect.h"
 #include "llfontgl.h"
 #include "lltimer.h"
 #include "lltextbox.h"
@@ -164,7 +170,7 @@ bool LLProgressView::postBuild()
     // hidden initially, until we need it
     setVisible(false);
 
-    LLNotifications::instance().getChannel("AlertModal")->connectChanged(boost::bind(&LLProgressView::onAlertModal, this, _1));
+    mModalAlertConnection = LLNotifications::instance().getChannel("AlertModal")->connectChanged(boost::bind(&LLProgressView::onAlertModal, this, _1));
 
     sInstance = this;
     return true;
@@ -173,6 +179,12 @@ bool LLProgressView::postBuild()
 
 LLProgressView::~LLProgressView()
 {
+    mModalAlertConnection.disconnect();
+#if VS_NATIVE_VULKAN
+    if (auto* resources = VSUIDrawBridge::resources())
+        for (const auto& key : mNativeTextureKeys) resources->erase(key);
+#endif
+
     // Just in case something went wrong, make sure we deregister our idle callback.
     gIdleCallbacks.deleteFunction(onIdle, this);
 
@@ -283,6 +295,22 @@ void LLProgressView::fade(bool in)
 
 void LLProgressView::drawStartTexture(F32 alpha)
 {
+#if VS_NATIVE_VULKAN
+    if (VSUIDrawBridge::resources())
+    {
+        const S32 width = getRect().getWidth(), height = getRect().getHeight();
+        if (mNativeStartImage && width > 0 && height > 0)
+        {
+            const F32 factor = llmax(F32(width) / gStartImageWidth, F32(height) / gStartImageHeight);
+            const S32 image_width = ll_round(gStartImageWidth * factor), image_height = ll_round(gStartImageHeight * factor);
+            LLLocalClipRect clip(LLRect(0, height, width, 0));
+            mNativeStartImage->draw((width-image_width)/2, (height-image_height)/2, image_width, image_height, LLColor4::white % alpha);
+        }
+        else gl_rect_2d(0, height, width, 0, LLColor4(0.f, 0.f, 0.f, alpha));
+        return;
+    }
+#endif
+
     gGL.pushMatrix();
     if (gStartTexture)
     {
@@ -331,6 +359,14 @@ void LLProgressView::drawLogos(F32 alpha)
     std::vector<TextureData>::const_iterator end = mLogosList.end();
     for (; iter != end; iter++)
     {
+#if VS_NATIVE_VULKAN
+        if (VSUIDrawBridge::resources())
+        {
+            if (iter->mNativeImage) iter->mNativeImage->draw(iter->mDrawRect.mLeft + offset_x,
+                iter->mDrawRect.mBottom + offset_y, iter->mDrawRect.getWidth(), iter->mDrawRect.getHeight(), UI_VERTEX_COLOR % alpha);
+            continue;
+        }
+#endif
         gl_draw_scaled_image_with_border(iter->mDrawRect.mLeft + offset_x,
                              iter->mDrawRect.mBottom + offset_y,
                              iter->mDrawRect.getWidth(),
@@ -474,6 +510,20 @@ void LLProgressView::loadLogo(const std::string &path,
         LL_WARNS("AppInit") << "Image decode failed " << path << LL_ENDL;
         return;
     }
+#if VS_NATIVE_VULKAN
+    if (auto* resources = VSUIDrawBridge::resources())
+    {
+        TextureData data;
+        const std::string key = "progress-logo:" + path;
+        data.mNativeImage = resources->publish(key, *raw);
+        mNativeTextureKeys.push_back(key);
+        data.mDrawRect = pos_rect;
+        data.mClipRect = clip_rect;
+        data.mOffsetRect = offset_rect;
+        mLogosList.push_back(data);
+        return;
+    }
+#endif
     // HACK: getLocalTexture allows only power of two dimentions
     raw->expandToPowerOfTwo();
 
@@ -550,6 +600,8 @@ void LLProgressView::initLogos()
 
 void LLProgressView::initStartTexture(S32 location_id, bool is_in_production)
 {
+    mNativeStartImage = nullptr;
+
     if (gStartTexture.notNull())
     {
         gStartTexture = NULL;
@@ -609,12 +661,23 @@ void LLProgressView::initStartTexture(S32 location_id, bool is_in_production)
         }
         else
         {
+#if VS_NATIVE_VULKAN
+            if (auto* resources = VSUIDrawBridge::resources())
+            {
+                mNativeStartImage = resources->publish("progress-start", *raw);
+                mNativeTextureKeys.push_back("progress-start");
+                return;
+            }
+#endif
             // HACK: getLocalTexture allows only power of two dimentions
             raw->expandToPowerOfTwo();
             gStartTexture = LLViewerTextureManager::getLocalTexture(raw.get(), false);
         }
     }
 
+#if VS_NATIVE_VULKAN
+    if (VSUIDrawBridge::resources()) return; // Draw the existing black background when no saved image exists.
+#endif
     if (gStartTexture.isNull())
     {
         gStartTexture = LLViewerTexture::sBlackImagep;
@@ -634,6 +697,13 @@ void LLProgressView::initTextures(S32 location_id, bool is_in_production)
 
 void LLProgressView::releaseTextures()
 {
+#if VS_NATIVE_VULKAN
+    if (auto* resources = VSUIDrawBridge::resources())
+        for (const auto& key : mNativeTextureKeys) resources->erase(key);
+#endif
+    mNativeTextureKeys.clear();
+    mNativeStartImage = nullptr;
+
     gStartTexture = NULL;
     mLogosList.clear();
 

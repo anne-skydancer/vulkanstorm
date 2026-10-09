@@ -60,9 +60,6 @@ LLFloaterTOS::LLFloaterTOS(const LLSD& data)
 bool LLFloaterTOS::postBuild()
 {
     childSetAction("Continue", onContinue, this);
-    childSetAction("Cancel", onCancel, this);
-    childSetCommitCallback("agree_chk", updateAgree, this);
-
     if (hasChild("tos_text"))
     {
         // this displays the critical message
@@ -74,12 +71,14 @@ bool LLFloaterTOS::postBuild()
         return true;
     }
 
+    childSetAction("Cancel", onCancel, this);
+    childSetCommitCallback("agree_chk", updateAgree, this);
+
     // disable Agree to TOS radio button until the page has fully loaded
     updateAgreeEnabled(false);
 
     // hide the SL text widget if we're displaying TOS with using a browser widget.
-    LLUICtrl *editor = getChild<LLUICtrl>("tos_text");
-    editor->setVisible(false);
+    if (auto* editor = findChild<LLUICtrl>("tos_text")) editor->setVisible(false);
 
     LLMediaCtrl* web_browser = getChild<LLMediaCtrl>("tos_html");
 // <FS:CR> FIRE-8063 - Aurora and OpenSim TOS

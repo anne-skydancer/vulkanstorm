@@ -65,6 +65,9 @@ class LLImageFormatted;
 class LLHUDIcon;
 class LLWindow;
 class LLRootView;
+class VSVulkanContext;
+class VSUIContext;
+class VSUIAdmission;
 class LLWindowListener;
 class LLViewerWindowListener;
 class LLVOPartGroup;
@@ -170,7 +173,12 @@ public:
         Params();
     };
 
-    LLViewerWindow(const Params& p);
+    LLViewerWindow(const Params& p, bool native_vulkan = false);
+    bool isNativeVulkan() const { return mNativeVulkan; }
+    void drawNativeUI();
+#if VS_NATIVE_VULKAN
+    VSVulkanContext* nativeContext() const { return mVulkanContext.get(); }
+#endif
     virtual ~LLViewerWindow();
 
     void            shutdownViews();
@@ -495,6 +503,18 @@ private:
     LLRect          getChatConsoleRect(); // Get optimal cosole rect.
 
 private:
+    void initNativeWindow(const Params& p);
+    void initNativeBase();
+    void reshapeNative(S32 width, S32 height);
+    bool nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type, bool down);
+    void nativeHover(LLCoordGL pos, MASK mask);
+    void nativeScroll(S32 clicks, bool horizontal = false);
+    bool mNativeVulkan = false;
+#if VS_NATIVE_VULKAN
+    std::unique_ptr<VSVulkanContext> mVulkanContext;
+    std::unique_ptr<VSUIAdmission> mNativeAdmission;
+    std::unique_ptr<VSUIContext> mNativeUI;
+#endif
     LLWindow*       mWindow;                        // graphical window object
     bool            mActive;
     bool            mUIVisible;
@@ -508,7 +528,7 @@ private:
     LLRect          mWindowRectScaled;          // whole window, scaled by UI size
     LLRect          mWorldViewRectRaw;          // area of screen for 3D world
     LLRect          mWorldViewRectScaled;       // area of screen for 3D world scaled by UI size
-    LLRootView*     mRootView;                  // a view of size mWindowRectRaw, containing all child views
+    LLRootView*     mRootView = nullptr;                  // a view of size mWindowRectRaw, containing all child views
     LLView*         mFloaterSnapRegion = nullptr;
     LLView*         mNavBarContainer = nullptr;
     LLPanel*        mStatusBarContainer = nullptr;
@@ -556,9 +576,9 @@ private:
     LLHandle<LLView> mToolBarHolder;        // container for toolbars
     LLHandle<LLView> mHintHolder;           // container for hints
     LLHandle<LLView> mLoginPanelHolder;     // container for login panel
-    LLPopupView*    mPopupView;         // container for transient popups
+    LLPopupView*    mPopupView = nullptr;         // container for transient popups
 
-    class LLDebugText* mDebugText; // Internal class for debug text
+    class LLDebugText* mDebugText = nullptr; // Internal class for debug text
 
     bool            mResDirty;
     bool            mStatesDirty;

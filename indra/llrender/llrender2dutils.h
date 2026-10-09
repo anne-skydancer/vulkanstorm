@@ -131,6 +131,9 @@ public:
     using native_rect_t = std::function<void(const LLRectf&,const LLColor4&)>;
     using native_clip_t = std::function<void(const LLRect*)>;
     static void setNativeUI(native_rect_t rectangle,native_clip_t clip);
+    using native_triangle_t = std::array<std::array<F32, 6>, 3>; // x,y,r,g,b,a
+    static void setNativeTriangles(std::function<void(const native_triangle_t&)>);
+    static void nativeTriangle(const native_triangle_t&);
     static bool isNativeUI();
     static void setSceneBlendType(U8 type);
     static U8 nativeBlend();

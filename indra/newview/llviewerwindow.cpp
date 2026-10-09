@@ -26,7 +26,23 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llviewerwindow.h"
-
+#if VS_NATIVE_VULKAN
+#include "vsvulkancontext.h"
+#include "llchannelmanager.h"
+#include "vsuicontext.h"
+#include "vsstartupui.h"
+#include "vsuiadmission.h"
+#endif
+#include <stdexcept>
+#if !VS_NATIVE_VULKAN
+void LLViewerWindow::initNativeWindow(const Params&) { throw std::runtime_error("Native Vulkan is not built"); }
+void LLViewerWindow::initNativeBase() { throw std::runtime_error("Native Vulkan is not built"); }
+void LLViewerWindow::drawNativeUI() { throw std::runtime_error("Native Vulkan is not built"); }
+void LLViewerWindow::reshapeNative(S32, S32) {}
+bool LLViewerWindow::nativeMouse(LLCoordGL, MASK, EMouseClickType, bool) { return false; }
+void LLViewerWindow::nativeHover(LLCoordGL, MASK) {}
+void LLViewerWindow::nativeScroll(S32, bool) {}
+#endif
 
 // system library includes
 #include <stdio.h>
@@ -1268,6 +1284,7 @@ bool LLViewerWindow::handleAnyMouseClick(LLWindow *window, LLCoordGL pos, MASK m
 
 bool LLViewerWindow::handleMouseDown(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
+    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_LEFT, true);
     mAllowMouseDragging = false;
     if (!mMouseDownTimer.getStarted())
     {
@@ -1284,6 +1301,7 @@ bool LLViewerWindow::handleMouseDown(LLWindow *window,  LLCoordGL pos, MASK mask
 
 bool LLViewerWindow::handleDoubleClick(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
+    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_DOUBLELEFT, true);
     // try handling as a double-click first, then a single-click if that
     // wasn't handled.
     bool down = true;
@@ -1296,6 +1314,7 @@ bool LLViewerWindow::handleDoubleClick(LLWindow *window,  LLCoordGL pos, MASK ma
 
 bool LLViewerWindow::handleMouseUp(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
+    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_LEFT, false);
     if (mMouseDownTimer.getStarted())
     {
         mMouseDownTimer.stop();
@@ -1305,18 +1324,21 @@ bool LLViewerWindow::handleMouseUp(LLWindow *window,  LLCoordGL pos, MASK mask)
 }
 bool LLViewerWindow::handleRightMouseDown(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
+    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_RIGHT, true);
     bool down = true;
     return gViewerInput.handleMouse(window, pos, mask, CLICK_RIGHT, down);
 }
 
 bool LLViewerWindow::handleRightMouseUp(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
+    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_RIGHT, false);
     bool down = false;
     return gViewerInput.handleMouse(window, pos, mask, CLICK_RIGHT, down);
 }
 
 bool LLViewerWindow::handleMiddleMouseDown(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
+    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_MIDDLE, true);
     bool down = true;
     gViewerInput.handleMouse(window, pos, mask, CLICK_MIDDLE, down);
 
@@ -1471,6 +1493,7 @@ LLWindowCallbacks::DragNDropResult LLViewerWindow::handleDragNDrop( LLWindow *wi
 
 bool LLViewerWindow::handleMiddleMouseUp(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
+    if (mNativeVulkan) return nativeMouse(pos, mask, CLICK_MIDDLE, false);
     bool down = false;
     gViewerInput.handleMouse(window, pos, mask, CLICK_MIDDLE, down);
 
@@ -1480,6 +1503,7 @@ bool LLViewerWindow::handleMiddleMouseUp(LLWindow *window,  LLCoordGL pos, MASK 
 
 bool LLViewerWindow::handleOtherMouse(LLWindow *window, LLCoordGL pos, MASK mask, S32 button, bool down)
 {
+    if (mNativeVulkan) return false;
     switch (button)
     {
     case 4:
@@ -1509,6 +1533,7 @@ bool LLViewerWindow::handleOtherMouseUp(LLWindow *window, LLCoordGL pos, MASK ma
 // WARNING: this is potentially called multiple times per frame
 void LLViewerWindow::handleMouseMove(LLWindow *window,  LLCoordGL pos, MASK mask)
 {
+    if (mNativeVulkan) { nativeHover(pos, mask); return; }
     S32 x = pos.mX;
     S32 y = pos.mY;
 
@@ -1561,6 +1586,7 @@ void LLViewerWindow::handleMouseDragged(LLWindow *window,  LLCoordGL pos, MASK m
 
 void LLViewerWindow::handleMouseLeave(LLWindow *window)
 {
+    if (mNativeVulkan) { mMouseInWindow = false; return; }
     // Note: we won't get this if we have captured the mouse.
     llassert( gFocusMgr.getMouseCapture() == NULL );
     mMouseInWindow = false;
@@ -1569,6 +1595,7 @@ void LLViewerWindow::handleMouseLeave(LLWindow *window)
 
 bool LLViewerWindow::handleCloseRequest(LLWindow *window, bool from_user)
 {
+    if (mNativeVulkan) { LLAppViewer::instance()->forceQuit(); return true; }
     if (!LLApp::isExiting() && !LLApp::isStopped())
     {
         if (from_user)
@@ -1626,6 +1653,13 @@ void LLViewerWindow::handleResize(LLWindow *window,  S32 width,  S32 height)
 // The top-level window has gained focus (e.g. via ALT-TAB)
 void LLViewerWindow::handleFocus(LLWindow *window)
 {
+    if (mNativeVulkan)
+    {
+        gFocusMgr.setAppHasFocus(true);
+        LLModalDialog::onAppFocusGained();
+        if (gKeyboard) gKeyboard->resetMaskKeys();
+        return;
+    }
     gFocusMgr.setAppHasFocus(true);
     LLModalDialog::onAppFocusGained();
 
@@ -1646,6 +1680,19 @@ void LLViewerWindow::handleFocus(LLWindow *window)
 // The top-level window has lost focus (e.g. via ALT-TAB)
 void LLViewerWindow::handleFocusLost(LLWindow *window)
 {
+    if (mNativeVulkan)
+    {
+        gFocusMgr.setAppHasFocus(false);
+        gFocusMgr.setMouseCapture(nullptr);
+        showCursor();
+        getWindow()->setMouseClipping(false);
+        if (gKeyboard)
+        {
+            gKeyboard->resetKeyDownAndHandle();
+            gKeyboard->resetKeys();
+        }
+        return;
+    }
     gFocusMgr.setAppHasFocus(false);
     //LLModalDialog::onAppFocusLost();
     LLToolMgr::getInstance()->onAppFocusLost();
@@ -1676,6 +1723,7 @@ void LLViewerWindow::handleFocusLost(LLWindow *window)
 
 bool LLViewerWindow::handleTranslatedKeyDown(KEY key,  MASK mask, bool repeated)
 {
+    if (mNativeVulkan) { auto* focus = gFocusMgr.getKeyboardFocus(); return focus && focus->handleKey(key, mask, false); }
     // Handle non-consuming global keybindings, like voice
     // Never affects event processing.
     gViewerInput.handleGlobalBindsKeyDown(key, mask);
@@ -1708,6 +1756,11 @@ bool LLViewerWindow::handleTranslatedKeyDown(KEY key,  MASK mask, bool repeated)
 
 bool LLViewerWindow::handleTranslatedKeyUp(KEY key,  MASK mask)
 {
+    if (mNativeVulkan)
+    {
+        auto* focus = gFocusMgr.getKeyboardFocus();
+        return focus && focus->handleKeyUp(key, mask, false);
+    }
     // Handle non-consuming global keybindings, like voice
     // Never affects event processing.
     gViewerInput.handleGlobalBindsKeyUp(key, mask);
@@ -1724,6 +1777,7 @@ bool LLViewerWindow::handleTranslatedKeyUp(KEY key,  MASK mask)
 
 void LLViewerWindow::handleScanKey(KEY key, bool key_down, bool key_up, bool key_level)
 {
+    if (mNativeVulkan) return;
     LLViewerJoystick::getInstance()->setCameraNeedsUpdate(true);
     gViewerInput.scanKey(key, key_down, key_up, key_level);
     return; // Be clear this function returns nothing
@@ -1734,6 +1788,7 @@ void LLViewerWindow::handleScanKey(KEY key, bool key_down, bool key_up, bool key
 
 bool LLViewerWindow::handleActivate(LLWindow *window, bool activated)
 {
+    if (mNativeVulkan) { mActive = activated; return true; }
     if (activated)
     {
         mActive = true;
@@ -1770,6 +1825,7 @@ bool LLViewerWindow::handleActivate(LLWindow *window, bool activated)
 
 bool LLViewerWindow::handleActivateApp(LLWindow *window, bool activating)
 {
+    if (mNativeVulkan) return false;
     //if (!activating) gAgentCamera.changeCameraToDefault();
 
     LLViewerJoystick::getInstance()->setNeedsReset(true);
@@ -1828,11 +1884,13 @@ bool LLViewerWindow::handlePaint(LLWindow *window,  S32 x,  S32 y, S32 width,  S
 
 void LLViewerWindow::handleScrollWheel(LLWindow *window,  S32 clicks)
 {
+    if (mNativeVulkan) { nativeScroll(clicks); return; }
     handleScrollWheel( clicks );
 }
 
 void LLViewerWindow::handleScrollHWheel(LLWindow *window,  S32 clicks)
 {
+    if (mNativeVulkan) { nativeScroll(clicks, true); return; }
     handleScrollHWheel(clicks);
 }
 
@@ -1902,6 +1960,7 @@ bool LLViewerWindow::handleDeviceChange(LLWindow *window, bool deviceRemoved)
 
 bool LLViewerWindow::handleDPIChanged(LLWindow *window, F32 ui_scale_factor, S32 window_width, S32 window_height)
 {
+    if (mNativeVulkan) { reshapeNative(window_width, window_height); return true; }
     LLFontGL::sResolutionGeneration++;
     if (ui_scale_factor >= MIN_UI_SCALE && ui_scale_factor <= MAX_UI_SCALE)
     {
@@ -1971,7 +2030,7 @@ std::string LLViewerWindow::translateString(const char* tag,
 //
 // Classes
 //
-LLViewerWindow::LLViewerWindow(const Params& p)
+LLViewerWindow::LLViewerWindow(const Params& p, bool native_vulkan)
 :   mWindow(NULL),
     mActive(true),
     mUIVisible(true),
@@ -1993,6 +2052,12 @@ LLViewerWindow::LLViewerWindow(const Params& p)
     mProgressView(NULL),
     mProgressViewMini(NULL)
 {
+    if (native_vulkan)
+    {
+        mNativeVulkan = true;
+        initNativeWindow(p);
+        return;
+    }
     // gKeyboard is still NULL, so it doesn't do LLWindowListener any good to
     // pass its value right now. Instead, pass it a nullary function that
     // will, when we later need it, return the value of gKeyboard.
@@ -2202,6 +2267,7 @@ struct MainPanel : public LLPanel
 
 void LLViewerWindow::initBase()
 {
+    if (mNativeVulkan) { initNativeBase(); return; }
     S32 height = getWindowHeightScaled();
     S32 width = getWindowWidthScaled();
 
@@ -2572,6 +2638,34 @@ void LLViewerWindow::initWorldUI()
 // Destroy the UI
 void LLViewerWindow::shutdownViews()
 {
+    if (mNativeVulkan)
+    {
+        gFocusMgr.unlockFocus();
+        gFocusMgr.setMouseCapture(nullptr);
+        gFocusMgr.setKeyboardFocus(nullptr);
+        gFocusMgr.setTopCtrl(nullptr);
+#if VS_NATIVE_VULKAN
+        if (mNativeUI)
+        {
+            LLModalDialog::shutdownModals();
+            LLNotificationsUI::LLToast::cleanupToasts();
+            if (LLNotifications::instanceExists()) LLNotifications::instance().clear();
+            LLNotificationsUI::LLChannelManager::deleteSingleton();
+            mAlertsChannel.reset();
+            mModalAlertsChannel.reset();
+            mSystemChannel.reset();
+        }
+        mNativeUI.reset();
+        mFloaterSnapRegion = nullptr;
+        mNativeAdmission.reset();
+#endif
+        mRootView = nullptr;
+        mPopupView = nullptr;
+        mProgressView = nullptr;
+        mProgressViewMini = nullptr;
+        gFloaterView = nullptr;
+        return;
+    }
     // clean up warning logger
     RecordToChatConsole::getInstance()->stopRecorder();
     LL_INFOS() << "Warning logger is cleaned." << LL_ENDL ;
@@ -2643,6 +2737,13 @@ void LLViewerWindow::shutdownViews()
 
 void LLViewerWindow::shutdownGL()
 {
+    if (mNativeVulkan)
+    {
+#if VS_NATIVE_VULKAN
+        mVulkanContext.reset(); // Retire WSI requests before destroying the native window.
+#endif
+        return;
+    }
     //--------------------------------------------------------
     // Shutdown GL cleanly.  Order is very important here.
     //--------------------------------------------------------
@@ -2692,6 +2793,7 @@ void LLViewerWindow::shutdownGL()
 LLViewerWindow::~LLViewerWindow()
 {
     LL_INFOS() << "Destroying Window" << LL_ENDL;
+    if (mNativeVulkan) { shutdownViews(); shutdownGL(); }
     destroyWindow();
 
     delete mDebugText;
@@ -2747,6 +2849,7 @@ void LLViewerWindow::sendShapeToSim()
 // camera variables and UI variables.
 void LLViewerWindow::reshape(S32 width, S32 height)
 {
+    if (mNativeVulkan) { reshapeNative(width, height); return; }
     // Destroying the window at quit time generates spurious
     // reshape messages.  We don't care about these, and we
     // don't want to send messages because the message system
@@ -3582,6 +3685,7 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
 
 bool LLViewerWindow::handleUnicodeChar(llwchar uni_char, MASK mask)
 {
+    if (mNativeVulkan) { auto* focus = gFocusMgr.getKeyboardFocus(); return focus && focus->handleUnicodeChar(uni_char, false); }
     // HACK:  We delay processing of return keys until they arrive as a Unicode char,
     // so that if you're typing chat text at low frame rate, we don't send the chat
     // until all keystrokes have been entered. JC
