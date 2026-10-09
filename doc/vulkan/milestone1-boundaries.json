@@ -1,5 +1,5 @@
 {
-  "source_commit": "8f2304bfafcaecf0d6aea3393d88b378887fe3d5",
+  "source_commit": "f1701ee9e9b2a3987ec209509906beaa8e595adb",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "closed-admission-set for future UI/chat; native window/clear and opt-in UI substrate fixtures are implemented; full UI/chat gate contracts remain requirements",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "1c71244a7ac79d45a5db4c74301f6c7dc440eae53e3fb81211e914d928323f0a",
+      "sha256": "4fe8fee7038934b955f51a41306dedda3a47c0e15764d9e0526f74fce99effe8",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -33,7 +33,7 @@
       ]
     },
     "indra/newview/llviewerwindow.cpp": {
-      "sha256": "944dca24a1204fed535c2817b2ecb3d47acf650f0e38f4e2878f9ce10d9e8474",
+      "sha256": "abcacee744afd06fa2d60c5911736b5b5c9972aef7605b6d69df983aaa978015",
       "anchors": [
         "LLViewerWindow::LLViewerWindow",
         "LLViewerWindow::initBase",
@@ -169,7 +169,7 @@
       ]
     },
     "indra/newview/llfloatertos.cpp": {
-      "sha256": "8b50a20b1e9a13ec067c2a253b077d5c3bc23e487a3482a68f3f9f030d955a96",
+      "sha256": "4d18079a6255a5323fbc2dcb743b4760a920caac6d68a0afd931c83657451813",
       "anchors": [
         "LLFloaterTOS::postBuild",
         "EXTERNAL_TOS",
@@ -240,7 +240,7 @@
       ]
     },
     "indra/newview/llviewermedia.cpp": {
-      "sha256": "a7bd34782717ec14cbeb4f15ce8521ce80b4d5f04d458b9b339657d369e5b90e",
+      "sha256": "e928f8d384dc607aab2b30c0d6a5c9481b951fb6e65c880816ff88035e6740d5",
       "anchors": [
         "LLViewerMedia"
       ]
@@ -341,7 +341,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "3cdac34c29aca4b950a52311f6819649f001796d702df2957bbca37abda527a5",
+      "sha256": "8ea82d97a5a7d21eea962ac32ebabb2e716eee1f227a5629d44f40760fefb532",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -442,7 +442,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "bd30d3d3657b312c369010daf4d50f5adaa37f45da223c11b369d43bf330293d",
+      "sha256": "146ff32e51e7024ad3ecff4d993f00a24451a3dd57f0064b4d4c4cd3baaa6074",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -450,7 +450,7 @@
       ]
     },
     "indra/newview/vsuiresources.h": {
-      "sha256": "dfddbbd3e818b2abe3ff003dfc30ebfbb679f0620dd72db1901a0d4df32e20cd",
+      "sha256": "91ac4b90923177f0967148c1ea0dba4f5646972795b0776081ad37d6fc0b6b60",
       "anchors": [
         "class VSUIResources"
       ]
@@ -543,7 +543,7 @@
       ]
     },
     "indra/llui/llpanel.cpp": {
-      "sha256": "4f1895f29ca39c22ac8a892c20c50b71dc347e1e4a71f11ed827a50615a80075",
+      "sha256": "338cf01d7acdeadc42c9866ce7ea57533fdb8d8853ba86bf9626bff63faadc76",
       "anchors": [
         "LLPanel::fromXML",
         "VSUIAdmission::panelFactory"
@@ -564,7 +564,7 @@
       ]
     },
     "indra/llrender/llrender2dutils.cpp": {
-      "sha256": "dcfe89a09c9eccf0e424e7aa0b82f3d98518177d80d0715e9567b48afd75af47",
+      "sha256": "047192309886fea4e08f17732e7ca60d43529251ec271b0662395a672085d9a9",
       "anchors": [
         "LLRender2D::setNativeUI",
         "LLRender2D::setSceneBlendType",
@@ -572,7 +572,7 @@
       ]
     },
     "indra/llrender/llrender2dutils.h": {
-      "sha256": "48e606993835574ce7bf76e2cfbecb3e4c90b68119950fdec2d8219bdb7dee05",
+      "sha256": "f5aee55b803df81e1ef033e87204d92a0c720f084b3392789b532afb8393323d",
       "anchors": [
         "setNativeUI",
         "setSceneBlendType"
@@ -621,20 +621,20 @@
       ]
     },
     "indra/newview/vsuidrawbridge.cpp": {
-      "sha256": "6ebc64f7e78927efa143608b060b74d4acc36cbcb67bac512a77e58b92df74ce",
+      "sha256": "08b87472e4dd9277c3bd93df9b3252f9630e2344b772056e39ca1b0e969fd6dd",
       "anchors": [
         "VSUIDrawBridge::VSUIDrawBridge",
         "setNativeUI"
       ]
     },
     "indra/newview/vsuidrawbridge.h": {
-      "sha256": "f3a3b666e27c2f927a6133decfa95d16ffa4b093bb61dc87ab27b1298d90d45a",
+      "sha256": "457d627fa99e6df1e5fa1ff0c4e8f8c1a2e0e8aea48eca5ec4fed0d648cfc3f3",
       "anchors": [
         "class VSUIDrawBridge"
       ]
     },
     "indra/newview/vsuiimageprovider.cpp": {
-      "sha256": "f691b60b744c41fb3bfe0c3b0c331227597cd5649d392d6ca511d9a560683a14",
+      "sha256": "6d7b490d488af9bf66c63548ee644c8fa1bfefbb36b9095f20f9961774222aa0",
       "anchors": [
         "VSUIImageProvider::getUIImage",
         "VSUIImageProvider::getUIImageByID"
@@ -647,7 +647,7 @@
       ]
     },
     "indra/newview/vsuifixture.cpp": {
-      "sha256": "5a88d0fb4043a3e8ad091c3d3ffa22a4b40c85722511f57143a53968fea7d029",
+      "sha256": "c5e71852cf1741f2bc5d7a644c313c9101093529d5627e445efb776f12608c79",
       "anchors": [
         "VSUIFixture::verifyInput",
         "VSUIFixture::draw",
@@ -681,7 +681,7 @@
       ]
     },
     "indra/newview/vsuicontext.cpp": {
-      "sha256": "d1976833b4d5a6474589e4fb4ea347ba765cc92c9e33a472ebbf45c50d7330df",
+      "sha256": "1515d56573d2bc1aad907cdae2959497261e37012d3773a10eec9aa37ad5951e",
       "anchors": [
         "VSUIContext::VSUIContext",
         "setSkinFolder",
@@ -690,7 +690,7 @@
       ]
     },
     "indra/newview/vsuicontext.h": {
-      "sha256": "ac745a858dba430eb5c41d0d6d42b59b9e9d342078aed7fdcbf0fb6663220faf",
+      "sha256": "5b732c3f3e55ba84925e60e8653d5848cb26127b997b57e461405b1ffa5e9899",
       "anchors": [
         "class VSUIContext"
       ]
@@ -700,6 +700,66 @@
       "anchors": [
         "LLFontVertexBuffer::render",
         "LLFontGL::hasNativeDraw()"
+      ]
+    },
+    "indra/newview/vsvulkancontext.cpp": {
+      "sha256": "f2e666209f92e91f74aa7c2eec60f30287379f17a3afb6d081f0378b6a9a8c11",
+      "anchors": [
+        "VSVulkanContext::VSVulkanContext",
+        "CreateDeviceAndContextsVk",
+        "present",
+        "cleanup"
+      ]
+    },
+    "indra/newview/vsvulkancontext.h": {
+      "sha256": "28ce25ea3af04d3b5d8c0436873610ea19ca96b477e3dc0c2b2177430f002910",
+      "anchors": [
+        "class VSVulkanContext",
+        "FrameObserver"
+      ]
+    },
+    "indra/newview/vsviewerwindow.cpp": {
+      "sha256": "3092ab9263d4a9d3db3dbe231ce9fcdf088193ce783762e7aaadbc50634ec34a",
+      "anchors": [
+        "initNativeWindow",
+        "initNativeBase",
+        "drawNativeUI",
+        "nativeMouse"
+      ]
+    },
+    "indra/newview/vsstartupui.cpp": {
+      "sha256": "379a42930869351cd991923c268fc942f3199e7eb470072c79668c9b57b034e2",
+      "anchors": [
+        "vs_startup_ui_admission",
+        "message_critical",
+        "LLPopupView"
+      ]
+    },
+    "indra/newview/vsmediapixels.h": {
+      "sha256": "68964d35ab94c19f2a8f2b203a15f0da81f7cd58ac835f7062d027aa1edf49fe",
+      "anchors": [
+        "vs_media_pixels",
+        "bottom_first",
+        "opaque"
+      ]
+    },
+    "indra/llrender/llfontregistry.cpp": {
+      "sha256": "36a3ddcd0b932220651d05b66af2e9b43bea5e0e6e87fc21f22af5f64cc0cea1",
+      "anchors": [
+        "LLFontGL::hasNativeDraw"
+      ]
+    },
+    "indra/newview/vstranslations.h": {
+      "sha256": "366cdb9a111210e272462e2b01570788318fe1557dd542a702aa002f63c05aef",
+      "anchors": [
+        "vs_init_strings"
+      ]
+    },
+    "indra/newview/vsuiaudio.h": {
+      "sha256": "c8adbe7771920bf77b998a751c8ddbf3e5043dac0b791ca66db6b49f326eb4b2",
+      "anchors": [
+        "ui_audio_callback",
+        "deferred_ui_audio_callback"
       ]
     }
   },
@@ -890,7 +950,15 @@
         "indra/llrender/llrender.cpp",
         "indra/newview/vsuicontext.cpp",
         "indra/newview/vsuicontext.h",
-        "indra/llrender/llfontvertexbuffer.cpp"
+        "indra/llrender/llfontvertexbuffer.cpp",
+        "indra/newview/vsvulkancontext.cpp",
+        "indra/newview/vsvulkancontext.h",
+        "indra/newview/vsviewerwindow.cpp",
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsmediapixels.h",
+        "indra/llrender/llfontregistry.cpp",
+        "indra/newview/vstranslations.h",
+        "indra/newview/vsuiaudio.h"
       ],
       "gates": [
         "G-RESOURCE",
@@ -945,7 +1013,15 @@
         "indra/llrender/llrender.cpp",
         "indra/newview/vsuicontext.cpp",
         "indra/newview/vsuicontext.h",
-        "indra/llrender/llfontvertexbuffer.cpp"
+        "indra/llrender/llfontvertexbuffer.cpp",
+        "indra/newview/vsvulkancontext.cpp",
+        "indra/newview/vsvulkancontext.h",
+        "indra/newview/vsviewerwindow.cpp",
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsmediapixels.h",
+        "indra/llrender/llfontregistry.cpp",
+        "indra/newview/vstranslations.h",
+        "indra/newview/vsuiaudio.h"
       ],
       "gates": [
         "G-LIFETIME"
@@ -5146,11 +5222,11 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "8f2304bfafcaecf0d6aea3393d88b378887fe3d5",
+    "source_commit": "f1701ee9e9b2a3987ec209509906beaa8e595adb",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
     "world_implemented": false,
-    "qualification": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
+    "qualification": "Native viewer-window integration review: LLViewerWindow owns its native device/swapchain, required startup root, login holder, popup/dialog owners, progress controllers, skin-aware UI and resource lifetimes. Normal initWindow dispatch has a native branch; normal LLAppViewer session admission remains closed. Native input/reshape routes avoid GL. CPU media buffers and progress images publish immutable Diligent resources; live browser and authentication qualification remain open. Shared translation initialization preserves viewer substitution defaults. Registered specialized factories remain closed while ordinary named panels retain their admitted widget path. Native alert shadows and context cones use explicit triangle packets. Linux primary native font faces retain glyph-generation ownership; cross-platform runtime confirmation is pending dedicated CI. Runtime qualification is recorded separately in viewer-ui-substrate.md; none of these source mappings asserts complete V3, connected UI/chat or world parity."
   }
 }
