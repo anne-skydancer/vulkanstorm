@@ -428,6 +428,18 @@ and exit code 0. Evidence is in
 `viewer.log`. No installer or release publication was produced. Linux runtime
 confirmation is left to the dedicated platform jobs.
 
+CI run [37867720427](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37867720427)
+passed the ordinary Windows login launch, including browser pixel publication
+and clean shutdown. Both Linux software devices passed the diagnostic matrix
+but the ordinary launch crashed during WebRTC audio-device initialization:
+`adm->Init()` returned -1 because the headless runners had no audio service.
+The dedicated workflow now provisions a private PulseAudio server with a
+48-kHz stereo null sink and its monitor capture source. It checks both devices,
+exports the server address to the viewer and archives the server log and device
+inventory. Normal voice initialization and all login acceptance checks remain
+enabled. Linux confirmation of this infrastructure correction awaits CI;
+the previous Linux crash is not counted as a Vulkan login pass.
+
 Real-server authentication has not been exercised; its implementation now uses
 the existing authentication path rather than the offline probe's rejecting
 callback. Connected region/session/chat integration remains V4 work. An
