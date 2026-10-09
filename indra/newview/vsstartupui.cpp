@@ -1,6 +1,9 @@
 // Required native login/progress/alert controls; optional viewer UI remains gated. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsstartupui.h"
+#include "vsplainchat.h"
+#include "llnotificationsutil.h"
+#include "lltrans.h"
 #include "vsuiadmission.h"
 #include "llrootview.h"
 #include "llviewermenu.h"
@@ -38,7 +41,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
     return std::make_unique<VSUIAdmission>(
         [](const std::type_info& t)
         {
-            return LLMenuBarGL::isNativeLoginItemType(t) || t == typeid(LLViewerMenuHolderGL) || t == typeid(LLMenuHolderGL) || t == typeid(LLMenuGL) ||
+            return t == typeid(VSPlainChat) || t == typeid(VSChatInput) || LLMenuBarGL::isNativeLoginItemType(t) || t == typeid(LLViewerMenuHolderGL) || t == typeid(LLMenuHolderGL) || t == typeid(LLMenuGL) ||
                    t == typeid(LLMenuBarGL) || t == typeid(LLMenuItemGL) || t == typeid(LLMenuItemCallGL) ||
                    t == typeid(LLMenuItemCheckGL) || t == typeid(LLMenuItemSeparatorGL) ||
                    t == typeid(LLMenuItemBranchGL) || t == typeid(LLMenuItemTearOffGL) ||
@@ -54,5 +57,11 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                    t == typeid(LLDragHandleTop) || t == typeid(LLDragHandleLeft) || t == typeid(LLMediaCtrl) || t == typeid(LLRadioGroup) || t == LLRadioGroup::itemType();
         },
         [](std::string_view name) { return name == "message_critical" || name == "message_tos"; },
-        [](std::string_view name) { return name == "progress_view" || name == "progress_view_mini" || name == "popup_holder"; });
+        [](std::string_view name) { return name == "progress_view" || name == "progress_view_mini" || name == "popup_holder"; },
+        [](std::string_view name)
+        {
+            LLSD substitution; substitution["CONTROL"] = std::string(name);
+            LLSD args; args["MESSAGE"] = LLTrans::getString("NativeVulkanUIUnavailable", substitution);
+            LLNotificationsUtil::add("GenericAlert", args);
+        });
 }

@@ -38,7 +38,7 @@
 void LLViewerWindow::initNativeWindow(const Params&) { throw std::runtime_error("Native Vulkan is not built"); }
 void LLViewerWindow::initNativeBase() { throw std::runtime_error("Native Vulkan is not built"); }
 void LLViewerWindow::drawNativeUI() { throw std::runtime_error("Native Vulkan is not built"); }
-void LLViewerWindow::reshapeNative(S32, S32) {}
+void LLViewerWindow::reshapeNative(S32, S32, F32) {}
 bool LLViewerWindow::nativeMouse(LLCoordGL, MASK, EMouseClickType, bool) { return false; }
 void LLViewerWindow::nativeHover(LLCoordGL, MASK) {}
 void LLViewerWindow::nativeScroll(S32, bool) {}
@@ -1971,7 +1971,12 @@ bool LLViewerWindow::handleDeviceChange(LLWindow *window, bool deviceRemoved)
 
 bool LLViewerWindow::handleDPIChanged(LLWindow *window, F32 ui_scale_factor, S32 window_width, S32 window_height)
 {
-    if (mNativeVulkan) { reshapeNative(window_width, window_height); return true; }
+    if (mNativeVulkan)
+    {
+        if (!std::isfinite(ui_scale_factor) || ui_scale_factor <= 0.f) return false;
+        reshapeNative(window_width, window_height, ui_scale_factor);
+        return true;
+    }
     LLFontGL::sResolutionGeneration++;
     if (ui_scale_factor >= MIN_UI_SCALE && ui_scale_factor <= MAX_UI_SCALE)
     {
@@ -2671,6 +2676,7 @@ void LLViewerWindow::shutdownViews()
         gLoginMenuBarView = nullptr;
         gEditMenu = nullptr;
         gPopupMenuView = nullptr;
+        mNativeChat = nullptr;
         mNativeUI.reset();
         mFloaterSnapRegion = nullptr;
         mNativeAdmission.reset();

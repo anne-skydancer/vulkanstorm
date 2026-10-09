@@ -347,9 +347,19 @@ void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4 &color )
 {
     if (LLRender2D::isNativeUI())
     {
-        // Axis-aligned widget borders become filled quads; Vulkan wide lines
-        // are not required. Diagonal line rasterization is not admitted yet.
-        if (x1!=x2 && y1!=y2) throw std::logic_error("Native diagonal UI line is not admitted");
+        // Rasterize widget strokes as triangles; no Vulkan wide-line feature.
+        if (x1!=x2 && y1!=y2)
+        {
+            const float dx=float(x2)-x1, dy=float(y2)-y1;
+            const float half=std::max(1.f,native_line_width)*.5f/std::hypot(dx,dy);
+            const float nx=-dy*half, ny=dx*half;
+            const auto vertex=[&](float x,float y) { return std::array<float,6>{x,y,color.mV[0],color.mV[1],color.mV[2],color.mV[3]}; };
+            const auto a=vertex(x1+nx,y1+ny), b=vertex(x2+nx,y2+ny);
+            const auto c=vertex(x1-nx,y1-ny), d=vertex(x2-nx,y2-ny);
+            LLRender2D::nativeTriangle({a,b,c});
+            LLRender2D::nativeTriangle({c,b,d});
+            return;
+        }
         const S32 width=llmax(1,static_cast<S32>(std::ceil(native_line_width)));
         if (x1==x2) LLRender2D::nativeRectangle(x1,llmax(y1,y2),x1+width,llmin(y1,y2),color,true);
         else LLRender2D::nativeRectangle(llmin(x1,x2),y1+width,llmax(x1,x2),y1,color,true);
@@ -367,6 +377,21 @@ void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4 &color )
 
 void gl_triangle_2d(S32 x1, S32 y1, S32 x2, S32 y2, S32 x3, S32 y3, const LLColor4& color, bool filled)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        if (filled)
+        {
+            const auto v=[&](float x,float y) { return std::array<float,6>{x,y,color.mV[0],color.mV[1],color.mV[2],color.mV[3]}; };
+            LLRender2D::nativeTriangle({v(float(x1),float(y1)),v(float(x2),float(y2)),v(float(x3),float(y3))});
+        }
+        else
+        {
+            gl_line_2d(x1,y1,x2,y2,color);
+            gl_line_2d(x2,y2,x3,y3,color);
+            gl_line_2d(x3,y3,x1,y1,color);
+        }
+        return;
+    }
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     gGL.color4fv(color.mV);

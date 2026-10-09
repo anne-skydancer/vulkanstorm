@@ -2171,13 +2171,13 @@ void LLLineEditor::draw()
 
             S32 pxBottom = (S32)(text_bottom + mGLFont->getDescenderHeight());
 
-            gGL.color4ub(255, 0, 0, 200);
+            const LLColor4 spelling_color(1.f, 0.f, 0.f, 200.f/255.f);
             while (pxStart + 1 < pxEnd)
             {
-                gl_line_2d(pxStart, pxBottom, pxStart + 2, pxBottom - 2);
+                gl_line_2d(pxStart, pxBottom, pxStart + 2, pxBottom - 2, spelling_color);
                 if (pxStart + 3 < pxEnd)
                 {
-                    gl_line_2d(pxStart + 2, pxBottom - 3, pxStart + 4, pxBottom - 1);
+                    gl_line_2d(pxStart + 2, pxBottom - 3, pxStart + 4, pxBottom - 1, spelling_color);
                 }
                 pxStart += 4;
             }

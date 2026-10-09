@@ -2266,7 +2266,8 @@ if(USE_DILIGENTCORE)
          vsuiresources.cpp vsuiresources.h vsuifontcache.cpp vsuifontcache.h
           vsuifontbridge.cpp vsuifontbridge.h
           vsuidrawbridge.cpp vsuidrawbridge.h vsuiimageprovider.cpp vsuiimageprovider.h
-          vsuicontext.cpp vsuicontext.h vsvulkancontext.cpp vsvulkancontext.h vsstartupui.cpp vsstartupui.h vsviewerwindow.cpp)
+          vsuicontext.cpp vsuicontext.h vsvulkancontext.cpp vsvulkancontext.h vsstartupui.cpp vsstartupui.h vsviewerwindow.cpp
+          vsplainchat.cpp vsplainchat.h)
 endif()
 if(VS_VULKAN_DIAGNOSTICS)
     list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h

@@ -31,9 +31,12 @@ class AcceptanceTests(unittest.TestCase):
                           'native-login-controller-created','native-startup-ui-released',
                           'native-startup-graphics-released','native-startup-window-released'],
                   modal_alert_verified=True,critical_dialog_verified=True,
-                  passed=True,presented_frames=9,readbacks=9,failure='')
+                  plain_chat_controls_verified=True,required_dialog_actions_verified=True,
+                  mfa_actions_verified=True,login_menus_verified=True,unsupported_ui_status_verified=True,
+                  native_dpi_event_verified=True,ime_event_route_verified=True,
+                  passed=True,presented_frames=17,readbacks=18,failure='')
         self.assertTrue(assess_startup(item,0,'','startup-positive'))
-        for key,value in [('modal_alert_verified',False),('critical_dialog_verified',False),('readbacks',8),('validation_errors',1),('shutdown_complete',False),
+        for key,value in [('modal_alert_verified',False),('critical_dialog_verified',False),('readbacks',17),('plain_chat_controls_verified',False),('required_dialog_actions_verified',False),('mfa_actions_verified',False),('login_menus_verified',False),('unsupported_ui_status_verified',False),('validation_errors',1),('shutdown_complete',False),
                           ('login_controls_verified',False),('progress_owner_verified',False),('stages',[]),
                           ('stages',list(reversed(item['stages'])))]:
             bad=copy.deepcopy(item);bad[key]=value
@@ -435,14 +438,14 @@ int main() {
         log = 'PASS viewer-native-diagnostic'
         self.assertFalse(assess(good, 0, log, 'ui-positive', 'Windows'))
         good.update(ui_fixture_enabled=True, ui_readback_verified=True, ui_readbacks=2,
-                    ui_facade_verified=True, ui_atlas_verified=True, ui_font_producer_verified=True,
+                    ui_facade_verified=True, ui_atlas_verified=True, ui_font_producer_verified=True, ui_delayed_completion_verified=True,
                     ui_admission_verified=True,ui_xui_verified=True,ui_input_verified=True,ui_focus_verified=True,
                     ui_mouse_verified=True,ui_scroll_verified=True)
         self.assertTrue(assess(good, 0, log, 'ui-positive', 'Windows'))
         self.assertTrue(assess(good, 0, log, 'skin-modern-blue', 'Windows'))
         for key, value in [('ui_readbacks', 1), ('ui_readback_verified', False), ('ui_fixture_enabled', False),
                            ('ui_facade_verified', False), ('ui_atlas_verified', False),
-                           ('ui_font_producer_verified', False), ('ui_admission_verified', False),
+                           ('ui_font_producer_verified', False), ('ui_delayed_completion_verified', False), ('ui_admission_verified', False),
                            ('ui_xui_verified', False), ('ui_input_verified', False), ('ui_focus_verified', False),
                            ('ui_mouse_verified', False), ('ui_scroll_verified', False)]:
             with self.subTest(key=key):

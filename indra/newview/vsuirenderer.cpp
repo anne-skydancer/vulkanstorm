@@ -200,7 +200,14 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
         check(p.bounds[2] >= p.bounds[0] && p.bounds[3] >= p.bounds[1], "Inverted native UI bounds");
         // Clamp before converting to signed integers; enormous finite clips are valid.
         auto edge = [dpi](float value, unsigned limit, bool end)
-        { double v = std::clamp(double(value)*dpi, 0.0, double(limit)); return int(end ? std::ceil(v) : std::floor(v)); };
+        {
+            // Packet coordinates and DPI are float UI values. Round their
+            // product at that precision before outward scissor rounding, so
+            // integer physical scissors survive logical-coordinate conversion
+            // (607 / 1.25f must not become a 608-pixel clip on reconstruction).
+            const double v=std::clamp(double(value*dpi),0.0,double(limit));
+            return int(end ? std::ceil(v) : std::floor(v));
+        };
         Rect clip{edge(p.clip[0],width,false), edge(p.clip[1],height,false),
                   edge(p.clip[2],width,true), edge(p.clip[3],height,true)};
         if (clip.right <= clip.left || clip.bottom <= clip.top ||

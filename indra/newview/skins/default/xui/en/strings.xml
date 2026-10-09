@@ -5,6 +5,7 @@
      that are returned from one component and may appear in many places-->
 <strings>
     <string name="NativeVulkanRegionUnavailable">Authentication succeeded. Native Vulkan region and connected chat integration is not available in this development build. You can return to the login screen or close the viewer.</string>
+    <string name="NativeVulkanUIUnavailable">[CONTROL] is not available in this native Vulkan development stage.</string>
     <string name="MBVulkanRendererUnavailable">Native Vulkan cannot run a normal viewer session in this build. Startup has stopped before graphics initialization; there is no OpenGL fallback. Select OpenGL or Zink explicitly in RenderBackend to start a normal session.</string>
 
 	<!-- Default Args - these arguments will be replaced in all strings -->

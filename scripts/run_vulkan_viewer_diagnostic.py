@@ -35,9 +35,13 @@ def assess_startup(record, code, log, case):
     if positions != sorted(positions) or 'DILIGENT 2:' in log or 'Validation Error' in log:
         return False
     if case == 'startup-positive':
-        return (code == 0 and record.get('passed') is True and record.get('presented_frames') == 9
-                and record.get('readbacks') == 9 and record.get('modal_alert_verified') is True
-                and record.get('critical_dialog_verified') is True)
+        return (code == 0 and record.get('passed') is True and record.get('presented_frames') == 17
+                and record.get('readbacks') == 18 and record.get('modal_alert_verified') is True
+                and record.get('critical_dialog_verified') is True
+                and all(record.get(key) is True for key in ('plain_chat_controls_verified',
+                    'required_dialog_actions_verified', 'mfa_actions_verified', 'login_menus_verified',
+                    'unsupported_ui_status_verified'))
+                and record.get('native_dpi_event_verified' if platform.system() == 'Windows' else 'ime_event_route_verified') is True)
     return code == 1 and record.get('passed') is False and record.get('failure') == 'Injected failure: ' + case and ('Injected failure: ' + case) in log
 
 
@@ -160,6 +164,7 @@ def assess(record, code, log, case, system):
                                  record.get('ui_facade_verified') is not True or
                                  record.get('ui_atlas_verified') is not True or
                                  record.get('ui_font_producer_verified') is not True or
+                                 record.get('ui_delayed_completion_verified') is not True or
                                  record.get('ui_admission_verified') is not True or
                                  record.get('ui_xui_verified') is not True or
                                  record.get('ui_input_verified') is not True or
@@ -237,21 +242,23 @@ def main():
                'ui_event_source': 'synthetic-native-window-events'}
     skins = skin_cases(stage)
     ui_cases = (*UI_CASES, *skins)
+    startup_skins = {"startup-" + name: selection for name, selection in skins.items()}
+    startup_cases = (*STARTUP_CASES, *startup_skins)
     results['skin_cases'] = {name: dict(zip(('skin', 'theme', 'language'), values)) for name, values in skins.items()}
     with windows_manifest_registration(runtime, args.register_windows_manifests):
-        for case in ('positive', *FAILURES, *ui_cases, *STARTUP_CASES):
+        for case in ('positive', *FAILURES, *ui_cases, *startup_cases):
             directory = evidence / case; directory.mkdir(exist_ok=True)
-            artifact = directory / ('viewer-startup.json' if case in STARTUP_CASES else 'viewer-presentation.json'); artifact.unlink(missing_ok=True)
+            artifact = directory / ('viewer-startup.json' if case in startup_cases else 'viewer-presentation.json'); artifact.unlink(missing_ok=True)
             image = directory / 'viewer-clear.ppm'; image.unlink(missing_ok=True)
             for pattern in ('viewer-ui-*.ppm','viewer-xui*.ppm'):
                 for old_image in directory.glob(pattern): old_image.unlink()
             child_env = env.copy(); child_env['VS_VULKAN_DIAGNOSTIC'] = str(directory)
             if case in ui_cases: child_env['VS_VULKAN_DIAGNOSTIC_UI'] = '1'
-            if case in STARTUP_CASES: child_env['VS_VULKAN_DIAGNOSTIC_STARTUP'] = '1'
-            if case in skins:
-                for key, value in zip(('SKIN', 'THEME', 'LANGUAGE'), skins[case]):
+            if case in startup_cases: child_env['VS_VULKAN_DIAGNOSTIC_STARTUP'] = '1'
+            if case in skins or case in startup_skins:
+                for key, value in zip(('SKIN', 'THEME', 'LANGUAGE'), (skins | startup_skins)[case]):
                     child_env['VS_VULKAN_DIAGNOSTIC_' + key] = value
-            if case not in ('positive', 'ui-positive', 'startup-positive') and case not in skins:
+            if case not in ('positive', 'ui-positive', 'startup-positive') and case not in skins and case not in startup_skins:
                 child_env['VS_VULKAN_DIAGNOSTIC_FAIL'] = case
             record = None; mapped = {}; log = ''; code = None; passed = False
             try:
@@ -259,12 +266,15 @@ def main():
                                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=90)
                 code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
                 record = json.loads(artifact.read_text())
-                passed = assess_startup(record, code, log, case) if case in STARTUP_CASES else assess(record, code, log, case, platform.system())
-                if case == 'startup-positive':
-                    for index in range(9):
-                        path = directory / f'startup-{index}.ppm'
-                        if not path.is_file() or path.stat().st_size < 640*480*3:
-                            raise RuntimeError('Missing or incomplete native startup readback')
+                passed = assess_startup(record, code, log, "startup-positive" if case in startup_skins else case) if case in startup_cases else assess(record, code, log, case, platform.system())
+                if case == 'startup-positive' or case in startup_skins:
+                    for index in range(18):
+                        for suffix in ('', '-expected'):
+                            path = directory / f'startup-{index}{suffix}.ppm'
+                            if not path.is_file() or path.stat().st_size < 640*480*3:
+                                raise RuntimeError('Missing or incomplete native startup readback')
+                    if case in startup_skins and tuple(record.get('ui_' + key) for key in ('skin', 'theme', 'language')) != startup_skins[case]:
+                        raise RuntimeError('Native startup skin selection differs from requested overlays')
                     if 'DILIGENT_DEVICE=' + expected_device['name'] not in log:
                         raise RuntimeError('Native startup selected an unexpected device')
                 if case in skins and tuple(record.get('ui_' + key) for key in ('skin', 'theme', 'language')) != skins[case]:
@@ -283,7 +293,7 @@ def main():
                         path = directory / f'viewer-xui{suffix}.ppm'
                         if not path.is_file() or path.stat().st_size != len(b'P6\n320 240\n255\n') + 320 * 240 * 3:
                             raise RuntimeError('Missing or incomplete viewer XUI readback: ' + path.name)
-                if case in ('positive', 'ui-positive') or 'device-created' in record.get('stages', []) or case in STARTUP_CASES:
+                if case in ('positive', 'ui-positive') or 'device-created' in record.get('stages', []) or case in startup_cases:
                     device = record['device'] if case not in STARTUP_CASES else expected_device
                     if any(device.get(k) != expected_device[k] for k in ('name', 'vendor_id', 'device_id')):
                         raise RuntimeError('Viewer and pinned test runtime selected different devices')
@@ -306,13 +316,16 @@ def main():
                                          loaded_library_sha256=mapped))
             print(('PASS' if passed else 'FAIL') + ': viewer ' + case)
         normal = run_normal_login(executable, stage, env, evidence, expected_device)
-    results['presentation_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] not in (*ui_cases, *STARTUP_CASES))
+    results['presentation_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] not in (*ui_cases, *startup_cases))
     results['ui_substrate_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in ui_cases)
     results['skin_fixture_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in skins)
     results['tests'].append(normal)
     results['normal_login_startup_qualified'] = normal['passed']
     print(('PASS' if normal['passed'] else 'FAIL') + ': viewer normal-login')
-    results['startup_window_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in STARTUP_CASES)
+    results['startup_window_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in startup_cases)
+    results['v3_controls_qualified'] = results['startup_window_qualified'] and results['ui_substrate_qualified'] and results['normal_login_startup_qualified']
+    results['ui_native_dpi_event_qualified'] = results['startup_window_qualified'] and windows
+    results['ui_sdl_ime_event_route_qualified'] = results['startup_window_qualified'] and not windows
     (evidence / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
     return 0 if results['presentation_qualified'] and results['ui_substrate_qualified'] and results['startup_window_qualified'] and results['normal_login_startup_qualified'] else 1
 

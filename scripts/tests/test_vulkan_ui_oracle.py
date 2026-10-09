@@ -108,6 +108,13 @@ int main() {
     packet.image=red;packet.bounds={0,0,2,2};packet.sampling=VSUIRenderer::Sampling::Nearest;
     pixels=vs_ui_expected_pixels(4,4,2,{packet});
     assert(pixel(3,3,0)==136);
+    // A coverage edge just above a sample center rounds onto it at the
+    // device's subpixel precision. Top edges include it; bottom edges exclude.
+    packet.bounds={0,.500001f,1,1.5f};packet.clip={0,0,1,1};
+    pixels=vs_ui_expected_pixels(4,4,1,{packet},8);assert(pixel(0,0,0)==136);
+    pixels=vs_ui_expected_pixels(4,4,1,{packet});assert(pixel(0,0,0)==16);
+    packet.bounds={0,-.5f,1,.500001f};
+    pixels=vs_ui_expected_pixels(4,4,1,{packet},8);assert(pixel(0,0,0)==16);
 }
 '''
         with tempfile.TemporaryDirectory() as temp:

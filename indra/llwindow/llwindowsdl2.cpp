@@ -35,6 +35,7 @@
 #include "llwindowsdl.h"
 
 #include "llwindowcallbacks.h"
+#include "llpreeditor.h"
 #include "llkeyboardsdl.h"
 
 #include "llerror.h"
@@ -1901,8 +1902,21 @@ void LLWindowSDL::gatherInput()
                 break;
             }
 
+            case SDL_TEXTEDITING:
+            {
+                if (!mUseGL && mPreeditor)
+                {
+                    const auto composition = utf8str_to_wstring(event.edit.text);
+                    mPreeditor->resetPreedit();
+                    if (!composition.empty())
+                        mPreeditor->updatePreedit(composition, {S32(composition.size())}, {true},
+                            llclamp(event.edit.start, 0, S32(composition.size())));
+                }
+                break;
+            }
             case SDL_TEXTINPUT:
             {
+                if (!mUseGL && mPreeditor) mPreeditor->resetPreedit();
                 auto string = utf8str_to_utf16str( event.text.text );
                 mKeyModifiers = gKeyboard->currentMask( false );
                 if (altGrMask)
@@ -2084,6 +2098,14 @@ void LLWindowSDL::gatherInput()
 
                     mCallbacks->handleResize(this, width, height);
                 }
+#if SDL_VERSION_ATLEAST(2,0,18)
+                else if (!mUseGL && event.window.event == SDL_WINDOWEVENT_DISPLAY_CHANGED)
+                {
+                    int width=0, height=0;
+                    SDL_GetWindowSize(mWindow, &width, &height);
+                    mCallbacks->handleDPIChanged(this, getSystemUISize(), width, height);
+                }
+#endif
                 else if( event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED ) // <FS:ND> What about SDL_WINDOWEVENT_ENTER (mouse focus)
                 {
                     // We have to do our own state massaging because SDL
@@ -2856,6 +2878,16 @@ void LLWindowSDL::setLanguageTextInput(const LLCoordGL& position)
 }
 
 // IME - International input compositing, i.e. for Japanese / Chinese text input
+F32 LLWindowSDL::getSystemUISize()
+{
+    if (mUseGL || !mWindow) return 1.f;
+    float dpi = 96.f;
+    const int display = SDL_GetWindowDisplayIndex(mWindow);
+    if (display < 0 || SDL_GetDisplayDPI(display, &dpi, nullptr, nullptr) != 0 || !(dpi >= 48.f && dpi <= 384.f))
+        return 1.f;
+    return dpi / 96.f;
+}
+
 void LLWindowSDL::allowLanguageTextInput(LLPreeditor *preeditor, bool b)
 {
     if (!mIMEEnabled)
@@ -2877,6 +2909,7 @@ void LLWindowSDL::allowLanguageTextInput(LLPreeditor *preeditor, bool b)
     // Take care of old and new preeditors.
     if (preeditor != mPreeditor || !b)
     {
+        if (!mUseGL && mPreeditor) mPreeditor->resetPreedit();
         mPreeditor = (b ? preeditor : nullptr);
     }
 

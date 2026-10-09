@@ -83,11 +83,13 @@ void LLWeb::loadURLInternal(const std::string &url, const std::string& target, c
 
     if (LLFloaterMarketplace::isMarketplaceURL(url))
     {
-        LLFloaterReg::showInstance("marketplace", p);
+        if (!LLFloaterReg::showInstance("marketplace", p) && LLViewerMedia::instanceExists() && !uuid.empty())
+            LLViewerMedia::instance().proxyWindowClosed(uuid);
     }
     else
     {
-        LLFloaterReg::showInstance("web_content", p);
+        if (!LLFloaterReg::showInstance("web_content", p) && LLViewerMedia::instanceExists() && !uuid.empty())
+            LLViewerMedia::instance().proxyWindowClosed(uuid);
     }
 }
 

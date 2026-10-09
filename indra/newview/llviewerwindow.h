@@ -68,6 +68,7 @@ class LLRootView;
 class VSVulkanContext;
 class VSUIContext;
 class VSUIAdmission;
+class VSPlainChat;
 class LLWindowListener;
 class LLViewerWindowListener;
 class LLVOPartGroup;
@@ -178,6 +179,7 @@ public:
     void drawNativeUI();
 #if VS_NATIVE_VULKAN
     VSVulkanContext* nativeContext() const { return mVulkanContext.get(); }
+    VSPlainChat* nativeChat() const { return mNativeChat; }
 #endif
     virtual ~LLViewerWindow();
 
@@ -505,7 +507,7 @@ private:
 private:
     void initNativeWindow(const Params& p);
     void initNativeBase();
-    void reshapeNative(S32 width, S32 height);
+    void reshapeNative(S32 width, S32 height, F32 system_scale = 0.f);
     bool nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type, bool down);
     void nativeHover(LLCoordGL pos, MASK mask);
     void nativeScroll(S32 clicks, bool horizontal = false);
@@ -514,6 +516,8 @@ private:
     std::unique_ptr<VSVulkanContext> mVulkanContext;
     std::unique_ptr<VSUIAdmission> mNativeAdmission;
     std::unique_ptr<VSUIContext> mNativeUI;
+    VSPlainChat* mNativeChat = nullptr; // Owned by the native root, like required startup panels.
+    F32 mNativeSystemScale = 1.f;
 #endif
     LLWindow*       mWindow;                        // graphical window object
     bool            mActive;

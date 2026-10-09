@@ -1635,6 +1635,7 @@ bool LLAppViewer::frameNativeVulkanLogin()
     LLEventTimer::updateClass();
     LLSmoothInterpolation::updateInterpolants();
     LLNotificationsUI::LLToast::updateClass();
+    LLMortician::updateClass(); // Retire closed UI owners before input/focus processing.
     LLFilePickerThread::clearDead();
     LLDirPickerThread::clearDead();
     gViewerWindow->getWindow()->processMiscNativeEvents();

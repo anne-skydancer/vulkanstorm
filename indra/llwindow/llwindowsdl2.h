@@ -62,6 +62,7 @@ public:
     /*virtual*/ bool getPosition(LLCoordScreen *position);
     /*virtual*/ bool getSize(LLCoordScreen *size);
     /*virtual*/ bool getSize(LLCoordWindow *size);
+    F32 getSystemUISize() override;
     /*virtual*/ bool setPosition(LLCoordScreen position);
     /*virtual*/ bool setSizeImpl(LLCoordScreen size);
     /*virtual*/ bool setSizeImpl(LLCoordWindow size);

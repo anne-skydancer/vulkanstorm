@@ -1,5 +1,6 @@
 // Existing XUI and input qualification inside the native viewer. LGPL-2.1.
 #include "vsuifixture.h"
+#include "vsplainchat.h"
 #include "llbutton.h"
 #include "llcontrol.h"
 #include "lldir.h"
@@ -30,19 +31,6 @@
 #include <stdexcept>
 namespace
 {
-// Expose the protected platform preeditor contract for diagnostic composition.
-// Rendering and editing remain the existing LLLineEditor implementation.
-class NativeLineEditor : public LLLineEditor
-{
-  public:
-    explicit NativeLineEditor(const Params &p) : LLLineEditor(p)
-    {
-    }
-    LLPreeditor &preeditor()
-    {
-        return *this;
-    }
-};
 void require(bool value, const char *message)
 {
     if (!value)
@@ -52,7 +40,7 @@ bool widget(const std::type_info &t)
 {
     return t == typeid(LLPanel) || t == typeid(LLView) || t == typeid(LLUICtrl) || t == typeid(LLTextBox) ||
            t == typeid(LLButton) || t == typeid(LLProgressBar) || t == typeid(LLLineEditor) ||
-           t == typeid(NativeLineEditor) || t == typeid(LLViewBorder) || t == typeid(LLTextEditor) ||
+           t == typeid(VSChatInput) || t == typeid(VSPlainChat) || t == typeid(LLViewBorder) || t == typeid(LLTextEditor) ||
            t == typeid(LLScrollContainer) || t == typeid(LLScrollbar);
 }
 } // namespace
@@ -63,8 +51,9 @@ struct VSUIFixture::Impl
     LLControlGroup config{"NativeUIConfig"}, ignores{"NativeUIIgnores"};
     std::unique_ptr<VSUIContext> context;
     LLView *root = nullptr;
-    NativeLineEditor *input = nullptr;
+    VSChatInput *input = nullptr;
     LLTextEditor *transcript = nullptr;
+    VSPlainChat *chat = nullptr;
     LLError::RecorderPtr log;
     Impl(VSUIResources &r, LLWindow *window)
         : resources(r), admission(
@@ -106,27 +95,28 @@ struct VSUIFixture::Impl
                     "Corrected progress XUI controls are missing");
             progress->setRect(LLRect(10, 230, 210, 210));
             progress->findChild<LLProgressBar>("progress_bar_mini")->setValue(LLSD(50.f));
-            LLLineEditor::Params edit;
-            edit.name = "native_chat_input";
-            edit.rect = LLRect(10, 190, 310, 160);
-            edit.spellcheck = false;
-            // Use the selected skin's text-field image and colors together.
-            edit.max_length.bytes = 1024;
-            input = LLUICtrlFactory::create<NativeLineEditor>(edit, root);
-            require(input, "Native input was not admitted");
-            LLTextEditor::Params chat;
-            chat.name = "native_plain_transcript";
-            chat.rect = LLRect(10, 150, 310, 20);
-            chat.read_only = true;
-            chat.parse_urls = false;
-            chat.spellcheck = false;
-            chat.embedded_items = false;
-            transcript = LLUICtrlFactory::create<LLTextEditor>(chat, root);
-            require(transcript, "Native transcript was not admitted");
+            LLPanel::Params chat_params;
+            chat_params.name = "native_nearby_chat";
+            chat_params.rect = LLRect(10, 190, 310, 20);
+            chat = LLUICtrlFactory::create<VSPlainChat>(chat_params, root);
+            require(chat, "Native plain chat was not admitted");
+            input = chat->input();
+            transcript = chat->transcript();
+            // Fit both real production controls into this compact oracle layout.
+            input->setRect(LLRect(0,170,300,140));
+            transcript->setRect(LLRect(0,130,300,0));
+            input->setText(LLStringExplicit("retained"));
+            require(!chat->submit() && input->getText()=="retained", "Unbound native chat lost unsent text");
+            chat->setSender([](const std::string&) { return false; });
+            require(!chat->submit() && input->getText()=="retained", "Rejected native chat lost unsent text");
+            std::string submitted;
+            chat->setSender([&submitted](const std::string& value) { submitted=value; return true; });
+            require(chat->submit() && submitted=="retained" && input->getText().empty(), "Native chat commit did not reach its transport interface");
+            chat->setSender([](const std::string&) { return true; });
             std::string text;
             for (unsigned i = 0; i < 30; ++i)
                 text += "Nearby " + std::to_string(i) + ": plain text\n";
-            transcript->setText(text);
+            chat->append(text);
         }
         catch (...)
         {
@@ -280,9 +270,18 @@ std::vector<VSUIRenderer::Packet> VSUIFixture::draw()
     LLRender2D::setSceneBlendType(LLRender::BT_ADD_WITH_ALPHA);
     gl_rect_2d(260, 15, 270, 5, LLColor4(.1f, .2f, .3f, .5f));
     LLRender2D::setSceneBlendType(LLRender::BT_ALPHA);
-    auto packets = c.resources.finish();
-    require(packets.size() >= 2 && packets[packets.size() - 2].blend == VSUIRenderer::Blend::Additive &&
-                packets.back().blend == VSUIRenderer::Blend::AdditiveAlpha,
+    auto glow = c.resources.finish();
+    require(glow.size() >= 2 && glow[glow.size() - 2].blend == VSUIRenderer::Blend::Additive &&
+                glow.back().blend == VSUIRenderer::Blend::AdditiveAlpha,
             "Native glow blend state was lost");
+    c.resources.begin(320,240,1);
+    gl_line_2d(2,15,8,5,LLColor4(.7f,.4f,.2f,1.f));
+    gl_triangle_2d(60,15,80,15,70,5,LLColor4(.2f,.5f,.8f,1.f),true);
+    gl_triangle_2d(90,15,110,15,100,5,LLColor4(.2f,.5f,.8f,1.f),false);
+    LLFontGL::getFontSansSerif()->renderUTF8("Style",0,140.f,10.f,LLColor4::white,
+        LLFontGL::LEFT,LLFontGL::BOTTOM,LLFontGL::BOLD|LLFontGL::ITALIC|LLFontGL::UNDERLINE,LLFontGL::DROP_SHADOW,5,100);
+    auto packets=c.resources.finish();
+    glow.insert(glow.end(),packets.begin(),packets.end());
+    packets=std::move(glow);
     return packets;
 }
