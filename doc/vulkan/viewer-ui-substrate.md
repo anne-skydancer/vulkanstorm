@@ -1,6 +1,6 @@
 # V3: viewer UI resource and packet substrate
 
-Source: `8f2304bfafcaecf0d6aea3393d88b378887fe3d5` on `vkstorm-vulkan`.
+Source: `f1701ee9e9b2a3987ec209509906beaa8e595adb` on `vkstorm-vulkan`.
 Status: resource and producer integration underway; full V3 acceptance remains open. This code
 runs in the staged viewer's native diagnostic lifecycle. An initial closed widget set now constructs corrected mini-progress XUI and
 plain editors, with native window input/focus, Tab traversal, scrolling and the
@@ -325,3 +325,66 @@ and input callbacks, then admit the required startup panels and their callbacks.
 Only open normal-session admission after that path passes lifecycle, resource,
 UI, DPI and platform-input qualification. Full V3, connected UI/chat and world
 rendering remain unqualified.
+
+
+## Native viewer-window and required startup owners, 9 October 2026
+
+Source: `f1701ee9e9b2a3987ec209509906beaa8e595adb` on `vkstorm-vulkan`.
+`LLViewerWindow` now has a native constructor and owns `VSVulkanContext`, the
+skin-aware UI owner, native root, login holder, floaters, popup owner, progress
+views and standard alert channels. Native frame, reshape, mouse, keyboard,
+Unicode and focus routes use that graph; cleanup releases controls and channels,
+then Diligent resources/swapchain, then the borrowed platform window.
+`LLAppViewer::initWindow` has a native dispatch branch. These reusable sources
+build with `USE_DILIGENTCORE`; the startup probe remains diagnostic-only.
+
+`VSVulkanContext` uses the machine's Vulkan loader discovery and verifies the
+created adapter against the selected device. Software ICD selection is supplied
+by the test launcher. Native UI rendering and presentation do not enter a GL
+context. Native progress images and media plugin buffers publish CPU bytes to
+immutable Diligent resources. Plugin copying preserves stride, row orientation,
+BGRA conversion and opaque RGB semantics. Media buffers are never retained by
+reference after plugin access. Live browser execution is not yet qualified.
+
+The native owner now shares the viewer's translation/substitution initialization
+and UI sound callbacks. Skin image facade names retain their public declaration
+names; internal GPU ownership keys are not exposed to controls resolving images
+again. Ordinary named XUI panels use their admitted base widget; registered
+specialized factories remain subject to the closed admission policy. Alerts use
+the real popup/root layout before world chrome exists. Modal controllers tolerate
+an absent menu container. Critical messages bind only controls present in their
+XUI. Native shadows and context cones emit explicit colored triangle packets.
+
+`VS_VULKAN_DIAGNOSTIC_STARTUP=1` adds an offline startup qualification through the
+actual `LLViewerWindow`, `FSPanelLogin`, progress controllers, `GenericAlert`
+notification/alert handler and `message_critical`/`LLFloaterTOS` controller. The
+sample alert/message text is test-only. This probe verifies Unicode/key routing,
+focus release, required controls, resize, configured DPI scaling,
+minimize/restore, nine GPU readbacks and ordered teardown. It requires zero
+pixel mismatches (per-channel tolerance 3), zero validation errors, the expected
+actual adapter and loaded-library hashes. Injected UI, frame and cleanup failures
+must exit with the expected error and complete teardown; crashes do not pass.
+
+Local Windows verification: the full Autobuild-backed RelWithDebInfo viewer and
+complete assets/runtime stage passed. All 43 staged SwiftShader cases passed,
+including four startup cases and the existing packaged skin/theme matrix.
+Readbacks of login, modal alert, critical message and progress were inspected.
+Evidence: `.tmp/viewer-vulkan-startup-final/results.json` and its per-case logs,
+readbacks and library hashes. This is local development evidence, not archived
+cross-platform CI acceptance. The required-dialog test at 640x480 does not
+establish responsive layout or visibility of every button in small windows.
+
+CI run [37844112807](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37844112807)
+passed Windows and failed both Linux jobs: native primary font faces were marked
+as fallback faces, causing an assertion during lazy glyph creation. The registry
+now preserves primary glyph-generation ownership while native drawing supplies
+CPU-backed fonts. A regression executes the actual registry decision. Linux
+runtime confirmation of this correction awaits the dedicated CI.
+
+Normal `LLAppViewer::init/frame/cleanup` startup and connected-session admission
+remain incomplete: `VSRenderBackend::canStartSession("Vulkan")` still fails
+closed. The startup probe's login callback does not authenticate. Browser-backed
+TOS/media execution, authentication callbacks, OS DPI/IME, required-dialog action
+coverage and full G-UI/G-RESOURCE closure remain open. This implementation is
+viewer code with an offline diagnostic consumer; it is not complete V3 or
+connected UI/chat acceptance.

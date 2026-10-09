@@ -1,6 +1,6 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-Source: `8f2304bfafcaecf0d6aea3393d88b378887fe3d5` on `vkstorm-vulkan`.
+Source: `f1701ee9e9b2a3987ec209509906beaa8e595adb` on `vkstorm-vulkan`.
 Status: implemented development diagnostic. CI run
 [37742422223](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37742422223)
 passed all nine original cases on Windows SwiftShader, Linux SwiftShader and
@@ -162,3 +162,11 @@ readbacks fail qualification. Local Windows passed all 39 cases under
 SwiftShader with zero validation errors. This covers the fixture's admitted
 controls, not full skin functionality, normal-session wiring or OS DPI/IME.
 See [shared UI ownership and qualification limits](viewer-ui-substrate.md#shared-native-ui-owner-and-skin-checkpoint-8-october-2026).
+
+
+The 9 October native viewer-window integration is recorded in
+[the UI substrate checkpoint](viewer-ui-substrate.md#native-viewer-window-and-required-startup-owners-9-october-2026).
+It adds reusable `LLViewerWindow` device/UI ownership and required startup
+controls, exercised by an offline viewer startup probe. Normal application and
+connected-session admission remain closed; diagnostic success does not establish
+full V3 acceptance.
