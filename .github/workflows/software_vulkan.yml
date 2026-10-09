@@ -37,6 +37,8 @@ jobs:
       - run: python scripts/tests/test_progress_panels.py
       - run: python scripts/tests/test_software_vulkan_runner.py
       - run: python scripts/tests/test_vulkan_viewer_diagnostic.py
+      - run: python scripts/tests/test_vulkan_media_pixels.py
+      - run: python scripts/tests/test_vulkan_font_registry.py
       - run: python scripts/tests/test_vulkan_ci_staging.py
       - run: python scripts/tests/test_vulkan_dependency_overlay.py
       - run: python scripts/tests/test_software_vulkan_dependencies.py

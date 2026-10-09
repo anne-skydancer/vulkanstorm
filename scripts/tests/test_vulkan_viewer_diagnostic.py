@@ -10,7 +10,7 @@ from render_backend_selector_fixture import SelectorTests
 from test_vulkan_ui_oracle import OracleTest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from run_vulkan_viewer_diagnostic import assess, STAGES, skin_cases
+from run_vulkan_viewer_diagnostic import assess, assess_startup, STAGES, skin_cases
 
 
 def record():
@@ -24,6 +24,27 @@ def record():
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_startup_acceptance_requires_viewer_ownership_readbacks_and_decisive_failure(self):
+        item=dict(schema=1,mode='viewer-native-startup',shutdown_complete=True,
+                  validation_errors=0,login_controls_verified=True,progress_owner_verified=True,
+                  stages=['native-viewer-window-created','native-startup-progress-created',
+                          'native-login-controller-created','native-startup-ui-released',
+                          'native-startup-graphics-released','native-startup-window-released'],
+                  modal_alert_verified=True,critical_dialog_verified=True,
+                  passed=True,presented_frames=9,readbacks=9,failure='')
+        self.assertTrue(assess_startup(item,0,'','startup-positive'))
+        for key,value in [('modal_alert_verified',False),('critical_dialog_verified',False),('readbacks',8),('validation_errors',1),('shutdown_complete',False),
+                          ('login_controls_verified',False),('progress_owner_verified',False),('stages',[]),
+                          ('stages',list(reversed(item['stages'])))]:
+            bad=copy.deepcopy(item);bad[key]=value
+            self.assertFalse(assess_startup(bad,0,'','startup-positive'))
+        self.assertFalse(assess_startup(item,-11,'','startup-positive'))
+        bad=copy.deepcopy(item);bad.update(passed=False,failure='Injected failure: startup-ui',presented_frames=0,readbacks=0)
+        self.assertTrue(assess_startup(bad,1,'Injected failure: startup-ui','startup-ui'))
+        self.assertFalse(assess_startup(bad,-1073741819,'Injected failure: startup-ui','startup-ui'))
+        bad['failure']='Unrelated initialization failure'
+        self.assertFalse(assess_startup(bad,1,'Injected failure: startup-ui','startup-ui'))
+
     def test_skin_matrix_requires_catalog_assets_and_preserves_all_theme_selections(self):
         with tempfile.TemporaryDirectory() as temp:
             stage = Path(temp)
@@ -320,6 +341,61 @@ int main() {
             source = Path(temp) / 'admission.cpp'; source.write_text(fixture)
             exe = Path(temp) / 'admission.exe'
             built = subprocess.run([compiler, '-std=c++17', '-I' + str(Path(__file__).resolve().parents[2] / 'indra/llui'),
+                                    str(source), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_named_panels_do_not_bypass_specialized_factory_admission(self):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        root = Path(__file__).resolve().parents[2]
+        text = (root / 'indra/llui/llpanel.cpp').read_text(encoding='utf-8')
+        start = text.index('LLPanel* LLPanel::createFactoryPanel(')
+        body = text[start:]
+        fixture = r"""
+#include <cassert>
+#include <deque>
+#include <map>
+#include <string>
+#include "vsuiadmission.h"
+struct LLCallbackMap {
+    void* (*mCallback)(void*);
+    void* mData;
+    using map_t = std::map<std::string, LLCallbackMap>;
+    using map_const_iter_t = map_t::const_iterator;
+};
+struct LLPanel {
+    struct Params {};
+    static std::deque<const LLCallbackMap::map_t*> sFactoryStack;
+    static LLPanel* createFactoryPanel(const std::string&);
+};
+std::deque<const LLCallbackMap::map_t*> LLPanel::sFactoryStack;
+struct LLUICtrlFactory {
+    template<class T> static T* create(const typename T::Params&) {
+        return VSUIAdmission::widget(typeid(T)) ? new T : nullptr;
+    }
+};
+""" + body + r"""
+int main() {
+    unsigned calls = 0;
+    LLCallbackMap::map_t factories;
+    factories.emplace("optional", LLCallbackMap{[](void* p)->void* {
+        ++*static_cast<unsigned*>(p); return new LLPanel;
+    }, &calls});
+    LLPanel::sFactoryStack.push_back(&factories);
+    VSUIAdmission admission([](const std::type_info& t){ return t == typeid(LLPanel); },
+        [](std::string_view){ return false; }, [](std::string_view){ return false; });
+    auto* ordinary = LLPanel::createFactoryPanel("login_content");
+    assert(ordinary != nullptr);
+    delete ordinary;
+    assert(LLPanel::createFactoryPanel("optional") == nullptr && calls == 0);
+}
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / 'panels.cpp'; source.write_text(fixture)
+            exe = Path(temp) / 'panels.exe'
+            built = subprocess.run([compiler, '-std=c++17', '-I' + str(root / 'indra/llui'),
                                     str(source), '-o', str(exe)], capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
             run = subprocess.run([str(exe)], capture_output=True, text=True)

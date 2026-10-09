@@ -62,7 +62,7 @@ struct VSUIFixture::Impl
     VSUIAdmission admission;
     LLControlGroup config{"NativeUIConfig"}, ignores{"NativeUIIgnores"};
     std::unique_ptr<VSUIContext> context;
-    LLPanel *root = nullptr;
+    LLView *root = nullptr;
     NativeLineEditor *input = nullptr;
     LLTextEditor *transcript = nullptr;
     LLError::RecorderPtr log;

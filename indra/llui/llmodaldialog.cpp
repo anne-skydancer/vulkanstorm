@@ -158,7 +158,7 @@ void LLModalDialog::setVisible( bool visible )
         if( visible )
         {
             // Hide all menus currently shown
-            LLMenuGL::sMenuContainer->hideMenus();
+            if (LLMenuGL::sMenuContainer) LLMenuGL::sMenuContainer->hideMenus();
 
             // Hide EmojiPicker if it is shown
             LLEmojiHelper::instance().hideHelper(nullptr, true);
@@ -181,7 +181,7 @@ void LLModalDialog::setVisible( bool visible )
 
 bool LLModalDialog::handleMouseDown(S32 x, S32 y, MASK mask)
 {
-    LLView* popup_menu = LLMenuGL::sMenuContainer->getVisibleMenu();
+    LLView* popup_menu = LLMenuGL::sMenuContainer ? LLMenuGL::sMenuContainer->getVisibleMenu() : nullptr;
     if (popup_menu != NULL)
     {
         S32 mx, my;
@@ -189,7 +189,7 @@ bool LLModalDialog::handleMouseDown(S32 x, S32 y, MASK mask)
         LLRect menu_screen_rc = popup_menu->calcScreenRect();
         if(!menu_screen_rc.pointInRect(mx, my))
         {
-            LLMenuGL::sMenuContainer->hideMenus();
+            if (LLMenuGL::sMenuContainer) LLMenuGL::sMenuContainer->hideMenus();
         }
     }
 
@@ -218,7 +218,7 @@ bool LLModalDialog::handleHover(S32 x, S32 y, MASK mask)
         LL_DEBUGS("UserInput") << "hover handled by " << getName() << LL_ENDL;
     }
 
-    LLView* popup_menu = LLMenuGL::sMenuContainer->getVisibleMenu();
+    LLView* popup_menu = LLMenuGL::sMenuContainer ? LLMenuGL::sMenuContainer->getVisibleMenu() : nullptr;
     if (popup_menu != NULL)
     {
         S32 mx, my;
@@ -260,7 +260,7 @@ bool LLModalDialog::handleDoubleClick(S32 x, S32 y, MASK mask)
 
 bool LLModalDialog::handleRightMouseDown(S32 x, S32 y, MASK mask)
 {
-    LLMenuGL::sMenuContainer->hideMenus();
+    if (LLMenuGL::sMenuContainer) LLMenuGL::sMenuContainer->hideMenus();
     childrenHandleRightMouseDown(x, y, mask);
     return true;
 }

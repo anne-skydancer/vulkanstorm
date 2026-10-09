@@ -7,10 +7,12 @@ class VSUIDrawBridge
   public:
     VSUIDrawBridge(VSUIResources &, float dpi);
     ~VSUIDrawBridge();
+    static VSUIResources* resources();
     VSUIDrawBridge(const VSUIDrawBridge &) = delete;
     VSUIDrawBridge &operator=(const VSUIDrawBridge &) = delete;
 
   private:
+    inline static VSUIResources* sResources = nullptr;
     VSUIFontBridge mFont;
     float mScaleX, mScaleY, mDepth;
     int mOriginX, mOriginY;

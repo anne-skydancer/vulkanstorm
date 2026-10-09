@@ -18,7 +18,27 @@ STAGES = ['viewer-window-created', 'device-created', 'swapchain-created-320x240'
           'viewer-window-destroyed', 'device-context-released']
 FAILURES = ('before-window', 'after-window', 'after-device', 'after-swapchain',
             'frame', 'shutdown', 'gl-trap', 'bad-clear')
+STARTUP_CASES = ('startup-positive', 'startup-ui', 'startup-frame', 'startup-cleanup')
 UI_CASES = ('ui-positive', 'bad-ui', 'ui-orientation', 'bad-xui', 'ui-construction', 'ui-gl-trap')
+
+
+def assess_startup(record, code, log, case):
+    stages = ['native-viewer-window-created', 'native-startup-progress-created',
+              'native-login-controller-created', 'native-startup-ui-released',
+              'native-startup-graphics-released', 'native-startup-window-released']
+    if (record.get('schema') != 1 or record.get('mode') != 'viewer-native-startup'
+        or record.get('shutdown_complete') is not True or record.get('validation_errors') != 0
+        or not record.get('login_controls_verified') or not record.get('progress_owner_verified')
+        or any(stage not in record.get('stages', []) for stage in stages)):
+        return False
+    positions = [record['stages'].index(stage) for stage in stages]
+    if positions != sorted(positions) or 'DILIGENT 2:' in log or 'Validation Error' in log:
+        return False
+    if case == 'startup-positive':
+        return (code == 0 and record.get('passed') is True and record.get('presented_frames') == 9
+                and record.get('readbacks') == 9 and record.get('modal_alert_verified') is True
+                and record.get('critical_dialog_verified') is True)
+    return code == 1 and record.get('passed') is False and record.get('failure') == 'Injected failure: ' + case and ('Injected failure: ' + case) in log
 
 
 def skin_cases(stage):
@@ -160,7 +180,8 @@ def main():
     for key in ('VK_ICD_FILENAMES', 'VK_ADD_DRIVER_FILES', 'VK_ADD_LAYER_PATH', 'VK_INSTANCE_LAYERS',
                 'VK_LOADER_DRIVERS_SELECT', 'VK_LOADER_DRIVERS_DISABLE', 'VK_LAYER_ENABLES', 'VK_LAYER_DISABLES',
                 'VS_VULKAN_DIAGNOSTIC', 'VS_VULKAN_DIAGNOSTIC_FAIL', 'VS_VULKAN_DIAGNOSTIC_UI',
-                'VS_VULKAN_DIAGNOSTIC_SKIN', 'VS_VULKAN_DIAGNOSTIC_THEME', 'VS_VULKAN_DIAGNOSTIC_LANGUAGE'):
+                'VS_VULKAN_DIAGNOSTIC_SKIN', 'VS_VULKAN_DIAGNOSTIC_THEME', 'VS_VULKAN_DIAGNOSTIC_LANGUAGE',
+                'VS_VULKAN_DIAGNOSTIC_STARTUP'):
         env.pop(key, None)
     env.update(VK_DRIVER_FILES=runtime['icd'], VK_LAYER_PATH=runtime['layer_path'],
                VK_LOADER_LAYERS_DISABLE='~implicit~', VK_LOADER_DEBUG='error,warn,driver,layer')
@@ -183,18 +204,19 @@ def main():
     ui_cases = (*UI_CASES, *skins)
     results['skin_cases'] = {name: dict(zip(('skin', 'theme', 'language'), values)) for name, values in skins.items()}
     with windows_manifest_registration(runtime, args.register_windows_manifests):
-        for case in ('positive', *FAILURES, *ui_cases):
+        for case in ('positive', *FAILURES, *ui_cases, *STARTUP_CASES):
             directory = evidence / case; directory.mkdir(exist_ok=True)
-            artifact = directory / 'viewer-presentation.json'; artifact.unlink(missing_ok=True)
+            artifact = directory / ('viewer-startup.json' if case in STARTUP_CASES else 'viewer-presentation.json'); artifact.unlink(missing_ok=True)
             image = directory / 'viewer-clear.ppm'; image.unlink(missing_ok=True)
             for pattern in ('viewer-ui-*.ppm','viewer-xui*.ppm'):
                 for old_image in directory.glob(pattern): old_image.unlink()
             child_env = env.copy(); child_env['VS_VULKAN_DIAGNOSTIC'] = str(directory)
             if case in ui_cases: child_env['VS_VULKAN_DIAGNOSTIC_UI'] = '1'
+            if case in STARTUP_CASES: child_env['VS_VULKAN_DIAGNOSTIC_STARTUP'] = '1'
             if case in skins:
                 for key, value in zip(('SKIN', 'THEME', 'LANGUAGE'), skins[case]):
                     child_env['VS_VULKAN_DIAGNOSTIC_' + key] = value
-            if case not in ('positive', 'ui-positive') and case not in skins:
+            if case not in ('positive', 'ui-positive', 'startup-positive') and case not in skins:
                 child_env['VS_VULKAN_DIAGNOSTIC_FAIL'] = case
             record = None; mapped = {}; log = ''; code = None; passed = False
             try:
@@ -202,7 +224,14 @@ def main():
                                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=90)
                 code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
                 record = json.loads(artifact.read_text())
-                passed = assess(record, code, log, case, platform.system())
+                passed = assess_startup(record, code, log, case) if case in STARTUP_CASES else assess(record, code, log, case, platform.system())
+                if case == 'startup-positive':
+                    for index in range(9):
+                        path = directory / f'startup-{index}.ppm'
+                        if not path.is_file() or path.stat().st_size < 640*480*3:
+                            raise RuntimeError('Missing or incomplete native startup readback')
+                    if 'DILIGENT_DEVICE=' + expected_device['name'] not in log:
+                        raise RuntimeError('Native startup selected an unexpected device')
                 if case in skins and tuple(record.get('ui_' + key) for key in ('skin', 'theme', 'language')) != skins[case]:
                     raise RuntimeError('Viewer skin selection differs from the requested skin/theme/language')
                 if case in ('positive', 'ui-positive') or case in skins:
@@ -219,8 +248,8 @@ def main():
                         path = directory / f'viewer-xui{suffix}.ppm'
                         if not path.is_file() or path.stat().st_size != len(b'P6\n320 240\n255\n') + 320 * 240 * 3:
                             raise RuntimeError('Missing or incomplete viewer XUI readback: ' + path.name)
-                if case in ('positive', 'ui-positive') or 'device-created' in record.get('stages', []):
-                    device = record['device']
+                if case in ('positive', 'ui-positive') or 'device-created' in record.get('stages', []) or case in STARTUP_CASES:
+                    device = record['device'] if case not in STARTUP_CASES else expected_device
                     if any(device.get(k) != expected_device[k] for k in ('name', 'vendor_id', 'device_id')):
                         raise RuntimeError('Viewer and pinned test runtime selected different devices')
                     mapped = loaded_library_hashes(log)
@@ -241,11 +270,12 @@ def main():
             results['tests'].append(dict(case=case, returncode=code, passed=passed, presentation=record,
                                          loaded_library_sha256=mapped))
             print(('PASS' if passed else 'FAIL') + ': viewer ' + case)
-    results['presentation_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] not in ui_cases)
+    results['presentation_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] not in (*ui_cases, *STARTUP_CASES))
     results['ui_substrate_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in ui_cases)
     results['skin_fixture_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in skins)
+    results['startup_window_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in STARTUP_CASES)
     (evidence / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
-    return 0 if results['presentation_qualified'] and results['ui_substrate_qualified'] else 1
+    return 0 if results['presentation_qualified'] and results['ui_substrate_qualified'] and results['startup_window_qualified'] else 1
 
 
 if __name__ == '__main__':

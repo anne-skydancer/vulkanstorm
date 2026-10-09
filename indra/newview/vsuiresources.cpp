@@ -280,3 +280,26 @@ void VSUIResources::screenClip(const LLRect* rect)
     const float top=bottom+std::ceil(rect->getHeight()*c.dpi)+1.f;
     c.clip={left/c.dpi,c.logical_height-top/c.dpi,right/c.dpi,c.logical_height-bottom/c.dpi};
 }
+
+void VSUIResources::triangle(const std::array<std::array<float, 6>, 3>& vertices)
+{
+    auto& c = *mImpl;
+    check(c.active, "Native triangle outside collection");
+    const std::string key = "native-solid-white";
+    if (!c.assets.count(key))
+    {
+        LLPointer<LLImageRaw> raw = new LLImageRaw(1,1,4);
+        raw->clear(255,255,255,255);
+        publish(key, *raw);
+    }
+    VSUIRenderer::Packet p;
+    p.image = c.assets.at(key).asset->image;
+    p.blend = nativeBlend(); p.clip = c.clip;
+    p.triangles.emplace();
+    for (unsigned i=0; i<6; ++i)
+    {
+        const auto& v = vertices[i < 3 ? i : 2]; // A single triangle plus a degenerate triangle.
+        (*p.triangles)[i] = {v[0]/c.dpi, c.logical_height-v[1]/c.dpi, 0.f, 0.f, v[2],v[3],v[4],v[5]};
+    }
+    c.packets.push_back(std::move(p));
+}

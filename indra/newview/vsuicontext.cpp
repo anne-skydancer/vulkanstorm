@@ -11,13 +11,15 @@
 #include "llviewereventrecorder.h"
 #include "llviewerprecompiledheaders.h"
 #include "vsuidrawbridge.h"
+#include "vstranslations.h"
+#include "vsuiaudio.h"
 #include "vsuiimageprovider.h"
 #include <cmath>
 #include <stdexcept>
 
 namespace
 {
-void require(bool condition, const char *message)
+void require(bool condition, const char* message)
 {
     if (!condition)
         throw std::runtime_error(message);
@@ -25,16 +27,16 @@ void require(bool condition, const char *message)
 } // namespace
 struct VSUIContext::Impl
 {
-    VSUIDrawBridge bridge;
+    VSUIDrawBridge                     bridge;
     std::unique_ptr<VSUIImageProvider> images;
-    std::unique_ptr<LLPanel> root;
-    std::string skin, theme, language;
-    bool owns_ui = false, owns_fonts = false, owns_factory = false, owns_recorder = false;
-    const bool previous_focus = gFocusMgr.getAppHasFocus();
+    std::unique_ptr<LLView>            root;
+    std::string                        skin, theme, language;
+    bool                               owns_ui = false, owns_fonts = false, owns_factory = false, owns_recorder = false;
+    const bool                         previous_focus = gFocusMgr.getAppHasFocus();
 
-    Impl(VSUIResources &resources, LLWindow *window, const LLUI::settings_map_t &settings, unsigned width,
-         unsigned height, float dpi)
-        : bridge(resources, dpi)
+    Impl(VSUIResources& resources, LLWindow* window, const LLUI::settings_map_t& settings, unsigned width, unsigned height, float dpi,
+         const std::function<LLView*(const LLRect&)>& root_factory) :
+        bridge(resources, dpi)
     {
         try
         {
@@ -42,13 +44,13 @@ struct VSUIContext::Impl
             require(window && width && height && std::isfinite(dpi) && dpi > 0, "Invalid native UI window/extent");
             const auto found = settings.find("config");
             require(found != settings.end() && found->second, "Native UI configuration is missing");
-            for (const char *group : {"floater", "ignores", "account"})
+            for (const char* group : { "floater", "ignores", "account" })
             {
                 const auto entry = settings.find(group);
                 require(entry != settings.end() && entry->second, "Native UI settings group is missing");
             }
-            auto &config = *found->second;
-            skin = config.getString("SkinCurrent");
+            auto& config = *found->second;
+            skin         = config.getString("SkinCurrent");
             if (skin.empty())
                 skin = "default";
             theme = config.getString("SkinCurrentTheme");
@@ -57,12 +59,12 @@ struct VSUIContext::Impl
             gDirUtilp->setSkinFolder(skin, theme, "en");
             LLUIColorTable::instance().clear();
             require(LLUIColorTable::instance().loadFromSettings(), "Native UI skin colors are missing");
-            images = std::make_unique<VSUIImageProvider>(resources);
+            images       = std::make_unique<VSUIImageProvider>(resources);
             owns_factory = true; // Static widget registration owns an initially empty factory.
-            LLUI::createInstance(settings, images.get(), nullptr, nullptr);
-            owns_ui = true;
+            LLUI::createInstance(settings, images.get(), ui_audio_callback, deferred_ui_audio_callback);
+            owns_ui                      = true;
             LLUI::getInstance()->mWindow = window;
-            language = LLUI::getLanguage();
+            language                     = LLUI::getLanguage();
             gDirUtilp->setSkinFolder(skin, theme, language);
             if (!LLViewerEventRecorder::instanceExists())
             {
@@ -71,16 +73,17 @@ struct VSUIContext::Impl
             }
             LLUI::setScaleFactor(LLVector2(dpi, dpi));
             LLXMLNodePtr strings;
-            require(LLUICtrlFactory::getLayeredXMLNode("strings.xml", strings) && LLTrans::parseStrings(strings, {}),
+            require(LLUICtrlFactory::getLayeredXMLNode("strings.xml", strings),
                     "Native UI skin translations are missing");
+            vs_init_strings();
             owns_fonts = true;
             LLFontGL::initClass(config.getF32("FontScreenDPI"), dpi, dpi, gDirUtilp->getAppRODataDir(),
                                 config.getString("FSFontSettingsFile"), config.getF32("FSFontSizeAdjustment"), false);
             LLPanel::Params panel;
-            panel.name = "native_ui_root";
+            panel.name       = "native_ui_root";
             panel.focus_root = true;
-            panel.rect = LLRect(0, static_cast<S32>(height / dpi), static_cast<S32>(width / dpi), 0);
-            root.reset(LLUICtrlFactory::create<LLPanel>(panel));
+            panel.rect       = LLRect(0, static_cast<S32>(height / dpi), static_cast<S32>(width / dpi), 0);
+            root.reset(root_factory ? root_factory(panel.rect()) : LLUICtrlFactory::create<LLPanel>(panel));
             require(bool(root), "Native UI root was not admitted");
             LLUI::getInstance()->setRootView(root.get());
         }
@@ -118,30 +121,19 @@ struct VSUIContext::Impl
         }
         images.reset(); // Facades/defaults and font faces are gone before the drawing bridge.
     }
-    ~Impl()
-    {
-        cleanup();
-    }
+    ~Impl() { cleanup(); }
 };
-VSUIContext::VSUIContext(VSUIResources &resources, LLWindow *window, const LLUI::settings_map_t &settings,
-                         unsigned width, unsigned height, float dpi)
-    : mImpl(std::make_unique<Impl>(resources, window, settings, width, height, dpi))
+VSUIContext::VSUIContext(VSUIResources& resources, LLWindow* window, const LLUI::settings_map_t& settings, unsigned width, unsigned height,
+                         float dpi, std::function<LLView*(const LLRect&)> root_factory) :
+    mImpl(std::make_unique<Impl>(resources, window, settings, width, height, dpi, root_factory))
 {
 }
 VSUIContext::~VSUIContext() = default;
-LLPanel *VSUIContext::root() const
-{
-    return mImpl->root.get();
-}
-const std::string &VSUIContext::skin() const
-{
-    return mImpl->skin;
-}
-const std::string &VSUIContext::theme() const
-{
-    return mImpl->theme;
-}
-const std::string &VSUIContext::language() const
-{
-    return mImpl->language;
-}
+LLView* VSUIContext::root() const
+{ return mImpl->root.get(); }
+const std::string& VSUIContext::skin() const
+{ return mImpl->skin; }
+const std::string& VSUIContext::theme() const
+{ return mImpl->theme; }
+const std::string& VSUIContext::language() const
+{ return mImpl->language; }

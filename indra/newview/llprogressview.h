@@ -128,11 +128,15 @@ private:
     {
     public:
         LLPointer<LLViewerTexture> mTexturep;
+        LLUIImagePtr mNativeImage;
         LLRect mDrawRect;
         LLRectf mClipRect;
         LLRectf mOffsetRect;
     };
     std::vector<TextureData> mLogosList;
+    LLUIImagePtr mNativeStartImage;
+    std::vector<std::string> mNativeTextureKeys;
+    boost::signals2::scoped_connection mModalAlertConnection;
 };
 
 class LLProgressViewMini :
