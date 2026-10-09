@@ -1,5 +1,5 @@
 {
-  "source_commit": "ad00157f5cd752d7d960b8fb52adbff7a0d51313",
+  "source_commit": "f80e6c725f72d7a9cd6b3d8657fecf0e6b087548",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -843,85 +843,148 @@
   ],
   "reviewed_ranges": [
     {
+      "path": "indra/newview/vsplainchat.h",
+      "start": 15,
+      "end": 21,
+      "sha256": "ac36f9b1ab1a04de561fe3cb9acdf48d57f6549725b4131bb7efebc5c58de184",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
+    },
+    {
+      "path": "indra/newview/vsplainchat.cpp",
+      "start": 33,
+      "end": 33,
+      "sha256": "ccb75186655e451e6c877a992262748257d789f092a07df3a5f2d7d4e2ee2a7f",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
+    },
+    {
+      "path": "indra/newview/vsplainchat.cpp",
+      "start": 69,
+      "end": 69,
+      "sha256": "ccb75186655e451e6c877a992262748257d789f092a07df3a5f2d7d4e2ee2a7f",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
+    },
+    {
+      "path": "indra/newview/vsplainchat.cpp",
+      "start": 85,
+      "end": 85,
+      "sha256": "ccb75186655e451e6c877a992262748257d789f092a07df3a5f2d7d4e2ee2a7f",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 195,
+      "end": 196,
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 213,
+      "end": 214,
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 247,
+      "end": 247,
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
+    },
+    {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 19,
       "end": 21,
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 33,
       "end": 33,
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 86,
       "end": 86,
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 113,
       "end": 120,
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 130,
       "end": 130,
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 133,
       "end": 133,
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 152,
       "end": 165,
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
-    },
-    {
-      "path": "indra/newview/vsnativereplay.cpp",
-      "start": 247,
-      "end": 250,
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 252,
-      "end": 253,
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "end": 255,
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 257,
+      "end": 258,
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/skins/default/xui/en/strings.xml",
@@ -1035,64 +1098,64 @@
       "path": "indra/newview/vsplainchat.h",
       "start": 7,
       "end": 8,
-      "sha256": "c261ecdac7db9f556089b5e4a74c3e2bcfd3a0cba0ed14b6efdd4ff4a8085b09",
+      "sha256": "ac36f9b1ab1a04de561fe3cb9acdf48d57f6549725b4131bb7efebc5c58de184",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsplainchat.h",
-      "start": 23,
-      "end": 23,
-      "sha256": "c261ecdac7db9f556089b5e4a74c3e2bcfd3a0cba0ed14b6efdd4ff4a8085b09",
+      "start": 30,
+      "end": 30,
+      "sha256": "ac36f9b1ab1a04de561fe3cb9acdf48d57f6549725b4131bb7efebc5c58de184",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsplainchat.h",
-      "start": 32,
-      "end": 33,
-      "sha256": "c261ecdac7db9f556089b5e4a74c3e2bcfd3a0cba0ed14b6efdd4ff4a8085b09",
+      "start": 39,
+      "end": 40,
+      "sha256": "ac36f9b1ab1a04de561fe3cb9acdf48d57f6549725b4131bb7efebc5c58de184",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsplainchat.cpp",
       "start": 5,
       "end": 6,
-      "sha256": "c4accb93be26ccfc8f792ac80bd2da2756571a7a40acac59454fd81680f6f174",
+      "sha256": "ccb75186655e451e6c877a992262748257d789f092a07df3a5f2d7d4e2ee2a7f",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsplainchat.cpp",
-      "start": 34,
-      "end": 46,
-      "sha256": "c4accb93be26ccfc8f792ac80bd2da2756571a7a40acac59454fd81680f6f174",
+      "start": 35,
+      "end": 47,
+      "sha256": "ccb75186655e451e6c877a992262748257d789f092a07df3a5f2d7d4e2ee2a7f",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsplainchat.cpp",
-      "start": 48,
-      "end": 55,
-      "sha256": "c4accb93be26ccfc8f792ac80bd2da2756571a7a40acac59454fd81680f6f174",
+      "start": 49,
+      "end": 56,
+      "sha256": "ccb75186655e451e6c877a992262748257d789f092a07df3a5f2d7d4e2ee2a7f",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsplainchat.cpp",
-      "start": 82,
-      "end": 82,
-      "sha256": "c4accb93be26ccfc8f792ac80bd2da2756571a7a40acac59454fd81680f6f174",
+      "start": 84,
+      "end": 84,
+      "sha256": "ccb75186655e451e6c877a992262748257d789f092a07df3a5f2d7d4e2ee2a7f",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativesession.h",
@@ -1124,11 +1187,11 @@
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 1,
-      "end": 285,
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "end": 290,
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/skins/default/xui/en/strings.xml",
@@ -7091,20 +7154,20 @@
     {
       "path": "indra/newview/vsplainchat.cpp",
       "start": 1,
-      "end": 85,
-      "sha256": "c4accb93be26ccfc8f792ac80bd2da2756571a7a40acac59454fd81680f6f174",
+      "end": 88,
+      "sha256": "ccb75186655e451e6c877a992262748257d789f092a07df3a5f2d7d4e2ee2a7f",
       "record": "I08",
       "disposition": "mapped",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsplainchat.h",
       "start": 1,
-      "end": 35,
-      "sha256": "c261ecdac7db9f556089b5e4a74c3e2bcfd3a0cba0ed14b6efdd4ff4a8085b09",
+      "end": 42,
+      "sha256": "ac36f9b1ab1a04de561fe3cb9acdf48d57f6549725b4131bb7efebc5c58de184",
       "record": "I08",
       "disposition": "mapped",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsstartupui.cpp",
