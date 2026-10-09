@@ -26,6 +26,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llviewercontrol.h"
 
@@ -1286,6 +1289,12 @@ void setting_setup_signal_listener(LLControlGroup& group, const std::string& set
 {
     setting_get_control(group, setting)->getSignal()->connect([callback](LLControlVariable* control, const LLSD& new_val, const LLSD& old_val)
     {
+#if VS_NATIVE_VULKAN
+        // Native owners observe admitted settings themselves. Preserve saved values
+        // without activating a legacy GL/world/optional listener, including cascades.
+        if (VSNativeSession::active() && control->getName() != "FSEnableLogThrottle"
+            && control->getName() != "SDL2IMEEnabled") return;
+#endif
         callback(new_val);
     });
 }
@@ -1294,6 +1303,10 @@ void setting_setup_signal_listener(LLControlGroup& group, const std::string& set
 {
     setting_get_control(group, setting)->getSignal()->connect([callback](LLControlVariable* control, const LLSD& new_val, const LLSD& old_val)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active() && control->getName() != "FSEnableLogThrottle"
+            && control->getName() != "SDL2IMEEnabled") return;
+#endif
         callback();
     });
 }

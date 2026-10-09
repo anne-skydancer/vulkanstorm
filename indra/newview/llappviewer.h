@@ -110,6 +110,9 @@ public:
     bool isNativeVulkanLogin() const { return mNativeVulkanLogin; }
 private:
     bool mNativeVulkanLogin = false;
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<class VSNativeSession> mNativeSession;
+#endif
     bool initNativeVulkanLogin();
     bool frameNativeVulkanLogin();
     bool cleanupNativeVulkanLogin();

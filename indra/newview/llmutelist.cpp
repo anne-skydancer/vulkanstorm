@@ -41,6 +41,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llmutelist.h"
 
@@ -957,6 +960,27 @@ void LLMuteList::cache(const LLUUID& agent_id)
 // Static message handlers
 //-----------------------------------------------------------------------------
 
+#if VS_NATIVE_VULKAN
+namespace
+{
+struct NativeMuteDelivery
+{
+    std::weak_ptr<VSNativeSession> owner;
+    U64 generation;
+    std::unique_ptr<std::string> filename;
+    void (*complete)(void**, S32, LLExtStat);
+};
+void nativeMuteDelivery(void** data, S32 code, LLExtStat status)
+{
+    std::unique_ptr<NativeMuteDelivery> delivery(reinterpret_cast<NativeMuteDelivery*>(data));
+    if (auto owner = delivery->owner.lock(); owner && owner->generation() == delivery->generation
+        && owner->phase() == VSNativeSession::Phase::Connected)
+        delivery->complete(reinterpret_cast<void**>(delivery->filename.release()), code, status);
+    else LLFile::remove(*delivery->filename);
+}
+}
+#endif
+
 void LLMuteList::processMuteListUpdate(LLMessageSystem* msg, void**)
 {
     LL_INFOS() << "LLMuteList::processMuteListUpdate()" << LL_ENDL;
@@ -987,6 +1011,16 @@ void LLMuteList::processMuteListUpdate(LLMessageSystem* msg, void**)
     // from server if file doesn't exist server side.
     // Once server side gets fixed make sure it gets handled right.
     std::string *local_filename_and_path = new std::string(gDirUtilp->getExpandedFilename( LL_PATH_CACHE, filename ));
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        *local_filename_and_path += ".native-" + std::to_string(owner->generation());
+        auto delivery = new NativeMuteDelivery{owner, owner->generation(), std::unique_ptr<std::string>(local_filename_and_path), onFileMuteList};
+        gXferManager->requestFile(*delivery->filename, filename, LL_PATH_CACHE, msg->getSender(), true,
+            nativeMuteDelivery, reinterpret_cast<void**>(delivery), LLXferManager::HIGH_PRIORITY);
+        return;
+    }
+#endif
     gXferManager->requestFile(*local_filename_and_path,
                               filename,
                               LL_PATH_CACHE,

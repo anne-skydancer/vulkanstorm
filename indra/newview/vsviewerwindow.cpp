@@ -156,6 +156,16 @@ void LLViewerWindow::drawNativeUI()
     updateUI(); // Native branch updates layout and real focus/edit-menu ownership.
     mVulkanContext->present(mDisplayScale.mV[VX], [&] { mRootView->draw(); });
 }
+void LLViewerWindow::refreshNativeFonts()
+{
+    if (!mVulkanContext || !mNativeUI) return;
+    mVulkanContext->wait();
+    mVulkanContext->resources().releaseFontPages();
+    const F32 dpi = mDisplayScale.mV[VX];
+    LLFontGL::initClass(gSavedSettings.getF32("FontScreenDPI"), dpi, dpi, gDirUtilp->getAppRODataDir(),
+        gSavedSettings.getString("FSFontSettingsFile"), gSavedSettings.getF32("FSFontSizeAdjustment"), false);
+    ++LLFontGL::sResolutionGeneration;
+}
 
 void LLViewerWindow::reshapeNative(S32 width, S32 height, F32 system_scale)
 {

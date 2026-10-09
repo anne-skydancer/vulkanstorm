@@ -36,6 +36,7 @@ jobs:
       - run: python -m unittest discover -s doc/vulkan -p 'test_*.py'
       - run: python scripts/tests/test_progress_panels.py
       - run: python scripts/tests/test_software_vulkan_runner.py
+      - run: python scripts/tests/test_vulkan_session_replay.py
       - run: python scripts/tests/test_vulkan_viewer_diagnostic.py
       - run: python scripts/tests/test_vulkan_ui_oracle.py
       - run: python scripts/tests/test_vulkan_media_pixels.py
@@ -237,6 +238,19 @@ jobs:
               --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
               --harness-evidence .ci/evidence/results.json --evidence .ci/viewer-evidence
           fi
+      - name: Connected UI and chat through the staged viewer
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            python scripts/run_vulkan_session_replay.py \
+              --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+              --harness-evidence .ci/evidence/results.json --evidence .ci/session-evidence --register-windows-manifests
+          else
+            xvfb-run -a -s '-screen 0 1024x768x24' python scripts/run_vulkan_session_replay.py \
+              --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+              --harness-evidence .ci/evidence/results.json --evidence .ci/session-evidence
+          fi
       - name: Record source and build environment
         if: always()
         shell: bash
@@ -263,6 +277,7 @@ jobs:
             .ci/evidence
             .ci/headless-evidence
             .ci/viewer-evidence
+            .ci/session-evidence
             .ci/audio/*.log
             .ci/audio/*.txt
             .ci/runtime/runtime.json

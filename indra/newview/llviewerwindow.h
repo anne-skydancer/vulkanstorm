@@ -177,6 +177,7 @@ public:
     LLViewerWindow(const Params& p, bool native_vulkan = false);
     bool isNativeVulkan() const { return mNativeVulkan; }
     void drawNativeUI();
+    void refreshNativeFonts();
 #if VS_NATIVE_VULKAN
     VSVulkanContext* nativeContext() const { return mVulkanContext.get(); }
     VSPlainChat* nativeChat() const { return mNativeChat; }

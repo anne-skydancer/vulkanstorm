@@ -380,6 +380,13 @@ public:
 
 
     // methods for building, sending, receiving, and handling messages
+    using MessageAdmission = std::function<bool(const std::string&, const LLHost&)>;
+    void setMessageAdmission(MessageAdmission admission) { mMessageAdmission = std::move(admission); }
+    bool admitMessage(const std::string& name, const LLHost& sender) const
+    { return !mMessageAdmission || mMessageAdmission(name, sender); }
+private:
+    MessageAdmission mMessageAdmission;
+public:
     void    setHandlerFuncFast(const char *name, void (*handler_func)(LLMessageSystem *msgsystem, void **user_data), void **user_data = NULL);
     void    setHandlerFunc(const char *name, void (*handler_func)(LLMessageSystem *msgsystem, void **user_data), void **user_data = NULL)
     {

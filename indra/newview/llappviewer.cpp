@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llappviewer.h"
 #include "vsrenderbackend.h"
@@ -32,6 +35,7 @@
 #include "vsuiaudio.h"
 #if VS_VULKAN_DIAGNOSTICS
 #include "vsvulkandiagnostic.h"
+#include "vsnativereplay.h"
 #endif
 
 // Viewer includes
@@ -1573,6 +1577,9 @@ LLTrace::BlockTimerStatHandle FTM_FRAME("Frame");
 // machine as OpenGL. Only rendering and the not-yet-created world owners differ.
 bool LLAppViewer::initNativeVulkanLogin()
 {
+#if VS_NATIVE_VULKAN
+    mNativeSession = VSNativeSession::create();
+#endif
     gGLActive = false;
     LLImage::initClass(gSavedSettings.getBOOL("TextureNewByteRange"), gSavedSettings.getS32("TextureReverseByteRange"));
     LLLFSThread::initClass(true);
@@ -1648,16 +1655,31 @@ bool LLAppViewer::frameNativeVulkanLogin()
     if (gServicePump) { gServicePump->pump(); gServicePump->callback(); }
     if (!LLApp::isExiting())
     {
-        idle_startup();
+        // The native owner advances CPU session/network work without entering idle's scene producers.
+        bool replay = false;
+#if VS_VULKAN_DIAGNOSTICS
+        replay = vs_native_replay_tick();
+#endif
+        if (LLStartUp::getStartupState() < STATE_WORLD_INIT && (!replay || LLStartUp::getStartupState() != STATE_LOGIN_WAIT)) idle_startup();
+#if VS_NATIVE_VULKAN
+        else if (LLStartUp::getStartupState() == STATE_WORLD_INIT && mNativeSession) mNativeSession->begin();
+        if (mNativeSession) mNativeSession->tick();
+#endif
         gViewerWindow->drawNativeUI();
     }
     const F32 quit_after = gSavedSettings.getF32("QuitAfterSeconds");
-    if (quit_after > 0.f && gRenderStartTime.getElapsedTimeF32() > quit_after) forceQuit();
+    if (quit_after > 0.f && gRenderStartTime.getElapsedTimeF32() > quit_after) requestQuit();
     return LLApp::isExiting();
 }
 
 bool LLAppViewer::cleanupNativeVulkanLogin()
 {
+#if VS_NATIVE_VULKAN
+    if (mNativeSession) mNativeSession->shutdown();
+    if (gMessageSystem) gMessageSystem->setMessageAdmission({});
+    mNativeSession.reset();
+#endif
+    LLStartUp::cleanupNameCache();
     if (LLLoginInstance::instanceExists()) LLLoginInstance::getInstance()->disconnect();
     if (LLVoiceClient::instanceExists()) LLVoiceClient::getInstance()->terminate();
     if (gViewerWindow)
@@ -1678,6 +1700,12 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
     clearSecHandler();
     if (mSaveSettingsOnExit)
     {
+        const std::string account = gSavedSettings.getString("PerAccountSettingsFile");
+        if (mSavePerAccountSettings && !account.empty()
+#if VS_VULKAN_DIAGNOSTICS
+            && !std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY")
+#endif
+            ) gSavedPerAccountSettings.saveToFile(account, true);
         gSavedSettings.saveToFile(gSavedSettings.getString("ClientSettingsFile"), true);
         gWarningSettings.saveToFile(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, getSettingsFilename("User", "Warnings")), true);
     }
@@ -5184,6 +5212,9 @@ void LLAppViewer::fastQuit(S32 error_code)
 
 void LLAppViewer::requestQuit()
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->requestLogout(true); return; }
+#endif
     LL_INFOS() << "requestQuit" << LL_ENDL;
 
     LLViewerRegion* region = gAgent.getRegion();
@@ -5739,6 +5770,9 @@ bool finish_forced_disconnect(const LLSD& notification, const LLSD& response)
 
 void LLAppViewer::forceDisconnect(const std::string& mesg)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->disconnect(mesg); return; }
+#endif
     if (gDoDisconnect)
     {
         // Already popped up one of these dialogs, don't
@@ -6829,6 +6863,9 @@ void LLAppViewer::idleNetwork()
 
 void LLAppViewer::disconnectViewer()
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->reset(); return; }
+#endif
     if (gDisconnected)
     {
         return;
@@ -7139,6 +7176,8 @@ F32 LLAppViewer::getMainloopTimeoutSec() const
 
 void LLAppViewer::handleLoginComplete()
 {
+    if (mNativeVulkanLogin) { mSavePerAccountSettings = true; return; }
+
     gLoggedInTime.start();
     initMainloopTimeout("Mainloop Init");
     LLWindow* viewer_window = gViewerWindow->getWindow();
