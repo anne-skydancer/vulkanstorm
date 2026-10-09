@@ -1,5 +1,5 @@
 {
-  "source_commit": "05907fc6e4058ce21c79685cf86511bb70196c9e",
+  "source_commit": "ad00157f5cd752d7d960b8fb52adbff7a0d51313",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -793,7 +793,7 @@
       ]
     },
     "indra/newview/vsnativereplay.cpp": {
-      "sha256": "1ed216f6778b9c2f0d03a5bdb166a229481b6b16363c2e16b3b1ed3d4e84d941",
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
       "anchors": [
         "vs_native_replay_tick()",
         "inspectOutgoing("
@@ -820,7 +820,7 @@
       ]
     },
     "indra/newview/llmutelist.cpp": {
-      "sha256": "9eb0f75c5066db7d756930310528d47137c3a0427a7f3fa1f0cce48012df28e3",
+      "sha256": "44dc58e20a75731f3339306b53996636ca9c42c1d7f2a80b905c2e20095e9f96",
       "anchors": [
         "NativeMuteDelivery",
         "nativeMuteDelivery("
@@ -896,7 +896,8 @@
         "indra/newview/llworld.cpp",
         "indra/newview/llviewerregion.cpp",
         "indra/newview/llagent.cpp",
-        "indra/newview/llviewermessage.cpp"
+        "indra/newview/llviewermessage.cpp",
+        "indra/newview/vsnativesession.cpp"
       ],
       "gates": [
         "G-SESSION",
@@ -910,7 +911,12 @@
         "indra/newview/llappviewer.cpp",
         "indra/newview/lleventpoll.cpp",
         "indra/llmessage/llcachename.cpp",
-        "indra/llmessage/llxfermanager.cpp"
+        "indra/llmessage/llxfermanager.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/llmessage/message.cpp",
+        "indra/llmessage/message.h",
+        "indra/llmessage/lltemplatemessagereader.cpp",
+        "indra/newview/llmutelist.cpp"
       ],
       "gates": [
         "G-PROTOCOL",
@@ -922,7 +928,8 @@
       "sources": [
         "indra/newview/llviewermessage.cpp",
         "indra/newview/fsfloaternearbychat.cpp",
-        "indra/newview/llchathistory.cpp"
+        "indra/newview/llchathistory.cpp",
+        "indra/newview/vsnativesession.cpp"
       ],
       "gates": [
         "G-CHAT",
@@ -934,7 +941,8 @@
       "sources": [
         "indra/newview/fsnearbychathub.cpp",
         "indra/newview/fsnearbychatcontrol.cpp",
-        "indra/newview/llagent.cpp"
+        "indra/newview/llagent.cpp",
+        "indra/newview/vsnativesession.cpp"
       ],
       "gates": [
         "G-CHAT",
@@ -946,7 +954,8 @@
       "sources": [
         "indra/newview/llappviewer.cpp",
         "indra/newview/llviewerwindow.cpp",
-        "indra/newview/llviewerdisplay.cpp"
+        "indra/newview/llviewerdisplay.cpp",
+        "indra/newview/vsnativesession.cpp"
       ],
       "gates": [
         "G-FRAME",
@@ -962,7 +971,9 @@
         "indra/newview/llfloatertos.cpp",
         "indra/newview/llchathistory.cpp",
         "indra/llui/llfloaterreg.cpp",
-        "indra/llui/lluictrlfactory.h"
+        "indra/llui/lluictrlfactory.h",
+        "indra/newview/llcommandhandler.cpp",
+        "indra/newview/llurldispatcher.cpp"
       ],
       "gates": [
         "G-UI",
@@ -974,7 +985,8 @@
       "sources": [
         "indra/newview/llviewercontrol.cpp",
         "indra/newview/llstartup.cpp",
-        "indra/newview/llagent.cpp"
+        "indra/newview/llagent.cpp",
+        "indra/newview/vsnativesession.cpp"
       ],
       "gates": [
         "G-SETTINGS",
@@ -1105,7 +1117,8 @@
         "indra/newview/vsuiaudio.h",
         "indra/newview/vsplainchat.cpp",
         "indra/newview/vsplainchat.h",
-        "indra/newview/llfloaterwebcontent.cpp"
+        "indra/newview/llfloaterwebcontent.cpp",
+        "indra/newview/vsnativesession.cpp"
       ],
       "gates": [
         "G-LIFETIME"
