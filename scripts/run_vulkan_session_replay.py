@@ -15,7 +15,7 @@ from run_software_vulkan_tests import windows_manifest_registration, loaded_libr
 
 REQUIRED = ('malformed', 'unknown', 'wrong_host', 'udp_chat', 'http_gate', 'udp_gate',
             'queued_expired', 'relogin', 'chat_submit', 'typing', 'settings_gate', 'readback',
-            'partial_init_cleanup', 'connection_timeout', 'encoded_chat', 'encoded_typing', 'ui_gate', 'logout_timeout', 'crossing_disconnect', 'encoded_channels', 'queued_http_chat', 'mute_request', 'mute_transfer_cleanup')
+            'partial_init_cleanup', 'connection_timeout', 'encoded_chat', 'encoded_typing', 'ui_gate', 'logout_timeout', 'crossing_disconnect', 'encoded_channels', 'queued_http_chat', 'mute_request', 'mute_transfer_cleanup', 'input_history')
 
 
 def read_llsd(element):

@@ -192,6 +192,8 @@ struct Replay
             {
                 chat->input()->setText(LLStringExplicit("V4 outgoing Unicode \xCE\xA9"));
                 require(chat->submit() && chat->input()->getText().empty(), "Production chat submit failed");
+                require(chat->input()->handleKeyHere(KEY_UP, MASK_CONTROL) && chat->input()->getText() == "V4 outgoing Unicode \xCE\xA9", "Submitted input history was not recalled");
+                require(chat->input()->handleKeyHere(KEY_DOWN, MASK_CONTROL) && chat->input()->getText().empty(), "Input history did not restore the empty draft");
                 owner.typing(true); owner.typing(false);
                 require(owner.sendChat("/123 channel message") && owner.sendChat("//repeat channel") && owner.sendChat("/whisper quiet message") && owner.sendChat("/shout loud message"), "Chat channel/type parsing failed");
                 require(!owner.sendChat("/999999999999 overflow") && !owner.sendChat("/123"), "Invalid channel input admitted");
@@ -208,6 +210,8 @@ struct Replay
             reply["AgentData"][0]["SessionID"] = LLUUID(response()["session_id"].asString());
             http("LogoutReply", reply, owner.host());
             require(owner.phase() == VSNativeSession::Phase::Login && !chat->getVisible(), "Logout did not detach session/UI");
+            chat->input()->handleKeyHere(KEY_UP, MASK_CONTROL);
+            require(chat->input()->getText().empty(), "Logout retained input history from the previous identity");
             ++step;
         }
         else if (step == 3)
@@ -240,6 +244,7 @@ struct Replay
             require(LLURLDispatcher::dispatchFromTextEditor("secondlife://Native/10/20/30", false), "Deferred region URL was not consumed");
             require(!LLWorld::instanceExists(), "Deferred URL instantiated scene resources");
             report["encoded_channels"] = encodedChannels == 4;
+            report["input_history"] = true;
             report["queued_http_chat"] = true;
             report["ui_gate"] = true;
             LLSD forged; forged["agent"] = LLUUID::generateNewID(); forged["session"] = LLUUID(response()["session_id"].asString());

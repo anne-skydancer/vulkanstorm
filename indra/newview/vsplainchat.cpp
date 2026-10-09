@@ -30,6 +30,7 @@ VSPlainChat::VSPlainChat(const Params& p) : LLPanel(p)
     edit.commit_on_focus_lost = false;
     mInput = LLUICtrlFactory::create<VSChatInput>(edit, this);
     if (!mInput || !mTranscript) throw std::runtime_error("Required native plain chat controls were not admitted");
+    mInput->setEnableLineHistory(true);
     mInput->setCommitCallback([this](LLUICtrl*, const LLSD&) { submit(); });
     LLButton::Params logout;
     logout.name = "native_logout";
@@ -65,6 +66,7 @@ bool VSPlainChat::submit()
     LLStringUtil::trim(text);
     // Retain unsent text on transport rejection. No local fake delivery/echo.
     if (text.empty() || !mSender || !mSender(text)) return false;
+    mInput->remember();
     mInput->setText(LLStringExplicit(""));
     return true;
 }
@@ -80,6 +82,7 @@ void VSPlainChat::clear()
 {
     setSender({});
     setSession("", {});
+    mInput->clearHistory();
     mInput->setText(LLStringExplicit(""));
     mTranscript->setText(LLStringExplicit(""));
 }
