@@ -1,6 +1,9 @@
 # Vulkanstorm development conventions
 
 - Prefer correct, performant, maintainable code. Report measured results and qualification limits accurately.
+- Carry authorized work through to the requested outcome. Milestones, diagnostic checkpoints and passing subsets of tests guide the work; they are not reasons to stop while requirements remain open.
+- Provide the outcome and qualification recap at completion. Avoid mid-flight recaps or permission requests that turn internal checkpoints into handoffs; interrupt only for a concrete blocker requiring user input. Follow any higher-priority communication requirements without stopping the work.
+- When asked to finish a roadmap stage, implement its entire scope and qualify its acceptance criteria. Distinguish implementation, runtime evidence and explicit qualification limits; do not substitute a diagnostic-only slice for required viewer integration.
 - Prefer the `vs` filename prefix for new Vulkanstorm-owned viewer `.cpp` and `.h` files, for example `vsshadercache.cpp` and `vsshadercache.h`. Standalone tests and tools use descriptive names consistent with their directories.
 - `vkstorm-release` is the feature-frozen release/default branch. Only security fixes and functionality patches are accepted; new improvements belong in development, not release. Qualify permitted patches before integration through PRs.
 - `vkstorm-devel` experiments with improvements no longer accepted in `vkstorm-release`.
