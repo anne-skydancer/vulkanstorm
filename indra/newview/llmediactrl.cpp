@@ -873,7 +873,10 @@ void LLMediaCtrl::draw()
                     plugin->getTextureFormatInternal() == GL_RGB);
                 LLPointer<LLImageRaw> raw = new LLImageRaw(width, height, 4);
                 memcpy(raw->getData(), pixels.data(), pixels.size());
+                const bool first_image = !mNativeMediaImage;
                 mNativeMediaImage = resources->publish("media:" + mMediaTextureID.asString(), *raw);
+                if (first_image)
+                    LL_INFOS("NativeUI") << "Native media pixels: " << getName() << " " << width << "x" << height << LL_ENDL;
                 mNativeMediaWidth = width; mNativeMediaHeight = height;
                 plugin->resetDirty();
             }

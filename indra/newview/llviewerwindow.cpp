@@ -1723,7 +1723,18 @@ void LLViewerWindow::handleFocusLost(LLWindow *window)
 
 bool LLViewerWindow::handleTranslatedKeyDown(KEY key,  MASK mask, bool repeated)
 {
-    if (mNativeVulkan) { auto* focus = gFocusMgr.getKeyboardFocus(); return focus && focus->handleKey(key, mask, false); }
+    if (mNativeVulkan)
+    {
+        if (key == KEY_RETURN && mask == MASK_NONE)
+        {
+            auto* focus = gFocusMgr.getKeyboardFocus();
+            if (focus && !focus->wantsReturnKey()) return false;
+        }
+        auto* focus = gFocusMgr.getKeyboardFocus();
+        if (focus && focus->handleKey(key, mask, false)) return true;
+        if (gLoginMenuBarView && gLoginMenuBarView->handleAcceleratorKey(key, mask)) return true;
+        return mRootView && mRootView->handleKey(key, mask, true);
+    }
     // Handle non-consuming global keybindings, like voice
     // Never affects event processing.
     gViewerInput.handleGlobalBindsKeyDown(key, mask);
@@ -2658,6 +2669,11 @@ void LLViewerWindow::shutdownViews()
             mModalAlertsChannel.reset();
             mSystemChannel.reset();
         }
+        if (gMenuHolder) cleanup_menus();
+        LLMenuGL::sMenuContainer = nullptr;
+        gLoginMenuBarView = nullptr;
+        gEditMenu = nullptr;
+        gPopupMenuView = nullptr;
         mNativeUI.reset();
         mFloaterSnapRegion = nullptr;
         mNativeAdmission.reset();
@@ -3930,6 +3946,12 @@ void append_xui_tooltip(LLView* viewp, LLToolTip::Params& params)
 // event processing.
 void LLViewerWindow::updateUI()
 {
+    if (mNativeVulkan)
+    {
+        LLLayoutStack::updateClass();
+        updateKeyboardFocus();
+        return;
+    }
     LL_PROFILE_ZONE_SCOPED_CATEGORY_UI;
 
     static std::string last_handle_msg;
@@ -4499,7 +4521,7 @@ void LLViewerWindow::updateMouseDelta()
 
 void LLViewerWindow::updateKeyboardFocus()
 {
-    if (!gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+    if (!mNativeVulkan && !gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
     {
         gFocusMgr.setKeyboardFocus(NULL);
     }
@@ -4562,7 +4584,7 @@ void LLViewerWindow::updateKeyboardFocus()
     }
 
     // last ditch force of edit menu to selection manager
-    if (LLEditMenuHandler::gEditMenuHandler == NULL && LLSelectMgr::getInstance()->getSelection()->getObjectCount())
+    if (!mNativeVulkan && LLEditMenuHandler::gEditMenuHandler == NULL && LLSelectMgr::getInstance()->getSelection()->getObjectCount())
     {
         LLEditMenuHandler::gEditMenuHandler = LLSelectMgr::getInstance();
     }
@@ -4571,7 +4593,7 @@ void LLViewerWindow::updateKeyboardFocus()
     {
         // sync all floaters with their focus state
         gFloaterView->highlightFocusedFloater();
-        gSnapshotFloaterView->highlightFocusedFloater();
+        if (gSnapshotFloaterView) gSnapshotFloaterView->highlightFocusedFloater();
         MASK    mask = gKeyboard->currentMask(true);
         if ((mask & MASK_CONTROL) == 0)
         {
@@ -4589,7 +4611,7 @@ void LLViewerWindow::updateKeyboardFocus()
     {
         // update focused floater
         gFloaterView->highlightFocusedFloater();
-        gSnapshotFloaterView->highlightFocusedFloater();
+        if (gSnapshotFloaterView) gSnapshotFloaterView->highlightFocusedFloater();
         // make sure floater visible order is in sync with tab order
         gFloaterView->syncFloaterTabOrder();
     }
