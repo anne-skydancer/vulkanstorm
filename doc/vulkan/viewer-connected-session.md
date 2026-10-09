@@ -37,7 +37,8 @@ seconds for acknowledgement. Vulkan failure ends the native session.
 
 ## Nearby chat and settings
 
-The existing native chat panel gains region status and a Log out control. Its real
+The existing native chat panel gains region status and a Log out control. Input history retains at most 128 submitted
+lines, supports recall and draft restoration, and clears when the session detaches. Its real
 input sends reliable UTF-8 ChatFromViewer packets with agent/session identity,
 channel and chat type. `/whisper`, `/shout`, `/123` and repeat-channel `//` syntax
 are supported; rejected sends retain input. Typing start/stop uses protocol packets
@@ -99,3 +100,9 @@ in-flight transfer during bounded logout. The complete existing 68-case V3 matri
 also passed locally with the V4 implementation. The source catalog was regenerated
 and checked without the Windows default-encoding conversion that invalidated the
 first CI source-evidence artifact; that failed run did not execute graphics jobs.
+
+Final input-history qualification uses source `f80e6c725f72d7a9cd6b3d8657fecf0e6b087548`:
+the staged viewer replay passed Unicode recall, empty-draft restoration and
+logout history isolation alongside every earlier V4 stage. CI run 38002641018
+passed source evidence and was superseded before graphics qualification by this
+complete input-history revision.

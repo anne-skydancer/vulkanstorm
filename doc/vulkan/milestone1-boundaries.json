@@ -1,5 +1,5 @@
 {
-  "source_commit": "ad00157f5cd752d7d960b8fb52adbff7a0d51313",
+  "source_commit": "f80e6c725f72d7a9cd6b3d8657fecf0e6b087548",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -761,7 +761,7 @@
       ]
     },
     "indra/newview/vsplainchat.cpp": {
-      "sha256": "c4accb93be26ccfc8f792ac80bd2da2756571a7a40acac59454fd81680f6f174",
+      "sha256": "ccb75186655e451e6c877a992262748257d789f092a07df3a5f2d7d4e2ee2a7f",
       "anchors": [
         "VSPlainChat::VSPlainChat",
         "VSPlainChat::setSender",
@@ -770,7 +770,7 @@
       ]
     },
     "indra/newview/vsplainchat.h": {
-      "sha256": "c261ecdac7db9f556089b5e4a74c3e2bcfd3a0cba0ed14b6efdd4ff4a8085b09",
+      "sha256": "ac36f9b1ab1a04de561fe3cb9acdf48d57f6549725b4131bb7efebc5c58de184",
       "anchors": [
         "class VSChatInput",
         "class VSPlainChat"
@@ -793,7 +793,7 @@
       ]
     },
     "indra/newview/vsnativereplay.cpp": {
-      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
       "anchors": [
         "vs_native_replay_tick()",
         "inspectOutgoing("
@@ -5344,7 +5344,7 @@
     "owner": "indra/newview/vsnativesession.cpp",
     "replay": "scripts/run_vulkan_session_replay.py",
     "live_server_qualification": "untested",
-    "software_qualification": "local-windows-swiftshader-replay-passed; CI matrix pending",
+    "software_qualification": "local-windows-swiftshader-complete-replay-passed; CI matrix pending",
     "world_rendering": false
   }
 }
