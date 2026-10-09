@@ -36,13 +36,16 @@ GL/Zink is a **GL backend**, created for AMD GPUs affected by rendering
 regressions caused by bugs in the AMD OpenGL ICD. Its use of Vulkan for driver
 translation does not make it a native Vulkan viewer backend or a Vulkan fallback.
 
-Current insertion-catalog baseline: **`035ee7d53e032d52668d723a2b0c66a5bc3770ac`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; its original nine cases passed all three CI platforms in run 37742422223. The
+Current insertion-catalog baseline: **`05907fc6e4058ce21c79685cf86511bb70196c9e`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; its original nine cases passed all three CI platforms in run 37742422223. The
 [V3 UI substrate](viewer-ui-substrate.md) now implements native packets and CPU
 font/GPU resource publication, corrected mini-progress XUI, native text editing
 and window focus/input delivery. A shared native UI owner preserves selected
 skin/theme/language/font settings; 24 skin fixture cases supplement the existing
-15 cases. Normal-session wiring, full required-panel admission, UI/chat and
-world rendering remain open.
+15 cases. V3 required-panel admission and normal login are software-qualified.
+[V4 connected UI/chat](viewer-connected-session.md) now has production session
+transport, CPU region identity, nearby chat and bounded lifecycle ownership,
+with a dedicated staged-viewer replay. Live-server qualification is untested;
+world rendering remains open.
 
 Historical comparative audit baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Its mandate compared suitable architectures, including native Vulkan and general graphics abstractions. Those reports contain no runtime measurements, GPU captures, native implementation or build qualification.
 
@@ -94,11 +97,11 @@ remain blockers. Native rendering and runtime parity remain unqualified.
 
 ## Coverage and limits
 
-There are **73 listed contract/design records**: 27 core frame/draw records (F01â€“F10/D01â€“D17), 13 resource/platform/build records (R01â€“R09/P01â€“P03/B01), 22 scene/UI/auxiliary records (S01â€“S10/U01â€“U06/A01â€“A06), and 11 shader-family records (H01â€“H11). Across the full ledger, 71 records are active/conditional and two are dormant: D16 (empty old-sky pool) and H10 (disabled error-shader fallback). The core subset has 26 active/conditional records and one dormant record. All listed records have candidate designs or explicit no-output decisions for dormant records. These groups overlap semantically; 73 is **not** a count of independent features or exhaustively traced execution paths.
+There are **73 listed contract/design records**: 27 core frame/draw records (F01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“F10/D01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“D17), 13 resource/platform/build records (R01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“R09/P01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“P03/B01), 22 scene/UI/auxiliary records (S01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“S10/U01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“U06/A01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“A06), and 11 shader-family records (H01ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“H11). Across the full ledger, 71 records are active/conditional and two are dormant: D16 (empty old-sky pool) and H10 (disabled error-shader fallback). The core subset has 26 active/conditional records and one dormant record. All listed records have candidate designs or explicit no-output decisions for dormant records. These groups overlap semantically; 73 is **not** a count of independent features or exhaustively traced execution paths.
 
 The lexical inventory contains **225 GLSL files**, **690 shader registration/variant rows**, **223 GL candidate source files**, and **13 draw-pool implementation files**. Parent scope cross-checks include 26 draw-pool `.cpp/.h`, 51 llrender, 42 llwindow and 233 llui source files. Counts establish inventory scope only. Critical source boundaries were traced, but all branches, all realized shader permutations, all callbacks and per-pixel arithmetic were not exhaustively proven.
 
-The historical reports record six architecture decisions (U-D1â€“U-D6). Library adoption and revision are now settled by the selected, pinned DiligentCore preparation. Depth formats, shader binding/vertex ABI, history/probe reset behavior, media/bake ownership and cancellation, and measurement-dependent optimizations still need implementation qualification. The historical source-gap lists describe the earlier audit; the current insertion catalog supersedes their insertion-location accounting. Locating every required seam does not qualify realized shader permutations, bake arithmetic, glTF compatibility, asset/cache failure behavior or an optional proprietary pathing implementation. Runtime parity, performance, memory budgets, driver portability and failure handling remain unqualified.
+The historical reports record six architecture decisions (U-D1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“U-D6). Library adoption and revision are now settled by the selected, pinned DiligentCore preparation. Depth formats, shader binding/vertex ABI, history/probe reset behavior, media/bake ownership and cancellation, and measurement-dependent optimizations still need implementation qualification. The historical source-gap lists describe the earlier audit; the current insertion catalog supersedes their insertion-location accounting. Locating every required seam does not qualify realized shader permutations, bake arithmetic, glTF compatibility, asset/cache failure behavior or an optional proprietary pathing implementation. Runtime parity, performance, memory budgets, driver portability and failure handling remain unqualified.
 
 The 73-record catalog is an earlier partial responsibility-level assessment. It is **not accepted as a complete DiligentCore insertion catalog**. Every necessary insertion point must have a source-backed mapping or justified exclusion; unresolved in-scope paths and discovery blind spots block acceptance. Runtime qualification is a separate requirement.
 

@@ -1,6 +1,6 @@
 # V3: viewer UI resource and packet substrate
 
-Source: `035ee7d53e032d52668d723a2b0c66a5bc3770ac` on `vkstorm-vulkan`.
+Source: `05907fc6e4058ce21c79685cf86511bb70196c9e` on `vkstorm-vulkan`.
 Status: V3 implementation complete and accepted on Windows SwiftShader, Linux
 SwiftShader and Linux Lavapipe; expanded software qualification passed.
 The ordinary viewer owns native login, menus, progress, required dialogs and
@@ -389,7 +389,7 @@ rendering remain unqualified.
 
 ## Native viewer-window and required startup owners, 9 October 2026
 
-Source: `035ee7d53e032d52668d723a2b0c66a5bc3770ac` on `vkstorm-vulkan`.
+Source: `05907fc6e4058ce21c79685cf86511bb70196c9e` on `vkstorm-vulkan`.
 `LLViewerWindow` now has a native constructor and owns `VSVulkanContext`, the
 skin-aware UI owner, native root, login holder, floaters, popup owner, progress
 views and standard alert channels. Native frame, reshape, mouse, keyboard,
