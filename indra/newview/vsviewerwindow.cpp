@@ -52,7 +52,9 @@ void LLViewerWindow::initNativeWindow(const Params& p)
         mWindowRectScaled    = LLRect(0, ll_round(size.mY / dpi), ll_round(size.mX / dpi), 0);
         mWorldViewRectRaw    = mWindowRectRaw;
         mWorldViewRectScaled = mWindowRectScaled;
-        mVulkanContext       = std::make_unique<VSVulkanContext>(*mWindow, gSavedSettings.getBOOL("RenderDebugGLSession"));
+        // Startup consumes the one-shot setting into the active session flag.
+        mVulkanContext       = std::make_unique<VSVulkanContext>(*mWindow,
+            gDebugGLSession || gSavedSettings.getBOOL("RenderDebugGLSession"));
         mNativeAdmission     = vs_startup_ui_admission();
         LLUI::settings_map_t settings{ { "config", &gSavedSettings },
                                        { "floater", &gSavedSettings },
