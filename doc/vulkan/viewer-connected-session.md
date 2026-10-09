@@ -102,6 +102,10 @@ loaded ICD and validation-layer hashes as well as staged GHI hashes. Ordinary
 login honors the active session validation flag after startup consumes its
 one-shot setting, so this path loads core and synchronization validation.
 
+CI run 38005384864 stopped at source evidence because locale-dependent reads
+changed Unicode review text on Windows. The catalog checker now reads and writes
+UTF-8 explicitly; acceptance is checked with both the Windows default mode and
+Python UTF-8 mode before resubmission. No graphics jobs ran in that failed run.
 Earlier CI runs were superseded by the final input-history and transport revisions.
 Their source-only success does not qualify this final graphics implementation.
 The final three-platform run and artifact results will be recorded here after

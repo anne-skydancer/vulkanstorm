@@ -38,8 +38,8 @@ def tracked():
 
 
 def discover(paths):
-    commands = set((OUT / "gl-api-symbols.txt").read_text().splitlines())
-    helper_header = mask_source((ROOT / "indra/llrender/llrender2dutils.h").read_text(), True)
+    commands = set((OUT / "gl-api-symbols.txt").read_text(encoding='utf-8').splitlines())
+    helper_header = mask_source((ROOT / "indra/llrender/llrender2dutils.h").read_text(encoding='utf-8'), True)
     ui_helpers = set(re.findall(r"\b(gl_\w+)\s*\(", helper_header))
     sites = []
     for path in paths:
@@ -256,7 +256,7 @@ def main():
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--accept", action="store_true")
     args = parser.parse_args()
-    records = json.loads((OUT / "diligent-insertion-records.json").read_text())
+    records = json.loads((OUT / "diligent-insertion-records.json").read_text(encoding='utf-8'))
     source_commit = records["source_commit"]
     scope_paths = ["indra", "3p", "autobuild.xml", "scripts/build_vulkan_dependencies.py"]
     delta = subprocess.check_output(["git", "diff", "--name-only", source_commit, "--", *scope_paths], cwd=ROOT, text=True)
@@ -283,7 +283,7 @@ def main():
         if hashlib.sha256((ROOT/reviewed["path"]).read_bytes()).hexdigest() != reviewed["sha256"]:
             raise SystemExit(f"Stale reviewed source: {reviewed['path']}")
     ui_classes = widget_classes(paths)
-    global_receivers = set(re.findall(r"\bextern\s+LLGLSLShader\s+(g\w+)\b", mask_source((ROOT/"indra/newview/llviewershadermgr.h").read_text(), True)))
+    global_receivers = set(re.findall(r"\bextern\s+LLGLSLShader\s+(g\w+)\b", mask_source((ROOT/"indra/newview/llviewershadermgr.h").read_text(encoding='utf-8'), True)))
     contexts = {}
     class_contexts = {}
     for path, line, kind, symbols, code in discover(paths):
@@ -327,7 +327,7 @@ def main():
     mapped_contracts = {c for r in by_id.values() for c in r.get("contracts", [])}
     if contract_ids - mapped_contracts:
         raise SystemExit(f"Original contracts omitted: {sorted(contract_ids-mapped_contracts)}")
-    shader_mgr = (ROOT / "indra/newview/llviewershadermgr.cpp").read_text().splitlines()
+    shader_mgr = (ROOT / "indra/newview/llviewershadermgr.cpp").read_text(encoding='utf-8').splitlines()
     for row in previous_rows:
         if shader_mgr[int(row["line"]) - 1].strip() != row["registration_or_variant"]:
             raise SystemExit(f"Stale shader registration at {row['line']}")
@@ -345,10 +345,10 @@ def main():
             writer = csv.DictWriter(output, fieldnames=list(sites[0]))
             writer.writeheader()
             writer.writerows(sites)
-        (OUT / "diligent-insertion-summary.json").write_text(json.dumps(summary, indent=2)+"\n")
+        (OUT / "diligent-insertion-summary.json").write_text(json.dumps(summary, indent=2)+"\n", encoding='utf-8')
     else:
         with (OUT / "diligent-insertion-sites.csv").open(encoding="utf8", newline="") as saved:
-            if json.loads((OUT / "diligent-insertion-summary.json").read_text()) != summary:
+            if json.loads((OUT / "diligent-insertion-summary.json").read_text(encoding='utf-8')) != summary:
                 raise SystemExit("Insertion summary artifact is stale")
             if list(csv.DictReader(saved)) != [{k: str(v) for k,v in s.items()} for s in sites]:
                 raise SystemExit("Insertion-site artifact is stale; inspect source delta then regenerate with --write")
