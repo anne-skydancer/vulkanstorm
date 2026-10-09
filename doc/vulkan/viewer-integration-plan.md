@@ -100,7 +100,7 @@ colors must remain paired. Run the admitted controls through every packaged
 skin/theme plus a translated overlay, with selection identity and readback
 checks. This matrix does not qualify additional controls or live skin switching.
 The current shared owner and remaining normal-session wiring are recorded in
-[the UI substrate checkpoint](viewer-ui-substrate.md#shared-native-ui-owner-and-skin-checkpoint-8-october-2026).
+[the normal application login integration checkpoint](viewer-ui-substrate.md#normal-native-application-login-integration-9-october-2026).
 
 Submit ordered UI packets with explicit texture/sampler, blend, clip, transform,
 origin and DPI state. Preserve the corrected XUI baseline. Admit login,

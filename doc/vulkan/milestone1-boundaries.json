@@ -1,5 +1,5 @@
 {
-  "source_commit": "f1701ee9e9b2a3987ec209509906beaa8e595adb",
+  "source_commit": "be089272e47ca7febafeb7c299642e24a6bb4c3f",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "closed-admission-set for future UI/chat; native window/clear and opt-in UI substrate fixtures are implemented; full UI/chat gate contracts remain requirements",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "4fe8fee7038934b955f51a41306dedda3a47c0e15764d9e0526f74fce99effe8",
+      "sha256": "94aee73b367a6f87b3de83068bf59298a57fc5850817fa873808df4f7193942d",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -33,7 +33,7 @@
       ]
     },
     "indra/newview/llviewerwindow.cpp": {
-      "sha256": "abcacee744afd06fa2d60c5911736b5b5c9972aef7605b6d69df983aaa978015",
+      "sha256": "b695b2368fc467fe42f4d73d2611c927bbe134b72cd460d8234eb2eb0579ed8a",
       "anchors": [
         "LLViewerWindow::LLViewerWindow",
         "LLViewerWindow::initBase",
@@ -70,7 +70,7 @@
       ]
     },
     "indra/newview/llstartup.cpp": {
-      "sha256": "b7cc68a72e9846d13c85c68bd4c07de8e5456aa48770be008c4b47ab952708eb",
+      "sha256": "ff9a2ed9b8b7326c2c46bd59c347d89e0e337b943c2770bf543c35012ce742d3",
       "anchors": [
         "idle_startup()",
         "do_startup_frame()",
@@ -361,14 +361,14 @@
       ]
     },
     "indra/newview/llappviewer.h": {
-      "sha256": "bdafd02b0540be1db546de5fa4ebf5c2a0b010b1ab9ba51afaf4a99d1e1d7af3",
+      "sha256": "4d65df9f8fc73bc0116105fae0e96019b02d5f8913e9cbc21786e8e92afcf059",
       "anchors": [
         "isVulkanDiagnostic",
         "vulkanDiagnosticExitCode"
       ]
     },
     "indra/newview/llappviewerwin32.cpp": {
-      "sha256": "ed3968692794612bd10baeefdb8fb20cf62771e9fc6461f3fb8487eb24fe64ef",
+      "sha256": "54468e74b5650b7a8cb3a4bf7873cca318d1fd33085076bdbecaed2331f65cde",
       "anchors": [
         "LLAppViewerWin32::init",
         "LLAppViewerWin32::cleanup",
@@ -435,7 +435,7 @@
       ]
     },
     "indra/newview/vsrenderbackend.h": {
-      "sha256": "9329de632f15a1164b7192075ea612dac4d349505f873ba51552610e645ac73f",
+      "sha256": "834bb165ab95369421c7ad0f4908c03e1078a04d90a1b5ba4617fc846df65bbc",
       "anchors": [
         "normalize",
         "canStartSession"
@@ -719,7 +719,7 @@
       ]
     },
     "indra/newview/vsviewerwindow.cpp": {
-      "sha256": "3092ab9263d4a9d3db3dbe231ce9fcdf088193ce783762e7aaadbc50634ec34a",
+      "sha256": "6b401379ff56e32e2925f2783067b92b390026348709f4ac7fd90f28530b8bef",
       "anchors": [
         "initNativeWindow",
         "initNativeBase",
@@ -728,7 +728,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "379a42930869351cd991923c268fc942f3199e7eb470072c79668c9b57b034e2",
+      "sha256": "f18194421df982b4162dc33f6db73e79817c49d2afce14028b86055b06997370",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -1256,826 +1256,826 @@
   "registries": {
     "messages": [
       {
-        "line": 2404,
+        "line": 2429,
         "call": "setHandlerFuncFast(_PREHASH_SoundTrigger, null_message_callback, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 2405,
+        "line": 2430,
         "call": "setHandlerFuncFast(_PREHASH_AttachedSound, null_message_callback, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 2537,
+        "line": 2562,
         "call": "setHandlerFuncFast( _PREHASH_AgentMovementComplete, process_agent_movement_complete)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3066,
+        "line": 3091,
         "call": "setHandlerFuncFast(_PREHASH_SoundTrigger, process_sound_trigger)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3067,
+        "line": 3092,
         "call": "setHandlerFuncFast(_PREHASH_PreloadSound, process_preload_sound)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3068,
+        "line": 3093,
         "call": "setHandlerFuncFast(_PREHASH_AttachedSound, process_attached_sound)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3069,
+        "line": 3094,
         "call": "setHandlerFuncFast(_PREHASH_AttachedSoundGainChange, process_attached_sound_gain_change)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3809,
+        "line": 3834,
         "call": "setHandlerFuncFast(_PREHASH_LayerData, process_layer_data )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3811,
+        "line": 3836,
         "call": "setHandlerFuncFast(_PREHASH_ImageData, LLViewerTextureList::receiveImageHeader )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3812,
+        "line": 3837,
         "call": "setHandlerFuncFast(_PREHASH_ImagePacket, LLViewerTextureList::receiveImagePacket )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3814,
+        "line": 3839,
         "call": "setHandlerFuncFast(_PREHASH_ObjectUpdate, process_object_update )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3815,
+        "line": 3840,
         "call": "setHandlerFunc(\"ObjectUpdateCompressed\", process_compressed_object_update )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3816,
+        "line": 3841,
         "call": "setHandlerFunc(\"ObjectUpdateCached\", process_cached_object_update )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3817,
+        "line": 3842,
         "call": "setHandlerFuncFast(_PREHASH_ImprovedTerseObjectUpdate, process_terse_object_update_improved )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3818,
+        "line": 3843,
         "call": "setHandlerFunc(\"SimStats\", process_sim_stats)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3819,
+        "line": 3844,
         "call": "setHandlerFuncFast(_PREHASH_HealthMessage, process_health_message )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3820,
+        "line": 3845,
         "call": "setHandlerFuncFast(_PREHASH_EconomyData, process_economy_data)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3821,
+        "line": 3846,
         "call": "setHandlerFunc(\"RegionInfo\", LLViewerRegion::processRegionInfo)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3823,
+        "line": 3848,
         "call": "setHandlerFuncFast(_PREHASH_ChatFromSimulator, process_chat_from_simulator)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3824,
+        "line": 3849,
         "call": "setHandlerFuncFast(_PREHASH_KillObject, process_kill_object, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3825,
+        "line": 3850,
         "call": "setHandlerFuncFast(_PREHASH_SimulatorViewerTimeMessage, process_time_synch, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3826,
+        "line": 3851,
         "call": "setHandlerFuncFast(_PREHASH_EnableSimulator, process_enable_simulator)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3827,
+        "line": 3852,
         "call": "setHandlerFuncFast(_PREHASH_DisableSimulator, process_disable_simulator)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3828,
+        "line": 3853,
         "call": "setHandlerFuncFast(_PREHASH_KickUser, process_kick_user, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3830,
+        "line": 3855,
         "call": "setHandlerFunc(\"CrossedRegion\", process_crossed_region)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3831,
+        "line": 3856,
         "call": "setHandlerFuncFast(_PREHASH_TeleportFinish, process_teleport_finish)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3833,
+        "line": 3858,
         "call": "setHandlerFuncFast(_PREHASH_AlertMessage, process_alert_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3834,
+        "line": 3859,
         "call": "setHandlerFunc(\"AgentAlertMessage\", process_agent_alert_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3835,
+        "line": 3860,
         "call": "setHandlerFuncFast(_PREHASH_MeanCollisionAlert, process_mean_collision_alert_message, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3836,
+        "line": 3861,
         "call": "setHandlerFunc(\"ViewerFrozenMessage\", process_frozen_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3838,
+        "line": 3863,
         "call": "setHandlerFuncFast(_PREHASH_NameValuePair, process_name_value)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3839,
+        "line": 3864,
         "call": "setHandlerFuncFast(_PREHASH_RemoveNameValuePair, process_remove_name_value)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3840,
+        "line": 3865,
         "call": "setHandlerFuncFast(_PREHASH_AvatarAnimation, process_avatar_animation)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3841,
+        "line": 3866,
         "call": "setHandlerFuncFast(_PREHASH_ObjectAnimation, process_object_animation)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3842,
+        "line": 3867,
         "call": "setHandlerFuncFast(_PREHASH_AvatarAppearance, process_avatar_appearance)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3844,
+        "line": 3869,
         "call": "setHandlerFunc(\"AgentCachedTextureResponse\", LLAgent::processAgentCachedTextureResponse)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3845,
+        "line": 3870,
         "call": "setHandlerFunc(\"RebakeAvatarTextures\", LLVOAvatarSelf::processRebakeAvatarTextures)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3847,
+        "line": 3872,
         "call": "setHandlerFuncFast(_PREHASH_CameraConstraint, process_camera_constraint)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3848,
+        "line": 3873,
         "call": "setHandlerFuncFast(_PREHASH_AvatarSitResponse, process_avatar_sit_response)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3849,
+        "line": 3874,
         "call": "setHandlerFunc(\"SetFollowCamProperties\", process_set_follow_cam_properties)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3850,
+        "line": 3875,
         "call": "setHandlerFunc(\"ClearFollowCamProperties\", process_clear_follow_cam_properties)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3852,
+        "line": 3877,
         "call": "setHandlerFuncFast(_PREHASH_ImprovedInstantMessage, process_improved_im)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3853,
+        "line": 3878,
         "call": "setHandlerFuncFast(_PREHASH_ScriptQuestion, process_script_question)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3856,
+        "line": 3881,
         "call": "setHandlerFuncFast(_PREHASH_ObjectProperties, process_object_properties, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3860,
+        "line": 3885,
         "call": "setHandlerFuncFast(_PREHASH_ObjectPropertiesFamily, process_object_properties_family, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3862,
+        "line": 3887,
         "call": "setHandlerFunc(\"ForceObjectSelect\", LLSelectMgr::processForceObjectSelect)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3864,
+        "line": 3889,
         "call": "setHandlerFuncFast(_PREHASH_MoneyBalanceReply, process_money_balance_reply, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3865,
+        "line": 3890,
         "call": "setHandlerFuncFast(_PREHASH_CoarseLocationUpdate, LLWorld::processCoarseUpdate, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3866,
+        "line": 3891,
         "call": "setHandlerFuncFast(_PREHASH_ReplyTaskInventory, LLViewerObject::processTaskInv, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3867,
+        "line": 3892,
         "call": "setHandlerFuncFast(_PREHASH_DerezContainer, process_derez_container, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3868,
+        "line": 3893,
         "call": "setHandlerFuncFast(_PREHASH_ScriptRunningReply, &LLLiveLSLEditor::processScriptRunningReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3871,
+        "line": 3896,
         "call": "setHandlerFuncFast(_PREHASH_DeRezAck, process_derez_ack)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3873,
+        "line": 3898,
         "call": "setHandlerFunc(\"LogoutReply\", process_logout_reply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3879,
+        "line": 3904,
         "call": "setHandlerFuncFast(_PREHASH_AgentDataUpdate, &LLAgent::processAgentDataUpdate)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3881,
+        "line": 3906,
         "call": "setHandlerFuncFast(_PREHASH_AgentGroupDataUpdate, &LLAgent::processAgentGroupDataUpdate)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3883,
+        "line": 3908,
         "call": "setHandlerFunc(\"AgentDropGroup\", &LLAgent::processAgentDropGroup)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3886,
+        "line": 3911,
         "call": "setHandlerFuncFast(_PREHASH_ParcelOverlay, LLViewerParcelMgr::processParcelOverlay)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3888,
+        "line": 3913,
         "call": "setHandlerFuncFast(_PREHASH_ParcelProperties, LLViewerParcelMgr::processParcelProperties)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3890,
+        "line": 3915,
         "call": "setHandlerFunc(\"ParcelAccessListReply\", LLViewerParcelMgr::processParcelAccessListReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3892,
+        "line": 3917,
         "call": "setHandlerFunc(\"ParcelDwellReply\", LLViewerParcelMgr::processParcelDwellReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3895,
+        "line": 3920,
         "call": "setHandlerFunc(\"AvatarPropertiesReply\", &LLAvatarPropertiesProcessor::processAvatarLegacyPropertiesReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3897,
+        "line": 3922,
         "call": "setHandlerFunc(\"AvatarInterestsReply\", &LLAvatarPropertiesProcessor::processAvatarInterestsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3899,
+        "line": 3924,
         "call": "setHandlerFunc(\"AvatarGroupsReply\", &LLAvatarPropertiesProcessor::processAvatarGroupsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3901,
+        "line": 3926,
         "call": "setHandlerFunc(\"AvatarNotesReply\", &LLAvatarPropertiesProcessor::processAvatarNotesReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3903,
+        "line": 3928,
         "call": "setHandlerFunc(\"AvatarPicksReply\", &LLAvatarPropertiesProcessor::processAvatarPicksReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3905,
+        "line": 3930,
         "call": "setHandlerFunc(\"AvatarClassifiedReply\", &LLAvatarPropertiesProcessor::processAvatarClassifiedsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3908,
+        "line": 3933,
         "call": "setHandlerFuncFast(_PREHASH_CreateGroupReply, LLGroupMgr::processCreateGroupReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3910,
+        "line": 3935,
         "call": "setHandlerFuncFast(_PREHASH_JoinGroupReply, LLGroupMgr::processJoinGroupReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3912,
+        "line": 3937,
         "call": "setHandlerFuncFast(_PREHASH_EjectGroupMemberReply, LLGroupMgr::processEjectGroupMemberReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3914,
+        "line": 3939,
         "call": "setHandlerFuncFast(_PREHASH_LeaveGroupReply, LLGroupMgr::processLeaveGroupReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3916,
+        "line": 3941,
         "call": "setHandlerFuncFast(_PREHASH_GroupProfileReply, LLGroupMgr::processGroupPropertiesReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3924,
+        "line": 3949,
         "call": "setHandlerFuncFast(_PREHASH_AgentWearablesUpdate, LLAgentWearables::processAgentInitialWearablesUpdate )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3926,
+        "line": 3951,
         "call": "setHandlerFunc(\"ScriptControlChange\", LLAgent::processScriptControlChange )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3929,
+        "line": 3954,
         "call": "setHandlerFuncFast(_PREHASH_ViewerEffect, LLHUDManager::processViewerEffect)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3931,
+        "line": 3956,
         "call": "setHandlerFuncFast(_PREHASH_GrantGodlikePowers, process_grant_godlike_powers)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3933,
+        "line": 3958,
         "call": "setHandlerFuncFast(_PREHASH_GroupAccountSummaryReply, LLPanelGroupLandMoney::processGroupAccountSummaryReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3935,
+        "line": 3960,
         "call": "setHandlerFuncFast(_PREHASH_GroupAccountDetailsReply, LLPanelGroupLandMoney::processGroupAccountDetailsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3937,
+        "line": 3962,
         "call": "setHandlerFuncFast(_PREHASH_GroupAccountTransactionsReply, LLPanelGroupLandMoney::processGroupAccountTransactionsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3940,
+        "line": 3965,
         "call": "setHandlerFuncFast(_PREHASH_UserInfoReply, process_user_info_reply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3943,
+        "line": 3968,
         "call": "setHandlerFunc(\"RegionHandshake\", process_region_handshake, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3945,
+        "line": 3970,
         "call": "setHandlerFunc(\"TeleportStart\", process_teleport_start )",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3946,
+        "line": 3971,
         "call": "setHandlerFunc(\"TeleportProgress\", process_teleport_progress)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3947,
+        "line": 3972,
         "call": "setHandlerFunc(\"TeleportFailed\", process_teleport_failed, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3948,
+        "line": 3973,
         "call": "setHandlerFunc(\"TeleportLocal\", process_teleport_local, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "retain-split"
       },
       {
-        "line": 3950,
+        "line": 3975,
         "call": "setHandlerFunc(\"ImageNotInDatabase\", LLViewerTextureList::processImageNotInDatabase, NULL)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3952,
+        "line": 3977,
         "call": "setHandlerFuncFast(_PREHASH_GroupMembersReply, LLGroupMgr::processGroupMembersReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3954,
+        "line": 3979,
         "call": "setHandlerFunc(\"GroupRoleDataReply\", LLGroupMgr::processGroupRoleDataReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3956,
+        "line": 3981,
         "call": "setHandlerFunc(\"GroupRoleMembersReply\", LLGroupMgr::processGroupRoleMembersReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3958,
+        "line": 3983,
         "call": "setHandlerFunc(\"GroupTitlesReply\", LLGroupMgr::processGroupTitlesReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3961,
+        "line": 3986,
         "call": "setHandlerFunc(\"PlacesReply\", process_places_reply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3962,
+        "line": 3987,
         "call": "setHandlerFunc(\"GroupNoticesListReply\", LLPanelGroupNotices::processGroupNoticesListReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3964,
+        "line": 3989,
         "call": "setHandlerFunc(\"AvatarPickerReply\", LLFloaterAvatarPicker::processAvatarPickerReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3966,
+        "line": 3991,
         "call": "setHandlerFunc(\"DirPlacesReply\", LLPanelDirBrowser::processDirPlacesReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3967,
+        "line": 3992,
         "call": "setHandlerFunc(\"DirPeopleReply\", LLPanelDirBrowser::processDirPeopleReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3968,
+        "line": 3993,
         "call": "setHandlerFunc(\"DirEventsReply\", LLPanelDirBrowser::processDirEventsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3969,
+        "line": 3994,
         "call": "setHandlerFunc(\"DirGroupsReply\", LLPanelDirBrowser::processDirGroupsReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3970,
+        "line": 3995,
         "call": "setHandlerFunc(\"DirClassifiedReply\", LLPanelDirBrowser::processDirClassifiedReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3971,
+        "line": 3996,
         "call": "setHandlerFunc(\"DirLandReply\", LLPanelDirBrowser::processDirLandReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3973,
+        "line": 3998,
         "call": "setHandlerFunc(\"MapBlockReply\", LLWorldMapMessage::processMapBlockReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3974,
+        "line": 3999,
         "call": "setHandlerFunc(\"MapItemReply\", LLWorldMapMessage::processMapItemReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3975,
+        "line": 4000,
         "call": "setHandlerFunc(\"EventInfoReply\", LLEventNotifier::processEventInfoReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3977,
+        "line": 4002,
         "call": "setHandlerFunc(\"PickInfoReply\", &LLAvatarPropertiesProcessor::processPickInfoReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3978,
+        "line": 4003,
         "call": "setHandlerFunc(\"ClassifiedInfoReply\", LLAvatarPropertiesProcessor::processClassifiedInfoReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3979,
+        "line": 4004,
         "call": "setHandlerFunc(\"ParcelInfoReply\", LLRemoteParcelInfoProcessor::processParcelInfoReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3980,
+        "line": 4005,
         "call": "setHandlerFunc(\"ScriptDialog\", process_script_dialog)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3981,
+        "line": 4006,
         "call": "setHandlerFunc(\"LoadURL\", process_load_url)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3982,
+        "line": 4007,
         "call": "setHandlerFunc(\"ScriptTeleportRequest\", process_script_teleport_request)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3983,
+        "line": 4008,
         "call": "setHandlerFunc(\"EstateCovenantReply\", process_covenant_reply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3986,
+        "line": 4011,
         "call": "setHandlerFunc(\"OfferCallingCard\", process_offer_callingcard)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3987,
+        "line": 4012,
         "call": "setHandlerFunc(\"AcceptCallingCard\", process_accept_callingcard)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3988,
+        "line": 4013,
         "call": "setHandlerFunc(\"DeclineCallingCard\", process_decline_callingcard)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3990,
+        "line": 4015,
         "call": "setHandlerFunc(\"ParcelObjectOwnersReply\", LLPanelLandObjects::processParcelObjectOwnersReply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3992,
+        "line": 4017,
         "call": "setHandlerFunc(\"InitiateDownload\", process_initiate_download)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3993,
+        "line": 4018,
         "call": "setHandlerFunc(\"LandStatReply\", LLFloaterTopObjects::handle_land_reply)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3994,
+        "line": 4019,
         "call": "setHandlerFunc(\"GenericMessage\", process_generic_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3995,
+        "line": 4020,
         "call": "setHandlerFunc(\"GenericStreamingMessage\", process_generic_streaming_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3996,
+        "line": 4021,
         "call": "setHandlerFunc(\"LargeGenericMessage\", process_large_generic_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
         "disposition": "defer"
       },
       {
-        "line": 3998,
+        "line": 4023,
         "call": "setHandlerFuncFast(_PREHASH_FeatureDisabled, process_feature_disabled_message)",
         "gate": "G-PROTOCOL",
         "caller_route": "R05",
@@ -5222,11 +5222,11 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "f1701ee9e9b2a3987ec209509906beaa8e595adb",
+    "source_commit": "be089272e47ca7febafeb7c299642e24a6bb4c3f",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
     "world_implemented": false,
-    "qualification": "Native viewer-window integration review: LLViewerWindow owns its native device/swapchain, required startup root, login holder, popup/dialog owners, progress controllers, skin-aware UI and resource lifetimes. Normal initWindow dispatch has a native branch; normal LLAppViewer session admission remains closed. Native input/reshape routes avoid GL. CPU media buffers and progress images publish immutable Diligent resources; live browser and authentication qualification remain open. Shared translation initialization preserves viewer substitution defaults. Registered specialized factories remain closed while ordinary named panels retain their admitted widget path. Native alert shadows and context cones use explicit triangle packets. Linux primary native font faces retain glyph-generation ownership; cross-platform runtime confirmation is pending dedicated CI. Runtime qualification is recorded separately in viewer-ui-substrate.md; none of these source mappings asserts complete V3, connected UI/chat or world parity."
+    "qualification": "Normal native login integration review: LLAppViewer dispatches ordinary Vulkan configuration into CPU startup services, LLViewerWindow ownership, native frame rendering, browser/event/network pumping and ordered cleanup. The existing idle_startup state machine, FSPanelLogin login_callback, credential handling, required alerts/agreements and LLLoginInstance authentication are retained. Login menus use native-compatible explicit-color primitives. Native startup avoids GL feature recommendation, texture workers and world UI owners. The connected region/chat stage remains explicitly gated before GL world creation with the existing notification/retry path. Windows software qualification covers complete staging, all 44 viewer cases, normal startup, live login browser pixel publication and clean shutdown; real-server authentication, platform-event completeness and connected chat/world parity remain unqualified."
   }
 }

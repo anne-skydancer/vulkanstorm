@@ -1,6 +1,6 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-Source: `f1701ee9e9b2a3987ec209509906beaa8e595adb` on `vkstorm-vulkan`.
+Source: `be089272e47ca7febafeb7c299642e24a6bb4c3f` on `vkstorm-vulkan`.
 Status: implemented development diagnostic. CI run
 [37742422223](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37742422223)
 passed all nine original cases on Windows SwiftShader, Linux SwiftShader and
@@ -153,7 +153,7 @@ selected skin/theme/language/font settings and initializes the existing overlay
 resolution, widget defaults, color table, translations and native image/font
 producers. Reusable native UI sources compile under `USE_DILIGENTCORE` rather
 than only under the diagnostic option. The fixture remains development-only;
-normal Vulkan startup is still gated pending the required session/UI closure.
+normal Vulkan application login is now wired as described below; connected-session acceptance remains open.
 
 The runner now adds 24 skin/theme/language cases to its fifteen existing cases:
 every packaged catalog selection, base default and German default XUI. Missing
@@ -167,6 +167,9 @@ See [shared UI ownership and qualification limits](viewer-ui-substrate.md#shared
 The 9 October native viewer-window integration is recorded in
 [the UI substrate checkpoint](viewer-ui-substrate.md#native-viewer-window-and-required-startup-owners-9-october-2026).
 It adds reusable `LLViewerWindow` device/UI ownership and required startup
-controls, exercised by an offline viewer startup probe. Normal application and
-connected-session admission remain closed; diagnostic success does not establish
-full V3 acceptance.
+controls, exercised by an offline viewer startup probe. The subsequent
+[normal application login integration](viewer-ui-substrate.md#normal-native-application-login-integration-9-october-2026)
+wires ordinary initialization, frames, login callbacks, browser pixels and
+shutdown, with a required CI launch outside diagnostic dispatch. Connected
+region/chat admission remains gated at the V4 boundary. Neither startup result
+establishes full V3 or connected-session acceptance.
