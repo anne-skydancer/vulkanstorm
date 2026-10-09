@@ -16,6 +16,9 @@
 #include "llnotifications.h"
 #include "llfloaterreg.h"
 #include "llurldispatcher.h"
+#include "llmutelist.h"
+#include "llxfermanager.h"
+#include "llxfer.h"
 #include "workqueue.h"
 #include "message.h"
 #include <filesystem>
@@ -27,7 +30,7 @@ void setting_setup_signal_listener(LLControlGroup&, const std::string&, std::fun
 void vs_native_replay_capture(VSVulkanContext&, const std::string&, std::shared_ptr<bool>);
 namespace
 {
-void require(bool condition, const char* reason) { if (!condition) throw std::runtime_error(reason); }
+void require(bool condition, const char* reason) { if (!condition) { LL_WARNS("NativeSessionReplay") << reason << LL_ENDL; throw std::runtime_error(reason); } }
 LLSD response()
 {
     LLSD result;
@@ -80,6 +83,7 @@ struct Replay
     bool captureRequested = false;
     bool submitted = false;
     unsigned encodedChannels = 0;
+    bool muteRequest = false, muteReplyQueued = false;
     bool encodedChat = false, encodedTypingStart = false, encodedTypingStop = false;
     LLSD report;
     unsigned deniedSettings = 0, allowedSettings = 0;
@@ -106,6 +110,14 @@ struct Replay
         else if (type == CHAT_TYPE_STOP) { require(text.empty(), "Typing carried chat text"); replay.encodedTypingStop = true; }
         else require(false, "Unexpected encoded chat type");
     }
+    static void outgoingMute(LLMessageSystem* msg, void** data)
+    {
+        auto& replay = *reinterpret_cast<Replay*>(data); LLUUID agent, session; U32 crc;
+        msg->getUUID("AgentData", "AgentID", agent); msg->getUUID("AgentData", "SessionID", session);
+        msg->getU32("MuteData", "MuteCRC", crc);
+        require(agent == LLUUID(response()["agent_id"].asString()) && session == LLUUID(response()["session_id"].asString()), "Mute request lost identity");
+        replay.muteRequest = true;
+    }
     void inspectOutgoing(VSNativeSession& owner)
     {
         require(!owner.admit("ChatFromViewer", owner.host()), "Production policy admitted a client-only message");
@@ -115,9 +127,10 @@ struct Replay
         gMessageSystem->setMessageAdmission([weak](const std::string& name, const LLHost& sender)
         {
             auto owner = weak.lock();
-            return owner && ((name == "ChatFromViewer" && sender == owner->host()) || owner->admit(name, sender));
+            return owner && (((name == "ChatFromViewer" || name == "MuteListRequest") && sender == owner->host()) || owner->admit(name, sender));
         });
         gMessageSystem->setHandlerFunc("ChatFromViewer", outgoing, reinterpret_cast<void**>(this));
+        gMessageSystem->setHandlerFunc("MuteListRequest", outgoingMute, reinterpret_cast<void**>(this));
     }
     void tick(VSNativeSession& owner)
     {
@@ -136,6 +149,20 @@ struct Replay
         else if (step == 1)
         {
             if (owner.phase() != VSNativeSession::Phase::Connected) return;
+            if (!muteRequest) return;
+            if (!muteReplyQueued)
+            {
+                LLSD mute; mute["MuteData"][0]["AgentID"] = LLUUID(response()["agent_id"].asString()); mute["MuteData"][0]["Filename"] = "native-v4-replay-empty.txt";
+                http("MuteListUpdate", mute, owner.host());
+                require(!gXferManager->mReceiveList.empty(), "Mute download was not queued");
+                LLMessageSystem* packet = gMessageSystem;
+                packet->newMessage("SendXferPacket"); packet->nextBlock("XferID");
+                packet->addU64("ID", gXferManager->mReceiveList.front()->mID); packet->addU32("Packet", 0x80000000u);
+                packet->nextBlock("DataPacket"); const U8 emptyFile[4] = {0, 0, 0, 0};
+                packet->addBinaryData("Data", emptyFile, sizeof(emptyFile)); packet->sendReliable(owner.host());
+                muteReplyQueued = true; return;
+            }
+            if (!LLMuteList::getInstance()->isLoadedFromServer()) return;
             require(owner.evidence()["circuit_ack"].asBoolean(), "Circuit was not acknowledged");
             require(!owner.deliver("AgentMovementComplete", LLSD::emptyArray(), owner.host(), owner.generation()), "Malformed semantic message admitted");
             require(!owner.admit("ObjectUpdate", owner.host()), "Scene message admitted");
@@ -217,7 +244,13 @@ struct Replay
             report["ui_gate"] = true;
             LLSD forged; forged["agent"] = LLUUID::generateNewID(); forged["session"] = LLUUID(response()["session_id"].asString());
             require(!owner.deliver("KickUser", forged, owner.host(), owner.generation()), "Forged kick identity admitted");
+            LLSD transfer; transfer["MuteData"][0]["AgentID"] = LLUUID(response()["agent_id"].asString());
+            transfer["MuteData"][0]["Filename"] = "native-v4-replay-muted.txt";
+            http("MuteListUpdate", transfer, owner.host());
+            require(!gXferManager->mReceiveList.empty(), "Mute transfer was not queued");
             owner.requestLogout(false); owner.expireDeadlineForReplay(); owner.tick();
+            require(gXferManager->mReceiveList.empty(), "Logout retained mute transfer callbacks");
+            report["mute_request"] = muteRequest; report["mute_transfer_cleanup"] = true;
             require(owner.phase() == VSNativeSession::Phase::Login, "Logout deadline did not release session");
             report["logout_timeout"] = true;
             require(owner.acceptLogin(response()), "Crossing identity rejected"); owner.begin();

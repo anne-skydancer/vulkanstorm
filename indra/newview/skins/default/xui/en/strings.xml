@@ -576,7 +576,7 @@ https://www.firestormviewer.org/support for help fixing this problem.
 	<!-- world map -->
 	<string name="texture_loading">Loading...</string>
 	<string name="worldmap_offline">Offline</string>
-	<string name="worldmap_item_tooltip_format">[AREA] mÃƒâ€šÃ‚Â² L$[PRICE] ([SQMPRICE] L$/mÃƒâ€šÃ‚Â²)</string>
+	<string name="worldmap_item_tooltip_format">[AREA] m² L$[PRICE] ([SQMPRICE] L$/m²)</string>
 	<string name="worldmap_results_none_found">None found.</string>
 	<string name="worldmap_agent_position">You are here</string>
 	
@@ -2717,7 +2717,7 @@ Try enclosing path to the editor with double quotes.
   <!-- commands -->
 
   <string 
-name="Command_360_Capture_Label">360Ãƒâ€šÃ‚Â° Snapshot</string>
+name="Command_360_Capture_Label">360° Snapshot</string>
   <string name="Command_AboutLand_Label">About land</string>
   <string name="Command_Appearance_Label">Appearance</string>
   <string name="Command_Avatar_Label">Avatar Welcome Pack</string>
@@ -2791,7 +2791,7 @@ name="Command_360_Capture_Label">360Ãƒâ€šÃ‚Â° Snapshot</string>
   <string name="Command_AvatarAlign_Label">Avatar alignment</string>
   <string name="Command_FaceNearest_Label">Face nearest avatar</string>
 
-  <string name="Command_360_Capture_Tooltip">Capture a 360Ãƒâ€šÃ‚Â° equirectangular image</string>
+  <string name="Command_360_Capture_Tooltip">Capture a 360° equirectangular image</string>
   <string name="Command_AboutLand_Tooltip">Information about the land you're visiting</string>
   <string name="Command_Appearance_Tooltip">Change your avatar</string>
   <string name="Command_Avatar_Tooltip">Choose a complete avatar</string>
@@ -3301,7 +3301,7 @@ Your current position: [AVATAR_POS]
   <string name="Pie_av_render_fully">Fully</string>
 
   <string name="Nametag_Complexity_Label">Complexity: [COMPLEXITY]</string>
-  <string name="Nametag_Texture_Area_Label">Texture Area: [TEXTURE_AREA] mÃƒâ€šÃ‚Â²</string>
+  <string name="Nametag_Texture_Area_Label">Texture Area: [TEXTURE_AREA] m²</string>
 
   <string name="font_unknown">Unknown Font</string>
   <string name="font_fonts.xml">Deja Vu</string>

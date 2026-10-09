@@ -925,10 +925,10 @@ void LLMuteList::requestFromServer(const LLUUID& agent_id)
         // cache() is liable to be called on shutdown, but since we've set a dirty state it will avoid writing to disk.
         return;
     }
-    if (!gAgent.getRegion())
+    if (!gAgent.getRegionHost().isOk())
     {
-        LL_WARNS() << "No region for agent yet, skipping mute list request!" << LL_ENDL;
-        tryLoadCacheFallback(agent_id, "no region for request");
+        LL_WARNS() << "No simulator host for agent yet, skipping mute list request!" << LL_ENDL;
+        tryLoadCacheFallback(agent_id, "no simulator host for request");
         return;
     }
     mLoadState = ML_REQUESTED;
