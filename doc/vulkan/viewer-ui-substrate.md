@@ -1,7 +1,8 @@
 # V3: viewer UI resource and packet substrate
 
 Source: `035ee7d53e032d52668d723a2b0c66a5bc3770ac` on `vkstorm-vulkan`.
-Status: V3 implementation complete; expanded platform qualification in progress.
+Status: V3 implementation complete and accepted on Windows SwiftShader, Linux
+SwiftShader and Linux Lavapipe; expanded software qualification passed.
 The ordinary viewer owns native login, menus, progress, required dialogs and
 skin-aware plain nearby-chat controls. V4 connected transport/session admission
 and subsequent world rendering remain separate roadmap stages.
@@ -110,8 +111,24 @@ publication and clean shutdown.
 Local Windows SwiftShader qualification passed all 68 cases from the complete
 `RelWithDebInfo` stage, with zero validation errors and zero unexplained GL
 trap entries. Evidence: `.tmp/v3-completion-final/results.json` and its logs,
-selection records and readbacks. Expanded Linux qualification is pending the
-dedicated CI; source implementation does not establish an untested platform.
+selection records and readbacks.
+
+Dedicated CI run [37982489750](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37982489750)
+passed the complete expanded matrix on Windows SwiftShader, Linux SwiftShader
+and Linux Lavapipe at commit `107daa7713d085173512656c09b29f9272782c55`:
+68/68 cases per platform, 204/204 total. Archived results set
+`v3_controls_qualified`, native presentation, UI substrate, packaged skin fixtures,
+startup and ordinary login qualification to true. All positive startup sequences
+produced 18 actual/expected readback pairs over 17 frames with zero validation
+errors. Windows native DPI messages and Linux SDL composition event routes
+passed; loaded dependency/runtime hashes, required artifacts and ordered cleanup
+were verified. The viewer was built and fully staged as `RelWithDebInfo`, without
+an installer. CI records its generated build/install working-tree changes;
+source is identified by the tested commit and the pinned source hashes.
+
+The slowest job took 2 hours 15 minutes 14 seconds. Its final 68-case viewer
+batch took 26 minutes 54 seconds; dependency and staged-viewer builds accounted
+for most elapsed time. All three jobs uploaded evidence and completed successfully.
 
 The prior ordinary-login CI
 [37925511896](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37925511896)
@@ -505,4 +522,6 @@ regression compiles the production creation, focus and editing routes with SDL
 endpoints supplied by the fixture; enabled composition reaches the focused
 preeditor, disabling releases it, and GL behavior is unchanged. The startup
 readback also paints active composition before resetting it. This failed Linux
-run is not V3 acceptance; the corrected expanded matrix requires a new pass.
+run is historical failure evidence. The corrected expanded matrix subsequently
+passed all three platforms in run [37982489750](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37982489750); the completion record above records
+V3 acceptance and its explicit qualification limits.
