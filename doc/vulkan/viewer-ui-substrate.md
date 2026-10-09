@@ -1,6 +1,6 @@
 # V3: viewer UI resource and packet substrate
 
-Source: `f1701ee9e9b2a3987ec209509906beaa8e595adb` on `vkstorm-vulkan`.
+Source: `be089272e47ca7febafeb7c299642e24a6bb4c3f` on `vkstorm-vulkan`.
 Status: resource and producer integration underway; full V3 acceptance remains open. This code
 runs in the staged viewer's native diagnostic lifecycle. An initial closed widget set now constructs corrected mini-progress XUI and
 plain editors, with native window input/focus, Tab traversal, scrolling and the
@@ -329,7 +329,7 @@ rendering remain unqualified.
 
 ## Native viewer-window and required startup owners, 9 October 2026
 
-Source: `f1701ee9e9b2a3987ec209509906beaa8e595adb` on `vkstorm-vulkan`.
+Source: `be089272e47ca7febafeb7c299642e24a6bb4c3f` on `vkstorm-vulkan`.
 `LLViewerWindow` now has a native constructor and owns `VSVulkanContext`, the
 skin-aware UI owner, native root, login holder, floaters, popup owner, progress
 views and standard alert channels. Native frame, reshape, mouse, keyboard,
@@ -388,3 +388,52 @@ TOS/media execution, authentication callbacks, OS DPI/IME, required-dialog actio
 coverage and full G-UI/G-RESOURCE closure remain open. This implementation is
 viewer code with an offline diagnostic consumer; it is not complete V3 or
 connected UI/chat acceptance.
+
+
+## Normal native application login integration, 9 October 2026
+
+The normal `RenderBackend=Vulkan` application path is now wired through
+`LLAppViewer::init`, `frame` and `cleanup`. Native builds admit this path through
+`VSRenderBackend::canStartSession`; builds without native Vulkan continue to
+refuse it before graphics initialization. Device discovery uses the machine's
+Vulkan loader and installed drivers. The software ICD override belongs to CI.
+
+After the existing configuration and HTTP initialization, native startup owns
+CPU image/filesystem services, disk cache, coroutines, credentials, voice and
+HTTP pumping, and the reusable native viewer window/UI. It avoids the OpenGL
+texture workers, feature recommendations and world UI owners. The frame loop
+runs the existing `idle_startup` state machine and native UI drawing. The actual
+`FSPanelLogin` Connect callback advances the existing authentication states;
+credential handling, proxy setup, authentication transport, progress, failure,
+retry, required modal alerts, TOS and MFA controllers are retained. The login
+and edit menus use admitted controls and explicit-color native primitives.
+Cleanup stops authentication, UI, media/audio/plugins, network services, threads
+and remaining singleton/coroutine owners in order.
+
+The dedicated viewer CI now requires an ordinary 30-second native login launch
+with diagnostic dispatch disabled. It requires the selected software device,
+actual login-screen construction, CEF plugin startup, publication of
+`login_html` browser pixels to native resources, validation without errors and
+clean exit. A crash, timeout, missing required log evidence or missing browser
+pixel publication fails the job. The existing deterministic UI/readback and
+skin matrix remain independent checks.
+
+Local Windows qualification used a complete staged `RelWithDebInfo` viewer:
+all 44 viewer cases passed, including the normal launch. After tightening the
+normal check to require real browser pixel publication, that launch passed
+again with a 723-by-737 login browser image, synchronization validation enabled
+and exit code 0. Evidence is in
+`.tmp/viewer-normal-login-final/results.json` and
+`.tmp/viewer-normal-login-pixels-final/normal-login/result.json` plus its
+`viewer.log`. No installer or release publication was produced. Linux runtime
+confirmation is left to the dedicated platform jobs.
+
+Real-server authentication has not been exercised; its implementation now uses
+the existing authentication path rather than the offline probe's rejecting
+callback. Connected region/session/chat integration remains V4 work. An
+otherwise successful native authentication reaches an explicit notification and
+retry boundary before GL world creation, instead of hanging or entering that
+renderer. This does not qualify a connected session, all G-UI/G-RESOURCE
+contracts, OS IME/DPI event coverage, or full V3/world parity. The diagnostic's
+`normal_session_admitted=false` field describes that probe's consumption; the
+new ordinary-launch evidence is recorded separately.

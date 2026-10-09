@@ -1,7 +1,7 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `f1701ee9e9b2a3987ec209509906beaa8e595adb`. DiligentCore is the selected
+source `be089272e47ca7febafeb7c299642e24a6bb4c3f`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
@@ -47,7 +47,7 @@ distinguishes actual viewer execution from standalone harness evidence. Connecte
 UI/chat and world rendering remain unimplemented. The diagnostic source has
 whole-file I02 reviews; affected factory, platform and startup/cleanup ranges
 were re-reviewed and their positions/hashes refreshed. The current generated
-ledger has 28,498 candidates in 1,751 files (19 standalone test-only candidates).
+ledger has 28,496 candidates in 1,751 files (19 standalone test-only candidates).
 The UI/chat boundary manifest now covers 94 hashed source files, including the
 new diagnostic and its application/window interfaces. Registry admission and
 the complete proposed UI/chat gate set remain implementation requirements.
@@ -328,8 +328,8 @@ The native pointer-input checkpoint adds capture-aware mouse/hover/wheel routing
 focus-loss capture cancellation and decisive GL geometry rejection inside the
 native drawing owner. Fractional-scale clips preserve the legacy physical-pixel
 margin. Fifteen Windows viewer cases pass; full V3 and cross-platform acceptance
-for this delta remain open. The current source accounting has 28,498 witnesses
-in 1,751 files and 94 boundary hashes.
+for this delta remain open. The current source accounting has 28,496 witnesses
+in 1,751 files and 102 boundary hashes.
 
 
 ## Shared UI ownership and skin refresh
