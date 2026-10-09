@@ -244,6 +244,15 @@ struct Replay
             require(LLURLDispatcher::dispatchFromTextEditor("secondlife://Native/10/20/30", false), "Deferred region URL was not consumed");
             require(!LLWorld::instanceExists(), "Deferred URL instantiated scene resources");
             report["encoded_channels"] = encodedChannels == 4;
+            LLSD frozen; frozen["FrozenData"][0]["Data"] = true;
+            http("ViewerFrozenMessage", frozen, owner.host()); require(owner.evidence()["frozen"].asBoolean(), "Frozen status was not decoded");
+            frozen["FrozenData"][0]["Data"] = false;
+            http("ViewerFrozenMessage", frozen, owner.host()); require(!owner.evidence()["frozen"].asBoolean(), "Unfrozen status was not decoded");
+            LLSD feature; feature["FailureInfo"][0]["AgentID"] = LLUUID(response()["agent_id"].asString());
+            feature["FailureInfo"][0]["TransactionID"] = LLUUID::generateNewID(); feature["FailureInfo"][0]["ErrorMessage"] = "V4 replay feature status";
+            const auto received = owner.evidence()["received"].asInteger(); http("FeatureDisabled", feature, owner.host());
+            require(owner.evidence()["received"].asInteger() == received + 1, "Feature status was not decoded");
+            report["status_messages"] = true;
             report["input_history"] = true;
             report["queued_http_chat"] = true;
             report["ui_gate"] = true;
@@ -259,13 +268,39 @@ struct Replay
             require(owner.phase() == VSNativeSession::Phase::Login, "Logout deadline did not release session");
             report["logout_timeout"] = true;
             require(owner.acceptLogin(response()), "Crossing identity rejected"); owner.begin();
-            require(owner.deliver("CrossedRegion", LLSD::emptyMap(), owner.host(), owner.generation()) && owner.phase() == VSNativeSession::Phase::Disconnected, "Unsupported crossing did not disconnect");
+            http("CrossedRegion", LLSD::emptyMap(), owner.host());
+            require(owner.phase() == VSNativeSession::Phase::Disconnected, "Wire crossing did not disconnect");
             report["crossing_disconnect"] = true;
             report["live_server_qualified"] = false;
+            // Use the real circuit state seen by the connected tick, without
+            // waiting for the message library's platform-dependent expiry timer.
+            require(owner.acceptLogin(response()), "Dead-circuit identity rejected"); owner.begin();
+            handshake(owner.host());
+            std::string eventURL(std::getenv("VS_VULKAN_REPLAY_SEED")); eventURL.replace(eventURL.size() - 4, 4, "events");
+            LLSD readyCaps; readyCaps["EventQueueGet"] = eventURL;
+            owner.capabilities(readyCaps, owner.generation());
+            owner.circuitResult(owner.generation(), 0);
+            LLSD movement; movement["agent"] = LLUUID(response()["agent_id"].asString()); movement["session"] = LLUUID(response()["session_id"].asString());
+            movement["handle"] = ll_sd_from_U64((U64(256) << 32) | 512); movement["position"] = ll_sd_from_vector3(LLVector3(10, 20, 30));
+            require(owner.deliver("AgentMovementComplete", movement, owner.host(), owner.generation()) && owner.phase() == VSNativeSession::Phase::Connected, "Dead-circuit fixture did not establish CPU readiness");
+            owner.tick(); // Drain the readiness packets before injecting circuit expiry.
+            gMessageSystem->mCircuitInfo.removeCircuitData(owner.host()); owner.tick();
+            require(owner.phase() == VSNativeSession::Phase::Disconnected, "Dead simulator circuit remained connected");
+            report["connected_timeout"] = true;
+            require(owner.acceptLogin(response()), "Reliable-failure identity rejected"); owner.begin();
+            // Circuit retirement invokes the actual pending reliable callback.
+            // It must return before its queued failure can reset the session.
+            gMessageSystem->mCircuitInfo.removeCircuitData(owner.host());
+            require(owner.phase() == VSNativeSession::Phase::Connecting, "Reliable callback reset transport during dispatch");
+            LL::WorkQueue::getInstance("mainloop")->runPending();
+            require(owner.phase() == VSNativeSession::Phase::Disconnected, "Reliable failure did not disconnect after dispatch");
+            report["reliable_failure"] = true;
             // Partial-init cancellation invalidates the suspended seed request and
             // reliable callback before the same owner accepts another identity.
             owner.reset(); require(owner.acceptLogin(response()), "Partial-init identity rejected");
-            owner.begin(); owner.reset();
+            owner.begin(); const LLHost retired = owner.host(); owner.reset();
+            LL::WorkQueue::getInstance("mainloop")->runPending();
+            require(!gMessageSystem->mCircuitInfo.findCircuit(retired), "Partial reset retained its transport circuit");
             report["partial_init_cleanup"] = owner.phase() == VSNativeSession::Phase::Login;
             require(owner.acceptLogin(response()), "Timeout identity rejected");
             owner.begin(); owner.expireDeadlineForReplay(); owner.tick();

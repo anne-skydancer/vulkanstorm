@@ -74,6 +74,7 @@ private:
     double mDeadline = 0;
     double mTypingDeadline = 0;
     bool mTyping = false;
+    bool mFrozen = false;
     bool mHandshake = false, mMovement = false, mSeedReady = false, mCircuitAck = false, mQuit = false;
     U64 mReceived = 0, mSent = 0, mRejected = 0, mExpired = 0;
     std::vector<boost::signals2::scoped_connection> mSettingConnections;

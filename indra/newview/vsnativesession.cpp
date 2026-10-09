@@ -4,6 +4,7 @@
 #include "vsplainchat.h"
 #include "llappviewer.h"
 #include "llviewerwindow.h"
+#include "llwindow.h"
 #include "llviewercontrol.h"
 #include "llstartup.h"
 #include "llagent.h"
@@ -35,6 +36,7 @@
 #include "llxfermanager.h"
 #include "llxfer.h"
 #include "message.h"
+#include "workqueue.h"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -52,13 +54,18 @@ double now() { return LLFrameTimer::getTotalSeconds(); }
 const std::set<std::string> transport = {"StartPingCheck", "CompletePingCheck", "PacketAck"};
 const std::set<std::string> session = {"RegionHandshake", "AgentMovementComplete", "ChatFromSimulator",
     "LogoutReply", "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "TeleportStart", "TeleportFinish",
-    "TeleportLocal", "CrossedRegion", "CloseCircuit", "DisableSimulator", "UUIDNameReply", "UUIDGroupNameReply",
+    "TeleportLocal", "TeleportProgress", "TeleportFailed", "ViewerFrozenMessage", "FeatureDisabled", "CrossedRegion", "CloseCircuit", "DisableSimulator", "UUIDNameReply", "UUIDGroupNameReply",
     "MuteListUpdate", "UseCachedMuteList", "SendXferPacket", "ConfirmXferPacket", "AbortXfer"};
 struct CircuitDelivery { std::weak_ptr<VSNativeSession> owner; U64 generation; };
 void circuitCallback(void** userdata, S32 result)
 {
     std::unique_ptr<CircuitDelivery> delivery(reinterpret_cast<CircuitDelivery*>(userdata));
-    if (auto owner = delivery->owner.lock()) owner->circuitResult(delivery->generation, result);
+    // ACK/retry processing still owns the packet and circuit while invoking us.
+    // A failed delivery can retire that circuit, so handle it after dispatch.
+    if (!delivery->owner.expired())
+        LL::WorkQueue::getInstance("mainloop")->post(
+            [weak = delivery->owner, generation = delivery->generation, result]()
+            { if (auto owner = weak.lock()) owner->circuitResult(generation, result); });
 }
 void receiveMessage(LLMessageSystem* msg, void**)
 {
@@ -104,7 +111,7 @@ void VSNativeSession::install(LLMessageSystem& msg)
     });
     // Mixed viewer handlers are replaced before any session messages can execute.
     for (const char* name : {"RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
-         "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "TeleportStart", "TeleportFinish", "TeleportLocal", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
+         "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
 }
 bool VSNativeSession::acceptLogin(const LLSD& response)
@@ -207,7 +214,7 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
 void VSNativeSession::receive(LLMessageSystem* msg)
 {
     const std::string name = msg->getMessageName();
-    LLSD body;
+    LLSD body = LLSD::emptyMap();
     if (name == "RegionHandshake")
     {
         U32 flags; U8 access; LLUUID id, owner; std::string region;
@@ -248,6 +255,14 @@ void VSNativeSession::receive(LLMessageSystem* msg)
     }
     else if (name == "AlertMessage" || name == "AgentAlertMessage")
     { std::string text; msg->getString("AlertData", "Message", text); body["text"] = text; }
+    else if (name == "ViewerFrozenMessage")
+    { bool frozen; msg->getBOOL("FrozenData", "Data", frozen); body["frozen"] = frozen; }
+    else if (name == "FeatureDisabled")
+    {
+        LLUUID agent; std::string text;
+        msg->getUUID("FailureInfo", "AgentID", agent); msg->getString("FailureInfo", "ErrorMessage", text);
+        body["agent"] = agent; body["text"] = text;
+    }
     else if (name == "Error")
     { std::string text; msg->getString("Data", "Message", text); body["text"] = text; }
     deliver(name, body, msg->getSender(), mGeneration);
@@ -276,9 +291,19 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
     { if (body["agent"].asUUID() != mAgent || body["session"].asUUID() != mSession) return false; finishLogout(); }
     else if (name == "KickUser")
     { if (body["agent"].asUUID() != mAgent || body["session"].asUUID() != mSession) return false; disconnect(body["text"].asString()); }
+    else if (name == "ViewerFrozenMessage")
+    {
+        if (!body["frozen"].isBoolean()) return false;
+        mFrozen = body["frozen"].asBoolean(); gViewerWindow->getWindow()->resetBusyCount();
+    }
+    else if (name == "FeatureDisabled")
+    {
+        if (body["agent"].asUUID() != mAgent || !body["text"].isString()) return false;
+        LL_WARNS("NativeSession") << "Simulator feature unavailable: " << body["text"].asString().substr(0, 4096) << LL_ENDL;
+    }
     else if (name == "AlertMessage" || name == "AgentAlertMessage" || name == "Error")
     { if (!body["text"].isString()) return false; LLSD args; args["ERROR_MESSAGE"] = body["text"].asString().substr(0, 4096); LLNotificationsUtil::add("ErrorMessage", args); }
-    else if (name == "TeleportStart" || name == "TeleportFinish" || name == "TeleportLocal" || name == "CrossedRegion" || name == "CloseCircuit" || name == "DisableSimulator")
+    else if (name == "TeleportStart" || name == "TeleportFinish" || name == "TeleportLocal" || name == "TeleportProgress" || name == "TeleportFailed" || name == "CrossedRegion" || name == "CloseCircuit" || name == "DisableSimulator")
         disconnect(LLTrans::getString("NativeSessionRegionUnavailable"));
     else return false;
     ++mReceived; return true;
@@ -413,6 +438,10 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
 }
 void VSNativeSession::tick()
 {
+    // Do not let late packets revive a retired connected circuit before the
+    // session notices its loss. Login/connecting still have their own deadline.
+    if (mPhase == Phase::Connected && gMessageSystem && !gMessageSystem->checkCircuitAlive(mHost))
+    { disconnect(LLTrans::getString("NativeSessionConnectionTimeout")); return; }
     if (gMessageSystem)
     {
         gMessageSystem->resetReceiveCounts(); LockMessageChecker checker(gMessageSystem);
@@ -421,12 +450,17 @@ void VSNativeSession::tick()
     }
     if (mPhase == Phase::Connecting && now() > mDeadline) disconnect(LLTrans::getString("NativeSessionConnectionTimeout"));
     else if (mPhase == Phase::Logout && now() > mDeadline) finishLogout();
+    else if (mPhase == Phase::Connected && gMessageSystem && !gMessageSystem->checkCircuitAlive(mHost))
+        disconnect(LLTrans::getString("NativeSessionConnectionTimeout"));
     else if (mPhase == Phase::Connected && now() > mDeadline)
     { send("AgentUpdate", LLSD()); mDeadline = now() + 1; }
     if (mTyping && now() > mTypingDeadline) typing(false);
-    if (gCacheName) gCacheName->processPending();
-    if (LLAvatarNameCache::instanceExists()) LLAvatarNameCache::getInstance()->idle();
-    if (gXferManager) gXferManager->retransmitUnackedPackets();
+    if (mPhase == Phase::Connecting || mPhase == Phase::Connected)
+    {
+        if (gCacheName) gCacheName->processPending();
+        if (LLAvatarNameCache::instanceExists()) LLAvatarNameCache::getInstance()->idle();
+        if (gXferManager) gXferManager->retransmitUnackedPackets();
+    }
     if (mPhase == Phase::Connected && LLMuteList::instanceExists()) LLMuteList::getInstance()->updateLoadState();
 }
 void VSNativeSession::unbind()
@@ -482,13 +516,21 @@ void VSNativeSession::reset()
         if (mAgent.notNull()) LLMuteList::getInstance()->cache(mAgent);
         LLMuteList::deleteSingleton();
     }
-    if (gMessageSystem && mHost.isOk()) gMessageSystem->disableCircuit(mHost);
+    if (gCacheName) gCacheName->setUpstream(LLHost());
+    if (gMessageSystem && mHost.isOk())
+    {
+        gMessageSystem->disableCircuit(mHost);
+        // Viewer-created circuits can have no inbound circuit-code mapping;
+        // disableCircuit alone deliberately retains those neighbor-style entries.
+        // This owner has exactly one admitted session host and must retire it.
+        gMessageSystem->mCircuitInfo.removeCircuitData(mHost);
+    }
     mPhase = Phase::Login; mHost = LLHost(); mCapabilities = LLSD();
     mAgent.setNull(); mSession.setNull(); mRegionID.setNull(); mOwner.setNull();
     mName.clear(); mSeed.clear(); mHandle = mFlags = 0; mCircuit = 0;
-    gAgentID.setNull(); gAgentSessionID.setNull(); gAgentMovementCompleted = false;
+    gAgentID.setNull(); gAgentSessionID.setNull(); gAgent.mSecureSessionID.setNull(); gAgent.mMOTD.clear(); gAgentMovementCompleted = false;
     mHandshake = mMovement = mSeedReady = mCircuitAck = mQuit = false;
-    mTyping = false;
+    mTyping = mFrozen = false;
     gDisconnected = true;
     if (LLAvatarNameCache::instanceExists()) LLAvatarNameCache::getInstance()->setNameLookupURL("");
 }
@@ -505,5 +547,6 @@ LLSD VSNativeSession::evidence() const
     result["region"] = mName; result["handshake"] = mHandshake; result["movement"] = mMovement;
     result["capabilities"] = mSeedReady; result["circuit_ack"] = mCircuitAck;
     result["region_width"] = S32(mWidth); result["region_height"] = S32(mHeight);
+    result["frozen"] = mFrozen;
     result["world_owners"] = 0; return result;
 }

@@ -12,10 +12,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import xml.etree.ElementTree as ET
 
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
+from run_vulkan_viewer_diagnostic import runtime_libraries
 
 REQUIRED = ('malformed', 'unknown', 'wrong_host', 'udp_chat', 'http_gate', 'udp_gate',
             'queued_expired', 'relogin', 'chat_submit', 'typing', 'settings_gate', 'readback',
-            'partial_init_cleanup', 'connection_timeout', 'encoded_chat', 'encoded_typing', 'ui_gate', 'logout_timeout', 'crossing_disconnect', 'encoded_channels', 'queued_http_chat', 'mute_request', 'mute_transfer_cleanup', 'input_history')
+            'partial_init_cleanup', 'connection_timeout', 'encoded_chat', 'encoded_typing', 'ui_gate', 'logout_timeout', 'crossing_disconnect', 'encoded_channels', 'queued_http_chat', 'mute_request', 'mute_transfer_cleanup', 'input_history', 'status_messages', 'connected_timeout', 'reliable_failure')
 
 
 def read_llsd(element):
@@ -192,9 +193,14 @@ def main():
                 path = str(((stage if windows else stage / 'lib') / name).resolve())
                 if libraries.get(path) != expected:
                     raise RuntimeError('Unexpected GHI dependency: ' + name)
+            for library in runtime_libraries(runtime):
+                if libraries.get(str(library.resolve())) != hashlib.sha256(library.read_bytes()).hexdigest():
+                    raise RuntimeError('Viewer did not load the pinned ICD/validation library: ' + str(library))
             report['loaded_library_sha256'] = libraries
             passed = passed and server.seed_requests >= 2 and server.event_requests >= 1
         except Exception as error:
+            if isinstance(error, subprocess.TimeoutExpired):
+                log = (error.stdout or b'').decode('utf-8', errors='replace') + '\nVIEWER TIMEOUT\n'
             log += '\nREPLAY EVIDENCE FAILURE: ' + repr(error)
             passed = False
         finally:
