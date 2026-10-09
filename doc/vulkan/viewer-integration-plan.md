@@ -4,8 +4,8 @@ Status: staged implementation plan. V1/V2 have an
 [implemented native viewer diagnostic](viewer-native-presentation.md); CI run
 [37742422223](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37742422223)
 passed Windows SwiftShader, Linux SwiftShader and Linux Lavapipe.
-V3 interface/resource implementation is complete; expanded platform acceptance
-is in progress in the [V3 completion record](viewer-ui-substrate.md#v3-completion-9-october-2026).
+V3 interface/resource implementation and expanded software acceptance are complete
+on all three platform/runtime combinations; see the [V3 completion record](viewer-ui-substrate.md#v3-completion-9-october-2026).
 Connected UI/chat (V4) and subsequent world rendering remain open.
 Planning source: `417e32891aee7bddf73a1ac1bbf7226133f78286` on
 `vkstorm-vulkan`, reviewed on 7 October 2026. Continue authorized implementation
@@ -99,8 +99,9 @@ asset overlays and translated XUI; skin-specific text-field images and text
 colors must remain paired. Run the admitted controls through every packaged
 skin/theme plus a translated overlay, with selection identity and readback
 checks. This matrix does not qualify additional controls or live skin switching.
-The current shared owner and remaining normal-session wiring are recorded in
-[the normal application login integration checkpoint](viewer-ui-substrate.md#normal-native-application-login-integration-9-october-2026).
+The completed normal-login/UI resource scope is recorded in
+[the V3 completion record](viewer-ui-substrate.md#v3-completion-9-october-2026).
+Connected-session wiring belongs to V4 below.
 
 Submit ordered UI packets with explicit texture/sampler, blend, clip, transform,
 origin and DPI state. Preserve the corrected XUI baseline. Admit login,

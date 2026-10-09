@@ -5265,8 +5265,10 @@
       "G-RESOURCE"
     ],
     "interface": "normal native login, menus, progress/status, required alerts/agreements and production plain nearby transcript/input",
-    "qualification": "Windows SwiftShader: all 68 expanded staged-viewer cases passed; expanded Linux CI pending",
+    "qualification": "Windows SwiftShader, Linux SwiftShader and Linux Lavapipe: all 68 expanded staged-viewer cases passed per platform (204 total), CI run 37982489750 at source commit 107daa7713d085173512656c09b29f9272782c55; physical multi-monitor DPI and OS IME services remain unqualified",
     "connected_session_qualified": false,
-    "world_qualified": false
+    "world_qualified": false,
+    "software_qualified": true,
+    "qualification_run": "https://github.com/anne-skydancer/vulkanstorm/actions/runs/37982489750"
   }
 }

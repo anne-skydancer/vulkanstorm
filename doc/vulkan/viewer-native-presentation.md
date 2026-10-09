@@ -6,7 +6,8 @@ Status: implemented development diagnostic. CI run
 passed all nine original cases on Windows SwiftShader, Linux SwiftShader and
 Linux Lavapipe. The expanded [V3 completion record](viewer-ui-substrate.md#v3-completion-9-october-2026)
 records normal viewer integration and its 68-case interface/resource matrix.
-Local Windows qualification has passed; expanded Linux qualification is pending.
+Dedicated CI run [37982489750](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37982489750) passed
+all 68 expanded cases on each of the three platform/runtime combinations.
 Connected UI/chat and world rendering remain subsequent stages.
 
 The first CI run passed the Windows build and native viewer diagnostic. Its
