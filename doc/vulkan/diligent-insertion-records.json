@@ -1,5 +1,5 @@
 {
-  "source_commit": "05907fc6e4058ce21c79685cf86511bb70196c9e",
+  "source_commit": "ad00157f5cd752d7d960b8fb52adbff7a0d51313",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -843,6 +843,141 @@
   ],
   "reviewed_ranges": [
     {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 19,
+      "end": 21,
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 33,
+      "end": 33,
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 86,
+      "end": 86,
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 113,
+      "end": 120,
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 130,
+      "end": 130,
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 133,
+      "end": 133,
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 152,
+      "end": 165,
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 247,
+      "end": 250,
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 252,
+      "end": 253,
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/strings.xml",
+      "start": 579,
+      "end": 579,
+      "sha256": "7ed8ddb560fbbc37dff5eaf8de75e5a61a6925299bc14deb9a6011e06bfe1424",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/strings.xml",
+      "start": 2720,
+      "end": 2720,
+      "sha256": "7ed8ddb560fbbc37dff5eaf8de75e5a61a6925299bc14deb9a6011e06bfe1424",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/strings.xml",
+      "start": 2794,
+      "end": 2794,
+      "sha256": "7ed8ddb560fbbc37dff5eaf8de75e5a61a6925299bc14deb9a6011e06bfe1424",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/strings.xml",
+      "start": 3304,
+      "end": 3304,
+      "sha256": "7ed8ddb560fbbc37dff5eaf8de75e5a61a6925299bc14deb9a6011e06bfe1424",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/llmutelist.cpp",
+      "start": 928,
+      "end": 928,
+      "sha256": "44dc58e20a75731f3339306b53996636ca9c42c1d7f2a80b905c2e20095e9f96",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
+      "path": "indra/newview/llmutelist.cpp",
+      "start": 930,
+      "end": 931,
+      "sha256": "44dc58e20a75731f3339306b53996636ca9c42c1d7f2a80b905c2e20095e9f96",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
+    },
+    {
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 5,
       "end": 5,
@@ -989,56 +1124,56 @@
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 1,
-      "end": 252,
-      "sha256": "1ed216f6778b9c2f0d03a5bdb166a229481b6b16363c2e16b3b1ed3d4e84d941",
+      "end": 285,
+      "sha256": "df19a4134e02d6a6cf1c9214d0bffd37323c0ae2e44e7c76d9d55f04aefb6d8b",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
     },
     {
       "path": "indra/newview/skins/default/xui/en/strings.xml",
       "start": 579,
       "end": 579,
-      "sha256": "d61eb6445afdc7b4b3dfc9901e22ae9e431a852fab6401592a8995d41d86c571",
+      "sha256": "7ed8ddb560fbbc37dff5eaf8de75e5a61a6925299bc14deb9a6011e06bfe1424",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
     },
     {
       "path": "indra/newview/skins/default/xui/en/strings.xml",
       "start": 2720,
       "end": 2720,
-      "sha256": "d61eb6445afdc7b4b3dfc9901e22ae9e431a852fab6401592a8995d41d86c571",
+      "sha256": "7ed8ddb560fbbc37dff5eaf8de75e5a61a6925299bc14deb9a6011e06bfe1424",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
     },
     {
       "path": "indra/newview/skins/default/xui/en/strings.xml",
       "start": 2794,
       "end": 2794,
-      "sha256": "d61eb6445afdc7b4b3dfc9901e22ae9e431a852fab6401592a8995d41d86c571",
+      "sha256": "7ed8ddb560fbbc37dff5eaf8de75e5a61a6925299bc14deb9a6011e06bfe1424",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
     },
     {
       "path": "indra/newview/skins/default/xui/en/strings.xml",
       "start": 3304,
       "end": 3304,
-      "sha256": "d61eb6445afdc7b4b3dfc9901e22ae9e431a852fab6401592a8995d41d86c571",
+      "sha256": "7ed8ddb560fbbc37dff5eaf8de75e5a61a6925299bc14deb9a6011e06bfe1424",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
     },
     {
       "path": "indra/newview/skins/default/xui/en/strings.xml",
       "start": 3360,
       "end": 3365,
-      "sha256": "d61eb6445afdc7b4b3dfc9901e22ae9e431a852fab6401592a8995d41d86c571",
+      "sha256": "7ed8ddb560fbbc37dff5eaf8de75e5a61a6925299bc14deb9a6011e06bfe1424",
       "record": "I08",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
     },
     {
       "path": "indra/newview/llviewerwindow.h",
@@ -1161,28 +1296,28 @@
       "path": "indra/newview/llmutelist.cpp",
       "start": 44,
       "end": 46,
-      "sha256": "9eb0f75c5066db7d756930310528d47137c3a0427a7f3fa1f0cce48012df28e3",
+      "sha256": "44dc58e20a75731f3339306b53996636ca9c42c1d7f2a80b905c2e20095e9f96",
       "record": "I01",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
     },
     {
       "path": "indra/newview/llmutelist.cpp",
       "start": 963,
       "end": 983,
-      "sha256": "9eb0f75c5066db7d756930310528d47137c3a0427a7f3fa1f0cce48012df28e3",
+      "sha256": "44dc58e20a75731f3339306b53996636ca9c42c1d7f2a80b905c2e20095e9f96",
       "record": "I01",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
     },
     {
       "path": "indra/newview/llmutelist.cpp",
       "start": 1014,
       "end": 1023,
-      "sha256": "9eb0f75c5066db7d756930310528d47137c3a0427a7f3fa1f0cce48012df28e3",
+      "sha256": "44dc58e20a75731f3339306b53996636ca9c42c1d7f2a80b905c2e20095e9f96",
       "record": "I01",
       "disposition": "mapped-gate",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+      "reason": "V4 final source review: CPU simulator host supplies mute-list transport without LLViewerRegion. Owned native mute-file callbacks validate the session generation; reset drains their EOF/cancellation callbacks before destroying transfers. The diagnostic replay observes actual reliable request fields, actual encoded mute-file completion and authoritative CPU loading, and cancellation of a later in-flight transfer. Connected chat, settings/URL admission and GPU readback remain covered by the staged-viewer replay. Restored existing UTF-8 XUI strings retain baseline semantics. Runtime and real-server qualifications remain separate from this source artifact."
     },
     {
       "path": "indra/newview/lleventpoll.cpp",

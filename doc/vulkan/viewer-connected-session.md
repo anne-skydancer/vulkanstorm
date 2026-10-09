@@ -91,3 +91,11 @@ clean. Source acceptance and 93 relevant regression/evidence checks passed.
 The three-platform CI matrix is the remaining software execution check; its run
 and artifacts will be recorded here after completion. Live-server qualification
 remains untested.
+
+The final source revision is `ad00157f5cd752d7d960b8fb52adbff7a0d51313`.
+Its staged Windows replay additionally passed actual encoded mute-list request
+and file completion, authoritative CPU mute loading and cancellation of a later
+in-flight transfer during bounded logout. The complete existing 68-case V3 matrix
+also passed locally with the V4 implementation. The source catalog was regenerated
+and checked without the Windows default-encoding conversion that invalidated the
+first CI source-evidence artifact; that failed run did not execute graphics jobs.
