@@ -43,6 +43,7 @@
 #include "llgl.h"
 #include "llmath.h"
 #include "llrender.h"
+#include "llrender2dutils.h"
 #include "llfocusmgr.h"
 #include "llcoord.h"
 #include "llwindow.h"
@@ -499,6 +500,20 @@ bool LLMenuItemGL::handleScrollWheel( S32 x, S32 y, S32 clicks )
     return !getMenu()->isScrollable();
 }
 
+namespace
+{
+void draw_menu_line(S32 x1, S32 y, S32 x2, const LLColor4& color)
+{
+    if (LLRender2D::isNativeUI())
+        LLRender2D::nativeRectangle(x1, y + 1, x2, y, color, true);
+    else
+    {
+        gGL.color4fv(color.mV);
+        gl_line_2d(x1, y, x2, y);
+    }
+}
+}
+
 void LLMenuItemGL::draw( void )
 {
     // *FIX: This can be optimized by using switches. Want to avoid
@@ -508,9 +523,7 @@ void LLMenuItemGL::draw( void )
     // let disabled items be highlighted, just don't draw them as such
     if( getEnabled() && getHighlight() && !mBriefItem)
     {
-        gGL.color4fv( mHighlightBackground.get().mV );
-
-        gl_rect_2d( 0, getRect().getHeight(), getRect().getWidth(), 0 );
+        gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 0, mHighlightBackground.get());
     }
 
     LLColor4 color;
@@ -569,7 +582,7 @@ void LLMenuItemGL::draw( void )
         {
             S32 x_begin = LEFT_PLAIN_PIXELS + mFont->getWidth(mLabel.getWString().c_str(), 0, static_cast<S32>(offset));
             S32 x_end = LEFT_PLAIN_PIXELS + mFont->getWidth(mLabel.getWString().c_str(), 0, static_cast<S32>(offset) + 1);
-            gl_line_2d(x_begin, (MENU_ITEM_PADDING / 2) + 1, x_end, (MENU_ITEM_PADDING / 2) + 1);
+            draw_menu_line(x_begin, (MENU_ITEM_PADDING / 2) + 1, x_end, color);
         }
     }
 }
@@ -616,10 +629,9 @@ U32 LLMenuItemSeparatorGL::getNominalHeight( void ) const
 
 void LLMenuItemSeparatorGL::draw( void )
 {
-    gGL.color4fv( mDisabledColor.get().mV );
     const S32 y = getRect().getHeight() / 2;
     const S32 PAD = 6;
-    gl_line_2d( PAD, y, getRect().getWidth() - PAD, y );
+    draw_menu_line(PAD, y, getRect().getWidth() - PAD, mDisabledColor.get());
 }
 
 void LLMenuItemSeparatorGL::buildDrawLabel( void )
@@ -777,22 +789,14 @@ void LLMenuItemTearOffGL::draw()
     // disabled items can be highlighted, but shouldn't render as such
     if( getEnabled() && getHighlight() && !isBriefItem())
     {
-        gGL.color4fv( mHighlightBackground.get().mV );
-        gl_rect_2d( 0, getRect().getHeight(), getRect().getWidth(), 0 );
+        gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 0, mHighlightBackground.get());
     }
 
-    if (getEnabled())
-    {
-        gGL.color4fv( mEnabledColor.get().mV );
-    }
-    else
-    {
-        gGL.color4fv( mDisabledColor.get().mV );
-    }
+    const LLColor4 color = getEnabled() ? mEnabledColor.get() : mDisabledColor.get();
     const S32 y = getRect().getHeight() / 3;
     const S32 PAD = 6;
-    gl_line_2d( PAD, y, getRect().getWidth() - PAD, y );
-    gl_line_2d( PAD, y * 2, getRect().getWidth() - PAD, y * 2 );
+    draw_menu_line(PAD, y, getRect().getWidth() - PAD, color);
+    draw_menu_line(PAD, y * 2, getRect().getWidth() - PAD, color);
 }
 
 U32 LLMenuItemTearOffGL::getNominalHeight( void ) const
@@ -1644,8 +1648,7 @@ void LLMenuItemBranchDownGL::draw( void )
 
     if( getHighlight() )
     {
-        gGL.color4fv( mHighlightBackground.get().mV );
-        gl_rect_2d( 0, getRect().getHeight(), getRect().getWidth(), 0 );
+        gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 0, mHighlightBackground.get());
     }
 
     LLColor4 color;
@@ -1676,7 +1679,7 @@ void LLMenuItemBranchDownGL::draw( void )
             S32 x_offset = ll_round((F32)getRect().getWidth() / 2.f - getFont()->getWidthF32(mLabel.getWString().c_str(), 0, S32_MAX) / 2.f);
             S32 x_begin = x_offset + getFont()->getWidth(mLabel.getWString().c_str(), 0, static_cast<S32>(offset));
             S32 x_end = x_offset + getFont()->getWidth(mLabel.getWString().c_str(), 0, static_cast<S32>(offset) + 1);
-            gl_line_2d(x_begin, LABEL_BOTTOM_PAD_PIXELS, x_end, LABEL_BOTTOM_PAD_PIXELS);
+            draw_menu_line(x_begin, LABEL_BOTTOM_PAD_PIXELS, x_end, color);
         }
     }
 }
@@ -3286,9 +3289,8 @@ void LLMenuGL::draw( void )
 void LLMenuGL::drawBackground(LLMenuItemGL* itemp, F32 alpha)
 {
     LLColor4 color = itemp->getHighlightBgColor() % alpha;
-    gGL.color4fv( color.mV );
     LLRect item_rect = itemp->getRect();
-    gl_rect_2d( 0, item_rect.getHeight(), item_rect.getWidth(), 0);
+    gl_rect_2d(0, item_rect.getHeight(), item_rect.getWidth(), 0, color);
 }
 
 void LLMenuGL::setVisible(bool visible)
@@ -3450,6 +3452,11 @@ void LLMenuGL::showPopup(LLView* spawning_view, LLMenuGL* menu, S32 x, S32 y, S3
 ///============================================================================
 
 static LLDefaultChildRegistry::Register<LLMenuBarGL> r2("menu_bar");
+
+bool LLMenuBarGL::isNativeLoginItemType(const std::type_info& type)
+{
+    return type == typeid(LLMenuItemBranchDownGL) || type == typeid(LLMenuScrollItem);
+}
 
 LLMenuBarGL::LLMenuBarGL( const Params& p )
 :   LLMenuGL(p),

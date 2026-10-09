@@ -585,7 +585,7 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
 
     NvDRSSessionHandle hSession = 0;
     static LLCachedControl<bool> use_nv_api(gSavedSettings, "NvAPICreateApplicationProfile", true);
-    if (!viewer_app_ptr->isVulkanDiagnostic() && use_nv_api)
+    if (!(viewer_app_ptr->isVulkanDiagnostic() || viewer_app_ptr->isNativeVulkanLogin()) && use_nv_api)
     {
         NvAPI_Status status;
 
@@ -644,7 +644,7 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
         }
 #endif
 
-        if (!viewer_app_ptr->isVulkanDiagnostic()) gGLActive = true;
+        if (!(viewer_app_ptr->isVulkanDiagnostic() || viewer_app_ptr->isNativeVulkanLogin())) gGLActive = true;
 
         viewer_app_ptr->cleanup();
 

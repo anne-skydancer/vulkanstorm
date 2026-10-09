@@ -7,6 +7,8 @@
 #include "llrootview.h"
 #include "llpopupview.h"
 #include "llpanel.h"
+#include "llviewermenu.h"
+#include "llmenugl.h"
 #include "llfloater.h"
 #include "llfloaterreg.h"
 #include "llfloatertos.h"
@@ -92,6 +94,19 @@ void LLViewerWindow::initNativeBase()
     auto* login          = LLUICtrlFactory::create<LLPanel>(holder, mRootView);
     require(login != nullptr, "Native login holder creation failed");
     mLoginPanelHolder = login->getHandle();
+    LLViewerMenuHolderGL::Params menu_holder;
+    menu_holder.name = "Menu Holder";
+    menu_holder.rect = mWindowRectScaled;
+    menu_holder.follows.flags = FOLLOWS_ALL;
+    menu_holder.mouse_opaque = false;
+    gMenuHolder = LLUICtrlFactory::create<LLViewerMenuHolderGL>(menu_holder, mRootView);
+    LLMenuGL::sMenuContainer = gMenuHolder;
+    LLPanel::Params menu_bar;
+    menu_bar.name = "menu_bar_holder";
+    menu_bar.rect = LLRect(0, mWindowRectScaled.getHeight(), mWindowRectScaled.getWidth(), mWindowRectScaled.getHeight() - MENU_BAR_HEIGHT);
+    menu_bar.follows.flags = FOLLOWS_LEFT | FOLLOWS_RIGHT | FOLLOWS_TOP;
+    menu_bar.mouse_opaque = false;
+    LLUICtrlFactory::create<LLPanel>(menu_bar, mRootView);
     LLFloaterView::Params floaters;
     floaters.name          = "Floater View";
     floaters.rect          = mWindowRectScaled;

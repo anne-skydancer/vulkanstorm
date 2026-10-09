@@ -41,6 +41,41 @@ def assess_startup(record, code, log, case):
     return code == 1 and record.get('passed') is False and record.get('failure') == 'Injected failure: ' + case and ('Injected failure: ' + case) in log
 
 
+def run_normal_login(executable, stage, env, evidence, expected_device):
+    """Run ordinary application initialization and startup, without diagnostic dispatch."""
+    directory = evidence / 'normal-login'
+    directory.mkdir(exist_ok=True)
+    child_env = {key: value for key, value in env.items() if not key.startswith('VS_VULKAN_DIAGNOSTIC')}
+    command = [str(executable), '--settings', 'vs_native_login_ci.xml',
+               '--set', 'ClientSettingsFile', str(directory / 'settings.xml'),
+               '--set', 'RenderBackend', 'Vulkan', '--set', 'AutoLogin', 'false',
+               '--set', 'QuitAfterSeconds', '30', '--set', 'RenderDebugGLSession', 'true',
+               '--set', 'UpdaterShowReleaseNotes', '0', '--set', 'FSShowWhitelistReminder', 'false']
+    log = ''; code = None; passed = False
+    try:
+        process = subprocess.run(command, cwd=stage, env=child_env, stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, timeout=90)
+        code = process.returncode
+        log = process.stdout.decode('utf-8', errors='replace')
+        required = ('Native Vulkan normal login initialized', 'Initializing Login Screen',
+                    'plugin version string: CEF plugin', 'Native media pixels: login_html',
+                    'Native Vulkan normal login shut down',
+                    'Machine Vulkan adapter: ' + expected_device['name'])
+        passed = (code == 0 and all(text in log for text in required)
+                  and not any(text in log for text in ('Validation Error', 'VUID-', 'DILIGENT 2:',
+                                                       'Forbidden GL path', 'Injected failure')))
+    except Exception as error:
+        log += '\nRunner: ' + repr(error)
+    (directory / 'viewer.log').write_text(log, encoding='utf-8')
+    record = {'case': 'normal-login', 'passed': passed, 'exit_code': code,
+              'application_lifecycle': 'normal LLAppViewer::init/frame/cleanup',
+              'diagnostic_dispatch': False, 'browser_pixels_published': 'Native media pixels: login_html' in log,
+              'authentication_qualified': False,
+              'connected_session_qualified': False}
+    (directory / 'result.json').write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
+    return record
+
+
 def skin_cases(stage):
     """Qualify every packaged skin/theme; missing catalog assets cannot fall back unnoticed."""
     def mapping(node):
@@ -270,12 +305,16 @@ def main():
             results['tests'].append(dict(case=case, returncode=code, passed=passed, presentation=record,
                                          loaded_library_sha256=mapped))
             print(('PASS' if passed else 'FAIL') + ': viewer ' + case)
+        normal = run_normal_login(executable, stage, env, evidence, expected_device)
     results['presentation_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] not in (*ui_cases, *STARTUP_CASES))
     results['ui_substrate_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in ui_cases)
     results['skin_fixture_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in skins)
+    results['tests'].append(normal)
+    results['normal_login_startup_qualified'] = normal['passed']
+    print(('PASS' if normal['passed'] else 'FAIL') + ': viewer normal-login')
     results['startup_window_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in STARTUP_CASES)
     (evidence / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
-    return 0 if results['presentation_qualified'] and results['ui_substrate_qualified'] and results['startup_window_qualified'] else 1
+    return 0 if results['presentation_qualified'] and results['ui_substrate_qualified'] and results['startup_window_qualified'] and results['normal_login_startup_qualified'] else 1
 
 
 if __name__ == '__main__':

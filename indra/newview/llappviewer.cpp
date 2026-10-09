@@ -1051,6 +1051,13 @@ bool LLAppViewer::init()
     LL_INFOS("InitInfo") << "LLCore::Http initialized." << LL_ENDL ;
 
     LLMachineID::init();
+#if VS_NATIVE_VULKAN
+    if (gSavedSettings.getString("RenderBackend") == "Vulkan")
+    {
+        mNativeVulkanLogin = true;
+        return initNativeVulkanLogin();
+    }
+#endif
 
     if (gSavedSettings.getBOOL("QAModeMetrics"))
     {
@@ -1562,11 +1569,143 @@ void LLAppViewer::initMaxHeapSize()
 // externally visible timers
 LLTrace::BlockTimerStatHandle FTM_FRAME("Frame");
 
+// Native login uses the same configuration, controllers and authentication state
+// machine as OpenGL. Only rendering and the not-yet-created world owners differ.
+bool LLAppViewer::initNativeVulkanLogin()
+{
+    gGLActive = false;
+    LLImage::initClass(gSavedSettings.getBOOL("TextureNewByteRange"), gSavedSettings.getS32("TextureReverseByteRange"));
+    LLLFSThread::initClass(true);
+    initGeneralThread();
+    gDirUtilp->setCacheDir(gSavedSettings.getString("CacheLocation"));
+    gDirUtilp->setSoundCacheDir(gSavedSettings.getString("FSSoundCacheLocation"));
+    const std::string cache_dir = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, gSavedSettings.getString("DiskCacheDirName"));
+    LLFile::mkdir(cache_dir);
+    LLDiskCache::initParamSingleton(cache_dir, uintmax_t(gSavedSettings.getU32("FSDiskCacheSize")) * 1024ULL * 1024ULL,
+                                   gSavedSettings.getBOOL("EnableDiskCacheDebugInfo"),
+                                   gSavedSettings.getF32("FSDiskCacheHighWaterPercent"), gSavedSettings.getF32("FSDiskCacheLowWaterPercent"));
+    LLFilePickerThread::initClass();
+    LLDirPickerThread::initClass();
+    LLViewerEventRecorder::createInstance();
+    settings_to_globals();
+    mSerialNumber = generateSerialNumber();
+    initSLURLHandler();
+    if (!initWindow()) return false;
+    LLKeyboard::setStringTranslatorFunc(LLTrans::getKeyboardString);
+    LLUrlAction::setOpenURLCallback(boost::bind(&LLWeb::loadURL, _1, LLStringUtil::null, LLStringUtil::null));
+    LLUrlAction::setOpenURLInternalCallback(boost::bind(&LLWeb::loadURLInternal, _1, LLStringUtil::null, LLStringUtil::null, false));
+    LLUrlAction::setOpenURLExternalCallback(boost::bind(&LLWeb::loadURLExternal, _1, true, LLStringUtil::null));
+    LLUrlAction::setExecuteSLURLCallback(&LLURLDispatcher::dispatchFromTextEditor);
+    LLTranslationBridge::ptr_t trans = std::make_shared<LLUITranslationBridge>();
+    LLWearableType::initParamSingleton(trans);
+    LLSettingsType::initParamSingleton(trans);
+#if LL_LINUX
+    LLMIMETypes::parseMIMETypes("mime_types_linux.xml");
+#else
+    LLMIMETypes::parseMIMETypes("mime_types.xml");
+#endif
+    try { initializeSecHandler(); }
+    catch (LLProtectedDataException& ex)
+    {
+        LL_WARNS() << "Error initializing SecHandlers: " << ex.what() << LL_ENDL;
+        LLNotificationsUtil::add("CorruptedProtectedDataStore");
+    }
+    LLCoprocedureManager::getInstance()->setPropertyMethods(
+        std::bind(&LLControlGroup::getU32, std::ref(gSavedSettings), std::placeholders::_1),
+        std::bind(&LLControlGroup::declareU32, std::ref(gSavedSettings), std::placeholders::_1, std::placeholders::_2,
+                  std::placeholders::_3, LLControlVariable::PERSIST_ALWAYS));
+    gServicePump = new LLPumpIO(gAPRPoolp);
+    LLVoiceChannel::initClass();
+    LLVoiceClient::initParamSingleton(gServicePump);
+    LLAgentLanguage::init();
+    gSavedSettings.setString("LastRunVersion", LLVersionInfo::instance().getChannelAndVersion());
+    mNumSessions = gSavedSettings.getS32("NumSessions") + 1;
+    gSavedSettings.setS32("NumSessions", mNumSessions);
+    LL_INFOS("AppInit") << "Native Vulkan normal login initialized" << LL_ENDL;
+    return true;
+}
+
+bool LLAppViewer::frameNativeVulkanLogin()
+{
+    ++gFrameCount;
+    gFrameTime = totalTime();
+    gFrameTimeSeconds = LLFrameTimer::getElapsedSeconds();
+    LLFrameTimer::updateFrameTime();
+    LLFrameTimer::updateFrameCount();
+    LLEventTimer::updateClass();
+    LLSmoothInterpolation::updateInterpolants();
+    LLNotificationsUI::LLToast::updateClass();
+    LLFilePickerThread::clearDead();
+    LLDirPickerThread::clearDead();
+    gViewerWindow->getWindow()->processMiscNativeEvents();
+    gViewerWindow->getWindow()->gatherInput();
+    LLEventPumps::instance().obtain("mainloop").post(LLSD());
+    llcoro::suspend();
+    LLCoros::instance().rethrow();
+    gMainloopWork.runFor(std::chrono::milliseconds(2));
+    LLLFSThread::updateClass(0);
+    if (gServicePump) { gServicePump->pump(); gServicePump->callback(); }
+    if (!LLApp::isExiting())
+    {
+        idle_startup();
+        gViewerWindow->drawNativeUI();
+    }
+    const F32 quit_after = gSavedSettings.getF32("QuitAfterSeconds");
+    if (quit_after > 0.f && gRenderStartTime.getElapsedTimeF32() > quit_after) forceQuit();
+    return LLApp::isExiting();
+}
+
+bool LLAppViewer::cleanupNativeVulkanLogin()
+{
+    if (LLLoginInstance::instanceExists()) LLLoginInstance::getInstance()->disconnect();
+    if (LLVoiceClient::instanceExists()) LLVoiceClient::getInstance()->terminate();
+    if (gViewerWindow)
+    {
+        gViewerWindow->shutdownViews();
+        gViewerWindow->shutdownGL();
+        delete gViewerWindow;
+        gViewerWindow = nullptr;
+    }
+    if (gAudiop) { gAudiop->shutdown(); delete gAudiop; gAudiop = nullptr; }
+    LLViewerMedia::deleteSingleton();
+    LLPluginProcessParent::shutdown();
+    LLVoiceClient::deleteSingleton();
+    delete gAssetStorage;
+    gAssetStorage = nullptr;
+    cleanup_xfer_manager();
+    end_messaging_system();
+    clearSecHandler();
+    if (mSaveSettingsOnExit)
+    {
+        gSavedSettings.saveToFile(gSavedSettings.getString("ClientSettingsFile"), true);
+        gWarningSettings.saveToFile(gDirUtilp->getExpandedFilename(LL_PATH_USER_SETTINGS, getSettingsFilename("User", "Warnings")), true);
+    }
+    delete gServicePump;
+    gServicePump = nullptr;
+    if (mGeneralThreadPool)
+    {
+        mGeneralThreadPool->close();
+        delete mGeneralThreadPool;
+        mGeneralThreadPool = nullptr;
+    }
+    mAppCoreHttp.cleanup();
+    LLLFSThread::cleanupClass();
+    LLImage::cleanupClass();
+    GrowlManager::destroyManager();
+    removeMarkerFiles();
+    LLViewerEventRecorder::deleteSingleton();
+    LLCore::LLHttp::cleanup();
+    LLSingletonBase::deleteAll();
+    LL_INFOS("AppInit") << "Native Vulkan normal login shut down" << LL_ENDL;
+    return true;
+}
+
 bool LLAppViewer::frame()
 {
 #if VS_VULKAN_DIAGNOSTICS
     if (mVulkanDiagnostic) return mVulkanDiagnostic->frame();
 #endif
+    if (mNativeVulkanLogin) return frameNativeVulkanLogin();
     bool ret = false;
 
     if (gSimulateMemLeak)
@@ -2043,6 +2182,7 @@ void LLAppViewer::flushLFSIO()
 
 bool LLAppViewer::cleanup()
 {
+    if (mNativeVulkanLogin) return cleanupNativeVulkanLogin();
 #if VS_VULKAN_DIAGNOSTICS
     if (mVulkanDiagnostic)
     {

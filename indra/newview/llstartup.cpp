@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsvulkancontext.h"
+#endif
 
 #include "llappviewer.h"
 #include "llstartup.h"
@@ -365,6 +368,11 @@ void callback_cache_name(const LLUUID& id, const std::string& full_name, bool is
 
 void do_startup_frame()
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        gViewerWindow->drawNativeUI();
+        return;
+    }
     // Until after STATE_AGENT_SEND we don't get very many UDP packets to poll the socket,
     // and after STATE_PRECACHE the LLAppViewer::idleNetwork() will do UDP processing,
     // so we only bother to process between those two states.
@@ -755,7 +763,7 @@ bool idle_startup()
     }
 
     //note: Removing this line will cause incorrect button size in the login screen. -- bao.
-    gTextureList.updateImages(0.01f) ;
+    if (!gViewerWindow->isNativeVulkan()) gTextureList.updateImages(0.01f);
 
     if ( STATE_FIRST == LLStartUp::getStartupState() )
     {
@@ -783,9 +791,14 @@ bool idle_startup()
         // Initialize stuff that doesn't need data from simulators
         //
         std::string lastGPU = gSavedSettings.getString("LastGPUString");
-        std::string thisGPU = LLFeatureManager::getInstance()->getGPUString();
+        std::string thisGPU;
+#if VS_NATIVE_VULKAN
+        if (gViewerWindow->isNativeVulkan()) thisGPU = gViewerWindow->nativeContext()->adapter();
+        else
+#endif
+            thisGPU = LLFeatureManager::getInstance()->getGPUString();
 
-        GrowlManager::initiateManager(); // <FS> Growl support
+        if (!gViewerWindow->isNativeVulkan()) GrowlManager::initiateManager(); // <FS> Growl support
 
         // <FS:Ansariel> Store current font and skin for system info (FIRE-6806)
         gSavedSettings.setString("FSInternalFontSettingsFile", gSavedSettings.getString("FSFontSettingsFile"));
@@ -802,16 +815,16 @@ bool idle_startup()
         if (gToolBarView)
             gToolBarView->setHideBottomOnEmpty(FSCommon::isLegacySkin());
 
-        if (LLFeatureManager::getInstance()->isSafe())
+        if (!gViewerWindow->isNativeVulkan() && LLFeatureManager::getInstance()->isSafe())
         {
             LLNotificationsUtil::add("DisplaySetToSafe");
         }
-        else if ((gSavedSettings.getS32("LastFeatureVersion") < LLFeatureManager::getInstance()->getVersion()) &&
+        else if (!gViewerWindow->isNativeVulkan() && (gSavedSettings.getS32("LastFeatureVersion") < LLFeatureManager::getInstance()->getVersion()) &&
                  (gSavedSettings.getS32("LastFeatureVersion") != 0))
         {
             LLNotificationsUtil::add("DisplaySetToRecommendedFeatureChange");
         }
-        else if (!lastGPU.empty() && LLFeatureManager::getInstance()->graphicsIdentityChanged())
+        else if (!gViewerWindow->isNativeVulkan() && !lastGPU.empty() && LLFeatureManager::getInstance()->graphicsIdentityChanged())
         {
             LLSD subs;
             subs["LAST_GPU"] = lastGPU;
@@ -831,9 +844,9 @@ bool idle_startup()
         //-------------------------------------------------
         LLStartUp::startLLProxy();
 
-        gSavedSettings.setS32("LastFeatureVersion", LLFeatureManager::getInstance()->getVersion());
+        if (!gViewerWindow->isNativeVulkan()) gSavedSettings.setS32("LastFeatureVersion", LLFeatureManager::getInstance()->getVersion());
         gSavedSettings.setString("LastGPUString", thisGPU);
-        gSavedSettings.setString("LastGraphicsRendererFamily", "OpenGL");
+        gSavedSettings.setString("LastGraphicsRendererFamily", gViewerWindow->isNativeVulkan() ? "Vulkan" : "OpenGL");
 
         std::string xml_file = LLUI::locateSkin("xui_version.xml");
         LLXMLNodePtr root;
@@ -1255,7 +1268,7 @@ bool idle_startup()
         LLStringOps::setupDatetimeInfo(false);
 
         // <FS:Beq> [FIRE-22130] for LOD Factors > 4 reset to the detected dafault
-        if (gSavedSettings.getF32("RenderVolumeLODFactor") > 4.f)
+        if (!gViewerWindow->isNativeVulkan() && gSavedSettings.getF32("RenderVolumeLODFactor") > 4.f)
         {
             bool feature_table_success = false;
             LLFeatureManager& feature_manager = LLFeatureManager::instance();
@@ -1594,7 +1607,7 @@ bool idle_startup()
         LLAppViewer::instance()->loadSettingsFromDirectory("Account");
 
         // <FS:Ansariel> Restore bottom toolbar layout now he have the user settings
-        LLLayoutStack* chat_bar_stack = gToolBarView->findChild<LLLayoutStack>("chat_bar_stack");
+        LLLayoutStack* chat_bar_stack = gToolBarView ? gToolBarView->findChild<LLLayoutStack>("chat_bar_stack") : nullptr;
         if (chat_bar_stack)
         {
             chat_bar_stack->refreshFromSettings();
@@ -2049,6 +2062,18 @@ bool idle_startup()
     //---------------------------------------------------------------------
     if (STATE_WORLD_INIT == LLStartUp::getStartupState())
     {
+        if (gViewerWindow->isNativeVulkan())
+        {
+            // Authentication is shared; entering a region is the next, separate
+            // connected-session milestone. Return through the real retry UI
+            // rather than spinning forever or constructing the GL world.
+            LLLoginInstance::getInstance()->disconnect();
+            LLSD args;
+            args["ERROR_MESSAGE"] = LLTrans::getString("NativeVulkanRegionUnavailable");
+            LLStartUp::setStartupState(STATE_LOGIN_CONFIRM_NOTIFICATON);
+            LLNotificationsUtil::add("ErrorMessage", args, LLSD(), login_alert_done);
+            return false;
+        }
         set_startup_status(0.30f, LLTrans::getString("LoginInitializingWorld"), gAgent.mMOTD);
         do_startup_frame();
         // We should have an agent id by this point.
@@ -4233,12 +4258,15 @@ void LLStartUp::postStartupState()
 
 void reset_login()
 {
-    gAgentWearables.cleanup();
-    gAgentCamera.cleanup();
-    gAgent.cleanup();
-    gSky.cleanup(); // mVOSkyp is an inworld object.
-    LLWorld::getInstance()->resetClass();
-    LLAppearanceMgr::getInstance()->cleanup();
+    if (!gViewerWindow || !gViewerWindow->isNativeVulkan())
+    {
+        gAgentWearables.cleanup();
+        gAgentCamera.cleanup();
+        gAgent.cleanup();
+        gSky.cleanup();
+        LLWorld::getInstance()->resetClass();
+        LLAppearanceMgr::getInstance()->cleanup();
+    }
 
     if ( gViewerWindow )
     {   // Hide menus and normal buttons

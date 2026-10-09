@@ -797,6 +797,7 @@ class LLMenuBarGL : public LLMenuGL
 public:
     struct Params : public LLInitParam::Block<Params, LLMenuGL::Params>
     {};
+    static bool isNativeLoginItemType(const std::type_info& type);
     LLMenuBarGL( const Params& p );
     virtual ~LLMenuBarGL();
 

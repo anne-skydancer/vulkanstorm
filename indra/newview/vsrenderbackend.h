@@ -10,8 +10,10 @@ inline std::string normalize(const std::string& value)
 }
 inline bool canStartSession(const std::string& value)
 {
-    // Diligent/diagnostic availability does not establish a usable UI/chat
-    // session. Open this admission only with the integrated native lifecycle.
+#if VS_NATIVE_VULKAN
+    return true;
+#else
     return normalize(value) != "Vulkan";
+#endif
 }
 }

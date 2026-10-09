@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include <stdexcept>
 
 #ifdef INCLUDE_VLD
 #define VLD_FORCE_ENABLE 1
@@ -578,6 +579,21 @@ void init_menus()
     menu_params.visible = false;
     gPopupMenuView = LLUICtrlFactory::create<LLMenuGL>(menu_params);
     gMenuHolder->addChild( gPopupMenuView );
+
+    if (gViewerWindow->isNativeVulkan())
+    {
+        const widget_registry_t& registry = LLViewerMenuHolderGL::child_registry_t::instance();
+        gEditMenu = LLUICtrlFactory::createFromFile<LLMenuGL>("menu_edit.xml", gMenuHolder, registry);
+        gLoginMenuBarView = LLUICtrlFactory::createFromFile<LLMenuBarGL>("menu_login.xml", gMenuHolder, registry);
+        if (!gEditMenu || !gLoginMenuBarView) throw std::runtime_error("Required native login menu XUI is missing");
+        LLView* holder = gViewerWindow->getRootView()->getChildView("menu_bar_holder");
+        gLoginMenuBarView->arrangeAndClear();
+        LLRect rect = gLoginMenuBarView->getRect();
+        rect.setLeftTopAndSize(0, holder->getRect().getHeight(), rect.getWidth(), rect.getHeight());
+        gLoginMenuBarView->setRect(rect);
+        holder->addChild(gLoginMenuBarView);
+        return;
+    }
 
     ///
     /// Context menus

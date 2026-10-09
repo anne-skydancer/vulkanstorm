@@ -3,6 +3,8 @@
 #include "vsstartupui.h"
 #include "vsuiadmission.h"
 #include "llrootview.h"
+#include "llviewermenu.h"
+#include "llmenugl.h"
 #include "llpopupview.h"
 #include "llpanel.h"
 #include "llbutton.h"
@@ -36,7 +38,11 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
     return std::make_unique<VSUIAdmission>(
         [](const std::type_info& t)
         {
-            return t == typeid(LLView) || t == typeid(LLPopupView) || t == typeid(LLRootView) || t == typeid(LLUICtrl) || t == typeid(LLPanel) ||
+            return LLMenuBarGL::isNativeLoginItemType(t) || t == typeid(LLViewerMenuHolderGL) || t == typeid(LLMenuHolderGL) || t == typeid(LLMenuGL) ||
+                   t == typeid(LLMenuBarGL) || t == typeid(LLMenuItemGL) || t == typeid(LLMenuItemCallGL) ||
+                   t == typeid(LLMenuItemCheckGL) || t == typeid(LLMenuItemSeparatorGL) ||
+                   t == typeid(LLMenuItemBranchGL) || t == typeid(LLMenuItemTearOffGL) ||
+                   t == typeid(LLView) || t == typeid(LLPopupView) || t == typeid(LLRootView) || t == typeid(LLUICtrl) || t == typeid(LLPanel) ||
                    t == typeid(LLButton) || t == typeid(LLCheckBoxCtrl) || t == typeid(LLComboBox) || t == typeid(LLIconCtrl) ||
                    t == typeid(LLLineEditor) || t == typeid(LLTextEditor) || t == typeid(LLViewerTextEditor) || t == typeid(LLTextBox) || t == typeid(LLLayoutStack) ||
                    t == typeid(LLLayoutPanel) || t == typeid(LLProgressBar) || t == typeid(LLScrollbar) || t == typeid(LLScrollContainer) ||

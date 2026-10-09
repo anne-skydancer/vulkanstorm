@@ -107,6 +107,13 @@ public:
     virtual bool init();            // Override to do application initialization
     virtual bool cleanup();         // Override to do application cleanup
     virtual bool frame(); // Override for application body logic
+    bool isNativeVulkanLogin() const { return mNativeVulkanLogin; }
+private:
+    bool mNativeVulkanLogin = false;
+    bool initNativeVulkanLogin();
+    bool frameNativeVulkanLogin();
+    bool cleanupNativeVulkanLogin();
+public:
     bool isVulkanDiagnostic() const;
     int vulkanDiagnosticExitCode() const;
 #if VS_VULKAN_DIAGNOSTICS
