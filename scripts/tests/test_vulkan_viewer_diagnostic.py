@@ -24,6 +24,90 @@ def record():
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_sdl_native_window_initializes_ime_policy_and_routes_composition(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/llwindow/llwindowsdl2.cpp').read_text(encoding='utf-8')
+        creation = source[source.index('bool LLWindowSDL::createNativeWindow('):
+                          source.index('static SDL_Surface *Load_BMP_Resource')]
+        focus = source[source.index('void LLWindowSDL::allowLanguageTextInput('):
+                       source.index('#endif // LL_SDL', source.index('void LLWindowSDL::allowLanguageTextInput('))]
+        editing = source[source.index('            case SDL_TEXTEDITING:'):
+                         source.index('            case SDL_TEXTINPUT:')]
+        fixture = r'''
+#include <algorithm>
+#include <cassert>
+#include <deque>
+#include <iostream>
+#include <string>
+#include <vector>
+using S32=int;using LLWString=std::wstring;
+template<class T>T llclamp(T v,T lo,T hi){return std::clamp(v,lo,hi);}
+LLWString utf8str_to_wstring(const char* text){return LLWString(text,text+std::string(text).size());}
+#define LL_X11 1
+#define LL_WARNS(x) std::cerr
+#define LL_ENDL std::endl
+constexpr auto SDL_HINT_IME_INTERNAL_EDITING="ime";
+constexpr auto SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR="bypass";
+constexpr int SDL_INIT_VIDEO=1,SDL_WINDOW_RESIZABLE=2,SDL_SYSWM_X11=3,SDL_TEXTEDITING=4;
+struct Settings{bool enabled=false;bool getBOOL(const char*)const{return enabled;}}gSavedSettings;
+std::string ime_hint;int starts=0,stops=0;
+void SDL_SetHint(const char* name,const char* value){if(std::string(name)=="ime")ime_hint=value;}
+int SDL_InitSubSystem(int){assert(ime_hint==(gSavedSettings.enabled?"1":"0"));return 0;}
+using SDL_Window=int;
+SDL_Window* SDL_CreateWindow(const char*,int,int,int,int,int){static int window;return &window;}
+void SDL_DestroyWindow(SDL_Window*){}
+void SDL_StartTextInput(){++starts;}
+void SDL_StopTextInput(){++stops;}
+struct SDL_SysWMinfo{int version=0,subsystem=0;struct{struct{void* display=nullptr;unsigned long window=0;}x11;}info;};
+#define SDL_VERSION(v) (*(v)=1)
+bool SDL_GetWindowWMInfo(SDL_Window*,SDL_SysWMinfo* info){info->subsystem=SDL_SYSWM_X11;info->info.x11={reinterpret_cast<void*>(1),42};return true;}
+struct LLPreeditor{
+    LLWString text;int resets=0,updates=0,caret=0;
+    void resetPreedit(){++resets;text.clear();}
+    void updatePreedit(const LLWString& value,const std::vector<S32>& lengths,const std::deque<bool>& standouts,S32 position){
+        assert(lengths==std::vector<S32>{S32(value.size())} && standouts==std::deque<bool>{true});
+        ++updates;text=value;caret=position;
+    }
+};
+struct Event{int type=SDL_TEXTEDITING;struct{char text[32]="abc";int start=2;}edit;};
+struct LLWindowSDL{
+    bool mUseGL=false,mIMEEnabled=false;LLPreeditor* mPreeditor=nullptr;
+    std::string mWindowTitle="native";int mSDLFlags=0;SDL_Window* mWindow=nullptr;
+    void* mSDL_Display=nullptr;unsigned long mSDL_XWindowID=0;
+    bool createNativeWindow(S32,S32,S32,S32);
+    void allowLanguageTextInput(LLPreeditor*,bool);
+    void gatherEditing(Event event){switch(event.type){
+''' + editing + r'''
+    default:break;}}
+};
+''' + creation + focus + r'''
+int main(){
+    gSavedSettings.enabled=true;LLWindowSDL window;
+    assert(window.createNativeWindow(0,0,640,480));
+    LLPreeditor editor;window.allowLanguageTextInput(&editor,true);window.gatherEditing({});
+    assert(editor.updates==1 && editor.text==L"abc" && editor.caret==2);
+    window.allowLanguageTextInput(&editor,false);window.gatherEditing({});
+    assert(editor.updates==1 && editor.text.empty() && stops==1);
+    window.allowLanguageTextInput(&editor,true);window.mUseGL=true;window.gatherEditing({});
+    assert(editor.updates==1); // Existing GL composition behavior is unchanged.
+    gSavedSettings.enabled=false;LLWindowSDL disabled;
+    assert(disabled.createNativeWindow(0,0,640,480));
+    disabled.allowLanguageTextInput(&editor,true);disabled.gatherEditing({});
+    assert(editor.updates==1 && disabled.mPreeditor==nullptr);
+}
+'''
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'native_sdl_ime.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            executable = path.with_suffix('.exe')
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(executable)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(executable)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_startup_acceptance_requires_viewer_ownership_readbacks_and_decisive_failure(self):
         item=dict(schema=1,mode='viewer-native-startup',shutdown_complete=True,
                   validation_errors=0,login_controls_verified=True,progress_owner_verified=True,

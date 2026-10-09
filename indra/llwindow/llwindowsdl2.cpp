@@ -459,6 +459,9 @@ LLWindowSDL::LLWindowSDL(LLWindowCallbacks* callbacks,
 
 bool LLWindowSDL::createNativeWindow(S32 x, S32 y, S32 width, S32 height)
 {
+    // IME policy belongs to the SDL window, independently of GL context setup.
+    mIMEEnabled = gSavedSettings.getBOOL("SDL2IMEEnabled");
+    SDL_SetHint(SDL_HINT_IME_INTERNAL_EDITING, mIMEEnabled ? "1" : "0");
     SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) return false;
     mSDLFlags = SDL_WINDOW_RESIZABLE;
