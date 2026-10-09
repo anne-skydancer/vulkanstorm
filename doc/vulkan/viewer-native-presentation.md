@@ -1,12 +1,13 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-Source: `be089272e47ca7febafeb7c299642e24a6bb4c3f` on `vkstorm-vulkan`.
+Source: `e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c` on `vkstorm-vulkan`.
 Status: implemented development diagnostic. CI run
 [37742422223](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37742422223)
 passed all nine original cases on Windows SwiftShader, Linux SwiftShader and
-Linux Lavapipe. The new [V3 UI substrate slice](viewer-ui-substrate.md) has
-additional viewer cases; its cross-platform qualification is pending.
-No UI/chat or world rendering acceptance is claimed.
+Linux Lavapipe. The expanded [V3 completion record](viewer-ui-substrate.md#v3-completion-9-october-2026)
+records normal viewer integration and its 68-case interface/resource matrix.
+Local Windows qualification has passed; expanded Linux qualification is pending.
+Connected UI/chat and world rendering remain subsequent stages.
 
 The first CI run passed the Windows build and native viewer diagnostic. Its
 Linux Lavapipe viewer build failed because the diagnostic used unqualified SDL

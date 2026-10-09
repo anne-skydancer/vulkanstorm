@@ -1,10 +1,14 @@
 # V3: viewer UI resource and packet substrate
 
-Source: `be089272e47ca7febafeb7c299642e24a6bb4c3f` on `vkstorm-vulkan`.
-Status: resource and producer integration underway; full V3 acceptance remains open. This code
-runs in the staged viewer's native diagnostic lifecycle. An initial closed widget set now constructs corrected mini-progress XUI and
-plain editors, with native window input/focus, Tab traversal, scrolling and the
-preeditor contract. Full required-panel admission and connected chat remain open.
+Source: `e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c` on `vkstorm-vulkan`.
+Status: V3 implementation complete; expanded platform qualification in progress.
+The ordinary viewer owns native login, menus, progress, required dialogs and
+skin-aware plain nearby-chat controls. V4 connected transport/session admission
+and subsequent world rendering remain separate roadmap stages.
+
+The dated implementation sections below preserve historical evidence; the
+[V3 completion record](#v3-completion-9-october-2026) supersedes their open-item
+statements.
 
 ## Implemented ownership and drawing
 
@@ -61,24 +65,63 @@ records `ui_substrate_qualified` separately from `ui_chat_qualified=false` and
 `world_qualified=false`. Scale changes are explicit test inputs; this does not
 qualify OS DPI events, keyboard focus or IME.
 
-## Remaining V3 work
+## V3 completion, 9 October 2026
 
-1. Extend the implemented local skin provider, rectangle/border/transform/clip
-   and alpha/additive adapters to every required control path. Initial widget
-   traversal passes; additional primitives and interaction states remain open.
-2. Define and own the required widget/panel/floater admission sets in the native
-   lifecycle. An initial fixture set is admitted; the remaining required
-   panels and their internal widget/callback dependencies still need admission.
-3. Admit the login, status/progress, nearby transcript/input and required
-   alerts/agreements through the native lifecycle; remove their reachable GL
-   resource publication paths.
-4. Extend the qualified focus, Tab, keyboard editing and scrolling checks to
-   the full admitted interface. Qualify platform DPI changes and OS IME where
-   runners support them; the direct preeditor contract does not qualify OS IME.
+The production viewer now supplies the entire V3 interface/resource scope:
 
-Full G-RESOURCE/G-UI closure and V3 exit remain open until these integrations
-and their viewer-level checks pass. Connected transport/login/chat acceptance
-is the subsequent V4 checkpoint.
+- Ordinary native application login retains the existing authentication,
+  credentials, browser pixels, retry and required-dialog controllers. Login
+  and edit menus run under the closed native widget admission policy.
+- `VSPlainChat` is a viewer-owned panel using the selected skin's text-editor
+  and line-editor defaults. It preserves Unicode input and history across DPI
+  recreation, supports scrolling and preediting, bounds retained history and
+  clears submitted text only after an attached sender accepts it. The V4
+  connected-session owner must attach transport and show the panel.
+- Required modal alerts, critical messages, TOS consent/cancellation and both
+  MFA forms use their real viewer controllers and response callbacks. Native
+  agreement dialogs adapt to small viewports so their action controls remain
+  reachable. Corrected XUI and skin overlays are preserved.
+- Optional restored floaters and direct browser factories are denied before
+  construction. Explicit actions show translated unsupported status; blocked
+  browser popup requests are closed through the existing media controller.
+- Native system DPI is combined with the saved UI scale. Win32 DPI messages
+  preserve the supplied scale across resize; SDL display changes refresh it.
+  SDL composition/commit events use the production editor's preeditor. Normal
+  frames maintain focus and retire deferred UI owners before input handling.
+- Native diagonal strokes, filled/outlined triangles and editor spellcheck
+  marks emit packets. Fractional-DPI scissor conversion preserves physical
+  clipping edges. The independent CPU coverage oracle uses the device's
+  advertised `subPixelPrecisionBits`; interpolation and strict color checks
+  remain separate from coverage rounding.
+- A general fence deliberately blocks GPU completion while producer references
+  are discarded. Resource generations must remain alive through retirement
+  attempts, then expire after completion. Teardown waits for outstanding work.
+
+The dedicated workflow requires 68 viewer cases. In addition to WSI, resource,
+input and fault-injection cases, the full required interface/action sequence
+runs under all 24 packaged skin/theme/language selections. Each positive startup
+case produces 18 actual/expected pixel pairs over 17 frames, including an extra
+scrolled transcript readback, required dialogs, resize/DPI and restoration.
+The runner checks selection identity, artifacts, loaded library hashes,
+validation diagnostics and ordered cleanup. Its ordinary 30-second login
+launch has diagnostic dispatch disabled and requires actual CEF pixel
+publication and clean shutdown.
+
+Local Windows SwiftShader qualification passed all 68 cases from the complete
+`RelWithDebInfo` stage, with zero validation errors and zero unexplained GL
+trap entries. Evidence: `.tmp/v3-completion-final/results.json` and its logs,
+selection records and readbacks. Expanded Linux qualification is pending the
+dedicated CI; source implementation does not establish an untested platform.
+
+The prior ordinary-login CI
+[37925511896](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37925511896)
+passed all 44 earlier cases on Windows SwiftShader, Linux SwiftShader and Linux
+Lavapipe, including actual browser pixels and clean normal shutdown. Real-server authentication and connected nearby-chat delivery
+belong to V4; world parity remains later work. Physical multi-monitor DPI and
+an installed OS IME service are unavailable in these software runners. The
+native event adapters and direct preeditor are exercised without claiming
+those unavailable services. Live skin switching and additional optional
+controls are outside this V3 acceptance matrix.
 
 ## Expanded resource and producer integration
 
@@ -329,7 +372,7 @@ rendering remain unqualified.
 
 ## Native viewer-window and required startup owners, 9 October 2026
 
-Source: `be089272e47ca7febafeb7c299642e24a6bb4c3f` on `vkstorm-vulkan`.
+Source: `e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c` on `vkstorm-vulkan`.
 `LLViewerWindow` now has a native constructor and owns `VSVulkanContext`, the
 skin-aware UI owner, native root, login holder, floaters, popup owner, progress
 views and standard alert channels. Native frame, reshape, mouse, keyboard,

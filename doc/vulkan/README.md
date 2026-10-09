@@ -36,7 +36,7 @@ GL/Zink is a **GL backend**, created for AMD GPUs affected by rendering
 regressions caused by bugs in the AMD OpenGL ICD. Its use of Vulkan for driver
 translation does not make it a native Vulkan viewer backend or a Vulkan fallback.
 
-Current insertion-catalog baseline: **`be089272e47ca7febafeb7c299642e24a6bb4c3f`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; its original nine cases passed all three CI platforms in run 37742422223. The
+Current insertion-catalog baseline: **`e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c`**, on **`vkstorm-vulkan`**. Target: **Windows and Linux**. DiligentCore is the selected graphics abstraction. The [current insertion catalog](diligent-insertion-catalog.md) defines implementation locations and acceptance accounting. The [native viewer diagnostic](viewer-native-presentation.md) implements the first window/clear/presentation checkpoint; its original nine cases passed all three CI platforms in run 37742422223. The
 [V3 UI substrate](viewer-ui-substrate.md) now implements native packets and CPU
 font/GPU resource publication, corrected mini-progress XUI, native text editing
 and window focus/input delivery. A shared native UI owner preserves selected
@@ -67,7 +67,7 @@ native viewer rendering. The old 73-record assessment does not establish all
 insertion points. Acceptance requires the [insertion catalog](diligent-insertion-catalog.md),
 its [records](diligent-insertion-records.json) and [site ledger](diligent-insertion-sites.csv)
 to reconcile the current tracked source and transitive rendering responsibilities.
-The current ledger reconciles **28,496 source witnesses in 1,751 files**, all
+The current ledger reconciles **28,516 source witnesses in 1,752 files**, all
 **225 shader modules** and **690 historical registration rows**, with no
 unmapped or unreviewed entries. These are source-accounting counts, not counts
 of edits or features. Source-reviewed roots, callback obligations, interface
@@ -94,11 +94,11 @@ remain blockers. Native rendering and runtime parity remain unqualified.
 
 ## Coverage and limits
 
-There are **73 listed contract/design records**: 27 core frame/draw records (F01–F10/D01–D17), 13 resource/platform/build records (R01–R09/P01–P03/B01), 22 scene/UI/auxiliary records (S01–S10/U01–U06/A01–A06), and 11 shader-family records (H01–H11). Across the full ledger, 71 records are active/conditional and two are dormant: D16 (empty old-sky pool) and H10 (disabled error-shader fallback). The core subset has 26 active/conditional records and one dormant record. All listed records have candidate designs or explicit no-output decisions for dormant records. These groups overlap semantically; 73 is **not** a count of independent features or exhaustively traced execution paths.
+There are **73 listed contract/design records**: 27 core frame/draw records (F01â€“F10/D01â€“D17), 13 resource/platform/build records (R01â€“R09/P01â€“P03/B01), 22 scene/UI/auxiliary records (S01â€“S10/U01â€“U06/A01â€“A06), and 11 shader-family records (H01â€“H11). Across the full ledger, 71 records are active/conditional and two are dormant: D16 (empty old-sky pool) and H10 (disabled error-shader fallback). The core subset has 26 active/conditional records and one dormant record. All listed records have candidate designs or explicit no-output decisions for dormant records. These groups overlap semantically; 73 is **not** a count of independent features or exhaustively traced execution paths.
 
 The lexical inventory contains **225 GLSL files**, **690 shader registration/variant rows**, **223 GL candidate source files**, and **13 draw-pool implementation files**. Parent scope cross-checks include 26 draw-pool `.cpp/.h`, 51 llrender, 42 llwindow and 233 llui source files. Counts establish inventory scope only. Critical source boundaries were traced, but all branches, all realized shader permutations, all callbacks and per-pixel arithmetic were not exhaustively proven.
 
-The historical reports record six architecture decisions (U-D1–U-D6). Library adoption and revision are now settled by the selected, pinned DiligentCore preparation. Depth formats, shader binding/vertex ABI, history/probe reset behavior, media/bake ownership and cancellation, and measurement-dependent optimizations still need implementation qualification. The historical source-gap lists describe the earlier audit; the current insertion catalog supersedes their insertion-location accounting. Locating every required seam does not qualify realized shader permutations, bake arithmetic, glTF compatibility, asset/cache failure behavior or an optional proprietary pathing implementation. Runtime parity, performance, memory budgets, driver portability and failure handling remain unqualified.
+The historical reports record six architecture decisions (U-D1â€“U-D6). Library adoption and revision are now settled by the selected, pinned DiligentCore preparation. Depth formats, shader binding/vertex ABI, history/probe reset behavior, media/bake ownership and cancellation, and measurement-dependent optimizations still need implementation qualification. The historical source-gap lists describe the earlier audit; the current insertion catalog supersedes their insertion-location accounting. Locating every required seam does not qualify realized shader permutations, bake arithmetic, glTF compatibility, asset/cache failure behavior or an optional proprietary pathing implementation. Runtime parity, performance, memory budgets, driver portability and failure handling remain unqualified.
 
 The 73-record catalog is an earlier partial responsibility-level assessment. It is **not accepted as a complete DiligentCore insertion catalog**. Every necessary insertion point must have a source-backed mapping or justified exclusion; unresolved in-scope paths and discovery blind spots block acceptance. Runtime qualification is a separate requirement.
 
