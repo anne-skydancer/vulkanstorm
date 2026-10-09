@@ -1,5 +1,5 @@
 {
-  "source_commit": "f80e6c725f72d7a9cd6b3d8657fecf0e6b087548",
+  "source_commit": "7d3d8b32f4d46b71d9248705bfde6e0b9a4901ec",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -843,6 +843,204 @@
   ],
   "reviewed_ranges": [
     {
+      "path": "indra/newview/vsviewerwindow.cpp",
+      "start": 55,
+      "end": 57,
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "V4 runtime validation review: ordinary startup consumes the one-shot RenderDebugGLSession setting into gDebugGLSession before native window creation. Native Diligent device creation now honors that active CPU session flag so the connected production path loads core/synchronization validation. Diagnostic-only window creation continues to honor the setting directly. No new graphics owner or scene producer; the staged replay verifies loaded validation-layer hashes."
+    },
+    {
+      "path": "indra/newview/vsnativesession.h",
+      "start": 77,
+      "end": 77,
+      "sha256": "b2206b5506ad71b7b75cb4731766d0f585deb0110624933da2df52f9048cba62",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 7,
+      "end": 7,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 39,
+      "end": 39,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 57,
+      "end": 57,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 63,
+      "end": 68,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 114,
+      "end": 114,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 217,
+      "end": 217,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 258,
+      "end": 265,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 294,
+      "end": 303,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 306,
+      "end": 306,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 441,
+      "end": 444,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 453,
+      "end": 454,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 458,
+      "end": 463,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 519,
+      "end": 527,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 531,
+      "end": 531,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 533,
+      "end": 533,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativesession.cpp",
+      "start": 550,
+      "end": 550,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 247,
+      "end": 255,
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 271,
+      "end": 272,
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 275,
+      "end": 297,
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 301,
+      "end": 303,
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "V4 final dispatch/lifecycle review: payload-free status messages now retain an empty map so wire crossing/disconnect reaches the native owner. CPU frozen and feature status retain baseline semantics. Connected transport expiry disconnects before late packets can revive the circuit. Reset retires code-less transport circuits and cache upstream; reliable callbacks defer session mutation until transport dispatch returns and reject old generations. Production viewer replay exercises actual wire crossing, pending reliable callback failure, retirement and partial reset. Locked ICD and validation-library loaded hashes are decisive. No scene producers are admitted; live server remains untested."
+    },
+    {
       "path": "indra/newview/vsplainchat.h",
       "start": 15,
       "end": 21,
@@ -882,7 +1080,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 195,
       "end": 196,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
@@ -891,16 +1089,16 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 213,
       "end": 214,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 247,
-      "end": 247,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "start": 256,
+      "end": 256,
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
@@ -909,7 +1107,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 19,
       "end": 21,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
@@ -918,7 +1116,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 33,
       "end": 33,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
@@ -927,7 +1125,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 86,
       "end": 86,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
@@ -936,7 +1134,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 113,
       "end": 120,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
@@ -945,7 +1143,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 130,
       "end": 130,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
@@ -954,7 +1152,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 133,
       "end": 133,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
@@ -963,25 +1161,25 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 152,
       "end": 165,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 252,
-      "end": 255,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "start": 261,
+      "end": 264,
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 257,
-      "end": 258,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "start": 266,
+      "end": 267,
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
@@ -1087,9 +1285,9 @@
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 159,
-      "end": 168,
-      "sha256": "2335aef28532155f58a893f4fc1f0bdf2c3fa639c5166bde9e5947f0608443c9",
+      "start": 161,
+      "end": 170,
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
       "record": "I08",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -1160,8 +1358,8 @@
     {
       "path": "indra/newview/vsnativesession.h",
       "start": 1,
-      "end": 83,
-      "sha256": "6bd652ddd1830a00288c5fb61b7a00173b5d977179625eebe1e5d178d1ed4437",
+      "end": 84,
+      "sha256": "b2206b5506ad71b7b75cb4731766d0f585deb0110624933da2df52f9048cba62",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -1169,8 +1367,8 @@
     {
       "path": "indra/newview/vsnativesession.cpp",
       "start": 1,
-      "end": 509,
-      "sha256": "09084879e76cb148ae95ddb19ff2c7841ad472618831539ef090c1045726a23f",
+      "end": 552,
+      "sha256": "adad6d799c946b83c6284533a669368462a9aa7f68fededc5a4d5d72f1d2c636",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -1187,8 +1385,8 @@
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 1,
-      "end": 290,
-      "sha256": "ee3b33b80846f0526ff9cf73b423aefd871f752f2d6a3ba0ff919f46248b0361",
+      "end": 325,
+      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
       "record": "I25",
       "disposition": "test-only",
       "reason": "V4 final input review: the existing native line editor retains bounded committed-input recall, restores the empty draft, and clears history when the session detaches. Real viewer key handlers verify Unicode recall and logout isolation in the connected-session replay. Native packets, plain transcript, protocol and generation ownership are unchanged; no scene producer is admitted. Software and live-server results remain separately recorded."
@@ -2100,7 +2298,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2109,7 +2307,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2118,7 +2316,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2127,7 +2325,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2136,7 +2334,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2145,7 +2343,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2154,7 +2352,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2163,7 +2361,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2172,7 +2370,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2181,7 +2379,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2190,7 +2388,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2199,7 +2397,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2208,7 +2406,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2217,7 +2415,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2226,7 +2424,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2235,7 +2433,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2244,7 +2442,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2253,7 +2451,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2262,7 +2460,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2298,7 +2496,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2307,7 +2505,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2316,7 +2514,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2325,7 +2523,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2334,7 +2532,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrender.cpp",
@@ -2343,7 +2541,7 @@
       "record": "I06",
       "disposition": "mapped",
       "sha256": "34deb3f60ab1eb7afb53c7afb9738cfc23102ce6cf7b33b6b0d32dfd2ba83174",
-      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021\u20132076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
+      "reason": "Reviewed receiver: LLRender::syncLightState954, syncMatrices1018 and diffuseColor2021–2076 declare shader as LLGLSLShader* from sCurBoundShaderPtr. This writes the reflected shader producer schema; lower through constant/resource bindings in I06 and retain surrounding light/matrix/query consumer, not arbitrary uniform method inference."
     },
     {
       "path": "indra/llrender/llrendersphere.cpp",
@@ -2370,7 +2568,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2379,7 +2577,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2388,7 +2586,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2397,7 +2595,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2406,7 +2604,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2415,7 +2613,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2424,7 +2622,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2433,7 +2631,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2442,7 +2640,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2451,7 +2649,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2460,7 +2658,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.cpp",
@@ -2469,7 +2667,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "0c7300244be3bb702a62d77539563474153c85619b7b51305401cc06079d06d9",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/fspanelface.h",
@@ -2478,7 +2676,7 @@
       "record": "I05",
       "disposition": "mapped",
       "sha256": "279d76825dc7c7a091b57706c015f9f67a4bf90153c32f0492cbd0a5d8fcdc35",
-      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932\u20135970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770\u20131792/4013\u20134035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
+      "reason": "FSPanelFace::LLSelectedTE::getImageFormat5932–5970 reads LLViewerTexture::getPrimaryFormat at5950; update/onSelectTexture1770–1792/4013–4035 map RGB/RGBA/ALPHA to material alpha UI. Replace public GL format identity with backend-independent image/channel metadata at I05 while preserving alpha decisions, callbacks and material semantics."
     },
     {
       "path": "indra/newview/llfloaterimagepreview.cpp",
@@ -6272,8 +6470,8 @@
     {
       "path": "indra/newview/vsviewerwindow.cpp",
       "start": 1,
-      "end": 240,
-      "sha256": "2335aef28532155f58a893f4fc1f0bdf2c3fa639c5166bde9e5947f0608443c9",
+      "end": 242,
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -6831,16 +7029,16 @@
       "path": "indra/newview/vsviewerwindow.cpp",
       "start": 10,
       "end": 11,
-      "sha256": "2335aef28532155f58a893f4fc1f0bdf2c3fa639c5166bde9e5947f0608443c9",
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 106,
-      "end": 118,
-      "sha256": "2335aef28532155f58a893f4fc1f0bdf2c3fa639c5166bde9e5947f0608443c9",
+      "start": 108,
+      "end": 120,
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -7344,7 +7542,7 @@
       "path": "indra/newview/vsviewerwindow.cpp",
       "start": 26,
       "end": 26,
-      "sha256": "2335aef28532155f58a893f4fc1f0bdf2c3fa639c5166bde9e5947f0608443c9",
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -7353,43 +7551,43 @@
       "path": "indra/newview/vsviewerwindow.cpp",
       "start": 48,
       "end": 49,
-      "sha256": "2335aef28532155f58a893f4fc1f0bdf2c3fa639c5166bde9e5947f0608443c9",
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 99,
-      "end": 105,
-      "sha256": "2335aef28532155f58a893f4fc1f0bdf2c3fa639c5166bde9e5947f0608443c9",
+      "start": 101,
+      "end": 107,
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 154,
-      "end": 156,
-      "sha256": "2335aef28532155f58a893f4fc1f0bdf2c3fa639c5166bde9e5947f0608443c9",
+      "start": 156,
+      "end": 158,
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 170,
-      "end": 170,
-      "sha256": "2335aef28532155f58a893f4fc1f0bdf2c3fa639c5166bde9e5947f0608443c9",
+      "start": 172,
+      "end": 172,
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 174,
-      "end": 175,
-      "sha256": "2335aef28532155f58a893f4fc1f0bdf2c3fa639c5166bde9e5947f0608443c9",
+      "start": 176,
+      "end": 177,
+      "sha256": "54476cb9126b9a2f80cbff981ae7da848b8774690b183e9634bfcef61e6f7551",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."

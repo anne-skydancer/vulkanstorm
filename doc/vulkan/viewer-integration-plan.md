@@ -88,7 +88,7 @@ failure proves application handling only, not real driver device-loss recovery.
 
 ### V3: native UI rendering and resource substrate
 
-Build on V2; implement I03Ã¢â‚¬â€œI09/I26/I27 and G-RESOURCE/G-UI. Separate CPU image
+Build on V2; implement I03–I09/I26/I27 and G-RESOURCE/G-UI. Separate CPU image
 decode/font rasterization from GPU publication. Replace UI image/font/buffer
 and shader ownership with Diligent resources, preserving generation lifetime,
 lazy glyph creation, upload bytes, replacement and readback completion.
@@ -120,7 +120,7 @@ completion and check lifetime, not merely object creation.
 
 ### V4: connected UI/chat checkpoint
 
-Implement the full R02Ã¢â‚¬â€œR12/G-* closure in the source acceptance record, including
+Implement the full R02–R12/G-* closure in the source acceptance record, including
 startup-state splitting, CPU region/session state, UDP and HTTP dispatch,
 settings/observer admission, chat effects, and owned init/destroy callbacks.
 Keep world/auxiliary producers gated while preserving session transport,
@@ -136,7 +136,7 @@ cannot establish connected-chat acceptance. This checkpoint has no world draws.
 
 ### V5: world contracts and first geometry increments
 
-After V4, extend source/admission accounting for I11Ã¢â‚¬â€œI15 and every newly reached
+After V4, extend source/admission accounting for I11–I15 and every newly reached
 startup, message, setting and resource callback. Design the viewer-owned
 frame/pass plan using [component designs](component-designs.md),
 [shader contracts](shader-contracts.md) and the
@@ -192,7 +192,7 @@ where contractual, not assumed for all floating-point effects.
 
 ### V8: auxiliary and interaction parity
 
-Implement supported I18Ã¢â‚¬â€œI22 producers/consumers: previews, local bakes,
+Implement supported I18–I22 producers/consumers: previews, local bakes,
 impostors/maps, media, picking/selection/debug, queries and captures. Bring
 prerequisites forward when earlier slices require them. Keep HUD world content
 distinct from 2D UI. Verify capture re-entry, tiled/oriented readback, media

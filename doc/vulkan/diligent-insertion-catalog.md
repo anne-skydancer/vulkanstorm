@@ -1,7 +1,7 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `f80e6c725f72d7a9cd6b3d8657fecf0e6b087548`. DiligentCore is the selected
+source `7d3d8b32f4d46b71d9248705bfde6e0b9a4901ec`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
@@ -353,7 +353,7 @@ qualification limits and remaining normal-session/panel integration work.
 
 ## V3 completion refresh, 9 October 2026
 
-Source `f80e6c725f72d7a9cd6b3d8657fecf0e6b087548`: required native viewer
+Source `7d3d8b32f4d46b71d9248705bfde6e0b9a4901ec`: required native viewer
 controls and resource ownership are implemented, including production plain
 chat, required-dialog actions, direct factory admission, DPI/composition routes
 and delayed completion lifetime checks. The ledger reconciles 28,516 witnesses
@@ -367,7 +367,7 @@ for the expanded software matrix and its qualification limits.
 The current pin includes production native CPU session transport, reliable nearby
 chat, lifecycle ownership, semantic UDP/HTTP admission and native settings/URL
 gates, plus the staged-viewer replay. It scans 27,801 tracked source paths and
-accepts 28,533 witnesses in 1,754 candidate files; all 690 shader registration
+accepts 28,534 witnesses in 1,754 candidate files; all 690 shader registration
 rows remain reconciled. Runtime qualification is recorded separately in
 [the connected-session record](viewer-connected-session.md); source acceptance
 continues to make no world-parity claim.

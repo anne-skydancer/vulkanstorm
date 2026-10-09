@@ -81,28 +81,28 @@ real server, real-server nearby send/receive, disconnect or logout. Those are th
 separate connected-chat acceptance criteria in the roadmap. World rendering and
 full supported parity remain V5 and subsequent work.
 
-## Local execution evidence
+## Execution evidence
 
-The complete RelWithDebInfo viewer stage built successfully at source
-`05907fc6e4058ce21c79685cf86511bb70196c9e`. The Windows SwiftShader staged-viewer
-replay passed, including encoded chat/channel/type/typing fields, real queued HTTP
-chat, relogin, stale work, controlled crossing, connection/logout deadlines and
-the independent connected-chat pixel comparison. Validation and GL traps were
-clean. Source acceptance and 93 relevant regression/evidence checks passed.
-The three-platform CI matrix is the remaining software execution check; its run
-and artifacts will be recorded here after completion. Live-server qualification
-remains untested.
+The final production source is `7d3d8b32f4d46b71d9248705bfde6e0b9a4901ec`.
+The complete RelWithDebInfo viewer stage and Windows SwiftShader replay are
+qualified locally before submission to the dedicated three-platform CI matrix.
+The existing 68-case V3 matrix passed locally with the V4 implementation; focused
+UI/startup regression checks additionally cover subsequent lifecycle changes.
+The final replay includes actual encoded mute requests and file completion,
+authoritative CPU mute loading, cancellation of an in-flight transfer, Unicode
+input recall, draft restoration and logout history isolation.
 
-The final source revision is `ad00157f5cd752d7d960b8fb52adbff7a0d51313`.
-Its staged Windows replay additionally passed actual encoded mute-list request
-and file completion, authoritative CPU mute loading and cancellation of a later
-in-flight transfer during bounded logout. The complete existing 68-case V3 matrix
-also passed locally with the V4 implementation. The source catalog was regenerated
-and checked without the Windows default-encoding conversion that invalidated the
-first CI source-evidence artifact; that failed run did not execute graphics jobs.
+Wire-delivered crossing, frozen/unfrozen status and feature status pass through
+the production HTTP dispatch path. Circuit retirement invokes the actual pending
+reliable-message callback, verifies that reset is deferred until dispatch returns,
+and checks that partial reset removes transport entries and rejects old-generation
+callback work. Connected expiry is injected into the real circuit state; it does
+not wait for the platform-dependent transport watchdog timer. The launcher checks
+loaded ICD and validation-layer hashes as well as staged GHI hashes. Ordinary
+login honors the active session validation flag after startup consumes its
+one-shot setting, so this path loads core and synchronization validation.
 
-Final input-history qualification uses source `f80e6c725f72d7a9cd6b3d8657fecf0e6b087548`:
-the staged viewer replay passed Unicode recall, empty-draft restoration and
-logout history isolation alongside every earlier V4 stage. CI run 38002641018
-passed source evidence and was superseded before graphics qualification by this
-complete input-history revision.
+Earlier CI runs were superseded by the final input-history and transport revisions.
+Their source-only success does not qualify this final graphics implementation.
+The final three-platform run and artifact results will be recorded here after
+completion. Live-server qualification remains untested.
