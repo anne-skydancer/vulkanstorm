@@ -1,6 +1,6 @@
 # V3: viewer UI resource and packet substrate
 
-Source: `deeb3d7c934b88f54fd6b79653faf1ff25bfd32a` on `vkstorm-vulkan`.
+Source: `035ee7d53e032d52668d723a2b0c66a5bc3770ac` on `vkstorm-vulkan`.
 Status: V3 implementation complete; expanded platform qualification in progress.
 The ordinary viewer owns native login, menus, progress, required dialogs and
 skin-aware plain nearby-chat controls. V4 connected transport/session admission
@@ -101,7 +101,7 @@ The dedicated workflow requires 68 viewer cases. In addition to WSI, resource,
 input and fault-injection cases, the full required interface/action sequence
 runs under all 24 packaged skin/theme/language selections. Each positive startup
 case produces 18 actual/expected pixel pairs over 17 frames, including an extra
-scrolled transcript readback, required dialogs, resize/DPI and restoration.
+scrolled transcript with visible composition, required dialogs, resize/DPI and restoration.
 The runner checks selection identity, artifacts, loaded library hashes,
 validation diagnostics and ordered cleanup. Its ordinary 30-second login
 launch has diagnostic dispatch disabled and requires actual CEF pixel
@@ -372,7 +372,7 @@ rendering remain unqualified.
 
 ## Native viewer-window and required startup owners, 9 October 2026
 
-Source: `deeb3d7c934b88f54fd6b79653faf1ff25bfd32a` on `vkstorm-vulkan`.
+Source: `035ee7d53e032d52668d723a2b0c66a5bc3770ac` on `vkstorm-vulkan`.
 `LLViewerWindow` now has a native constructor and owns `VSVulkanContext`, the
 skin-aware UI owner, native root, login holder, floaters, popup owner, progress
 views and standard alert channels. Native frame, reshape, mouse, keyboard,
@@ -492,3 +492,17 @@ renderer. This does not qualify a connected session, all G-UI/G-RESOURCE
 contracts, OS IME/DPI event coverage, or full V3/world parity. The diagnostic's
 `normal_session_admitted=false` field describes that probe's consumption; the
 new ordinary-launch evidence is recorded separately.
+
+### Expanded CI correction
+
+Run [37969192998](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37969192998)
+passed all 68 Windows SwiftShader cases. Linux Lavapipe passed native WSI,
+resource/skin fixtures, delayed completion and ordinary login, but startup
+composition failed: native SDL window creation bypassed the GL setup that
+initialized `SDL2IMEEnabled`. Native window creation now initializes the saved
+IME policy before video initialization, independently of a GL context. A
+regression compiles the production creation, focus and editing routes with SDL
+endpoints supplied by the fixture; enabled composition reaches the focused
+preeditor, disabling releases it, and GL behavior is unchanged. The startup
+readback also paints active composition before resetting it. This failed Linux
+run is not V3 acceptance; the corrected expanded matrix requires a new pass.

@@ -1,5 +1,5 @@
 {
-  "source_commit": "deeb3d7c934b88f54fd6b79653faf1ff25bfd32a",
+  "source_commit": "035ee7d53e032d52668d723a2b0c66a5bc3770ac",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Closed native V3 required widget/panel/floater admission and ordinary login/resource ownership implemented; V4 connected protocol/session/chat gate contracts remain open",
@@ -62,7 +62,7 @@
       ]
     },
     "indra/llwindow/llwindowsdl2.cpp": {
-      "sha256": "194fbd99e5071b23ce3159f2a2a59a06a660286493e854af01c17629ec0aa3b1",
+      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df",
       "anchors": [
         "LLWindowSDL::LLWindowSDL",
         "SDL_WINDOW_OPENGL",
@@ -341,7 +341,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "c87ee0de29656bce9d17030b90142ff857502862675e5a2baca25f0f5547f122",
+      "sha256": "cc684c10583bd08f8cdb2f8f56fb575b72e91e95e5551e09b599f73948a6edca",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -5251,7 +5251,7 @@
     }
   ],
   "native_diagnostic": {
-    "source_commit": "deeb3d7c934b88f54fd6b79653faf1ff25bfd32a",
+    "source_commit": "035ee7d53e032d52668d723a2b0c66a5bc3770ac",
     "implemented": true,
     "default_enabled": false,
     "ui_chat_implemented": false,
