@@ -12,6 +12,13 @@ class VSChatInput : public LLLineEditor
 public:
     explicit VSChatInput(const Params& p) : LLLineEditor(p) {}
     LLPreeditor& preeditor() { return *this; }
+    void remember()
+    {
+        updateHistory();
+        if (mLineHistory.size() > 129) mLineHistory.erase(mLineHistory.begin(), mLineHistory.end() - 129);
+        mCurrentHistoryLine = mLineHistory.empty() ? mLineHistory.end() : mLineHistory.end() - 1;
+    }
+    void clearHistory() { mLineHistory.clear(); mCurrentHistoryLine = mLineHistory.end(); }
 };
 
 class VSPlainChat : public LLPanel
