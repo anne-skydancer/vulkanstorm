@@ -379,3 +379,15 @@ These runs qualify the earlier independent software Vulkan CI and standalone
 Diligent infrastructure. The staging evidence retains
 `native_viewer_runtime_qualified: false`: native viewer UI/chat, live sessions,
 physical devices, Wayland and performance remain outside this qualification.
+
+## V4 connected-session replay
+
+After the existing staged-viewer V3 matrix, each graphics job runs
+`run_vulkan_session_replay.py` against the same executable and installed GHI
+libraries. A local HTTP capability/event-queue fixture and encoded UDP loopback
+exercise the production CPU session owner. `.ci/session-evidence` contains
+structured results, actual/expected connected-chat readbacks, packets, loader and
+validation logs and HTTP requests. This evidence qualifies deterministic software
+execution; it cannot qualify real-server authentication or streamed chat. No
+credentials are needed for the replay, and normal Vulkan execution still selects
+the machine's available drivers.

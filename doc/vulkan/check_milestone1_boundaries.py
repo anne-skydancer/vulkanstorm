@@ -151,7 +151,7 @@ def main():
     counts = ', '.join(f'{k}={len(v)}' for k, v in data['registries'].items())
     print(f'PASS: source analysis only; {len(data["routes"])} routes, '
           f'{len(data["families"])} families, {len(data["states"])} states; {counts}.')
-    print('Proposed gates are not implemented; runtime remains unqualified.')
+    print('Source-analysis acceptance does not certify runtime; consult the stage qualification records.')
 
 
 if __name__ == '__main__':
