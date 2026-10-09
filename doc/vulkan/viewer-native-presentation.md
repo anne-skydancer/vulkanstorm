@@ -1,6 +1,6 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-Source: `e7e9e6e6aa68ab125b4af41a2955259aa0d2ba4c` on `vkstorm-vulkan`.
+Source: `deeb3d7c934b88f54fd6b79653faf1ff25bfd32a` on `vkstorm-vulkan`.
 Status: implemented development diagnostic. CI run
 [37742422223](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37742422223)
 passed all nine original cases on Windows SwiftShader, Linux SwiftShader and
