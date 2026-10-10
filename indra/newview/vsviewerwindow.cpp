@@ -100,6 +100,9 @@ void LLViewerWindow::initNativeWindow(const Params& p)
 void LLViewerWindow::initNativeBase()
 {
     require(mRootView && !gFloaterView, "Native startup UI requires exclusive ownership");
+    // Register shared editing actions before any native text widget creates its menu.
+    initialize_edit_menu();
+    initialize_spellcheck_menu();
     mFloaterSnapRegion = mRootView; // Startup dialogs follow the real native root before world chrome exists.
     LLPanel::Params holder;
     holder.name          = "login_panel_holder";

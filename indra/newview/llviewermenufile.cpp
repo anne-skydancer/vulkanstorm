@@ -1054,7 +1054,8 @@ class LLFileEnableCloseWindow : public view_listener_t
     bool handleEvent(const LLSD& userdata)
     {
         bool frontmost_fl_exists = (NULL != gFloaterView->getFrontmostClosableFloater());
-        bool frontmost_snapshot_fl_exists = (NULL != gSnapshotFloaterView->getFrontmostClosableFloater());
+        // Text-only native UI has ordinary floaters, but no scene snapshot owner.
+        bool frontmost_snapshot_fl_exists = gSnapshotFloaterView && gSnapshotFloaterView->getFrontmostClosableFloater();
 
         return !LLNotificationsUI::LLToast::isAlertToastShown() && (frontmost_fl_exists || frontmost_snapshot_fl_exists);
     }
@@ -1065,7 +1066,7 @@ class LLFileCloseWindow : public view_listener_t
     bool handleEvent(const LLSD& userdata)
     {
         bool frontmost_fl_exists = (NULL != gFloaterView->getFrontmostClosableFloater());
-        LLFloater* snapshot_floater = gSnapshotFloaterView->getFrontmostClosableFloater();
+        LLFloater* snapshot_floater = gSnapshotFloaterView ? gSnapshotFloaterView->getFrontmostClosableFloater() : nullptr;
 
         if(snapshot_floater && (!frontmost_fl_exists || snapshot_floater->hasFocus()))
         {
@@ -1090,7 +1091,7 @@ class FSFileEnableCloseWindowGroup : public view_listener_t
     bool handleEvent(const LLSD& userdata)
     {
         bool frontmost_fl_exists = (NULL != gFloaterView->getFrontmostClosableFloater());
-        bool frontmost_snapshot_fl_exists = (NULL != gSnapshotFloaterView->getFrontmostClosableFloater());
+        bool frontmost_snapshot_fl_exists = gSnapshotFloaterView && gSnapshotFloaterView->getFrontmostClosableFloater();
 
         return !LLNotificationsUI::LLToast::isAlertToastShown() && (frontmost_fl_exists || frontmost_snapshot_fl_exists);
     }
@@ -1101,7 +1102,7 @@ class FSFileCloseWindowGroup : public view_listener_t
     bool handleEvent(const LLSD& userdata)
     {
         bool frontmost_fl_exists = (NULL != gFloaterView->getFrontmostClosableFloater());
-        LLFloater* snapshot_floater = gSnapshotFloaterView->getFrontmostClosableFloater();
+        LLFloater* snapshot_floater = gSnapshotFloaterView ? gSnapshotFloaterView->getFrontmostClosableFloater() : nullptr;
 
         if (snapshot_floater && (!frontmost_fl_exists || snapshot_floater->hasFocus()))
         {
@@ -1113,10 +1114,14 @@ class FSFileCloseWindowGroup : public view_listener_t
         }
         else
         {
-            auto floaterlist = LLFloaterReg::getAllFloatersInGroup(gFloaterView->getFrontmostClosableFloater());
-            for (auto floater : floaterlist)
+            auto* frontmost = gFloaterView->getFrontmostClosableFloater();
+            if (frontmost)
             {
-                floater->closeFloater();
+                auto floaterlist = LLFloaterReg::getAllFloatersInGroup(frontmost);
+                for (auto floater : floaterlist)
+                {
+                    floater->closeFloater();
+                }
             }
         }
         if (gMenuHolder) gMenuHolder->hideMenus();
