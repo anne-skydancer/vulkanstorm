@@ -1,5 +1,5 @@
 {
-  "source_commit": "f06d246d3c79c1c12c06f58df1425f6e4dbfca16",
+  "source_commit": "99f1ade5ac9183cfcd546cf7138e5e9bdd34da20",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -33,7 +33,7 @@
       ]
     },
     "indra/newview/llviewerwindow.cpp": {
-      "sha256": "b9284d19e6365d7b96a211d0272577d2effeec8d72dc01a781a97d32b80a4cd5",
+      "sha256": "7462821fd978f389611ae4eae3303c68034bf631558f1244ec44c1efec482f86",
       "anchors": [
         "LLViewerWindow::LLViewerWindow",
         "LLViewerWindow::initBase",
@@ -54,7 +54,7 @@
       ]
     },
     "indra/llwindow/llwindowwin32.cpp": {
-      "sha256": "02f7f198b6d2863c15392fe2e83888cd6cb9964a49c87d412d58232ae6cfab7c",
+      "sha256": "80e9c1d24c6148aa8f00b73fd67592540ffb49cd90a588479a71ed6857db6a47",
       "anchors": [
         "LLWindowWin32::LLWindowWin32",
         "opengl32.dll",
@@ -89,7 +89,7 @@
       ]
     },
     "indra/newview/llworld.cpp": {
-      "sha256": "de580ce03b1163277ba1c4aee4db91593e50d7888a61f427839eecadef1950e7",
+      "sha256": "6cb927d17579dbc0cb1f0cf6bbd989c00e934f189b447cec508789cb53ca7aaa",
       "anchors": [
         "LLWorld::addRegion",
         "process_region_handshake",
@@ -107,7 +107,7 @@
       ]
     },
     "indra/newview/llagent.cpp": {
-      "sha256": "0984223b8201d636423be8ef480ad6bffebb061c2390d6b2bf651e43b9348b59",
+      "sha256": "8064c89be21100fbfee14f7134f703d69342213552e8198bd9b12b4ac3afe2c6",
       "anchors": [
         "LLAgent::setRegion",
         "LLAgent::startTyping",
@@ -132,7 +132,7 @@
       ]
     },
     "indra/newview/fsnearbychathub.cpp": {
-      "sha256": "1a9cb8e47d2b3725c94b2afc37dd7c87e5aa7997be0ab70559205002292670ef",
+      "sha256": "c95a4301c5b467be9a77e409e3d20005457e0280b46fb7ee1b97beaf2670e1ad",
       "anchors": [
         "really_send_chat_from_viewer",
         "FSNearbyChat::sendChatFromViewer",
@@ -140,13 +140,13 @@
       ]
     },
     "indra/newview/fsnearbychatcontrol.cpp": {
-      "sha256": "044aeb9badb0d6ee61884a19d47ea5b39a883e4d6261971d1a64652df30578a9",
+      "sha256": "24f6d30104e7c7860f7853b146a28324a9245b65e58379938dc1f6cef6bf4c26",
       "anchors": [
         "FSNearbyChatControl"
       ]
     },
     "indra/newview/fsfloaternearbychat.cpp": {
-      "sha256": "7e85e9161ed12d1bcf6d4e25b0271220615ffba791fb3a5cb63a4f644580a0ba",
+      "sha256": "21e1bd301a4b83532a8f1aec7f26ef31c56cb7a50b3e6fa3b2e02f2657f47050",
       "anchors": [
         "FSFloaterNearbyChat::postBuild",
         "FSFloaterNearbyChat::addMessage"
@@ -288,13 +288,13 @@
       ]
     },
     "indra/newview/llfavoritesbar.h": {
-      "sha256": "85674065eb0fb45b3576490811fa710e810e894c83049e83ac7195e8ada20853",
+      "sha256": "52b23654bc5b2c513abf4df9b2237880739ca5563a0a2bde863bb2bc0f56cc2b",
       "anchors": [
         "LLDestroyClass<LLFavoritesOrderStorage>"
       ]
     },
     "indra/newview/llnavigationbar.h": {
-      "sha256": "f0e44905b07d61ccd8c3821eee4c7bb134b6cfd21441e6e206ea0c7e9295d314",
+      "sha256": "585c250e4a0cb1428bc1cb75269bb50834ee91b7fde682749c9f386c35f37c2a",
       "anchors": [
         "LLDestroyClass<LLNavigationBar>"
       ]
@@ -480,7 +480,7 @@
       ]
     },
     "indra/llui/vsuiadmission.h": {
-      "sha256": "fc449e6de3ee702a5f047c52f8fce0920d0be07a607861f5c5652adc6d117c79",
+      "sha256": "56baa1a727e18316f2d61151bd1861415f0499eafe15b6fddff4dc70bcc5d618",
       "anchors": [
         "class VSUIAdmission",
         "static bool widget",
@@ -605,7 +605,7 @@
       ]
     },
     "indra/llui/lltextbase.cpp": {
-      "sha256": "8aff19eb4e7846fc57b6e3794a0ba62e1e55ca17164ca3a0d0696d812e4700f2",
+      "sha256": "9137bc4d5137337d041e05b7867c606087427a4119a70ea410842ef97f90ec72",
       "anchors": [
         "LLTextBase::draw",
         "isNativeUI"
@@ -632,7 +632,7 @@
       ]
     },
     "indra/newview/vsuiimageprovider.cpp": {
-      "sha256": "18aac8c4aae62a5025014cbc2a804d4e32f7508e8705a6ca0e0295a3cc13ca76",
+      "sha256": "42e3b2fef826946941ebd6bf50b79573ed9b4b2844d3921718116867a9d03601",
       "anchors": [
         "VSUIImageProvider::getUIImage",
         "VSUIImageProvider::getUIImageByID"
@@ -679,7 +679,7 @@
       ]
     },
     "indra/newview/vsuicontext.cpp": {
-      "sha256": "70a40d972c12f8c69e7fa59063160a0f81003103c2cc331b02310fbb21404e07",
+      "sha256": "fd134b495455891385e502c471a38f7b16b426763b66a8d4cdc02ec6b24fdbc8",
       "anchors": [
         "VSUIContext::VSUIContext",
         "setSkinFolder",
@@ -717,7 +717,7 @@
       ]
     },
     "indra/newview/vsviewerwindow.cpp": {
-      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
+      "sha256": "c94f7bfb0edf99a8fea8492d7392b2e1e7c2b6a8d8fc06cf9dd24361d8f89285",
       "anchors": [
         "initNativeWindow",
         "initNativeBase",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "97e7fd5fbad383afb2fcf5a5300c759a0f4babce6e2a675c813a207926a7515b",
+      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -761,7 +761,7 @@
       ]
     },
     "indra/newview/vsplainchat.cpp": {
-      "sha256": "fedb18fb2871690421a8338920c21a62d263c234d3ed4c6868bc116224bfb0a2",
+      "sha256": "30d63f1529b832122bea667064b1a3523b3bd9e9775ead0c13ccc65b34eabdaf",
       "anchors": [
         "VSPlainChat::VSPlainChat",
         "VSPlainChat::setSender",
@@ -770,7 +770,7 @@
       ]
     },
     "indra/newview/vsplainchat.h": {
-      "sha256": "992a440be628b138f086366ccdf22385fda43bcbf5b262a8930183433a2c4be0",
+      "sha256": "6b331ba2ac1074576f602a8dbb7e2ae647ad0b40f028e691d598804edd8a9b54",
       "anchors": [
         "class VSChatInput",
         "class VSPlainChat"
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "75f20a33f4b085b511d2335f83bbd0c9e0a78940a7b83a866a7c125c4c6086a3",
+      "sha256": "0f7a5099aac63a07e04560729c7c8b10c0db4c2e3fbfe1e8bef88e15bd51dba9",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
@@ -793,7 +793,7 @@
       ]
     },
     "indra/newview/vsnativereplay.cpp": {
-      "sha256": "cd00d157cb6f3eb6f7a852497cf8ee2864186102c39f281d517638f4482d95ad",
+      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
       "anchors": [
         "vs_native_replay_tick()",
         "inspectOutgoing("
@@ -827,21 +827,21 @@
       ]
     },
     "indra/newview/llcommandhandler.cpp": {
-      "sha256": "30981bd7d209a07fb6863843675accfbeaa3dda56969902e476e11fb18af9334",
+      "sha256": "b584466adb452ef05b52fca995738ffd8b88d56ca4364cc80c80856c44a4ddec",
       "anchors": [
         "VSNativeSession::active()",
         "LLCommandDispatcher::dispatch("
       ]
     },
     "indra/newview/llurldispatcher.cpp": {
-      "sha256": "b0a866c7172b5dc9f816e626e46a2e3be552fbf65ce0aea40bebbda50896b089",
+      "sha256": "0a883fcfa53ba55914f5b40095cca0ad3b98acfff8dbfc027b1facce01d2153d",
       "anchors": [
         "VSNativeSession::active()",
         "dispatchRegion("
       ]
     },
     "indra/newview/vsnativeim.cpp": {
-      "sha256": "a5999bb754dd4d1f23293e81967b9792e0076c44db4ae2c13f4f84d8ca868463",
+      "sha256": "40bb106b0cf5769565621cfa6f71e4d5189462ad670d06f34ff8c679ad1c37a1",
       "anchors": [
         "vs_native_im_receive",
         "vs_native_im_guard",
@@ -867,7 +867,7 @@
       ]
     },
     "indra/newview/vsnativeimreplay.cpp": {
-      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
+      "sha256": "5ef9fa1376ba29173499ec15e945d22f879dd72318b12d2c34a15e4eaf2643e4",
       "anchors": [
         "vs_native_im_replay_tick",
         "vs_native_im_replay_expired",
@@ -889,7 +889,7 @@
       ]
     },
     "indra/newview/llimview.cpp": {
-      "sha256": "fc0ae6850d7f98a29ab88d58e9e4790f0fc2d89215bc14080dd474579aec4be2",
+      "sha256": "d893f014423a7dab5932ce3eb504fc7372761de8ead3e7aad3d9b0c6c83e49f7",
       "anchors": [
         "vs_native_im_guard",
         "onInviteNameLookup",
@@ -919,7 +919,7 @@
       ]
     },
     "indra/newview/llfloaterpreference.cpp": {
-      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
+      "sha256": "80646237734ea869d9a43c13cb43cc8ef7a6b7fe9e2744c7b271cf5dd4ee20f9",
       "anchors": [
         "LLFloaterPreference::refreshEnabledState",
         "vs_native_im_guard"
@@ -5342,19 +5342,21 @@
     },
     {
       "path": "indra/newview/llfavoritesbar.h",
-      "line": 190,
+      "line": 193,
       "registration": "LLDestroyClass<LLFavoritesOrderStorage>",
       "gate": "G-LIFETIME",
       "caller_route": "R12",
-      "disposition": "defer"
+      "disposition": "retain-cpu",
+      "reason": "CPU account favorites order persistence is explicitly saved before account retirement in LLViewerWindow::setNativeConnected(false), then resetAccount expires callbacks and clears cached favorites identity. Reviewed shared destroyClass/cleanup preserves account file ownership; no scene owners or runtime acceptance implied."
     },
     {
       "path": "indra/newview/llnavigationbar.h",
-      "line": 97,
+      "line": 98,
       "registration": "LLDestroyClass<LLNavigationBar>",
       "gate": "G-LIFETIME",
       "caller_route": "R12",
-      "disposition": "defer"
+      "disposition": "defer",
+      "reason": "Conservative census includes this friend declaration; LLNavigationBar no longer inherits LLDestroyClass and its former destroyClass body is commented out. Native account navigation completion and singleton destruction are explicitly owned by viewer lifecycle, rather than broadcasting the legacy destroy registration list."
     },
     {
       "path": "indra/newview/llpanelmarketplaceinboxinventory.h",
@@ -5362,7 +5364,8 @@
       "registration": "LLDestroyClass<LLInboxNewItemsStorage>",
       "gate": "G-LIFETIME",
       "caller_route": "R12",
-      "disposition": "defer"
+      "disposition": "retain-cpu",
+      "reason": "CPU inbox freshness IDs are saved and singleton retired in vs_native_im_reset only after real inventory/inbox views unregister their pointers and while the original account directory is active. Shared destroyClass saves only an existing instance, preventing final teardown from recreating empty storage and overwriting the retired account. No runtime acceptance implied."
     },
     {
       "path": "indra/newview/llpaneloutfitedit.cpp",
