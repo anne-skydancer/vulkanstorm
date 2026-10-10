@@ -339,7 +339,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "d750470abfbd55c0235b8c509902e9837aa19e7882402e231f9da23b05dd5620",
+      "sha256": "a8090e494702392820a53be188f0cb709a32755c6ec279a0309e39f3aed4f6e6",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
