@@ -1911,7 +1911,12 @@ struct Replay : public LLAvatarPropertiesObserver
                     if (next.mLeft <= first.mLeft || next.mBottom != first.mBottom) continue;
                     const S32 x = (first.mLeft + next.mLeft) / 2, y = first.getCenterY();
                     if (!visible.pointInRect(x, y)) continue;
-                    opened = field->handleRightMouseDown(x, y, MASK_NONE);
+                    // Opaque text controls can handle non-link clicks without
+                    // opening a popup. Do not reuse a previous context owner.
+                    gMenuHolder->hideMenus();
+                    const bool handled = field->handleRightMouseDown(x, y, MASK_NONE);
+                    auto* popup = dynamic_cast<LLMenuGL*>(gMenuHolder->getVisibleMenu());
+                    opened = handled && popup && popup->getVisible() && popup->getName() == "Url Popup";
                     if (opened)
                         LL_INFOS("NativeIMReplay") << "Inspector link context field=" << field->getName()
                             << " index=" << index << " point=" << x << "," << y
@@ -1927,7 +1932,11 @@ struct Replay : public LLAvatarPropertiesObserver
                 gViewerWindow->getWindow()->copyTextToClipboard(utf8str_to_wstring("before inspector URL copy"));
                 commitContextItem(menu, "url_copy");
                 LLWString copied;
-                require(gViewerWindow->getWindow()->pasteTextFromClipboard(copied) && wstring_to_utf8str(copied) == expected,
+                const bool copiedURL = gViewerWindow->getWindow()->pasteTextFromClipboard(copied);
+                if (!copiedURL || wstring_to_utf8str(copied) != expected)
+                    LL_WARNS("NativeIMReplay") << "Inspector URL identity mismatch field=" << field->getName()
+                        << " copied=" << wstring_to_utf8str(copied) << " expected=" << expected << LL_ENDL;
+                require(copiedURL && wstring_to_utf8str(copied) == expected,
                     "Actual object inspector metadata link lost selected target identity");
             };
             verifyInspectorURL(inspector->getChild<LLTextBox>("object_owner"),
