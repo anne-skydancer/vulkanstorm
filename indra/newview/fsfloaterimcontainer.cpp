@@ -382,7 +382,17 @@ void FSFloaterIMContainer::addFloater(LLFloater* floaterp,
 
     LLUUID session_id = floaterp->getKey();
     mSessions[session_id] = floaterp;
-    floaterp->mCloseSignal.connect(boost::bind(&FSFloaterIMContainer::onCloseFloater, this, session_id));
+    const auto host = getHandle();
+    floaterp->mCloseSignal.connect([host](LLUICtrl* source, const LLSD&)
+    {
+        auto* container = dynamic_cast<FSFloaterIMContainer*>(host.get());
+        auto* closed = dynamic_cast<LLFloater*>(source);
+        if (!container || !closed) return;
+        // Conference initialization replaces the temporary session UUID. Read
+        // the closing panel's current identity instead of capturing that UUID.
+        LLUUID id = closed->getKey().asUUID();
+        container->onCloseFloater(id);
+    });
 }
 
 void FSFloaterIMContainer::addNewSession(LLFloater* floaterp, EInstantMessage type)
@@ -446,10 +456,12 @@ bool FSFloaterIMContainer::hasFloater(LLFloater* floaterp)
 
 void FSFloaterIMContainer::onCloseFloater(LLUUID& id)
 {
-    LLFloater* session_floater = mSessions[id];
+    auto session = mSessions.find(id);
+    if (session == mSessions.end()) return;
+    LLFloater* session_floater = session->second;
     bool was_session_shown = session_floater && session_floater->isShown();
 
-    mSessions.erase(id);
+    mSessions.erase(session);
     if (was_session_shown && isShown())
     {
         setFocus(true);

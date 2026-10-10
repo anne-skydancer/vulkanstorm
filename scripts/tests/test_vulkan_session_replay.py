@@ -1,5 +1,6 @@
 """Connected-session evidence must fail for missing stages and corrupt diagnostics."""
 import sys
+import copy
 import re
 import subprocess
 from pathlib import Path
@@ -11,9 +12,35 @@ import os
 import http.client
 import xmlrpc.client
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment
+from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_conference_start_requires_actual_selected_recipient_and_temporary_identity(self):
+        start = dict(path='/chat', request={
+            'method': 'start conference',
+            'session-id': '85000000-0000-0000-0000-000000000009',
+            'params': ['50000000-0000-0000-0000-000000000005']})
+        self.assertTrue(conference_start_observed([start]))
+        self.assertTrue(conference_start_observed([dict(path='/chat', request={'method': 'accept invitation'}), start]))
+        self.assertFalse(conference_start_observed([]))
+        self.assertFalse(conference_start_observed([start, copy.deepcopy(start)]))
+        for params in [[], ['10000000-0000-0000-0000-000000000001'],
+                       ['50000000-0000-0000-0000-000000000005'] * 2]:
+            with self.subTest(params=params):
+                altered = copy.deepcopy(start); altered['request']['params'] = params
+                self.assertFalse(conference_start_observed([altered]))
+        for identity in ['', None, 'not-a-uuid', '00000000-0000-0000-0000-000000000000',
+                         '84000000-0000-0000-0000-000000000008']:
+            with self.subTest(identity=identity):
+                altered = copy.deepcopy(start); altered['request']['session-id'] = identity
+                self.assertFalse(conference_start_observed([altered]))
+        altered = copy.deepcopy(start); del altered['request']['session-id']
+        self.assertFalse(conference_start_observed([altered]))
+        altered = copy.deepcopy(start); altered['path'] = '/unrelated'
+        self.assertFalse(conference_start_observed([altered]))
+        # Diagnostic-body records cannot substitute for the actual POST receipt.
+        self.assertFalse(conference_start_observed([dict(path='/chat', body=start['request'])]))
+
     def test_replay_profile_is_fresh_and_does_not_mutate_parent_environment(self):
         parent = dict(os.environ)
         with tempfile.TemporaryDirectory() as directory:

@@ -26,6 +26,8 @@ class VSUIFixture
     bool focused() const;
     std::string inputText() const;
     std::array<std::string,3> skinSelection() const;
+    // Known readback probes: x, y, expected RGB from GL byte tint semantics.
+    std::vector<std::array<unsigned,5>> inactiveTabShadeProbes() const;
 
   private:
     struct Impl;

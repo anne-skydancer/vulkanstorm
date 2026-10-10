@@ -204,6 +204,9 @@ static void on_avatar_name_cache_toast(const LLUUID& agent_id,
                                        const LLAvatarName& av_name,
                                        LLSD msg)
 {
+    // Name resolution can complete after the conversation has been closed.
+    const LLUUID session_id = msg["session_id"].asUUID();
+    if (session_id.notNull() && !LLIMModel::instance().findIMSession(session_id)) return;
     LLSD args;
     args["MESSAGE"] = msg["message"];
     args["TIME"] = msg["time"];
@@ -223,6 +226,10 @@ static void on_avatar_name_cache_toast(const LLUUID& agent_id,
 
 void notify_of_message(const LLSD& msg, bool is_dnd_msg)
 {
+    // Queued message observers may run after Leave has retired their model.
+    // Nearby chat uses a null UUID and keeps its independent notification path.
+    const LLUUID notification_session = msg["session_id"].asUUID();
+    if (notification_session.notNull() && !LLIMModel::instance().findIMSession(notification_session)) return;
     // [CHUI Merge] Commented out for now. Need to see if/how we can/want to wire it up
 #if 0
     std::string user_preferences;
