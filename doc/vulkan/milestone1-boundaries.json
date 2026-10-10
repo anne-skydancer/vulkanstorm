@@ -1,5 +1,5 @@
 {
-  "source_commit": "163ee9e2e853fb556705b7f24ab279195405c3c1",
+  "source_commit": "6f424ea3eea872f62a1345cf3ca4ca2fa0bdb49c",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
+      "sha256": "e0a99c0318e430aed5c04db675d4e6c78fa374b0ccf0a4b2bffb4f10f74c2ef8",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -33,7 +33,7 @@
       ]
     },
     "indra/newview/llviewerwindow.cpp": {
-      "sha256": "e3cf8f0413d62ea4523beab5b81f2fdfb723745f8093c35b3d3a2c037df62f37",
+      "sha256": "b9284d19e6365d7b96a211d0272577d2effeec8d72dc01a781a97d32b80a4cd5",
       "anchors": [
         "LLViewerWindow::LLViewerWindow",
         "LLViewerWindow::initBase",
@@ -70,7 +70,7 @@
       ]
     },
     "indra/newview/llstartup.cpp": {
-      "sha256": "4c819a79fc7199ee60cd86ce869c58022b3813e260276368134dc8fef7b3b94b",
+      "sha256": "f298eb5d5fe24a5d304acc1244e7c0a481e4e13064d12670d0583654234f81b2",
       "anchors": [
         "idle_startup()",
         "do_startup_frame()",
@@ -107,7 +107,7 @@
       ]
     },
     "indra/newview/llagent.cpp": {
-      "sha256": "999c7e81396acf965e0cc26971c543c0e4acd0b1d88c815d449862e9035fdd13",
+      "sha256": "0984223b8201d636423be8ef480ad6bffebb061c2390d6b2bf651e43b9348b59",
       "anchors": [
         "LLAgent::setRegion",
         "LLAgent::startTyping",
@@ -115,7 +115,7 @@
       ]
     },
     "indra/newview/llviewermessage.cpp": {
-      "sha256": "3bcb152825f184e9af7f5861fbf2c00b2c355ffd23c656cb91ca5494eff794b8",
+      "sha256": "02b35b9facfef46d8bb67fe92c7d93168abc9ffbb56407c8709c384346a51529",
       "anchors": [
         "process_chat_from_simulator",
         "process_agent_movement_complete",
@@ -190,7 +190,7 @@
       ]
     },
     "indra/llui/lluictrlfactory.h": {
-      "sha256": "fe629af95f141faa4319ff6cb57cc9938f9cc05175203bfba5351b8c9a8e5974",
+      "sha256": "3a93ea73f073fa7ca9d7601a05c5660eaa4344715a17d45ff00a27c6f2b28497",
       "anchors": [
         "create"
       ]
@@ -326,13 +326,13 @@
       ]
     },
     "indra/newview/llsyswellwindow.h": {
-      "sha256": "a9d079ed37a473c5b9231ea2ee1349204539c4cb74c57e85485265ed0725ad59",
+      "sha256": "61c95edf3a85fccd0ba0dddf476a0a9fdf663d532c26df7f26872c75b248f7b9",
       "anchors": [
         "LLInitClass<LLIMWellWindow>"
       ]
     },
     "indra/newview/llviewerinventory.h": {
-      "sha256": "4c20ab917ac91a9f8d49390bf61f92bfecf3dbfe9e8cc0daeda70df03e418a25",
+      "sha256": "5143c0262a8cdd3f49ca538ca9805d8ebce9856e552f5c341049721105554b76",
       "anchors": [
         "LLDestroyClass<LLInventoryCallbackManager>",
         "LLDestroyClass<LLInventoryCallbackManager>"
@@ -401,7 +401,7 @@
       ]
     },
     "indra/newview/vsuirenderer.cpp": {
-      "sha256": "f2dfb2af3691c86b36f7f93c7d0669f23a2cd41f975457c245372b3af6328947",
+      "sha256": "1943c8cf13d75c26a6595c207c71ab36c8a8510c164a6ca5478b32d3d7da6ac2",
       "anchors": [
         "VSUIRenderer::upload",
         "VSUIRenderer::draw",
@@ -410,7 +410,7 @@
       ]
     },
     "indra/newview/vsuirenderer.h": {
-      "sha256": "dfc5972efbbff92f9133b61d8021bbecae7c71fe43ca96695f2beb75c2ed23bd",
+      "sha256": "80ff71be9ff06078c0982a79fff018e0d422154e8f4c9abfca3f11de7a5577a3",
       "anchors": [
         "class VSUIRenderer",
         "struct Packet",
@@ -440,7 +440,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "146ff32e51e7024ad3ecff4d993f00a24451a3dd57f0064b4d4c4cd3baaa6074",
+      "sha256": "badf5ee7387ee5abbafeac138682f2326f5a3ab7e3246604b5e0e2a2dbb1b537",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -448,7 +448,7 @@
       ]
     },
     "indra/newview/vsuiresources.h": {
-      "sha256": "91ac4b90923177f0967148c1ea0dba4f5646972795b0776081ad37d6fc0b6b60",
+      "sha256": "f87a997a7bba7923164199a11369ed111ffac6df3fdb37f2b6677ca13c6ec34a",
       "anchors": [
         "class VSUIResources"
       ]
@@ -516,14 +516,14 @@
       ]
     },
     "indra/llrender/lluiimage.cpp": {
-      "sha256": "7fe1395973a29714dc400835e37df55b83745cb5fabd571483c5a336734fbc97",
+      "sha256": "86fc6fc0898e3be268d1b97ac8227ff6241570af6300d5250dd624782199223e",
       "anchors": [
         "LLUIImage::LLUIImage",
         "mNativeDraw"
       ]
     },
     "indra/llrender/lluiimage.h": {
-      "sha256": "672627347f23b787259c638a3741b04b3a717ccf02205a7cb7c448b8c3fcc045",
+      "sha256": "834d02c9e2fcb66a75c2df4905f2969f70cd2d97fc7b7f6747e46c78517c1ac8",
       "anchors": [
         "native_draw_t"
       ]
@@ -562,7 +562,7 @@
       ]
     },
     "indra/llrender/llrender2dutils.cpp": {
-      "sha256": "1e97c4985a7ef097488b18824378f87e7a50541548ec487ed0b9721aec4f1008",
+      "sha256": "4d49f543c315235a93dd5f0987dab0b308fb43dfbe37c1d6f0f7d10a47e69ed5",
       "anchors": [
         "LLRender2D::setNativeUI",
         "LLRender2D::setSceneBlendType",
@@ -605,7 +605,7 @@
       ]
     },
     "indra/llui/lltextbase.cpp": {
-      "sha256": "7425d36a353bc852f95258df538f58ef13d345ca7ea65a6d2346a7f4ae342b0c",
+      "sha256": "8aff19eb4e7846fc57b6e3794a0ba62e1e55ca17164ca3a0d0696d812e4700f2",
       "anchors": [
         "LLTextBase::draw",
         "isNativeUI"
@@ -632,20 +632,20 @@
       ]
     },
     "indra/newview/vsuiimageprovider.cpp": {
-      "sha256": "6d7b490d488af9bf66c63548ee644c8fa1bfefbb36b9095f20f9961774222aa0",
+      "sha256": "18aac8c4aae62a5025014cbc2a804d4e32f7508e8705a6ca0e0295a3cc13ca76",
       "anchors": [
         "VSUIImageProvider::getUIImage",
         "VSUIImageProvider::getUIImageByID"
       ]
     },
     "indra/newview/vsuiimageprovider.h": {
-      "sha256": "a17cec78b0e38e7ae225b4534541b707ea119ef109dfde89bd4fb79f89445469",
+      "sha256": "55c70b4b2872ad996464f885e6f584457a6863f5297f47272d2da038e6acc6ad",
       "anchors": [
         "class VSUIImageProvider"
       ]
     },
     "indra/newview/vsuifixture.cpp": {
-      "sha256": "a6d26ad0e4b00ac06efe5ab408672d6ef49cba53e070032f1c85ffa593cc684f",
+      "sha256": "5848869603aca07a59e5a3c9bf12d32cae3298591a4cad9c14b13e35aba5d8ee",
       "anchors": [
         "VSUIFixture::verifyInput",
         "VSUIFixture::draw",
@@ -659,7 +659,7 @@
       ]
     },
     "indra/newview/vsuipixeloracle.cpp": {
-      "sha256": "a85353d71228653f68a3daf5161f049bc8e9ba1c93fb059bd7172ae74c2c1f3b",
+      "sha256": "520c73f553b5566b4d2c6a873225974cf3f356313fb1fdec5ab60a98ad629155",
       "anchors": [
         "vs_ui_expected_pixels",
         "top_left"
@@ -679,7 +679,7 @@
       ]
     },
     "indra/newview/vsuicontext.cpp": {
-      "sha256": "1515d56573d2bc1aad907cdae2959497261e37012d3773a10eec9aa37ad5951e",
+      "sha256": "70a40d972c12f8c69e7fa59063160a0f81003103c2cc331b02310fbb21404e07",
       "anchors": [
         "VSUIContext::VSUIContext",
         "setSkinFolder",
@@ -688,7 +688,7 @@
       ]
     },
     "indra/newview/vsuicontext.h": {
-      "sha256": "5b732c3f3e55ba84925e60e8653d5848cb26127b997b57e461405b1ffa5e9899",
+      "sha256": "c76aa3dbe7792b2eb64bd6b35f9438cbb06a14618f375e6b70fc0219967af8cb",
       "anchors": [
         "class VSUIContext"
       ]
@@ -717,7 +717,7 @@
       ]
     },
     "indra/newview/vsviewerwindow.cpp": {
-      "sha256": "bb5e5dfde122b00487a9a6e9eec12031d705d3053faad3eada4ae108f04b0259",
+      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
       "anchors": [
         "initNativeWindow",
         "initNativeBase",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "0e28e8c193353c6da6c9f0507080efda73e6e55811e9233d834e5b59f020cc5c",
+      "sha256": "97e7fd5fbad383afb2fcf5a5300c759a0f4babce6e2a675c813a207926a7515b",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -761,7 +761,7 @@
       ]
     },
     "indra/newview/vsplainchat.cpp": {
-      "sha256": "ccb75186655e451e6c877a992262748257d789f092a07df3a5f2d7d4e2ee2a7f",
+      "sha256": "fedb18fb2871690421a8338920c21a62d263c234d3ed4c6868bc116224bfb0a2",
       "anchors": [
         "VSPlainChat::VSPlainChat",
         "VSPlainChat::setSender",
@@ -770,7 +770,7 @@
       ]
     },
     "indra/newview/vsplainchat.h": {
-      "sha256": "ac36f9b1ab1a04de561fe3cb9acdf48d57f6549725b4131bb7efebc5c58de184",
+      "sha256": "992a440be628b138f086366ccdf22385fda43bcbf5b262a8930183433a2c4be0",
       "anchors": [
         "class VSChatInput",
         "class VSPlainChat"
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "f1369520b5dd386ef72f0ab47480da30b51a305855b6ae81dec3cc4ebcbaa4c4",
+      "sha256": "75f20a33f4b085b511d2335f83bbd0c9e0a78940a7b83a866a7c125c4c6086a3",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
@@ -793,7 +793,7 @@
       ]
     },
     "indra/newview/vsnativereplay.cpp": {
-      "sha256": "409b6e4ccf1a5eb6357a73639ddf0022b9a0e06cce568198fb334057533be3ee",
+      "sha256": "cd00d157cb6f3eb6f7a852497cf8ee2864186102c39f281d517638f4482d95ad",
       "anchors": [
         "vs_native_replay_tick()",
         "inspectOutgoing("
@@ -839,6 +839,91 @@
         "VSNativeSession::active()",
         "dispatchRegion("
       ]
+    },
+    "indra/newview/vsnativeim.cpp": {
+      "sha256": "a5999bb754dd4d1f23293e81967b9792e0076c44db4ae2c13f4f84d8ca868463",
+      "anchors": [
+        "vs_native_im_receive",
+        "vs_native_im_guard",
+        "vs_native_im_install",
+        "vs_native_im_request_offline",
+        "vs_native_im_reset",
+        "vs_native_im_notification_current"
+      ]
+    },
+    "indra/newview/vsnativeim.h": {
+      "sha256": "e4044676f2664e64dcb911bddf3624c33de3a71351679a96b3b80554634482b0",
+      "anchors": [
+        "vs_native_im_ui_callback",
+        "vs_native_im_guard",
+        "vs_native_im_reset"
+      ]
+    },
+    "indra/newview/vsgroupsearch.cpp": {
+      "sha256": "b80894b9ad60b7ab8d38ab450f9bce2b7c77d697ea0cd7e4ea9a25b81c5bdf65",
+      "anchors": [
+        "VSGroupSearch::postBuild",
+        "vs_show_group_search"
+      ]
+    },
+    "indra/newview/vsnativeimreplay.cpp": {
+      "sha256": "ba6a68f074f36b3dfc0f2d765b6464d3dfa9e685e826e2e90d24b1c1a767b93b",
+      "anchors": [
+        "vs_native_im_replay_tick",
+        "vs_native_im_replay_expired",
+        "connected_profile_second_life_image_save",
+        "connected_group_directory_search"
+      ]
+    },
+    "indra/newview/llviewerdisplayname.cpp": {
+      "sha256": "4d60b5a61ec08a5d5105ca2269e1822fbd1a0b5bf2b73d6298ed4c051b52b847",
+      "anchors": [
+        "LLViewerDisplayName::resetAccountRequests",
+        "LLViewerDisplayName::setDisplayNameCoro"
+      ]
+    },
+    "indra/newview/llfloaterdisplayname.cpp": {
+      "sha256": "0a67a7e296ea9916a4fef1ac1ef5f74c616b1096bbccf019065fe1774a2f3389",
+      "anchors": [
+        "LLFloaterDisplayNameUtil::isNativeFloaterType"
+      ]
+    },
+    "indra/newview/llimview.cpp": {
+      "sha256": "fc0ae6850d7f98a29ab88d58e9e4790f0fc2d89215bc14080dd474579aec4be2",
+      "anchors": [
+        "vs_native_im_guard",
+        "onInviteNameLookup",
+        "typingNameCallback"
+      ]
+    },
+    "indra/newview/llgroupmgr.cpp": {
+      "sha256": "00836653cbe63b6ac1c7ba0b68281f1dd5a554b7dc2b7eb1d982c15ee822554f",
+      "anchors": [
+        "vs_native_im_guard",
+        "sendGroupMemberEjects",
+        "sendGroupRoleChanges"
+      ]
+    },
+    "indra/newview/fsfloaterim.cpp": {
+      "sha256": "df800bd3b7a7b190f0299d395a2b96bfa982f1eaf5f5cf25deefd6807a1a7799",
+      "anchors": [
+        "FSFloaterIM::postBuild",
+        "FSFloaterIM::sendMsg"
+      ]
+    },
+    "indra/newview/fsfloaterimcontainer.cpp": {
+      "sha256": "71e9d0b95803940652b694cea132df1eb24e2e0375adcd2617a5f3152dc7092f",
+      "anchors": [
+        "FSFloaterIMContainer::addFloater",
+        "isNativeVulkan"
+      ]
+    },
+    "indra/newview/llfloaterpreference.cpp": {
+      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "anchors": [
+        "LLFloaterPreference::refreshEnabledState",
+        "vs_native_im_guard"
+      ]
     }
   },
   "routes": {
@@ -869,7 +954,10 @@
     "R02": {
       "sources": [
         "indra/newview/llviewerwindow.cpp",
-        "indra/newview/llviewerfloaterreg.cpp"
+        "indra/newview/llviewerfloaterreg.cpp",
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsgroupsearch.cpp",
+        "indra/newview/vsnativeim.cpp"
       ],
       "gates": [
         "G-UI",
@@ -897,7 +985,8 @@
         "indra/newview/llviewerregion.cpp",
         "indra/newview/llagent.cpp",
         "indra/newview/llviewermessage.cpp",
-        "indra/newview/vsnativesession.cpp"
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/vsnativeim.cpp"
       ],
       "gates": [
         "G-SESSION",
@@ -916,7 +1005,11 @@
         "indra/llmessage/message.cpp",
         "indra/llmessage/message.h",
         "indra/llmessage/lltemplatemessagereader.cpp",
-        "indra/newview/llmutelist.cpp"
+        "indra/newview/llmutelist.cpp",
+        "indra/newview/vsnativeim.cpp",
+        "indra/newview/llimview.cpp",
+        "indra/newview/llgroupmgr.cpp",
+        "indra/newview/llviewerdisplayname.cpp"
       ],
       "gates": [
         "G-PROTOCOL",
@@ -929,20 +1022,26 @@
         "indra/newview/llviewermessage.cpp",
         "indra/newview/fsfloaternearbychat.cpp",
         "indra/newview/llchathistory.cpp",
-        "indra/newview/vsnativesession.cpp"
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/vsnativeim.cpp",
+        "indra/newview/llimview.cpp",
+        "indra/newview/fsfloaterim.cpp",
+        "indra/newview/fsfloaterimcontainer.cpp"
       ],
       "gates": [
         "G-CHAT",
         "G-UI"
       ],
-      "cpu_outcome": "Preserve nearby text, sender metadata, filtering and history without avatar effects."
+      "cpu_outcome": "Preserve nearby/direct/group text, shared session policy, sender metadata, filtering, typing, notifications and history without avatar effects."
     },
     "R07": {
       "sources": [
         "indra/newview/fsnearbychathub.cpp",
         "indra/newview/fsnearbychatcontrol.cpp",
         "indra/newview/llagent.cpp",
-        "indra/newview/vsnativesession.cpp"
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/vsnativeim.cpp",
+        "indra/newview/fsfloaterim.cpp"
       ],
       "gates": [
         "G-CHAT",
@@ -973,7 +1072,10 @@
         "indra/llui/llfloaterreg.cpp",
         "indra/llui/lluictrlfactory.h",
         "indra/newview/llcommandhandler.cpp",
-        "indra/newview/llurldispatcher.cpp"
+        "indra/newview/llurldispatcher.cpp",
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsgroupsearch.cpp",
+        "indra/newview/llfloaterdisplayname.cpp"
       ],
       "gates": [
         "G-UI",
@@ -986,7 +1088,9 @@
         "indra/newview/llviewercontrol.cpp",
         "indra/newview/llstartup.cpp",
         "indra/newview/llagent.cpp",
-        "indra/newview/vsnativesession.cpp"
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/vsnativeim.cpp",
+        "indra/newview/llfloaterpreference.cpp"
       ],
       "gates": [
         "G-SETTINGS",
@@ -1118,7 +1222,11 @@
         "indra/newview/vsplainchat.cpp",
         "indra/newview/vsplainchat.h",
         "indra/newview/llfloaterwebcontent.cpp",
-        "indra/newview/vsnativesession.cpp"
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/vsnativeim.cpp",
+        "indra/newview/vsgroupsearch.cpp",
+        "indra/newview/vsnativeimreplay.cpp",
+        "indra/newview/llviewerdisplayname.cpp"
       ],
       "gates": [
         "G-LIFETIME"
@@ -1174,7 +1282,10 @@
       "G-RESOURCE",
       "G-SETTINGS",
       "G-STARTUP",
-      "G-UI"
+      "G-UI",
+      "G-CHAT",
+      "G-PROTOCOL",
+      "G-SESSION"
     ],
     "I09": [
       "G-LIFETIME",
@@ -5349,5 +5460,35 @@
     "software_qualified": true,
     "qualification_run": "https://github.com/anne-skydancer/vulkanstorm/actions/runs/38012380599",
     "qualification_commit": "2d7298e2b097600666bbf3ffd3293077214472c8"
+  },
+  "connected_text_lifecycle_owners": {
+    "scope": "Reviewed source ownership only; complete connected replay and live-grid qualification remain separate.",
+    "G-SESSION": [
+      "indra/newview/vsnativesession.cpp",
+      "indra/newview/vsnativeim.cpp"
+    ],
+    "G-PROTOCOL": [
+      "indra/newview/vsnativesession.cpp",
+      "indra/newview/vsnativeim.cpp",
+      "indra/newview/llimview.cpp",
+      "indra/newview/llgroupmgr.cpp"
+    ],
+    "G-UI": [
+      "indra/newview/vsstartupui.cpp",
+      "indra/newview/vsgroupsearch.cpp",
+      "indra/newview/fsfloaterim.cpp",
+      "indra/newview/llfloaterprofile.cpp"
+    ],
+    "G-LIFETIME": [
+      "indra/newview/vsnativeim.cpp",
+      "indra/newview/llgroupmgr.cpp",
+      "indra/newview/llviewerdisplayname.cpp",
+      "indra/newview/vsnativesession.cpp"
+    ],
+    "diagnostic_evidence_owners": [
+      "indra/newview/vsnativeimreplay.cpp",
+      "scripts/run_vulkan_session_replay.py"
+    ],
+    "teardown_contract": "Expire account generation, destroy profile/group/IM dependent views before model/cache removal, disconnect pending name/session callbacks, preserve shared service observers and retain authentication retry ownership."
   }
 }
