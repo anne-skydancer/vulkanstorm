@@ -25,6 +25,8 @@
 #include "llscrolllistctrl.h"
 #include "llviewborder.h"
 #include "llfloater.h"
+#include "llfloaterabout.h"
+#include "lltabcontainer.h"
 #include "llmediactrl.h"
 #include "llradiogroup.h"
 #include "llwindowshade.h"
@@ -41,7 +43,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
     return std::make_unique<VSUIAdmission>(
         [](const std::type_info& t)
         {
-            return t == typeid(VSPlainChat) || t == typeid(VSChatInput) || LLMenuBarGL::isNativeLoginItemType(t) || t == typeid(LLViewerMenuHolderGL) || t == typeid(LLMenuHolderGL) || t == typeid(LLMenuGL) ||
+            return LLFloaterAboutUtil::isFloaterType(t) || t == typeid(LLTabContainer) || t == typeid(VSPlainChat) || t == typeid(VSChatInput) || LLMenuBarGL::isNativeLoginItemType(t) || t == typeid(LLViewerMenuHolderGL) || t == typeid(LLMenuHolderGL) || t == typeid(LLMenuGL) ||
                    t == typeid(LLMenuBarGL) || t == typeid(LLMenuItemGL) || t == typeid(LLMenuItemCallGL) ||
                    t == typeid(LLMenuItemCheckGL) || t == typeid(LLMenuItemSeparatorGL) ||
                    t == typeid(LLMenuItemBranchGL) || t == typeid(LLMenuItemTearOffGL) ||
@@ -56,7 +58,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                    t == typeid(LLWindowShade) || t == typeid(LLResizeBar) || t == typeid(LLResizeHandle) ||
                    t == typeid(LLDragHandleTop) || t == typeid(LLDragHandleLeft) || t == typeid(LLMediaCtrl) || t == typeid(LLRadioGroup) || t == LLRadioGroup::itemType();
         },
-        [](std::string_view name) { return name == "message_critical" || name == "message_tos"; },
+        [](std::string_view name) { return name == "sl_about" || name == "message_critical" || name == "message_tos"; },
         [](std::string_view name) { return name == "progress_view" || name == "progress_view_mini" || name == "popup_holder"; },
         [](std::string_view name)
         {

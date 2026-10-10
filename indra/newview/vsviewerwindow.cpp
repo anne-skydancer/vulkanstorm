@@ -12,6 +12,7 @@
 #include "llfloater.h"
 #include "llfloaterreg.h"
 #include "llfloatertos.h"
+#include "llfloaterabout.h"
 #include "llprogressview.h"
 #include "llviewercontrol.h"
 #include "llfocusmgr.h"
@@ -134,6 +135,7 @@ void LLViewerWindow::initNativeBase()
     mSystemChannel.reset(new LLNotificationChannel("System", "Visible", LLNotificationFilters::includeEverything));
     mAlertsChannel.reset(new LLNotificationsUI::LLAlertHandler("Alerts", "alert", false));
     mModalAlertsChannel.reset(new LLNotificationsUI::LLAlertHandler("AlertModal", "alertmodal", true));
+    LLFloaterAboutUtil::registerFloater();
     LLFloaterReg::add("message_critical", "floater_critical.xml", &LLFloaterReg::build<LLFloaterTOS>);
     LLFloaterReg::add("message_tos", "floater_tos.xml", &LLFloaterReg::build<LLFloaterTOS>);
     auto progress = std::make_unique<LLProgressView>();

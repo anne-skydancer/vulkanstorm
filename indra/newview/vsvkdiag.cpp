@@ -14,6 +14,8 @@
 #include "llimagetga.h"
 #include "lluictrlfactory.h"
 #include "llfloaterreg.h"
+#include "lltabcontainer.h"
+#include "llviewertexteditor.h"
 #include "llpanel.h"
 #include "llviewerwindow.h"
 #include "llappviewer.h"
@@ -45,6 +47,7 @@
 #include "llwindow.h"
 #include "llwindowcallbacks.h"
 #include "llkeyboard.h"
+#include "lltrans.h"
 #include "llgl.h"
 // The viewer PCH imports X11 and sys/mman.h macros with Diligent type names.
 // Preserve the platform definitions while parsing the GHI's C++ interfaces.
@@ -216,6 +219,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     LLTempBoundListener startup_reply;
     unsigned startup_accepted=0, startup_rejected=0, startup_modal_actions=0, startup_mfa_actions=0;
     unsigned startup_login_actions=0;
+    bool startup_about_verified=false;
     bool startup_chat_verified=false, startup_dpi_verified=false, startup_menu_verified=false;
     bool startup_ime_route_verified=false, startup_dialog_actions=false, startup_denial_verified=false;
     std::string startup_sent;
@@ -994,6 +998,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
 #else
         LLMIMETypes::parseMIMETypes("mime_types.xml");
 #endif
+        LLKeyboard::setStringTranslatorFunc(LLTrans::getKeyboardString);
         init_menus();
         require(gLoginMenuBarView && gEditMenu, "Native login/edit menus were not admitted");
         startup_menu_verified=true;
@@ -1305,6 +1310,53 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             window->restore();
             stages.emplace_back("native-startup-restored");
         }
+        if (frames == 16)
+        {
+            // Restore space for the full shared floater after the small-window/DPI tests.
+            gSavedSettings.setF32("UIScaleFactor", 1.f);
+            require(window->setSize(LLCoordWindow(1280, 1024)), "Native About resize failed");
+            window->gatherInput();
+            startup_window->drawNativeUI(); // Lay out the resized menu before its OS clicks.
+            // Activate the existing Help menu action through the OS event route.
+            auto* help_item = gLoginMenuBarView->findChild<LLMenuItemBranchGL>("Help");
+            require(help_item != nullptr, "Native login Help menu is missing");
+            auto* help = help_item->getBranch();
+            startupClick(help_item, [help] { return help->getVisible(); });
+            auto* item = help->getChild<LLMenuItemGL>("About Second Life");
+            startupClick(item, [] { return LLFloaterReg::instanceVisible("sl_about"); });
+            auto* about = LLFloaterReg::getInstance("sl_about");
+            require(about != nullptr, "Native About menu did not open the existing floater");
+            const LLSD info = LLAppViewer::instance()->getViewerInfo();
+            require(info["RENDERING_API"].asString() == "Vulkan" && info["OPENGL_VERSION"].isUndefined() &&
+                info["GRAPHICS_CARD"].asString() == startup_window->nativeContext()->adapter() &&
+                !info["RENDERING_API_VERSION"].asString().empty(), "Native About reported OpenGL or the wrong device");
+            const auto support = about->getChild<LLViewerTextEditor>("support_editor")->getText();
+            require(support.find("Rendering API: Vulkan") != std::string::npos &&
+                support.find(info["RENDERING_API_VERSION"].asString()) != std::string::npos &&
+                support.find(info["GRAPHICS_CARD"].asString()) != std::string::npos,
+                "Native About support text omitted the active renderer/device");
+            std::ofstream support_evidence(evidence / "viewer-about.txt");
+            support_evidence << support;
+            require(support_evidence.good(), "Cannot preserve native About support text");
+            auto* tabs = about->getChild<LLTabContainer>("about_tab");
+            require(tabs->getTabCount() == 4, "About lost its existing credits/license tabs");
+            startup_window->drawNativeUI(); // Shared tab layout publishes button positions on first draw.
+            for (S32 tab = 0; tab < tabs->getTabCount(); ++tab)
+            {
+                auto* button = tabs->getChild<LLButton>("htab_" + tabs->getPanelByIndex(tab)->getName());
+                startupClick(button, [tabs, tab] { return tabs->getCurrentPanelIndex() == tab; });
+                startup_window->drawNativeUI(); // Qualify every existing tab's visible content.
+            }
+            startupClick(tabs->getChild<LLButton>("htab_" + tabs->getPanelByIndex(0)->getName()),
+                [tabs] { return tabs->getCurrentPanelIndex() == 0; });
+            startupClick(about->getChild<LLButton>("copy_btn"), [this, about]
+            {
+                LLWString copied;
+                return window->pasteTextFromClipboard(copied) &&
+                    wstring_to_utf8str(copied) == about->getChild<LLViewerTextEditor>("support_editor")->getText();
+            });
+            startup_about_verified = true;
+        }
         startup_window->drawNativeUI();
         ++frames;
         return frames == 17;
@@ -1339,7 +1391,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     {
         boost::json::object record{{"schema",1},{"mode","viewer-native-startup"},{"device",identity},{"stages",stages},
             {"login_controls_verified",startup_login},{"progress_owner_verified",startup_progress},
-            {"login_os_input_verified",startup_login_actions==2},{"login_submit_actions",startup_login_actions},
+            {"about_renderer_verified",startup_about_verified},{"login_os_input_verified",startup_login_actions==2},{"login_submit_actions",startup_login_actions},
             {"modal_alert_verified",startup_alert_verified},{"critical_dialog_verified",startup_critical_verified},
             {"presented_frames",frames},{"readbacks",startup_readbacks},{"validation_errors",diagnostic_errors.load()},
             {"subpixel_precision_bits",startup_subpixel_bits},
@@ -1349,7 +1401,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             {"unsupported_ui_status_verified",startup_denial_verified},{"native_dpi_event_verified",startup_dpi_verified},
             {"ime_event_route_verified",startup_ime_route_verified},{"os_ime_service_qualified",false},
             {"normal_session_admitted",false},{"live_browser_qualified",false},{"authentication_qualified",false},
-            {"shutdown_complete",cleaned},{"passed",failure.empty() && cleaned && startup_readbacks == 18},{"failure",failure}};
+            {"shutdown_complete",cleaned},{"passed",failure.empty() && cleaned && startup_about_verified && startup_readbacks == 24},{"failure",failure}};
         std::ofstream out(evidence / "viewer-startup.json");out << boost::json::serialize(record) << '\n';
         require(out.good(), "Cannot write native startup evidence");
     }

@@ -36,9 +36,10 @@ def assess_startup(record, code, log, case):
         return False
     if case == 'startup-positive':
         return (code == 0 and record.get('passed') is True and record.get('presented_frames') == 17
+                and record.get('about_renderer_verified') is True
                 and record.get('login_os_input_verified') is True
                 and record.get('login_submit_actions') == 2
-                and record.get('readbacks') == 18 and record.get('modal_alert_verified') is True
+                and record.get('readbacks') == 24 and record.get('modal_alert_verified') is True
                 and record.get('critical_dialog_verified') is True
                 and all(record.get(key) is True for key in ('plain_chat_controls_verified',
                     'required_dialog_actions_verified', 'mfa_actions_verified', 'login_menus_verified',
@@ -252,6 +253,7 @@ def main():
             directory = evidence / case; directory.mkdir(exist_ok=True)
             artifact = directory / ('viewer-startup.json' if case in startup_cases else 'viewer-presentation.json'); artifact.unlink(missing_ok=True)
             image = directory / 'viewer-clear.ppm'; image.unlink(missing_ok=True)
+            (directory / 'viewer-about.txt').unlink(missing_ok=True)
             for pattern in ('viewer-ui-*.ppm','viewer-xui*.ppm'):
                 for old_image in directory.glob(pattern): old_image.unlink()
             child_env = env.copy(); child_env['VS_VULKAN_DIAGNOSTIC'] = str(directory)
@@ -270,11 +272,14 @@ def main():
                 record = json.loads(artifact.read_text())
                 passed = assess_startup(record, code, log, "startup-positive" if case in startup_skins else case) if case in startup_cases else assess(record, code, log, case, platform.system())
                 if case == 'startup-positive' or case in startup_skins:
-                    for index in range(18):
+                    for index in range(24):
                         for suffix in ('', '-expected'):
                             path = directory / f'startup-{index}{suffix}.ppm'
                             if not path.is_file() or path.stat().st_size < 640*480*3:
                                 raise RuntimeError('Missing or incomplete native startup readback')
+                    support = (directory / 'viewer-about.txt').read_text(encoding='utf-8')
+                    if 'Rendering API: Vulkan' not in support or expected_device['name'] not in support:
+                        raise RuntimeError('Missing or incorrect native About renderer evidence')
                     if case in startup_skins and tuple(record.get('ui_' + key) for key in ('skin', 'theme', 'language')) != startup_skins[case]:
                         raise RuntimeError('Native startup skin selection differs from requested overlays')
                     if 'DILIGENT_DEVICE=' + expected_device['name'] not in log:

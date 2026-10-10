@@ -161,10 +161,81 @@ int main(){
             run = subprocess.run([str(executable)], capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
+    def test_about_uses_running_backend_and_never_queries_gl_for_vulkan(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/newview/llappviewer.cpp').read_text(encoding='utf-8')
+        start = source.index('    const bool native_vulkan =', source.index('LLSD LLAppViewer::getViewerInfo()'))
+        body = source[start:source.index('// [RLVa:KB] - Checked: 2010-04-18', start)]
+        cache_start = source.index('    if (LLDiskCache::instanceExists())')
+        cache_body = source[cache_start:source.index('    // </FS:Beq>', cache_start)]
+        fixture = r"""
+#include <cassert>
+#include <map>
+#include <sstream>
+#include <string>
+#define VS_NATIVE_VULKAN 1
+#define LL_WINDOWS 0
+struct LLSD {
+    using Map=std::map<std::string,LLSD>;Map data;std::string value;bool defined=false;
+    using Integer=int;
+    LLSD()=default;LLSD(const char* v):value(v),defined(true){}
+    LLSD(const std::string& v):value(v),defined(true){}
+    LLSD(int v):value(std::to_string(v)),defined(true){}
+    LLSD& operator[](const std::string& k){return data[k];}
+    const LLSD& operator[](const std::string& k)const{return data.at(k);}
+    auto beginMap()const{return data.begin();}auto endMap()const{return data.end();}
+};
+struct Context {LLSD facts;LLSD rendererInfo()const{return facts;}};
+struct Window {bool native=false;Context* context=nullptr;
+    bool isNativeVulkan()const{return native;}Context* nativeContext(){return context;}};
+Window* gViewerWindow=nullptr;bool mNativeVulkanLogin=false;
+struct GLManager {bool mInited=false;int mVRAM=42,mVRAMDetected=64;}gGLManager;
+int calls=0;constexpr int GL_VENDOR=1,GL_RENDERER=2,GL_VERSION=3;
+const char* glGetString(int name){++calls;return name==GL_VERSION?"4.6 Mesa/Zink":name==GL_VENDOR?"Mesa":"Zink";}
+std::string ll_safe_string(const char* p){return p?p:"";}
+#define LL_PROFILE_ZONE_NAMED(name)
+struct LLDiskCache {
+    inline static bool initialized=false;inline static int calls=0;
+    static bool instanceExists(){return initialized;}
+    static LLDiskCache* getInstance(){assert(initialized);static LLDiskCache cache;return &cache;}
+    std::string getCacheInfo(){++calls;return "cache ready";}
+};
+LLSD report(){LLSD info;
+""" + body + cache_body + r"""
+return info;}
+int main(){
+    Context context;context.facts["GRAPHICS_CARD"]="Selected Vulkan device";
+    context.facts["RENDERING_API_VERSION"]="1.3.0";
+    Window window;gViewerWindow=&window;window.native=true;window.context=&context;
+    gGLManager.mInited=true;
+    auto info=report();assert(calls==0 && info["RENDERING_API"].value=="Vulkan");
+    assert(info["GRAPHICS_CARD"].value=="Selected Vulkan device" && !info["OPENGL_VERSION"].defined);
+    window.context=nullptr;info=report();assert(calls==0 && !info["RENDERING_API_VERSION"].defined);
+    gViewerWindow=nullptr;mNativeVulkanLogin=true;info=report();assert(calls==0 && info["RENDERING_API"].value=="Vulkan");
+    gViewerWindow=&window;window.native=false; // Running OpenGL wins over a next-session preference.
+    info=report();assert(calls==3 && info["RENDERING_API"].value=="OpenGL");
+    assert(info["RENDERING_API_VERSION"].value=="4.6 Mesa/Zink" && info["GRAPHICS_CARD"].value=="Zink");
+    gGLManager.mInited=false;info=report();assert(calls==3 && !info["RENDERING_API_VERSION"].defined);
+    assert(LLDiskCache::calls==0);
+    LLDiskCache::initialized=true;info=report();assert(LLDiskCache::calls==1 && info["DISK_CACHE_INFO"].value=="cache ready");
+}
+"""
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'about_renderer.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            executable = path.with_suffix('.exe')
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(executable)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(executable)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_startup_acceptance_requires_viewer_ownership_readbacks_and_decisive_failure(self):
         item=dict(schema=1,mode='viewer-native-startup',shutdown_complete=True,
                   validation_errors=0,login_controls_verified=True,progress_owner_verified=True,
-                  login_os_input_verified=True,login_submit_actions=2,
+                  about_renderer_verified=True,login_os_input_verified=True,login_submit_actions=2,
                   stages=['native-viewer-window-created','native-startup-progress-created',
                           'native-login-controller-created','native-startup-ui-released',
                           'native-startup-graphics-released','native-startup-window-released'],
@@ -172,11 +243,11 @@ int main(){
                   plain_chat_controls_verified=True,required_dialog_actions_verified=True,
                   mfa_actions_verified=True,login_menus_verified=True,unsupported_ui_status_verified=True,
                   native_dpi_event_verified=True,ime_event_route_verified=True,
-                  passed=True,presented_frames=17,readbacks=18,failure='')
+                  passed=True,presented_frames=17,readbacks=24,failure='')
         self.assertTrue(assess_startup(item,0,'','startup-positive'))
-        for key,value in [('modal_alert_verified',False),('critical_dialog_verified',False),('readbacks',17),('plain_chat_controls_verified',False),('required_dialog_actions_verified',False),('mfa_actions_verified',False),('login_menus_verified',False),('unsupported_ui_status_verified',False),('validation_errors',1),('shutdown_complete',False),
+        for key,value in [('modal_alert_verified',False),('critical_dialog_verified',False),('readbacks',17),('readbacks',18),('readbacks',23),('plain_chat_controls_verified',False),('required_dialog_actions_verified',False),('mfa_actions_verified',False),('login_menus_verified',False),('unsupported_ui_status_verified',False),('validation_errors',1),('shutdown_complete',False),
                           ('login_controls_verified',False),('progress_owner_verified',False),('stages',[]),
-                          ('login_os_input_verified',False),('login_submit_actions',0),('login_submit_actions',1),
+                          ('about_renderer_verified',False),('login_os_input_verified',False),('login_submit_actions',0),('login_submit_actions',1),
                           ('stages',list(reversed(item['stages'])))]:
             bad=copy.deepcopy(item);bad[key]=value
             self.assertFalse(assess_startup(bad,0,'','startup-positive'))
