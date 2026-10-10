@@ -187,7 +187,7 @@ bool LLSidepanelInventory::postBuild()
         //tabs->setCommitCallback(boost::bind(&LLSidepanelInventory::updateVerbs, this));
 
         // <FS:Zi> Add reload button to inventory inbox
-        if (LLButton* reload_inbox_btn = getChild<LLButton>(INBOX_RELOAD_BUTTON_NAME) ; reload_inbox_btn)
+        if (LLButton* reload_inbox_btn = findChild<LLButton>(INBOX_RELOAD_BUTTON_NAME) ; reload_inbox_btn)
         {
             reload_inbox_btn->setClickedCallback(boost::bind(&LLSidepanelInventory::onReloadInboxClicked, this));
         }
@@ -214,13 +214,14 @@ bool LLSidepanelInventory::postBuild()
         // </FS:Ansariel>
 
         // Set up button states and callbacks
-        LLButton * inbox_button = getChild<LLButton>(INBOX_BUTTON_NAME);
+        LLButton * inbox_button = findChild<LLButton>(INBOX_BUTTON_NAME);
 
-        inbox_button->setCommitCallback(boost::bind(&LLSidepanelInventory::onToggleInboxBtn, this));
+        if (inbox_button)
+            inbox_button->setCommitCallback(boost::bind(&LLSidepanelInventory::onToggleInboxBtn, this));
 
         // For main Inventory floater: Get the previous inbox state from "InventoryInboxToggleState" setting.
         // For additional Inventory floaters: Collapsed state is default.
-        bool is_inbox_collapsed = !inbox_button->getToggleState();// || sLoginCompleted; // <FS:Ansariel> Show inbox on main inventory window only
+        bool is_inbox_collapsed = !inbox_button || !inbox_button->getToggleState();// || sLoginCompleted; // <FS:Ansariel> Show inbox on main inventory window only
 
         // Restore the collapsed inbox panel state
         mInboxLayoutPanel = getChild<LLLayoutPanel>(INBOX_LAYOUT_PANEL_NAME);
@@ -435,8 +436,16 @@ void LLSidepanelInventory::openInbox()
 {
     if (mInboxEnabled)
     {
-        getChild<LLButton>(INBOX_BUTTON_NAME)->setToggleState(true);
-        onToggleInboxBtn();
+        if (auto* button = findChild<LLButton>(INBOX_BUTTON_NAME))
+        {
+            button->setToggleState(true);
+            onToggleInboxBtn();
+        }
+        else if (auto* tabs = findChild<LLTabContainer>("inventory_tab_container"))
+        {
+            tabs->selectTabByName(MARKETPLACE_INBOX_PANEL);
+            gSavedPerAccountSettings.setU32("LastInventoryInboxActivity", (U32)time_corrected());
+        }
     }
 }
 
@@ -449,16 +458,16 @@ void LLSidepanelInventory::onInboxChanged(const LLUUID& inbox_id)
     // Expand the inbox since we have fresh items
     if (mInboxEnabled)
     {
-        getChild<LLButton>(INBOX_BUTTON_NAME)->setToggleState(true);
-        onToggleInboxBtn();
+        openInbox();
     }
 #endif
 }
 
 void LLSidepanelInventory::onToggleInboxBtn()
 {
-    LLButton* inboxButton = getChild<LLButton>(INBOX_BUTTON_NAME);
-    LLLayoutStack* inv_stack = getChild<LLLayoutStack>(INVENTORY_LAYOUT_STACK_NAME);
+    LLButton* inboxButton = findChild<LLButton>(INBOX_BUTTON_NAME);
+    LLLayoutStack* inv_stack = findChild<LLLayoutStack>(INVENTORY_LAYOUT_STACK_NAME);
+    if (!inboxButton || !inv_stack || !mInboxLayoutPanel) return;
 
     const bool inbox_expanded = inboxButton->getToggleState();
 
@@ -489,11 +498,14 @@ void LLSidepanelInventory::onOpen(const LLSD& key)
     LLPanelMarketplaceInbox * inbox = findChild<LLPanelMarketplaceInbox>(MARKETPLACE_INBOX_PANEL);
     if (inbox && (inbox->getFreshItemCount() > 0))
     {
-        getChild<LLButton>(INBOX_BUTTON_NAME)->setToggleState(true);
-        onToggleInboxBtn();
+        openInbox();
     }
 #else
-    if (mInboxEnabled && getChild<LLButton>(INBOX_BUTTON_NAME)->getToggleState())
+    const auto* inbox_button = findChild<LLButton>(INBOX_BUTTON_NAME);
+    auto* inbox_tabs = findChild<LLTabContainer>("inventory_tab_container");
+    const auto* inbox_panel = findChild<LLPanelMarketplaceInbox>(MARKETPLACE_INBOX_PANEL);
+    if (mInboxEnabled && ((inbox_button && inbox_button->getToggleState()) ||
+                         (inbox_tabs && inbox_panel && inbox_tabs->getCurrentPanel() == inbox_panel)))
     {
         gSavedPerAccountSettings.setU32("LastInventoryInboxActivity", (U32)time_corrected());
     }
