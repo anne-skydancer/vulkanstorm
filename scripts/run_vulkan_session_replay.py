@@ -21,6 +21,12 @@ from urllib.parse import urlsplit, parse_qs
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
 from run_vulkan_viewer_diagnostic import runtime_libraries, skin_cases
 
+# Vintage's full 396-frame Preferences traversal takes about 200 seconds on
+# the pinned software device; all connected actions took over 314 seconds.
+VIEWER_REPLAY_SECONDS = 480
+PROCESS_REPLAY_SECONDS = 500
+CASE_REPLAY_SECONDS = 530
+
 INVENTORY_ROOT = '70000000-0000-0000-0000-000000000001'
 LIBRARY_ROOT = '72000000-0000-0000-0000-000000000001'
 LIBRARY_OWNER = '72000000-0000-0000-0000-000000000002'
@@ -134,6 +140,12 @@ def favorites_fetch_observed(requests):
         folder.get('folder_id') == '70000000-0000-0000-0000-000000000016'
         and folder.get('fetch_items') is True
         for folder in record.get('request', {}).get('folders', [])) for record in requests)
+
+
+def run_staged_viewer(command, stage, env):
+    """A finite process deadline kills a stalled viewer and preserves its output."""
+    return subprocess.run(command, cwd=stage, env=env, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, timeout=PROCESS_REPLAY_SECONDS)
 
 
 def conference_start_observed(requests):
@@ -588,7 +600,7 @@ def main():
             if args.register_windows_manifests:
                 command.append('--register-windows-manifests')
             try:
-                code = subprocess.run(command, timeout=230).returncode
+                code = subprocess.run(command, timeout=CASE_REPLAY_SECONDS).returncode
                 record = json.loads((child / 'results.json').read_text())
                 results[name] = dict(passed=code == 0 and record.get('passed') is True,
                                      exit_code=code, evidence=str(child))
@@ -637,7 +649,7 @@ def main():
     env['VK_LAYER_SETTINGS_PATH'] = str(layer)
     command = [str(executable), '--settings', 'vs_native_session_ci.xml', '--set', 'ClientSettingsFile',
                str(directory / 'settings.xml'), '--set', 'RenderBackend', 'Vulkan', '--set', 'AutoLogin', 'false',
-               '--set', 'QuitAfterSeconds', '180', '--set', 'RenderDebugGLSession', 'true',
+               '--set', 'QuitAfterSeconds', str(VIEWER_REPLAY_SECONDS), '--set', 'RenderDebugGLSession', 'true',
                '--set', 'UpdaterShowReleaseNotes', '0', '--set', 'FSShowWhitelistReminder', 'false']
     selection = ET.Element('llsd')
     append_llsd(selection, {name: dict(Type='String', Persist=0, Comment='Replay skin selection', Value=value)
@@ -658,8 +670,7 @@ def main():
         env['VS_VULKAN_REPLAY_LOGIN'] = server.url + '/login'
         try:
             with windows_manifest_registration(runtime, args.register_windows_manifests):
-                process = subprocess.run(command, cwd=stage, env=env, stdout=subprocess.PIPE,
-                                         stderr=subprocess.STDOUT, timeout=200)
+                process = run_staged_viewer(command, stage, env)
             code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
             report = read_llsd(ET.parse(directory / 'session-replay.xml').getroot())
             passed = assess(report, code, log)
@@ -718,7 +729,9 @@ def main():
             server.shutdown(); worker.join()
         (directory / 'http-replay.json').write_text(json.dumps(server.requests, indent=2) + '\n')
     (directory / 'viewer.log').write_text(log, encoding='utf-8')
-    report.update(passed=passed, exit_code=code, live_server_qualified=False)
+    report.update(passed=passed, exit_code=code, live_server_qualified=False,
+                  execution_budget=dict(viewer=VIEWER_REPLAY_SECONDS, process=PROCESS_REPLAY_SECONDS,
+                                        matrix_case=CASE_REPLAY_SECONDS))
     (directory / 'results.json').write_text(json.dumps(report, indent=2) + '\n')
     print(('PASS' if passed else 'FAIL') + ': viewer connected-session replay')
     return 0 if passed else 1

@@ -5,6 +5,9 @@ import re
 import subprocess
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+import time
+import shutil
 import xml.etree.ElementTree as ET
 import threading
 import tempfile
@@ -12,9 +15,53 @@ import os
 import http.client
 import xmlrpc.client
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import run_vulkan_session_replay as session_runner
 from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_stalled_viewer_is_killed_and_timeout_remains_failed_evidence(self):
+        self.assertGreater(session_runner.VIEWER_REPLAY_SECONDS, 0)
+        self.assertLess(session_runner.VIEWER_REPLAY_SECONDS, session_runner.PROCESS_REPLAY_SECONDS)
+        self.assertLess(session_runner.PROCESS_REPLAY_SECONDS, session_runner.CASE_REPLAY_SECONDS)
+        with tempfile.TemporaryDirectory() as directory, patch.object(session_runner, 'PROCESS_REPLAY_SECONDS', .5):
+            started = time.monotonic()
+            with self.assertRaises(subprocess.TimeoutExpired) as timeout:
+                session_runner.run_staged_viewer([sys.executable, '-c',
+                    "import time; print('viewer-started', flush=True); time.sleep(20)"], Path(directory), dict(os.environ))
+            self.assertIn(b'viewer-started', timeout.exception.stdout)
+            self.assertLess(time.monotonic() - started, 5)
+        self.assertFalse(assess(self.record(), 124, 'VIEWER TIMEOUT'))
+        self.assertFalse(assess({}, 0, 'VIEWER TIMEOUT'))
+
+    def test_actual_toolbar_chat_contract_accepts_vintage_and_voice_control(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/newview/vsnativereplay.cpp').read_text()
+        lookup = re.search(r'auto\* bottom = gViewerWindow->getRootView\(\)->findChild<[^>]+>\("default_chat_bar"\);', source)[0]
+        fixture = r"""#include <cassert>
+struct LLView {virtual ~LLView()=default;};
+struct FSNearbyChatControl:LLView{};
+struct FSNearbyChatVoiceControl:FSNearbyChatControl{};
+struct Root {LLView* entry;template<class T>T* findChild(const char*){return dynamic_cast<T*>(entry);}};
+struct Window {Root* root;Root* getRootView(){return root;}};
+Window* gViewerWindow;
+int main(){CONTROL entry;Root root{&entry};Window window{&root};gViewerWindow=&window;
+ LOOKUP assert(bottom==&entry);}
+"""
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        for skin in ['vintage', 'default']:
+            xml = ET.parse(root / ('indra/newview/skins/' + skin + '/xui/en/panel_toolbar_view.xml'))
+            node = next(v for v in xml.getroot().iter() if v.attrib.get('name') == 'default_chat_bar')
+            control = {'fs_nearby_chat_control':'FSNearbyChatControl',
+                       'fs_nearby_chat_voice_monitor':'FSNearbyChatVoiceControl'}[node.tag]
+            with self.subTest(skin=skin, actual_widget=node.tag), tempfile.TemporaryDirectory() as directory:
+                path=Path(directory)/'toolbar.cpp';path.write_text(fixture.replace('CONTROL',control).replace('LOOKUP',lookup))
+                exe=Path(directory)/'toolbar.exe'
+                built=subprocess.run([compiler,'-std=c++17',str(path),'-o',str(exe)],capture_output=True,text=True)
+                self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+                run=subprocess.run([str(exe)],capture_output=True,text=True)
+                self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+
     def test_conference_start_requires_actual_selected_recipient_and_temporary_identity(self):
         start = dict(path='/chat', request={
             'method': 'start conference',

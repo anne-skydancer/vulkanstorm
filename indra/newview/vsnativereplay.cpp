@@ -628,7 +628,7 @@ struct Replay
                 require(chat->submit() && chat->input()->getText().empty(), "Production chat submit failed");
                 require(chat->input()->handleKeyHere(KEY_UP, MASK_CONTROL) && chat->input()->getText() == "V4 outgoing Unicode \xCE\xA9", "Submitted input history was not recalled");
                 require(chat->input()->handleKeyHere(KEY_DOWN, MASK_CONTROL) && chat->input()->getText().empty(), "Input history did not restore the empty draft");
-                auto* bottom = gViewerWindow->getRootView()->findChild<FSNearbyChatVoiceControl>("default_chat_bar");
+                auto* bottom = gViewerWindow->getRootView()->findChild<FSNearbyChatControl>("default_chat_bar");
                 require(bottom && bottom->isInVisibleChain() && bottom->getEnabled(), "Actual skinned toolbar chat bar is unavailable");
                 bottom->setFocus(true); bottom->setText(LLStringExplicit("V4 toolbar Unicode \xCE\xA9"));
                 require(bottom->handleKeyHere(KEY_RETURN, MASK_NONE) && bottom->getText().empty(), "Actual toolbar Enter did not submit chat");
