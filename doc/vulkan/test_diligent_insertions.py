@@ -49,7 +49,17 @@ class InsertionAccountingTests(unittest.TestCase):
                 return json.dumps(records)
             return original_read(path, *args, **kwargs)
 
+        original_output = audit.subprocess.check_output
+
+        def output(command, *args, **kwargs):
+            if command[:3] == ["git", "diff", "--name-only"]:
+                # This fixture tests rejected review metadata after the source-pin
+                # precondition. Exercise dirty-source rejection separately below.
+                return ""
+            return original_output(command, *args, **kwargs)
+
         with mock.patch.object(pathlib.Path, "read_text", read), \
+                mock.patch.object(audit.subprocess, "check_output", output), \
                 mock.patch.object(sys, "argv", ["check_diligent_insertions.py", "--accept"]), \
                 contextlib.redirect_stdout(io.StringIO()):
             with self.assertRaisesRegex(SystemExit, expected):
@@ -64,6 +74,21 @@ class InsertionAccountingTests(unittest.TestCase):
         self.rejected_review(
             lambda records: records["reviewed_ranges"][0].update(sha256="0" * 64),
             "Stale reviewed source")
+
+    def test_dirty_source_is_rejected_before_review(self):
+        # An uncommitted fix must not acquire clean source-pin acceptance, even
+        # if its changed-file hashes have been reviewed separately.
+        original_output = audit.subprocess.check_output
+
+        def output(command, *args, **kwargs):
+            if command[:3] == ["git", "diff", "--name-only"]:
+                return "indra/newview/llcallingcard.cpp\n"
+            return original_output(command, *args, **kwargs)
+
+        with mock.patch.object(audit.subprocess, "check_output", output), \
+                mock.patch.object(sys, "argv", ["check_diligent_insertions.py", "--accept"]):
+            with self.assertRaisesRegex(SystemExit, "Renderer source differs from catalog baseline"):
+                audit.main()
 
 
 if __name__ == "__main__":

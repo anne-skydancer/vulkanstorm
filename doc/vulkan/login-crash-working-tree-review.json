@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "provenance": "reviewed-uncommitted-working-tree",
+  "head_commit": "d2570e155f01604c12195d3b4cdee5e1cdb2c574",
+  "committed_catalog_source_pin": "f560e6b41e03756f05c4531bb79ae1d0c1babd04",
+  "acceptance": "scoped-source-review-only",
+  "committed_source_pin_accepted": false,
+  "runtime_parity_qualified": false,
+  "scope": "Two renderer files changed by the login friend-status fix; no acceptance of a clean commit or full renderer parity.",
+  "reviewed_sources": [
+    {
+      "path": "indra/newview/llcallingcard.cpp",
+      "sha256": "b499de99e3f4914befe6e7aaf3ffdd2a6630afc60aec40fedea158089d1e4361",
+      "changed_ranges": [
+        {
+          "start": 61,
+          "end": 64
+        },
+        {
+          "start": 905,
+          "end": 925
+        },
+        {
+          "start": 928,
+          "end": 928
+        }
+      ],
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed friend-status name-cache callback: active native sessions append to VSPlainChat only while Connected and with a live native chat owner; honor per-account nearby logging. Preserve IM status, notification/sound policy, keyword handling and legacy history/toast routing. Native callback avoids the absent FSFloaterNearbyChat owner and GL/world rendering."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
+      "changed_ranges": [
+        {
+          "start": 55,
+          "end": 58
+        },
+        {
+          "start": 412,
+          "end": 449
+        },
+        {
+          "start": 460,
+          "end": 460
+        }
+      ],
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only decoded OnlineNotification/OfflineNotification replay checks native transcript delivery across asynchronous name-cache work, both history modes, saved-setting restoration and unchanged prior notification-manager existence. Does not construct a scene or submit live-grid traffic."
+    }
+  ],
+  "boundary_hash_updates": {
+    "indra/newview/vsnativeimreplay.cpp": {
+      "committed_record_sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "reviewed_working_tree_sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
+    }
+  },
+  "implementation_hashes": {
+    ".github/workflows/software_vulkan.yml": "2b27ead067234be5e631c94cb5ff85959ad4c096c65ac39cad5273f64e8ecd4e",
+    "indra/newview/llcallingcard.cpp": "b499de99e3f4914befe6e7aaf3ffdd2a6630afc60aec40fedea158089d1e4361",
+    "indra/newview/vsnativeimreplay.cpp": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
+    "scripts/run_vulkan_session_replay.py": "58f22dc2db15c27d335385ffa3fbe51cc2fe7f84a521bff6deff144379458bb6",
+    "scripts/tests/test_vulkan_friend_status.py": "98c479f8bf30258853008ef8af64bc6fefc5136f4652bfc8429a8888da10dc1a"
+  },
+  "qualified_executable": {
+    "path": "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vcabout-local\\newview\\RelWithDebInfo\\vulkanstorm-bin.exe",
+    "sha256": "56b997fa82d07e2a9eef9eb0ce12dbed678aaf44923547cf6df8c00d1c7ed3f6",
+    "basis": "Previously built and staged Windows RelWithDebInfo executable; unchanged during documentation reconciliation."
+  },
+  "runtime_evidence": {
+    "default": ".tmp/login-crash/qualified-default/results.json",
+    "modern": ".tmp/login-crash/qualified-modern/results.json",
+    "required_assertions_per_case": 79,
+    "live_grid_qualified": false
+  },
+  "blocked_checks": [
+    "check_diligent_insertions.py --accept",
+    "check_milestone1_boundaries.py",
+    "test_milestone1_boundaries.test_current_evidence"
+  ],
+  "required_next_step": "After a source commit is explicitly authorized, review/remap the existing insertion/platform ranges at that actual commit, refresh the boundary owner hash, regenerate insertion artifacts, and rerun acceptance. Preserve committed source pins until that operation; this sidecar is not substituted for their source_commit.",
+  "evidence": ".tmp/login-crash/qualification.json"
+}

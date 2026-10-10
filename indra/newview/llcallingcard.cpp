@@ -58,6 +58,10 @@
 #include "lggcontactsets.h"
 #include "llfloaterreg.h"
 #include "llnotificationmanager.h"
+#include "vsnativesession.h"
+#include "vsplainchat.h"
+#include "llviewerwindow.h"
+#include "lllogchat.h"
 
 ///----------------------------------------------------------------------------
 /// Local function declarations, constants, enums, and typedefs
@@ -898,10 +902,30 @@ static void on_avatar_name_cache_notify(const LLUUID& agent_id,
         chat.mChatType = CHAT_TYPE_RADAR;
         chat.mFromID = agent_id;
         chat.mFromName = used_name;
-        if (history_only)
+        // Native nearby chat is VSPlainChat, not the legacy nearby floater.
+        // Its friend-status path must not construct the legacy toast manager
+        // or dereference that floater's uninitialized history controls.
+        bool native_history = false;
+#if VS_NATIVE_VULKAN
+        native_history = VSNativeSession::active() != nullptr;
+#endif
+        if (native_history)
+        {
+#if VS_NATIVE_VULKAN
+            auto owner = VSNativeSession::active();
+            auto* nearby = gViewerWindow ? gViewerWindow->nativeChat() : nullptr;
+            if (owner && owner->phase() == VSNativeSession::Phase::Connected && nearby)
+            {
+                nearby->append(used_name + ": " + chat.mText);
+                if (gSavedPerAccountSettings.getBOOL("LogNearbyChat"))
+                    LLLogChat::saveHistory("chat", used_name, agent_id, chat.mText);
+            }
+#endif
+        }
+        else if (history_only)
         {
             FSFloaterNearbyChat* nearby_chat = LLFloaterReg::getTypedInstance<FSFloaterNearbyChat>("fs_nearby_chat", LLSD());
-            nearby_chat->addMessage(chat, true, LLSD());
+            if (nearby_chat) nearby_chat->addMessage(chat, true, LLSD());
         }
         else
         {

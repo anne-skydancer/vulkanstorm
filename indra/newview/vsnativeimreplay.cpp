@@ -52,6 +52,10 @@
 #include "fsfloaterim.h"
 #include "fsfloaterimcontainer.h"
 #include "fsfloatercontacts.h"
+#include "llnotificationmanager.h"
+#include "vsplainchat.h"
+#include "llviewerwindow.h"
+#include "lltexteditor.h"
 #include "fsscrolllistctrl.h"
 #include "llgrouplist.h"
 #include "llchatentry.h"
@@ -405,6 +409,44 @@ struct Replay : public LLAvatarPropertiesObserver
                 "Real group Search encoded wrong query, scope or page");
         }
     }
+    S32 friendStatusStep = 0;
+    bool savedFriendNearby = false, savedFriendHistory = false;
+    bool hadLegacyNoticeManager = false;
+    bool qualifyFriendStatus(VSNativeSession& owner, LLSD& evidence)
+    {
+        if (friendStatusStep == 3) return true;
+        if (friendStatusStep == 0)
+        {
+            savedFriendNearby = gSavedSettings.getBOOL("OnlineOfflinetoNearbyChat");
+            savedFriendHistory = gSavedSettings.getBOOL("OnlineOfflinetoNearbyChatHistory");
+            hadLegacyNoticeManager = LLNotificationsUI::LLNotificationManager::instanceExists();
+            gSavedSettings.setBOOL("OnlineOfflinetoNearbyChat", true);
+            gSavedSettings.setBOOL("OnlineOfflinetoNearbyChatHistory", false);
+            LLSD status; status["AgentBlock"][0]["AgentID"] = peer;
+            event(owner, "OnlineNotification", status);
+            ++friendStatusStep; return false;
+        }
+        auto* nearby = gViewerWindow->nativeChat();
+        require(nearby != nullptr, "Native friend-status history unavailable");
+        const auto text = nearby->transcript()->getText();
+        if (friendStatusStep == 1)
+        {
+            if (text.find(LLTrans::getString("FriendOnlineNotification")) == std::string::npos) return false;
+            require(LLNotificationsUI::LLNotificationManager::instanceExists() == hadLegacyNoticeManager,
+                "Native online notification constructed legacy toast manager");
+            gSavedSettings.setBOOL("OnlineOfflinetoNearbyChatHistory", true);
+            LLSD status; status["AgentBlock"][0]["AgentID"] = peer;
+            event(owner, "OfflineNotification", status);
+            ++friendStatusStep; return false;
+        }
+        if (text.find(LLTrans::getString("FriendOfflineNotification")) == std::string::npos) return false;
+        require(LLNotificationsUI::LLNotificationManager::instanceExists() == hadLegacyNoticeManager,
+            "Native offline notification constructed legacy toast manager");
+        gSavedSettings.setBOOL("OnlineOfflinetoNearbyChat", savedFriendNearby);
+        gSavedSettings.setBOOL("OnlineOfflinetoNearbyChatHistory", savedFriendHistory);
+        evidence["im_friend_status_history"] = true;
+        ++friendStatusStep; return true;
+    }
     bool tick(VSNativeSession& owner, LLSD& evidence)
     {
         if (loggedStep != step)
@@ -415,6 +457,7 @@ struct Replay : public LLAvatarPropertiesObserver
         if (step == 0)
         {
             require(owner.phase() == VSNativeSession::Phase::Connected && gIMMgr, "IM replay requires connected shared services");
+            if (!qualifyFriendStatus(owner, evidence)) return false;
             if (!membershipSent)
             {
                 LLSD membership;

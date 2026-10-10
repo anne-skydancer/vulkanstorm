@@ -40,6 +40,7 @@ jobs:
       - run: python scripts/tests/test_vulkan_viewer_diagnostic.py
       - run: python scripts/tests/test_vulkan_menu_callbacks.py
       - run: python scripts/tests/test_vulkan_preferences.py
+      - run: python scripts/tests/test_vulkan_friend_status.py
       - run: python scripts/tests/test_vulkan_ui_oracle.py
       - run: python scripts/tests/test_vulkan_media_pixels.py
       - run: python scripts/tests/test_vulkan_font_registry.py
