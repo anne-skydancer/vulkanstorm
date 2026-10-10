@@ -356,7 +356,7 @@
               image_unselected="SplitButtonLeft_Off"
               image_selected="SplitButtonLeft_Selected"
               image_pressed="SplitButtonLeft_Selected" 
-              image_pressed_selected="SplitButtonLeft_Press"
+              image_pressed_selected="SplitButtonLeft_Selected"
               image_disabled="SplitButtonLeft_Disabled"
               layout="topleft"
               left_delta="0"

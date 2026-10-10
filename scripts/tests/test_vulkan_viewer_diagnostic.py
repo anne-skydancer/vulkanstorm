@@ -24,6 +24,48 @@ def record():
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_native_scene_voice_leaf_is_omitted_before_factory(self):
+        root=Path(__file__).resolve().parents[2]
+        source=(root/'indra/newview/vsstartupui.cpp').read_text()
+        start=source.index('[](std::string_view filename, std::string_view child)')
+        opening=source.index('{',start);end=opening+1;depth=1
+        while depth:
+            depth+=(source[end]=='{')-(source[end]=='}');end+=1
+        gate=source[start:end]
+        factory=(root/'indra/llui/lluictrlfactory.cpp').read_text()
+        body=factory.split('void LLUICtrlFactory::createChildren(',1)[1].split('LLView *LLUICtrlFactory::createFromXML',1)[0]
+        self.assertLess(body.index('VSUIAdmission::child('),body.index('createFromXML('))
+        fixture=r'''#include <cassert>
+#include "vsuiadmission.h"
+int main(){
+ auto gate=GATE;
+ // Legacy construction and teardown retain every selected-skin child.
+ assert(VSUIAdmission::child("panel_toolbar_view.xml","nearby_voice_output_monitor"));
+ {
+  VSUIAdmission native([](const std::type_info&){return true;},
+   [](std::string_view){return false;},{},{},{},{},gate);
+  for(auto file:{"panel_toolbar_view.xml","skins/vintage/xui/en/panel_toolbar_view.xml",
+                 "skins\\vintage\\xui\\en\\panel_toolbar_view.xml"})
+   assert(!VSUIAdmission::child(file,"nearby_voice_output_monitor"));
+  assert(!VSUIAdmission::child("skins/default/xui/en/panel_people.xml","nearby_panel"));
+  for(auto name:{"default_chat_bar","utility_talk_button","voice_chat_controls_panel","toolbar_left"})
+   assert(VSUIAdmission::child("panel_toolbar_view.xml",name));
+  assert(VSUIAdmission::child("different_panel_toolbar_view.xml","nearby_voice_output_monitor"));
+  assert(VSUIAdmission::child("panel_im.xml","nearby_voice_output_monitor"));
+  assert(VSUIAdmission::child("panel_toolbar_view.xml","nearby_panel"));
+ }
+ assert(VSUIAdmission::child("panel_toolbar_view.xml","nearby_voice_output_monitor"));
+}
+'''.replace('GATE',gate)
+        compiler=shutil.which('clang++') or shutil.which('g++');self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'native_voice_leaf.cpp';path.write_text(fixture)
+            exe=Path(directory)/'native_voice_leaf.exe'
+            built=subprocess.run([compiler,'-std=c++17','-I',str(root/'indra/llui'),str(path),'-o',str(exe)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            run=subprocess.run([str(exe)],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+
     def test_shared_edit_delete_needs_no_scene_menu_owner(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / 'indra/newview/llviewermenu.cpp').read_text()
