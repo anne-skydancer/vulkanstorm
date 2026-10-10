@@ -44,7 +44,10 @@ skin/theme/language/font settings; 24 skin fixture cases supplement the existing
 15 cases. V3 required-panel admission and normal login are software-qualified.
 [V4 connected UI/chat](viewer-connected-session.md) now has production session
 transport, CPU region identity, nearby chat and bounded lifecycle ownership,
-with a dedicated staged-viewer replay. Live-server qualification is untested;
+with a dedicated staged-viewer replay. All 27 replay stages and 68 viewer cases
+passed per platform on Windows SwiftShader, Linux SwiftShader and Linux Lavapipe
+in [CI run 38012380599](https://github.com/anne-skydancer/vulkanstorm/actions/runs/38012380599).
+Live-server qualification is untested;
 world rendering remains open.
 
 Historical comparative audit baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Its mandate compared suitable architectures, including native Vulkan and general graphics abstractions. Those reports contain no runtime measurements, GPU captures, native implementation or build qualification.
