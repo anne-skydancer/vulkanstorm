@@ -183,6 +183,11 @@ private:
 };
 //============================================================================
 
+bool LLTabContainer::isNativeTabButtonType(const std::type_info& type)
+{
+    return type == typeid(LLCustomButtonIconCtrl);
+}
+
 struct LLPlaceHolderPanel : public LLPanel
 {
     // create dummy param block to register with "placeholder" nane

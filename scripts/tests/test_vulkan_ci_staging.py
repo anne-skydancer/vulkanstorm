@@ -28,7 +28,8 @@ class StagingFailureTests(unittest.TestCase):
         self.cef_runtime = ['llplugin/vulkan-1.dll', 'llplugin/libcef.dll', 'llplugin/dullahan_host.exe'] if windows else ['lib/libcef.so', 'bin/dullahan_host']
         platform_files = ['vulkanstorm-bin.exe', *self.libraries] if windows else ['bin/vulkanstorm-bin', *(f'lib/{name}' for name in self.libraries)]
         files = [*platform_files, *self.cef_runtime,
-                 'app_settings/message_template.msg', 'skins/default/xui/en/test.xml',
+                 'app_settings/message_template.msg', 'app_settings/contributors.txt',
+                 'app_settings/packages-info.txt', 'skins/default/xui/en/test.xml',
                  'fonts/test.ttf', 'app_settings/shaders/test.glsl',
                  'licenses/vulkan-ghi/test.txt', str(self.host.relative_to(self.stage)), str(self.media.relative_to(self.stage))]
         for name in files:
@@ -44,6 +45,17 @@ class StagingFailureTests(unittest.TestCase):
 
     def test_complete_stage(self):
         check(self.build)
+
+    def test_missing_about_assets(self):
+        for name in ('contributors.txt', 'packages-info.txt'):
+            with self.subTest(asset=name):
+                path = self.stage / 'app_settings' / name
+                path.unlink()
+                try:
+                    with self.assertRaisesRegex(RuntimeError, 'Missing staged file'):
+                        check(self.build)
+                finally:
+                    path.write_bytes(b'test')
 
     def test_wrong_library_bytes(self):
         (self.library_dir / self.libraries[0]).write_bytes(b'wrong')

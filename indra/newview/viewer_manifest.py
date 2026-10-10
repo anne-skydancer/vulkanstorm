@@ -171,13 +171,15 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             self.path("*.dae") # <FS:Beq> FIRE-30963 - better physics defaults
 
 
+        # Help -> About needs these in a runnable development stage as well.
+        with self.prefix(src_dst="app_settings"):
+            contributions_path = os.path.join(self.args['source'], "..", "..", "doc", "contributions.txt")
+            contributor_names = self.extract_names(contributions_path)
+            self.put_in_file(contributor_names.encode(), "contributors.txt", src=contributions_path)
+            self.path(src=os.path.join(self.args['build'], "packages-info.txt"), dst="packages-info.txt")
+
         if self.is_packaging_viewer():
             with self.prefix(src_dst="app_settings"):
-                # include the extracted list of contributors
-                contributions_path = os.path.join(self.args['source'], "..", "..", "doc", "contributions.txt")
-                contributor_names = self.extract_names(contributions_path)
-                self.put_in_file(contributor_names.encode(), "contributors.txt", src=contributions_path)
-
                 # ... and the default camera position settings
                 self.path("camera")
 
@@ -208,8 +210,6 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                 self.path("fs_static_assets")
                 # </FS:Beq>
 
-                # include the extracted packages information (see BuildPackagesInfo.cmake)
-                self.path(src=os.path.join(self.args['build'],"packages-info.txt"), dst="packages-info.txt")
                 # CHOP-955: If we have "sourceid" or "viewer_channel" in the
                 # build process environment, generate it into
                 # settings_install.xml.

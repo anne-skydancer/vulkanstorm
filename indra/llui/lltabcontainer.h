@@ -32,6 +32,7 @@
 #include "llframetimer.h"
 #include "lliconctrl.h"
 #include "llbutton.h"
+#include <typeinfo>
 
 class LLTabTuple;
 
@@ -205,6 +206,7 @@ public:
     LLPanel*    getCurrentPanel();
     S32         getCurrentPanelIndex() const;
     S32         getTabCount() const;
+    static bool isNativeTabButtonType(const std::type_info& type);
     LLPanel*    getPanelByIndex(S32 index) const;
     S32         getIndexForPanel(LLPanel* panel) const;
     S32         getPanelIndexByTitle(std::string_view title) const;

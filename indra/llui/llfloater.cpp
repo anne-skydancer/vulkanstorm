@@ -2214,8 +2214,16 @@ void LLFloater::draw()
 
                 const LLFontGL* font = LLFontGL::getFontSansSerif();
                 LLRect r = getRect();
-                gl_rect_2d_offset_local(0, r.getHeight(), r.getWidth(), r.getHeight() - font->getLineHeight() - 1,
-                    titlebar_focus_color % alpha, 0, true);
+                if (LLRender2D::isNativeUI())
+                {
+                    gl_rect_2d(0, r.getHeight(), r.getWidth(), r.getHeight() - font->getLineHeight() - 1,
+                        titlebar_focus_color % alpha, true);
+                }
+                else
+                {
+                    gl_rect_2d_offset_local(0, r.getHeight(), r.getWidth(), r.getHeight() - font->getLineHeight() - 1,
+                        titlebar_focus_color % alpha, 0, true);
+                }
             }
         }
     }
