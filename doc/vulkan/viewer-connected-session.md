@@ -83,7 +83,7 @@ full supported parity remain V5 and subsequent work.
 
 ## Execution evidence
 
-The final production source is `7d3d8b32f4d46b71d9248705bfde6e0b9a4901ec`.
+The final production source is `d617185e40d0df7ac866fb47fb0d17252e0e185e`.
 The complete RelWithDebInfo viewer stage and Windows SwiftShader replay are
 qualified locally before submission to the dedicated three-platform CI matrix.
 The existing 68-case V3 matrix passed locally with the V4 implementation; focused
@@ -108,5 +108,12 @@ UTF-8 explicitly; acceptance is checked with both the Windows default mode and
 Python UTF-8 mode before resubmission. No graphics jobs ran in that failed run.
 Earlier CI runs were superseded by the final input-history and transport revisions.
 Their source-only success does not qualify this final graphics implementation.
+Run 38005657430 passed source evidence and the standalone Vulkan/headless checks;
+Linux viewer compilation then found an incorrectly cased anti-spam header name.
+The include now matches tracked `NACLantispam.h`, and source evidence checks all
+native viewer includes for case mismatches before the platform builds. The
+Windows runtime behavior is unchanged by this portability correction.
+Verified GHI/software-runtime dependencies are now cached after the standalone
+checks, before viewer compilation, so a viewer failure does not discard them.
 The final three-platform run and artifact results will be recorded here after
 completion. Live-server qualification remains untested.

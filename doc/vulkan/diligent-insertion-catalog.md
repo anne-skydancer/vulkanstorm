@@ -1,7 +1,7 @@
 # Current DiligentCore insertion audit
 
 This is the authoritative entry point for insertion coverage on `vkstorm-vulkan`,
-source `7d3d8b32f4d46b71d9248705bfde6e0b9a4901ec`. DiligentCore is the selected
+source `d617185e40d0df7ac866fb47fb0d17252e0e185e`. DiligentCore is the selected
 GHI, not a candidate awaiting comparison with bgfx. The dependency preparation
 does not implement a renderer. Windows/Linux are in scope, with NVIDIA, AMD and
 Intel first-class; macOS/Metal are outside the selected product scope.
@@ -353,7 +353,7 @@ qualification limits and remaining normal-session/panel integration work.
 
 ## V3 completion refresh, 9 October 2026
 
-Source `7d3d8b32f4d46b71d9248705bfde6e0b9a4901ec`: required native viewer
+Source `d617185e40d0df7ac866fb47fb0d17252e0e185e`: required native viewer
 controls and resource ownership are implemented, including production plain
 chat, required-dialog actions, direct factory admission, DPI/composition routes
 and delayed completion lifetime checks. The ledger reconciles 28,516 witnesses
