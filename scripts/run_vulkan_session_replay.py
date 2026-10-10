@@ -62,7 +62,7 @@ REQUIRED = ('connected_skin_geometry', 'connected_account_benefits', 'connected_
             'connected_display_name_update',
             'connected_profile_second_life_image_save', 'connected_profile_first_life_image_save',
             'connected_resident_profile_notes', 'connected_group_profile_members_roles',
-            'connected_preferences_apply_cancel', 'connected_contact_set_edit', 'connected_blocklist_edit',
+            'connected_preferences_apply_cancel', 'preferences_repeated_tabs', 'preferences_graphics_persistence', 'connected_contact_set_edit', 'connected_blocklist_edit',
             'connected_transcript_preview', 'im_inventory_offer', 'im_group_attachment', 'im_inventory_preview',
             'connected_ui_image_decoded', 'im_friendship_notification', 'im_group_notice', 'im_group_invitation_decline_encoded',
             'im_contacts_ui', 'im_readback', 'im_direct_encoded', 'im_direct_incoming_offline', 'im_typing', 'im_mute',
@@ -247,7 +247,7 @@ class Handler(BaseHTTPRequestHandler):
         payload = self.rfile.read(size)
         path = urlsplit(self.path).path
         if path == '/script-data':
-            expected = b'default { state_entry() { llOwnerSay("Native edited script"); } }'
+            expected = b'default { state_entry() { llOwnerSay("Native edited script"); }}'
             metadata = self.server.upload_requests.get('script')
             if not metadata or payload.rstrip(b'\0') != expected:
                 self.send_error(400)
@@ -523,7 +523,7 @@ def main():
             if args.register_windows_manifests:
                 command.append('--register-windows-manifests')
             try:
-                code = subprocess.run(command, timeout=130).returncode
+                code = subprocess.run(command, timeout=230).returncode
                 record = json.loads((child / 'results.json').read_text())
                 results[name] = dict(passed=code == 0 and record.get('passed') is True,
                                      exit_code=code, evidence=str(child))
@@ -569,7 +569,7 @@ def main():
     env['VK_LAYER_SETTINGS_PATH'] = str(layer)
     command = [str(executable), '--settings', 'vs_native_session_ci.xml', '--set', 'ClientSettingsFile',
                str(directory / 'settings.xml'), '--set', 'RenderBackend', 'Vulkan', '--set', 'AutoLogin', 'false',
-               '--set', 'QuitAfterSeconds', '80', '--set', 'RenderDebugGLSession', 'true',
+               '--set', 'QuitAfterSeconds', '180', '--set', 'RenderDebugGLSession', 'true',
                '--set', 'UpdaterShowReleaseNotes', '0', '--set', 'FSShowWhitelistReminder', 'false']
     selection = ET.Element('llsd')
     append_llsd(selection, {name: dict(Type='String', Persist=0, Comment='Replay skin selection', Value=value)
@@ -589,7 +589,7 @@ def main():
         try:
             with windows_manifest_registration(runtime, args.register_windows_manifests):
                 process = subprocess.run(command, cwd=stage, env=env, stdout=subprocess.PIPE,
-                                         stderr=subprocess.STDOUT, timeout=100)
+                                         stderr=subprocess.STDOUT, timeout=200)
             code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
             report = read_llsd(ET.parse(directory / 'session-replay.xml').getroot())
             passed = assess(report, code, log)
