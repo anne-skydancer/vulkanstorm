@@ -804,6 +804,10 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         const auto additive=(230*320+245)*4,alpha_additive=(230*320+265)*4;
         require(std::abs(int(pixels[additive])-42)<=1 && std::abs(int(pixels[alpha_additive])-29)<=1,
                 "Native glow oracle differs from known blend pixels");
+        const auto replacement=(230*320+285)*4;
+        require(std::abs(int(pixels[replacement])-26)<=1 &&
+                std::abs(int(pixels[replacement+3])-128)<=1,
+                "Native replacement oracle differs from known RGBA pixels");
         if (injected=="bad-xui") pixels[0]=255;
         ui->draw(target,320,240,1,packets);
         auto desc=target->GetTexture()->GetDesc();const bool bgra=desc.Format==TEX_FORMAT_BGRA8_UNORM;
@@ -820,7 +824,10 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         require(mapped.pData!=nullptr,"Cannot map existing XUI readback");
         std::ofstream actual(evidence/"viewer-xui.ppm",std::ios::binary);
         std::ofstream expected(evidence/"viewer-xui-expected.ppm",std::ios::binary);
+        std::ofstream alpha(evidence/"viewer-xui-alpha.pgm",std::ios::binary);
+        std::ofstream expected_alpha(evidence/"viewer-xui-alpha-expected.pgm",std::ios::binary);
         actual<<"P6\n320 240\n255\n";expected<<"P6\n320 240\n255\n";
+        alpha<<"P5\n320 240\n255\n";expected_alpha<<"P5\n320 240\n255\n";
         unsigned mismatches=0;
         for(unsigned y=0;y<240;++y) for(unsigned x=0;x<320;++x)
         {
@@ -830,10 +837,13 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             actual.write(reinterpret_cast<const char*>(rgb),3);
             expected.write(reinterpret_cast<const char*>(oracle),3);
             for(unsigned c=0;c<3;++c) if(std::abs(int(rgb[c])-int(oracle[c]))>3) ++mismatches;
-            if(pixel[3]!=255) ++mismatches;
+            alpha.write(reinterpret_cast<const char*>(pixel+3),1);
+            expected_alpha.write(reinterpret_cast<const char*>(oracle+3),1);
+            // Replacement blending writes source alpha; it need not stay opaque.
+            if(std::abs(int(pixel[3])-int(oracle[3]))>3) ++mismatches;
         }
         context->UnmapTextureSubresource(readback,0,0);
-        require(actual.good() && expected.good(),"Cannot preserve existing XUI readbacks");
+        require(actual.good() && expected.good() && alpha.good() && expected_alpha.good(),"Cannot preserve existing XUI readbacks");
         std::cout<<"VIEWER_XUI_MISMATCHES="<<mismatches<<'\n';
         require(mismatches==0,"Viewer XUI pixel oracle mismatch");ui_xui_verified=true;
     }
