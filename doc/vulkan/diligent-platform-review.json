@@ -1,5 +1,5 @@
 {
-  "source_commit": "f1787e8f027388d2c77fe48c9499c37c654a82cd",
+  "source_commit": "163ee9e2e853fb556705b7f24ab279195405c3c1",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -176,48 +176,48 @@
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1190,
-      "end": 1345,
+      "start": 1191,
+      "end": 1346,
       "record": "I01",
       "disposition": "mapped",
       "reason": "init calls selectGLBackend before initWindow, then GL VRAM overrides/info/requirements/driver warnings and self-registered callbacks. Native capability/identity owner must precede callbacks and prevent GL probes; CPU SSE/RAM/input policies remain.",
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 2409,
-      "end": 2495,
+      "start": 2410,
+      "end": 2496,
       "record": "I02",
       "disposition": "mapped",
       "reason": "Shutdown stops fetch/cache/decode/thread pools before shutdownGL then viewer window deletion. Native path must cancel/retain producers and drain submitted work before resource/device/window destruction; keyboard remains until views destroyed.",
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 3719,
-      "end": 3857,
+      "start": 3720,
+      "end": 3858,
       "record": "I01",
       "disposition": "mapped",
       "reason": "initWindow currently coerces Vulkan to GL, creates LLViewerWindow then pipeline/initGLDefaults with persisted RenderInitError. Replace backend capability/error ownership; preserve startup diagnostics and reference route.",
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4041,
-      "end": 4135,
+      "start": 4042,
+      "end": 4136,
       "record": "I01",
       "disposition": "mapped",
       "reason": "getViewerInfo directly glGetString vendor/renderer/version plus GL VRAM/vendor-based WMI; replace with cached actual Vulkan adapter/driver/backend identity, safe during teardown. CPU/network/library diagnostics remain.",
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 6760,
-      "end": 6790,
+      "start": 6787,
+      "end": 6817,
       "record": "I01",
       "disposition": "mapped",
       "reason": "forceErrorDriverCrash calls glDeleteTextures(1,NULL). Legacy crash injection must be gated/disabled/adapted for native backend rather than executing GL with no context.",
-      "sha256": "e1ad9122a9ca1010d8891da61e49d2a210d77fb8ebbd3944f439e49c3679c4a3"
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47"
     },
     {
       "path": "indra/newview/llviewerwindow.cpp",
@@ -371,6 +371,348 @@
       "disposition": "mapped",
       "reason": "GPU macros expand Tracy OpenGL API under flag, hidden GL execution across caller files. Native path must replace/gate GPU macros, preserving CPU diagnostics.",
       "sha256": "b6751e633fa46a6e674d72a4fbc83bf66f5ade48a0d44dce525e9058fcd1ee71"
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 30,
+      "end": 30,
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4304,
+      "end": 4326,
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4329,
+      "end": 4329,
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4331,
+      "end": 4364,
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4497,
+      "end": 4497,
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4499,
+      "end": 4499,
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4556,
+      "end": 4561,
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4621,
+      "end": 4621,
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4623,
+      "end": 4623,
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llfloaterabout.cpp",
+      "start": 436,
+      "end": 440,
+      "sha256": "a6c5f0a0f3b1359085a0f10669a2a6e6683d2815da804ccdf596d2533fe5dddc",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
+    },
+    {
+      "path": "indra/newview/llfloaterabout.h",
+      "start": 30,
+      "end": 31,
+      "sha256": "de22e5ad08ed14fdc06c738b80ebb576fd259c89e24d0ef9025b025b1b79ec93",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
+    },
+    {
+      "path": "indra/newview/llfloaterabout.h",
+      "start": 35,
+      "end": 35,
+      "sha256": "de22e5ad08ed14fdc06c738b80ebb576fd259c89e24d0ef9025b025b1b79ec93",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
+    },
+    {
+      "path": "indra/newview/vsstartupui.cpp",
+      "start": 28,
+      "end": 29,
+      "sha256": "0e28e8c193353c6da6c9f0507080efda73e6e55811e9233d834e5b59f020cc5c",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
+    },
+    {
+      "path": "indra/newview/vsstartupui.cpp",
+      "start": 46,
+      "end": 46,
+      "sha256": "0e28e8c193353c6da6c9f0507080efda73e6e55811e9233d834e5b59f020cc5c",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
+    },
+    {
+      "path": "indra/newview/vsstartupui.cpp",
+      "start": 61,
+      "end": 61,
+      "sha256": "0e28e8c193353c6da6c9f0507080efda73e6e55811e9233d834e5b59f020cc5c",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
+    },
+    {
+      "path": "indra/newview/vsviewerwindow.cpp",
+      "start": 15,
+      "end": 15,
+      "sha256": "bb5e5dfde122b00487a9a6e9eec12031d705d3053faad3eada4ae108f04b0259",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
+    },
+    {
+      "path": "indra/newview/vsviewerwindow.cpp",
+      "start": 138,
+      "end": 138,
+      "sha256": "bb5e5dfde122b00487a9a6e9eec12031d705d3053faad3eada4ae108f04b0259",
+      "record": "I08",
+      "disposition": "mapped-gate",
+      "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 17,
+      "end": 18,
+      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "record": "I25",
+      "disposition": "mapped-gate",
+      "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 50,
+      "end": 50,
+      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "record": "I25",
+      "disposition": "mapped-gate",
+      "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 222,
+      "end": 222,
+      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "record": "I25",
+      "disposition": "mapped-gate",
+      "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1001,
+      "end": 1001,
+      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "record": "I25",
+      "disposition": "mapped-gate",
+      "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1313,
+      "end": 1359,
+      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "record": "I25",
+      "disposition": "mapped-gate",
+      "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1394,
+      "end": 1394,
+      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "record": "I25",
+      "disposition": "mapped-gate",
+      "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1404,
+      "end": 1404,
+      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "record": "I25",
+      "disposition": "mapped-gate",
+      "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.cpp",
+      "start": 17,
+      "end": 18,
+      "sha256": "0c16044b47f5acc5a1ebcf9f525266be894e3c6066240de807c3b44ab5183208",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.cpp",
+      "start": 48,
+      "end": 48,
+      "sha256": "0c16044b47f5acc5a1ebcf9f525266be894e3c6066240de807c3b44ab5183208",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.cpp",
+      "start": 84,
+      "end": 100,
+      "sha256": "0c16044b47f5acc5a1ebcf9f525266be894e3c6066240de807c3b44ab5183208",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.cpp",
+      "start": 200,
+      "end": 201,
+      "sha256": "0c16044b47f5acc5a1ebcf9f525266be894e3c6066240de807c3b44ab5183208",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.h",
+      "start": 9,
+      "end": 9,
+      "sha256": "86bfaf5d3f1a10f6d537b73c18a44755ae6a1f0d39d1101cd008404ea68dc00b",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.h",
+      "start": 25,
+      "end": 26,
+      "sha256": "86bfaf5d3f1a10f6d537b73c18a44755ae6a1f0d39d1101cd008404ea68dc00b",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
+    },
+    {
+      "path": "indra/llui/llfloater.cpp",
+      "start": 2217,
+      "end": 2226,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared About and tab container retain existing skin classes. The private custom tab button is admitted by exact type identity; native floater focus highlight publishes explicit-color UI rectangles while OpenGL retains its physical-offset helper. No world or general floater admission.",
+      "sha256": "bd4c7e9957686802c25cd27d9a8b50f3bf48dfaefbe7e4cf7c0b7eb6e92e81ae"
+    },
+    {
+      "path": "indra/llui/lltabcontainer.cpp",
+      "start": 185,
+      "end": 189,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared About and tab container retain existing skin classes. The private custom tab button is admitted by exact type identity; native floater focus highlight publishes explicit-color UI rectangles while OpenGL retains its physical-offset helper. No world or general floater admission.",
+      "sha256": "699ceb86fa7c4ce3b383efdd45ba93cd3966e18d636286bb95073c810b271be9"
+    },
+    {
+      "path": "indra/llui/lltabcontainer.h",
+      "start": 35,
+      "end": 35,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared About and tab container retain existing skin classes. The private custom tab button is admitted by exact type identity; native floater focus highlight publishes explicit-color UI rectangles while OpenGL retains its physical-offset helper. No world or general floater admission.",
+      "sha256": "944101de80864b404b2c7a78778dac29ec466516176f42d53ab56b736a937e3a"
+    },
+    {
+      "path": "indra/llui/lltabcontainer.h",
+      "start": 209,
+      "end": 209,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared About and tab container retain existing skin classes. The private custom tab button is admitted by exact type identity; native floater focus highlight publishes explicit-color UI rectangles while OpenGL retains its physical-offset helper. No world or general floater admission.",
+      "sha256": "944101de80864b404b2c7a78778dac29ec466516176f42d53ab56b736a937e3a"
+    },
+    {
+      "path": "indra/newview/viewer_manifest.py",
+      "start": 174,
+      "end": 180,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Shared About assets are staged for development and package builds; existing Autobuild packages-info and contributor extraction remain the sources, no installer or release publishing added.",
+      "sha256": "71c0ae4264dd481646f8a26626e914c993fba62100064fd36b9810bf55a6588b"
+    },
+    {
+      "path": "indra/newview/viewer_manifest.py",
+      "start": 183,
+      "end": 183,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Shared About assets are staged for development and package builds; existing Autobuild packages-info and contributor extraction remain the sources, no installer or release publishing added.",
+      "sha256": "71c0ae4264dd481646f8a26626e914c993fba62100064fd36b9810bf55a6588b"
+    },
+    {
+      "path": "indra/newview/viewer_manifest.py",
+      "start": 213,
+      "end": 213,
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Shared About assets are staged for development and package builds; existing Autobuild packages-info and contributor extraction remain the sources, no installer or release publishing added.",
+      "sha256": "71c0ae4264dd481646f8a26626e914c993fba62100064fd36b9810bf55a6588b"
+    },
+    {
+      "path": "indra/newview/vsstartupui.cpp",
+      "start": 46,
+      "end": 46,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared About and tab container retain existing skin classes. The private custom tab button is admitted by exact type identity; native floater focus highlight publishes explicit-color UI rectangles while OpenGL retains its physical-offset helper. No world or general floater admission.",
+      "sha256": "0e28e8c193353c6da6c9f0507080efda73e6e55811e9233d834e5b59f020cc5c"
     }
   ]
 }

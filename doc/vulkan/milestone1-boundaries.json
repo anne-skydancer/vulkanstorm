@@ -1,5 +1,5 @@
 {
-  "source_commit": "f1787e8f027388d2c77fe48c9499c37c654a82cd",
+  "source_commit": "163ee9e2e853fb556705b7f24ab279195405c3c1",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "11a767bc0946ae57fca6cb0bba4c0a7ece389fc15828ca665fca07cb8bd77c1c",
+      "sha256": "e71b7f9c636c5a6ec26ef19e86c5e9aacdb85358e1d9fb82e2803b52da594e47",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -339,7 +339,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "a8090e494702392820a53be188f0cb709a32755c6ec279a0309e39f3aed4f6e6",
+      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -701,7 +701,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.cpp": {
-      "sha256": "92c99d6b1d36c906dc7d27d60855c4eace5cabb586a45efe9edd0dc80e3a84c2",
+      "sha256": "0c16044b47f5acc5a1ebcf9f525266be894e3c6066240de807c3b44ab5183208",
       "anchors": [
         "VSVulkanContext::VSVulkanContext",
         "CreateDeviceAndContextsVk",
@@ -710,14 +710,14 @@
       ]
     },
     "indra/newview/vsvulkancontext.h": {
-      "sha256": "28ce25ea3af04d3b5d8c0436873610ea19ca96b477e3dc0c2b2177430f002910",
+      "sha256": "86bfaf5d3f1a10f6d537b73c18a44755ae6a1f0d39d1101cd008404ea68dc00b",
       "anchors": [
         "class VSVulkanContext",
         "FrameObserver"
       ]
     },
     "indra/newview/vsviewerwindow.cpp": {
-      "sha256": "df590fa2373f2da8a856a00e6e2cf74187f9d3d49b375e0f17b9937665906380",
+      "sha256": "bb5e5dfde122b00487a9a6e9eec12031d705d3053faad3eada4ae108f04b0259",
       "anchors": [
         "initNativeWindow",
         "initNativeBase",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "bd57eaffdd07e0bcb88539659258c77af1413e2773245847ca9f23efefe90631",
+      "sha256": "0e28e8c193353c6da6c9f0507080efda73e6e55811e9233d834e5b59f020cc5c",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
