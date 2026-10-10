@@ -50,7 +50,6 @@ Vous êtes à [REGION]
 Mémoire : [MEMORY_MB] Mo (Utilisée : [USED_RAM] Mo)
 Concurrence: [CONCURRENCY]
 Version OS : [OS_VERSION]
-Distributeur de cartes graphiques : [GRAPHICS_CARD_VENDOR]
 Carte graphique : [GRAPHICS_CARD]
 Mémoire de carte graphique : [GRAPHICS_CARD_MEMORY] Mo
 Mémoire de carte graphique (Détectée): [GRAPHICS_CARD_MEMORY_DETECTED] Mo

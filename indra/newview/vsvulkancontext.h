@@ -6,6 +6,7 @@
 #include <string>
 namespace Diligent { struct GraphicsAdapterInfo; }
 class LLWindow;
+class LLSD;
 class VSUIResources;
 class VSVulkanContext
 {
@@ -21,6 +22,8 @@ public:
     using FrameObserver = std::function<void(Diligent::IRenderDevice*, Diligent::IDeviceContext*, Diligent::ITextureView*, unsigned, unsigned, float, const std::vector<VSUIRenderer::Packet>&)>;
     void setFrameObserver(FrameObserver);
     void               wait();
+    // Cached facts from the selected device; safe for About/crash reports.
+    LLSD rendererInfo() const;
     const std::string& adapter() const;
     const Diligent::GraphicsAdapterInfo& adapterInfo() const;
 

@@ -53,7 +53,6 @@ SLURL: &lt;nolink&gt;[SLURL]&lt;/nolink&gt;
 Speicher: [MEMORY_MB] MB (Verwendet: [USED_RAM] MB)
 Parallelität: [CONCURRENCY]
 Betriebssystemversion: [OS_VERSION]
-Grafikkartenhersteller: [GRAPHICS_CARD_VENDOR]
 Grafikkarte: [GRAPHICS_CARD]
 Grafikkartenspeicher: [GRAPHICS_CARD_MEMORY] MB
 Grafikkartenspeicher (Erkannt): [GRAPHICS_CARD_MEMORY_DETECTED] MB

@@ -14,6 +14,8 @@
 #undef True
 #undef MAP_TYPE
 #include <DiligentCore/Graphics/GraphicsEngineVulkan/interface/EngineFactoryVk.h>
+#include <vulkan/vulkan.h>
+#include <DiligentCore/Graphics/GraphicsEngineVulkan/interface/RenderDeviceVk.h>
 #include <DiligentCore/Common/interface/RefCntAutoPtr.hpp>
 #pragma pop_macro("MAP_TYPE")
 #pragma pop_macro("True")
@@ -43,6 +45,7 @@ struct VSVulkanContext::Impl
     std::unique_ptr<VSUIRenderer>                     renderer;
     std::unique_ptr<VSUIResources>                    resources;
     std::string                                       adapter;
+    LLSD renderer_info;
     FrameObserver observer;
 #if !LL_WINDOWS
     Display* display = nullptr; // Borrowed from the SDL window, including retirement.
@@ -78,6 +81,23 @@ struct VSVulkanContext::Impl
             require(actual.VendorId == selected.VendorId && actual.DeviceId == selected.DeviceId &&
                 std::string(actual.Description) == selected.Description, "Native Vulkan selected an unexpected adapter");
             adapter = actual.Description;
+            RefCntAutoPtr<IRenderDeviceVk> native_device(device, IID_RenderDeviceVk);
+            require(native_device != nullptr, "Native device does not expose Vulkan properties");
+            VkPhysicalDeviceProperties properties{};
+            vkGetPhysicalDeviceProperties(native_device->GetVkPhysicalDevice(), &properties);
+            renderer_info["GRAPHICS_CARD"] = adapter;
+            renderer_info["RENDERING_API"] = "Vulkan";
+            renderer_info["RENDERING_API_VERSION"] = llformat("%u.%u.%u",
+                VK_VERSION_MAJOR(properties.apiVersion), VK_VERSION_MINOR(properties.apiVersion),
+                VK_VERSION_PATCH(properties.apiVersion));
+            // Vulkan driverVersion is vendor-specific, not an API version.
+            renderer_info["GRAPHICS_DRIVER_VERSION"] = llformat("0x%08x (raw Vulkan value)", properties.driverVersion);
+            if (actual.Memory.LocalMemory)
+            {
+                const double megabytes = double(actual.Memory.LocalMemory) / (1024 * 1024);
+                renderer_info["GRAPHICS_CARD_MEMORY"] = megabytes;
+                renderer_info["GRAPHICS_CARD_MEMORY_DETECTED"] = megabytes;
+            }
             LL_INFOS("NativeVulkan") << "Machine Vulkan adapter: " << adapter << LL_ENDL;
             NativeWindow native{};
 #if LL_WINDOWS
@@ -177,6 +197,8 @@ bool VSVulkanContext::present(float dpi, const std::function<void()>& draw)
 { return mImpl->present(dpi, draw); }
 void VSVulkanContext::wait()
 { mImpl->context->WaitForIdle(); }
+LLSD VSVulkanContext::rendererInfo() const
+{ return mImpl->renderer_info; }
 const std::string& VSVulkanContext::adapter() const
 { return mImpl->adapter; }
 

@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
+#include "vsvulkancontext.h"
 #endif
 
 #include "llappviewer.h"
@@ -4300,53 +4301,72 @@ LLSD LLAppViewer::getViewerInfo() const
     info["CONCURRENCY"] = LLSD::Integer(std::thread::hardware_concurrency());    // <FS:Beq> Add hardware concurrency to info
     // Moved hack adjustment to Windows memory size into llsys.cpp
     info["OS_VERSION"] = LLOSInfo::instance().getOSString();
-    info["GRAPHICS_CARD_VENDOR"] = ll_safe_string((const char*)(glGetString(GL_VENDOR)));
-    info["GRAPHICS_CARD"] = ll_safe_string((const char*)(glGetString(GL_RENDERER)));
-    info["GRAPHICS_CARD_MEMORY"] = LLSD::Integer(gGLManager.mVRAM);
-    info["GRAPHICS_CARD_MEMORY_DETECTED"] = gGLManager.mVRAMDetected; // <FS:Beq/> allow detected hardware to be overridden.
-
-#if LL_WINDOWS
-    std::string drvinfo;
-
-    if (gGLManager.mIsIntel)
+    // Use the running window, not a renderer preference changed for next restart.
+    // Keep the latched native session flag when reporting after window teardown.
+    const bool native_vulkan = gViewerWindow ? gViewerWindow->isNativeVulkan() : mNativeVulkanLogin;
+    info["RENDERING_API"] = native_vulkan ? "Vulkan" : "OpenGL";
+    for (const char* key : {"RENDERING_API_VERSION", "GRAPHICS_CARD_VENDOR", "GRAPHICS_CARD",
+                           "GRAPHICS_CARD_MEMORY", "GRAPHICS_CARD_MEMORY_DETECTED", "OPENGL_VERSION"})
+        info[key] = LLSD();
+#if VS_NATIVE_VULKAN
+    if (native_vulkan && gViewerWindow && gViewerWindow->nativeContext())
     {
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_INTEL);
-    }
-    else if (gGLManager.mIsNVIDIA)
-    {
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_NVIDIA);
-    }
-    else if (gGLManager.mIsAMD)
-    {
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_AMD);
-    }
-
-    if (drvinfo.empty())
-    {
-        // Generic/substitute windows driver? Unknown vendor?
-        LL_WARNS("DriverVersion") << "Vendor based driver search failed, searching for any driver" << LL_ENDL;
-        drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_ANY);
-    }
-
-    if (!drvinfo.empty())
-    {
-        info["GRAPHICS_DRIVER_VERSION"] = drvinfo;
-    }
-    else
-    {
-        LL_WARNS("DriverVersion")<< "Cannot get driver version from getDriverVersionWMI" << LL_ENDL;
-        LLSD driver_info = gDXHardware.getDisplayInfo();
-        if (driver_info.has("DriverVersion"))
-        {
-            info["GRAPHICS_DRIVER_VERSION"] = driver_info["DriverVersion"];
-        }
+        const LLSD renderer = gViewerWindow->nativeContext()->rendererInfo();
+        for (auto entry = renderer.beginMap(); entry != renderer.endMap(); ++entry)
+            info[entry->first] = entry->second;
     }
 #endif
+    if (!native_vulkan && gGLManager.mInited)
+    {
+        info["GRAPHICS_CARD_VENDOR"] = ll_safe_string((const char*)(glGetString(GL_VENDOR)));
+        info["GRAPHICS_CARD"] = ll_safe_string((const char*)(glGetString(GL_RENDERER)));
+        info["GRAPHICS_CARD_MEMORY"] = LLSD::Integer(gGLManager.mVRAM);
+        info["GRAPHICS_CARD_MEMORY_DETECTED"] = gGLManager.mVRAMDetected; // <FS:Beq/> allow detected hardware to be overridden.
+        info["OPENGL_VERSION"] = ll_safe_string((const char*)(glGetString(GL_VERSION)));
+        info["RENDERING_API_VERSION"] = info["OPENGL_VERSION"];
+
+#if LL_WINDOWS
+        std::string drvinfo;
+
+        if (gGLManager.mIsIntel)
+        {
+            drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_INTEL);
+        }
+        else if (gGLManager.mIsNVIDIA)
+        {
+            drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_NVIDIA);
+        }
+        else if (gGLManager.mIsAMD)
+        {
+            drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_AMD);
+        }
+
+        if (drvinfo.empty())
+        {
+            // Generic/substitute windows driver? Unknown vendor?
+            LL_WARNS("DriverVersion") << "Vendor based driver search failed, searching for any driver" << LL_ENDL;
+            drvinfo = gDXHardware.getDriverVersionWMI(LLDXHardware::GPU_ANY);
+        }
+
+        if (!drvinfo.empty())
+        {
+            info["GRAPHICS_DRIVER_VERSION"] = drvinfo;
+        }
+        else
+        {
+            LL_WARNS("DriverVersion")<< "Cannot get driver version from getDriverVersionWMI" << LL_ENDL;
+            LLSD driver_info = gDXHardware.getDisplayInfo();
+            if (driver_info.has("DriverVersion"))
+            {
+                info["GRAPHICS_DRIVER_VERSION"] = driver_info["DriverVersion"];
+            }
+        }
+#endif
+    }
 
 // [RLVa:KB] - Checked: 2010-04-18 (RLVa-1.2.0)
     info["RLV_VERSION"] = (rlv_handler_t::isEnabled()) ? RlvStrings::getVersionAbout() : LLTrans::getString("RLVaStatusDisabled");
 // [/RLVa:KB]
-    info["OPENGL_VERSION"] = ll_safe_string((const char*)(glGetString(GL_VERSION)));
     info["LIBCURL_VERSION"] = LLCore::LLHttp::getCURLVersion();
     // Settings
     // <FS:Beq> gViewerWindow can be null on shutdown. Crashes if bugsplatt uses the info
@@ -4474,8 +4494,9 @@ LLSD LLAppViewer::getViewerInfo() const
     // populate field for new local disk cache with some details
     // <FS:Beq> only populate if the cache is available
     // info["DISK_CACHE_INFO"] = LLDiskCache::getInstance()->getCacheInfo();
-    if (auto cache = LLDiskCache::getInstance(); cache)
+    if (LLDiskCache::instanceExists())
     {
+        auto* cache = LLDiskCache::getInstance();
         LL_PROFILE_ZONE_NAMED("gvi-getCacheInfo"); // <FS:Beq/> improve instrumentation
         info["DISK_CACHE_INFO"] = cache->getCacheInfo();
     }
@@ -4532,6 +4553,12 @@ LLSD LLAppViewer::getViewerInfo() const
         info["VRAM_BUDGET_ENGLISH"] = "Unlimited";
     }
     // </FS:Ansariel>
+    if (native_vulkan)
+    {
+        // The OpenGL texture budget does not govern native Vulkan allocations.
+        info["VRAM_BUDGET"] = LLSD();
+        info["VRAM_BUDGET_ENGLISH"] = LLSD();
+    }
 
     return info;
 }
@@ -4591,9 +4618,9 @@ std::string LLAppViewer::getViewerInfoString(bool default_string) const
     support << "\n";
     if (info.has("GRAPHICS_DRIVER_VERSION"))
     {
-        support << "\n" << LLTrans::getString("AboutDriver", args, default_string);
+        support << "\n" << LLTrans::getString(info["RENDERING_API"].asString() == "Vulkan" ? "AboutGraphicsDriver" : "AboutDriver", args, default_string);
     }
-    support << "\n" << LLTrans::getString("AboutOGL", args, default_string);
+    support << "\n" << LLTrans::getString("AboutRenderer", args, default_string);
     //support << "\n\n" << LLTrans::getString("AboutSettings", args, default_string); // <FS> Custom sysinfo
 #if LL_DARWIN
     support << "\n" << LLTrans::getString("AboutOSXHiDPI", args, default_string);

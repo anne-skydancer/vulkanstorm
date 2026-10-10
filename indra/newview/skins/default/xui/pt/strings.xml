@@ -49,7 +49,6 @@ SLURL: &lt;nolink&gt;[SLURL]&lt;/nolink&gt;
 Memória: [MEMORY_MB] MBs (Memória usada: [USED_RAM] MBs)
 Concurrency: [CONCURRENCY]
 Versão OS: [OS_VERSION]
-Placa de vídeo: [GRAPHICS_CARD_VENDOR]
 Placa gráfica: [GRAPHICS_CARD]
 Memória de Placa gráfica: [GRAPHICS_CARD_MEMORY] MB
 Memória de Placa gráfica (Detected): [GRAPHICS_CARD_MEMORY_DETECTED] MB

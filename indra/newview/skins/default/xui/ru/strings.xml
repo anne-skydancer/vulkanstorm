@@ -65,7 +65,6 @@ SLURL: &lt;nolink&gt;[SLURL]&lt;/nolink&gt;
 Память RAM: [MEMORY_MB] МБ (Использовал: [USED_RAM] MB)
 Потоки декодирования изображений: [CONCURRENCY]
 Версия ОС: [OS_VERSION]
-Производитель видеокарты: [GRAPHICS_CARD_VENDOR]
 Видеокарта: [GRAPHICS_CARD]
 Память видеокарты: [GRAPHICS_CARD_MEMORY] МБ
 Память видеокарты (Обнаружено): [GRAPHICS_CARD_MEMORY_DETECTED] MB

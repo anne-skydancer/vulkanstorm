@@ -27,9 +27,12 @@
 #ifndef LL_LLFLOATERABOUT_H
 #define LL_LLFLOATERABOUT_H
 
+#include <typeinfo>
+
 namespace LLFloaterAboutUtil
 {
     void registerFloater();
+    bool isFloaterType(const std::type_info& type);
 
     // Support for user initialized update/state checks
     void checkUpdatesAndNotify();

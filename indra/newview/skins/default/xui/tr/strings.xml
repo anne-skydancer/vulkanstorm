@@ -57,7 +57,6 @@ SLURL: &lt;nolink&gt;[SLURL]&lt;/nolink&gt;
 Bellek: [MEMORY_MB] MB (Used: [USED_RAM] MB)
 Concurrency: [CONCURRENCY]
 İşl. Sis. Sürümü: [OS_VERSION]
-Grafik Kartı Üreticisi: [GRAPHICS_CARD_VENDOR]
 Grafik Kartı: [GRAPHICS_CARD]
 Graphics Card Memory: [GRAPHICS_CARD_MEMORY] MB
 Graphics Card Memory (Detected): [GRAPHICS_CARD_MEMORY_DETECTED] MB

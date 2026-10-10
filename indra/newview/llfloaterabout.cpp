@@ -433,6 +433,11 @@ void LLFloaterAbout::setUpdateListener()
 ///----------------------------------------------------------------------------
 /// LLFloaterAboutUtil
 ///----------------------------------------------------------------------------
+bool LLFloaterAboutUtil::isFloaterType(const std::type_info& type)
+{
+    return type == typeid(LLFloaterAbout);
+}
+
 void LLFloaterAboutUtil::registerFloater()
 {
     LLFloaterReg::add("sl_about", "floater_about.xml",
