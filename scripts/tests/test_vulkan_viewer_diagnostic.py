@@ -108,9 +108,63 @@ int main(){
             run = subprocess.run([str(executable)], capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
+    def test_native_return_character_commits_after_text_and_only_once(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/newview/llviewerwindow.cpp').read_text(encoding='utf-8')
+        start = source.index('bool LLViewerWindow::handleUnicodeChar(')
+        start = source.index('    if (mNativeVulkan)', start)
+        end = source.index('    // HACK:', start)
+        body = source[start:end]
+        fixture = r"""
+#include <cassert>
+#include <string>
+using llwchar=unsigned;using MASK=unsigned;
+constexpr MASK MASK_NONE=0,MASK_CONTROL=1,MASK_ALT=2;
+constexpr int KEY_RETURN=13;
+struct Focus {
+    bool wants=false,consume=true;int submits=0;std::string text;
+    bool wantsReturnKey()const{return wants;}
+    bool handleUnicodeChar(llwchar c,bool){if(c<32)return false;text+=char(c);return true;}
+    bool handleKey(int key,MASK,bool){assert(key==KEY_RETURN);if(consume)++submits;return consume;}
+};
+struct FocusManager {Focus* focus=nullptr;Focus* getKeyboardFocus(){return focus;}}gFocusMgr;
+struct Root {int submits=0;bool handleKey(int key,MASK,bool){assert(key==KEY_RETURN);++submits;return true;}};
+struct LLViewerWindow {
+    bool mNativeVulkan=true;Root* mRootView=nullptr;
+    bool handleUnicodeChar(llwchar uni_char,MASK mask){
+""" + body + r"""
+        return false;
+    }
+};
+int main(){
+    Root root;Focus edit;gFocusMgr.focus=&edit;LLViewerWindow window;window.mRootView=&root;
+    assert(window.handleUnicodeChar('a',0));assert(window.handleUnicodeChar('b',0));
+    assert(edit.text=="ab" && edit.submits==0);
+    assert(window.handleUnicodeChar(13,0) && edit.submits==1 && edit.text=="ab");
+    edit.wants=true;assert(window.handleUnicodeChar(13,0) && edit.submits==1);
+    edit.wants=false;edit.consume=false;
+    assert(window.handleUnicodeChar(3,0) && root.submits==1);
+    assert(!window.handleUnicodeChar(13,MASK_CONTROL) && root.submits==1);
+    assert(!window.handleUnicodeChar(13,MASK_ALT) && root.submits==1);
+    gFocusMgr.focus=nullptr;assert(window.handleUnicodeChar(13,0) && root.submits==2);
+}
+"""
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'native_return.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            executable = path.with_suffix('.exe')
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(executable)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(executable)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_startup_acceptance_requires_viewer_ownership_readbacks_and_decisive_failure(self):
         item=dict(schema=1,mode='viewer-native-startup',shutdown_complete=True,
                   validation_errors=0,login_controls_verified=True,progress_owner_verified=True,
+                  login_os_input_verified=True,login_submit_actions=2,
                   stages=['native-viewer-window-created','native-startup-progress-created',
                           'native-login-controller-created','native-startup-ui-released',
                           'native-startup-graphics-released','native-startup-window-released'],
@@ -122,6 +176,7 @@ int main(){
         self.assertTrue(assess_startup(item,0,'','startup-positive'))
         for key,value in [('modal_alert_verified',False),('critical_dialog_verified',False),('readbacks',17),('plain_chat_controls_verified',False),('required_dialog_actions_verified',False),('mfa_actions_verified',False),('login_menus_verified',False),('unsupported_ui_status_verified',False),('validation_errors',1),('shutdown_complete',False),
                           ('login_controls_verified',False),('progress_owner_verified',False),('stages',[]),
+                          ('login_os_input_verified',False),('login_submit_actions',0),('login_submit_actions',1),
                           ('stages',list(reversed(item['stages'])))]:
             bad=copy.deepcopy(item);bad[key]=value
             self.assertFalse(assess_startup(bad,0,'','startup-positive'))
