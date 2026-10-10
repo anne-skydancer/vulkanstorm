@@ -1,5 +1,5 @@
 {
-  "source_commit": "8dd932e856ea1d50e27023f8f0041c66d40c0cfd",
+  "source_commit": "4581519cddb0d0d98ae231dd108ae20cd5f21194",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -1042,16 +1042,16 @@
       "path": "indra/newview/vsviewerwindow.cpp",
       "start": 15,
       "end": 15,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped-gate",
       "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 147,
-      "end": 147,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 150,
+      "end": 150,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped-gate",
       "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
@@ -1060,7 +1060,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 17,
       "end": 18,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
@@ -1069,7 +1069,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 50,
       "end": 50,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
@@ -1078,7 +1078,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 222,
       "end": 222,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
@@ -1087,34 +1087,43 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1011,
       "end": 1011,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1333,
-      "end": 1379,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "start": 1332,
+      "end": 1338,
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1414,
-      "end": 1414,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "start": 1349,
+      "end": 1388,
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1424,
-      "end": 1424,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "start": 1423,
+      "end": 1423,
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
+      "record": "I25",
+      "disposition": "mapped-gate",
+      "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1433,
+      "end": 1433,
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
@@ -8422,43 +8431,34 @@
       "path": "indra/newview/llviewermenufile.cpp",
       "start": 30,
       "end": 33,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1380,
-      "end": 1384,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "start": 1385,
+      "end": 1389,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1401,
-      "end": 1410,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "start": 1406,
+      "end": 1415,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1412,
-      "end": 1412,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
-      "record": "I08",
-      "disposition": "mapped",
-      "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
-    },
-    {
-      "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1414,
-      "end": 1416,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "start": 1417,
+      "end": 1417,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
@@ -8466,80 +8466,89 @@
     {
       "path": "indra/newview/llviewermenufile.cpp",
       "start": 1419,
-      "end": 1419,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "end": 1421,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1421,
-      "end": 1430,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "start": 1424,
+      "end": 1424,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1448,
-      "end": 1448,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "start": 1426,
+      "end": 1435,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1536,
-      "end": 1558,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "start": 1453,
+      "end": 1453,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1567,
-      "end": 1567,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "start": 1541,
+      "end": 1563,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1578,
-      "end": 1579,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "start": 1572,
+      "end": 1572,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1588,
-      "end": 1588,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "start": 1583,
+      "end": 1584,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1606,
-      "end": 1624,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "start": 1593,
+      "end": 1593,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
     },
     {
       "path": "indra/newview/llviewermenufile.cpp",
-      "start": 1629,
+      "start": 1611,
       "end": 1629,
-      "sha256": "01f2cfdde273559f01d54d39b61bff3793976e749974b19db8db11dbea47d809",
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
+    },
+    {
+      "path": "indra/newview/llviewermenufile.cpp",
+      "start": 1634,
+      "end": 1634,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native CPU upload capability and legacy asset fallback use authenticated connected host, known balance and nonnegative cost admission. File/resource callbacks capture account identity before dispatch; stale upload completions cannot mutate another account or remove its upload dialog. Existing OpenGL asset callback/charge behavior remains. Source-only review; no live-grid paid-upload qualification. Connected and known nonnegative upload cost/balance gates apply before both capability and asset fallback; actual NativeUploadCostUnavailable notification reports unavailable account cost."
@@ -9907,7 +9916,7 @@
       "path": "indra/newview/vsviewerwindow.cpp",
       "start": 22,
       "end": 22,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown."
@@ -9916,61 +9925,61 @@
       "path": "indra/newview/vsviewerwindow.cpp",
       "start": 24,
       "end": 31,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 145,
-      "end": 146,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 148,
+      "end": 149,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 261,
-      "end": 263,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 264,
+      "end": 266,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 265,
-      "end": 271,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 268,
+      "end": 274,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 273,
-      "end": 273,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 276,
+      "end": 276,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 275,
-      "end": 291,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 278,
+      "end": 294,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 295,
-      "end": 297,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 298,
+      "end": 300,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown."
@@ -10283,36 +10292,36 @@
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 264,
-      "end": 264,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 267,
+      "end": 267,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown. Connected control visibility/image retirement returns when root views have already been retired; explicit account shutdown remains ordered before ordinary viewer view teardown."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 272,
-      "end": 272,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 275,
+      "end": 275,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown. Connected control visibility/image retirement returns when root views have already been retired; explicit account shutdown remains ordered before ordinary viewer view teardown."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 274,
-      "end": 274,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 277,
+      "end": 277,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown. Connected control visibility/image retirement returns when root views have already been retired; explicit account shutdown remains ordered before ordinary viewer view teardown."
     },
     {
       "path": "indra/newview/vsviewerwindow.cpp",
-      "start": 292,
-      "end": 294,
-      "sha256": "c6cd0a8fe18739717bedfe41982bbeb82b157ef6c4376197aa7d17d9a5cbdb19",
+      "start": 295,
+      "end": 297,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown. Connected control visibility/image retirement returns when root views have already been retired; explicit account shutdown remains ordered before ordinary viewer view teardown."
@@ -10391,27 +10400,27 @@
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1051,
-      "end": 1054,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "start": 1050,
+      "end": 1053,
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1056,
-      "end": 1059,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "start": 1055,
+      "end": 1058,
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1308,
-      "end": 1310,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "start": 1307,
+      "end": 1309,
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source."
@@ -10420,7 +10429,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 807,
       "end": 810,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
@@ -10429,7 +10438,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 827,
       "end": 828,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
@@ -10438,7 +10447,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 830,
       "end": 830,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
@@ -10447,7 +10456,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 840,
       "end": 843,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
@@ -10456,14 +10465,86 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 846,
       "end": 846,
-      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
+    },
+    {
+      "path": "indra/newview/llviewermenufile.cpp",
+      "start": 1057,
+      "end": 1058,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared menu enable/close/group-close callbacks treat the absent native scene snapshot container as optional and retain ordinary floater behavior and OpenGL snapshot precedence. Exact callback fixture plus native window menu reproduction supply separate evidence; no world parity inferred."
+    },
+    {
+      "path": "indra/newview/llviewermenufile.cpp",
+      "start": 1069,
+      "end": 1069,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared menu enable/close/group-close callbacks treat the absent native scene snapshot container as optional and retain ordinary floater behavior and OpenGL snapshot precedence. Exact callback fixture plus native window menu reproduction supply separate evidence; no world parity inferred."
+    },
+    {
+      "path": "indra/newview/llviewermenufile.cpp",
+      "start": 1094,
+      "end": 1094,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared menu enable/close/group-close callbacks treat the absent native scene snapshot container as optional and retain ordinary floater behavior and OpenGL snapshot precedence. Exact callback fixture plus native window menu reproduction supply separate evidence; no world parity inferred."
+    },
+    {
+      "path": "indra/newview/llviewermenufile.cpp",
+      "start": 1105,
+      "end": 1105,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared menu enable/close/group-close callbacks treat the absent native scene snapshot container as optional and retain ordinary floater behavior and OpenGL snapshot precedence. Exact callback fixture plus native window menu reproduction supply separate evidence; no world parity inferred."
+    },
+    {
+      "path": "indra/newview/llviewermenufile.cpp",
+      "start": 1117,
+      "end": 1118,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared menu enable/close/group-close callbacks treat the absent native scene snapshot container as optional and retain ordinary floater behavior and OpenGL snapshot precedence. Exact callback fixture plus native window menu reproduction supply separate evidence; no world parity inferred."
+    },
+    {
+      "path": "indra/newview/llviewermenufile.cpp",
+      "start": 1120,
+      "end": 1124,
+      "sha256": "2b21c69a23633afedc4e7ac182e81ce433e1888541c9fddaefbaf8d3027744ff",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared menu enable/close/group-close callbacks treat the absent native scene snapshot container as optional and retain ordinary floater behavior and OpenGL snapshot precedence. Exact callback fixture plus native window menu reproduction supply separate evidence; no world parity inferred."
+    },
+    {
+      "path": "indra/newview/vsviewerwindow.cpp",
+      "start": 103,
+      "end": 105,
+      "sha256": "013777bcb140c2def452fe63acfbdc684600ca357c3907538aea84eb06d6ecc9",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Register shared Edit and spellcheck callbacks before native text-widget construction, matching viewer initialization order and preserving skinned context-menu actions."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1339,
+      "end": 1348,
+      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Open the actual Viewer menu through Win32/SDL events and evaluate hidden Close Window enable callback before the existing Help/About interaction. This closes the construction-only menu coverage gap."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "56abb64cc0404b2900d851c3b2477f2472772d07",
+    "previous_source_commit": "8dd932e856ea1d50e27023f8f0041c66d40c0cfd",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Only hash-verified existing insertion-review witnesses replace invalid platform rows; reasons/range extents retained and unchanged text mapped. Changed blocks have explicit source dispositions. No platform/runtime certification."
   }

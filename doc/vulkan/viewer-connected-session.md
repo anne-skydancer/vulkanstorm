@@ -212,3 +212,29 @@ Factory rejections and dummy controls remain decisive failures alongside
 crashes, validation errors, missing evidence and GL access. Final Linux SDL
 runtime confirmation is pending dedicated CI; live-grid interoperability remains
 a separate qualification. The earlier baseline does not qualify these additions.
+
+The subsequent menu-crash report exposed a remaining shared callback dependency:
+opening Viewer evaluates the hidden Close Window enable callback during menu
+layout. That callback accessed the snapshot floater container, which the native
+text-only UI does not construct. A normal no-login viewer run reproduced the
+access violation in `LLFileEnableCloseWindow::handleEvent`, through
+`LLMenuGL::arrange` and `LLFloaterView::getFrontmostClosableFloater`.
+Source commit `4581519cddb0d0d98ae231dd108ae20cd5f21194` makes the snapshot owner
+optional in all four close/enable/group-close callbacks while retaining ordinary
+UI closing and existing snapshot precedence. Native startup also registers the
+shared Edit and spellcheck callbacks before creating text controls. The dedicated
+CI now compiles and executes the actual close callbacks with absent and present
+snapshot owners; startup qualification opens Viewer through native OS mouse
+events before the existing Help/About checks. Opening only Help had not covered
+the failing callback.
+
+The final Windows RelWithDebInfo stage passed all 68 viewer cases, including
+Viewer-menu opening for every startup skin selection and all 24 startup
+readbacks per positive case. The ordinary no-login menu reproduction exited
+cleanly after the fix, with no access violation or missing Edit callbacks.
+The exact callback fixture also retained OpenGL snapshot precedence and ordinary
+floater/group closing, including the empty-owner case. This is software Vulkan
+qualification; it does not establish live-grid or physical-driver acceptance.
+The same final stage passed all 76 required connected-session assertions with
+the standard skin at 150% scaling, including local chat, direct/group IM,
+Preferences and relogin. Linux runtime confirmation remains pending dedicated CI.
