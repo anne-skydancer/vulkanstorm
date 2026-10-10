@@ -238,3 +238,55 @@ qualification; it does not establish live-grid or physical-driver acceptance.
 The same final stage passed all 76 required connected-session assertions with
 the standard skin at 150% scaling, including local chat, direct/group IM,
 Preferences and relogin. Linux runtime confirmation remains pending dedicated CI.
+
+### Graphics preferences and repeated tab switching, 10 October 2026
+
+Source fix `7c615dcbb71fccc67b243c254c313c7e28ab56e2` removes the native
+blanket disabling of graphics controls, preserves saved FOV/FSAA choices and
+bypasses legacy hardware recommendations that could overwrite settings. Scene
+wireframe and hardware Defaults remain unavailable without their renderer owner.
+Settings remain readable, editable and persistent with world rendering disabled.
+The reported preferences crash dump identifies a null write in
+`LLRender::color4ub`, called by translucent `LLColorSwatchCtrl::draw`; that draw
+now omits the redundant GL color mutation and uses backend-neutral UI matrices.
+
+The Windows RelWithDebInfo viewer built in the existing Autobuild-generated
+cache passed full staging and actual native session replay in default and
+`ansastorm_modern` skins. Each replay passed 78 required assertions, traversing
+66 admitted top-level/nested preference paths over 396 frame draws, including
+repeated switching, Apply, Cancel, reopen and fresh saved-settings readback.
+RenderBackend remained Vulkan and world owners remained zero. Fifteen focused
+source regressions passed separately. This is Windows SwiftShader/loopback
+evidence; manual interaction, physical GPU, live-grid and Linux qualification
+remain unperformed for this fix.
+
+The original `build-vcloginfix-local` user executable is preserved (SHA-256
+`dc231443d8c7823485553e3f21b8626da10bfeea50cb6e98c066f129adcfe830`). The
+corrected complete stage is the existing `build-vcabout-local` directory
+(executable SHA-256
+`f759a71359adeead46e400c3ad45e0038e56c2db78af439935b1edbff06f1d01`).
+Local evidence is in `.tmp/preferences/qualification.json` and its linked replay,
+build and source-test records; these scratch artifacts are not distributed.
+
+Local history reconciliation merged `codex/vulkan-restore-progress-panels` as
+`8ddee9d8b5108e80ad82e7950c02d9e9339b9d46` and
+`codex/vulkan-first-deliverable` as
+`f560e6b41e03756f05c4531bb79ae1d0c1babd04`. Their documentation patches were
+already ported as `898df1ab5d` and `e054538629`; both merges retain the newer
+scope, source pins and qualification records, with no content change. Local
+and remote-tracking ancestry inventory found no other branch descending from
+the pre-integration Vulkan tip. Legacy pre-reset Vulkan/UI branches and separate
+release, canary, development and GL experiments were excluded. No push, branch
+deletion, history rewrite or release action was performed.
+
+Post-integration checks passed the insertion-catalog acceptance and milestone
+boundary checks, 21 documentation tests and 92 tests from all 12 dedicated
+software-Vulkan CI regression scripts (each run in its own process, matching
+the workflow). A combined module invocation was unsuitable: the diagnostic
+fixture imports from its script directory, and its session upload test also
+encountered a connection reset; both scripts passed in the intended standalone
+invocations. The complete stage passed its staging check and a fresh default-skin
+native session replay passed all 78 assertions. All seven build-manifest source
+hashes still match the qualified executable; the two ancestry-only merges need
+no recompilation. Source analysis acceptance remains separate from runtime
+qualification, and the software-runtime limits above still apply.

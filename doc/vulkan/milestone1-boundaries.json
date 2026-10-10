@@ -1,5 +1,5 @@
 {
-  "source_commit": "4581519cddb0d0d98ae231dd108ae20cd5f21194",
+  "source_commit": "f560e6b41e03756f05c4531bb79ae1d0c1babd04",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -867,7 +867,7 @@
       ]
     },
     "indra/newview/vsnativeimreplay.cpp": {
-      "sha256": "ba6a68f074f36b3dfc0f2d765b6464d3dfa9e685e826e2e90d24b1c1a767b93b",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
       "anchors": [
         "vs_native_im_replay_tick",
         "vs_native_im_replay_expired",
@@ -919,7 +919,7 @@
       ]
     },
     "indra/newview/llfloaterpreference.cpp": {
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "anchors": [
         "LLFloaterPreference::refreshEnabledState",
         "vs_native_im_guard"
