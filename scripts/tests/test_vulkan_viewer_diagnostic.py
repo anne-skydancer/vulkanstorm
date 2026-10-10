@@ -24,6 +24,91 @@ def record():
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_inventory_optional_skin_controls_use_real_present_widgets(self):
+        root=Path(__file__).resolve().parents[2]
+        inbox=(root/'indra/newview/llpanelmarketplaceinbox.cpp').read_text()
+        side=(root/'indra/newview/llsidepanelinventory.cpp').read_text()
+        main=(root/'indra/newview/llpanelmaininventory.cpp').read_text()
+        def function(source,signature):
+            start=source.index(signature);opening=source.index('{',start);end=opening+1;depth=1
+            while depth:
+                depth+=(source[end]=='{')-(source[end]=='}');end+=1
+            return source[start:end]
+        draw=function(inbox,'void LLPanelMarketplaceInbox::draw()')
+        opened=function(side,'void LLSidepanelInventory::openInbox()')
+        active=side.split('const auto* inbox_button = findChild<LLButton>(INBOX_BUTTON_NAME);',1)[1]
+        active=active[active.index('    if (mInboxEnabled'):active.index('    {')]
+        self.assertEqual(side.count('        openInbox();'),2)
+        self.assertNotIn('getChild<LLButton>(INBOX_BUTTON_NAME)',side)
+        self.assertNotIn('getChild<LLButton>(INBOX_RELOAD_BUTTON_NAME)',side)
+        self.assertIn('mVisibilityMenuButton = findChild<LLMenuButton>("options_visibility_btn")',main)
+        self.assertIn('if (mVisibilityMenuButton)\n        mVisibilityMenuButton->setMenu',main)
+        fixture=r'''#include <cassert>
+#include <map>
+#include <string>
+#define llassert assert
+using U32=int;
+std::string llformat(const char*,int n){return std::to_string(n);}
+struct LLStringUtil{using format_map_t=std::map<std::string,std::string>;};
+struct LLUICtrl{std::string value,arg;bool visible=true;void setValue(std::string s){value=s;}
+ void setVisible(bool v){visible=v;}void setTextArg(const char*,std::string s){arg=s;} };
+struct LLButton:LLUICtrl{bool toggled=false;void setLabel(std::string s){value=s;}
+ void setToggleState(bool v){toggled=v;}bool getToggleState()const{return toggled;} };
+struct LLPanel { int drawn=0;void draw(){++drawn;} };
+struct LLPanelMarketplaceInbox:LLPanel{
+ LLUICtrl* mFreshCountCtrl=nullptr;LLButton* mInboxButton=nullptr;LLUICtrl* text=nullptr;
+ int count=0,fresh=0,mLastItemCount=-1,mLastFreshItemCount=-1;
+ int getTotalItemCount(){return count;}int getFreshItemCount(){return fresh;}
+ template<class T>T* findChild(const char*){return static_cast<T*>(text);}
+ std::string getString(const char*){return "Received items";}
+ std::string getString(const char*,const LLStringUtil::format_map_t&a){return "Received items ("+a.at("[NUM]")+")";}
+ void draw();
+};
+struct LLTabContainer{std::string selected;LLPanelMarketplaceInbox* current=nullptr;
+ LLPanelMarketplaceInbox* getCurrentPanel(){return current;}void selectTabByName(const char*s){selected=s;} };
+struct Settings{int activity=0;void setU32(const char*,int n){activity=n;} }gSavedPerAccountSettings;
+int time_corrected(){return 17;}
+const char* INBOX_BUTTON_NAME="inbox_btn";const char* MARKETPLACE_INBOX_PANEL="marketplace_inbox";
+struct LLSidepanelInventory {
+ bool mInboxEnabled=true;LLButton* button=nullptr;LLTabContainer* tabs=nullptr;int toggles=0;
+ template<class T>T* findChild(const char*name){
+  if(std::string(name)==INBOX_BUTTON_NAME)return reinterpret_cast<T*>(button);
+  return reinterpret_cast<T*>(tabs);
+ }
+ void onToggleInboxBtn(){++toggles;}void openInbox();
+};
+DRAW
+OPENED
+int main(){
+ LLUICtrl fresh,label;LLButton button;LLPanelMarketplaceInbox inbox;inbox.mFreshCountCtrl=&fresh;
+ // Vintage has a label/tab, ordinary skins retain their actual button.
+ inbox.text=&label;inbox.count=5;inbox.fresh=2;inbox.draw();
+ assert(label.value=="Received items (5)" && fresh.visible && fresh.arg=="2");
+ inbox.count=0;inbox.draw();assert(label.value=="Received items" && !fresh.visible);
+ inbox.mInboxButton=&button;inbox.count=3;inbox.draw();assert(button.value=="Received items (3)");
+ LLSidepanelInventory side;LLTabContainer tabs;side.tabs=&tabs;side.openInbox();
+ assert(tabs.selected=="marketplace_inbox" && side.toggles==0 && gSavedPerAccountSettings.activity==17);
+ side.button=&button;side.openInbox();assert(button.toggled && side.toggles==1);
+ side.mInboxEnabled=false;side.openInbox();assert(side.toggles==1);
+ side.button=nullptr;side.tabs=nullptr;side.mInboxEnabled=true;side.openInbox();
+ const LLButton* inbox_button=nullptr;LLTabContainer* inbox_tabs=&tabs;
+ const LLPanelMarketplaceInbox* inbox_panel=nullptr;bool mInboxEnabled=true,marked=false;
+ ACTIVE {marked=true;}
+ assert(!marked); // Two null panels are not a selected inbox.
+ inbox_panel=&inbox;tabs.current=&inbox;
+ ACTIVE {marked=true;}
+ assert(marked);
+}
+'''.replace('DRAW',draw).replace('OPENED',opened).replace('ACTIVE',active)
+        compiler=shutil.which('clang++') or shutil.which('g++');self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'skin_inventory_controls.cpp';path.write_text(fixture)
+            exe=Path(directory)/'skin_inventory_controls.exe'
+            built=subprocess.run([compiler,'-std=c++17',str(path),'-o',str(exe)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            run=subprocess.run([str(exe)],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+
     def test_native_scene_voice_leaf_is_omitted_before_factory(self):
         root=Path(__file__).resolve().parents[2]
         source=(root/'indra/newview/vsstartupui.cpp').read_text()

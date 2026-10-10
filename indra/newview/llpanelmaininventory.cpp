@@ -423,7 +423,7 @@ bool LLPanelMainInventory::postBuild()
     // </FS:Zi> Filter dropdown
 
     mGearMenuButton = getChild<LLMenuButton>("options_gear_btn");
-    mVisibilityMenuButton = getChild<LLMenuButton>("options_visibility_btn");
+    mVisibilityMenuButton = findChild<LLMenuButton>("options_visibility_btn");
     // <FS:Ansariel> Keep better inventory layout
     //mViewMenuButton = getChild<LLMenuButton>("view_btn");
     mViewMenuButton = findChild<LLMenuButton>("view_btn");
@@ -2175,7 +2175,8 @@ void LLPanelMainInventory::initListCommandsHandlers()
     mMenuAddHandle = menu->getHandle();
 
     mMenuVisibility = LLUICtrlFactory::getInstance()->createFromFile<LLToggleableMenu>("menu_inventory_search_visibility.xml", gMenuHolder, LLViewerMenuHolderGL::child_registry_t::instance());
-    mVisibilityMenuButton->setMenu(mMenuVisibility, LLMenuButton::MP_BOTTOM_LEFT, true);
+    if (mVisibilityMenuButton)
+        mVisibilityMenuButton->setMenu(mMenuVisibility, LLMenuButton::MP_BOTTOM_LEFT, true);
 
     // Update the trash button when selected item(s) get worn or taken off.
     LLOutfitObserver::instance().addCOFChangedCallback(boost::bind(&LLPanelMainInventory::updateListCommands, this));

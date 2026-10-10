@@ -70,7 +70,7 @@ bool LLPanelMarketplaceInbox::postBuild()
     LLFocusableElement::setFocusReceivedCallback(boost::bind(&LLPanelMarketplaceInbox::onFocusReceived, this));
 
     mFreshCountCtrl = getChild<LLUICtrl>("inbox_fresh_new_count");
-    mInboxButton = getChild<LLButton>("inbox_btn");
+    mInboxButton = findChild<LLButton>("inbox_btn");
 
     return true;
 }
@@ -277,11 +277,15 @@ void LLPanelMarketplaceInbox::draw()
             LLStringUtil::format_map_t args;
             args["[NUM]"] = item_count_str;
             // setLabel is expensive, causes buffer regeneration
-            mInboxButton->setLabel(getString("InboxLabelWithArg", args));
+            const auto label = getString("InboxLabelWithArg", args);
+            if (mInboxButton) mInboxButton->setLabel(label);
+            else if (auto* text = findChild<LLUICtrl>("inbox_label")) text->setValue(label);
         }
         else
         {
-            mInboxButton->setLabel(getString("InboxLabelNoArg"));
+            const auto label = getString("InboxLabelNoArg");
+            if (mInboxButton) mInboxButton->setLabel(label);
+            else if (auto* text = findChild<LLUICtrl>("inbox_label")) text->setValue(label);
 
             mFreshCountCtrl->setVisible(false);
         }
