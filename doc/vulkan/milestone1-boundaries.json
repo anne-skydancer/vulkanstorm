@@ -1,5 +1,5 @@
 {
-  "source_commit": "6f424ea3eea872f62a1345cf3ca4ca2fa0bdb49c",
+  "source_commit": "8dd932e856ea1d50e27023f8f0041c66d40c0cfd",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -62,7 +62,7 @@
       ]
     },
     "indra/llwindow/llwindowsdl2.cpp": {
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df",
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
       "anchors": [
         "LLWindowSDL::LLWindowSDL",
         "SDL_WINDOW_OPENGL",
@@ -339,7 +339,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",

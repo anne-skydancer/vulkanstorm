@@ -202,9 +202,13 @@ SwiftShader runtime; live credentials/server testing remains unqualified.
 
 The preceding results describe the earlier local-chat baseline. The expanded
 connected UI, direct/group IM, inventory-offer, profile, group-management and
-Preferences integration is undergoing fresh staged qualification. It must pass
-the complete connected replay, including every packaged skin/theme and the
-German overlay (`run_vulkan_session_replay.py --all-skins`). Factory rejections
-and dummy controls fail qualification alongside crashes, validation errors,
-missing evidence and GL access. The earlier baseline result does not qualify
-these additions. Live-grid interoperability remains a separate qualification.
+Preferences integration now has fresh local Windows qualification, recorded in
+[the connected UI audit](connected-ui-gap-audit.md#recorded-local-windows-qualification-10-october-2026).
+The connected matrix exercised all 24 packaged skin/theme/language selections
+and standard-skin 125%/150% scaling; its vintage dummy-control failure was fixed
+and the complete vintage replay rerun successfully. Final source also passed
+all 68 viewer runtime cases and all 76 required connected assertions at 150%.
+Factory rejections and dummy controls remain decisive failures alongside
+crashes, validation errors, missing evidence and GL access. Final Linux SDL
+runtime confirmation is pending dedicated CI; live-grid interoperability remains
+a separate qualification. The earlier baseline does not qualify these additions.

@@ -64,17 +64,37 @@ their shared vertices; outline bands avoid double-compositing translucent
 corners. Compiler-backed regressions cover these production geometry paths.
 Driver-dependent OpenGL wide-line rasterization is not certified identical.
 
+The nearby transcript uses the ordinary `simple_text_editor` factory tag,
+retaining its previous `LLTextEditor` type and inherited skin defaults. The
+viewer-specific `text_editor` tag selects a different type and is unnecessary
+for this plain transcript. Vintage Item Properties now supplies its required
+Export checkbox and the controller's exact sale-combo name and numeric values.
+
 The connected replay separately requires positive, contained, nonoverlapping
 chat/control geometry and records the actual rectangles. Pixel comparison alone
 previously passed an incorrectly laid-out panel, so it cannot substitute for
 this check. The standard skin at 125% now passes both checks and its captured
-chat layout has been visually inspected. The complete packaged skin matrix and
-the final rebuilt viewer's startup checks remain pending until recorded below.
+chat layout has been visually inspected. Recorded qualification below separates
+the initial connected matrix, its corrected vintage rerun and final viewer checks.
 
 Relogin no longer reuses function-static Preferences child pointers. Account
 notifications remain expired after their owner disappears, and final native
 shutdown is idempotent even when a suspended seed coroutine retains the owner.
 These corrections address failures observed in the staged connected replay.
+
+The SDL native preeditor boundary now cancels only an active composition when
+focus changes or an empty editing event arrives. `resetPreedit()` can delete
+ordinary selected text, so calling it without a composition erased the selected
+login username on Linux. Actual committed text still replaces selection, and
+new composition still replaces the selected range. Compiler-backed tests cover
+focus switching, disable, empty cancellation, active cancellation and commit;
+actual Linux window-event evidence remains separate.
+
+The XUI fixture now checks replacement blending against known RGBA pixels and
+the independent oracle's alpha, rather than assuming every target pixel stays
+opaque. RGB and alpha retain the existing tolerance of three. Actual and
+expected alpha PGM captures are required alongside the RGB PPM captures. The
+unsupported-owner probe uses world map because Preferences is now supported.
 
 Notification replay responses assign the selected existing button explicitly; `LLSD::with()` only inserts absent keys and leaves the response template's undefined values unchanged. Persisted DND restoration likewise assigns its restore flag explicitly. Payment qualification requires the actual confirmation callback and encoded transfer, including balance and retired-window rejection.
 
@@ -85,3 +105,35 @@ The native session consumes the ordinary Second Life login benefit packages and 
 Inventory Sound, both existing Properties preference routes, thumbnail editing and the inventory Script editor use their existing skinned controls. Inventory scripts load through the authenticated asset service and save through `UpdateScriptAgent`; file-picker, asset, upload and modal callbacks are scoped to their originating window and account. Script task/world controls remain outside this text-only stage. The staged replay must observe actual editing and encoded metadata/source uploads before these paths can be reported as qualified.
 
 Maintain build revision, staged runtime/assets, selected software Vulkan device, validation logs, fixture protocol results, UI packet/readback comparison and failure captures with each qualification run. Software-device CI proves the implemented Vulkan path on those devices; no AMD/NVIDIA physical host is assumed available. Vendor hardware behavior and live-grid interoperability remain separately identified qualification limits.
+
+### Recorded local Windows qualification, 10 October 2026
+
+The fully staged RelWithDebInfo viewer uses the Autobuild-installed GHI libraries
+and pinned SwiftShader runtime. The initial connected matrix completed 26 cases:
+25 passed, and vintage failed the decisive dummy-control check. After correcting
+its Item Properties XUI, the complete vintage replay passed. The cases cover all
+24 packaged skin/theme/language selections plus the standard Vulkanstorm skin at
+125% and 150% UI scale. Initial failures remain preserved as evidence.
+
+The final transcript tag and RGBA check were then qualified by all 68 staged
+viewer runtime cases, which passed. These include every packaged skin in the
+XUI and startup probes, actual OS Login/Return input, dialogs, presentation,
+failure injection, normal login startup and shutdown. The standard-skin alpha
+capture matches the independent oracle exactly, including replacement alpha 128.
+The final executable's connected replay at 150% also passed all 76 required
+assertions, including local chat, direct/group IM, account controls, logout and
+relogin. Maximum RGB difference in its nearby-chat readback is one, within the
+unchanged tolerance of three. Its captured layout was visually inspected.
+
+Source is pinned to `8dd932e856ea1d50e27023f8f0041c66d40c0cfd`.
+Local evidence is retained under `.tmp/connected/skin-matrix63`, `vintage65`,
+`viewer67` and `replay67`; the staged executable and source/hash manifest remain
+under `build-vcloginfix-local` and `.tmp/connected/build67-manifest.json`.
+All 24 viewer source regressions, four compiler-backed UI/oracle regressions,
+11 session-runner regressions and 21 documentation checks pass.
+
+Actual Linux SDL runtime confirmation is pending the final dedicated CI run.
+The compiled production-source regression demonstrates the selection-preserving
+fix, but does not substitute for SDL/X11 window-event execution. This evidence
+does not qualify live-grid interoperability, physical GPU behavior or world
+rendering, nor claim identical layout to the legacy rich nearby-chat floater.

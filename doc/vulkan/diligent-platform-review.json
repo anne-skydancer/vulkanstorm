@@ -1,5 +1,5 @@
 {
-  "source_commit": "6f424ea3eea872f62a1345cf3ca4ca2fa0bdb49c",
+  "source_commit": "8dd932e856ea1d50e27023f8f0041c66d40c0cfd",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -82,7 +82,7 @@
       "record": "I02",
       "disposition": "mapped",
       "reason": "Constructor ignores use_gl, creates GL context then gGLManager, cursors and X11 clipboard. Backend mode must separate SDL OS window and native resource creation; input/clipboard remain SDL/X11. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df"
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369"
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
@@ -91,7 +91,7 @@
       "record": "I02",
       "disposition": "mapped",
       "reason": "createContext sets SDL_WINDOW_OPENGL and SDL_GL attributes, creates GL context/surface-dependent fullscreen sizing, cached X11 handles, clear/present; switch destroys and reopens; destroyContext invalidates X11 and quits video. Native mode needs Vulkan flags, surface-independent dimensions, typed handles and swapchain retirement before SDL window/video teardown. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df"
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369"
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
@@ -100,31 +100,31 @@
       "record": "I02",
       "disposition": "mapped",
       "reason": "SDL_GL_SwapWindow is selected presentation seam; size/FSAA/gamma values are platform/future attachment policy, not native GL execution requirements. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df"
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369"
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 2629,
-      "end": 2649,
+      "start": 2633,
+      "end": 2653,
       "record": "I02",
       "disposition": "mapped",
       "reason": "getPlatformWindow NULL; add typed SDL WM export instead of legacy media handle; external-file launch remains OS functionality. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df"
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369"
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 2767,
-      "end": 2811,
+      "start": 2771,
+      "end": 2815,
       "record": "I02",
       "disposition": "mapped",
       "reason": "GL shared contexts, swap interval and make-current must stay only on GL path; native uploads use renderer ownership, not shared SDL GL contexts. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df"
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369"
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
       "start": 38,
       "end": 38,
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df",
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
@@ -132,44 +132,44 @@
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
       "start": 1908,
-      "end": 1919,
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df",
+      "end": 1912,
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 1922,
-      "end": 1922,
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df",
+      "start": 1918,
+      "end": 1923,
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 2104,
-      "end": 2111,
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df",
+      "start": 1926,
+      "end": 1926,
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 2884,
-      "end": 2893,
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df",
+      "start": 2108,
+      "end": 2115,
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
     },
     {
       "path": "indra/llwindow/llwindowsdl2.cpp",
-      "start": 2915,
-      "end": 2915,
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df",
+      "start": 2888,
+      "end": 2897,
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
@@ -178,7 +178,7 @@
       "path": "indra/llwindow/llwindowsdl2.cpp",
       "start": 462,
       "end": 464,
-      "sha256": "4edc12b151ac7b1f77949c2ecd0fd84a02589eafea8620747dc1eadf6482f1df",
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
@@ -1060,7 +1060,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 17,
       "end": 18,
-      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
@@ -1069,7 +1069,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 50,
       "end": 50,
-      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
@@ -1078,43 +1078,43 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 222,
       "end": 222,
-      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1001,
-      "end": 1001,
-      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "start": 1011,
+      "end": 1011,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1313,
-      "end": 1359,
-      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "start": 1333,
+      "end": 1379,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1394,
-      "end": 1394,
-      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "start": 1414,
+      "end": 1414,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1404,
-      "end": 1404,
-      "sha256": "aff4b0d11180c649718eb0e9dbc1c5de414b49b58b3a5458ec0fe9cae7a196ff",
+      "start": 1424,
+      "end": 1424,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
@@ -10086,8 +10086,17 @@
     {
       "path": "indra/newview/skins/default/xui/en/panel_vs_nearby_chat.xml",
       "start": 1,
+      "end": 5,
+      "sha256": "3752e5272fba05e41d9de1d4764d0db7c5f0e41d897963050d3b48f750b1552a",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native nearby chat builds its required real editor/transcript/session controls through layered selected-skin XUI after factory owner initialization. Distinct VSChatInput Params inherit the selected ordinary line editor defaults without registering a conflicting base type. Transport rejection, byte bounds, preeditor and history behavior remain shared; source review does not establish visual parity or connected runtime acceptance."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_vs_nearby_chat.xml",
+      "start": 7,
       "end": 12,
-      "sha256": "efcafcac7db8d5053c7ea73fc060936d4fb7b56b1532b610cb1ca30f42abd381",
+      "sha256": "3752e5272fba05e41d9de1d4764d0db7c5f0e41d897963050d3b48f750b1552a",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native nearby chat builds its required real editor/transcript/session controls through layered selected-skin XUI after factory owner initialization. Distinct VSChatInput Params inherit the selected ordinary line editor defaults without registering a conflicting base type. Transport rejection, byte bounds, preeditor and history behavior remain shared; source review does not establish visual parity or connected runtime acceptance."
@@ -10307,10 +10316,154 @@
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native stored notifications use scoped handlers, save before reset and rebind trusted restored responder ownership; admitted text/profile/group/inventory replies preserve shared handlers and isolate deferred scene operations. Connected controls retain shared floater/avatar-picker input/font services and inverse teardown. Connected control visibility/image retirement returns when root views have already been retired; explicit account shutdown remains ordered before ordinary viewer view teardown."
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl2.cpp",
+      "start": 1913,
+      "end": 1917,
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native SDL focus changes and empty editing cancellation reset only an active preedit range, preserving selected committed login text. New composition and actual text commit still replace selection; GL composition path is unchanged. Compiler-backed source regression covers selection, cancellation, switching and commit; actual Linux runtime remains separately qualified."
+    },
+    {
+      "path": "indra/llwindow/llwindowsdl2.cpp",
+      "start": 2919,
+      "end": 2925,
+      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Native SDL focus changes and empty editing cancellation reset only an active preedit range, preserving selected committed login text. New composition and actual text commit still replace selection; GL composition path is unchanged. Compiler-backed source regression covers selection, cancellation, switching and commit; actual Linux runtime remains separately qualified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_vs_nearby_chat.xml",
+      "start": 6,
+      "end": 6,
+      "sha256": "3752e5272fba05e41d9de1d4764d0db7c5f0e41d897963050d3b48f750b1552a",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native nearby chat builds its required real editor/transcript/session controls through layered selected-skin XUI after factory owner initialization. Distinct VSChatInput Params inherit the selected ordinary line editor defaults without registering a conflicting base type. Transport rejection, byte bounds, preeditor and history behavior remain shared; source review does not establish visual parity or connected runtime acceptance."
+    },
+    {
+      "path": "indra/newview/skins/vintage/xui/en/floater_inventory_item_properties.xml",
+      "start": 245,
+      "end": 251,
+      "sha256": "9743d09898242ffe28cf49df9e0f756da4bea5bb59c8bcae82d00cbc466e7ef1",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Vintage existing Item Properties XUI supplies controller-required Export permission and exact sale combo identity/numeric enums, preserving its checkbox row and skin layout. Required factory diagnostics remain decisive; source review does not certify runtime."
+    },
+    {
+      "path": "indra/newview/skins/vintage/xui/en/floater_inventory_item_properties.xml",
+      "start": 399,
+      "end": 399,
+      "sha256": "9743d09898242ffe28cf49df9e0f756da4bea5bb59c8bcae82d00cbc466e7ef1",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Vintage existing Item Properties XUI supplies controller-required Export permission and exact sale combo identity/numeric enums, preserving its checkbox row and skin layout. Required factory diagnostics remain decisive; source review does not certify runtime."
+    },
+    {
+      "path": "indra/newview/skins/vintage/xui/en/floater_inventory_item_properties.xml",
+      "start": 404,
+      "end": 404,
+      "sha256": "9743d09898242ffe28cf49df9e0f756da4bea5bb59c8bcae82d00cbc466e7ef1",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Vintage existing Item Properties XUI supplies controller-required Export permission and exact sale combo identity/numeric enums, preserving its checkbox row and skin layout. Required factory diagnostics remain decisive; source review does not certify runtime."
+    },
+    {
+      "path": "indra/newview/skins/vintage/xui/en/floater_inventory_item_properties.xml",
+      "start": 408,
+      "end": 408,
+      "sha256": "9743d09898242ffe28cf49df9e0f756da4bea5bb59c8bcae82d00cbc466e7ef1",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Vintage existing Item Properties XUI supplies controller-required Export permission and exact sale combo identity/numeric enums, preserving its checkbox row and skin layout. Required factory diagnostics remain decisive; source review does not certify runtime."
+    },
+    {
+      "path": "indra/newview/skins/vintage/xui/en/floater_inventory_item_properties.xml",
+      "start": 412,
+      "end": 412,
+      "sha256": "9743d09898242ffe28cf49df9e0f756da4bea5bb59c8bcae82d00cbc466e7ef1",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Vintage existing Item Properties XUI supplies controller-required Export permission and exact sale combo identity/numeric enums, preserving its checkbox row and skin layout. Required factory diagnostics remain decisive; source review does not certify runtime."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1051,
+      "end": 1054,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1056,
+      "end": 1059,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1308,
+      "end": 1310,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 807,
+      "end": 810,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 827,
+      "end": 828,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 830,
+      "end": 830,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 840,
+      "end": 843,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 846,
+      "end": 846,
+      "sha256": "407512cf7312063f2a170df4ac60fb8ff94ab0d769a8a7bd40aa87117244a2ad",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "12b2da0ba9cb04ad30bfda1cfd42f49eadee5a9c",
+    "previous_source_commit": "56abb64cc0404b2900d851c3b2477f2472772d07",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Only hash-verified existing insertion-review witnesses replace invalid platform rows; reasons/range extents retained and unchanged text mapped. Changed blocks have explicit source dispositions. No platform/runtime certification."
   }
