@@ -148,3 +148,30 @@ Real-server authentication, nearby send/receive, disconnect and logout remain
 explicitly untested because credentials/server access are unavailable. The replay
 does not qualify those live-server criteria, physical multi-monitor DPI, OS IME
 services or world rendering.
+
+
+## Login input regression reported during live testing: 10 October 2026
+
+The user could see the login screen but could neither enter credentials by
+clicking the fields nor activate Login. Earlier software qualification was
+insufficient: it assigned keyboard focus and invoked button commits directly,
+so passing those checks did not establish pointer-driven login usability.
+
+The native window's empty full-window popup and floater containers inherited
+mouse opacity instead of the `mouse_opaque="false"` policy in `main_view.xml`.
+They intercepted hit testing before the login controls. The native construction
+now uses that same click-through policy and excludes those containers from tab
+stops. Their child dialogs and popups still receive events normally.
+
+The native Unicode path also failed to translate the deferred Return character
+into a control key event. It now submits after preceding text events, preserving
+modifier exclusions and avoiding duplicate submission for controls which handle
+Return on keydown.
+
+The startup acceptance probe now waits for the first real presentation/layout,
+clears focus, delivers Win32 or SDL mouse/text events, types synthetic credentials,
+and verifies the existing login controller callback from both a Login click and
+Return. It records `login_os_input_verified` and `login_submit_actions`; CI rejects
+missing evidence or a count other than two. The callback is intercepted only in
+the offline probe; production continues through the ordinary startup callback.
+This does not certify live authentication or a real server session.

@@ -37,6 +37,7 @@
 #include "lllineeditor.h"
 #include "lltexteditor.h"
 #include "llbutton.h"
+#include "llcombobox.h"
 #include "llfocusmgr.h"
 #include "lldir.h"
 #include "llmimetypes.h"
@@ -214,6 +215,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     LLError::RecorderPtr startup_log;
     LLTempBoundListener startup_reply;
     unsigned startup_accepted=0, startup_rejected=0, startup_modal_actions=0, startup_mfa_actions=0;
+    unsigned startup_login_actions=0;
     bool startup_chat_verified=false, startup_dpi_verified=false, startup_menu_verified=false;
     bool startup_ime_route_verified=false, startup_dialog_actions=false, startup_denial_verified=false;
     std::string startup_sent;
@@ -967,7 +969,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         require(gViewerWindow == nullptr, "Native startup requires exclusive viewer ownership");
         LLViewerWindow::Params params;
         params.title("Vulkanstorm native startup qualification").name("VulkanstormNativeStartupDiagnostic")
-            .x(100).y(100).width(640).height(480).min_width(320).min_height(240);
+            .x(100).y(100).width(1280).height(960).min_width(320).min_height(240);
         startup_window = std::make_unique<LLViewerWindow>(params, true);
         gViewerWindow = startup_window.get();
         window = startup_window->getWindow();
@@ -997,22 +999,112 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         startup_menu_verified=true;
         startup_reply=LLEventPumps::instance().obtain("NativeStartupAgreementReply").listen("viewer-v3",[this](const LLSD& value)
         { if (value.asBoolean()) ++startup_accepted; else ++startup_rejected; return false; });
-        FSPanelLogin::show(startup_window->getWindowRectScaled(), [](S32, void*) { throw std::runtime_error("Unexpected authentication request in offline startup qualification"); }, nullptr);
+        FSPanelLogin::show(startup_window->getWindowRectScaled(), [](S32, void* data)
+            { ++static_cast<Impl*>(data)->startup_login_actions; }, this);
         auto* holder = startup_window->getLoginPanelHolder();
         require(holder && holder->findChild<LLLineEditor>("password_edit") && holder->findChild<LLButton>("connect_btn") &&
             holder->findChild<LLMediaCtrl>("login_html"), "Required existing login controls are missing");
         startup_login = true;
         stages.emplace_back("native-login-controller-created");
-        FSPanelLogin::giveFocus();
-        auto* password = holder->findChild<LLLineEditor>("password_edit");
-        password->setFocus(true);
-        require(startup_window->handleUnicodeChar('x', MASK_NONE) && password->getText() == "x", "Native viewer Unicode route did not edit the login control");
-        require(startup_window->handleTranslatedKeyDown(KEY_BACKSPACE, MASK_NONE, false) && password->getText().empty(), "Native viewer key route did not edit the login control");
+        window->show();
+        startup_window->updateUI();
         startup_window->handleFocusLost(window);
         require(!gFocusMgr.getAppHasFocus() && !gFocusMgr.getMouseCapture(), "Native viewer focus loss did not release capture");
         startup_window->handleFocus(window);
         window->show();
         inject("startup-ui");
+    }
+    void startupLoginInput()
+    {
+        auto* holder = startup_window->getLoginPanelHolder();
+        // Exercise the complete overlay hierarchy and OS event queue. Forcing
+        // setFocus() or calling onCommit() directly bypasses broken hit testing.
+        auto* username = holder->findChild<LLComboBox>("username_combo");
+        auto* password = holder->findChild<LLLineEditor>("password_edit");
+        auto* connect = holder->findChild<LLButton>("connect_btn");
+        username->setTextEntry(LLStringExplicit(""));
+        password->setText(LLStringExplicit(""));
+        gFocusMgr.setKeyboardFocus(nullptr);
+        startupClick(username, [username] { return username->hasFocus(); });
+        startupType("Offline Test", [username] { return username->getValue().asString() == "Offline Test"; });
+        startupClick(password, [password] { return password->hasFocus(); });
+        startupType("x", [password] { return password->getText() == "x"; });
+        require(startup_window->handleTranslatedKeyDown(KEY_BACKSPACE, MASK_NONE, false) && password->getText().empty(), "Native viewer key route did not edit the login control");
+        startupType("offline-only", [password] { return password->getText() == "offline-only"; });
+        require(connect->getEnabled(), "Typed login credentials did not enable Login");
+        startupClick(connect, [this] { return startup_login_actions == 1; });
+        startupClick(password, [password] { return password->hasFocus(); });
+        startupType("\r", [this] { return startup_login_actions == 2; });
+        stages.emplace_back("native-login-os-input-and-submit-verified");
+        password->setText(LLStringExplicit(""));
+        username->setTextEntry(LLStringExplicit(""));
+    }
+    void startupWaitInput(const std::function<bool()>& complete)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        do
+        {
+            window->gatherInput();
+            if (complete()) return;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        } while (std::chrono::steady_clock::now() < deadline);
+        throw std::runtime_error("Native login OS input did not reach its control/callback");
+    }
+    void startupClick(LLView* control, const std::function<bool()>& complete)
+    {
+        S32 x, y;
+        // Editable combos have their drop-down arrow on the right.
+        control->localPointToScreen(5, control->getRect().getHeight()/2, &x, &y);
+        const auto scale = startup_window->getDisplayScale();
+        const S32 raw_x = ll_round(x * scale.mV[VX]);
+        const S32 raw_y = startup_window->getWindowRectRaw().getHeight() - ll_round(y * scale.mV[VY]) - 1;
+        std::cout << "NATIVE_STARTUP_CLICK=" << control->getName() << ':' << raw_x << ',' << raw_y << '\n';
+        require(startup_window->getWindowRectScaled().pointInRect(x, y), "Native login control lies outside test viewport");
+#if LL_WINDOWS
+        const auto hwnd = static_cast<HWND>(window->getPlatformWindow());
+        SendMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(raw_x, raw_y));
+        SendMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(raw_x, raw_y));
+#else
+        SDL_Event event{};
+        event.type = SDL_MOUSEBUTTONDOWN;
+        event.button.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window->getPlatformWindow()));
+        event.button.button = SDL_BUTTON_LEFT; event.button.state = SDL_PRESSED;
+        event.button.x = raw_x; event.button.y = raw_y; event.button.clicks = 1;
+        require(SDL_PushEvent(&event) == 1, "Cannot queue native login mouse down");
+        event.type = SDL_MOUSEBUTTONUP; event.button.state = SDL_RELEASED;
+        require(SDL_PushEvent(&event) == 1, "Cannot queue native login mouse up");
+#endif
+        startupWaitInput(complete);
+    }
+    void startupType(const std::string& text, const std::function<bool()>& complete)
+    {
+#if LL_WINDOWS
+        const auto hwnd = static_cast<HWND>(window->getPlatformWindow());
+        for (unsigned char character : text) SendMessageW(hwnd, WM_CHAR, character, 1);
+#else
+        SDL_Event event{};
+        if (text == "\r")
+        {
+            // SDL intentionally suppresses Return within 20 ms of an IME
+            // text event. Model a distinct subsequent user input/frame.
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
+            LLFrameTimer::updateFrameTime();
+            event.type = SDL_KEYDOWN;
+            event.key.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window->getPlatformWindow()));
+            event.key.keysym.sym = SDLK_RETURN;
+            require(SDL_PushEvent(&event) == 1, "Cannot queue native login Return");
+            event.type = SDL_KEYUP;
+        }
+        else
+        {
+            event.type = SDL_TEXTINPUT;
+            event.text.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window->getPlatformWindow()));
+            require(text.size() < sizeof(event.text.text), "Native login test text exceeds SDL buffer");
+            std::copy(text.begin(), text.end(), event.text.text);
+        }
+        require(SDL_PushEvent(&event) == 1, "Cannot queue native login text");
+#endif
+        startupWaitInput(complete);
     }
     void captureStartup(Diligent::IRenderDevice* dev, Diligent::IDeviceContext* ctx, Diligent::ITextureView* target,
         unsigned width, unsigned height, float dpi, const std::vector<VSUIRenderer::Packet>& packets)
@@ -1053,6 +1145,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         inject("startup-frame");
         if (frames == 1)
         {
+            startupLoginInput(); // First presentation has laid out XUI and scroll containers.
             LLSD args; args["MESSAGE"] = "Native viewer modal alert";
             startup_alert = LLNotifications::instance().add("GenericAlert", args, LLSD(),
                 [this](const LLSD&,const LLSD&) { ++startup_modal_actions; return false; });
@@ -1061,7 +1154,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         }
         if (frames == 2)
         {
-            startupAlertPanel()->getChild<LLButton>("close")->onCommit();
+            startupClick(startupAlertPanel()->getChild<LLButton>("close"), [this] { return startup_modal_actions==1; });
             require(startup_modal_actions==1,"Native modal button did not reach notification callback");
             startup_alert.reset();
             auto* critical=startupAgreement("message_critical");
@@ -1070,7 +1163,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         }
         if (frames == 3)
         {
-            startup_critical.get()->getChild<LLButton>("Continue")->onCommit();
+            startupClick(startup_critical.get()->getChild<LLButton>("Continue"), [this] { return startup_accepted==1; });
             require(startup_accepted==1,"Native critical-message action did not deliver its reply");
             require(window->setSize(LLCoordWindow(800,600)), "Native startup resize failed");
             gSavedSettings.setF32("UIScaleFactor",1.25f);
@@ -1091,7 +1184,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
                 tos->setSiteIsAlive(false); // The existing unavailable-page controller path.
                 auto* agree=tos->getChild<LLCheckBoxCtrl>("agree_chk");
                 require(agree->getEnabled(),"TOS unavailable-page response did not enable consent");
-                agree->setValue(true); agree->onCommit();
+                startupClick(agree, [agree] { return agree->getValue().asBoolean(); });
                 require(tos->getChild<LLButton>("Continue")->getEnabled(),"Native TOS consent did not enable Continue");
             }
         }
@@ -1099,12 +1192,12 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         {
             auto* tos=startup_critical.get();
             require(tos->getRect().getHeight() <= startup_window->getWindowRectScaled().getHeight(),"Required TOS exceeds native viewport");
-            tos->getChild<LLButton>("Continue")->onCommit();
+            startupClick(tos->getChild<LLButton>("Continue"), [this] { return startup_accepted==2; });
             require(startup_accepted==2,"Native TOS consent did not deliver accepted reply");
         }
         if (frames == 7)
         {
-            startup_critical.get()->getChild<LLButton>("Cancel")->onCommit();
+            startupClick(startup_critical.get()->getChild<LLButton>("Cancel"), [this] { return startup_rejected==1; });
             require(startup_rejected==1,"Native TOS cancellation did not deliver rejected reply");
             startup_dialog_actions=true;
             LLNotificationChannel::getInstance("AlertModal")->forEachNotification([this](LLNotificationPtr notification) { startup_alert=notification; });
@@ -1246,6 +1339,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     {
         boost::json::object record{{"schema",1},{"mode","viewer-native-startup"},{"device",identity},{"stages",stages},
             {"login_controls_verified",startup_login},{"progress_owner_verified",startup_progress},
+            {"login_os_input_verified",startup_login_actions==2},{"login_submit_actions",startup_login_actions},
             {"modal_alert_verified",startup_alert_verified},{"critical_dialog_verified",startup_critical_verified},
             {"presented_frames",frames},{"readbacks",startup_readbacks},{"validation_errors",diagnostic_errors.load()},
             {"subpixel_precision_bits",startup_subpixel_bits},

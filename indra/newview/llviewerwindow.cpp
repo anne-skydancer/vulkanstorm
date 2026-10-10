@@ -3708,7 +3708,19 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
 
 bool LLViewerWindow::handleUnicodeChar(llwchar uni_char, MASK mask)
 {
-    if (mNativeVulkan) { auto* focus = gFocusMgr.getKeyboardFocus(); return focus && focus->handleUnicodeChar(uni_char, false); }
+    if (mNativeVulkan)
+    {
+        auto* focus = gFocusMgr.getKeyboardFocus();
+        // Text controls defer Return until the character event, just as on the
+        // GL route, so preceding queued text is committed before submission.
+        if (((uni_char == 13 && mask != MASK_CONTROL) || (uni_char == 3 && mask == MASK_NONE)) && mask != MASK_ALT)
+        {
+            if (focus && focus->wantsReturnKey()) return true; // Already handled on keydown.
+            if (focus && focus->handleKey(KEY_RETURN, mask, false)) return true;
+            return mRootView && mRootView->handleKey(KEY_RETURN, mask, true);
+        }
+        return focus && focus->handleUnicodeChar(uni_char, false);
+    }
     // HACK:  We delay processing of return keys until they arrive as a Unicode char,
     // so that if you're typing chat text at low frame rate, we don't send the chat
     // until all keystrokes have been entered. JC

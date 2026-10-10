@@ -9,6 +9,7 @@
 - `vkstorm-devel` experiments with improvements no longer accepted in `vkstorm-release`.
 - `vkstorm-canary` targets Vulkanstorm 1.0.1, based on upstream 7.2.5. Rename it to `vkstorm_1.0.1` only once upstream 7.2.5 is released.
 - Continue authorized Vulkan work on the existing `vkstorm-vulkan` branch. Once development is ready, rename it to `vkstorm_1.1.0`; native Vulkan will be that revision's default renderer.
+- Keep branch checkouts under `C:\Dev\vulkanstorm\worktrees`; the Vulkan checkout belongs at `C:\Dev\vulkanstorm\worktrees\vkstorm-vulkan`. Preserve staged executables needed for an ongoing user test until that test is finished.
 - Keep native Vulkan dependency, rendering and software-device CI separate from production baseline CI. Software graphics qualification must not publish release artifacts or advance `latest`.
 - Develop new features only on feature branches created from `vkstorm-devel`. Use the `codex/` prefix by default.
 - Only hotfixes, critical fixes, or security patches may be directly committed to `vkstorm-release` or `vkstorm-devel`.

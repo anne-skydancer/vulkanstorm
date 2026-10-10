@@ -36,6 +36,8 @@ def assess_startup(record, code, log, case):
         return False
     if case == 'startup-positive':
         return (code == 0 and record.get('passed') is True and record.get('presented_frames') == 17
+                and record.get('login_os_input_verified') is True
+                and record.get('login_submit_actions') == 2
                 and record.get('readbacks') == 18 and record.get('modal_alert_verified') is True
                 and record.get('critical_dialog_verified') is True
                 and all(record.get(key) is True for key in ('plain_chat_controls_verified',

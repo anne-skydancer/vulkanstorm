@@ -95,6 +95,8 @@ void LLViewerWindow::initNativeBase()
     holder.name          = "login_panel_holder";
     holder.rect          = mWindowRectScaled;
     holder.follows.flags = FOLLOWS_ALL;
+    holder.mouse_opaque  = false;
+    holder.tab_stop      = false;
     auto* login          = LLUICtrlFactory::create<LLPanel>(holder, mRootView);
     require(login != nullptr, "Native login holder creation failed");
     mLoginPanelHolder = login->getHandle();
@@ -122,6 +124,9 @@ void LLViewerWindow::initNativeBase()
     floaters.name          = "Floater View";
     floaters.rect          = mWindowRectScaled;
     floaters.follows.flags = FOLLOWS_ALL;
+    // Match main_view.xml: empty overlay space must pass input to login/chat.
+    floaters.mouse_opaque = false;
+    floaters.tab_stop     = false;
     gFloaterView           = LLUICtrlFactory::create<LLFloaterView>(floaters, mRootView);
     require(gFloaterView != nullptr, "Native required-dialog container creation failed");
     // Initialize default channels before registering viewer-owned children.
@@ -144,6 +149,8 @@ void LLViewerWindow::initNativeBase()
     popups.name = "popup_holder";
     popups.rect = mWindowRectScaled;
     popups.follows.flags = FOLLOWS_ALL;
+    popups.mouse_opaque = false;
+    popups.tab_stop = false;
     popups.mouse_opaque = false;
     mPopupView = LLUICtrlFactory::create<LLPopupView>(popups, mRootView);
     require(mPopupView != nullptr, "Native popup owner creation failed");
