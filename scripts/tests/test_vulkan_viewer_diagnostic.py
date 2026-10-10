@@ -46,7 +46,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(rectangles['native_logout'], (400,232,496,256))
         self.assertEqual(rectangles['native_plain_transcript'], (4,36,496,228))
         self.assertEqual(rectangles['native_chat_input'], (4,4,496,30))
-        transcript = panel.find("text_editor[@name='native_plain_transcript']")
+        transcript = panel.find("simple_text_editor[@name='native_plain_transcript']")
         self.assertEqual(transcript.get('bg_readonly_color'), 'ChatHistoryBgColor')
         self.assertEqual(transcript.get('text_readonly_color'), 'ChatHistoryTextColor')
         self.assertEqual(transcript.get('word_wrap'), 'true')
@@ -127,6 +127,8 @@ int main(){
                        source.index('#endif // LL_SDL', source.index('void LLWindowSDL::allowLanguageTextInput('))]
         editing = source[source.index('            case SDL_TEXTEDITING:'):
                          source.index('            case SDL_TEXTINPUT:')]
+        committing = source[source.index('            case SDL_TEXTINPUT:'):
+                            source.index('                auto string = utf8str_to_utf16str( event.text.text );')]
         fixture = r'''
 #include <algorithm>
 #include <cassert>
@@ -142,7 +144,7 @@ LLWString utf8str_to_wstring(const char* text){return LLWString(text,text+std::s
 #define LL_ENDL std::endl
 constexpr auto SDL_HINT_IME_INTERNAL_EDITING="ime";
 constexpr auto SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR="bypass";
-constexpr int SDL_INIT_VIDEO=1,SDL_WINDOW_RESIZABLE=2,SDL_SYSWM_X11=3,SDL_TEXTEDITING=4;
+constexpr int SDL_INIT_VIDEO=1,SDL_WINDOW_RESIZABLE=2,SDL_SYSWM_X11=3,SDL_TEXTEDITING=4,SDL_TEXTINPUT=5;
 struct Settings{bool enabled=false;bool getBOOL(const char*)const{return enabled;}}gSavedSettings;
 std::string ime_hint;int starts=0,stops=0;
 void SDL_SetHint(const char* name,const char* value){if(std::string(name)=="ime")ime_hint=value;}
@@ -156,11 +158,12 @@ struct SDL_SysWMinfo{int version=0,subsystem=0;struct{struct{void* display=nullp
 #define SDL_VERSION(v) (*(v)=1)
 bool SDL_GetWindowWMInfo(SDL_Window*,SDL_SysWMinfo* info){info->subsystem=SDL_SYSWM_X11;info->info.x11={reinterpret_cast<void*>(1),42};return true;}
 struct LLPreeditor{
-    LLWString text;int resets=0,updates=0,caret=0;
-    void resetPreedit(){++resets;text.clear();}
+    LLWString text;int resets=0,updates=0,caret=0;S32 compositionLength=0;bool selected=false;
+    void getPreeditRange(S32* position,S32* length)const{*position=caret;*length=compositionLength;}
+    void resetPreedit(){++resets;if(selected || compositionLength)text.clear();compositionLength=0;selected=false;}
     void updatePreedit(const LLWString& value,const std::vector<S32>& lengths,const std::deque<bool>& standouts,S32 position){
         assert(lengths==std::vector<S32>{S32(value.size())} && standouts==std::deque<bool>{true});
-        ++updates;text=value;caret=position;
+        ++updates;text=value;caret=position;compositionLength=S32(value.size());
     }
 };
 struct Event{int type=SDL_TEXTEDITING;struct{char text[32]="abc";int start=2;}edit;};
@@ -173,6 +176,10 @@ struct LLWindowSDL{
     void gatherEditing(Event event){switch(event.type){
 ''' + editing + r'''
     default:break;}}
+    void gatherCommit(){switch(SDL_TEXTINPUT){
+''' + committing + r'''
+        break;}
+    default:break;}}
 };
 ''' + creation + focus + r'''
 int main(){
@@ -182,6 +189,27 @@ int main(){
     assert(editor.updates==1 && editor.text==L"abc" && editor.caret==2);
     window.allowLanguageTextInput(&editor,false);window.gatherEditing({});
     assert(editor.updates==1 && editor.text.empty() && stops==1);
+    // Ordinary select-all is committed text, not pending IME composition.
+    LLPreeditor username,password;username.text=L"Offline Test";username.selected=true;
+    window.allowLanguageTextInput(&username,true);
+    window.allowLanguageTextInput(&password,true);
+    assert(username.text==L"Offline Test" && username.selected && username.resets==0);
+    window.allowLanguageTextInput(&username,true);
+    window.allowLanguageTextInput(&username,false);
+    assert(username.text==L"Offline Test" && username.selected && username.resets==0);
+    window.allowLanguageTextInput(&username,true);
+    Event cancel;cancel.edit.text[0]=0;window.gatherEditing(cancel);
+    assert(username.text==L"Offline Test" && username.selected && username.resets==0);
+    // Starting composition replaces selection; cancellation retires only that composition.
+    window.gatherEditing({});assert(username.text==L"abc" && username.compositionLength==3);
+    window.gatherEditing(cancel);assert(username.text.empty() && username.compositionLength==0);
+    window.gatherEditing({});window.allowLanguageTextInput(&password,true);
+    assert(username.text.empty() && username.compositionLength==0);
+    window.allowLanguageTextInput(&username,true);window.gatherEditing({});window.gatherCommit();
+    assert(username.text.empty() && username.compositionLength==0);
+    username.text=L"replace me";username.selected=true;window.gatherCommit();
+    assert(username.text.empty() && !username.selected); // Actual commit still replaces normal selection.
+    window.allowLanguageTextInput(&username,false);
     window.allowLanguageTextInput(&editor,true);window.mUseGL=true;window.gatherEditing({});
     assert(editor.updates==1); // Existing GL composition behavior is unchanged.
     gSavedSettings.enabled=false;LLWindowSDL disabled;
