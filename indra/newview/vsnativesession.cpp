@@ -31,7 +31,7 @@
 #include "llsdutil_math.h"
 #include "llquaternion.h"
 #include "llfocusmgr.h"
-#include "naclantispam.h"
+#include "NACLantispam.h"
 #include "llcachename.h"
 #include "llxfermanager.h"
 #include "llxfer.h"
