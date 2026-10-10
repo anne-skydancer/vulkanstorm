@@ -1,5 +1,5 @@
 {
-  "source_commit": "f560e6b41e03756f05c4531bb79ae1d0c1babd04",
+  "source_commit": "f06d246d3c79c1c12c06f58df1425f6e4dbfca16",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -2759,9 +2759,9 @@
     },
     {
       "path": "indra/newview/llcallingcard.cpp",
-      "start": 1101,
-      "end": 1111,
-      "sha256": "5ca87c59e09504b91d90384b2f3f8bf22f3bd0cdd8cae1b2f43f77f8a5a1402d",
+      "start": 1125,
+      "end": 1135,
+      "sha256": "b499de99e3f4914befe6e7aaf3ffdd2a6630afc60aec40fedea158089d1e4361",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Account reset clears tracker/buddy pending queues and relationships and publishes REMOVE through existing UI observers without deleting those observers. Source review only; no expanded runtime acceptance claim."
@@ -9069,116 +9069,143 @@
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 1,
-      "end": 61,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "end": 54,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 63,
-      "end": 82,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 59,
+      "end": 65,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 84,
-      "end": 165,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 67,
+      "end": 86,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 205,
-      "end": 718,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 88,
+      "end": 169,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 742,
-      "end": 743,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 209,
+      "end": 411,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 746,
-      "end": 751,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 450,
+      "end": 459,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 760,
-      "end": 760,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 461,
+      "end": 761,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 769,
-      "end": 774,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 785,
+      "end": 786,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 791,
-      "end": 791,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 789,
+      "end": 794,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 792,
-      "end": 792,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 803,
+      "end": 803,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 795,
-      "end": 795,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 812,
+      "end": 817,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 810,
-      "end": 1458,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 834,
+      "end": 834,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1460,
-      "end": 1543,
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "start": 835,
+      "end": 835,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 838,
+      "end": 838,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 853,
+      "end": 1501,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 1503,
+      "end": 1586,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -10733,102 +10760,156 @@
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 62,
-      "end": 62,
+      "start": 66,
+      "end": 66,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 83,
-      "end": 83,
+      "start": 87,
+      "end": 87,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 166,
-      "end": 204,
+      "start": 170,
+      "end": 208,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 719,
-      "end": 741,
+      "start": 762,
+      "end": 784,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 744,
-      "end": 745,
+      "start": 787,
+      "end": 788,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 752,
-      "end": 759,
+      "start": 795,
+      "end": 802,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 761,
-      "end": 768,
+      "start": 804,
+      "end": 811,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 775,
-      "end": 790,
+      "start": 818,
+      "end": 833,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 793,
-      "end": 794,
+      "start": 836,
+      "end": 837,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 796,
-      "end": 809,
+      "start": 839,
+      "end": 852,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1459,
-      "end": 1459,
+      "start": 1502,
+      "end": 1502,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da"
+    },
+    {
+      "path": "indra/newview/llcallingcard.cpp",
+      "start": 61,
+      "end": 64,
+      "sha256": "b499de99e3f4914befe6e7aaf3ffdd2a6630afc60aec40fedea158089d1e4361",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed friend-status name-cache callback: active native sessions append to VSPlainChat only while Connected and with a live native chat owner; honor per-account nearby logging. Preserve IM status, notification/sound policy, keyword handling and legacy history/toast routing. Native callback avoids the absent FSFloaterNearbyChat owner and GL/world rendering."
+    },
+    {
+      "path": "indra/newview/llcallingcard.cpp",
+      "start": 905,
+      "end": 925,
+      "sha256": "b499de99e3f4914befe6e7aaf3ffdd2a6630afc60aec40fedea158089d1e4361",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed friend-status name-cache callback: active native sessions append to VSPlainChat only while Connected and with a live native chat owner; honor per-account nearby logging. Preserve IM status, notification/sound policy, keyword handling and legacy history/toast routing. Native callback avoids the absent FSFloaterNearbyChat owner and GL/world rendering."
+    },
+    {
+      "path": "indra/newview/llcallingcard.cpp",
+      "start": 928,
+      "end": 928,
+      "sha256": "b499de99e3f4914befe6e7aaf3ffdd2a6630afc60aec40fedea158089d1e4361",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed friend-status name-cache callback: active native sessions append to VSPlainChat only while Connected and with a live native chat owner; honor per-account nearby logging. Preserve IM status, notification/sound policy, keyword handling and legacy history/toast routing. Native callback avoids the absent FSFloaterNearbyChat owner and GL/world rendering."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 55,
+      "end": 58,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only decoded OnlineNotification/OfflineNotification replay checks native transcript delivery across asynchronous name-cache work, both history modes, saved-setting restoration and unchanged prior notification-manager existence. Does not construct a scene or submit live-grid traffic."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 412,
+      "end": 449,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only decoded OnlineNotification/OfflineNotification replay checks native transcript delivery across asynchronous name-cache work, both history modes, saved-setting restoration and unchanged prior notification-manager existence. Does not construct a scene or submit live-grid traffic."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 460,
+      "end": 460,
+      "sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only decoded OnlineNotification/OfflineNotification replay checks native transcript delivery across asynchronous name-cache work, both history modes, saved-setting restoration and unchanged prior notification-manager existence. Does not construct a scene or submit live-grid traffic."
     }
   ],
   "source_review_reconciliation": {

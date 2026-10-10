@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "provenance": "reviewed-uncommitted-working-tree",
-  "head_commit": "d2570e155f01604c12195d3b4cdee5e1cdb2c574",
-  "committed_catalog_source_pin": "f560e6b41e03756f05c4531bb79ae1d0c1babd04",
+  "provenance": "reviewed-committed-source-with-precommit-build-evidence",
+  "head_commit": "f06d246d3c79c1c12c06f58df1425f6e4dbfca16",
+  "committed_catalog_source_pin": "f06d246d3c79c1c12c06f58df1425f6e4dbfca16",
   "acceptance": "scoped-source-review-only",
-  "committed_source_pin_accepted": false,
+  "committed_source_pin_accepted": true,
   "runtime_parity_qualified": false,
-  "scope": "Two renderer files changed by the login friend-status fix; no acceptance of a clean commit or full renderer parity.",
+  "scope": "Two renderer files changed by the committed login friend-status fix; canonical source-analysis acceptance passed, with software runtime evidence and live-grid limits kept separate.",
   "reviewed_sources": [
     {
       "path": "indra/newview/llcallingcard.cpp",
@@ -67,7 +67,7 @@
   "qualified_executable": {
     "path": "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vcabout-local\\newview\\RelWithDebInfo\\vulkanstorm-bin.exe",
     "sha256": "56b997fa82d07e2a9eef9eb0ce12dbed678aaf44923547cf6df8c00d1c7ed3f6",
-    "basis": "Previously built and staged Windows RelWithDebInfo executable; unchanged during documentation reconciliation."
+    "basis": "Built before the source commit from these same reviewed source bytes; unchanged during source/metadata commits, with no rebuild or new runtime claim."
   },
   "runtime_evidence": {
     "default": ".tmp/login-crash/qualified-default/results.json",
@@ -75,11 +75,39 @@
     "required_assertions_per_case": 79,
     "live_grid_qualified": false
   },
-  "blocked_checks": [
-    "check_diligent_insertions.py --accept",
-    "check_milestone1_boundaries.py",
-    "test_milestone1_boundaries.test_current_evidence"
-  ],
-  "required_next_step": "After a source commit is explicitly authorized, review/remap the existing insertion/platform ranges at that actual commit, refresh the boundary owner hash, regenerate insertion artifacts, and rerun acceptance. Preserve committed source pins until that operation; this sidecar is not substituted for their source_commit.",
-  "evidence": ".tmp/login-crash/qualification.json"
+  "blocked_checks": [],
+  "required_next_step": null,
+  "evidence": ".tmp/login-crash/qualification.json",
+  "precommit_review_snapshot": {
+    "provenance": "reviewed-uncommitted-working-tree",
+    "head_commit": "d2570e155f01604c12195d3b4cdee5e1cdb2c574",
+    "committed_catalog_source_pin": "f560e6b41e03756f05c4531bb79ae1d0c1babd04",
+    "committed_source_pin_accepted": false,
+    "blocked_checks": [
+      "check_diligent_insertions.py --accept",
+      "check_milestone1_boundaries.py",
+      "test_milestone1_boundaries.test_current_evidence"
+    ],
+    "required_next_step": "After a source commit is explicitly authorized, review/remap the existing insertion/platform ranges at that actual commit, refresh the boundary owner hash, regenerate insertion artifacts, and rerun acceptance. Preserve committed source pins until that operation; this sidecar is not substituted for their source_commit."
+  },
+  "committed_source_proof": {
+    "indra/newview/llcallingcard.cpp": {
+      "committed_blob_sha256": "b499de99e3f4914befe6e7aaf3ffdd2a6630afc60aec40fedea158089d1e4361",
+      "checked_out_source_sha256": "b499de99e3f4914befe6e7aaf3ffdd2a6630afc60aec40fedea158089d1e4361",
+      "line_ending_equivalent": true
+    },
+    "indra/newview/vsnativeimreplay.cpp": {
+      "committed_blob_sha256": "d9a61df00f4a439b676e90ddbd38513b42733be3372ebc4d1d5ec9ea5e8d2a4a",
+      "checked_out_source_sha256": "33d5c90bb40e257a735778680f1212c9008ee03a5a5371e1e3ecab01f613a2da",
+      "line_ending_equivalent": true
+    }
+  },
+  "acceptance_checks": {
+    "catalog_regeneration": true,
+    "catalog_verification": true,
+    "milestone_boundaries": true,
+    "documentation_tests": 22,
+    "all_passed": true
+  },
+  "integration": "Committed directly on vkstorm-vulkan. No separate fix branch exists and no artificial merge was created."
 }
