@@ -6,6 +6,37 @@ This inventory describes implementation and outstanding qualification separately
 
 ## Connected chrome and nearby frontend: current integration
 
+### All-skin tint correction, 10 October 2026
+
+Source `d34fe4920260edc12dd566c9525f9a4b625cc62d` corrects a shared
+native-renderer mismatch: OpenGL clamps float vertex tint channels and truncates
+them to normalized U8, whereas native images and primitives retained the full
+float channels. Native image, rectangle and triangle packets now preserve the
+same byte representation. Font colors were already normalized U8. Skin colors,
+assets and the shared tab/button controllers retain their existing definitions.
+
+The independent regression extracts the actual GL conversion and tests byte
+boundaries and fractional opacity against the native conversion. Each selected
+skin's real layered inactive-tab image is also decoded independently and drawn
+in two fractional-tint/opacity swatches; mapped Vulkan pixels are compared with
+the GL byte-tint/alpha expectation with at most one byte of rounding tolerance.
+All 68 staged Windows viewer diagnostic cases passed in
+`.tmp/connected/parity/diagnostic44/results.json`, including every packaged
+skin/theme and the German overlay, presentation failures and normal login.
+The corrected executable was built as RelWithDebInfo with the viewer's
+Autobuild-installed libraries and complete assets, without an installer.
+
+The final connected replay also covers real conference start, temporary-to-server
+session remapping, send/leave/reinvite and delayed notification retirement.
+Shared conversation-close callbacks now resolve the current panel identity and
+retain weak host ownership. Message and delayed name-resolution notification
+callbacks reject retired non-null sessions before dereferencing their models.
+Replay43 exposed that notification crash; its failed evidence is preserved.
+The rebuilt final stage is `build-vcuiparity-final-local/newview/RelWithDebInfo`.
+Its complete 26-case connected skin/theme/language/scale matrix is still running;
+these source fixes and the successful rendering matrix do not imply live-grid,
+Linux or physical-driver qualification.
+
 The user's live login establishes that ordinary credentials can connect the native viewer. It also exposed missing address/favorites controls, toolbar placement and pointer behavior, plus a crash during IM interaction. Those reports prevent treating the earlier diagnostic replay as connected OpenGL UI parity.
 
 The current source uses the shared `LLNavigationBar`, location input, favorites and navigation history, `LLStatusBar`, main menu and `LLToolBarView` rather than a second chrome layout. Account toolbar positions, display modes, alignment and layout use the existing `toolbars.xml` serializer. The real Toybox configurator and command drag/drop operate through UI mouse capture and shared two-dimensional drop targets; they do not select world tools. Restore/clear confirmations retain account-generation ownership. Native OS input/cursor handling belongs to the viewer window integration.
