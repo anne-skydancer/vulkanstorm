@@ -290,3 +290,39 @@ native session replay passed all 78 assertions. All seven build-manifest source
 hashes still match the qualified executable; the two ancestry-only merges need
 no recompilation. Source analysis acceptance remains separate from runtime
 qualification, and the software-runtime limits above still apply.
+
+### Login friend-status crash: uncommitted qualification
+
+The scoped working-tree fix based on HEAD
+`d2570e155f01604c12195d3b4cdee5e1cdb2c574` routes friend-status notices to the
+native `VSPlainChat` owner. The reported executable (SHA-256 `f759a713...`) and
+dump `vulkanstorm-bin.exe.23872.dmp` identify a callback entering the legacy
+nearby-chat handler. A synthetic loopback debugger reproduction locates the
+null access at `FSFloaterNearbyChat::addMessage:300`, RVA `0x26aaa2` in that
+image; native startup does not construct the legacy nearby-chat owner.
+The Windows work queue converts this access violation into an uncaught exception
+and fail-fast termination. No live login was submitted during diagnosis.
+
+The corrected Windows RelWithDebInfo image has SHA-256
+`56b997fa82d07e2a9eef9eb0ce12dbed678aaf44923547cf6df8c00d1c7ed3f6` and is
+fully staged in `build-vcabout-local/newview/RelWithDebInfo`. It passed the exact
+synthetic friend-online trigger and all 79 connected assertions in default and
+`ansastorm_modern` skins, including online/offline history modes, relogin and
+Preferences. World owners remained zero. Ninety-three dedicated source tests
+passed, with one local HTTP connection-reset failure passing on retry. The
+original crash executable/PDB and dump/log are retained in `.tmp/login-crash`;
+the older `build-vcloginfix-local` image remains unchanged. The handed-off image
+has not been rebuilt or replaced during this documentation reconciliation.
+
+This fix is **uncommitted**. Its [scoped working-tree source review](login-crash-working-tree-review.json)
+records the actual changed-file hashes/ranges and pending boundary hash update
+separately from the canonical committed source pin. It does not claim committed
+source acceptance. The insertion negative fixtures isolate malformed review
+metadata after the clean-source precondition; an additional regression checks
+that dirty source is rejected before review. Their original rejection assertions
+remain intact. The canonical catalog and boundary acceptance commands still
+reject the modified renderer files, and the canonical boundary current-evidence
+test still reports a stale hash. A subsequently authorized source commit and
+reviewed repin are required to close these checks. The sidecar is not substituted
+for a commit, and the source-pin guards remain unchanged. Live-grid, physical
+GPU, manual interaction and Linux acceptance of this fix remain unqualified.

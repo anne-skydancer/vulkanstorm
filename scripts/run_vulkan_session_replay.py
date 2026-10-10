@@ -64,7 +64,7 @@ REQUIRED = ('connected_skin_geometry', 'connected_account_benefits', 'connected_
             'connected_resident_profile_notes', 'connected_group_profile_members_roles',
             'connected_preferences_apply_cancel', 'preferences_repeated_tabs', 'preferences_graphics_persistence', 'connected_contact_set_edit', 'connected_blocklist_edit',
             'connected_transcript_preview', 'im_inventory_offer', 'im_group_attachment', 'im_inventory_preview',
-            'connected_ui_image_decoded', 'im_friendship_notification', 'im_group_notice', 'im_group_invitation_decline_encoded',
+            'connected_ui_image_decoded', 'im_friendship_notification', 'im_friend_status_history', 'im_group_notice', 'im_group_invitation_decline_encoded',
             'im_contacts_ui', 'im_readback', 'im_direct_encoded', 'im_direct_incoming_offline', 'im_typing', 'im_mute',
             'im_group_start', 'im_group_encoded', 'im_group_incoming', 'im_group_participants',
             'im_group_leave', 'im_group_reopen', 'im_group_invitation', 'im_group_start_error',
