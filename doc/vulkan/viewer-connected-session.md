@@ -115,5 +115,36 @@ native viewer includes for case mismatches before the platform builds. The
 Windows runtime behavior is unchanged by this portability correction.
 Verified GHI/software-runtime dependencies are now cached after the standalone
 checks, before viewer compilation, so a viewer failure does not discard them.
-The final three-platform run and artifact results will be recorded here after
-completion. Live-server qualification remains untested.
+## Software qualification complete: 10 October 2026
+
+[CI run 38012380599](https://github.com/anne-skydancer/vulkanstorm/actions/runs/38012380599)
+passed source evidence and all three independent graphics jobs at commit
+`2d7298e2b097600666bbf3ffd3293077214472c8`. Each job built and completely staged
+the RelWithDebInfo viewer without an installer, passed six standalone presentation
+cases and five headless cases, passed the existing 68-case viewer matrix, and
+passed all 27 connected-session replay stages. The production source catalog
+remains pinned to `d617185e40d0df7ac866fb47fb0d17252e0e185e`; subsequent commits
+changed only CI and qualification records.
+
+All three uploaded artifacts were downloaded and checked against the run commit,
+staging executable checksum, GHI loaded-library hashes, locked ICD/validation-layer
+hashes, license checksums, XML/JSON stage results and shutdown/validation logs.
+The actual and independent expected connected-chat PPMs were compared again:
+
+| Platform/runtime | Viewer cases | Session stages | Maximum RGB difference |
+| --- | ---: | ---: | ---: |
+| Windows SwiftShader | 68 passed | 27 passed | 1 |
+| Linux SwiftShader | 68 passed | 27 passed | 1 |
+| Linux Lavapipe | 68 passed | 27 passed | 2 |
+
+All readbacks remain within the existing strict color threshold of 3; no threshold
+was loosened. Validation and GL traps were clean. Runtime reports retain their
+dirty-worktree flag, which includes auxiliary CI checkouts and cache inputs;
+these reports are not a clean-worktree certification. Source acceptance and the
+recorded build/run commit remain separate evidence.
+
+V4 production integration and deterministic software qualification are complete.
+Real-server authentication, nearby send/receive, disconnect and logout remain
+explicitly untested because credentials/server access are unavailable. The replay
+does not qualify those live-server criteria, physical multi-monitor DPI, OS IME
+services or world rendering.

@@ -5344,7 +5344,10 @@
     "owner": "indra/newview/vsnativesession.cpp",
     "replay": "scripts/run_vulkan_session_replay.py",
     "live_server_qualification": "untested",
-    "software_qualification": "local-windows-swiftshader-complete-replay-passed; CI matrix pending",
-    "world_rendering": false
+    "software_qualification": "Windows SwiftShader, Linux SwiftShader and Linux Lavapipe: 27 connected-session stages and 68 viewer cases passed per platform; CI run 38012380599 at commit 2d7298e2b097600666bbf3ffd3293077214472c8; loaded dependency hashes, validation logs and archived readbacks verified",
+    "world_rendering": false,
+    "software_qualified": true,
+    "qualification_run": "https://github.com/anne-skydancer/vulkanstorm/actions/runs/38012380599",
+    "qualification_commit": "2d7298e2b097600666bbf3ffd3293077214472c8"
   }
 }

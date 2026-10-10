@@ -6,8 +6,8 @@ Status: staged implementation plan. V1/V2 have an
 passed Windows SwiftShader, Linux SwiftShader and Linux Lavapipe.
 V3 interface/resource implementation and expanded software acceptance are complete
 on all three platform/runtime combinations; see the [V3 completion record](viewer-ui-substrate.md#v3-completion-9-october-2026).
-V4 connected UI/chat is implemented; software replay qualification is being recorded
-in [the connected-session record](viewer-connected-session.md). Live-server
+V4 connected UI/chat is implemented and software-qualified on all three CI platforms;
+see [the connected-session record](viewer-connected-session.md). Live-server
 qualification remains explicitly untested. Subsequent world rendering remains open.
 Planning source: `417e32891aee7bddf73a1ac1bbf7226133f78286` on
 `vkstorm-vulkan`, reviewed on 7 October 2026. Continue authorized implementation
