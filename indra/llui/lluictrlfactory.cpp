@@ -66,6 +66,11 @@ public:
 
 static LLDefaultChildRegistry::Register<LLUICtrlLocate> r1("locate");
 
+bool LLUICtrlFactory::isNativeLayoutType(const std::type_info& type)
+{
+    return type == typeid(LLUICtrlLocate);
+}
+
 // Build time optimization, generate this once in .cpp file
 template class LLUICtrlFactory* LLSingleton<class LLUICtrlFactory>::getInstance();
 

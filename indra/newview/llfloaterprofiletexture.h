@@ -70,6 +70,7 @@ private:
     S32 mImageOldBoostLevel;
     bool mWasNoDelete;
     image_loaded_signal_t* mImageLoadedSignal;
+    boost::signals2::connection mNativeImageConnection;
     LLLoadedCallbackEntry::source_callback_list_t mCallbackTextureList;
 };
 

@@ -26,6 +26,11 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeim.h"
+#include "vsuiimageprovider.h"
+#endif
 
 #include "lltexturectrl.h"
 
@@ -341,6 +346,10 @@ void LLFloaterTexturePicker::setCanApplyImmediately(bool b)
 
 void LLFloaterTexturePicker::stopUsingPipette()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return;
+#endif
+
     if (LLToolMgr::getInstance()->getCurrentTool() == LLToolPipette::getInstance())
     {
         LLToolMgr::getInstance()->clearTransientTool();
@@ -349,6 +358,23 @@ void LLFloaterTexturePicker::stopUsingPipette()
 
 bool LLFloaterTexturePicker::updateImageStats()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto image = mImageAssetID.notNull() ? LLUI::getUIImageByID(mImageAssetID) : nullptr;
+        const bool ready = mImageAssetID.isNull() || vs_ui_image_ready(mImageAssetID);
+        const S32 width = image && ready ? image->getWidth() : 0;
+        const S32 height = image && ready ? image->getHeight() : 0;
+        const bool valid = ready && (mImageAssetID.isNull() ||
+            ((!mLimitsSet || width == height) && width >= mMinDim && width <= mMaxDim && height >= mMinDim && height <= mMaxDim));
+        mResolutionLabel->setTextArg("[DIMENSIONS]", ready ? llformat("%d x %d", width, height) : std::string("[? x ?]"));
+        mResolutionWarning->setTextArg("[TEXDIM]", llformat("%dx%d", width, height));
+        mResolutionLabel->setVisible(valid || !ready);
+        mResolutionWarning->setVisible(ready && !valid);
+        return valid;
+    }
+#endif
+
     bool result = true;
     if (mGLTFMaterial.notNull())
     {
@@ -723,7 +749,10 @@ bool LLFloaterTexturePicker::postBuild()
 
     mSavedFolderState.setApply(false);
 
-    LLToolPipette::getInstance()->setToolSelectCallback(boost::bind(&LLFloaterTexturePicker::onTextureSelect, this, _1));
+#if VS_NATIVE_VULKAN
+    if (!VSNativeSession::active())
+#endif
+        LLToolPipette::getInstance()->setToolSelectCallback(boost::bind(&LLFloaterTexturePicker::onTextureSelect, this, _1));
 
     getChild<LLComboBox>("l_bake_use_texture_combo_box")->setCommitCallback(onBakeTextureSelect, this);
 
@@ -734,6 +763,28 @@ bool LLFloaterTexturePicker::postBuild()
 // virtual
 void LLFloaterTexturePicker::draw()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        mSelectBtn->setEnabled(mActive && mCanApply && updateImageStats() && !getTentative());
+        // World pipette selection belongs to the deferred scene renderer.
+        mPipetteBtn->setEnabled(false); mPipetteBtn->setValue(false);
+        if (mTentativeLabel) mTentativeLabel->setVisible(getTentative() && !mViewModel->isDirty());
+        mDefaultBtn->setEnabled(mImageAssetID != mDefaultImageAssetID || getTentative());
+        mBlankBtn->setEnabled((mImageAssetID != mBlankImageAssetID && mBlankImageAssetID.notNull()) || getTentative());
+        mNoneBtn->setEnabled(mAllowNoTexture && (mImageAssetID.notNull() || getTentative()));
+        mTransparentBtn->setEnabled((mImageAssetID != mTransparentImageAssetID && mTransparentImageAssetID.notNull()) || getTentative());
+        LLFloater::draw();
+        if (isMinimized() || !mOwner) return;
+        LLRect interior = mPreviewWidget->getRect(); gl_rect_2d(interior, LLColor4::black, false); interior.stretch(-1);
+        const F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.f : getCurrentTransparency();
+        auto image = mImageAssetID.notNull() ? LLUI::getUIImageByID(mImageAssetID) : mFallbackImage;
+        if (image) image->draw(interior, UI_VERTEX_COLOR % alpha);
+        else { gl_rect_2d(interior, LLColor4::grey % alpha, true); gl_draw_x(interior, LLColor4::black); }
+        return;
+    }
+#endif
+
     static LLCachedControl<F32> max_opacity(gSavedSettings, "PickerContextOpacity", 0.4f);
     drawConeToOwner(mContextConeOpacity, max_opacity, mOwner);
 
@@ -1160,6 +1211,10 @@ void LLFloaterTexturePicker::onBtnSelect(void* userdata)
 
 void LLFloaterTexturePicker::onBtnPipette()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return;
+#endif
+
     bool pipette_active = getChild<LLUICtrl>("Pipette")->getValue().asBoolean();
     pipette_active = !pipette_active;
     if (pipette_active)
@@ -2336,6 +2391,20 @@ void LLTextureCtrl::setAllowLocalTexture(bool b)
 void LLTextureCtrl::setImageAssetName(const std::string& name)
 {
     LLPointer<LLUIImage> imagep = LLUI::getUIImage(name);
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        if (LLUUID::validate(name)) setImageAssetID(LLUUID(name));
+        else
+        {
+            // A named skin image has no inventory asset identity. Preserve its
+            // visual facade as the control's empty-selection fallback.
+            mFallbackImage = imagep;
+            setImageAssetID(LLUUID::null);
+        }
+        return;
+    }
+#endif
     if(imagep)
     {
         LLViewerFetchedTexture* pTexture = dynamic_cast<LLViewerFetchedTexture*>(imagep->getImage().get());
@@ -2449,6 +2518,23 @@ bool LLTextureCtrl::handleDragAndDrop(S32 x, S32 y, MASK mask,
 void LLTextureCtrl::draw()
 {
     mBorder->setKeyboardFocusHighlight(hasFocus());
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        LLRect border(0, getRect().getHeight(), getRect().getWidth(), mCaptionHeight);
+        gl_rect_2d(border, mBorderColor.get(), false);
+        LLRect interior = border; interior.stretch(-1);
+        const F32 alpha = getTransparencyType() == TT_ACTIVE ? 1.f : getCurrentTransparency();
+        auto image = mValid && mImageAssetID.notNull() ? LLUI::getUIImageByID(mImageAssetID) : mFallbackImage;
+        if (image) image->draw(interior, UI_VERTEX_COLOR % alpha);
+        else { gl_rect_2d(interior, LLColor4::grey % alpha, true); gl_draw_x(interior, LLColor4::black); }
+        if (mIsMasked) { gl_rect_2d(interior, LLColor4(.5f, .5f, .5f, .44f), true); gl_draw_x(interior, LLColor4::black); }
+        mTentativeLabel->setVisible(getTentative());
+        mCaption->setEnabled(getEnabled() && isInEnabledChain());
+        LLUICtrl::draw();
+        return;
+    }
+#endif
 
     LLPointer<LLViewerTexture> preview = NULL;
 

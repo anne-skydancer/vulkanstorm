@@ -345,6 +345,7 @@ public:
     ~LLInventoryCallbackManager();
 
     void fire(U32 callback_id, const LLUUID& item_id);
+    void resetAccountCallbacks() { mMap.clear(); }
     U32 registerCB(LLPointer<LLInventoryCallback> cb);
 private:
     typedef std::map<U32, LLPointer<LLInventoryCallback> > callback_map_t;

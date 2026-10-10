@@ -31,6 +31,7 @@
 
 #include "llfloater.h"
 #include "llpointer.h"
+#include "lluiimage.h"
 #include "llcolorswatch.h"
 #include "llspinctrl.h"
 
@@ -176,6 +177,8 @@ class LLFloaterColorPicker
 
         // image used to compose color grid
         LLPointer<class LLViewerTexture> mRGBImage;
+        LLPointer<LLUIImage> mNativeRGBImage;
+        std::string mNativeImageKey;
 
         // current swatch in use
         LLColorSwatchCtrl* mSwatch;

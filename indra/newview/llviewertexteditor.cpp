@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewertexteditor.h"
+#include "vsnativeim.h"
 
 #include "llagent.h"
 #include "llaudioengine.h"
@@ -1356,12 +1357,14 @@ void LLViewerTextEditor::showUnsavedAlertDialog( LLInventoryItem* item )
     LLSD payload;
     payload["item_id"] = item->getUUID();
     payload["notecard_id"] = mNotecardInventoryID;
+    vs_native_im_stamp_notification(payload);
     LLNotificationsUtil::add( "ConfirmNotecardSave", LLSD(), payload, LLViewerTextEditor::onNotecardDialog);
 }
 
 // static
 bool LLViewerTextEditor::onNotecardDialog(const LLSD& notification, const LLSD& response )
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if( option == 0 )
     {
@@ -1383,7 +1386,7 @@ void LLViewerTextEditor::showCopyToInvDialog( LLInventoryItem* item, llwchar wc 
     payload["item_id"] = item_id;
     payload["item_wc"] = LLSD::Integer(wc);
     LLNotificationsUtil::add( "ConfirmItemCopy", LLSD(), payload,
-        boost::bind(&LLViewerTextEditor::onCopyToInvDialog, this, _1, _2));
+        vs_native_im_ui_callback(this, boost::bind(&LLViewerTextEditor::onCopyToInvDialog, this, _1, _2)));
 }
 
 bool LLViewerTextEditor::onCopyToInvDialog(const LLSD& notification, const LLSD& response)

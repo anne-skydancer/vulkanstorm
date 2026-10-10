@@ -81,6 +81,7 @@ class LLAgentBenefitsMgr: public LLSingleton<LLAgentBenefitsMgr>
 
 public:
     static const LLAgentBenefits& current();
+    static void resetAccountBenefits();
     static const LLAgentBenefits& get(const std::string& package);
     static bool init(const std::string& package, const LLSD& benefits_sd);
     static bool initCurrent(const std::string& package, const LLSD& benefits_sd);

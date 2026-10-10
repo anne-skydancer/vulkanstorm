@@ -5,7 +5,9 @@ ordinary Vulkan viewer login. Authentication and required agreements remain in
 the existing startup flow; the successful response enters this owner before
 legacy world initialization. The viewer establishes the reliable simulator
 circuit, obtains reviewed seed capabilities, processes region handshake and
-agent movement completion, and opens its existing native nearby-chat panel.
+agent movement completion, and opens its native connected controls. The connected
+UI uses the existing skinned Contacts, direct/group IM conversations, notification,
+profile, Preferences and transcript controls, alongside native nearby chat.
 Vulkan continues to use available machine drivers during normal execution.
 
 ## Ownership and admission
@@ -13,14 +15,16 @@ Vulkan continues to use available machine drivers during normal execution.
 The owner retains agent/session identity, simulator host/circuit, region handle,
 region UUID/name/owner/access/flags, region dimensions and local agent position.
 It owns neither LLWorld nor LLViewerRegion, terrain, avatars, drawables, parcels,
-media or inventory. Agent movement updates CPU position without invoking legacy
+or world media. Account inventory, text assets and UI images are CPU services
+retained for messaging attachments and notifications. Agent movement updates CPU position without invoking legacy
 position observers. Periodic AgentUpdate packets maintain protocol readiness
 without activating camera or avatar resources.
 
 UDP semantic dispatch and direct HTTP message dispatch share default-deny
 admission. Transport decoding and reliable acknowledgements precede semantic
 admission. Reviewed simulator messages preserve handshake, movement, nearby chat,
-name replies, CPU mute-list transfers, alerts, logout and disconnect behavior.
+name replies, CPU mute-list transfers, direct/group IM, account inventory/profile/
+group replies, alerts, logout and disconnect behavior.
 Unknown messages, world updates and child-simulator admission are consumed without
 calling legacy handlers. Teleport/crossing requests cause a controlled disconnect.
 Command URLs are gated before legacy command execution or region lookup; login
@@ -32,8 +36,18 @@ weak ownership and/or generation admission. Event-queue work uses a weak poll
 owner, checks both its stopped state and session generation, and cancels suspended
 HTTP work. Mute transfers complete cancellation callbacks before destruction.
 Partial initialization, logout, disconnect and relogin use the same reset path.
+Reset also retires conversation/profile/account dialogs, clears inventory and
+contact-set ownership, and disconnects name and settings callbacks before their
+controls are destroyed. Contacts snapshots current buddies when constructed
+after login rather than relying on an already-consumed startup notification.
 Connection establishment has a 60-second deadline; logout waits at most five
 seconds for acknowledgement. Vulkan failure ends the native session.
+
+The [connected UI gap audit](connected-ui-gap-audit.md) records the expanded
+minimum acceptance: ordinary login, fully functioning connected text UI, local
+chat, direct IM and group IM. Implementation and its current qualification are
+recorded separately there; the historical nearby-chat CI result below does not
+qualify the expanded integration by itself.
 
 ## Nearby chat and settings
 
@@ -185,3 +199,12 @@ reported zero errors and all 18 startup readbacks per positive case matched the
 existing pixel oracle. The production session replay also passed, as did 19 viewer
 regression tests and 21 source-documentation tests. This evidence uses the pinned
 SwiftShader runtime; live credentials/server testing remains unqualified.
+
+The preceding results describe the earlier local-chat baseline. The expanded
+connected UI, direct/group IM, inventory-offer, profile, group-management and
+Preferences integration is undergoing fresh staged qualification. It must pass
+the complete connected replay, including every packaged skin/theme and the
+German overlay (`run_vulkan_session_replay.py --all-skins`). Factory rejections
+and dummy controls fail qualification alongside crashes, validation errors,
+missing evidence and GL access. The earlier baseline result does not qualify
+these additions. Live-grid interoperability remains a separate qualification.

@@ -150,6 +150,9 @@ protected:
             }
         }
         mAvatarNameCacheConnections.clear();
+        for (auto& [id, connection] : mGroupNameCacheConnections)
+            connection.disconnect();
+        mGroupNameCacheConnections.clear();
     }
     friend class LLUICtrlFactory;
 public:

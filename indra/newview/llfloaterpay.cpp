@@ -28,6 +28,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterpay.h"
+#include "vsnativeim.h"
 
 #include "message.h"
 #include "llfloater.h"
@@ -70,10 +71,10 @@ class LLFloaterPay;
 
 struct LLGiveMoneyInfo
 {
-    LLFloaterPay* mFloater;
+    LLHandle<LLFloater> mFloater;
+    std::function<bool()> mCurrent;
     S32 mAmount;
-    LLGiveMoneyInfo(LLFloaterPay* floater, S32 amount) :
-        mFloater(floater), mAmount(amount){}
+    LLGiveMoneyInfo(LLFloaterPay* floater, S32 amount);
 };
 
 typedef std::shared_ptr<LLGiveMoneyInfo> give_money_ptr;
@@ -128,6 +129,9 @@ protected:
 };
 
 // <FS:Ansariel> FIRE-16812: Remember last amount paid
+LLGiveMoneyInfo::LLGiveMoneyInfo(LLFloaterPay* floater, S32 amount) :
+    mFloater(floater->getHandle()), mCurrent(vs_native_im_guard()), mAmount(amount) {}
+
 S32 LLFloaterPay::sLastAmount = 0;
 const S32 FASTPAY_BUTTON_WIDTH = 80;
 // <FS:Ansariel> FIRE-16092: Make payment confirmation customizable
@@ -150,7 +154,7 @@ LLFloaterPay::~LLFloaterPay()
     std::vector<give_money_ptr>::iterator iter;
     for (iter = mCallbackData.begin(); iter != mCallbackData.end(); ++iter)
     {
-        (*iter)->mFloater = NULL;
+        (*iter)->mFloater.markDead();
     }
     mCallbackData.clear();
     // Name callbacks will be automatically disconnected since LLFloater is trackable
@@ -444,7 +448,7 @@ void LLFloaterPay::payDirectly(money_callback callback,
 
 bool LLFloaterPay::payConfirmationCallback(const LLSD& notification, const LLSD& response, give_money_ptr info)
 {
-    if (!info.get() || !info->mFloater)
+    if (!info || !info->mCurrent() || !info->mFloater.get())
     {
         return false;
     }
@@ -452,8 +456,9 @@ bool LLFloaterPay::payConfirmationCallback(const LLSD& notification, const LLSD&
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if (option == 0)
     {
-        info->mFloater->give(info->mAmount);
-        info->mFloater->closeFloater();
+        auto* floater = static_cast<LLFloaterPay*>(info->mFloater.get());
+        floater->give(info->mAmount);
+        floater->closeFloater();
     }
 
     return false;
@@ -508,12 +513,12 @@ void LLFloaterPay::onKeystroke(LLLineEditor*, void* data)
 // static
 void LLFloaterPay::onGive(give_money_ptr info)
 {
-    if (!info.get() || !info->mFloater)
+    if (!info || !info->mCurrent() || !info->mFloater.get())
     {
         return;
     }
 
-    LLFloaterPay* floater = info->mFloater;
+    LLFloaterPay* floater = static_cast<LLFloaterPay*>(info->mFloater.get());
     S32 amount = info->mAmount;
     if (amount == 0)
     {
@@ -527,7 +532,7 @@ void LLFloaterPay::onGive(give_money_ptr info)
 
     // <FS:Ansariel> FIRE-16092: Make payment confirmation customizable
     //if (amount > PAY_AMOUNT_NOTIFICATION)
-    if (gSavedSettings.getBOOL("FSConfirmPayments") && amount > gSavedSettings.getS32("FSPaymentConfirmationThreshold") && gStatusBar && gStatusBar->getBalance() >= amount)
+    if (gSavedSettings.getBOOL("FSConfirmPayments") && amount > gSavedSettings.getS32("FSPaymentConfirmationThreshold") && can_afford_transaction(amount))
     // </FS:Ansariel>
     {
         LLUUID payee_id = LLUUID::null;
@@ -667,4 +672,9 @@ void LLFloaterPayUtil::payDirectly(money_callback callback,
                                    bool is_group)
 {
     LLFloaterPay::payDirectly(callback, target_id, is_group);
+}
+
+bool LLFloaterPayUtil::isNativeFloaterType(const std::type_info& type)
+{
+    return type == typeid(LLFloaterPay);
 }

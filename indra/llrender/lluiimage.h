@@ -60,6 +60,11 @@ public:
     // packet publisher and natural pixel extent; all draw variants share it.
     LLUIImage(const std::string& name, S32 width, S32 height, native_draw_t draw);
     virtual ~LLUIImage();
+    using native_rotated_draw_t = std::function<void(S32, S32, S32, S32, F32,
+                                                    const LLColor4&, const LLRectf&)>;
+    void setNativeRotatedDraw(native_rotated_draw_t draw) { mNativeRotatedDraw = std::move(draw); }
+    void drawRotated(S32 x, S32 y, S32 width, S32 height, F32 degrees,
+                     const LLColor4& color = UI_VERTEX_COLOR) const;
 
     LL_FORCE_INLINE void setClipRegion(const LLRectf& region)
     {
@@ -97,6 +102,10 @@ public:
 
     virtual S32 getWidth() const;
     virtual S32 getHeight() const;
+    void setNativeExtent(S32 width, S32 height)
+    {
+        if (mNativeDraw && width > 0 && height > 0) { mNativeWidth = width; mNativeHeight = height; }
+    }
 
     // returns dimensions of underlying textures, which might not be equal to ui image portion
     LL_FORCE_INLINE S32 getTextureWidth() const;
@@ -117,6 +126,7 @@ protected:
     mutable S32             mCachedW;
     mutable S32             mCachedH;
     native_draw_t mNativeDraw;
+    native_rotated_draw_t mNativeRotatedDraw;
     S32 mNativeWidth = 0, mNativeHeight = 0;
 };
 

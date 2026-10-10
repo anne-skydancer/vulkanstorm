@@ -28,6 +28,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "llviewerwindow.h"
 
 #include "fsfloaterimcontainer.h"
 
@@ -68,6 +69,7 @@ FSFloaterIMContainer::FSFloaterIMContainer(const LLSD& seed)
 
 FSFloaterIMContainer::~FSFloaterIMContainer()
 {
+    mVoiceStateSettingConnection.disconnect();
     mNewMessageConnection.disconnect();
     LLTransientFloaterMgr::getInstance()->removeControlView(LLTransientFloaterMgr::IM, this);
 
@@ -89,7 +91,7 @@ bool FSFloaterIMContainer::postBuild()
     mActiveVoiceUpdateTimer.setTimerExpirySec(VOICE_STATUS_UPDATE_INTERVAL);
     mActiveVoiceUpdateTimer.start();
 
-    gSavedSettings.getControl("FSShowConversationVoiceStateIndicator")->getSignal()->connect(boost::bind(&FSFloaterIMContainer::onVoiceStateIndicatorChanged, this, _2));
+    mVoiceStateSettingConnection = gSavedSettings.getControl("FSShowConversationVoiceStateIndicator")->getSignal()->connect(boost::bind(&FSFloaterIMContainer::onVoiceStateIndicatorChanged, this, _2));
 
     return true;
 }
@@ -127,6 +129,9 @@ void FSFloaterIMContainer::initTabs()
         }
     }
 
+    // Native nearby chat is already owned by the native root/session.
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return;
+
     LLFloater* floater_chat = FSFloaterNearbyChat::getInstance();
     if (!LLFloater::isVisible(floater_chat) && (floater_chat->getHost() != this))
     {
@@ -157,6 +162,7 @@ void FSFloaterIMContainer::onIMTabRearrange(S32 tab_index, LLPanel* tab_panel)
     if (idSession.isNull())
         return;
 
+    if (!LLChicletBar::instanceExists()) return;
     LLChicletPanel* pChicletPanel = LLChicletBar::instance().getChicletPanel();
     LLChiclet* pIMChiclet = pChicletPanel->findChiclet<LLChiclet>(idSession);
     pChicletPanel->setChicletIndex(pIMChiclet, tab_index - mTabContainer->getNumLockedTabs());
@@ -332,7 +338,7 @@ void FSFloaterIMContainer::addFloater(LLFloater* floaterp,
     {
 // [SL:KB] - Patch: UI-TabRearrange | Checked: 2012-06-22 (Catznip-3.3.0)
         // If we're redocking a torn off IM floater, return it back to its previous place
-        if (floaterp->isTornOff())
+        if (floaterp->isTornOff() && LLChicletBar::instanceExists())
         {
             LLChicletPanel* pChicletPanel = LLChicletBar::instance().getChicletPanel();
 
@@ -688,7 +694,8 @@ void FSFloaterIMContainer::addFlashingSession(const LLUUID& session_id)
 
 void FSFloaterIMContainer::checkFlashing()
 {
-    gToolBarView->flashCommand(LLCommandId("chat"), !mFlashingSessions.empty(), isMinimized());
+    if (gToolBarView)
+        gToolBarView->flashCommand(LLCommandId("chat"), !mFlashingSessions.empty(), isMinimized());
 }
 
 void FSFloaterIMContainer::sessionIDUpdated(const LLUUID& old_session_id, const LLUUID& new_session_id)

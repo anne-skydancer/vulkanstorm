@@ -34,6 +34,7 @@
 #include "llinventoryobserver.h"
 #include "llextendedstatus.h"
 #include <map>
+#include <functional>
 
 class LLInventoryItem;
 class LLViewerObject;
@@ -121,6 +122,7 @@ protected:
     bool mSaveDialogShown;
 
 protected:
+    std::function<bool()> mPreviewCurrent;
     LLUUID mItemUUID;
 
     // mObjectUUID will have a value if it is associated with a task in

@@ -33,6 +33,7 @@ class LLFloaterSpellCheckerSettings : public LLFloater
 {
 public:
     LLFloaterSpellCheckerSettings(const LLSD& key);
+    ~LLFloaterSpellCheckerSettings() override;
 
     void draw() override;
     bool postBuild() override;
@@ -50,6 +51,8 @@ protected:
 
 private:
     void commitChanges();
+    boost::signals2::scoped_connection mSpellCheckConnection;
+    boost::signals2::scoped_connection mDictionaryConnection;
 };
 
 class LLFloaterSpellCheckerImport : public LLFloater

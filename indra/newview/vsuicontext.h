@@ -21,6 +21,7 @@ public:
     const std::string& skin() const;
     const std::string& theme() const;
     const std::string& language() const;
+    void resetAccountImages();
 
 private:
     struct Impl;

@@ -32,6 +32,8 @@
 #include "llinventory.h"
 #include "lllineeditor.h"
 #include "llpreviewsound.h"
+#include "llviewerwindow.h"
+#include "llnotificationsutil.h"
 #include "llresmgr.h"
 #include "llviewercontrol.h"
 #include "llviewermessage.h"  // send_guid_sound_trigger
@@ -81,6 +83,11 @@ void LLPreviewSound::playSound( void *userdata )
     LLPreviewSound* self = (LLPreviewSound*) userdata;
     const LLInventoryItem *item = self->getItem();
 
+    if (item && gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
     if(item && gAudiop)
     {
         send_sound_trigger(item->getAssetUUID(), SOUND_GAIN);

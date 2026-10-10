@@ -82,6 +82,18 @@ S32 LLUIImage::getHeight() const
     return ll_round((F32)(mNativeDraw ? mNativeHeight : mImage->getHeight(0)) * mClipRegion.getHeight());
 }
 
+void LLUIImage::drawRotated(S32 x, S32 y, S32 width, S32 height, F32 degrees,
+                            const LLColor4& color) const
+{
+    if (mNativeDraw)
+    {
+        if (!mNativeRotatedDraw) throw std::logic_error("Native image has no rotated draw publisher");
+        mNativeRotatedDraw(x, y, width, height, degrees, color, mClipRegion);
+        return;
+    }
+    gl_draw_scaled_rotated_image(x, y, width, height, degrees, mImage, color, mClipRegion);
+}
+
 void LLUIImage::draw3D(const LLVector3& origin_agent, const LLVector3& x_axis, const LLVector3& y_axis,
                         const LLRect& rect, const LLColor4& color)
 {

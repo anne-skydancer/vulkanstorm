@@ -63,6 +63,8 @@ public:
     typedef std::unordered_set<LLUUID> uuid_set_t;
 
     void loadFromDisk();
+    // Discard one login's aliases, sets and pending name lookups before relogin.
+    void resetAccount();
 
     void setSetColor(std::string_view set_name, const LLColor4& color);
     LLColor4 getSetColor(std::string_view set_name) const;

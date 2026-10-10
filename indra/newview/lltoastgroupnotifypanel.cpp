@@ -219,6 +219,10 @@ LLToastGroupNotifyPanel::LLToastGroupNotifyPanel(const LLNotificationPtr& notifi
 // virtual
 LLToastGroupNotifyPanel::~LLToastGroupNotifyPanel()
 {
+    // A notification may retain its serialized offer after its panel retires.
+    // Destroy this panel's responder without sending an account-side response.
+    delete mInventoryOffer;
+    mInventoryOffer = nullptr;
 }
 
 void LLToastGroupNotifyPanel::close()
@@ -250,7 +254,10 @@ void LLToastGroupNotifyPanel::onClickGroupNotices()
 void LLToastGroupNotifyPanel::onClickAttachment()
 {
     if (mInventoryOffer != NULL) {
-        mInventoryOffer->forceResponse(IOR_ACCEPT);
+        const auto type = mInventoryOffer->mType;
+        auto* offer = mInventoryOffer;
+        mInventoryOffer = nullptr;
+        offer->forceResponse(IOR_ACCEPT);
 
         LLTextBox * pAttachLink = getChild<LLTextBox> ("attachment");
         static const LLUIColor textColor = LLUIColorTable::instance().getColor(
@@ -262,7 +269,7 @@ void LLToastGroupNotifyPanel::onClickAttachment()
         pAttachIcon->setEnabled(false);
 
         //if attachment isn't openable - notify about saving
-        if (!isAttachmentOpenable(mInventoryOffer->mType)) {
+        if (!isAttachmentOpenable(type)) {
             LLNotifications::instance().add("AttachmentSaved", LLSD(), LLSD());
         }
 

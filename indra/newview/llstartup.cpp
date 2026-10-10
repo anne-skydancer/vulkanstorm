@@ -4802,7 +4802,39 @@ bool process_login_success_response(U32 &first_sim_size_x, U32 &first_sim_size_y
 {
     LLSD response = LLLoginInstance::getInstance()->getResponse();
 #if VS_NATIVE_VULKAN
-    if (auto session = VSNativeSession::active()) return session->acceptLogin(response);
+    if (auto session = VSNativeSession::active())
+    {
+        if (!session->acceptLogin(response)) return false;
+        gDisplayName = response["display_name"].asString();
+        if (gDisplayName.empty()) gDisplayName = gAgentUsername;
+        LLStringUtil::replaceChar(gDisplayName, '"', ' '); LLStringUtil::trim(gDisplayName);
+        gAgentStartLocation = response["start_location"].asString();
+        // Account inventory is a CPU service used by connected UI and notification
+        // responders even while scene rendering and avatar appearance are deferred.
+        const LLUUID root = response["inventory-root"][0]["folder_id"].asUUID();
+        if (root.notNull()) gInventory.setRootFolderID(root);
+        const LLUUID library = response["inventory-lib-root"][0]["folder_id"].asUUID();
+        const LLUUID libraryOwner = response["inventory-lib-owner"][0]["agent_id"].asUUID();
+        gInventory.setLibraryRootFolderID(library);
+        gInventory.setLibraryOwnerID(libraryOwner);
+        if (response["inventory-skeleton"].isArray())
+            gInventory.loadSkeleton(response["inventory-skeleton"], gAgentID);
+        if (libraryOwner.notNull() && response["inventory-skel-lib"].isArray())
+            gInventory.loadSkeleton(response["inventory-skel-lib"], libraryOwner);
+        if (root.notNull()) gInventory.buildParentChildMap();
+        const LLSD flags = response["login-flags"][0];
+        gAgent.setFirstLogin(flags["ever_logged_in"].asString() == "N");
+        LLStringOps::setupDatetimeInfo(flags["daylight_savings"].asString() == "Y");
+        LLStringOps::setupUsingPacificTime(!LLGridManager::getInstance()->isInSecondLife());
+        LLPermissions::setupIsInOpenSim(!LLGridManager::getInstance()->isInSecondLife());
+        gAgent.mMOTD = response["message"].asString();
+        if (response.has("seconds_since_epoch"))
+        {
+            const auto serverTime = response["seconds_since_epoch"].asInteger();
+            if (serverTime > 0) gUTCOffset = S32(serverTime - time(nullptr));
+        }
+        return true;
+    }
 #endif
 
     // <FS:Ansariel> OpenSim legacy economy support

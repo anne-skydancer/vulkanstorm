@@ -26,6 +26,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #endif
@@ -1367,6 +1368,13 @@ std::string LLAgent::getRegionCapability(const std::string &name)
         return std::string();
 
     return mRegionp->getCapability(name);
+}
+
+void LLAgent::resetGroups()
+{
+    mGroups.clear(); mGroupID.setNull(); mGroupPowers = 0; mGroupName.clear();
+    fireEvent(new LLOldEvents::LLEvent(this, "new group"), "");
+    fireEvent(new LLOldEvents::LLEvent(this, "update grouptitle list"), "");
 }
 
 //-----------------------------------------------------------------------------
@@ -3528,7 +3536,11 @@ void LLAgent::sendMaturityPreferenceToServer(U8 pPreferredMaturity)
         mLastKnownRequestMaturity = pPreferredMaturity;
 
         // If we don't have a region, report it as an error
-        if (getRegion() == NULL)
+        if (getRegion() == NULL
+#if VS_NATIVE_VULKAN
+            && !VSNativeSession::active()
+#endif
+            )
         {
             LL_WARNS("Agent") << "Region is not defined, can not change Maturity setting." << LL_ENDL;
             return;
@@ -3547,6 +3559,9 @@ void LLAgent::sendMaturityPreferenceToServer(U8 pPreferredMaturity)
             ))
         {
             LL_WARNS("Agent") << "Maturity request post failed." << LL_ENDL;
+#if VS_NATIVE_VULKAN
+          if (VSNativeSession::active()) handlePreferredMaturityError();
+#endif
         }
     }
 }
@@ -3628,6 +3643,18 @@ void LLAgent::changeInterestListMode(const std::string &new_mode)
 
 bool LLAgent::requestPostCapability(const std::string &capName, LLSD &postData, httpCallback_t cbSuccess, httpCallback_t cbFailure)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto url = getRegionCapability(capName);
+        if (url.empty()) return false;
+        const auto current = vs_native_im_guard();
+        auto success = [current, cbSuccess](const LLSD& result) { if (current() && cbSuccess) cbSuccess(result); };
+        auto failure = [current, cbFailure](const LLSD& result) { if (current() && cbFailure) cbFailure(result); };
+        LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpPost(url, getAgentPolicy(), postData, success, failure);
+        return true;
+    }
+#endif
     if (getRegion())
     {
         return getRegion()->requestPostCapability(capName, postData, cbSuccess, cbFailure);
@@ -3637,6 +3664,18 @@ bool LLAgent::requestPostCapability(const std::string &capName, LLSD &postData, 
 
 bool LLAgent::requestGetCapability(const std::string &capName, httpCallback_t cbSuccess, httpCallback_t cbFailure)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        const auto url = getRegionCapability(capName);
+        if (url.empty()) return false;
+        const auto current = vs_native_im_guard();
+        auto success = [current, cbSuccess](const LLSD& result) { if (current() && cbSuccess) cbSuccess(result); };
+        auto failure = [current, cbFailure](const LLSD& result) { if (current() && cbFailure) cbFailure(result); };
+        LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpGet(url, getAgentPolicy(), success, failure);
+        return true;
+    }
+#endif
     if (getRegion())
     {
         return getRegion()->requestGetCapability(capName, cbSuccess, cbFailure);
@@ -3693,6 +3732,10 @@ void LLAgent::buildFullname(std::string& name) const
     {
         name = gAgentAvatarp->getFullname();
     }
+#if VS_NATIVE_VULKAN
+    else if (VSNativeSession::active()) name = gAgentUsername;
+#endif
+
 }
 
 //*TODO remove, is not used anywhere as of August 20, 2009
@@ -5786,8 +5829,7 @@ void LLAgent::sendAgentUserInfoRequest()
     if (getID().isNull())
         return; // not logged in
 
-    if (mRegionp)
-        cap = mRegionp->getCapability("UserInfo");
+    cap = getRegionCapability("UserInfo");
 
     if (!cap.empty())
     {
@@ -5802,6 +5844,7 @@ void LLAgent::sendAgentUserInfoRequest()
 
 void LLAgent::requestAgentUserInfoCoro(std::string capurl)
 {
+    const auto current = vs_native_im_guard();
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("requestAgentUserInfoCoro", httpPolicy);
@@ -5812,6 +5855,7 @@ void LLAgent::requestAgentUserInfoCoro(std::string capurl)
     httpOpts->setFollowRedirects(true);
 
     LLSD result = httpAdapter->getAndSuspend(httpRequest, capurl, httpOpts, httpHeaders);
+    if (!current()) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -5857,8 +5901,7 @@ void LLAgent::sendAgentUpdateUserInfo(bool im_via_email, const std::string& dire
     if (getID().isNull())
         return; // not logged in
 
-    if (mRegionp)
-        cap = mRegionp->getCapability("UserInfo");
+    cap = getRegionCapability("UserInfo");
 
     if (!cap.empty())
     {
@@ -5879,6 +5922,7 @@ void LLAgent::sendAgentUpdateUserInfo(bool im_via_email, const std::string& dire
 //void LLAgent::updateAgentUserInfoCoro(std::string capurl, std::string directory_visibility)
 void LLAgent::updateAgentUserInfoCoro(std::string capurl, bool im_via_email, std::string directory_visibility)
 {
+    const auto current = vs_native_im_guard();
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("requestAgentUserInfoCoro", httpPolicy);
@@ -5896,6 +5940,7 @@ void LLAgent::updateAgentUserInfoCoro(std::string capurl, bool im_via_email, std
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, capurl, body, httpOpts, httpHeaders);
 
+    if (!current()) return;
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 

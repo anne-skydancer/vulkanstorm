@@ -22,6 +22,7 @@ public:
     void begin(unsigned width, unsigned height, float dpi);
     void setClip(std::array<float,4> top_left_logical);
     std::vector<VSUIRenderer::Packet> finish();
+    LLPointer<LLImageRaw> rawImage(const std::string& key) const;
     void erase(const std::string& key);
     std::uint64_t generation(const std::string& key) const;
     void fontBatch(LLImageRaw*,S32,const LLVector4a*,const LLVector2*,const LLColor4U*,S32);

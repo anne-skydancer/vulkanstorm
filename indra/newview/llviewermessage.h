@@ -26,6 +26,7 @@
 
 #ifndef LL_LLVIEWERMESSAGE_H
 #define LL_LLVIEWERMESSAGE_H
+#include "vsnativeim.h"
 
 #include "llassettype.h"
 #include "llinstantmessage.h"
@@ -290,6 +291,9 @@ private:
     typedef std::map<std::string, respond_function_t> respond_function_map_t;
 
     respond_function_map_t mRespondFunctions;
+    std::function<bool()> mCurrent = vs_native_im_guard();
+    LLSD mNativeScope;
+    bool current() const { return mCurrent() && vs_native_im_notification_current(mNativeScope); }
 };
 
 // <FS:Ansariel> Moved from source; needed in llimprocessing.cpp
@@ -320,13 +324,14 @@ public:
         // This only gets called if the user explicity clicks "Show" or
         // AutoAcceptNewInventory and ShowNewInventory are true.
         //open_inventory_offer(mComplete, mFromName);
-        open_inventory_offer(mComplete, mFromName, mIsManuallyAccepted);
+        if (mCurrent()) open_inventory_offer(mComplete, mFromName, mIsManuallyAccepted);
         gInventory.removeObserver(this);
         delete this;
     }
 private:
     std::string mFromName;
     bool        mIsManuallyAccepted;
+    std::function<bool()> mCurrent = vs_native_im_guard();
 };
 // </FS:Ansariel>
 

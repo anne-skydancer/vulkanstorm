@@ -30,6 +30,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativeim.h"
+#include "vsnativesession.h"
+#endif
 
 // <FS:ND> Disable some warnings on newer GCC versions.
 // This might also trigger on something like 4.8, but I did not suchh a GCC to test anything lower than 4.9 and higher than 4.6
@@ -851,11 +855,19 @@ LLGroupMgr::~LLGroupMgr()
 
 void LLGroupMgr::clearGroups()
 {
+    mMemberRequestInFlight = false;
     std::for_each(mRoleActionSets.begin(), mRoleActionSets.end(), DeletePointer());
     mRoleActionSets.clear();
     std::for_each(mGroups.begin(), mGroups.end(), DeletePairedPointer());
     mGroups.clear();
     mObservers.clear();
+}
+
+void LLGroupMgr::clearAccountGroups()
+{
+    mMemberRequestInFlight = false;
+    std::for_each(mGroups.begin(), mGroups.end(), DeletePairedPointer());
+    mGroups.clear();
 }
 
 void LLGroupMgr::clearGroupData(const LLUUID& group_id)
@@ -2020,6 +2032,11 @@ void LLGroupMgr::sendGroupMemberEjects(const LLUUID& group_id,
 
 void LLGroupMgr::getGroupBanRequestCoro(std::string url, LLUUID group_id)
 {
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    if (!native_guard()) return;
+#endif
+
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("groupMembersRequest", httpPolicy);
@@ -2028,6 +2045,10 @@ void LLGroupMgr::getGroupBanRequestCoro(std::string url, LLUUID group_id)
     std::string finalUrl = url + "?group_id=" + group_id.asString();
 
     LLSD result = httpAdapter->getAndSuspend(httpRequest, finalUrl);
+#if VS_NATIVE_VULKAN
+    if (!native_guard()) return;
+#endif
+
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -2049,6 +2070,11 @@ void LLGroupMgr::getGroupBanRequestCoro(std::string url, LLUUID group_id)
 void LLGroupMgr::postGroupBanRequestCoro(std::string url, LLUUID group_id,
     U32 action, uuid_vec_t ban_list, bool update)
 {
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    if (!native_guard()) return;
+#endif
+
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("groupMembersRequest", httpPolicy);
@@ -2075,6 +2101,10 @@ void LLGroupMgr::postGroupBanRequestCoro(std::string url, LLUUID group_id,
     LL_WARNS() << "post: " << ll_pretty_print_sd(postData) << LL_ENDL;
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, finalUrl, postData, httpOptions, httpHeaders);
+#if VS_NATIVE_VULKAN
+    if (!native_guard()) return;
+#endif
+
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -2103,22 +2133,7 @@ void LLGroupMgr::sendGroupBanRequest(   EBanRequestType request_type,
                                         U32 ban_action, /* = BAN_NO_ACTION */
                                         const std::vector<LLUUID> &ban_list) /* = std::vector<LLUUID>() */
 {
-    LLViewerRegion* currentRegion = gAgent.getRegion();
-    if(!currentRegion)
-    {
-        LL_WARNS("GrpMgr") << "Agent does not have a current region." << LL_ENDL;
-        return;
-    }
-
-    // Check to make sure we have our capabilities
-    if(!currentRegion->capabilitiesReceived())
-    {
-        LL_WARNS("GrpMgr") << " Capabilities not received!" << LL_ENDL;
-        return;
-    }
-
-    // Get our capability
-    std::string cap_url =  currentRegion->getCapability("GroupAPIv1");
+    std::string cap_url = gAgent.getRegionCapability("GroupAPIv1");
     if(cap_url.empty())
     {
         return;
@@ -2183,6 +2198,11 @@ void LLGroupMgr::processGroupBanRequest(const LLSD& content)
 
 void LLGroupMgr::groupMembersRequestCoro(std::string url, LLUUID group_id, U32 page_size, U32 page_start, U32 sort_column, bool sort_descending)
 {
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    if (!native_guard()) return;
+#endif
+
     LL_INFOS("GrpMgr") << "group_id: '" << group_id << "'"
         << ", page_size: " << page_size << ", page_start: " << page_start
         << ", sort_column: " << sort_column << ", sort_descending: " << sort_descending << LL_ENDL;
@@ -2216,6 +2236,10 @@ void LLGroupMgr::groupMembersRequestCoro(std::string url, LLUUID group_id, U32 p
     mMemberRequestInFlight = true;
 
     LLSD response = httpAdapter->postAndSuspend(httpRequest, url, postData, httpOpts);
+#if VS_NATIVE_VULKAN
+    if (!native_guard()) return;
+#endif
+
 
     mMemberRequestInFlight = false;
 
@@ -2229,6 +2253,11 @@ void LLGroupMgr::groupMembersRequestCoro(std::string url, LLUUID group_id, U32 p
     }
 
     response.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
+    if (response["group_id"].asUUID() != group_id)
+    {
+        LL_WARNS("GrpMgr") << "Group member response does not match requested group " << group_id << LL_ENDL;
+        return;
+    }
     processCapGroupMembersResponse(response, url, page_size, page_start, sort_column, sort_descending);
 }
 
@@ -2245,23 +2274,7 @@ void LLGroupMgr::sendCapGroupMembersRequest(const LLUUID& group_id, U32 page_siz
         << ", page_size: " << page_size << ", page_start: " << page_start
         << ", sort_column_name: '" << sort_column_name << "', sort_descending: " << sort_descending << LL_ENDL;
 
-    LLViewerRegion* currentRegion = gAgent.getRegion();
-    // Thank you FS:Ansariel!
-    if (!currentRegion)
-    {
-        LL_WARNS("GrpMgr") << "Agent does not have a current region. Uh-oh!" << LL_ENDL;
-        return;
-    }
-
-    // Check to make sure we have our capabilities
-    if (!currentRegion->capabilitiesReceived())
-    {
-        LL_WARNS("GrpMgr") << " Capabilities not received!" << LL_ENDL;
-        return;
-    }
-
-    // Get our capability
-    std::string cap_url =  currentRegion->getCapability("GroupMemberData");
+    std::string cap_url = gAgent.getRegionCapability("GroupMemberData");
 
     // Thank you FS:Ansariel!
     if (cap_url.empty())
@@ -2292,8 +2305,10 @@ void LLGroupMgr::sendCapGroupMembersRequest(const LLUUID& group_id, U32 page_siz
         }
     }
 
-    LLCoros::instance().launch("LLGroupMgr::groupMembersRequestCoro", [&]()
+    const auto current = vs_native_im_guard();
+    LLCoros::instance().launch("LLGroupMgr::groupMembersRequestCoro", [this, current, cap_url, group_id, page_size, page_start, sort_column, sort_descending]()
         {
+            if (!current()) return;
             groupMembersRequestCoro(cap_url, group_id, page_size, page_start, sort_column, sort_descending);
         });
 }
@@ -2423,7 +2438,7 @@ void LLGroupMgr::processCapGroupMembersResponse(const LLSD& response, const std:
 
     if (page_size && members_loaded >= page_size && member_count > members_before)
     {
-        LLCoros::instance().launch("LLGroupMgr::groupMembersRequestCoro", [&]()
+        LLCoros::instance().launch("LLGroupMgr::groupMembersRequestCoro", [this, url, group_id, page_size, page_start, sort_column, sort_descending]()
             {
                 groupMembersRequestCoro(url, group_id, page_size, page_start, sort_column, sort_descending);
             });

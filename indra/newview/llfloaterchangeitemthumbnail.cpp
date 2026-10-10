@@ -42,6 +42,12 @@
 #include "lltextbox.h"
 #include "lltexturectrl.h"
 #include "llthumbnailctrl.h"
+#include "llimage.h"
+#include "llviewerwindow.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsuiimageprovider.h"
+#endif
 #include "llviewerfoldertype.h"
 #include "llviewermenufile.h"
 #include "llviewerobjectlist.h"
@@ -59,6 +65,7 @@ public:
     void notify(const std::vector<std::string>& filenames) override;
 
 private:
+    std::function<bool()> mCurrent = vs_native_im_guard();
     LLUUID mInventoryId;
     LLUUID mTaskId;
     LLFloaterSimpleSnapshot::completion_t mCallback;
@@ -88,7 +95,7 @@ LLThumbnailImagePicker::~LLThumbnailImagePicker()
 
 void LLThumbnailImagePicker::notify(const std::vector<std::string>& filenames)
 {
-    if (filenames.empty())
+    if (!mCurrent() || filenames.empty())
     {
         return;
     }
@@ -103,6 +110,7 @@ void LLThumbnailImagePicker::notify(const std::vector<std::string>& filenames)
 
 LLFloaterChangeItemThumbnail::LLFloaterChangeItemThumbnail(const LLSD& key)
     : LLFloater(key)
+    , mThumbnailCurrent(vs_native_im_guard())
     , mObserverInitialized(false)
     , mMultipleThumbnails(false)
     , mTooltipState(TOOLTIP_NONE)
@@ -113,6 +121,37 @@ LLFloaterChangeItemThumbnail::~LLFloaterChangeItemThumbnail()
 {
     gInventory.removeObserver(this);
     removeVOInventoryListener();
+}
+
+void LLFloaterChangeItemThumbnail::draw()
+{
+#if VS_NATIVE_VULKAN
+    if (mThumbnailCurrent() && mNativePendingImage.notNull() && vs_ui_image_failed(mNativePendingImage))
+    {
+        mNativePendingImage.setNull();
+        if (!mNativePendingSilent) LLNotificationsUtil::add("ThumbnailDimentionsLimit");
+    }
+    if (mThumbnailCurrent() && mNativePendingImage.notNull() && vs_ui_image_ready(mNativePendingImage))
+    {
+        const auto asset = mNativePendingImage; mNativePendingImage.setNull();
+        auto raw = vs_ui_image_raw(asset);
+        if (raw && raw->getWidth() == raw->getHeight() &&
+            raw->getWidth() >= LLFloaterSimpleSnapshot::THUMBNAIL_SNAPSHOT_DIM_MIN)
+        {
+            if (raw->getWidth() <= LLFloaterSimpleSnapshot::THUMBNAIL_SNAPSHOT_DIM_MAX) setThumbnailId(asset);
+            else if (!mNativePendingSilent && !mItemList.empty())
+            {
+                const auto ids = mItemList; const auto task = mTaskId; const auto weak = getHandle();
+                const auto current = mThumbnailCurrent;
+                LLFloaterSimpleSnapshot::uploadThumbnail(raw, *ids.begin(), task,
+                    [ids, task, weak, current](const LLUUID& uploaded)
+                    { if (current()) onUploadComplete(uploaded, task, ids, weak); });
+            }
+        }
+        else if (!mNativePendingSilent) LLNotificationsUtil::add("ThumbnailDimentionsLimit");
+    }
+#endif
+    LLFloater::draw();
 }
 
 bool LLFloaterChangeItemThumbnail::postBuild()
@@ -299,6 +338,7 @@ void LLFloaterChangeItemThumbnail::inventoryChanged(LLViewerObject* object,
 
 LLInventoryObject* LLFloaterChangeItemThumbnail::getInventoryObject()
 {
+    if (!mThumbnailCurrent()) return nullptr;
     if (mItemList.size() == 0)
     {
         return NULL;
@@ -483,15 +523,16 @@ void LLFloaterChangeItemThumbnail::onUploadLocal(void *userdata)
 {
     LLFloaterChangeItemThumbnail *self = (LLFloaterChangeItemThumbnail*)userdata;
 
+    if (!self->mThumbnailCurrent()) return;
     LLUUID task_id = self->mTaskId;
     uuid_set_t inventory_ids = self->mItemList;
     LLHandle<LLFloater> handle = self->getHandle();
     (new LLThumbnailImagePicker(
         *self->mItemList.begin(),
         self->mTaskId,
-        [inventory_ids, task_id, handle](const LLUUID& asset_id)
+        [inventory_ids, task_id, handle, current = self->mThumbnailCurrent](const LLUUID& asset_id)
         {
-            onUploadComplete(asset_id, task_id, inventory_ids, handle);
+            if (current()) onUploadComplete(asset_id, task_id, inventory_ids, handle);
         }
     ))->getFile();
 
@@ -510,6 +551,11 @@ void LLFloaterChangeItemThumbnail::onUploadLocal(void *userdata)
 void LLFloaterChangeItemThumbnail::onUploadSnapshot(void *userdata)
 {
     LLFloaterChangeItemThumbnail *self = (LLFloaterChangeItemThumbnail*)userdata;
+    if (!self->mThumbnailCurrent()) return;
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable"); return;
+    }
 
     LLFloater* floaterp = self->mSnapshotHandle.get();
     // Show the dialog
@@ -661,6 +707,15 @@ struct ImageLoadedData
 
 void LLFloaterChangeItemThumbnail::assignAndValidateAsset(const LLUUID &asset_id, bool silent)
 {
+    if (!mThumbnailCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        mNativePendingImage = asset_id; mNativePendingSilent = silent;
+        LLUI::getUIImageByID(asset_id); // Existing authenticated CPU image provider owns asynchronous decode.
+        return;
+    }
+#endif
     LLPointer<LLViewerFetchedTexture> texturep = LLViewerTextureManager::getFetchedTexture(asset_id);
     if (texturep->isMissingAsset())
     {
@@ -716,6 +771,15 @@ bool LLFloaterChangeItemThumbnail::validateAsset(const LLUUID &asset_id)
         return false;
     }
 
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto raw = vs_ui_image_raw(asset_id);
+        return raw && raw->getWidth() == raw->getHeight() &&
+            raw->getWidth() >= LLFloaterSimpleSnapshot::THUMBNAIL_SNAPSHOT_DIM_MIN &&
+            raw->getWidth() <= LLFloaterSimpleSnapshot::THUMBNAIL_SNAPSHOT_DIM_MAX;
+    }
+#endif
     LLPointer<LLViewerFetchedTexture> texturep = LLViewerTextureManager::findFetchedTexture(asset_id, TEX_LIST_STANDARD);
 
     if (!texturep)
@@ -878,12 +942,11 @@ void LLFloaterChangeItemThumbnail::showTexturePicker(const LLUUID &thumbnail_id)
         {
             //texture_floaterp->setTextureSelectedCallback();
             //texture_floaterp->setOnUpdateImageStatsCallback();
-            texture_floaterp->setOnFloaterCommitCallback([this](LLTextureCtrl::ETexturePickOp op, LLPickerSource, const LLUUID&, const LLUUID&, const LLUUID&)
+            texture_floaterp->setOnFloaterCommitCallback([weak = getHandle(), current = mThumbnailCurrent](LLTextureCtrl::ETexturePickOp op, LLPickerSource, const LLUUID&, const LLUUID&, const LLUUID&)
             {
-                if (op == LLTextureCtrl::TEXTURE_SELECT)
-                {
-                    onTexturePickerCommit();
-                }
+                auto* self = dynamic_cast<LLFloaterChangeItemThumbnail*>(weak.get());
+                if (current() && self && op == LLTextureCtrl::TEXTURE_SELECT)
+                    self->onTexturePickerCommit();
             }
             );
 
@@ -905,9 +968,17 @@ void LLFloaterChangeItemThumbnail::onTexturePickerCommit()
 {
     LLFloaterTexturePicker* floaterp = (LLFloaterTexturePicker*)mPickerHandle.get();
 
-    if (floaterp)
+    if (floaterp && mThumbnailCurrent())
     {
         LLUUID asset_id = floaterp->getAssetID();
+#if VS_NATIVE_VULKAN
+        if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            if (asset_id.isNull()) setThumbnailId(asset_id);
+            else assignAndValidateAsset(asset_id);
+            return;
+        }
+#endif
 
         if (asset_id.isNull())
         {

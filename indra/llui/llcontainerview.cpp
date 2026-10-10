@@ -27,6 +27,7 @@
 #include "linden_common.h"
 
 #include "llcontainerview.h"
+#include "llrender2dutils.h"
 
 #include "llerror.h"
 #include "llfontgl.h"
@@ -118,7 +119,7 @@ void LLContainerView::draw()
     // <FS:Zi> Add background visible flag and color to container_view so we can have blank scrollview containers
     if (mBackgroundVisible)
     {
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
         // <FS:Zi> Add background visible flag and color to container_view so we can have blank scrollview containers
         // gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 0, LLColor4(0.f, 0.f, 0.f, 0.25f));

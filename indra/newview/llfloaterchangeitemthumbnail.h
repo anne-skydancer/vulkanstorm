@@ -28,6 +28,7 @@
 #define LL_LLFLOATERCHANGEITEMTHUMBNAIL_H
 
 #include "llfloater.h"
+#include <functional>
 #include "llinventoryobserver.h"
 #include "llvoinventorylistener.h"
 
@@ -47,6 +48,7 @@ public:
 
     bool postBuild() override;
     void onOpen(const LLSD& key) override;
+    void draw() override;
     void onFocusReceived() override;
     void onMouseEnter(S32 x, S32 y, MASK mask) override;
 
@@ -120,6 +122,9 @@ private:
     void onButtonMouseEnter(LLUICtrl* button, const LLSD& param, EToolTipState state);
     void onButtonMouseLeave(LLUICtrl* button, const LLSD& param, EToolTipState state);
 
+    std::function<bool()> mThumbnailCurrent;
+    LLUUID mNativePendingImage;
+    bool mNativePendingSilent = false;
     bool mObserverInitialized;
     bool mMultipleThumbnails; // for multiselection
     EToolTipState mTooltipState;

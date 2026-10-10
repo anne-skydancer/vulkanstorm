@@ -270,6 +270,7 @@ private:
     // NaCl End
 
     LLScriptEdContainer* mContainer; // parent view
+    std::function<bool()> mCurrentAccount;
 
 public:
     boost::signals2::connection mSyntaxIDConnection;

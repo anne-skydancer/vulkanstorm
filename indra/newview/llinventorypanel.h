@@ -38,6 +38,7 @@
 #include "llscrollcontainer.h"
 #include "lluictrlfactory.h"
 #include <functional>
+#include <boost/signals2/connection.hpp>
 #include <set>
 
 class LLInvFVBridge;
@@ -313,6 +314,7 @@ protected:
     LLScrollContainer*          mScroller;
 
     LLUUID                      mPreviousSelectedFolder;
+    boost::signals2::scoped_connection mHideEmptyFoldersConnection, mShowInboxConnection;
 
     LLFolderViewModelInventory  mInventoryViewModel;
     LLPointer<LLFolderViewGroupedItemBridge> mGroupedItemBridge;

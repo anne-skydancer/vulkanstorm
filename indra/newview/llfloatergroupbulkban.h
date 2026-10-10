@@ -36,6 +36,7 @@ class LLFloaterGroupBulkBan : public LLFloater
 public:
     virtual ~LLFloaterGroupBulkBan();
 
+    static void destroyAccountFloaters();
     static void showForGroup(const LLUUID& group_id, uuid_vec_t* agent_ids = NULL);
 
 protected:

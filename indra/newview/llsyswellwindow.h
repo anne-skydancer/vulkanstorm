@@ -210,6 +210,8 @@ protected:
     /*virtual*/ const std::string& getAnchorViewName() { return IM_WELL_ANCHOR_NAME; }
 
 private:
+    boost::signals2::scoped_connection mObjectChicletConnection;
+    boost::signals2::scoped_connection mIMChicletConnection;
     LLChiclet* findObjectChiclet(const LLUUID& notification_id);
 
     bool confirmCloseAll(const LLSD& notification, const LLSD& response);
@@ -242,6 +244,8 @@ private:
     public:
         LLIMChiclet* mChiclet;
     private:
+        boost::signals2::scoped_connection mAvatarNameConnection;
+        boost::signals2::scoped_connection mChicletSizeConnection;
         LLButton*   mCloseBtn;
     };
     // </FS:Ansariel> [FS communication UI]

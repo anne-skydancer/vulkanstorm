@@ -35,6 +35,7 @@
 #include "llviewercontrol.h"
 #include "llviewergenericmessage.h"
 #include "llweb.h"
+#include "llviewerwindow.h"
 
 // Example:
 // llOpenFloater("guidebook", "http://page.com", []);
@@ -138,6 +139,15 @@ bool LLUrlFloaterDispatchHandler::operator()(const LLDispatcher *, const std::st
     {
         // try unescaping
         url = LLURI::unescape(url);
+    }
+
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if (floater != FLOATER_GUIDEBOOK && floater != FLOATER_HOW_TO && floater != FLOATER_WEB_CONTENT)
+            return false;
+        // Preserve connected URL access without constructing a GL-backed media floater.
+        LLWeb::loadURLExternal(url);
+        return true;
     }
 
     LLFloaterWebContent::Params params;

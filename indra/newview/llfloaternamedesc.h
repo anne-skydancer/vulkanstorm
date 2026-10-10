@@ -31,6 +31,7 @@
 #include "llresizehandle.h"
 #include "llstring.h"
 #include "llassettype.h"
+#include <functional>
 
 class LLLineEditor;
 class LLButton;
@@ -53,6 +54,7 @@ protected:
     virtual void        onCommit() override;
 
 protected:
+    std::function<bool()> mUploadCurrent;
     bool        mIsAudio;
     bool        mIsText;
 

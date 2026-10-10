@@ -36,6 +36,7 @@
 class LLGroupActions
 {
 public:
+    static void resetAccountRequests();
     /**
      * Invokes group search floater.
      */

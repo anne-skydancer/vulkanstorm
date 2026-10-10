@@ -2267,12 +2267,13 @@ if(USE_DILIGENTCORE)
           vsuifontbridge.cpp vsuifontbridge.h
           vsuidrawbridge.cpp vsuidrawbridge.h vsuiimageprovider.cpp vsuiimageprovider.h
           vsuicontext.cpp vsuicontext.h vsvulkancontext.cpp vsvulkancontext.h vsstartupui.cpp vsstartupui.h vsviewerwindow.cpp
-          vsplainchat.cpp vsplainchat.h vsnativesession.cpp vsnativesession.h)
+          vsplainchat.cpp vsplainchat.h vsnativesession.cpp vsnativesession.h vsnativeim.cpp vsnativeim.h
+          vsgroupsearch.cpp vsgroupsearch.h)
 endif()
 if(VS_VULKAN_DIAGNOSTICS)
     list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h
          vsuifixture.cpp vsuifixture.h vsuipixeloracle.cpp vsuipixeloracle.h
-         vsnativereplay.cpp vsnativereplay.h)
+         vsnativereplay.cpp vsnativereplay.h vsnativeimreplay.cpp vsnativeimreplay.h)
 endif()
 
 add_executable(${VIEWER_BINARY_NAME}

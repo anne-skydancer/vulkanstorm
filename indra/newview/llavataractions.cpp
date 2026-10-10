@@ -26,6 +26,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llavataractions.h"
 
@@ -57,6 +58,7 @@
 #include "llinventorybridge.h"
 #include "llinventorymodel.h"   // for gInventory.findCategoryUUIDForType
 #include "llinventorypanel.h"
+#include "fsfloaterpartialinventory.h"
 #include "llfloaterimcontainer.h"
 #include "llimview.h"           // for gIMMgr
 #include "llmutelist.h"
@@ -248,6 +250,12 @@ void LLAvatarActions::offerTeleport(const LLUUID& invitee)
 // static
 void LLAvatarActions::offerTeleport(const uuid_vec_t& ids)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     if (ids.size() == 0)
         return;
 
@@ -615,6 +623,12 @@ void LLAvatarActions::hideProfile(const LLUUID& avatar_id)
 // static
 void LLAvatarActions::showOnMap(const LLUUID& id)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     LLAvatarName av_name;
     if (!LLAvatarNameCache::get(id, &av_name))
     {
@@ -630,7 +644,10 @@ void LLAvatarActions::showOnMap(const LLUUID& id)
 void LLAvatarActions::pay(const LLUUID& id)
 {
     LLNotification::Params params("DoNotDisturbModePay");
-    params.functor.function(boost::bind(&LLAvatarActions::handlePay, _1, _2, id));
+    params.functor.function([current = vs_native_im_guard(), id](const LLSD& notification, const LLSD& response)
+    {
+        return current() ? LLAvatarActions::handlePay(notification, response, id) : false;
+    });
 
     if (gAgent.isDoNotDisturb())
     {
@@ -707,6 +724,12 @@ void LLAvatarActions::teleport_request_callback(const LLSD& notification, const 
 // static
 void LLAvatarActions::teleportRequest(const LLUUID& id)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
 
     // <FS:PP> Warn if 'reject teleport offers and requests' mode is active
     if (gSavedPerAccountSettings.getBOOL("FSRejectTeleportOffersMode"))
@@ -851,7 +874,15 @@ void LLAvatarActions::share(const LLUUID& id)
     // </FS:Ansariel>
 
     LLSD key;
-    LLFloaterSidePanelContainer::showPanel("inventory", key);
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        key["start_folder_id"] = gInventory.getRootFolderID();
+        auto* root = gInventory.getCategory(gInventory.getRootFolderID());
+        key["start_folder_name"] = root ? root->getName() : LLTrans::getString("Inventory");
+        LLFloaterReg::showInstance("fs_partial_inventory", key);
+    }
+    else
+        LLFloaterSidePanelContainer::showPanel("inventory", key);
     // <FS:Ansariel> [FS Communication UI]
     //LLFloaterReg::showInstance("im_container");
     LLFloaterReg::showInstance("fs_im_container");
@@ -885,6 +916,12 @@ void LLAvatarActions::share(const LLUUID& id)
 //static
 void LLAvatarActions::track(const LLUUID& id)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     FSRadar* radar = FSRadar::getInstance();
     if (radar)
     {
@@ -897,6 +934,12 @@ void LLAvatarActions::track(const LLUUID& id)
 //static
 void LLAvatarActions::teleportTo(const LLUUID& id)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     FSRadar* radar = FSRadar::getInstance();
     if (radar)
     {
@@ -925,7 +968,7 @@ namespace action_give_inventory
     {
         LLInventoryPanel* active_panel = LLInventoryPanel::getActiveInventoryPanel(false);
         LLFloater* floater_appearance = LLFloaterReg::findInstance("appearance");
-        if (!active_panel || (floater_appearance && floater_appearance->hasFocus()))
+        if (!(gViewerWindow && gViewerWindow->isNativeVulkan()) && (!active_panel || (floater_appearance && floater_appearance->hasFocus())))
         {
             active_panel = get_outfit_editor_inventory_panel();
         }
@@ -1013,16 +1056,9 @@ namespace action_give_inventory
         }
     }
 
-    struct LLShareInfo : public LLSingleton<LLShareInfo>
+    static void give_inventory_cb(const LLSD& notification, const LLSD& response, std::set<LLUUID> inventory_selected_uuids, const uuid_vec_t& recipients)
     {
-        LLSINGLETON_EMPTY_CTOR(LLShareInfo);
-    public:
-        std::vector<LLAvatarName> mAvatarNames;
-        uuid_vec_t mAvatarUuids;
-    };
-
-    static void give_inventory_cb(const LLSD& notification, const LLSD& response, std::set<LLUUID> inventory_selected_uuids)
-    {
+        if (!vs_native_im_notification_current(notification["payload"])) return;
         S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
         // if Cancel pressed
         if (option == 1)
@@ -1035,13 +1071,13 @@ namespace action_give_inventory
             return;
         }
 
-        auto count = LLShareInfo::instance().mAvatarNames.size();
+        auto count = recipients.size();
         bool shared = count && !inventory_selected_uuids.empty();
 
         // iterate through avatars
         for(size_t i = 0; i < count; ++i)
         {
-            const LLUUID& avatar_uuid = LLShareInfo::instance().mAvatarUuids[i];
+            const LLUUID& avatar_uuid = recipients[i];
 
             // We souldn't open IM session, just calculate session ID for logging purpose. See EXT-6710
             const LLUUID session_id = gIMMgr->computeSessionID(IM_NOTHING_SPECIAL, avatar_uuid);
@@ -1065,6 +1101,7 @@ namespace action_give_inventory
                     break;
                 }
                 LLViewerInventoryItem* inv_item = gInventory.getItem(*it);
+                if (!inv_item) { shared = false; continue; }
                 if (!inv_item->getPermissions().allowCopyBy(gAgentID))
                 {
                     if (!noncopy_item_names.empty())
@@ -1090,6 +1127,7 @@ namespace action_give_inventory
                 payload["agent_id"] = avatar_uuid;
                 payload["items"] = noncopy_items;
                 payload["success_notification"] = "ItemsShared";
+                vs_native_im_stamp_notification(payload);
                 LLNotificationsUtil::add("CannotCopyWarning", substitutions, payload,
                     &LLGiveInventory::handleCopyProtectedItem);
                 shared = false;
@@ -1172,9 +1210,10 @@ namespace action_give_inventory
         LLSD substitutions;
         substitutions["RESIDENTS"] = residents;
         substitutions["ITEMS"] = items;
-        LLShareInfo::instance().mAvatarNames = avatar_names;
-        LLShareInfo::instance().mAvatarUuids = avatar_uuids;
-        LLNotificationsUtil::add(notification, substitutions, LLSD(), boost::bind(&give_inventory_cb, _1, _2, inventory_selected_uuids));
+        LLSD payload;
+        vs_native_im_stamp_notification(payload);
+        LLNotificationsUtil::add(notification, substitutions, payload,
+            boost::bind(&give_inventory_cb, _1, _2, inventory_selected_uuids, avatar_uuids));
     }
 
     static void give_inventory(const uuid_vec_t& avatar_uuids, const std::vector<LLAvatarName> avatar_names, LLInventoryPanel* panel = NULL)
@@ -1262,7 +1301,7 @@ std::set<LLUUID> LLAvatarActions::getInventorySelectedUUIDs(LLInventoryPanel* ac
         inventory_selected= active_panel->getRootFolder()->getSelectionList();
     }
 
-    if (inventory_selected.empty())
+    if (inventory_selected.empty() && !(gViewerWindow && gViewerWindow->isNativeVulkan()))
     {
         LLSidepanelInventory *sidepanel_inventory = LLFloaterSidePanelContainer::getPanel<LLSidepanelInventory>("inventory");
         if (sidepanel_inventory)
@@ -1295,17 +1334,20 @@ void LLAvatarActions::shareWithAvatars(LLView * panel)
     using namespace action_give_inventory;
 
     LLFloater* root_floater = gFloaterView->getParentFloater(panel);
-    LLInventoryPanel* inv_panel = dynamic_cast<LLInventoryPanel*>(panel);
     LLFloaterAvatarPicker* picker =
         // <FS:Ansariel> FIRE-32377: Don't include own avatar when sharing items
         //LLFloaterAvatarPicker::show(boost::bind(give_inventory, _1, _2, inv_panel), true, false, false, root_floater->getName());
-        LLFloaterAvatarPicker::show(boost::bind(give_inventory, _1, _2, inv_panel), true, false, true, root_floater->getName());
+        LLFloaterAvatarPicker::show([weak = panel->getHandle(), current = vs_native_im_guard()](const uuid_vec_t& ids, const std::vector<LLAvatarName>& names)
+        {
+            if (current()) if (auto* owner = dynamic_cast<LLInventoryPanel*>(weak.get())) give_inventory(ids, names, owner);
+        }, true, false, true, root_floater ? root_floater->getName() : LLStringUtil::null);
     if (!picker)
     {
         return;
     }
 
-    picker->setOkBtnEnableCb(boost::bind(is_give_inventory_acceptable, inv_panel));
+    picker->setOkBtnEnableCb([weak = panel->getHandle(), current = vs_native_im_guard()](const uuid_vec_t&)
+    { return current() && weak.get() && is_give_inventory_acceptable(dynamic_cast<LLInventoryPanel*>(weak.get())); });
     picker->openFriendsTab();
 
     if (root_floater)
@@ -1321,7 +1363,9 @@ void LLAvatarActions::shareWithAvatars(const uuid_set_t inventory_selected_uuids
     using namespace action_give_inventory;
 
     LLFloaterAvatarPicker* picker =
-        LLFloaterAvatarPicker::show(boost::bind(give_inventory_ids, _1, _2, inventory_selected_uuids), true, false, false, root_floater->getName());
+        LLFloaterAvatarPicker::show([current = vs_native_im_guard(), inventory_selected_uuids](const uuid_vec_t& ids, const std::vector<LLAvatarName>& names)
+        { if (current()) give_inventory_ids(ids, names, inventory_selected_uuids); }, true, false, false,
+            root_floater ? root_floater->getName() : LLStringUtil::null);
     if (!picker)
     {
         return;
@@ -1929,6 +1973,7 @@ void LLAvatarActions::report(const LLUUID& idAgent)
 
 bool LLAvatarActions::canZoomIn(const LLUUID& idAgent)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return false;
     // <FS:Ansariel> Firestorm radar support
     //return gObjectList.findObject(idAgent);
 
@@ -1957,6 +2002,12 @@ bool LLAvatarActions::canZoomIn(const LLUUID& idAgent)
 
 void LLAvatarActions::zoomIn(const LLUUID& idAgent)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     // <FS:Ansariel> Firestorm radar support
     //handle_zoom_to_object(idAgent);
 
@@ -1973,6 +2024,12 @@ void LLAvatarActions::zoomIn(const LLUUID& idAgent)
 
 void LLAvatarActions::getScriptInfo(const LLUUID& idAgent)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     LL_INFOS() << "Reporting Script Info for avatar: " << idAgent.asString() << LL_ENDL;
     FSLSLBridge::instance().viewerToLSL("getScriptInfo|" + idAgent.asString() + "|" + (gSavedSettings.getBOOL("FSScriptInfoExtended") ? "1" : "0"));
 }
@@ -2000,6 +2057,9 @@ bool getRegionAndPosGlobalFromAgentID(const LLUUID& idAgent, const LLViewerRegio
         return (pAvatarObj->isAvatar()) && (NULL != pAvatarObj->getRegion());
     }
 
+    // Text sessions have no scene location service. Do not instantiate one
+    // just to evaluate avatar menu permissions.
+    if (!LLWorld::instanceExists()) return false;
     // Walk over each region we're connected to and try finding the agent on one of them
     LLWorld::region_list_t::const_iterator itRegion = LLWorld::getInstance()->getRegionList().begin();
     LLWorld::region_list_t::const_iterator endRegion = LLWorld::getInstance()->getRegionList().end();
@@ -2489,6 +2549,7 @@ void LLAvatarActions::estateBanMultiple(const uuid_vec_t& idAgents)
 bool LLAvatarActions::callbackEstateBan(const LLSD& notification, const LLSD& response)
 {
     LLViewerRegion* region = gAgent.getRegion();
+    if (!region) return false; // Region may have retired while confirmation was open.
     S32 idxOption = LLNotificationsUtil::getSelectedOption(notification, response);
 
     if (0 == idxOption || 1 == idxOption)

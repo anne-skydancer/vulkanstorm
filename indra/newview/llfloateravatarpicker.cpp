@@ -26,6 +26,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloateravatarpicker.h"
+#include "vsnativeim.h"
+#include "llrender2dutils.h"
+#include "llnotificationsutil.h"
 
 // Viewer includes
 #include "llagent.h"
@@ -470,6 +473,15 @@ void LLFloaterAvatarPicker::onList()
 
 void LLFloaterAvatarPicker::populateNearMe()
 {
+    if (LLRender2D::isNativeUI())
+    {
+        mNearMeListComplete = true;
+        getChildView("NearMe")->setEnabled(false);
+        getChildView("ok_btn")->setEnabled(false);
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     bool all_loaded = true;
     bool empty = true;
     LLScrollListCtrl* near_me_scroller = getChild<LLScrollListCtrl>("NearMe");
@@ -678,8 +690,9 @@ bool LLFloaterAvatarPicker::visibleItemsSelected() const
 }
 
 /*static*/
-void LLFloaterAvatarPicker::findByIdCoro(std::string url, LLUUID query_id, LLUUID agent_id, std::string floater_key)
+void LLFloaterAvatarPicker::findByIdCoro(std::string url, LLUUID query_id, LLUUID agent_id, std::string floater_key, std::function<bool()> current)
 {
+    if (!current()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("findByIdCoro", httpPolicy);
@@ -689,6 +702,7 @@ void LLFloaterAvatarPicker::findByIdCoro(std::string url, LLUUID query_id, LLUUI
     httpOpts->setTimeout(AVATAR_PICKER_SEARCH_TIMEOUT);
 
     LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
+    if (!current()) return;
 
     LL_DEBUGS("Agent") << result << LL_ENDL;
 
@@ -713,8 +727,9 @@ void LLFloaterAvatarPicker::findByIdCoro(std::string url, LLUUID query_id, LLUUI
 }
 
 /*static*/
-void LLFloaterAvatarPicker::findByNameCoro(std::string url, LLUUID queryID, std::string name)
+void LLFloaterAvatarPicker::findByNameCoro(std::string url, LLUUID queryID, std::string name, std::function<bool()> current)
 {
+    if (!current()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("findByNameCoro", httpPolicy);
@@ -726,6 +741,7 @@ void LLFloaterAvatarPicker::findByNameCoro(std::string url, LLUUID queryID, std:
     httpOpts->setTimeout(AVATAR_PICKER_SEARCH_TIMEOUT);
 
     LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
+    if (!current()) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -785,11 +801,11 @@ void LLFloaterAvatarPicker::find()
         // While cache could have been nicer, it neither has a failure callback, nor
         // can cleanup in case of an invalid uuid. So we go directly to the capability.
         LLViewerRegion* region = gAgent.getRegion();
-        if (region)
+        if (region || LLRender2D::isNativeUI())
         {
             std::string url;
             url.reserve(128);
-            url = region->getCapability("GetDisplayNames");
+            url = gAgent.getRegionCapability("GetDisplayNames");
             if (!url.empty())
             {
                 // capability urls don't end in '/', but we need one to parse
@@ -803,7 +819,7 @@ void LLFloaterAvatarPicker::find()
                 LL_DEBUGS("Agent") << "avatar picker " << url << LL_ENDL;
 
                 LLCoros::instance().launch("LLFloaterAvatarPicker::findCoro",
-                    boost::bind(&LLFloaterAvatarPicker::findByIdCoro, url, mQueryID, agent_id, getKey().asString()));
+                    boost::bind(&LLFloaterAvatarPicker::findByIdCoro, url, mQueryID, agent_id, getKey().asString(), vs_native_im_guard()));
             }
             else
             {
@@ -819,9 +835,9 @@ void LLFloaterAvatarPicker::find()
         url.reserve(128); // avoid a memory allocation or two
 
         LLViewerRegion* region = gAgent.getRegion();
-        if (region)
+        if (region || LLRender2D::isNativeUI())
         {
-            url = region->getCapability("AvatarPickerSearch");
+            url = gAgent.getRegionCapability("AvatarPickerSearch");
             // Prefer use of capabilities to search on both SLID and display name
             if (!url.empty())
             {
@@ -837,7 +853,7 @@ void LLFloaterAvatarPicker::find()
                 LL_DEBUGS("Agent") << "avatar picker " << url << LL_ENDL;
 
                 LLCoros::instance().launch("LLFloaterAvatarPicker::findCoro",
-                    boost::bind(&LLFloaterAvatarPicker::findByNameCoro, url, mQueryID, getKey().asString()));
+                    boost::bind(&LLFloaterAvatarPicker::findByNameCoro, url, mQueryID, getKey().asString(), vs_native_im_guard()));
             }
             else
             {

@@ -19,6 +19,7 @@ VSUIRenderer::Blend nativeBlend()
     if (!LLRender2D::isNativeUI()) return VSUIRenderer::Blend::StraightAlpha;
     switch (LLRender2D::nativeBlend())
     {
+    case LLRender::BT_REPLACE: return VSUIRenderer::Blend::Replace;
     case LLRender::BT_ADD: return VSUIRenderer::Blend::Additive;
     case LLRender::BT_ADD_WITH_ALPHA: return VSUIRenderer::Blend::AdditiveAlpha;
     default: return VSUIRenderer::Blend::StraightAlpha;
@@ -45,6 +46,22 @@ struct VSUIResources::Impl
     std::array<float,4> clip{};
     bool active=false;
     explicit Impl(VSUIRenderer& value) : renderer(value) {}
+    void drawRotated(const Asset& a,S32 x,S32 y,S32 width,S32 height,F32 degrees,
+                     const LLColor4& color,const LLRectf& uv)
+    {
+        check(std::isfinite(degrees), "Non-finite native UI image rotation");
+        const auto first = packets.size();
+        draw(a,x,y,width,height,color,false,uv,LLRectf(0.f,1.f,1.f,0.f),true);
+        const auto origin = LLRender2D::isNativeUI() ? LLRender2D::nativeOrigin() : std::array<F32,2>{0,0};
+        // Preserve the GL helper's centre and counter-clockwise bottom-left
+        // rotation after canonicalizing to the renderer's top-left space.
+        const float cx = x + origin[0] + float(width/2);
+        const float cy = logical_height - y - origin[1] - float(height/2);
+        const float radians = degrees * DEG_TO_RAD;
+        const float c = std::cos(radians), sn = std::sin(radians);
+        for (auto i = first; i < packets.size(); ++i)
+            packets[i].transform = {c,-sn,sn,c,cx-c*cx-sn*cy,cy+sn*cx-c*cy};
+    }
     void draw(const Asset& a,S32 x,S32 y,S32 width,S32 height,const LLColor4& color,
               bool solid,const LLRectf& outer,const LLRectf& center,bool inner)
     {
@@ -128,6 +145,12 @@ LLUIImagePtr VSUIResources::publish(const std::string& key,const LLImageRaw& raw
             auto canvas=owner.lock(); check(bool(canvas),"Native UI image owner has retired");
             canvas->draw(*asset,x,y,w,h,color,solid,outer,center,inner);
         });
+    facade->setNativeRotatedDraw([owner,asset](S32 x,S32 y,S32 w,S32 h,F32 degrees,
+                                               const LLColor4& color,const LLRectf& uv)
+    {
+        auto canvas=owner.lock(); check(bool(canvas),"Native UI image owner has retired");
+        canvas->drawRotated(*asset,x,y,w,h,degrees,color,uv);
+    });
     mImpl->assets.insert_or_assign(key,Impl::Entry{asset,facade});
     return facade;
 }
@@ -147,6 +170,15 @@ LLUIImagePtr VSUIResources::region(const std::string& key,const std::string& nam
             catch (...) { canvas->sampling=previous; throw; }
             canvas->sampling=previous;
         });
+    facade->setNativeRotatedDraw([owner,asset,sampling](S32 x,S32 y,S32 w,S32 h,F32 degrees,
+                                                       const LLColor4& color,const LLRectf& clip)
+    {
+        auto canvas=owner.lock(); check(bool(canvas),"Native UI image owner has retired");
+        const auto previous=canvas->sampling; canvas->sampling=sampling;
+        try { canvas->drawRotated(*asset,x,y,w,h,degrees,color,clip); }
+        catch (...) { canvas->sampling=previous; throw; }
+        canvas->sampling=previous;
+    });
     facade->setClipRegion(uv);
     return facade;
 }
@@ -302,4 +334,16 @@ void VSUIResources::triangle(const std::array<std::array<float, 6>, 3>& vertices
         (*p.triangles)[i] = {v[0]/c.dpi, c.logical_height-v[1]/c.dpi, 0.f, 0.f, v[2],v[3],v[4],v[5]};
     }
     c.packets.push_back(std::move(p));
+}
+
+LLPointer<LLImageRaw> VSUIResources::rawImage(const std::string& key) const
+{
+    const auto found = mImpl->assets.find(key);
+    if (found == mImpl->assets.end()) return nullptr;
+    const auto& asset = *found->second.asset;
+    LLPointer<LLImageRaw> raw = new LLImageRaw(asset.width, asset.height, 4);
+    const auto stride = asset.width * 4;
+    for (unsigned y = 0; y < asset.height; ++y)
+        std::copy_n(asset.bytes.data() + y * stride, stride, raw->getData() + (asset.height - 1 - y) * stride);
+    return raw;
 }

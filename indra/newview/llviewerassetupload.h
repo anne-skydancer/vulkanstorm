@@ -29,6 +29,7 @@
 #define LL_VIEWER_ASSET_UPLOAD_H
 
 #include "llfoldertype.h"
+#include <functional>
 #include "llassettype.h"
 #include "llinventorytype.h"
 #include "lleventcoro.h"
@@ -285,7 +286,7 @@ class LLViewerAssetUpload
 public:
     static LLUUID EnqueueInventoryUpload(const std::string &url, const LLResourceUploadInfo::ptr_t &uploadInfo);
 
-    static void AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo);
+    static void AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo, std::function<bool()> current);
 
 private:
     static void HandleUploadError(LLCore::HttpStatus status, LLSD &result, LLResourceUploadInfo::ptr_t &uploadInfo);

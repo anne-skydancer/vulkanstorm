@@ -85,10 +85,11 @@ LLPanelGroupBulkImpl::~LLPanelGroupBulkImpl()
 void LLPanelGroupBulkImpl::callbackClickAdd(LLPanelGroupBulk* panelp)
 {
     LLFloater* root_floater = gFloaterView->getParentFloater(panelp);
+    const auto weak = panelp->getDerivedHandle<LLPanelGroupBulk>();
     LLFloaterAvatarPicker* picker = LLFloaterAvatarPicker::show(
-        [this](const uuid_vec_t& agent_ids, const std::vector<LLAvatarName>&)
+        [weak](const uuid_vec_t& agent_ids, const std::vector<LLAvatarName>&)
         {
-            addUsers(agent_ids);
+            if (auto* panel = weak.get()) panel->mImplementation->addUsers(agent_ids);
         }, true, false, false, root_floater->getName(), mAddButton);
     if (picker)
     {

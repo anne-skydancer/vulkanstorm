@@ -210,6 +210,7 @@ private:
 
     // connection to voice channel state change signal
     boost::signals2::connection mVoiceChannelStateChangeConnection;
+    boost::signals2::connection mSysinfoSettingConnection;
 
     void            setTyping(bool typing);
     void            onSlide();

@@ -27,6 +27,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llscripteditor.h"
+#include "llviewerwindow.h"
 
 #include "llsyntaxid.h"
 #include "lllocalcliprect.h"
@@ -243,7 +244,7 @@ void LLScriptEditor::drawSelectionBackground()
     {
         std::vector<LLRect> selection_rects = getSelectionRects();
 
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        if (!(gViewerWindow && gViewerWindow->isNativeVulkan())) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
         const LLColor4& color = mReadOnly ? mReadOnlyFgColor : mFgColor;
         F32 alpha = hasFocus() ? 0.7f : 0.3f;
         alpha *= getDrawContext().mAlpha;

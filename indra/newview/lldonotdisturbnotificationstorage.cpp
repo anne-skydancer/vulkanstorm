@@ -26,6 +26,7 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "lldonotdisturbnotificationstorage.h"
 
@@ -82,13 +83,14 @@ LLDoNotDisturbNotificationStorage::~LLDoNotDisturbNotificationStorage()
 
 void LLDoNotDisturbNotificationStorage::reset()
 {
+    mDirty = false;
     setFileName(gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT, "dnd_notifications.xml"));
 }
 
 void LLDoNotDisturbNotificationStorage::initialize()
 {
     reset();
-    getCommunicationChannel()->connectFailedFilter(boost::bind(&LLDoNotDisturbNotificationStorage::onChannelChanged, this, _1));
+    mChannelConnection = getCommunicationChannel()->connectFailedFilter(boost::bind(&LLDoNotDisturbNotificationStorage::onChannelChanged, this, _1));
 }
 
 bool LLDoNotDisturbNotificationStorage::getDirty()
@@ -161,6 +163,9 @@ void LLDoNotDisturbNotificationStorage::loadNotifications()
          ++notification_it)
     {
         LLSD notification_params = *notification_it;
+        // Persisted account records receive this login's delivery epoch.
+        vs_native_im_stamp_notification(notification_params["payload"]);
+        vs_native_im_stamp_notification(notification_params["responder"]);
         const LLUUID& notificationID = notification_params["id"];
         std::string notificationName = notification_params["name"];
         LLNotificationPtr notification = instance.find(notificationID);
@@ -196,7 +201,8 @@ void LLDoNotDisturbNotificationStorage::loadNotifications()
         //New notification needs to be added
         else
         {
-            notification = (LLNotificationPtr) new LLNotification(notification_params.with("is_dnd", true));
+            notification_params["is_dnd"] = true;
+            notification = (LLNotificationPtr) new LLNotification(notification_params);
             LLNotificationResponderInterface* responder = createResponder(notification_params["responder_sd"]["responder_type"], notification_params["responder_sd"]);
             if (responder == NULL)
             {

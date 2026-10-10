@@ -178,6 +178,7 @@ public:
     bool isNativeVulkan() const { return mNativeVulkan; }
     void drawNativeUI();
     void refreshNativeFonts();
+    void setNativeConnected(bool connected);
 #if VS_NATIVE_VULKAN
     VSVulkanContext* nativeContext() const { return mVulkanContext.get(); }
     VSPlainChat* nativeChat() const { return mNativeChat; }

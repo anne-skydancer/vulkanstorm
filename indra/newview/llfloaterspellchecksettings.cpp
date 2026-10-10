@@ -48,6 +48,8 @@ LLFloaterSpellCheckerSettings::LLFloaterSpellCheckerSettings(const LLSD& key)
 {
 }
 
+LLFloaterSpellCheckerSettings::~LLFloaterSpellCheckerSettings() = default;
+
 void LLFloaterSpellCheckerSettings::draw()
 {
     LLFloater::draw();
@@ -63,8 +65,8 @@ void LLFloaterSpellCheckerSettings::draw()
 
 bool LLFloaterSpellCheckerSettings::postBuild(void)
 {
-    gSavedSettings.getControl("SpellCheck")->getSignal()->connect(boost::bind(&LLFloaterSpellCheckerSettings::refreshDictionaries, this, false));
-    LLSpellChecker::setSettingsChangeCallback(boost::bind(&LLFloaterSpellCheckerSettings::onSpellCheckSettingsChange, this));
+    mSpellCheckConnection = gSavedSettings.getControl("SpellCheck")->getSignal()->connect(boost::bind(&LLFloaterSpellCheckerSettings::refreshDictionaries, this, false));
+    mDictionaryConnection = LLSpellChecker::setSettingsChangeCallback(boost::bind(&LLFloaterSpellCheckerSettings::onSpellCheckSettingsChange, this));
     getChild<LLUICtrl>("spellcheck_remove_btn")->setCommitCallback(boost::bind(&LLFloaterSpellCheckerSettings::onBtnRemove, this));
     getChild<LLUICtrl>("spellcheck_import_btn")->setCommitCallback(boost::bind(&LLFloaterSpellCheckerSettings::onBtnImport, this));
     getChild<LLUICtrl>("spellcheck_main_combo")->setCommitCallback([this](LLUICtrl* ctrl, const LLSD& data)

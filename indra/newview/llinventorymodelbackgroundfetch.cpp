@@ -26,6 +26,8 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llinventorymodelbackgroundfetch.h"
+#include "vsnativeim.h"
+#include "vsnativesession.h"
 
 #include "llaisapi.h"
 #include "llagent.h"
@@ -93,6 +95,16 @@
 
 namespace
 {
+bool nativeConnected()
+{
+#if VS_NATIVE_VULKAN
+    const auto owner = VSNativeSession::active();
+    return owner && owner->phase() == VSNativeSession::Phase::Connected;
+#else
+    return false;
+#endif
+}
+
 
 ///----------------------------------------------------------------------------
 /// Class <anonymous>::BGItemHttpHandler
@@ -117,16 +129,19 @@ class BGItemHttpHandler : public LLInventoryModel::FetchItemHttpHandler
 
 public:
     BGItemHttpHandler(const LLSD& request_sd)
-        : LLInventoryModel::FetchItemHttpHandler(request_sd)
+        : LLInventoryModel::FetchItemHttpHandler(request_sd), mCurrent(vs_native_im_guard())
         {
             LLInventoryModelBackgroundFetch::instance().incrFetchCount(1);
         }
 
     virtual ~BGItemHttpHandler()
         {
-            LLInventoryModelBackgroundFetch::instance().incrFetchCount(-1);
+            if (mCurrent()) LLInventoryModelBackgroundFetch::instance().incrFetchCount(-1);
         }
 
+private:
+    std::function<bool()> mCurrent;
+public:
     BGItemHttpHandler(const BGItemHttpHandler&) = delete;
     BGItemHttpHandler& operator=(const BGItemHttpHandler&) = delete;
 };
@@ -149,14 +164,14 @@ public:
     BGFolderHttpHandler(const LLSD& request_sd, const uuid_vec_t& recursive_cats)
         : LLCore::HttpHandler(),
           mRequestSD(request_sd),
-          mRecursiveCatUUIDs(recursive_cats)
+          mRecursiveCatUUIDs(recursive_cats), mCurrent(vs_native_im_guard())
         {
             LLInventoryModelBackgroundFetch::instance().incrFetchCount(1);
         }
 
     virtual ~BGFolderHttpHandler()
         {
-            LLInventoryModelBackgroundFetch::instance().incrFetchCount(-1);
+            if (mCurrent()) LLInventoryModelBackgroundFetch::instance().incrFetchCount(-1);
         }
 
 protected:
@@ -174,6 +189,7 @@ private:
     void processFailure(const char* const reason, LLCore::HttpResponse* response);
 
 private:
+    std::function<bool()> mCurrent;
     LLSD mRequestSD;
     const uuid_vec_t mRecursiveCatUUIDs; // hack for storing away which cat fetches are recursive
 };
@@ -538,6 +554,23 @@ void LLInventoryModelBackgroundFetch::backgroundFetchCB(void*)
     LLInventoryModelBackgroundFetch::instance().backgroundFetch();
 }
 
+void LLInventoryModelBackgroundFetch::pumpAccountFetch()
+{
+    AISAPI::pumpPending();
+    backgroundFetch();
+}
+
+void LLInventoryModelBackgroundFetch::resetAccountFetch()
+{
+    gIdleCallbacks.deleteFunction(backgroundFetchCB, nullptr);
+    mRecursiveInventoryFetchStarted = mRecursiveLibraryFetchStarted = mRecursiveMarketplaceFetchStarted = false;
+    mAllRecursiveFoldersFetched = mBackgroundFetchActive = mFolderFetchActive = false;
+    mFetchCount = mLastFetchCount = mFetchFolderCount = 0;
+    mFetchFolderQueue.clear(); mFetchItemQueue.clear(); mForceFetchSet.clear(); mExpectedFolderIds.clear();
+    mTimelyFetchPending = false; mNumFetchRetries = 0;
+    mFetchTimer.reset();
+}
+
 void LLInventoryModelBackgroundFetch::backgroundFetch()
 {
     if (mBackgroundFetchActive)
@@ -552,7 +585,8 @@ void LLInventoryModelBackgroundFetch::backgroundFetch()
             {
                 bulkFetchViaAis();
             }
-            else if (gAgent.getRegion() && gAgent.getRegion()->capabilitiesReceived())
+            else if (nativeConnected()
+                || (gAgent.getRegion() && gAgent.getRegion()->capabilitiesReceived()))
             {
                 // If we'll be using the capability, we'll be sending batches and the background thing isn't as important.
                 bulkFetch();
@@ -1224,7 +1258,7 @@ void LLInventoryModelBackgroundFetch::bulkFetch()
     //If there are items in mFetchQueue, we want to check the time since the last bulkFetch was
     //sent.  If it exceeds our retry time, go ahead and fire off another batch.
     LLViewerRegion* region(gAgent.getRegion());
-    if (! region || gDisconnected || LLApp::isExiting())
+    if ((!region && !nativeConnected()) || gDisconnected || LLApp::isExiting())
     {
         return;
     }
@@ -1390,7 +1424,7 @@ void LLInventoryModelBackgroundFetch::bulkFetch()
         {
             if (folder_request_body["folders"].size())
             {
-                const std::string url(region->getCapability("FetchInventoryDescendents2"));
+                const std::string url(gAgent.getRegionCapability("FetchInventoryDescendents2"));
 
                 if (! url.empty())
                 {
@@ -1401,7 +1435,7 @@ void LLInventoryModelBackgroundFetch::bulkFetch()
 
             if (folder_request_body_lib["folders"].size())
             {
-                const std::string url(region->getCapability("FetchLibDescendents2"));
+                const std::string url(gAgent.getRegionCapability("FetchLibDescendents2"));
 
                 if (! url.empty())
                 {
@@ -1415,7 +1449,7 @@ void LLInventoryModelBackgroundFetch::bulkFetch()
         {
             if (item_request_body.size())
             {
-                const std::string url(region->getCapability("FetchInventory2"));
+                const std::string url(gAgent.getRegionCapability("FetchInventory2"));
 
                 if (! url.empty())
                 {
@@ -1428,7 +1462,7 @@ void LLInventoryModelBackgroundFetch::bulkFetch()
 
             if (item_request_body_lib.size())
             {
-                const std::string url(region->getCapability("FetchLib2"));
+                const std::string url(gAgent.getRegionCapability("FetchLib2"));
 
                 if (! url.empty())
                 {
@@ -1479,6 +1513,7 @@ namespace
 
 void BGFolderHttpHandler::onCompleted(LLCore::HttpHandle handle, LLCore::HttpResponse* response)
 {
+    if (!mCurrent()) return;
     do      // Single-pass do-while used for common exit handling
     {
         LLCore::HttpStatus status(response->getStatus());

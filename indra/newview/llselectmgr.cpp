@@ -7654,6 +7654,9 @@ void LLSelectNode::renderOneSilhouette(const LLColor4 &color)
 // *DEPRECATED: See header comment.
 void dialog_refresh_all()
 {
+    // This helper refreshes object-selection dialogs and their scene menus.
+    // Connected native name/account controls own their independent updates.
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return;
     // This is the easiest place to fire the update signal, as it will
     // make cleaning up the functions below easier.  Also, sometimes entities
     // outside the selection manager change properties of selected objects

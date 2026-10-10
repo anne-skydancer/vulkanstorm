@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpreviewscript.h"
+#include "vsnativeim.h"
 
 #include "llassetstorage.h"
 #include "llbutton.h"
@@ -455,6 +456,7 @@ LLScriptEdCore::LLScriptEdCore(
     mScriptRemoved(false),
     mSaveDialogShown(false)
 {
+    mCurrentAccount = vs_native_im_guard();
     setFollowsAll();
     setBorderVisible(false);
 
@@ -474,6 +476,20 @@ LLScriptEdCore::LLScriptEdCore(
 
 LLScriptEdCore::~LLScriptEdCore()
 {
+    if (auto* help = mLiveHelpHandle.get())
+    {
+        // Help controls retain this editor in their callbacks. Retire them
+        // even when account reset destroys the parent without closeFloater().
+        help->closeFloater();
+        if (mLiveHelpHandle.get()) delete mLiveHelpHandle.get();
+        mLiveHelpHandle.markDead();
+    }
+    if (auto* go = LLFloaterGotoLine::getInstance(); go && go->getEditorCore() == this)
+    {
+        go->closeFloater();
+        // This non-reusable dependent floater may delete itself while closing.
+        if (LLFloaterGotoLine::getInstance() == go) delete go;
+    }
     deleteBridges();
 
     // If the search window is up for this editor, close it.
@@ -1372,6 +1388,7 @@ void LLScriptEdCore::addHelpItemToHistory(const std::string& help_string)
 
 bool LLScriptEdCore::canClose()
 {
+    if (!mCurrentAccount()) return true;
     if(mForceClose || !hasChanged() || mScriptRemoved)
     {
         return true;
@@ -1382,7 +1399,7 @@ bool LLScriptEdCore::canClose()
         {
             mSaveDialogShown = true;
             // Bring up view-modal dialog: Save changes? Yes, No, Cancel
-            LLNotificationsUtil::add("SaveChanges", LLSD(), LLSD(), boost::bind(&LLScriptEdCore::handleSaveChangesDialog, this, _1, _2));
+            LLNotificationsUtil::add("SaveChanges", LLSD(), LLSD(), vs_native_im_ui_callback(this, boost::bind(&LLScriptEdCore::handleSaveChangesDialog, this, _1, _2)));
         }
         return false;
     }
@@ -1565,6 +1582,7 @@ void LLScriptEdCore::onBtnInsertFunction(LLUICtrl *ui, void* userdata)
 void LLScriptEdCore::doSave(bool close_after_save, bool sync /*= true*/)
 // </FS:Ansariel>
 {
+    if (!mCurrentAccount()) return;
     // NaCl - LSL Preprocessor
     // Clear status list *before* running the preprocessor (FIRE-10172) -Sei
     mErrorList->deleteAllItems();
@@ -1590,6 +1608,7 @@ void LLScriptEdCore::doSave(bool close_after_save, bool sync /*= true*/)
 // NaCl - LSL Preprocessor
 void LLScriptEdCore::doSaveComplete( void* userdata, bool close_after_save, bool sync)
 {
+    if (!mCurrentAccount()) return;
     add( LLStatViewer::LSL_SAVES,1 );
 
     //LLScriptEdCore* self = (LLScriptEdCore*) userdata;
@@ -1603,6 +1622,7 @@ void LLScriptEdCore::doSaveComplete( void* userdata, bool close_after_save, bool
 
 void LLScriptEdCore::openInExternalEditor()
 {
+    if (!mCurrentAccount()) return;
     // Open it in external editor.
     {
         LLExternalEditor ed;
@@ -1668,7 +1688,7 @@ void LLScriptEdCore::onBtnUndoChanges()
 {
     if( !mEditor->tryToRevertToPristineState() )
     {
-        LLNotificationsUtil::add("ScriptCannotUndo", LLSD(), LLSD(), boost::bind(&LLScriptEdCore::handleReloadFromServerDialog, this, _1, _2));
+        LLNotificationsUtil::add("ScriptCannotUndo", LLSD(), LLSD(), vs_native_im_ui_callback(this, boost::bind(&LLScriptEdCore::handleReloadFromServerDialog, this, _1, _2)));
     }
 }
 
@@ -1799,14 +1819,23 @@ bool LLScriptEdCore::handleKeyHere(KEY key, MASK mask)
 
 void LLScriptEdCore::onBtnLoadFromFile( void* data )
 {
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLScriptEdCore::loadScriptFromFile, _1, data), LLFilePicker::FFLOAD_SCRIPT, false);
+    auto* self = static_cast<LLScriptEdCore*>(data);
+    const auto weak = self->getHandle();
+    const auto current = vs_native_im_guard();
+    LLFilePickerReplyThread::startPicker([weak, current](const std::vector<std::string>& files, LLFilePicker::ELoadFilter, LLFilePicker::ESaveFilter)
+    {
+        if (auto* editor = dynamic_cast<LLScriptEdCore*>(weak.get()); editor && current() && !files.empty())
+            loadScriptFromFile(files, editor);
+    }, LLFilePicker::FFLOAD_SCRIPT, false);
 }
 
 void LLScriptEdCore::loadScriptFromFile(const std::vector<std::string>& filenames, void* data)
 {
+    if (filenames.empty()) return;
     std::string filename = filenames[0];
 
     llifstream fin(filename.c_str());
+    if (!fin) return;
 
     std::string line;
     std::string text;
@@ -1840,12 +1869,19 @@ void LLScriptEdCore::onBtnSaveToFile( void* userdata )
 
     if( self->mSaveCallback )
     {
-        LLFilePickerReplyThread::startPicker(boost::bind(&LLScriptEdCore::saveScriptToFile, _1, userdata), LLFilePicker::FFSAVE_SCRIPT, self->mScriptName);
+        const auto weak = self->getHandle();
+        const auto current = vs_native_im_guard();
+        LLFilePickerReplyThread::startPicker([weak, current](const std::vector<std::string>& files, LLFilePicker::ELoadFilter, LLFilePicker::ESaveFilter)
+        {
+            if (auto* editor = dynamic_cast<LLScriptEdCore*>(weak.get()); editor && current() && !files.empty())
+                saveScriptToFile(files, editor);
+        }, LLFilePicker::FFSAVE_SCRIPT, self->mScriptName);
     }
 }
 
 void LLScriptEdCore::saveScriptToFile(const std::vector<std::string>& filenames, void* data)
 {
+    if (filenames.empty()) return;
     LLScriptEdCore* self = (LLScriptEdCore*)data;
     if (self)
     {
@@ -2370,6 +2406,7 @@ void LLPreviewLSL::callbackLSLCompileFailed(const LLSD& compile_errors)
 
 void LLPreviewLSL::loadAsset()
 {
+    if (!mPreviewCurrent() || !gAssetStorage) return;
     // *HACK: we poke into inventory to see if it's there, and if so,
     // then it might be part of the inventory library. If it's in the
     // library, then you can see the script, but not modify it.
@@ -2390,19 +2427,22 @@ void LLPreviewLSL::loadAsset()
                                 item->getPermissions(), GP_OBJECT_MANIPULATE);
         if (gAgent.isGodlike() || (is_copyable && (is_modifiable || is_library)))
         {
-            LLUUID* new_uuid = new LLUUID(mItemUUID);
-            gAssetStorage->getInvItemAsset(LLHost(),
-                                        gAgent.getID(),
-                                        gAgent.getSessionID(),
-                                        item->getPermissions().getOwner(),
-                                        LLUUID::null,
-                                        item->getUUID(),
-                                        item->getAssetUUID(),
-                                        item->getType(),
-                                        &LLPreviewLSL::onLoadComplete,
-                                        (void*)new_uuid,
-                                        true);
+            struct Request { LLHandle<LLFloater> weak; std::function<bool()> current; };
+            auto* request = new Request{getHandle(), mPreviewCurrent};
+            const auto loaded = +[](const LLUUID& id, LLAssetType::EType type, void* data, S32 status, LLExtStat ext)
+            {
+                std::unique_ptr<Request> request(static_cast<Request*>(data));
+                auto* preview = dynamic_cast<LLPreviewLSL*>(request->weak.get());
+                if (!preview || !request->current()) return;
+                onLoadComplete(id, type, new LLHandle<LLFloater>(request->weak), status, ext);
+            };
             mAssetStatus = PREVIEW_ASSET_LOADING;
+            if ((gViewerWindow && gViewerWindow->isNativeVulkan()) && item->getAssetUUID().notNull())
+                gAssetStorage->getAssetData(item->getAssetUUID(), item->getType(), loaded, request, true);
+            else
+                gAssetStorage->getInvItemAsset(LLHost(), gAgent.getID(), gAgent.getSessionID(),
+                    item->getPermissions().getOwner(), LLUUID::null, item->getUUID(), item->getAssetUUID(),
+                    item->getType(), loaded, request, true);
         }
         else
         {
@@ -2546,12 +2586,15 @@ void LLPreviewLSL::saveIfNeeded(bool sync /*= true*/)
 {
 //  if(!mScriptEd->hasChanged())
 // [SL:KB] - Patch: Build-ScriptRecover | Checked: 2012-02-10 (Catznip-3.2.1) | Added: Catznip-3.2.1
-    if ( (!mScriptEd->hasChanged()) || (!gAgent.getRegion()) )
+    if (!mPreviewCurrent() || !mScriptEd->hasChanged())
 // [/SL:KB]
     {
         return;
     }
 
+    const std::string url = gAgent.getRegionCapability("UpdateScriptAgent");
+    const LLInventoryItem* inv_item = getItem();
+    if (url.empty() || !inv_item) return;
     mPendingUploads = 0;
     // <FS> FIRE-10172: Fix LSL editor error display
     //mScriptEd->mErrorList->deleteAllItems();
@@ -2563,10 +2606,7 @@ void LLPreviewLSL::saveIfNeeded(bool sync /*= true*/)
         mScriptEd->sync();
     }
 
-    if (!gAgent.getRegion()) return;
-    const LLInventoryItem *inv_item = getItem();
-    // save it out to asset server
-    std::string url = gAgent.getRegion()->getCapability("UpdateScriptAgent");
+    // Inventory scripts use the authenticated capability without a scene region.
 
     // NaCL - LSL Preprocessor
     mScriptEd->enableSave(false); // Clear the enable save flag (FIRE-10173)
@@ -2611,12 +2651,17 @@ void LLPreviewLSL::saveIfNeeded(bool sync /*= true*/)
             //        LLPreviewLSL::finishedLSLUpload(itemId, response);
             //    },
             //LLPreviewLSL::failedLSLUpload));
+            const auto weak = getHandle();
+            const auto current = mPreviewCurrent;
             LLResourceUploadInfo::ptr_t uploadInfo(std::make_shared<FSScriptAssetUpload>(mItemUUID, buffer,
-                [old_asset_id](LLUUID itemId, LLUUID, LLUUID, LLSD response) {
+                [old_asset_id, weak, current](LLUUID itemId, LLUUID, LLUUID, LLSD response) {
+                    if (!weak.get() || !current()) return;
                     LLFileSystem::removeFile(old_asset_id, LLAssetType::AT_LSL_TEXT);
                     LLPreviewLSL::finishedLSLUpload(itemId, response);
                 },
-                LLPreviewLSL::failedLSLUpload, domono));
+                [weak, current](LLUUID item, LLUUID task, LLSD response, std::string reason) {
+                    return weak.get() && current() && LLPreviewLSL::failedLSLUpload(item, task, response, reason);
+                }, domono));
 
             LLViewerAssetUpload::EnqueueInventoryUpload(url, uploadInfo);
         }
@@ -2629,9 +2674,9 @@ void LLPreviewLSL::onLoadComplete(const LLUUID& asset_uuid, LLAssetType::EType t
 {
     LL_DEBUGS() << "LLPreviewLSL::onLoadComplete: got uuid " << asset_uuid
          << LL_ENDL;
-    LLUUID* item_uuid = (LLUUID*)user_data;
-    LLPreviewLSL* preview = LLFloaterReg::findTypedInstance<LLPreviewLSL>("preview_script", *item_uuid);
-    if( preview )
+    std::unique_ptr<LLHandle<LLFloater>> weak(static_cast<LLHandle<LLFloater>*>(user_data));
+    auto* preview = dynamic_cast<LLPreviewLSL*>(weak->get());
+    if (preview && preview->mPreviewCurrent())
     {
         if(0 == status)
         {
@@ -2647,7 +2692,7 @@ void LLPreviewLSL::onLoadComplete(const LLUUID& asset_uuid, LLAssetType::EType t
             preview->mScriptEd->mEditor->makePristine();
 
             std::string script_name = DEFAULT_SCRIPT_NAME;
-            LLInventoryItem* item = gInventory.getItem(*item_uuid);
+            LLInventoryItem* item = gInventory.getItem(preview->mItemUUID);
             bool is_modifiable = false;
             if (item)
             {
@@ -2690,7 +2735,6 @@ void LLPreviewLSL::onLoadComplete(const LLUUID& asset_uuid, LLAssetType::EType t
             LL_WARNS() << "Problem loading script: " << status << LL_ENDL;
         }
     }
-    delete item_uuid;
 }
 
 

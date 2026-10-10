@@ -1,3 +1,4 @@
+#include <typeinfo>
 /**
  * @file llfloaterpreference.h
  * @brief LLPreferenceCore class definition
@@ -103,6 +104,7 @@ public:
 
     // refresh all the graphics preferences menus
     static void refreshEnabledGraphics();
+    static bool isPrivacyPanelType(const std::type_info&);
 
     // translate user's do not disturb response message according to current locale if message is default, otherwise do nothing
     static void initDoNotDisturbResponse();
@@ -337,6 +339,7 @@ private:
     std::unique_ptr< ll::prefs::SearchData > mSearchData;
     bool mSearchDataDirty;
 
+    std::vector<boost::signals2::connection> mSettingConnections;
     boost::signals2::connection mImpostorsChangedSignal;
     boost::signals2::connection mComplexityChangedSignal;
 
@@ -383,6 +386,7 @@ public:
 protected:
     typedef std::map<LLControlVariable*, LLSD> control_values_map_t;
     control_values_map_t mSavedValues;
+    std::vector<boost::signals2::scoped_connection> mSettingConnections;
 
 private:
     //for "Only friends and groups can call or IM me"
@@ -699,6 +703,7 @@ private:
     bool mSocksSettingsDirty;
     typedef std::map<LLControlVariable*, LLSD> control_values_map_t;
     control_values_map_t mSavedValues;
+    std::vector<boost::signals2::scoped_connection> mSettingConnections;
     LOG_CLASS(LLFloaterPreferenceProxy);
 };
 

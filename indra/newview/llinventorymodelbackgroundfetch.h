@@ -60,6 +60,9 @@ public:
     // AIS3 only
     void fetchCOF(nullary_func_t callback);
 
+    void pumpAccountFetch();
+    void resetAccountFetch();
+
     bool folderFetchActive() const;
     bool isEverythingFetched() const; // completing the fetch once per session should be sufficient
 

@@ -32,6 +32,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeim.h"
+#endif
 
 #include "llfloaterpreference.h"
 #include "vsrenderbackend.h"
@@ -342,6 +346,7 @@ void handleDisplayNamesOptionChanged(const LLSD& newvalue)
 
 void handleAppearanceCameraMovementChanged(const LLSD& newvalue)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return;
     if(!newvalue.asBoolean() && gAgentCamera.getCameraMode() == CAMERA_MODE_CUSTOMIZE_AVATAR)
     {
         gAgentCamera.changeCameraToDefault();
@@ -533,7 +538,7 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     gSavedSettings.getControl("UseDisplayNames")->getCommitSignal()->connect(boost::bind(&handleDisplayNamesOptionChanged,  _2));
 
     gSavedSettings.getControl("AppearanceCameraMovement")->getCommitSignal()->connect(boost::bind(&handleAppearanceCameraMovementChanged,  _2));
-    gSavedSettings.getControl("WindLightUseAtmosShaders")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::onAtmosShaderChange, this));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("WindLightUseAtmosShaders")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::onAtmosShaderChange, this)));
 
     LLAvatarPropertiesProcessor::getInstance()->addObserver( gAgent.getID(), this );
 
@@ -585,7 +590,17 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
 
 void LLFloaterPreference::processProperties( void* pData, EAvatarProcessorType type )
 {
-    if ( APT_PROPERTIES_LEGACY == type )
+    if (APT_PROPERTIES == type)
+    {
+        const auto* data = static_cast<const LLAvatarData*>(pData);
+        if (data && data->avatar_id == gAgent.getID() && data->avatar_id.notNull())
+        {
+            mAllowPublish = (data->flags & AVATAR_ALLOW_PUBLISH) != 0;
+            mAvatarDataInitialized = true;
+            getChild<LLUICtrl>("online_searchresults")->setValue(mAllowPublish);
+        }
+    }
+    else if ( APT_PROPERTIES_LEGACY == type )
     {
         const LLAvatarLegacyData* pAvatarData = static_cast<const LLAvatarLegacyData*>( pData );
         if (pAvatarData && (gAgent.getID() == pAvatarData->avatar_id) && (pAvatarData->avatar_id != LLUUID::null))
@@ -618,6 +633,10 @@ void LLFloaterPreference::saveAvatarProperties( void )
 
 void LLFloaterPreference::saveAvatarPropertiesCoro(const std::string cap_url, bool allow_publish)
 {
+#if VS_NATIVE_VULKAN
+    const auto current = vs_native_im_guard();
+    if (!current()) return;
+#endif
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("put_avatar_properties_coro", httpPolicy);
@@ -632,6 +651,9 @@ void LLFloaterPreference::saveAvatarPropertiesCoro(const std::string cap_url, bo
     data["allow_publish"] = allow_publish;
 
     LLSD result = httpAdapter->putAndSuspend(httpRequest, finalUrl, data, httpOpts, httpHeaders);
+#if VS_NATIVE_VULKAN
+    if (!current()) return;
+#endif
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -661,22 +683,22 @@ bool LLFloaterPreference::postBuild()
     //gSavedSettings.getControl("ChatFontSize")->getSignal()->connect(boost::bind(&LLViewerChat::signalChatFontChanged));
     // </FS:Ansariel> [FS communication UI]
 
-    gSavedSettings.getControl("ChatBubbleOpacity")->getSignal()->connect(boost::bind(&LLFloaterPreference::onNameTagOpacityChange, this, _2));
-    gSavedSettings.getControl("ConsoleBackgroundOpacity")->getSignal()->connect(boost::bind(&LLFloaterPreference::onConsoleOpacityChange, this, _2));   // <FS:CR> FIRE-1332 - Sepeate opacity settings for nametag and console chat
+    mSettingConnections.emplace_back(gSavedSettings.getControl("ChatBubbleOpacity")->getSignal()->connect(boost::bind(&LLFloaterPreference::onNameTagOpacityChange, this, _2)));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("ConsoleBackgroundOpacity")->getSignal()->connect(boost::bind(&LLFloaterPreference::onConsoleOpacityChange, this, _2)));   // <FS:CR> FIRE-1332 - Sepeate opacity settings for nametag and console chat
 
-    gSavedSettings.getControl("PreferredMaturity")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangeMaturity, this));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("PreferredMaturity")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangeMaturity, this)));
 
-    gSavedSettings.getControl("RenderAvatarComplexityMode")->getSignal()->connect(
+    mSettingConnections.emplace_back(gSavedSettings.getControl("RenderAvatarComplexityMode")->getSignal()->connect(
         [this](LLControlVariable* control, const LLSD& new_val, const LLSD& old_val)
         {
             onChangeComplexityMode(new_val);
-        });
+        }));
 
-    gSavedPerAccountSettings.getControl("ModelUploadFolder")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangeModelFolder, this));
-    gSavedPerAccountSettings.getControl("PBRUploadFolder")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangePBRFolder, this));
-    gSavedPerAccountSettings.getControl("TextureUploadFolder")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangeTextureFolder, this));
-    gSavedPerAccountSettings.getControl("SoundUploadFolder")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangeSoundFolder, this));
-    gSavedPerAccountSettings.getControl("AnimationUploadFolder")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangeAnimationFolder, this));
+    mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("ModelUploadFolder")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangeModelFolder, this)));
+    mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("PBRUploadFolder")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangePBRFolder, this)));
+    mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("TextureUploadFolder")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangeTextureFolder, this)));
+    mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("SoundUploadFolder")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangeSoundFolder, this)));
+    mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("AnimationUploadFolder")->getSignal()->connect(boost::bind(&LLFloaterPreference::onChangeAnimationFolder, this)));
 
     LLTabContainer* tabcontainer = getChild<LLTabContainer>("pref core");
     if (!tabcontainer->selectTab(gSavedSettings.getS32("LastPrefTab")))
@@ -724,11 +746,21 @@ bool LLFloaterPreference::postBuild()
     // set 'enable' property for 'Clear log...' button
     changed();
 
-    LLLogChat::getInstance()->setSaveHistorySignal(boost::bind(&LLFloaterPreference::onLogChatHistorySaved, this));
+    const auto weak_preferences = getHandle();
+    LLLogChat::getInstance()->setSaveHistorySignal([weak_preferences]
+    {
+        if (auto* preferences = dynamic_cast<LLFloaterPreference*>(weak_preferences.get()))
+            preferences->onLogChatHistorySaved();
+    });
 
     LLSliderCtrl* fov_slider = getChild<LLSliderCtrl>("camera_fov");
-    fov_slider->setMinValue(LLViewerCamera::getInstance()->getMinView());
-    fov_slider->setMaxValue(LLViewerCamera::getInstance()->getMaxView());
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        fov_slider->setEnabled(false); // World-camera ownership is deferred.
+    else
+    {
+        fov_slider->setMinValue(LLViewerCamera::getInstance()->getMinView());
+        fov_slider->setMaxValue(LLViewerCamera::getInstance()->getMaxView());
+    }
 
     bool enable_complexity = gSavedSettings.getS32("RenderAvatarComplexityMode") != LLVOAvatar::AV_RENDER_ONLY_SHOW_FRIENDS;
     getChild<LLSliderCtrl>("IndirectMaxComplexity")->setEnabled(enable_complexity);
@@ -797,13 +829,13 @@ bool LLFloaterPreference::postBuild()
 // </FS:AW  opensim preferences>
 
     // <FS:Zi> Pie menu
-    gSavedSettings.getControl("OverridePieColors")->getSignal()->connect(boost::bind(&LLFloaterPreference::onPieColorsOverrideChanged, this));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("OverridePieColors")->getSignal()->connect(boost::bind(&LLFloaterPreference::onPieColorsOverrideChanged, this)));
     // make sure pie color controls are enabled or greyed out properly
     onPieColorsOverrideChanged();
     // </FS:Zi> Pie menu
 
     // <FS:Zi> Group Notices and chiclets location setting conversion bool => S32
-    gSavedSettings.getControl("ShowGroupNoticesTopRight")->getSignal()->connect(boost::bind(&LLFloaterPreference::onShowGroupNoticesTopRightChanged, this));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("ShowGroupNoticesTopRight")->getSignal()->connect(boost::bind(&LLFloaterPreference::onShowGroupNoticesTopRightChanged, this)));
     onShowGroupNoticesTopRightChanged();
     // </FS:Zi> Group Notices and chiclets location setting conversion bool => S32
 
@@ -819,19 +851,19 @@ bool LLFloaterPreference::postBuild()
     // </FS:Kadah>
 
     // <FS:Ansariel> Update label for max. non imposters and max complexity
-    gSavedSettings.getControl("IndirectMaxNonImpostors")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::updateMaxNonImpostorsLabel, this, _2));
-    gSavedSettings.getControl("RenderAvatarMaxComplexity")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::updateMaxComplexityLabel, this, _2));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("IndirectMaxNonImpostors")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::updateMaxNonImpostorsLabel, this, _2)));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("RenderAvatarMaxComplexity")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::updateMaxComplexityLabel, this, _2)));
 
     // <FS:Ansariel> Properly disable avatar tag setting
-    gSavedSettings.getControl("NameTagShowUsernames")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::onAvatarTagSettingsChanged, this));
-    gSavedSettings.getControl("FSNameTagShowLegacyUsernames")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::onAvatarTagSettingsChanged, this));
-    gSavedSettings.getControl("AvatarNameTagMode")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::onAvatarTagSettingsChanged, this));
-    gSavedSettings.getControl("FSTagShowARW")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::onAvatarTagSettingsChanged, this));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("NameTagShowUsernames")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::onAvatarTagSettingsChanged, this)));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("FSNameTagShowLegacyUsernames")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::onAvatarTagSettingsChanged, this)));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("AvatarNameTagMode")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::onAvatarTagSettingsChanged, this)));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("FSTagShowARW")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::onAvatarTagSettingsChanged, this)));
     onAvatarTagSettingsChanged();
     // </FS:Ansariel>
 
     // <FS:Ansariel> Correct enabled state of Animated Script Dialogs option
-    gSavedSettings.getControl("ScriptDialogsPosition")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::updateAnimatedScriptDialogs, this));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("ScriptDialogsPosition")->getCommitSignal()->connect(boost::bind(&LLFloaterPreference::updateAnimatedScriptDialogs, this)));
     updateAnimatedScriptDialogs();
 
     // <FS:Ansariel> Set max. UI scaling factor depending on max. supported OS scaling factor
@@ -952,6 +984,7 @@ void LLFloaterPreference::onDoNotDisturbResponseChanged()
 
 LLFloaterPreference::~LLFloaterPreference()
 {
+    for (auto& connection : mSettingConnections) connection.disconnect();
     LLConversationLog::instance().removeObserver(this);
     if (LLAvatarPropertiesProcessor::instanceExists())
     {
@@ -1014,8 +1047,13 @@ void LLFloaterPreference::apply()
     gViewerWindow->requestResolutionUpdate(); // for UIScaleFactor
 
     LLSliderCtrl* fov_slider = getChild<LLSliderCtrl>("camera_fov");
-    fov_slider->setMinValue(LLViewerCamera::getInstance()->getMinView());
-    fov_slider->setMaxValue(LLViewerCamera::getInstance()->getMaxView());
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        fov_slider->setEnabled(false); // World-camera ownership is deferred.
+    else
+    {
+        fov_slider->setMinValue(LLViewerCamera::getInstance()->getMinView());
+        fov_slider->setMaxValue(LLViewerCamera::getInstance()->getMaxView());
+    }
 
     std::string cache_location = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, "");
     setCacheLocation(cache_location);
@@ -1140,14 +1178,14 @@ void LLFloaterPreference::onOpen(const LLSD& key)
         initialized = true;
         // this connection is needed to properly set "DoNotDisturbResponseChanged" setting when user makes changes in
         // do not disturb response message.
-        gSavedPerAccountSettings.getControl("DoNotDisturbModeResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this));
+        mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("DoNotDisturbModeResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this)));
         // <FS:Ansariel> FIRE-5436: Unlocalizable auto-response messages
-        gSavedPerAccountSettings.getControl("FSAutorespondModeResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this));
-        gSavedPerAccountSettings.getControl("FSAutorespondNonFriendsResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this));
-        gSavedPerAccountSettings.getControl("FSRejectTeleportOffersResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this));
-        gSavedPerAccountSettings.getControl("FSRejectFriendshipRequestsResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this));
-        gSavedPerAccountSettings.getControl("FSMutedAvatarResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this));
-        gSavedPerAccountSettings.getControl("FSAwayAvatarResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this));
+        mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("FSAutorespondModeResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this)));
+        mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("FSAutorespondNonFriendsResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this)));
+        mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("FSRejectTeleportOffersResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this)));
+        mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("FSRejectFriendshipRequestsResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this)));
+        mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("FSMutedAvatarResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this)));
+        mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("FSAwayAvatarResponse")->getSignal()->connect(boost::bind(&LLFloaterPreference::onDoNotDisturbResponseChanged, this)));
         // </FS:Ansariel>
 
         // <FS:Ansariel> FIRE-17630: Properly disable per-account settings backup list
@@ -1292,8 +1330,11 @@ void LLFloaterPreference::onOpen(const LLSD& key)
     saveSettings();
 
     // Make sure there is a default preference file
-    LLPresetsManager::getInstance()->createMissingDefault(PRESETS_CAMERA);
-    LLPresetsManager::getInstance()->createMissingDefault(PRESETS_GRAPHIC);
+    if (!(gViewerWindow && gViewerWindow->isNativeVulkan()))
+    {
+        LLPresetsManager::getInstance()->createMissingDefault(PRESETS_CAMERA);
+        LLPresetsManager::getInstance()->createMissingDefault(PRESETS_GRAPHIC);
+    }
 
     // <FS:Ansariel> Fix resetting graphics preset on cancel
     saveGraphicsPreset(gSavedSettings.getString("PresetGraphicActive"));
@@ -1435,6 +1476,10 @@ void LLFloaterPreference::updateShowFavoritesCheckbox(bool val)
 
 void LLFloaterPreference::setHardwareDefaults()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return;
+#endif
+
     // <FS:Ansariel> Fix resetting graphics preset on cancel
     //std::string preset_graphic_active = gSavedSettings.getString("PresetGraphicActive");
     //if (!preset_graphic_active.empty())
@@ -2194,6 +2239,28 @@ void LLFloaterPreference::onUpdatePopupFilter()
 
 void LLFloaterPreference::refreshEnabledState()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        std::function<void(LLView*, bool)> refresh_native = [&](LLView* view, bool graphics)
+        {
+            graphics = graphics || dynamic_cast<LLPanelPreferenceGraphics*>(view) != nullptr;
+            if (graphics && view->getName() != "render_backend")
+            {
+                if (auto* ctrl = dynamic_cast<LLUICtrl*>(view);
+                    ctrl && (ctrl->getControlVariable() || dynamic_cast<LLButton*>(ctrl)))
+                    ctrl->setEnabled(false);
+            }
+            for (auto* child : *view->getChildList()) refresh_native(child, graphics);
+        };
+        refresh_native(this, false);
+        getChildView("render_backend")->setEnabled(true);
+        getChild<LLButton>("fs_default_creation_permissions")->setEnabled(LLStartUp::getStartupState() >= STATE_STARTED);
+        getChildView("block_list")->setEnabled(LLLoginInstance::getInstance()->authSuccess());
+        return;
+    }
+#endif
+
     if (!LLFeatureManager::getInstance()->isFeatureAvailable("RenderCompressTextures"))
     {
         getChildView("texture compression")->setEnabled(false);
@@ -2407,6 +2474,10 @@ void LLFloaterPreference::onCommitWindowedMode()
 
 void LLFloaterPreference::onChangeQuality(const LLSD& data)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return;
+#endif
+
     U32 level = (U32)(data.asReal());
     constexpr U32 LVL_HIGH = 4;
     if (level >= LVL_HIGH && mLastQualityLevel < level)
@@ -3085,6 +3156,7 @@ void LLFloaterPreference::onClickActionChange()
 
 void LLFloaterPreference::onAtmosShaderChange()
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return;
     LLCheckBoxCtrl* ctrl_alm = getChild<LLCheckBoxCtrl>("UseLightShaders");
     if(ctrl_alm)
     {
@@ -3445,7 +3517,7 @@ bool LLPanelPreference::postBuild()
     // <FS:Ansariel> Flash chat toolbar button notification
     if (hasChild("FSNotifyIMFlash", true))
     {
-        gSavedSettings.getControl("FSChatWindow")->getSignal()->connect(boost::bind(&LLPanelPreference::onChatWindowChanged, this));
+        mSettingConnections.emplace_back(gSavedSettings.getControl("FSChatWindow")->getSignal()->connect(boost::bind(&LLPanelPreference::onChatWindowChanged, this)));
         onChatWindowChanged();
     }
     // </FS:Ansariel>
@@ -3453,8 +3525,8 @@ bool LLPanelPreference::postBuild()
     // <FS:Ansariel> Exodus' mouselook combat feature
     if (hasChild("FSMouselookCombatFeatures", true))
     {
-        gSavedSettings.getControl("EnableMouselook")->getSignal()->connect(boost::bind(&LLPanelPreference::updateMouselookCombatFeatures, this));
-        gSavedSettings.getControl("FSMouselookCombatFeatures")->getSignal()->connect(boost::bind(&LLPanelPreference::updateMouselookCombatFeatures, this));
+        mSettingConnections.emplace_back(gSavedSettings.getControl("EnableMouselook")->getSignal()->connect(boost::bind(&LLPanelPreference::updateMouselookCombatFeatures, this)));
+        mSettingConnections.emplace_back(gSavedSettings.getControl("FSMouselookCombatFeatures")->getSignal()->connect(boost::bind(&LLPanelPreference::updateMouselookCombatFeatures, this)));
         updateMouselookCombatFeatures();
     }
     // </FS:Ansariel>
@@ -3889,7 +3961,7 @@ public:
     /*virtual*/ bool postBuild()
     {
         getChild<LLUICtrl>("showlookat")->setCommitCallback(boost::bind(&LLPanelPreferencePrivacy::onClickDebugLookAt, this, _2));
-        gSavedPerAccountSettings.getControl("DebugLookAt")->getSignal()->connect(boost::bind(&LLPanelPreferencePrivacy::onChangeDebugLookAt, this));
+        mSettingConnections.emplace_back(gSavedPerAccountSettings.getControl("DebugLookAt")->getSignal()->connect(boost::bind(&LLPanelPreferencePrivacy::onChangeDebugLookAt, this)));
         onChangeDebugLookAt();
 
         mInvDropTarget = getChild<FSCopyTransInventoryDropTarget>("autoresponse_item");
@@ -3973,6 +4045,11 @@ private:
     }
     // </FS:Ansariel>
 };
+
+bool LLFloaterPreference::isPrivacyPanelType(const std::type_info& type)
+{
+    return type == typeid(LLPanelPreferencePrivacy);
+}
 
 static LLPanelInjector<LLPanelPreferenceGraphics> t_pref_graph("panel_preference_graphics");
 static LLPanelInjector<LLPanelPreferencePrivacy> t_pref_privacy("panel_preference_privacy");
@@ -5891,7 +5968,8 @@ void FSPanelPreferenceBackup:: doRestoreSettings(const LLSD& notification, const
         // start clean
         LL_INFOS("SettingsBackup") << "clearing global settings" << LL_ENDL;
         gSavedSettings.resetToDefaults();
-        LLFeatureManager::getInstance()->applyRecommendedSettings();  
+        if (!(gViewerWindow && gViewerWindow->isNativeVulkan()))
+            LLFeatureManager::getInstance()->applyRecommendedSettings();
 
         // run restore on global controls
         LL_INFOS("SettingsBackup") << "restoring global settings from backup" << LL_ENDL;
@@ -6492,7 +6570,7 @@ bool FSPanelPreferenceSounds::postBuild()
 #if LL_FMODSTUDIO || LL_SOLOUD
     if (gAudiop && mOutputDevicePanel && mOutputDeviceComboBox)
     {
-        gSavedSettings.getControl("FSOutputDeviceUUID")->getSignal()->connect(boost::bind(&FSPanelPreferenceSounds::onOutputDeviceChanged, this, _2));
+        mSettingConnections.emplace_back(gSavedSettings.getControl("FSOutputDeviceUUID")->getSignal()->connect(boost::bind(&FSPanelPreferenceSounds::onOutputDeviceChanged, this, _2)));
 
         mOutputDeviceListChangedConnection = gAudiop->setOutputDeviceListChangedCallback(boost::bind(&FSPanelPreferenceSounds::onOutputDeviceListChanged, this, _1));
         onOutputDeviceListChanged(gAudiop->getDevices());
@@ -6514,7 +6592,7 @@ bool FSPanelPreferenceSounds::postBuild()
     mMoapInteractionFriendObjects->setCommitCallback(boost::bind(&FSPanelPreferenceSounds::updateMoapInteractionSetting, this));
     mMoapInteractionLandownerObjects->setCommitCallback(boost::bind(&FSPanelPreferenceSounds::updateMoapInteractionSetting, this));
 
-    gSavedSettings.getControl("MediaFirstClickInteract")->getSignal()->connect(boost::bind(&FSPanelPreferenceSounds::onMoapInteractionChanged, this));
+    mSettingConnections.emplace_back(gSavedSettings.getControl("MediaFirstClickInteract")->getSignal()->connect(boost::bind(&FSPanelPreferenceSounds::onMoapInteractionChanged, this)));
     onMoapInteractionChanged();
 
     return LLPanelPreference::postBuild();

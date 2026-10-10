@@ -121,6 +121,7 @@ public:
     F64 nameExpirationFromHeaders(const LLSD& headers);
 
     void addUseDisplayNamesCallback(const use_display_name_signal_t::slot_type& cb);
+    boost::signals2::connection connectUseDisplayNamesCallback(const use_display_name_signal_t::slot_type& cb);
 
     void setAccountNameChangedCallback(const account_name_changed_callback_t& cb) { mAccountNameChangedCallback = cb; }
 

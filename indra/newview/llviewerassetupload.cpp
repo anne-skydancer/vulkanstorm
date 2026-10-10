@@ -42,6 +42,8 @@
 #include "llinventorypanel.h"
 #include "llsdutil.h"
 #include "llviewerassetupload.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
 #include "llappviewer.h"
 #include "llviewerstats.h"
 #include "llfilesystem.h"
@@ -886,7 +888,7 @@ LLUUID LLViewerAssetUpload::EnqueueInventoryUpload(const std::string &url, const
 
     LLUUID queueId = LLCoprocedureManager::instance().enqueueCoprocedure("Upload",
         procName + LLAssetType::lookup(uploadInfo->getAssetType()) + ")",
-        boost::bind(&LLViewerAssetUpload::AssetInventoryUploadCoproc, _1, _2, url, uploadInfo));
+        boost::bind(&LLViewerAssetUpload::AssetInventoryUploadCoproc, _1, _2, url, uploadInfo, vs_native_im_guard()));
 
     return queueId;
 }
@@ -894,8 +896,9 @@ LLUUID LLViewerAssetUpload::EnqueueInventoryUpload(const std::string &url, const
 //=========================================================================
 /*static*/
 void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter,
-    const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo)
+    const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo, std::function<bool()> current)
 {
+    if (!current()) return;
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
     LLCore::HttpOptions::ptr_t httpOptions = std::make_shared<LLCore::HttpOptions>();
     httpOptions->setTimeout(LL_ASSET_UPLOAD_TIMEOUT_SEC);
@@ -910,6 +913,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
     }
 
     llcoro::suspend();
+    if (!current()) return;
 
     if (uploadInfo->showUploadDialog())
     {
@@ -926,6 +930,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
     LLSD body = uploadInfo->generatePostBody();
 
     result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOptions);
+    if (!current()) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -944,6 +949,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
     if (!uploader.empty() && uploadInfo->getAssetId().notNull())
     {
         result = httpAdapter->postFileAndSuspend(httpRequest, uploader, uploadInfo->getAssetId(), uploadInfo->getAssetType(), httpOptions);
+        if (!current()) return;
         httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -1005,8 +1011,13 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
                 // panel on the primary inventory floater. We don't have to deal with selecting
                 // the correct floater because only the primary inventory floater can show
                 // object properties.
-                LLSidepanelInventory* sidepanel_inventory = LLFloaterSidePanelContainer::getPanel<LLSidepanelInventory>("inventory");
-                sidepanel_inventory->showInventoryPanel();
+                if (gViewerWindow && gViewerWindow->isNativeVulkan())
+                    panel = LLInventoryPanel::getActiveInventoryPanel(true, true);
+                else
+                {
+                    LLSidepanelInventory* sidepanel_inventory = LLFloaterSidePanelContainer::getPanel<LLSidepanelInventory>("inventory");
+                    sidepanel_inventory->showInventoryPanel();
+                }
             }
             // </FS:Ansariel>
 

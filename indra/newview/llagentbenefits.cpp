@@ -343,6 +343,17 @@ LLAgentBenefitsMgr::~LLAgentBenefitsMgr()
 }
 
 // static
+void LLAgentBenefitsMgr::resetAccountBenefits()
+{
+    if (!instanceExists()) return;
+    auto& manager = instance();
+    manager.mCurrentName.clear();
+    manager.mCurrent = LLAgentBenefits();
+    manager.mDefault = LLAgentBenefits();
+    manager.mPackageMap.clear();
+}
+
+// static
 const LLAgentBenefits& LLAgentBenefitsMgr::current()
 {
     return instance().mCurrent;

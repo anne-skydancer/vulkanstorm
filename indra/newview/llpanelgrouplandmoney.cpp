@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpanelgrouplandmoney.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "lluiconstants.h"
 #include "roles_constants.h"
@@ -309,6 +312,13 @@ bool LLPanelGroupLandMoney::impl::applyContribution()
     your_contribution = getStoredContribution();
     sqm_avail = your_contribution;
 
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (owner->balanceKnown()) sqm_avail += owner->squareMetersLeft();
+    }
+    else
+#endif
     if(gStatusBar)
     {
         sqm_avail += gStatusBar->getSquareMetersLeft();
@@ -608,6 +618,13 @@ void LLPanelGroupLandMoney::activate()
         //We need to have the status bar have observers
         //or find better way of distributing up to date land data. - jwolk
         S32 max_avail = mImplementationp->getStoredContribution();
+#if VS_NATIVE_VULKAN
+        if (const auto owner = VSNativeSession::active())
+        {
+            if (owner->balanceKnown()) max_avail += owner->squareMetersLeft();
+        }
+        else
+#endif
         if(gStatusBar)
         {
             max_avail += gStatusBar->getSquareMetersLeft();

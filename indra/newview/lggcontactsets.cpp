@@ -18,6 +18,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llviewerwindow.h"
 
 #include "lggcontactsets.h"
 
@@ -91,20 +92,21 @@ LGGContactSets::LGGContactSets()
 
 LGGContactSets::~LGGContactSets()
 {
-    for (avatar_name_cache_connection_map_t::iterator it = mAvatarNameCacheConnections.begin(); it != mAvatarNameCacheConnections.end(); ++it)
-    {
-        if (it->second.connected())
-        {
-            it->second.disconnect();
-        }
-    }
-    mAvatarNameCacheConnections.clear();
+    resetAccount();
+}
 
-    for (contact_set_map_t::iterator itr = mContactSets.begin(); itr != mContactSets.end(); ++itr)
-    {
-        delete itr->second;
-    }
+void LGGContactSets::resetAccount()
+{
+    // Disconnect callbacks before deleting data they may otherwise repopulate.
+    for (auto& [id, connection] : mAvatarNameCacheConnections)
+        connection.disconnect();
+    mAvatarNameCacheConnections.clear();
+    for (auto& [name, set] : mContactSets)
+        delete set;
     mContactSets.clear();
+    mExtraAvatars.clear();
+    mPseudonyms.clear();
+    mDefaultColor = LLColor4::grey;
 }
 
 void LGGContactSets::toneDownColor(LLColor4& color) const
@@ -507,7 +509,9 @@ LLColor4 LGGContactSets::colorize(const LLUUID& uuid, LLColor4 color, ContactSet
     }
     else
     {
-        if (auto entry = FSRadar::getInstance()->getEntry(uuid); (entry && entry->getIsLinden()) || (!entry && FSCommon::isLinden(uuid)) )
+        const bool native = gViewerWindow && gViewerWindow->isNativeVulkan();
+        auto entry = native && !FSRadar::instanceExists() ? nullptr : FSRadar::getInstance()->getEntry(uuid);
+        if ((entry && entry->getIsLinden()) || (!entry && FSCommon::isLinden(uuid)))
         {
             switch (type)
             {

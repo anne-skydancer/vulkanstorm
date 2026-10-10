@@ -91,6 +91,7 @@
 #include "llviewermenufile.h"
 #include "llviewerregion.h"
 #include "llviewerwindow.h"
+#include "vsnativeim.h"
 #include "llvoavatarself.h"
 #include "llwearablelist.h"
 // [RLVa:KB] - Checked: 2011-05-22 (RLVa-1.3.1a)
@@ -1089,6 +1090,14 @@ void show_item_original(const LLUUID& item_uuid)
         return;
     }
     // </FS:Ansariel>
+
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto original = gInventory.getLinkedItemID(item_uuid);
+        if (gInventory.getObject(original))
+            LLInventoryPanel::openInventoryPanelAndSetSelection(true, original);
+        return;
+    }
 
     static LLUICachedControl<bool> find_original_new_floater("FindOriginalOpenWindow", false);
 
@@ -2615,8 +2624,11 @@ void ungroup_folder_items(const LLUUID& folder_id)
     LLSD args;
     args["FOLDER_NAME"] = inv_cat->getName();
     LLNotificationsUtil::add("UngroupFolder", args, LLSD(),
-        [inv_cat](const LLSD& notification, const LLSD& response)
+        [folder_id, current = vs_native_im_guard()](const LLSD& notification, const LLSD& response)
     {
+        if (!current()) return;
+        auto* inv_cat = gInventory.getCategory(folder_id);
+        if (!inv_cat || LLFolderType::lookupIsProtectedType(inv_cat->getPreferredType())) return;
         S32 opt = LLNotificationsUtil::getSelectedOption(notification, response);
         if (opt == 1)
             return;
@@ -3531,6 +3543,14 @@ bool get_selection_object_uuids(LLFolderView *root, uuid_vec_t& ids)
 
 void LLInventoryAction::doToSelected(LLInventoryModel* model, LLFolderView* root, const std::string& action, bool user_confirm)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
+        (action == "wear" || action == "wear_add" || action == "attach" || action == "detach" ||
+         action == "take_off" || action == "replace_outfit" || action == "add_to_outfit" ||
+         action == "remove_from_outfit" || action == "playworld" || action == "playlocal"))
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
     std::set<LLFolderViewItem*> selected_items = root->getSelectionList();
     if (selected_items.empty()
         && action != "wear"
@@ -3582,17 +3602,17 @@ void LLInventoryAction::doToSelected(LLInventoryModel* model, LLFolderView* root
                 if ((("cut" == action) || ("delete" == action)) && (LLMarketplaceData::instance().isListed(viewModel->getUUID()) || LLMarketplaceData::instance().isVersionFolder(viewModel->getUUID())))
                 {
                     // Cut or delete of the active version folder or listing folder itself will unlist the listing so ask that question specifically
-                    LLNotificationsUtil::add("ConfirmMerchantUnlist", LLSD(), LLSD(), boost::bind(&LLInventoryAction::callback_doToSelected, _1, _2, model, root, action));
+                    LLNotificationsUtil::add("ConfirmMerchantUnlist", LLSD(), LLSD(), vs_native_im_ui_callback(root, boost::bind(&LLInventoryAction::callback_doToSelected, _1, _2, model, root, action)));
                     return;
                 }
                 // Any other case will simply modify but not unlist a listing
-                LLNotificationsUtil::add("ConfirmMerchantActiveChange", LLSD(), LLSD(), boost::bind(&LLInventoryAction::callback_doToSelected, _1, _2, model, root, action));
+                LLNotificationsUtil::add("ConfirmMerchantActiveChange", LLSD(), LLSD(), vs_native_im_ui_callback(root, boost::bind(&LLInventoryAction::callback_doToSelected, _1, _2, model, root, action)));
                 return;
             }
             // Cutting or deleting a whole listing needs confirmation as SLM will be archived and inaccessible to the user
             else if (LLMarketplaceData::instance().isListed(viewModel->getUUID()) && (("cut" == action) || ("delete" == action)))
             {
-                LLNotificationsUtil::add("ConfirmListingCutOrDelete", LLSD(), LLSD(), boost::bind(&LLInventoryAction::callback_doToSelected, _1, _2, model, root, action));
+                LLNotificationsUtil::add("ConfirmListingCutOrDelete", LLSD(), LLSD(), vs_native_im_ui_callback(root, boost::bind(&LLInventoryAction::callback_doToSelected, _1, _2, model, root, action)));
                 return;
             }
         }
@@ -3604,7 +3624,7 @@ void LLInventoryAction::doToSelected(LLInventoryModel* model, LLFolderView* root
         LLFolderViewModelItemInventory * viewModel = dynamic_cast<LLFolderViewModelItemInventory *>((*set_iter)->getViewModelItem());
         if (contains_nocopy_items(viewModel->getUUID()))
         {
-            LLNotificationsUtil::add("ConfirmCopyToMarketplace", LLSD(), LLSD(), boost::bind(&LLInventoryAction::callback_copySelected, _1, _2, model, root, action));
+            LLNotificationsUtil::add("ConfirmCopyToMarketplace", LLSD(), LLSD(), vs_native_im_ui_callback(root, boost::bind(&LLInventoryAction::callback_copySelected, _1, _2, model, root, action)));
             return;
         }
     }
@@ -3694,11 +3714,11 @@ void LLInventoryAction::doToSelected(LLInventoryModel* model, LLFolderView* root
         {
             LLSD payload;
             payload["has_worn"] = true;
-            LLNotificationsUtil::add("DeleteWornItems", LLSD(), payload, boost::bind(&LLInventoryAction::onItemsRemovalConfirmation, _1, _2, root->getHandle()));
+            LLNotificationsUtil::add("DeleteWornItems", LLSD(), payload, vs_native_im_ui_callback(root, boost::bind(&LLInventoryAction::onItemsRemovalConfirmation, _1, _2, root->getHandle())));
         }
         else if ( (!f.allDescendentsPassedFilter()) && !marketplacelistings_item && (!LLNotifications::instance().getIgnored("DeleteFilteredItems")) )
         {
-            LLNotificationsUtil::add("DeleteFilteredItems", LLSD(), LLSD(), boost::bind(&LLInventoryAction::onItemsRemovalConfirmation, _1, _2, root->getHandle()));
+            LLNotificationsUtil::add("DeleteFilteredItems", LLSD(), LLSD(), vs_native_im_ui_callback(root, boost::bind(&LLInventoryAction::onItemsRemovalConfirmation, _1, _2, root->getHandle())));
         }
         else
         {
@@ -3742,7 +3762,7 @@ void LLInventoryAction::doToSelected(LLInventoryModel* model, LLFolderView* root
             args["COUNT_TOTAL"] = count_str;
             args["QUESTION"] = LLTrans::getString(selection_count > 1 ? "DeleteItems" : "DeleteItem", args);
             // </FS:Ansariel>
-            LLNotificationsUtil::add("DeleteItems", args, LLSD(), boost::bind(&LLInventoryAction::onItemsRemovalConfirmation, _1, _2, root->getHandle()));
+            LLNotificationsUtil::add("DeleteItems", args, LLSD(), vs_native_im_ui_callback(root, boost::bind(&LLInventoryAction::onItemsRemovalConfirmation, _1, _2, root->getHandle())));
         }
         // Note: marketplace listings will be updated in the callback if delete confirmed
         return;
@@ -4006,7 +4026,17 @@ void LLInventoryAction::doToSelected(LLInventoryModel* model, LLFolderView* root
     }
     else if ("save_selected_as" == action)
     {
-        (new LLDirPickerThread(boost::bind(&LLInventoryAction::saveMultipleTextures, _1, selected_items, model), std::string()))->getFile();
+        const auto weak = root->getParentPanel()->getHandle();
+        const auto current = vs_native_im_guard();
+        (new LLDirPickerThread([weak, current, ids, model](const std::vector<std::string>& filenames, std::string)
+        {
+            if (!current() || filenames.empty()) return;
+            auto* panel = dynamic_cast<LLInventoryPanel*>(weak.get());
+            if (!panel) return;
+            std::set<LLFolderViewItem*> live_items;
+            for (const auto& id : ids) if (auto* item = panel->getItemByID(id)) live_items.insert(item);
+            if (!live_items.empty()) LLInventoryAction::saveMultipleTextures(filenames, live_items, model);
+        }, std::string()))->getFile();
     }
     else if ("new_folder_from_selected" == action)
     {
@@ -4030,8 +4060,9 @@ void LLInventoryAction::doToSelected(LLInventoryModel* model, LLFolderView* root
         args["DESC"] = LLTrans::getString("New Folder");
 
         LLNotificationsUtil::add("CreateSubfolder", args, LLSD(),
-            [ids](const LLSD& notification, const LLSD& response)
+            [ids, current = vs_native_im_guard()](const LLSD& notification, const LLSD& response)
         {
+            if (!current()) return;
             S32 opt = LLNotificationsUtil::getSelectedOption(notification, response);
             if (opt == 0)
             {
@@ -4133,6 +4164,7 @@ void LLInventoryAction::doToSelected(LLInventoryModel* model, LLFolderView* root
 
 void LLInventoryAction::saveMultipleTextures(const std::vector<std::string>& filenames, std::set<LLFolderViewItem*> selected_items, LLInventoryModel* model)
 {
+    if (filenames.empty()) return;
     gSavedSettings.setString("TextureSaveLocation", filenames[0]);
 
     LLMultiPreview* multi_previewp = new LLMultiPreview();
@@ -4191,6 +4223,13 @@ void LLInventoryAction::removeItemFromDND(LLFolderView* root)
 
 void LLInventoryAction::fileUploadLocation(const LLUUID& dest_id, const std::string& action)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
+        (action == "upload_model" || action == "upload_pbr_material" || action == "upload_animation"))
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     if (action == "def_model")
     {
         gSavedPerAccountSettings.setString("ModelUploadFolder", dest_id.asString());
@@ -4213,15 +4252,18 @@ void LLInventoryAction::fileUploadLocation(const LLUUID& dest_id, const std::str
     }
     else if (action == "upload_texture")
     {
-        LLFilePickerReplyThread::startPicker(boost::bind(&upload_single_file, _1, _2, dest_id), LLFilePicker::FFLOAD_IMAGE, false);
+        LLFilePickerReplyThread::startPicker([current = vs_native_im_guard(), dest_id](const std::vector<std::string>& filenames, LLFilePicker::ELoadFilter type, LLFilePicker::ESaveFilter)
+        { if (current() && !filenames.empty()) upload_single_file(filenames, type, dest_id); }, LLFilePicker::FFLOAD_IMAGE, false);
     }
     else if (action == "upload_sound")
     {
-        LLFilePickerReplyThread::startPicker(boost::bind(&upload_single_file, _1, _2, dest_id), LLFilePicker::FFLOAD_WAV, false);
+        LLFilePickerReplyThread::startPicker([current = vs_native_im_guard(), dest_id](const std::vector<std::string>& filenames, LLFilePicker::ELoadFilter type, LLFilePicker::ESaveFilter)
+        { if (current() && !filenames.empty()) upload_single_file(filenames, type, dest_id); }, LLFilePicker::FFLOAD_WAV, false);
     }
     else if (action == "upload_animation")
     {
-        LLFilePickerReplyThread::startPicker(boost::bind(&upload_single_file, _1, _2, dest_id), LLFilePicker::FFLOAD_ANIM, false);
+        LLFilePickerReplyThread::startPicker([current = vs_native_im_guard(), dest_id](const std::vector<std::string>& filenames, LLFilePicker::ELoadFilter type, LLFilePicker::ESaveFilter)
+        { if (current() && !filenames.empty()) upload_single_file(filenames, type, dest_id); }, LLFilePicker::FFLOAD_ANIM, false);
     }
     else if (action == "upload_model")
     {
@@ -4233,7 +4275,8 @@ void LLInventoryAction::fileUploadLocation(const LLUUID& dest_id, const std::str
     }
     else if (action == "upload_bulk")
     {
-        LLFilePickerReplyThread::startPicker(boost::bind(&upload_bulk, _1, _2, true, dest_id), LLFilePicker::FFLOAD_ALL, true);
+        LLFilePickerReplyThread::startPicker([current = vs_native_im_guard(), dest_id](const std::vector<std::string>& filenames, LLFilePicker::ELoadFilter type, LLFilePicker::ESaveFilter)
+        { if (current() && !filenames.empty()) upload_bulk(filenames, type, true, dest_id); }, LLFilePicker::FFLOAD_ALL, true);
     }
 }
 

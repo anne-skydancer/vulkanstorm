@@ -206,7 +206,7 @@ void FSFloaterIM::onFocusLost()
 {
     LLIMModel::getInstance()->resetActiveSessionID();
 
-    LLChicletBar::getInstance()->getChicletPanel()->setChicletToggleState(mSessionID, false);
+    if (LLChicletBar::instanceExists()) LLChicletBar::getInstance()->getChicletPanel()->setChicletToggleState(mSessionID, false);
 
     LLFloaterChatMentionPicker::removeParticipantSource(this);
 
@@ -217,7 +217,7 @@ void FSFloaterIM::onFocusReceived()
 {
     LLIMModel::getInstance()->setActiveSessionID(mSessionID);
 
-    LLChicletBar::getInstance()->getChicletPanel()->setChicletToggleState(mSessionID, true);
+    if (LLChicletBar::instanceExists()) LLChicletBar::getInstance()->getChicletPanel()->setChicletToggleState(mSessionID, true);
 
     if (getVisible())
     {
@@ -244,6 +244,7 @@ void FSFloaterIM::onClose(bool app_quitting)
 
 
     // AO: Make sure observers are removed on close
+    mSysinfoSettingConnection.disconnect();
     mVoiceChannelStateChangeConnection.disconnect();
     LLVoiceClient::removeObserver((LLVoiceClientStatusObserver*)this);
 
@@ -933,7 +934,7 @@ bool FSFloaterIM::postBuild()
                 // this needs to be extended to fsdata awareness, once we have it. -Zi
                 // mIsSupportIM=fsdata(partnerUUID).isSupport(); // pseudocode something like this
                 onSysinfoButtonVisibilityChanged(gSavedSettings.getBOOL("SysinfoButtonInIM"));
-                gSavedSettings.getControl("SysinfoButtonInIM")->getCommitSignal()->connect(boost::bind(&FSFloaterIM::onSysinfoButtonVisibilityChanged, this, _2));
+                mSysinfoSettingConnection = gSavedSettings.getControl("SysinfoButtonInIM")->getCommitSignal()->connect(boost::bind(&FSFloaterIM::onSysinfoButtonVisibilityChanged, this, _2));
                 // support sysinfo button -Zi
 
                 break;
@@ -1427,7 +1428,7 @@ void FSFloaterIM::setVisible(bool visible)
         }
     }
 
-    if (!visible)
+    if (!visible && LLChicletBar::instanceExists())
     {
         if (LLIMChiclet* chiclet = LLChicletBar::getInstance()->getChicletPanel()->findChiclet<LLIMChiclet>(mSessionID); chiclet)
         {
@@ -1438,11 +1439,11 @@ void FSFloaterIM::setVisible(bool visible)
     if (visible && isInVisibleChain())
     {
         sIMFloaterShowedSignal(mSessionID);
-        gConsole->addSession(mSessionID);
+        if (gConsole) gConsole->addSession(mSessionID);
     }
     else
     {
-        gConsole->removeSession(mSessionID);
+        if (gConsole) gConsole->removeSession(mSessionID);
     }
 }
 
@@ -2104,8 +2105,8 @@ bool FSFloaterIM::isInviteAllowed() const
 
 bool FSFloaterIM::inviteToSession(const uuid_vec_t& ids)
 {
-    LLViewerRegion* region = gAgent.getRegion();
-    bool is_region_exist = region != NULL;
+    const std::string url = gAgent.getRegionCapability("ChatSessionRequest");
+    bool is_region_exist = !url.empty();
 
     if (is_region_exist)
     {
@@ -2115,7 +2116,6 @@ bool FSFloaterIM::inviteToSession(const uuid_vec_t& ids)
         {
             LL_DEBUGS("FSFloaterIM") << "FSFloaterIM::inviteToSession() - inviting participants" << LL_ENDL;
 
-            std::string url = region->getCapability("ChatSessionRequest");
 
             LLSD data;
             data["params"] = LLSD::emptyArray();
@@ -2541,11 +2541,11 @@ void FSFloaterIM::handleMinimized(bool minimized)
 {
     if (minimized)
     {
-        gConsole->removeSession(mSessionID);
+        if (gConsole) gConsole->removeSession(mSessionID);
     }
     else
     {
-        gConsole->addSession(mSessionID);
+        if (gConsole) gConsole->addSession(mSessionID);
         if (mChatHistory)
         {
             updateMessages();

@@ -40,6 +40,11 @@
 #include "llimview.h" // for gIMMgr
 #include "llnotificationsutil.h"
 #include "llstartup.h"
+#include "llviewerwindow.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsgroupsearch.h"
+#endif
 #include "llstatusbar.h"    // can_afford_transaction()
 #include "groupchatlistener.h"
 // [RLVa:KB] - Checked: 2011-03-28 (RLVa-1.3.0)
@@ -129,7 +134,8 @@ public:
                 //LLSD params;
                 //params["people_panel_tab_name"] = "groups_panel";
                 //LLFloaterSidePanelContainer::showPanel("people", "panel_people", params);
-                if (gSavedSettings.getBOOL("FSUseV2Friends") && !FSCommon::isLegacySkin())
+                if (!(gViewerWindow && gViewerWindow->isNativeVulkan()) &&
+                    gSavedSettings.getBOOL("FSUseV2Friends") && !FSCommon::isLegacySkin())
                 {
                     LLSD params;
                     params["people_panel_tab_name"] = "groups_panel";
@@ -236,10 +242,12 @@ public:
      {}
      void processGroupData()
      {
+         if (!mCurrent()) return;
          LLGroupActions::processLeaveGroupDataResponse(mGroupId);
      }
      void changed(LLGroupChange gc)
      {
+         if (!mCurrent()) return;
          if (gc == GC_PROPERTIES && !mRequestProcessed)
          {
              LLGroupMgrGroupData* gdatap = LLGroupMgr::getInstance()->getGroupData(mGroupId);
@@ -254,13 +262,27 @@ public:
              }
          }
      }
+private:
+     std::function<bool()> mCurrent = vs_native_im_guard();
 };
 
 LLFetchLeaveGroupData* gFetchLeaveGroupData = NULL;
+void LLGroupActions::resetAccountRequests()
+{
+    delete gFetchLeaveGroupData;
+    gFetchLeaveGroupData = nullptr;
+}
 
 // static
 void LLGroupActions::search()
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        vs_show_group_search();
+        return;
+    }
+#endif
     // <FS:Ansariel> Open groups search panel instead of invoking presumed failed websearch
     //LLFloaterReg::showInstance("search", LLSD().with("collection", "groups"));
     LLFloaterReg::showInstance((gSavedSettings.getBOOL("FSUseFSLegacySearch") ? "search" : "legacy_search"), LLSD().with("tab", "groups"));
@@ -328,6 +350,7 @@ void LLGroupActions::join(const LLUUID& group_id)
         args["NAME"] = gdatap->mName;
         LLSD payload;
         payload["group_id"] = group_id;
+        vs_native_im_stamp_notification(payload);
 
         if (can_afford_transaction(cost))
         {
@@ -352,6 +375,7 @@ void LLGroupActions::join(const LLUUID& group_id)
 // static
 bool LLGroupActions::onJoinGroup(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
 
     if (option == 1)
@@ -360,8 +384,11 @@ bool LLGroupActions::onJoinGroup(const LLSD& notification, const LLSD& response)
         return false;
     }
 
-    LLGroupMgr::getInstance()->
-        sendGroupMemberJoin(notification["payload"]["group_id"].asUUID());
+    const LLUUID group_id = notification["payload"]["group_id"].asUUID();
+    const auto* group_data = LLGroupMgr::getInstance()->getGroupData(group_id);
+    if (!gAgent.canJoinGroups() || (group_data && !can_afford_transaction(group_data->mMembershipFee)))
+        return false;
+    LLGroupMgr::getInstance()->sendGroupMemberJoin(group_id);
     return false;
 }
 
@@ -400,6 +427,7 @@ void LLGroupActions::leave(const LLUUID& group_id)
 void LLGroupActions::processLeaveGroupDataResponse(const LLUUID group_id)
 {
     LLGroupMgrGroupData* gdatap = LLGroupMgr::getInstance()->getGroupData(group_id);
+    if (!gdatap || !gAgent.isInGroup(group_id)) return;
     LLUUID agent_id = gAgent.getID();
     LLGroupMgrGroupData::member_list_t::iterator mit = gdatap->mMembers.find(agent_id);
     //get the member data for the group
@@ -417,6 +445,7 @@ void LLGroupActions::processLeaveGroupDataResponse(const LLUUID group_id)
     args["GROUP"] = gdatap->mName;
     LLSD payload;
     payload["group_id"] = group_id;
+    vs_native_im_stamp_notification(payload);
     if (gdatap->mMembershipFee > 0)
     {
         args["COST"] = gdatap->mMembershipFee;
@@ -448,6 +477,14 @@ void LLGroupActions::activate(const LLUUID& group_id)
     gAgent.sendReliableMessage();
 }
 
+static bool useStandaloneGroupUI()
+{
+    // Native connected groups use the existing complete skinned floater graph.
+    // The People sidebar also owns deferred scene controls.
+    return (gViewerWindow && gViewerWindow->isNativeVulkan()) ||
+        gSavedSettings.getBOOL("FSUseStandaloneGroupFloater");
+}
+
 static bool isGroupUIVisible()
 {
     static LLPanel* panel = 0;
@@ -461,6 +498,11 @@ static bool isGroupUIVisible()
 // static
 void LLGroupActions::inspect(const LLUUID& group_id)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        show(group_id);
+        return;
+    }
     LLFloaterReg::showInstance("inspect_group", LLSD().with("group_id", group_id));
 }
 
@@ -486,7 +528,7 @@ void LLGroupActions::show(const LLUUID &group_id, bool expand_notices_tab)
     //    floater->setVisibleAndFrontmost(true, params);
     //}
     LLFloater* floater = nullptr;
-    if (gSavedSettings.getBOOL("FSUseStandaloneGroupFloater"))
+    if (useStandaloneGroupUI())
     {
         if (expand_notices_tab)
             floater = FSFloaterGroup::openGroupFloater(params);
@@ -537,7 +579,7 @@ void LLGroupActions::refresh_notices(const LLUUID& group_id /*= LLUUID::null*/)
 
     // <FS:Ansariel> Standalone group floaters
     //LLFloaterSidePanelContainer::showPanel("people", "panel_group_info_sidetray", params);
-    if (gSavedSettings.getBOOL("FSUseStandaloneGroupFloater"))
+    if (useStandaloneGroupUI())
     {
         if (FSFloaterGroup::isFloaterVisible(group_id))
         {
@@ -569,7 +611,7 @@ void LLGroupActions::refresh(const LLUUID& group_id)
 
     // <FS:Ansariel> Standalone group floaters
     //LLFloaterSidePanelContainer::showPanel("people", "panel_group_info_sidetray", params);
-    if (gSavedSettings.getBOOL("FSUseStandaloneGroupFloater"))
+    if (useStandaloneGroupUI())
     {
         if (FSFloaterGroup::isFloaterVisible(group_id))
         {
@@ -596,7 +638,7 @@ void LLGroupActions::createGroup()
 
     // <FS:Ansariel> Standalone group floaters
     //LLFloaterSidePanelContainer::showPanel("people", "panel_group_creation_sidetray", params);
-    if (gSavedSettings.getBOOL("FSUseStandaloneGroupFloater"))
+    if (useStandaloneGroupUI())
     {
         FSFloaterGroup::openGroupFloater(params);
     }
@@ -621,7 +663,7 @@ void LLGroupActions::closeGroup(const LLUUID& group_id)
 
     // <FS:Ansariel> Standalone group floaters
     //LLFloaterSidePanelContainer::showPanel("people", "panel_group_info_sidetray", params);
-    if (gSavedSettings.getBOOL("FSUseStandaloneGroupFloater"))
+    if (useStandaloneGroupUI())
     {
         FSFloaterGroup::closeGroupFloater(group_id);
     }
@@ -730,7 +772,13 @@ static void confirm_group_im_snooze(const LLUUID& group_id)
         LLSD args;
         args["DURATION"] = gSavedSettings.getS32("GroupSnoozeTime");
 
-        LLNotificationsUtil::add("SnoozeDuration", args, LLSD(), boost::bind(&snooze_group_im_duration_callback, _1, _2, group_id));
+        const auto current = vs_native_im_guard();
+        LLNotificationsUtil::add("SnoozeDuration", args, LLSD(),
+            [current, group_id](const LLSD& notification, const LLSD& response)
+            {
+                if (current()) snooze_group_im_duration_callback(notification, response, group_id);
+                return false;
+            });
         return;
     }
 
@@ -861,6 +909,7 @@ void LLGroupActions::ejectFromGroup(const LLUUID& idGroup, const LLUUID& idAgent
     LLSD payload;
     payload["avatar_id"] = idAgent;
     payload["group_id"] = idGroup;
+    vs_native_im_stamp_notification(payload);
     // <FS:Ansariel> Show complete name in eject dialog
     //std::string fullname = LLSLURL("agent", idAgent, "inspect").getSLURLString();
     std::string fullname = LLSLURL("agent", idAgent, "completename").getSLURLString();
@@ -874,6 +923,7 @@ void LLGroupActions::ejectFromGroup(const LLUUID& idGroup, const LLUUID& idAgent
 
 bool LLGroupActions::callbackEject(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if (2 == option) // Cancel button
     {
@@ -900,12 +950,13 @@ bool LLGroupActions::callbackEject(const LLSD& notification, const LLSD& respons
 // static
 bool LLGroupActions::onLeaveGroup(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     LLUUID group_id = notification["payload"]["group_id"].asUUID();
     if(option == 0)
     {
         // <FS:Ansariel> Standalone group floaters
-        if (gSavedSettings.getBOOL("FSUseStandaloneGroupFloater"))
+        if (useStandaloneGroupUI())
         {
             FSFloaterGroup::closeGroupFloater(group_id);
         }

@@ -25,6 +25,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "lldonotdisturbnotificationstorage.h"
+#include "llpersistentnotificationstorage.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #include "vsvulkancontext.h"
@@ -248,6 +250,8 @@
 #include "llcommandlineparser.h"
 #include "llfloatermemleak.h"
 #include "llfloaterreg.h"
+#include "llemojidictionary.h"
+#include "llfolderviewitem.h"
 #include "llfloatersimplesnapshot.h"
 #include "llfloatersnapshot.h"
 #include "llfloaterflickr.h"
@@ -1582,6 +1586,7 @@ bool LLAppViewer::initNativeVulkanLogin()
     mNativeSession = VSNativeSession::create();
 #endif
     gGLActive = false;
+    FSAssetBlacklist::getInstance();
     LLImage::initClass(gSavedSettings.getBOOL("TextureNewByteRange"), gSavedSettings.getS32("TextureReverseByteRange"));
     LLLFSThread::initClass(true);
     initGeneralThread();
@@ -1599,6 +1604,9 @@ bool LLAppViewer::initNativeVulkanLogin()
     mSerialNumber = generateSerialNumber();
     initSLURLHandler();
     if (!initWindow()) return false;
+    LLUI::getInstance()->mHelpImpl = LLViewerHelp::getInstance();
+    LLUrlFloaterDispatchHandler::registerInDispatcher();
+    LLFolderViewItem::initClass();
     LLKeyboard::setStringTranslatorFunc(LLTrans::getKeyboardString);
     LLUrlAction::setOpenURLCallback(boost::bind(&LLWeb::loadURL, _1, LLStringUtil::null, LLStringUtil::null));
     LLUrlAction::setOpenURLInternalCallback(boost::bind(&LLWeb::loadURLInternal, _1, LLStringUtil::null, LLStringUtil::null, false));
@@ -1626,6 +1634,12 @@ bool LLAppViewer::initNativeVulkanLogin()
     LLVoiceChannel::initClass();
     LLVoiceClient::initParamSingleton(gServicePump);
     LLAgentLanguage::init();
+    LLFloater::initClass();
+    LLViewerFloaterReg::registerFloaters();
+    LLGroupMgr::parseRoleActions("role_actions.xml");
+    LLAgent::parseTeleportMessages("teleport_strings.xml");
+    LLEmojiDictionary::initClass();
+    gIMMgr = LLIMMgr::getInstance();
     gSavedSettings.setString("LastRunVersion", LLVersionInfo::instance().getChannelAndVersion());
     mNumSessions = gSavedSettings.getS32("NumSessions") + 1;
     gSavedSettings.setS32("NumSessions", mNumSessions);
@@ -1654,6 +1668,13 @@ bool LLAppViewer::frameNativeVulkanLogin()
     gMainloopWork.runFor(std::chrono::milliseconds(2));
     LLLFSThread::updateClass(0);
     if (gServicePump) { gServicePump->pump(); gServicePump->callback(); }
+    // Shared text UI views and CPU controllers advance through their idle queue.
+    // Only services initialized for this native account register callbacks here.
+    gIdleCallbacks.callFunctions();
+    gInventory.handleResponses(true);
+    gInventory.handleResponses(false);
+    gInventory.idleNotifyObservers();
+    LLAvatarTracker::instance().idleNotifyObservers();
     if (!LLApp::isExiting())
     {
         // The native owner advances CPU session/network work without entering idle's scene producers.
@@ -1665,6 +1686,11 @@ bool LLAppViewer::frameNativeVulkanLogin()
 #if VS_NATIVE_VULKAN
         else if (LLStartUp::getStartupState() == STATE_WORLD_INIT && mNativeSession) mNativeSession->begin();
         if (mNativeSession) mNativeSession->tick();
+        if (gAudiop && mNativeSession && mNativeSession->phase() == VSNativeSession::Phase::Connected)
+        {
+            audio_update_volume(false);
+            gAudiop->idle();
+        }
 #endif
         gViewerWindow->drawNativeUI();
     }
@@ -1683,13 +1709,23 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
     LLStartUp::cleanupNameCache();
     if (LLLoginInstance::instanceExists()) LLLoginInstance::getInstance()->disconnect();
     if (LLVoiceClient::instanceExists()) LLVoiceClient::getInstance()->terminate();
+    if (LLPersistentNotificationStorage::instanceExists())
+    {
+        LLPersistentNotificationStorage::deleteSingleton();
+    }
+    if (LLDoNotDisturbNotificationStorage::instanceExists())
+    {
+        LLDoNotDisturbNotificationStorage::deleteSingleton();
+    }
     if (gViewerWindow)
     {
         gViewerWindow->shutdownViews();
+        LLFolderViewItem::cleanupClass();
         gViewerWindow->shutdownGL();
         delete gViewerWindow;
         gViewerWindow = nullptr;
     }
+    gInventory.cleanupInventory();
     if (gAudiop) { gAudiop->shutdown(); delete gAudiop; gAudiop = nullptr; }
     LLViewerMedia::deleteSingleton();
     LLPluginProcessParent::shutdown();

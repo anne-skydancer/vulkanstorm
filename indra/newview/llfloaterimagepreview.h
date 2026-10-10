@@ -28,6 +28,7 @@
 #define LL_LLFLOATERIMAGEPREVIEW_H
 
 #include "llfloaternamedesc.h"
+#include "lluiimage.h"
 #include "lldynamictexture.h"
 #include "llpointer.h"
 #include "llquaternion.h"
@@ -139,6 +140,8 @@ protected:
     void            emptyAlphaCheckboxCallback();
     bool            imageEmptyAlphaCallback(const LLSD& notification, const LLSD& response);
     // </FS:Zi>
+    std::string mNativeImageKey;
+    LLPointer<LLUIImage> mNativeImage;
     LLPointer<LLImageRaw> mRawImagep;
     LLPointer<LLImagePreviewAvatar> mAvatarPreview;
     LLPointer<LLImagePreviewSculpted> mSculptedPreview;

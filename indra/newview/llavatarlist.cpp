@@ -210,13 +210,13 @@ LLAvatarList::LLAvatarList(const Params& p)
         mLITUpdateTimer->start();
     }
 
-    LLAvatarNameCache::getInstance()->addUseDisplayNamesCallback(boost::bind(&LLAvatarList::handleDisplayNamesOptionChanged, this));
+    mDisplayNameConnection = LLAvatarNameCache::getInstance()->connectUseDisplayNamesCallback(boost::bind(&LLAvatarList::handleDisplayNamesOptionChanged, this));
 
     // <FS:Ansariel> FIRE-1089: List needs to update also if we change the username setting
-    gSavedSettings.getControl("NameTagShowUsernames")->getSignal()->connect(boost::bind(&LLAvatarList::handleDisplayNamesOptionChanged, this));
+    mUsernameConnection = gSavedSettings.getControl("NameTagShowUsernames")->getSignal()->connect(boost::bind(&LLAvatarList::handleDisplayNamesOptionChanged, this));
 
     // <FS:PP> FIRE-32748 Colorize Friends List with Contact Sets
-    gSavedSettings.getControl("FSContactSetsColorizeFriends")->getSignal()->connect(boost::bind(&LLAvatarList::refreshNames, this));
+    mContactColorConnection = gSavedSettings.getControl("FSContactSetsColorizeFriends")->getSignal()->connect(boost::bind(&LLAvatarList::refreshNames, this));
 
     // <FS:Ansariel> Update voice volume slider on RLVa shownames restriction update
     mRlvBehaviorCallbackConnection = gRlvHandler.setBehaviourCallback(boost::bind(&LLAvatarList::updateRlvRestrictions, this, _1, _2));
@@ -257,6 +257,9 @@ void LLAvatarList::handleDisplayNamesOptionChanged()
 
 LLAvatarList::~LLAvatarList()
 {
+    mDisplayNameConnection.disconnect();
+    mUsernameConnection.disconnect();
+    mContactColorConnection.disconnect();
     delete mLITUpdateTimer;
 
     // <FS:Ansariel> Update voice volume slider on RLVa shownames restriction update

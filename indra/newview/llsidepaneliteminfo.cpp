@@ -26,6 +26,8 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llsidepaneliteminfo.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
 
 #include "roles_constants.h"
 
@@ -129,6 +131,7 @@ static LLPanelInjector<LLSidepanelItemInfo> t_item_info("sidepanel_item_info");
 // Default constructor
 LLSidepanelItemInfo::LLSidepanelItemInfo(const LLPanel::Params& p)
     : LLPanel(p)
+    , mPropertiesCurrent(vs_native_im_guard())
     , mItemID(LLUUID::null)
     , mObjectInventoryObserver(NULL)
     , mUpdatePendingId(-1)
@@ -230,6 +233,7 @@ const LLUUID& LLSidepanelItemInfo::getItemID() const
 
 void LLSidepanelItemInfo::onUpdateCallback(const LLUUID& item_id, S32 received_update_id)
 {
+    if (!mPropertiesCurrent()) return;
     if (mItemID == item_id && mUpdatePendingId == received_update_id)
     {
         mUpdatePendingId = -1;
@@ -372,7 +376,7 @@ void LLSidepanelItemInfo::refreshFromItem(LLViewerInventoryItem* item)
     // CREATOR NAME //
     //////////////////
     if(!gCacheName) return;
-    if(!gAgent.getRegion()) return;
+    if (!gAgent.getRegion() && !(gViewerWindow && gViewerWindow->isNativeVulkan())) return;
 
     if (item->getCreatorUUID().notNull())
     {
@@ -799,6 +803,7 @@ void LLSidepanelItemInfo::refreshFromItem(LLViewerInventoryItem* item)
 void LLSidepanelItemInfo::updateCreatorName(const LLUUID& creator_id, const LLAvatarName& creator_name, const LLStyle::Params& style_params, bool rlv_restricted)
 // [/RLVa:KB]
 {
+    if (!mPropertiesCurrent()) return;
     if (mCreatorCacheConnection.connected())
     {
         mCreatorCacheConnection.disconnect();
@@ -815,6 +820,7 @@ void LLSidepanelItemInfo::updateCreatorName(const LLUUID& creator_id, const LLAv
 void LLSidepanelItemInfo::updateOwnerName(const LLUUID& owner_id, const LLAvatarName& owner_name, const LLStyle::Params& style_params, bool rlv_restricted)
 // [/RLVa:KB]
 {
+    if (!mPropertiesCurrent()) return;
     if (mOwnerCacheConnection.connected())
     {
         mOwnerCacheConnection.disconnect();
@@ -872,7 +878,7 @@ void LLSidepanelItemInfo::onIdle( void* user_data )
 void LLSidepanelItemInfo::setAssociatedExperience( LLHandle<LLSidepanelItemInfo> hInfo, const LLSD& experience )
 {
     LLSidepanelItemInfo* info = hInfo.get();
-    if(info)
+    if (info && info->mPropertiesCurrent())
     {
         LLUUID id;
         if(experience.has(LLExperienceCache::EXPERIENCE_ID))
@@ -1125,6 +1131,7 @@ void LLSidepanelItemInfo::updatePermissions()
 
 void LLSidepanelItemInfo::onEditThumbnail()
 {
+    if (!mPropertiesCurrent()) return;
     LLSD data;
     data["task_id"] = mObjectID;
     data["item_id"] = mItemID;
@@ -1259,6 +1266,7 @@ void LLSidepanelItemInfo::onCommitChanges(LLPointer<LLViewerInventoryItem> item)
 
 LLViewerInventoryItem* LLSidepanelItemInfo::findItem() const
 {
+    if (!mPropertiesCurrent()) return nullptr;
     LLViewerInventoryItem* item = NULL;
     if(mObjectID.isNull())
     {

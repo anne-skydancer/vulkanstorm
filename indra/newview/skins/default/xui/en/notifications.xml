@@ -168,6 +168,29 @@ No tutorial is currently available.
 [MESSAGE]
   </notification>
 
+  <notification name="NativeWorldUnavailable" type="alertmodal" icon="alertmodal.tga">
+World features are not yet available with the Vulkan renderer.
+    <usetemplate name="okbutton" yestext="OK" />
+  </notification>
+
+  <notification
+   icon="alertmodal.tga"
+   name="NativeUploadCostUnavailable"
+   type="alertmodal">
+The upload cost has not been received. Please wait and try again.
+    <usetemplate name="okbutton" yestext="OK" />
+  </notification>
+
+  <notification name="NativePaymentBalanceUnavailable" type="alertmodal" icon="alertmodal.tga">
+Your balance has not been received. Please wait and try again.
+    <usetemplate name="okbutton" yestext="OK" />
+  </notification>
+
+  <notification name="NativePaymentInsufficientFunds" type="alertmodal" icon="alertmodal.tga">
+Your balance is too low for this payment.
+    <usetemplate name="okbutton" yestext="OK" />
+  </notification>
+
   <notification
    icon="alertmodal.tga"
    name="GenericAlertYesCancel"

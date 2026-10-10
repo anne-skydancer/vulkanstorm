@@ -874,10 +874,9 @@ void LLFolderViewItem::drawOpenFolderArrow()
 
     if (hasVisibleChildren() || !isFolderComplete())
     {
-        gl_draw_scaled_rotated_image(
-            // <FS:Ansariel> Inventory specials
+        sFolderArrowImg->drawRotated(
             mIndentation, getRect().getHeight() - mArrowSize - mTextPad - mItemTopPad,
-            mArrowSize, mArrowSize, mControlLabelRotation, sFolderArrowImg->getImage(), sFgColor);
+            mArrowSize, mArrowSize, mControlLabelRotation, sFgColor);
     }
 }
 
@@ -910,13 +909,10 @@ void LLFolderViewItem::drawFavoriteIcon()
         {
             x_offset = getRect().getWidth();
         }
-        gl_draw_scaled_image(
+        favorite_image->draw(
             x_offset - FAVORITE_IMAGE_SIZE - FAVORITE_IMAGE_PAD,
             getRect().getHeight() - mItemHeight + FAVORITE_IMAGE_PAD,
-            FAVORITE_IMAGE_SIZE,
-            FAVORITE_IMAGE_SIZE,
-            favorite_image->getImage(),
-            sFgColor);
+            FAVORITE_IMAGE_SIZE, FAVORITE_IMAGE_SIZE, sFgColor);
     }
 }
 
@@ -962,7 +958,7 @@ void LLFolderViewItem::drawHighlight(bool showContent, bool hasKeyboardFocus,
     //
     if (isHighlightAllowed())
     {
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
         // Highlight for selected but not current items
         if (!isHighlightActive() && !isFlashing())
@@ -1035,7 +1031,7 @@ void LLFolderViewItem::drawHighlight(bool showContent, bool hasKeyboardFocus,
     //
     if (mDragAndDropTarget)
     {
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
         gl_rect_2d(FOCUS_LEFT,
             focus_top,
             getRect().getWidth() - 2,

@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "fsfloatercontacts.h"
 
@@ -79,6 +80,8 @@ FSFloaterContacts::FSFloaterContacts(const LLSD& seed)
 
 FSFloaterContacts::~FSFloaterContacts()
 {
+    for (auto& connection : mSettingsConnections) connection.disconnect();
+    mSettingsConnections.clear();
     // For notification when SIP online status changes.
     LLVoiceClient::removeObserver(this);
     LLAvatarTracker::instance().removeObserver(this);
@@ -182,17 +185,31 @@ bool FSFloaterContacts::postBuild()
 
     mRlvBehaviorCallbackConnection = gRlvHandler.setBehaviourCallback(boost::bind(&FSFloaterContacts::updateRlvRestrictions, this, _1));
 
-    gSavedSettings.getControl("FSFriendListFullNameFormat")->getSignal()->connect(boost::bind(&FSFloaterContacts::onDisplayNameChanged, this));
-    gSavedSettings.getControl("FSFriendListSortOrder")->getSignal()->connect(boost::bind(&FSFloaterContacts::sortFriendList, this));
-    gSavedSettings.getControl("FSFriendListColumnShowUserName")->getSignal()->connect(boost::bind(&FSFloaterContacts::onColumnDisplayModeChanged, this, "FSFriendListColumnShowUserName"));
-    gSavedSettings.getControl("FSFriendListColumnShowDisplayName")->getSignal()->connect(boost::bind(&FSFloaterContacts::onColumnDisplayModeChanged, this, "FSFriendListColumnShowDisplayName"));
-    gSavedSettings.getControl("FSFriendListColumnShowFullName")->getSignal()->connect(boost::bind(&FSFloaterContacts::onColumnDisplayModeChanged, this, "FSFriendListColumnShowFullName"));
-    gSavedSettings.getControl("FSFriendListColumnShowPermissions")->getSignal()->connect(boost::bind(&FSFloaterContacts::onColumnDisplayModeChanged, this, std::string()));
-    gSavedSettings.getControl("FSContactSetsColorizeFriends")->getSignal()->connect(boost::bind(&FSFloaterContacts::onDisplayNameChanged, this));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("FSFriendListFullNameFormat")->getSignal()->connect(boost::bind(&FSFloaterContacts::onDisplayNameChanged, this)));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("FSFriendListSortOrder")->getSignal()->connect(boost::bind(&FSFloaterContacts::sortFriendList, this)));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("FSFriendListColumnShowUserName")->getSignal()->connect(boost::bind(&FSFloaterContacts::onColumnDisplayModeChanged, this, "FSFriendListColumnShowUserName")));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("FSFriendListColumnShowDisplayName")->getSignal()->connect(boost::bind(&FSFloaterContacts::onColumnDisplayModeChanged, this, "FSFriendListColumnShowDisplayName")));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("FSFriendListColumnShowFullName")->getSignal()->connect(boost::bind(&FSFloaterContacts::onColumnDisplayModeChanged, this, "FSFriendListColumnShowFullName")));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("FSFriendListColumnShowPermissions")->getSignal()->connect(boost::bind(&FSFloaterContacts::onColumnDisplayModeChanged, this, std::string())));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("FSContactSetsColorizeFriends")->getSignal()->connect(boost::bind(&FSFloaterContacts::onDisplayNameChanged, this)));
     onColumnDisplayModeChanged();
 
-    LLAvatarNameCache::getInstance()->addUseDisplayNamesCallback(boost::bind(&FSFloaterContacts::onDisplayNameChanged, this));
+    const LLHandle<LLFloater> contacts_handle = getHandle();
+    mSettingsConnections.emplace_back(LLAvatarNameCache::getInstance()->connectUseDisplayNamesCallback([contacts_handle]()
+    {
+        if (auto* contacts = dynamic_cast<FSFloaterContacts*>(contacts_handle.get()))
+            contacts->onDisplayNameChanged();
+    }));
 
+    // A floater may be created after the tracker has delivered login changes.
+    // Populate from current account state as well as observing future deltas.
+    LLAvatarTracker::buddy_map_t buddies;
+    LLAvatarTracker::instance().copyBuddyList(buddies);
+    for (const auto& [id, relation] : buddies)
+    {
+        addFriend(id);
+        updateFriendItem(id, relation);
+    }
     return true;
 }
 
@@ -659,6 +676,12 @@ void FSFloaterContacts::addFriend(const LLUUID& agent_id)
         return;
     }
 
+    if (mFriendsList->getItem(agent_id))
+    {
+        updateFriendItem(agent_id, relationInfo);
+        return;
+    }
+
     LLAvatarName av_name;
     if (!LLAvatarNameCache::get(agent_id, &av_name))
     {
@@ -819,10 +842,13 @@ void FSFloaterContacts::updateFriendItemColor(LLScrollListItem* item, const LLUU
     }
 }
 
-void FSFloaterContacts::updateFriendItem(const LLUUID& agent_id, const LLRelationship* relationship, const LLUUID& request_id)
+void FSFloaterContacts::updateFriendItem(const LLUUID& agent_id, const LLRelationship*, const LLUUID& request_id)
 {
     disconnectAvatarNameCacheConnection(request_id);
-    updateFriendItem(agent_id, relationship);
+    // Name-cache work may outlive an account's buddy-map replacement. Never
+    // dereference the relationship pointer captured by the old request.
+    const auto* current = LLAvatarTracker::instance().getBuddyInfo(agent_id);
+    if (current) updateFriendItem(agent_id, current);
 }
 
 void FSFloaterContacts::refreshRightsChangeList()
@@ -951,14 +977,14 @@ void FSFloaterContacts::confirmModifyRights(const rights_map_t& ids, EGrantRevok
             LLNotificationsUtil::add("GrantModifyRights",
                 args,
                 LLSD(),
-                boost::bind(&FSFloaterContacts::modifyRightsConfirmation, this, _1, _2, rights));
+                vs_native_im_ui_callback(this, boost::bind(&FSFloaterContacts::modifyRightsConfirmation, this, _1, _2, rights)));
         }
         else
         {
             LLNotificationsUtil::add("RevokeModifyRights",
                 args,
                 LLSD(),
-                boost::bind(&FSFloaterContacts::modifyRightsConfirmation, this, _1, _2, rights));
+                vs_native_im_ui_callback(this, boost::bind(&FSFloaterContacts::modifyRightsConfirmation, this, _1, _2, rights)));
         }
     }
     else
@@ -968,14 +994,14 @@ void FSFloaterContacts::confirmModifyRights(const rights_map_t& ids, EGrantRevok
             LLNotificationsUtil::add("GrantModifyRightsMultiple",
                 args,
                 LLSD(),
-                boost::bind(&FSFloaterContacts::modifyRightsConfirmation, this, _1, _2, rights));
+                vs_native_im_ui_callback(this, boost::bind(&FSFloaterContacts::modifyRightsConfirmation, this, _1, _2, rights)));
         }
         else
         {
             LLNotificationsUtil::add("RevokeModifyRightsMultiple",
                 args,
                 LLSD(),
-                boost::bind(&FSFloaterContacts::modifyRightsConfirmation, this, _1, _2, rights));
+                vs_native_im_ui_callback(this, boost::bind(&FSFloaterContacts::modifyRightsConfirmation, this, _1, _2, rights)));
         }
     }
 }

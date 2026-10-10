@@ -202,18 +202,21 @@ bool LLSysWellChiclet::handleRightMouseDown(S32 x, S32 y, MASK mask)
 LLIMWellChiclet::LLIMWellChiclet(const Params& p)
 : LLSysWellChiclet(p)
 {
-    LLIMModel::instance().addNewMsgCallback(boost::bind(&LLIMWellChiclet::messageCountChanged, this, _1));
-    LLIMModel::instance().addNoUnreadMsgsCallback(boost::bind(&LLIMWellChiclet::messageCountChanged, this, _1));
+    mNewMessageConnection = LLIMModel::instance().addNewMsgCallback(boost::bind(&LLIMWellChiclet::messageCountChanged, this, _1));
+    mNoUnreadConnection = LLIMModel::instance().addNoUnreadMsgsCallback(boost::bind(&LLIMWellChiclet::messageCountChanged, this, _1));
 
     LLIMMgr::getInstance()->addSessionObserver(this);
 
     LLIMWellWindow::getInstance()->setSysWellChiclet(this);
 
-    gSavedSettings.getControl("FSShowMessageCountInWindowTitle")->getSignal()->connect(boost::bind(&LLIMWellChiclet::updateApplicationWindowTitle, this));
+    mTitleSettingConnection = gSavedSettings.getControl("FSShowMessageCountInWindowTitle")->getSignal()->connect(boost::bind(&LLIMWellChiclet::updateApplicationWindowTitle, this));
 }
 
 LLIMWellChiclet::~LLIMWellChiclet()
 {
+    mNewMessageConnection.disconnect();
+    mNoUnreadConnection.disconnect();
+    mTitleSettingConnection.disconnect();
     LLContextMenu* menu = static_cast<LLContextMenu*>(mContextMenuHandle.get());
     if (menu)
     {

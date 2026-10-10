@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeim.h"
+#endif
 
 #include "llthumbnailctrl.h"
 
@@ -238,6 +242,13 @@ void LLThumbnailCtrl::initImage()
         mImageAssetID = tvalue.asUUID();
         if (mImageAssetID.notNull())
         {
+#if VS_NATIVE_VULKAN
+            if (VSNativeSession::active())
+            {
+                mImagep = LLUI::getUIImageByID(mImageAssetID);
+                return;
+            }
+#endif
             // Should it support baked textures?
             mTexturep = LLViewerTextureManager::getFetchedTexture(mImageAssetID, FTT_DEFAULT, MIPMAP_YES, LLGLTexture::BOOST_THUMBNAIL);
             mTexturep->forceToSaveRawImage(0);
@@ -247,6 +258,10 @@ void LLThumbnailCtrl::initImage()
     else if (tvalue.isString())
     {
         mImagep = LLUI::getUIImage(tvalue.asString(), LLGLTexture::BOOST_UI);
+#if VS_NATIVE_VULKAN
+        // Named skin placeholders already carry their complete UIImage facade.
+        if (VSNativeSession::active()) return;
+#endif
         if (mImagep)
         {
             LLViewerFetchedTexture* texture = dynamic_cast<LLViewerFetchedTexture*>(mImagep->getImage().get());

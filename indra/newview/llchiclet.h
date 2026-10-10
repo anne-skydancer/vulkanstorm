@@ -996,6 +996,11 @@ protected:
     void messageCountChanged(const LLSD& session_data);
 
     void updateApplicationWindowTitle();
+
+private:
+    boost::signals2::scoped_connection mNewMessageConnection;
+    boost::signals2::scoped_connection mNoUnreadConnection;
+    boost::signals2::scoped_connection mTitleSettingConnection;
 };
 // </FS:Ansariel> [FS communication UI]
 

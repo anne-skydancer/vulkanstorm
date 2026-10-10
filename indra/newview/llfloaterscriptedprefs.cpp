@@ -35,6 +35,7 @@
 
 #include "llfloaterreg.h"
 #include "llpreviewscript.h"
+#include "vsnativeim.h"
 
 LLFloaterScriptEdPrefs::LLFloaterScriptEdPrefs(const LLSD& key)
 :   LLFloater(key)
@@ -91,11 +92,18 @@ void LLFloaterScriptEdPrefs::setPreprocInclude()
     std::string cur_name(gSavedSettings.getString("_NACL_PreProcHDDIncludeLocation"));
     std::string proposed_name(cur_name);
 
-    (new LLDirPickerThread(boost::bind(&LLFloaterScriptEdPrefs::changePreprocIncludePath, this, _1, _2), proposed_name))->getFile();
+    const auto weak = getHandle();
+    const auto current = vs_native_im_guard();
+    (new LLDirPickerThread([weak, current](const std::vector<std::string>& files, std::string proposed)
+    {
+        if (auto* floater = dynamic_cast<LLFloaterScriptEdPrefs*>(weak.get()); floater && current() && !files.empty())
+            floater->changePreprocIncludePath(files, proposed);
+    }, proposed_name))->getFile();
 }
 
 void LLFloaterScriptEdPrefs::changePreprocIncludePath(const std::vector<std::string>& filenames, std::string proposed_name)
 {
+    if (filenames.empty()) return;
     std::string dir_name = filenames[0];
     if (!dir_name.empty() && dir_name != proposed_name)
     {

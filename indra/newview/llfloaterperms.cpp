@@ -28,6 +28,9 @@
 #include "llviewerprecompiledheaders.h"
 #include "llcheckboxctrl.h"
 #include "llfloaterperms.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativeim.h"
+#endif
 #include "llviewercontrol.h"
 #include "llviewerwindow.h"
 #include "lluictrlfactory.h"
@@ -190,12 +193,7 @@ void LLFloaterPermsDefault::sendInitialPerms()
 
 void LLFloaterPermsDefault::updateCap()
 {
-    if (!gAgent.getRegion())
-    {
-        LL_WARNS("Avatar") << "Region not set, cannot request capability update" << LL_ENDL;
-        return;
-    }
-    std::string object_url = gAgent.getRegion()->getCapability("AgentPreferences");
+    std::string object_url = gAgent.getRegionCapability("AgentPreferences");
 
     if(!object_url.empty())
     {
@@ -211,6 +209,10 @@ void LLFloaterPermsDefault::updateCap()
 /*static*/
 void LLFloaterPermsDefault::updateCapCoro(std::string url)
 {
+#if VS_NATIVE_VULKAN
+    const auto current = vs_native_im_guard();
+    if (!current()) return;
+#endif
     int retryCount = 0;
     std::string previousReason;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -236,8 +238,14 @@ void LLFloaterPermsDefault::updateCapCoro(std::string url)
 
     while (true)
     {
+#if VS_NATIVE_VULKAN
+        if (!current()) return;
+#endif
         ++retryCount;
         LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+#if VS_NATIVE_VULKAN
+        if (!current()) return;
+#endif
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

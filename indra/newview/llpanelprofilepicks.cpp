@@ -25,6 +25,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#include "llrender2dutils.h"
 
 #include "llpanelprofilepicks.h"
 
@@ -282,7 +284,7 @@ void LLPanelProfilePicks::onClickDelete()
         payload["pick_id"] = pick_id;
         payload["tab_idx"] = mTabContainer->getCurrentPanelIndex();
         LLNotificationsUtil::add("ProfileDeletePick", args, payload,
-            boost::bind(&LLPanelProfilePicks::callbackDeletePick, this, _1, _2));
+            vs_native_im_ui_callback(this, boost::bind(&LLPanelProfilePicks::callbackDeletePick, this, _1, _2)));
     }
 }
 
@@ -838,16 +840,30 @@ void LLPanelProfilePick::setPickLocation(const std::string& location)
 
 void LLPanelProfilePick::onClickMap()
 {
-    LLFloaterWorldMap::getInstance()->trackLocation(getPosGlobal());
-    LLFloaterReg::showInstance("world_map", "center");
+    if (LLRender2D::isNativeUI())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
+    if (!LLRender2D::isNativeUI())
+        if (auto* map = LLFloaterWorldMap::getInstance()) map->trackLocation(getPosGlobal());
+    if (!LLRender2D::isNativeUI()) LLFloaterReg::showInstance("world_map", "center");
 }
 
 void LLPanelProfilePick::onClickTeleport()
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     if (!getPosGlobal().isExactlyZero())
     {
         gAgent.teleportViaLocation(getPosGlobal());
-        LLFloaterWorldMap::getInstance()->trackLocation(getPosGlobal());
+        if (!LLRender2D::isNativeUI())
+        if (auto* map = LLFloaterWorldMap::getInstance()) map->trackLocation(getPosGlobal());
     }
 }
 

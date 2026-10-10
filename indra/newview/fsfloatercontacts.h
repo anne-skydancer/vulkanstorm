@@ -206,6 +206,7 @@ private:
 
     using avatar_name_cb_t = std::map<LLUUID, LLAvatarNameCache::callback_connection_t>;
     avatar_name_cb_t    mAvatarNameCacheConnections;
+    std::vector<boost::signals2::connection> mSettingsConnections;
     void                disconnectAvatarNameCacheConnection(const LLUUID& request_id);
 };
 

@@ -79,7 +79,7 @@ bool LLRender2D::isNativeUI() { return bool(native_rectangle); }
 void LLRender2D::setSceneBlendType(U8 type)
 {
     if (!isNativeUI()) { gGL.setSceneBlendType(static_cast<LLRender::eBlendType>(type));return; }
-    if (type!=LLRender::BT_ALPHA && type!=LLRender::BT_ADD && type!=LLRender::BT_ADD_WITH_ALPHA)
+    if (type!=LLRender::BT_ALPHA && type!=LLRender::BT_ADD && type!=LLRender::BT_ADD_WITH_ALPHA && type!=LLRender::BT_REPLACE)
         throw std::logic_error("Native UI blend mode is not admitted");
     native_blend=type;
 }
@@ -143,6 +143,12 @@ void gl_state_for_2d(S32 width, S32 height)
 
 void gl_draw_x(const LLRect& rect, const LLColor4& color)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        gl_line_2d(rect.mLeft, rect.mTop, rect.mRight, rect.mBottom, color);
+        gl_line_2d(rect.mLeft, rect.mBottom, rect.mRight, rect.mTop, color);
+        return;
+    }
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     gGL.color4fv( color.mV );
@@ -1099,6 +1105,20 @@ void gl_ring( F32 radius, F32 width, const LLColor4& center_color, const LLColor
 // Draw gray and white checkerboard with black border
 void gl_rect_2d_checkerboard(const LLRect& rect, GLfloat alpha)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        // Same repeating checker pattern, emitted as ordinary native UI quads.
+        constexpr S32 tile = 16;
+        for (S32 y = rect.mBottom; y < rect.mTop; y += tile)
+            for (S32 x = rect.mLeft; x < rect.mRight; x += tile)
+            {
+                const F32 level = (((x - rect.mLeft) / tile + (y - rect.mBottom) / tile) & 1) ? .5f : 1.f;
+                gl_rect_2d(x, llmin(y + tile, rect.mTop), llmin(x + tile, rect.mRight), y,
+                    LLColor4(level, level, level, alpha));
+            }
+        return;
+    }
+
     //polygon stipple is deprecated, use "Checker" texture
     LLPointer<LLUIImage> img = LLRender2D::getInstance()->getUIImage("Checker");
     gGL.getTexUnit(0)->bind(img->getImage());

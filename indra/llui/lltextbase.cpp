@@ -1078,13 +1078,13 @@ void LLTextBase::drawText()
 
                 S32 squiggle_bottom = (S32)text_rect.mBottom + (S32)cur_segment->getStyle()->getFont()->getDescenderHeight();
 
-                gGL.color4ub(255, 0, 0, 200);
+                const LLColor4 squiggle_color(1.f, 0.f, 0.f, 200.f / 255.f);
                 while (squiggle_start + 1 < squiggle_end)
                 {
-                    gl_line_2d(squiggle_start, squiggle_bottom, squiggle_start + 2, squiggle_bottom - 2);
+                    gl_line_2d(squiggle_start, squiggle_bottom, squiggle_start + 2, squiggle_bottom - 2, squiggle_color);
                     if (squiggle_start + 3 < squiggle_end)
                     {
-                        gl_line_2d(squiggle_start + 2, squiggle_bottom - 3, squiggle_start + 4, squiggle_bottom - 1);
+                        gl_line_2d(squiggle_start + 2, squiggle_bottom - 3, squiggle_start + 4, squiggle_bottom - 1, squiggle_color);
                     }
                     squiggle_start += 4;
                 }

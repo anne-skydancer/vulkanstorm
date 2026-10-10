@@ -36,6 +36,7 @@
 #include "llscrolllistctrl.h"
 #include "lltrans.h"
 #include "llviewermenu.h"
+#include "llviewerwindow.h"
 
 /////////////////////////////////////////////////////
 // FSGroupTitlesObserver class
@@ -90,7 +91,7 @@ FSFloaterGroupTitles::~FSFloaterGroupTitles()
 
     if (LLContextMenu* menu = mClearRegionMenuHandle.get())
     {
-        gMenuHolder->removeChild(menu);
+        if (gMenuHolder) gMenuHolder->removeChild(menu);
         delete menu;
     }
 
@@ -308,8 +309,9 @@ void FSFloaterGroupTitles::selectedTitleChanged()
         LLUUID role_id  = selected_item->getColumn(mTitleList->getColumn("role_id")->mIndex)->getValue().asUUID();
         mInfoButton->setEnabled(group_id.notNull());
         const bool has_region = !FSGroupTitleRegionMgr::getInstance()->getRegionForTitle(group_id, role_id).empty();
-        mSetRegionButton->setEnabled(true);
-        mSetRegionManualButton->setEnabled(true);
+        const bool region_owner = !(gViewerWindow && gViewerWindow->isNativeVulkan());
+        mSetRegionButton->setEnabled(region_owner);
+        mSetRegionManualButton->setEnabled(region_owner);
         mClearRegionButton->setEnabled(has_region);
     }
     else

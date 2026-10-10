@@ -27,6 +27,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewermenufile.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 // project includes
 #include "llagent.h"
@@ -1373,6 +1377,11 @@ void upload_done_callback(
     LLExtStat ext_status) // StoreAssetData callback (fixed)
 {
     LLResourceData* data = (LLResourceData*)user_data;
+    if (data && data->mCurrentAccount && !data->mCurrentAccount())
+    {
+        delete data;
+        return;
+    }
     S32 expected_upload_cost = data ? data->mExpectedUploadCost : 0;
     //LLAssetType::EType pref_loc = data->mPreferredLocation;
     bool is_balance_sufficient = true;
@@ -1389,16 +1398,36 @@ void upload_done_callback(
             {
                 // Charge the user for the upload.
                 LLViewerRegion* region = gAgent.getRegion();
-
-                if(!(can_afford_transaction(expected_upload_cost)))
+                LLHost destination = region ? region->getHost() : LLHost();
+                bool native = false, unknown_balance = false;
+#if VS_NATIVE_VULKAN
+                if (auto owner = VSNativeSession::active())
                 {
-                    LLBuyCurrencyHTML::openCurrencyFloater( "", expected_upload_cost );
+                    native = true;
+                    unknown_balance = expected_upload_cost > 0 && !owner->balanceKnown();
+                    destination = owner->host();
+                }
+#endif
+
+                if (unknown_balance || !can_afford_transaction(expected_upload_cost))
+                {
+                    if (native) LLNotificationsUtil::add(unknown_balance
+                        ? "NativePaymentBalanceUnavailable" : "NativePaymentInsufficientFunds");
+                    else LLBuyCurrencyHTML::openCurrencyFloater("", expected_upload_cost);
                     is_balance_sufficient = false;
                 }
-                else if(region)
+                else if(destination.isOk())
                 {
-                    // Charge user for upload
-                    gStatusBar->debitBalance(expected_upload_cost);
+                    // Keep the account balance reservation consistent with the charge.
+#if VS_NATIVE_VULKAN
+                    if (auto owner = VSNativeSession::active())
+                    {
+                        if (expected_upload_cost > 0)
+                            owner->updateBalance(owner->balance() - expected_upload_cost);
+                    }
+                    else
+#endif
+                    if (gStatusBar) gStatusBar->debitBalance(expected_upload_cost);
 
                     LLMessageSystem* msg = gMessageSystem;
                     msg->newMessageFast(_PREHASH_MoneyTransferRequest);
@@ -1416,7 +1445,7 @@ void upload_done_callback(
                     msg->addU8Fast(_PREHASH_AggregatePermInventory, (U8)LLAggregatePermissions::AP_EMPTY);
                     msg->addS32Fast(_PREHASH_TransactionType, TRANS_UPLOAD_CHARGE);
                     msg->addStringFast(_PREHASH_Description, NULL);
-                    msg->sendReliable(region->getHost());
+                    msg->sendReliable(destination);
                 }
             }
 
@@ -1504,6 +1533,29 @@ void upload_new_resource(
 //     uploadInfo->setTransactionId(tid);
 
 
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (owner->phase() != VSNativeSession::Phase::Connected) return;
+        const S32 cost = uploadInfo->getExpectedUploadCost();
+        if (cost < 0)
+        {
+            LLNotificationsUtil::add("NativeUploadCostUnavailable");
+            return;
+        }
+        if (cost > 0 && !owner->balanceKnown())
+        {
+            LLNotificationsUtil::add("NativePaymentBalanceUnavailable");
+            return;
+        }
+        if (!can_afford_transaction(cost))
+        {
+            LLNotificationsUtil::add("NativePaymentInsufficientFunds");
+            return;
+        }
+    }
+#endif
+
     std::string url = gAgent.getRegionCapability("NewFileAgentInventory");
 
     if ( !url.empty() )
@@ -1512,6 +1564,7 @@ void upload_new_resource(
     }
     else
     {
+        if (!gAssetStorage) return;
         uploadInfo->prepareUpload();
         uploadInfo->logPreparedUpload();
 
@@ -1522,8 +1575,8 @@ void upload_new_resource(
             LLAssetType::AT_TEXTURE == uploadInfo->getAssetType() ||
             LLAssetType::AT_ANIMATION == uploadInfo->getAssetType())
         {
-            S32 balance = gStatusBar->getBalance();
-            if (balance < uploadInfo->getExpectedUploadCost())
+            if (!(gViewerWindow && gViewerWindow->isNativeVulkan()) &&
+                (!gStatusBar || gStatusBar->getBalance() < uploadInfo->getExpectedUploadCost()))
             {
                 // insufficient funds, bail on this upload
                 LLBuyCurrencyHTML::openCurrencyFloater("", uploadInfo->getExpectedUploadCost());
@@ -1532,6 +1585,7 @@ void upload_new_resource(
         }
 
         LLResourceData* data = new LLResourceData;
+        data->mCurrentAccount = vs_native_im_guard();
         data->mAssetInfo.mTransactionID = uploadInfo->getTransactionId();
         data->mAssetInfo.mUuid = uploadInfo->getAssetId();
         data->mAssetInfo.mType = uploadInfo->getAssetType();
@@ -1549,11 +1603,30 @@ void upload_new_resource(
         {
             asset_callback = callback;
         }
+        void* callback_data = data;
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            struct AccountUploadCallback
+            {
+                LLAssetStorage::LLStoreAssetCallback callback;
+                LLResourceData* data;
+                std::function<bool()> current;
+            };
+            callback_data = new AccountUploadCallback{asset_callback, data, data->mCurrentAccount};
+            asset_callback = [](const LLUUID& id, void* opaque, S32 result, LLExtStat status)
+            {
+                std::unique_ptr<AccountUploadCallback> context(static_cast<AccountUploadCallback*>(opaque));
+                if (!context->current()) { delete context->data; return; }
+                context->callback(id, context->data, result, status);
+            };
+        }
+#endif
         gAssetStorage->storeAssetData(
             data->mAssetInfo.mTransactionID,
             data->mAssetInfo.mType,
             asset_callback,
-            (void*)data,
+            callback_data,
             false);
     }
 }

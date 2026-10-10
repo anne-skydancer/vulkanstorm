@@ -68,6 +68,10 @@
 #include "llviewercontrol.h"
 #include "lltrans.h"
 #include "llimagedimensionsinfo.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsuiimageprovider.h"
+#endif
 #include "llviewerregion.h" // <FS:CR> getCentralBakeVersion()
 #include "llcheckboxctrl.h"
 #include "llagentbenefits.h"
@@ -100,6 +104,7 @@ LLFloaterImagePreview::LLFloaterImagePreview(const LLSD& args) :
     mLastMouseY(0),
     mImagep(NULL)
 {
+    mNativeImageKey = "inventory-upload-preview:" + LLUUID::generateNewID().asString();
     loadImage(mFilenameAndPath);
 }
 
@@ -137,13 +142,25 @@ bool LLFloaterImagePreview::postBuild()
     LLUICtrl* uploaded_size_text = getChild<LLUICtrl>("uploaded_size_text");
     // </FS:PP>
 
-    if (mRawImagep.notNull() && gAgent.getRegion() != NULL)
+    const bool native = gViewerWindow && gViewerWindow->isNativeVulkan();
+    if (mRawImagep.notNull() && (native || gAgent.getRegion() != NULL))
     {
-        mAvatarPreview = new LLImagePreviewAvatar(256, 256);
-        mAvatarPreview->setPreviewTarget("mPelvis", "mUpperBodyMesh0", mRawImagep, 2.f, false);
-
-        mSculptedPreview = new LLImagePreviewSculpted(256, 256);
-        mSculptedPreview->setPreviewTarget(mRawImagep, 2.0f);
+        if (!native)
+        {
+            mAvatarPreview = new LLImagePreviewAvatar(256, 256);
+            mAvatarPreview->setPreviewTarget("mPelvis", "mUpperBodyMesh0", mRawImagep, 2.f, false);
+            mSculptedPreview = new LLImagePreviewSculpted(256, 256);
+            mSculptedPreview->setPreviewTarget(mRawImagep, 2.0f);
+        }
+        else
+        {
+#if VS_NATIVE_VULKAN
+            mNativeImage = vs_publish_ui_image(mNativeImageKey, *mRawImagep);
+#endif
+            // Flat decoded texture preview is functional. Avatar clothing and
+            // sculpted mesh previews belong to the deferred world renderer.
+            getChildView("clothing_type_combo")->setEnabled(false);
+        }
 
         // <FS:Beq> BUG-228331 - lossless_check is misleading don't show it if it won't be used.
         //if (mRawImagep->getWidth() * mRawImagep->getHeight() <= LL_IMAGE_REZ_LOSSLESS_CUTOFF * LL_IMAGE_REZ_LOSSLESS_CUTOFF)
@@ -168,7 +185,7 @@ bool LLFloaterImagePreview::postBuild()
         //</FS:Beq>
 
         // <FS:CR> Temporary texture uploads
-        bool enable_temp_uploads = (LLAgentBenefitsMgr::current().getTextureUploadCost() != 0
+        bool enable_temp_uploads = (!native && LLAgentBenefitsMgr::current().getTextureUploadCost() != 0
                                     && gAgent.getRegion()->getCentralBakeVersion() == 0);
         if (!enable_temp_uploads)
         {
@@ -255,7 +272,7 @@ void LLFloaterImagePreview::emptyAlphaCheckboxCallback()
     }
     else
     {
-        LLNotificationsUtil::add("ImageEmptyAlphaLayer", LLSD(), LLSD(), boost::bind(&LLFloaterImagePreview::imageEmptyAlphaCallback, this, _1, _2));
+        LLNotificationsUtil::add("ImageEmptyAlphaLayer", LLSD(), LLSD(), vs_native_im_ui_callback(this, boost::bind(&LLFloaterImagePreview::imageEmptyAlphaCallback, this, _1, _2)));
     }
 }
 
@@ -275,6 +292,7 @@ bool LLFloaterImagePreview::imageEmptyAlphaCallback(const LLSD& notification, co
 
 void LLFloaterImagePreview::onBtnUpload()
 {
+    if (!mUploadCurrent() || mRawImagep.isNull() || !mEmptyAlphaCheck) return;
     if(mEmptyAlphaCheck->getValue())
     {
         LLPointer<LLImageRaw> stripped_image = new LLImageRaw(mRawImagep->getWidth(), mRawImagep->getHeight(), 3);
@@ -289,6 +307,7 @@ void LLFloaterImagePreview::onBtnUpload()
         stripped_png->save(mFilenameAndPath);
 
         mDeleteTempFile = mFilenameAndPath;
+        if (gViewerWindow && gViewerWindow->isNativeVulkan()) mRawImagep = stripped_image;
     }
 
     onBtnOK();
@@ -314,6 +333,10 @@ LLFloaterImagePreview::~LLFloaterImagePreview()
         LLFile::remove(mDeleteTempFile);
     }
     // </FS:Zi>
+#if VS_NATIVE_VULKAN
+    if (mNativeImage) vs_erase_ui_image(mNativeImageKey);
+#endif
+    mNativeImage = nullptr;
     clearAllPreviewTextures();
 
     mRawImagep = NULL;
@@ -403,6 +426,7 @@ void LLFloaterImagePreview::clearAllPreviewTextures()
 //-----------------------------------------------------------------------------
 void LLFloaterImagePreview::onBtnOK()
 {
+    if (!mUploadCurrent() || mRawImagep.isNull()) return;
     getChildView("ok_btn")->setEnabled(false); // don't allow inadvertent extra uploads
 
     S32 expected_upload_cost = getExpectedUploadCost();
@@ -468,6 +492,16 @@ void LLFloaterImagePreview::onBtnOK()
 void LLFloaterImagePreview::draw()
 {
     LLFloater::draw();
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if (mNativeImage && mUploadCurrent())
+        {
+            gl_rect_2d_checkerboard(mPreviewRect);
+            mNativeImage->setClipRegion(mPreviewImageRect);
+            mNativeImage->draw(mPreviewRect, LLColor4::white);
+        }
+        return;
+    }
     // LLRect r = getRect(); <FS:Beq/> set but unused
 
     if (mRawImagep.notNull())
@@ -737,13 +771,14 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
 {
     MASK local_mask = mask & ~MASK_ALT;
 
-    if (mAvatarPreview && hasMouseCapture())
+    const bool native = gViewerWindow && gViewerWindow->isNativeVulkan();
+    if ((mAvatarPreview || native) && hasMouseCapture())
     {
         if (local_mask == MASK_PAN)
         {
             // pan here
             LLCtrlSelectionInterface* iface = childGetSelectionInterface("clothing_type_combo");
-            if (iface && iface->getFirstSelectedIndex() <= 0)
+            if ((native || (iface && iface->getFirstSelectedIndex() <= 0)))
             {
                 mPreviewImageRect.translate((F32)(x - mLastMouseX) * -0.005f * mPreviewImageRect.getWidth(),
                     (F32)(y - mLastMouseY) * -0.005f * mPreviewImageRect.getHeight());
@@ -754,7 +789,7 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
                 mSculptedPreview->pan((F32)(x - mLastMouseX) * -0.005f, (F32)(y - mLastMouseY) * -0.005f);
             }
         }
-        else if (local_mask == MASK_ORBIT)
+        else if (local_mask == MASK_ORBIT && !native)
         {
             F32 yaw_radians = (F32)(x - mLastMouseX) * -0.01f;
             F32 pitch_radians = (F32)(y - mLastMouseY) * 0.02f;
@@ -765,7 +800,7 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
         else
         {
             LLCtrlSelectionInterface* iface = childGetSelectionInterface("clothing_type_combo");
-            if (iface && iface->getFirstSelectedIndex() <= 0)
+            if ((native || (iface && iface->getFirstSelectedIndex() <= 0)))
             {
                 F32 zoom_amt = (F32)(y - mLastMouseY) * -0.002f;
                 mPreviewImageRect.stretch(zoom_amt);
@@ -783,7 +818,7 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
         }
 
         LLCtrlSelectionInterface* iface = childGetSelectionInterface("clothing_type_combo");
-        if (iface && iface->getFirstSelectedIndex() <= 0)
+        if ((native || (iface && iface->getFirstSelectedIndex() <= 0)))
         {
             if (mPreviewImageRect.getWidth() > 1.f)
             {
@@ -830,11 +865,11 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
         LLUI::getInstance()->setMousePositionLocal(this, mLastMouseX, mLastMouseY);
     }
 
-    if (!mPreviewRect.pointInRect(x, y) || !mAvatarPreview || !mSculptedPreview)
+    if (!mPreviewRect.pointInRect(x, y) || (!native && (!mAvatarPreview || !mSculptedPreview)))
     {
         return LLFloater::handleHover(x, y, mask);
     }
-    else if (local_mask == MASK_ORBIT)
+    else if (local_mask == MASK_ORBIT && !native)
     {
         gViewerWindow->setCursor(UI_CURSOR_TOOLCAMERA);
     }
@@ -855,6 +890,19 @@ bool LLFloaterImagePreview::handleHover(S32 x, S32 y, MASK mask)
 //-----------------------------------------------------------------------------
 bool LLFloaterImagePreview::handleScrollWheel(S32 x, S32 y, S32 clicks)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if (mPreviewRect.pointInRect(x, y))
+        {
+            const F32 width = llclamp(mPreviewImageRect.getWidth() + static_cast<F32>(clicks) * .04f, .1f, 1.f);
+            const F32 height = llclamp(mPreviewImageRect.getHeight() + static_cast<F32>(clicks) * .04f, .1f, 1.f);
+            const F32 left = llclamp((mPreviewImageRect.mLeft + mPreviewImageRect.mRight - width) * .5f, 0.f, 1.f - width);
+            const F32 bottom = llclamp((mPreviewImageRect.mBottom + mPreviewImageRect.mTop - height) * .5f, 0.f, 1.f - height);
+            mPreviewImageRect.set(left, bottom + height, left + width, bottom);
+            return true;
+        }
+        return LLFloater::handleScrollWheel(x, y, clicks);
+    }
     if (mPreviewRect.pointInRect(x, y) && mAvatarPreview)
     {
         mAvatarPreview->zoom((F32)clicks * -0.2f);

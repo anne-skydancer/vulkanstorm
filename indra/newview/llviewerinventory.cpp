@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativesession.h"
 #include "llviewerinventory.h"
 
 #include "llnotificationsutil.h"
@@ -747,15 +748,9 @@ bool LLViewerInventoryCategory::fetch(S32 expiry_seconds)
         mDescendentsRequested.reset();
         mDescendentsRequested.setTimerExpirySec((F32)expiry_seconds);
 
-        std::string url;
-        if (gAgent.getRegion())
-        {
-            url = gAgent.getRegion()->getCapability("FetchInventoryDescendents2");
-        }
-        else
-        {
-            LL_WARNS_ONCE(LOG_INV) << "agent region is null" << LL_ENDL;
-        }
+        // The connected text viewer has an authenticated capability owner
+        // before it has a rendered scene region.
+        const std::string url = gAgent.getRegionCapability("FetchInventoryDescendents2");
         if (!url.empty() || AISAPI::isAvailable())
         {
             LLInventoryModelBackgroundFetch::instance().start(mUUID, false);
@@ -2015,7 +2010,12 @@ void copy_inventory_from_notecard(const LLUUID& destination_id,
         viewer_region = gAgent.getRegion();
     }
 
-    if (! viewer_region)
+    if (!viewer_region
+#if VS_NATIVE_VULKAN
+        && !(object_id.isNull() && VSNativeSession::active() &&
+             VSNativeSession::active()->phase() == VSNativeSession::Phase::Connected)
+#endif
+        )
     {
         LL_WARNS(LOG_NOTECARD) << "Can't find region from object_id "
                                << object_id << " or gAgent"

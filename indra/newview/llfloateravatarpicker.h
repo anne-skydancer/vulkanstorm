@@ -32,6 +32,7 @@
 #include "llcoros.h"
 
 #include <vector>
+#include <functional>
 
 class LLAvatarName;
 class LLScrollListCtrl;
@@ -102,8 +103,8 @@ private:
     void onContactSetSelected();
     // </FS:PP>
 
-    static void findByIdCoro(std::string url, LLUUID query_id, LLUUID agent_id, std::string floater_key);
-    static void findByNameCoro(std::string url, LLUUID mQueryID, std::string mName);
+    static void findByIdCoro(std::string url, LLUUID query_id, LLUUID agent_id, std::string floater_key, std::function<bool()> current);
+    static void findByNameCoro(std::string url, LLUUID mQueryID, std::string mName, std::function<bool()> current);
     void find();
     void setAllowMultiple(bool allow_multiple);
     LLScrollListCtrl* getActiveList();

@@ -38,6 +38,7 @@
 class AISAPI
 {
 public:
+    static void pumpPending();
     static const S32 HTTP_TIMEOUT;
     typedef enum {
         INVENTORY,

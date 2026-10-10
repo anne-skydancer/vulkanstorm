@@ -405,8 +405,13 @@ bool LLPanelGroupGeneral::apply(std::string& mesg)
         if(mComboMature &&
            mComboMature->getCurrentIndex() == DECLINE_TO_STATE)
         {
+            const auto weak = getDerivedHandle<LLPanelGroupGeneral>();
             LLNotificationsUtil::add("SetGroupMature", LLSD(), LLSD(),
-                                            boost::bind(&LLPanelGroupGeneral::confirmMatureApply, this, _1, _2));
+                [weak](const LLSD& notification, const LLSD& response)
+                {
+                    auto* panel = weak.get();
+                    return panel ? panel->confirmMatureApply(notification, response) : false;
+                });
             return false;
         }
 

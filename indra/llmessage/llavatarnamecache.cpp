@@ -992,7 +992,12 @@ bool LLAvatarNameCache::expirationFromCacheControl(const LLSD& headers, F64 *exp
 
 void LLAvatarNameCache::addUseDisplayNamesCallback(const use_display_name_signal_t::slot_type& cb)
 {
-    mUseDisplayNamesSignal.connect(cb);
+    connectUseDisplayNamesCallback(cb);
+}
+
+boost::signals2::connection LLAvatarNameCache::connectUseDisplayNamesCallback(const use_display_name_signal_t::slot_type& cb)
+{
+    return mUseDisplayNamesSignal.connect(cb);
 }
 
 

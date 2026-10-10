@@ -134,7 +134,7 @@ Online notifications:
      width="270"
      control_name="FSContactSetsNotificationToast"/>
     <check_box
-     disabled_control="OnlineOffLinetoNearbyChat"
+     disabled_control="OnlineOfflinetoNearbyChat"
      follows="left|top"
      height="12"
      label="Show Online Notices for certain Sets in nearby chat"

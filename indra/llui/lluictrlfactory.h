@@ -114,6 +114,7 @@ class LLUICtrlFactory : public LLSingleton<LLUICtrlFactory>
     };
 
 public:
+    static bool isNativeLayoutType(const std::type_info& type);
 
     // get default parameter block for widget of a specific type
     template<typename T>

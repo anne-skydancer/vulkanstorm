@@ -50,6 +50,7 @@ class LLAccordionCtrlTab : public LLUICtrl
 {
 // Interface
 public:
+    static bool isNativeHeaderType(const std::type_info& type);
 
     struct Params
      : public LLInitParam::Block<Params, LLUICtrl::Params>

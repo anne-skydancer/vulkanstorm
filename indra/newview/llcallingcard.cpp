@@ -1098,3 +1098,14 @@ bool LLCollectAllBuddies::operator()(const LLUUID& buddy_id, LLRelationship* bud
     }
     return true;
 }
+
+void LLAvatarTracker::clearBuddyList()
+{
+    deleteTrackingData();
+    mTrackedAgentValid = false;
+    for (const auto& buddy : mBuddyInfo) { mChangedBuddyIDs.insert(buddy.first); delete buddy.second; }
+    mBuddyInfo.clear();
+    mBuddyStatusQueue = {};
+    addChangedMask(LLFriendObserver::REMOVE, LLUUID::null);
+    notifyObservers();
+}

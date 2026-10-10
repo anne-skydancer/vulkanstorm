@@ -26,6 +26,8 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llfloaterproperties.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
 
 #include <algorithm>
 #include <functional>
@@ -113,6 +115,7 @@ void LLPropertiesObserver::changed(U32 mask)
 // Default constructor
 LLFloaterProperties::LLFloaterProperties(const LLSD& key)
   : LLFloater(key),
+    mPropertiesCurrent(vs_native_im_guard()),
     mDirty(true)
     // <FS:Ansariel> Avatar names often not showing on first open
     ,mCreatorNameCbConnection(),
@@ -320,7 +323,7 @@ void LLFloaterProperties::refreshFromItem(LLInventoryItem* item)
     // CREATOR NAME //
     //////////////////
     if(!gCacheName) return;
-    if(!gAgent.getRegion()) return;
+    if (!gAgent.getRegion() && !(gViewerWindow && gViewerWindow->isNativeVulkan())) return;
 
     if (item->getCreatorUUID().notNull())
     {
@@ -639,7 +642,7 @@ void LLFloaterProperties::refreshFromItem(LLInventoryItem* item)
 void LLFloaterProperties::setAssociatedExperience( LLHandle<LLFloaterProperties> hInfo, const LLSD& experience )
 {
     LLFloaterProperties* info = hInfo.get();
-    if(info)
+    if (info && info->mPropertiesCurrent())
     {
         LLUUID id;
         if(experience.has(LLExperienceCache::EXPERIENCE_ID))
@@ -982,6 +985,7 @@ void LLFloaterProperties::updateSaleInfo()
 
 LLInventoryItem* LLFloaterProperties::findItem() const
 {
+    if (!mPropertiesCurrent()) return nullptr;
     LLInventoryItem* item = NULL;
     if(mObjectID.isNull())
     {
@@ -1018,6 +1022,7 @@ void LLFloaterProperties::dirtyAll()
 // <FS:Ansariel> Avatar names often not showing on first open
 void LLFloaterProperties::onCreatorNameCallback(const LLUUID& av_id, const LLAvatarName& av_name, const LLPermissions& perm)
 {
+    if (!mPropertiesCurrent()) return;
     bool enabled = true;
     std::string name = av_name.getUserName();
     // If the object creator matches the object owner we need to anonymize the creator field as well
@@ -1033,6 +1038,7 @@ void LLFloaterProperties::onCreatorNameCallback(const LLUUID& av_id, const LLAva
 
 void LLFloaterProperties::onOwnerNameCallback(const LLUUID& av_id, const LLAvatarName& av_name)
 {
+    if (!mPropertiesCurrent()) return;
     bool fRlvCanShowOwner = true;
     std::string name = av_name.getUserName();
     if (RlvActions::isRlvEnabled())
@@ -1050,6 +1056,7 @@ void LLFloaterProperties::onOwnerNameCallback(const LLUUID& av_id, const LLAvata
 
 void LLFloaterProperties::onGroupOwnerNameCallback(const std::string& name)
 {
+    if (!mPropertiesCurrent()) return;
     getChild<LLUICtrl>("LabelOwnerName")->setValue(name);
     getChildView("BtnOwner")->setEnabled(true);
 }

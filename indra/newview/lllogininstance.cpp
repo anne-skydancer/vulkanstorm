@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_VULKAN_DIAGNOSTICS
+#include "vsnativereplay.h"
+#endif
 
 #include "lllogininstance.h"
 
@@ -120,7 +123,11 @@ void LLLoginInstance::connect(LLPointer<LLCredential> credentials)
         LL_WARNS() << "Failed to get login URIs during connect. No connect for you!" << LL_ENDL;
         return;
     }
+#if VS_VULKAN_DIAGNOSTICS
+    connect(vs_native_replay_login_uri(uris.front()), credentials);
+#else
     connect(uris.front(), credentials);
+#endif
 }
 
 void LLLoginInstance::connect(const std::string& uri, LLPointer<LLCredential> credentials)
@@ -136,7 +143,11 @@ void LLLoginInstance::reconnect()
     // request params.
     std::vector<std::string> uris;
     LLGridManager::getInstance()->getLoginURIs(uris);
+#if VS_VULKAN_DIAGNOSTICS
+    mLoginModule->connect(vs_native_replay_login_uri(uris.front()), mRequestData);
+#else
     mLoginModule->connect(uris.front(), mRequestData);
+#endif
     gViewerWindow->setShowProgress(true,!gSavedSettings.getBOOL("FSDisableLoginScreens"));
 }
 

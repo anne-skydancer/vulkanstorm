@@ -48,6 +48,7 @@
 #include "llstring.h"
 #include "llpermissions.h"
 #include "lltrans.h"
+#include "vsnativeim.h"
 
 // linden includes
 #include "llassetstorage.h"
@@ -64,6 +65,7 @@ const S32 PREVIEW_HPAD = PREVIEW_RESIZE_HANDLE_SIZE;
 //-----------------------------------------------------------------------------
 LLFloaterNameDesc::LLFloaterNameDesc(const LLSD& args)
     : LLFloater(args)
+    , mUploadCurrent(vs_native_im_guard())
     , mIsAudio(false)
     , mIsText(false)
 {
@@ -195,6 +197,7 @@ void LLFloaterNameDesc::doCommit()
 //-----------------------------------------------------------------------------
 void LLFloaterNameDesc::onBtnOK( )
 {
+    if (!mUploadCurrent()) return;
     getChildView("ok_btn")->setEnabled(false); // don't allow inadvertent extra uploads
 
     LLAssetStorage::LLStoreAssetCallback callback;

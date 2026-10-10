@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llfloaterprofile.h"
 
@@ -73,12 +74,12 @@ void LLFloaterProfile::onClickCloseBtn(bool app_quitting)
         if (mPanelProfile->hasUnpublishedClassifieds())
         {
             LLNotificationsUtil::add("ProfileUnpublishedClassified", LLSD(), LLSD(),
-                boost::bind(&LLFloaterProfile::onUnsavedChangesCallback, this, _1, _2, false));
+                vs_native_im_ui_callback(this, boost::bind(&LLFloaterProfile::onUnsavedChangesCallback, this, _1, _2, false)));
         }
         else if (mPanelProfile->hasUnsavedChanges())
         {
             LLNotificationsUtil::add("ProfileUnsavedChanges", LLSD(), LLSD(),
-                boost::bind(&LLFloaterProfile::onUnsavedChangesCallback, this, _1, _2, true));
+                vs_native_im_ui_callback(this, boost::bind(&LLFloaterProfile::onUnsavedChangesCallback, this, _1, _2, true)));
         }
         else
         {

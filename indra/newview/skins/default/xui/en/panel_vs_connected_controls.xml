@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<panel name="native_connected_controls" follows="left|right|top" height="32" width="1000" background_visible="true">
+  <button name="contacts" label="Friends" tool_tip="Open friends and contacts" left="4" top="4" width="96" height="24" />
+  <button name="groups" label="Groups" tool_tip="Open groups and group chats" left="104" top="4" width="96" height="24" />
+  <button name="new_im" label="New IM" tool_tip="Find a person and start an IM" left="204" top="4" width="96" height="24" />
+  <button name="conversations" label="Conversations" left="304" top="4" width="112" height="24" />
+  <button name="preferences" label="Preferences" left="420" top="4" width="104" height="24" />
+  <button name="notifications" label="Notifications" left="528" top="4" width="104" height="24" />
+</panel>

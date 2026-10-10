@@ -1,6 +1,19 @@
 // Native CPU session and nearby transport. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "vsnativesession.h"
+#include "vsnativeim.h"
+#include "llcallingcard.h"
+#include "lluserrelations.h"
+#include "lggcontactsets.h"
+#include "llagentlanguage.h"
+#include "llinventorymodel.h"
+#include "llinventorymodelbackgroundfetch.h"
+#include "llviewerassetstorage.h"
+#include "llviewerinventory.h"
+#include "llexperiencecache.h"
+#include "vsuiimageprovider.h"
+#include "llpersistentnotificationstorage.h"
+#include "lldonotdisturbnotificationstorage.h"
 #include "vsplainchat.h"
 #include "llappviewer.h"
 #include "llviewerwindow.h"
@@ -8,16 +21,29 @@
 #include "llviewercontrol.h"
 #include "llstartup.h"
 #include "llagent.h"
+#include "llagentbenefits.h"
+#include "llviewernetwork.h"
+#include "lleconomy.h"
 #include "llagentdata.h"
 #if LL_SDL2
 #include "llwindowsdl.h"
 #endif
 #include "lllogininstance.h"
 #include "llpanel.h"
+#include "llpaneldirbrowser.h"
+#include "llgroupmgr.h"
+#include "llpanelgroupnotices.h"
+#include "llpanelgrouplandmoney.h"
+#include "llavatarpropertiesprocessor.h"
+#include "llfloateravatarpicker.h"
+#include "llremoteparcelrequest.h"
+#include "llvieweraudio.h"
+#include "llviewermessage.h"
 #include "fspanellogin.h"
 #include "llprogressview.h"
 #include "llnotificationsutil.h"
 #include "lltrans.h"
+#include "llurlentry.h"
 #include "llcorehttputil.h"
 #include "llcoros.h"
 #include "lleventpoll.h"
@@ -47,6 +73,7 @@
 extern bool gDisconnected;
 extern bool gAgentMovementCompleted;
 extern void reset_login();
+extern bool init_benefits(LLSD& response);
 namespace
 {
 std::weak_ptr<VSNativeSession> sOwner;
@@ -55,7 +82,20 @@ const std::set<std::string> transport = {"StartPingCheck", "CompletePingCheck", 
 const std::set<std::string> session = {"RegionHandshake", "AgentMovementComplete", "ChatFromSimulator",
     "LogoutReply", "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "TeleportStart", "TeleportFinish",
     "TeleportLocal", "TeleportProgress", "TeleportFailed", "ViewerFrozenMessage", "FeatureDisabled", "CrossedRegion", "CloseCircuit", "DisableSimulator", "UUIDNameReply", "UUIDGroupNameReply",
-    "MuteListUpdate", "UseCachedMuteList", "SendXferPacket", "ConfirmXferPacket", "AbortXfer"};
+    "MuteListUpdate", "UseCachedMuteList", "SendXferPacket", "ConfirmXferPacket", "AbortXfer", "TransferInfo", "TransferPacket", "TransferAbort",
+    "EconomyData", "ImprovedInstantMessage", "AgentDataUpdate", "AgentGroupDataUpdate", "AgentDropGroup",
+    "OnlineNotification", "OfflineNotification", "ChangeUserRights", "MoneyBalanceReply", "UserInfoReply", "ParcelInfoReply", "PlacesReply",
+    "AvatarPropertiesReply", "AvatarInterestsReply", "AvatarGroupsReply", "AvatarNotesReply",
+    "AvatarPicksReply", "AvatarClassifiedReply", "AvatarPickerReply", "PickInfoReply", "ClassifiedInfoReply",
+    "CreateGroupReply", "JoinGroupReply", "EjectGroupMemberReply", "LeaveGroupReply",
+    "GroupProfileReply", "GroupMembersReply", "GroupRoleDataReply", "GroupRoleMembersReply",
+    "DirGroupsReply", "GroupTitlesReply", "GroupNoticesListReply", "GroupAccountSummaryReply",
+    "GroupAccountDetailsReply", "GroupAccountTransactionsReply",
+    "UpdateCreateInventoryItem", "RemoveInventoryItem", "RemoveInventoryFolder", "RemoveInventoryObjects",
+    "SaveAssetIntoInventory", "BulkUpdateInventory", "MoveInventoryItem", "InventoryDescendents", "FetchInventoryReply",
+    "SetDisplayNameReply", "DisplayNameUpdate",
+    "ChatterBoxSessionStartReply", "ChatterBoxSessionEventReply", "ChatterBoxSessionAgentListUpdates",
+    "ChatterBoxSessionUpdate", "ChatterBoxInvitation", "ForceCloseChatterBoxSession"};
 struct CircuitDelivery { std::weak_ptr<VSNativeSession> owner; U64 generation; };
 void circuitCallback(void** userdata, S32 result)
 {
@@ -111,8 +151,57 @@ void VSNativeSession::install(LLMessageSystem& msg)
     });
     // Mixed viewer handlers are replaced before any session messages can execute.
     for (const char* name : {"RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
-         "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
+         "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
+    LLAvatarTracker::instance().registerCallbacks(&msg);
+    LLInventoryModel::registerCallbacks(&msg);
+    msg.setHandlerFunc("AgentDataUpdate", LLAgent::processAgentDataUpdate);
+    msg.setHandlerFunc("AgentGroupDataUpdate", LLAgent::processAgentGroupDataUpdate);
+    msg.setHandlerFunc("AgentDropGroup", LLAgent::processAgentDropGroup);
+    msg.setHandlerFunc("DirGroupsReply", LLPanelDirBrowser::processDirGroupsReply);
+    // These CPU services normally register during the world startup path,
+    // which native text startup deliberately does not execute. Admission
+    // alone cannot substitute for installing their production reply handlers.
+    msg.setHandlerFunc("CreateGroupReply", LLGroupMgr::processCreateGroupReply);
+    msg.setHandlerFunc("JoinGroupReply", LLGroupMgr::processJoinGroupReply);
+    msg.setHandlerFunc("EjectGroupMemberReply", LLGroupMgr::processEjectGroupMemberReply);
+    msg.setHandlerFunc("LeaveGroupReply", LLGroupMgr::processLeaveGroupReply);
+    msg.setHandlerFunc("GroupProfileReply", LLGroupMgr::processGroupPropertiesReply);
+    msg.setHandlerFunc("GroupMembersReply", LLGroupMgr::processGroupMembersReply);
+    msg.setHandlerFunc("GroupRoleDataReply", LLGroupMgr::processGroupRoleDataReply);
+    msg.setHandlerFunc("GroupRoleMembersReply", LLGroupMgr::processGroupRoleMembersReply);
+    msg.setHandlerFunc("GroupTitlesReply", LLGroupMgr::processGroupTitlesReply);
+    msg.setHandlerFunc("GroupNoticesListReply", LLPanelGroupNotices::processGroupNoticesListReply);
+    msg.setHandlerFunc("GroupAccountSummaryReply", LLPanelGroupLandMoney::processGroupAccountSummaryReply);
+    msg.setHandlerFunc("GroupAccountDetailsReply", LLPanelGroupLandMoney::processGroupAccountDetailsReply);
+    msg.setHandlerFunc("GroupAccountTransactionsReply", LLPanelGroupLandMoney::processGroupAccountTransactionsReply);
+    // Group land listings are CPU rows. Null/personal land queries do not
+    // instantiate the deferred scene Land Holdings floater in this route.
+    msg.setHandlerFunc("PlacesReply", LLPanelGroupLandMoney::processPlacesReply);
+    msg.setHandlerFunc("AvatarPropertiesReply", LLAvatarPropertiesProcessor::processAvatarLegacyPropertiesReply);
+    msg.setHandlerFunc("AvatarInterestsReply", LLAvatarPropertiesProcessor::processAvatarInterestsReply);
+    msg.setHandlerFunc("AvatarGroupsReply", LLAvatarPropertiesProcessor::processAvatarGroupsReply);
+    msg.setHandlerFunc("AvatarNotesReply", LLAvatarPropertiesProcessor::processAvatarNotesReply);
+    msg.setHandlerFunc("AvatarPicksReply", LLAvatarPropertiesProcessor::processAvatarPicksReply);
+    msg.setHandlerFunc("AvatarClassifiedReply", LLAvatarPropertiesProcessor::processAvatarClassifiedsReply);
+    msg.setHandlerFunc("PickInfoReply", LLAvatarPropertiesProcessor::processPickInfoReply);
+    msg.setHandlerFunc("ClassifiedInfoReply", LLAvatarPropertiesProcessor::processClassifiedInfoReply);
+    msg.setHandlerFunc("ParcelInfoReply", LLRemoteParcelInfoProcessor::processParcelInfoReply);
+    msg.setHandlerFunc("AvatarPickerReply", LLFloaterAvatarPicker::processAvatarPickerReply);
+    msg.setHandlerFunc("UserInfoReply", [](LLMessageSystem* message, void** data)
+    {
+        LLUUID agent; message->getUUID("AgentData", "AgentID", agent);
+        if (agent == gAgentID) process_user_info_reply(message, data);
+    });
+
+    msg.setHandlerFunc("EconomyData", [](LLMessageSystem* message, void**)
+    {
+        const auto current = VSNativeSession::active();
+        if (!current || current->phase() != Phase::Connected || current->host() != message->getSender()) return;
+        if (!LLGridManager::instance().isInSecondLife())
+            LLGlobalEconomy::processEconomyData(message, LLGlobalEconomy::getInstance());
+    });
+    vs_native_im_install(msg);
 }
 bool VSNativeSession::acceptLogin(const LLSD& response)
 {
@@ -126,6 +215,17 @@ bool VSNativeSession::acceptLogin(const LLSD& response)
     mWidth = response.has("region_size_x") ? U32(response["region_size_x"].asInteger()) : 256;
     mHeight = response.has("region_size_y") ? U32(response["region_size_y"].asInteger()) : 256;
     if (!mWidth || !mHeight || mWidth > 65536 || mHeight > 65536) return false;
+    if (LLGridManager::instance().isInSecondLife())
+    {
+        LLSD benefitsResponse = response;
+        if (!init_benefits(benefitsResponse))
+        {
+            LLAgentBenefitsMgr::resetAccountBenefits();
+            LLSD payload; vs_native_im_stamp_notification(payload);
+            LLNotificationsUtil::add("FailedToGetBenefits", LLSD(), payload);
+            LL_WARNS("NativeSession") << "Login benefits are incomplete; unavailable account costs remain blocked" << LL_ENDL;
+        }
+    }
     mLastChannel = 0;
     mAgent = agent; mSession = identity; mHost = host; mCircuit = circuit; mSeed = seed;
     mHandle = to_region_handle(U32(response["region_x"].asInteger()), U32(response["region_y"].asInteger()));
@@ -137,6 +237,28 @@ bool VSNativeSession::acceptLogin(const LLSD& response)
     std::string last = response["last_name"].asString();
     LLStringUtil::replaceChar(last, '"', ' '); LLStringUtil::trim(last);
     if (!last.empty() && last != "Resident") gAgentUsername += " " + last;
+    LLUrlEntryBase::setAgentID(mAgent);
+    LLUrlEntryParcel::setSessionID(mSession);
+    if (response.has("agent_access_max"))
+    {
+        const auto access = response["agent_access_max"].asString();
+        if (!access.empty()) gAgent.setMaturity(access[0]);
+    }
+    const auto preferred = response["agent_region_access"].asString();
+    if (!preferred.empty()) gSavedSettings.setU32("PreferredMaturity", LLAgent::convertTextToMaturity(preferred[0]));
+    if (response.has("help_url_format")) gSavedSettings.setString("HelpURLFormat", response["help_url_format"].asString());
+    LLAvatarTracker::buddy_map_t buddies;
+    const auto& buddyList = response["buddy-list"];
+    for (auto iter = buddyList.beginArray(); iter != buddyList.endArray(); ++iter)
+    {
+        const auto& buddy = *iter;
+        const auto id = buddy["buddy_id"].asUUID();
+        if (id.notNull()) buddies.emplace(id, new LLRelationship(buddy["buddy_rights_given"].asInteger(), buddy["buddy_rights_has"].asInteger(), false));
+    }
+    LLAvatarTracker::instance().addBuddyList(buddies);
+    auto* contacts = LGGContactSets::getInstance();
+    contacts->loadFromDisk();
+    LLAvatarNameCache::instance().setCustomNameCheckCallback(boost::bind(&LGGContactSets::checkCustomName, contacts, _1, _2, _3));
     gMessageSystem->mOurCircuitCode = circuit;
     // Retain CPU identity/origin, without agent init's camera/animation observers.
     gAgent.initOriginGlobal(from_region_handle(mHandle));
@@ -153,6 +275,7 @@ void VSNativeSession::begin()
     gMessageSystem->enableCircuit(mHost, true);
     LLStartUp::initNameCache();
     if (gCacheName) gCacheName->setUpstream(mHost);
+    if (gAssetStorage) gAssetStorage->setUpstream(mHost);
     if (gXferManager) gXferManager->registerCallbacks(gMessageSystem);
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessage("UseCircuitCode"); msg->nextBlock("CircuitCode");
@@ -179,7 +302,12 @@ void VSNativeSession::seedCoro(std::string url, U64 generation)
     mCancelSeed = [weak]() { if (auto request = weak.lock()) request->cancelSuspendedOperation(); };
     auto request = std::make_shared<LLCore::HttpRequest>();
     auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(15); options->setRetries(0);
-    LLSD wanted = LLSD::emptyArray(); wanted.append("EventQueueGet"); wanted.append("GetDisplayNames");
+    LLSD wanted = LLSD::emptyArray();
+    for (const char* name : {"EventQueueGet", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "AvatarPickerSearch",
+         "GroupAPIv1", "GroupMemberData", "AgentProfile", "UploadAgentProfileImage", "NewFileAgentInventory", "InventoryThumbnailUpload", "SetDisplayName", "RemoteParcelRequest", "AcceptFriendship", "DeclineFriendship",
+         "AcceptGroupInvite", "DeclineGroupInvite", "FetchInventory2", "FetchLib2",
+         "FetchInventoryDescendents2", "FetchLibDescendents2", "InventoryAPIv3", "LibraryAPIv3", "CreateInventoryCategory", "ViewerAsset", "CopyInventoryFromNotecard", "UpdateAgentLanguage", "UpdateAgentInformation", "UpdateNotecardAgentInventory", "UpdateNotecardTaskInventory", "UpdateScriptAgent", "UserInfo", "AgentPreferences", "SearchStatRequest", "Tracking",
+         "GetExperiences", "GetExperienceInfo", "GroupExperiences", "GetMetadata"}) wanted.append(name);
     for (unsigned attempt = 0; attempt < 3; ++attempt)
     {
         LLSD result = adapter->postAndSuspend(request, url, wanted, options);
@@ -194,10 +322,20 @@ void VSNativeSession::capabilities(const LLSD& caps, U64 generation)
     if (generation != mGeneration || mPhase != Phase::Connecting) { ++mExpired; return; }
     if (!caps.isMap() || !webURL(caps["EventQueueGet"].asString())) { disconnect(LLTrans::getString("NativeSessionInvalidCapabilities")); return; }
     mCapabilities = LLSD::emptyMap();
-    for (const char* name : {"EventQueueGet", "GetDisplayNames"})
+    for (const char* name : {"EventQueueGet", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "AvatarPickerSearch",
+         "GroupAPIv1", "GroupMemberData", "AgentProfile", "UploadAgentProfileImage", "NewFileAgentInventory", "InventoryThumbnailUpload", "SetDisplayName", "RemoteParcelRequest", "AcceptFriendship", "DeclineFriendship",
+         "AcceptGroupInvite", "DeclineGroupInvite", "FetchInventory2", "FetchLib2",
+         "FetchInventoryDescendents2", "FetchLibDescendents2", "InventoryAPIv3", "LibraryAPIv3", "CreateInventoryCategory", "ViewerAsset", "CopyInventoryFromNotecard", "UpdateAgentLanguage", "UpdateAgentInformation", "UpdateNotecardAgentInventory", "UpdateNotecardTaskInventory", "UpdateScriptAgent", "UserInfo", "AgentPreferences", "SearchStatRequest", "Tracking",
+         "GetExperiences", "GetExperienceInfo", "GroupExperiences", "GetMetadata"})
         if (webURL(caps[name].asString())) mCapabilities[name] = caps[name];
+    // LLSD messages are sent through the host's granted HTTP transport.
+    // LLAgent, cache-name and asset services retain copies of this host.
+    mHost.setUntrustedSimulatorCap(capability("UntrustedSimulatorMessage"));
+    if (gCacheName) gCacheName->setUpstream(mHost);
+    if (gAssetStorage) gAssetStorage->setUpstream(mHost);
     LLAvatarNameCache::getInstance()->setNameLookupURL(capability("GetDisplayNames"));
     mPoll = std::make_unique<LLEventPoll>(capability("EventQueueGet"), mHost);
+    LLExperienceCache::instance().setCapabilityQuery([](const std::string& name) { return gAgent.getRegionCapability(name); });
     mSeedReady = true;
     connected();
 }
@@ -232,6 +370,16 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         msg->getUUID("AgentData", "AgentID", agent); msg->getUUID("AgentData", "SessionID", identity);
         msg->getU64("Data", "RegionHandle", handle); msg->getVector3("Data", "Position", pos);
         body["agent"] = agent; body["session"] = identity; body["handle"] = ll_sd_from_U64(handle); body["position"] = ll_sd_from_vector3(pos);
+    }
+    else if (name == "MoneyBalanceReply")
+    {
+        LLUUID agent; S32 balance;
+        msg->getUUID("MoneyData", "AgentID", agent); msg->getS32("MoneyData", "MoneyBalance", balance);
+        body["agent"] = agent; body["balance"] = balance;
+        S32 credit, committed;
+        msg->getS32("MoneyData", "SquareMetersCredit", credit);
+        msg->getS32("MoneyData", "SquareMetersCommitted", committed);
+        body["land_credit"] = credit; body["land_committed"] = committed;
     }
     else if (name == "ChatFromSimulator")
     {
@@ -286,6 +434,12 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         LLVector3 pos = ll_vector3_from_sd(body["position"]); if (!pos.isFinite()) return false;
         mPosition = pos; gAgent.setPositionAgent(pos); mMovement = true; connected();
     }
+    else if (name == "MoneyBalanceReply" && mPhase == Phase::Connected)
+    {
+        if (body["agent"].asUUID() != mAgent) return false;
+        updateBalance(body["balance"].asInteger());
+        mLandCredit = body["land_credit"].asInteger(); mLandCommitted = body["land_committed"].asInteger();
+    }
     else if (name == "ChatFromSimulator" && mPhase == Phase::Connected) appendChat(body, generation);
     else if (name == "LogoutReply" && mPhase == Phase::Logout)
     { if (body["agent"].asUUID() != mAgent || body["session"].asUUID() != mSession) return false; finishLogout(); }
@@ -316,7 +470,14 @@ void VSNativeSession::connected()
     LLStartUp::setStartupState(STATE_STARTED);
     LLAppViewer::instance()->handleLoginComplete();
     FSPanelLogin::closePanel();
+    gViewerWindow->setNativeConnected(true);
     gViewerWindow->getProgressView()->setVisible(false);
+    init_audio();
+    if (!LLGridManager::instance().isInSecondLife())
+    {
+        gMessageSystem->newMessage("EconomyDataRequest");
+        gMessageSystem->sendReliable(mHost);
+    }
     mChat = gViewerWindow->nativeChat();
     if (mChat)
     {
@@ -336,6 +497,9 @@ void VSNativeSession::connected()
         }
     }
     LLMuteList::getInstance()->requestFromServer(mAgent);
+    gAgent.sendAgentDataUpdateRequest();
+    send("MoneyBalanceRequest", LLSD());
+    LLAgentLanguage::update();
     LL_INFOS("NativeSession") << "Native CPU region ready: " << mName << LL_ENDL;
 }
 void VSNativeSession::appendChat(LLSD chat, U64 generation)
@@ -424,6 +588,8 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
     if (name == "RegionHandshakeReply")
     { msg->nextBlock("RegionInfo"); msg->addU32("Flags", 0); } // No cache, appearance or mesh promises.
     else if (name == "CompleteAgentMovement") msg->addU32("CircuitCode", mCircuit);
+    else if (name == "MoneyBalanceRequest")
+    { msg->nextBlock("MoneyData"); msg->addUUID("TransactionID", LLUUID::null); }
     else if (name == "ChatFromViewer")
     { msg->nextBlock("ChatData"); msg->addString("Message", data["text"].asString()); msg->addU8("Type", U8(data["type"].asInteger())); msg->addS32("Channel", data["channel"].asInteger()); }
     else if (name == "AgentUpdate")
@@ -457,14 +623,28 @@ void VSNativeSession::tick()
     if (mTyping && now() > mTypingDeadline) typing(false);
     if (mPhase == Phase::Connecting || mPhase == Phase::Connected)
     {
-        if (gCacheName) gCacheName->processPending();
-        if (LLAvatarNameCache::instanceExists()) LLAvatarNameCache::getInstance()->idle();
+        // Do not dispatch legacy/cache lookups before the seed grant. A failed
+        // pre-cap request otherwise remains pending for five minutes even once
+        // the proper directory/UntrustedSimulatorMessage endpoints arrive.
+        if (mSeedReady)
+        {
+            if (gCacheName) gCacheName->processPending();
+            if (LLAvatarNameCache::instanceExists()) LLAvatarNameCache::getInstance()->idle();
+        }
         if (gXferManager) gXferManager->retransmitUnackedPackets();
     }
-    if (mPhase == Phase::Connected && LLMuteList::instanceExists()) LLMuteList::getInstance()->updateLoadState();
+    if (mPhase == Phase::Connected && LLMuteList::instanceExists())
+    {
+        LLMuteList::getInstance()->updateLoadState();
+        if (LLMuteList::getInstance()->isLoadedFromServer()) vs_native_im_request_offline();
+        LLAvatarTracker::instance().idleNotifyObservers();
+        vs_pump_ui_images();
+        if (LLInventoryModelBackgroundFetch::instanceExists()) LLInventoryModelBackgroundFetch::instance().pumpAccountFetch();
+    }
 }
 void VSNativeSession::unbind()
 {
+    if (gViewerWindow) gViewerWindow->setNativeConnected(false);
     if (mChat) { mChat->input()->setKeystrokeCallback({}, nullptr); mChat->clear(); mChat->setVisible(false); mChat = nullptr; }
 }
 void VSNativeSession::requestLogout(bool quit)
@@ -495,7 +675,40 @@ void VSNativeSession::disconnect(const std::string& reason)
 }
 void VSNativeSession::reset()
 {
+    if (mAgent.notNull() && (mPhase == Phase::Connected || mPhase == Phase::Logout || mPhase == Phase::Disconnected))
+    {
+        if (LLPersistentNotificationStorage::instanceExists()) LLPersistentNotificationStorage::getInstance()->saveNotifications();
+        if (LLDoNotDisturbNotificationStorage::instanceExists()) LLDoNotDisturbNotificationStorage::getInstance()->saveNotifications();
+    }
     ++mGeneration; unbind();
+    if (LLNotifications::instanceExists())
+    {
+        std::vector<LLNotificationPtr> retired;
+        if (auto channel = LLNotifications::instance().getChannel("System"))
+            channel->forEachNotification([&retired](LLNotificationPtr notification)
+            {
+                if (notification->getPayload().has("vs_notification_epoch")) retired.push_back(notification);
+            });
+        for (const auto& notification : retired) LLNotifications::instance().cancel(notification);
+    }
+    if (auto* assets = dynamic_cast<LLViewerAssetStorage*>(gAssetStorage)) assets->resetAccountRequests();
+    vs_native_im_reset(); clearBalance();
+    LLAgentBenefitsMgr::resetAccountBenefits();
+    if (LLGlobalEconomy::instanceExists())
+    {
+        auto& economy = LLGlobalEconomy::instance();
+        economy.setObjectCount(-1); economy.setObjectCapacity(-1);
+        economy.setPriceObjectClaim(-1); economy.setPricePublicObjectDecay(-1);
+        economy.setPricePublicObjectDelete(-1); economy.setPriceEnergyUnit(-1);
+        economy.setPriceUpload(-1); economy.setPriceRentLight(-1);
+        economy.setTeleportMinPrice(-1); economy.setTeleportPriceExponent(-1.f);
+        economy.setPriceGroupCreate(-1);
+    }
+    if (LLInventoryModelBackgroundFetch::instanceExists()) LLInventoryModelBackgroundFetch::instance().resetAccountFetch();
+    gInventoryCallbacks.resetAccountCallbacks();
+    gInventory.clearAccountInventory();
+    LLAvatarTracker::instance().clearBuddyList();
+    gAgent.resetGroups();
     mNameConnections.clear(); mNames.clear(); mPendingNames.clear();
     mPhase = Phase::Login;
     auto cancel = std::move(mCancelSeed); if (cancel) cancel();

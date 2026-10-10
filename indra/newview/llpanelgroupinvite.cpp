@@ -74,6 +74,7 @@ public:
 
 public:
     LLUUID mGroupID;
+    LLHandle<LLPanelGroupInvite> mOwnerPanel;
 
     std::string     mLoadingText;
     LLNameListCtrl  *mInvitees;
@@ -162,6 +163,7 @@ void LLPanelGroupInvite::impl::submitInvitations()
 
     LLGroupMgrGroupData* gdatap = LLGroupMgr::getInstance()->getGroupData(mGroupID);
 
+    if (!gdatap) return;
     // Default to everyone role.
     LLUUID role_id = LLUUID::null;
 
@@ -174,7 +176,13 @@ void LLPanelGroupInvite::impl::submitInvitations()
         {
             LLSD args;
             args["MESSAGE"] = mOwnerWarning;
-            LLNotificationsUtil::add("GenericAlertYesCancel", args, LLSD(), boost::bind(&LLPanelGroupInvite::impl::inviteOwnerCallback, this, _1, _2));
+            const auto weak = mOwnerPanel;
+            LLNotificationsUtil::add("GenericAlertYesCancel", args, LLSD(),
+                [weak](const LLSD& notification, const LLSD& response)
+                {
+                    auto* panel = weak.get();
+                    return panel ? panel->mImplementation->inviteOwnerCallback(notification, response) : false;
+                });
             return; // we'll be called again if user confirms
         }
     }
@@ -313,8 +321,12 @@ void LLPanelGroupInvite::impl::callbackClickAdd(void* userdata)
         //This will do for now. -jwolk May 10, 2006
         LLView * button = panelp->findChild<LLButton>("add_button");
         LLFloater * root_floater = gFloaterView->getParentFloater(panelp);
+        const auto weak = panelp->getDerivedHandle<LLPanelGroupInvite>();
         LLFloaterAvatarPicker* picker = LLFloaterAvatarPicker::show(
-            boost::bind(impl::callbackAddUsers, _1, panelp->mImplementation), true, false, false, root_floater->getName(), button);
+            [weak](const uuid_vec_t& ids, const std::vector<LLAvatarName>&)
+            {
+                if (auto* panel = weak.get()) impl::callbackAddUsers(ids, panel->mImplementation);
+            }, true, false, false, root_floater->getName(), button);
         if (picker)
         {
             root_floater->addDependentFloater(picker);
@@ -445,6 +457,7 @@ LLPanelGroupInvite::LLPanelGroupInvite(const LLUUID& group_id)
       mImplementation(new impl(group_id)),
       mPendingUpdate(false)
 {
+    mImplementation->mOwnerPanel = getDerivedHandle<LLPanelGroupInvite>();
     // Pass on construction of this panel to the control factory.
     buildFromFile( "panel_group_invite.xml");
 }

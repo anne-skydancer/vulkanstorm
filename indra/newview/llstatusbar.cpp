@@ -26,6 +26,10 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativeim.h"
+#include "vsnativesession.h"
+#endif
 
 #include "llstatusbar.h"
 
@@ -877,27 +881,27 @@ void LLStatusBar::setBalance(S32 balance)
 // static
 void LLStatusBar::sendMoneyBalanceRequest()
 {
+    if (gDisconnected || !gMessageSystem) return;
+    LLHost destination = gAgent.getRegion() ? gAgent.getRegionHost() : LLHost();
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (owner->phase() != VSNativeSession::Phase::Connected ||
+            gAgent.getID().isNull() || gAgent.getSessionID().isNull()) return;
+        destination = owner->host();
+    }
+#endif
+    if (!destination.isOk()) return;
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessageFast(_PREHASH_MoneyBalanceRequest);
     msg->nextBlockFast(_PREHASH_AgentData);
     msg->addUUIDFast(_PREHASH_AgentID, gAgent.getID());
     msg->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
     msg->nextBlockFast(_PREHASH_MoneyData);
-    msg->addUUIDFast(_PREHASH_TransactionID, LLUUID::null );
-
-    if (gDisconnected)
-    {
-        LL_DEBUGS() << "Trying to send message when disconnected, skipping balance request!" << LL_ENDL;
-        return;
-    }
-    if (!gAgent.getRegion())
-    {
-        LL_DEBUGS() << "LLAgent::sendReliableMessage No region for agent yet, skipping balance request!" << LL_ENDL;
-        return;
-    }
-    // Double amount of retries due to this request initially happening during busy stage
-    // Ideally this should be turned into a capability
-    gMessageSystem->sendReliable(gAgent.getRegionHost(), LL_DEFAULT_RELIABLE_RETRIES * 2, true, LL_PING_BASED_TIMEOUT_DUMMY, NULL, NULL);
+    msg->addUUIDFast(_PREHASH_TransactionID, LLUUID::null);
+    // Retain the startup-stage retry policy for both peer renderers.
+    msg->sendReliable(destination, LL_DEFAULT_RELIABLE_RETRIES * 2, true,
+        LL_PING_BASED_TIMEOUT_DUMMY, NULL, NULL);
 }
 
 
@@ -1216,6 +1220,11 @@ bool LLStatusBar::getAudioStreamEnabled() const
 
 bool can_afford_transaction(S32 cost)
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+        return owner->phase() == VSNativeSession::Phase::Connected &&
+            (cost <= 0 || (owner->balanceKnown() && owner->balance() >= cost));
+#endif
     return((cost <= 0)||((gStatusBar) && (gStatusBar->getBalance() >=cost)));
 }
 

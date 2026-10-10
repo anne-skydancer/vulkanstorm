@@ -479,15 +479,24 @@ void init_audio()
         LL_WARNS() << "Failed to create an appropriate Audio Engine" << LL_ENDL;
         return;
     }
-    LLVector3d lpos_global = gAgentCamera.getCameraPositionGlobal();
-    LLVector3 lpos_global_f;
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        // Text UI audio uses a neutral listener until the world camera exists.
+        gAudiop->setListener(LLVector3::zero, LLVector3::zero, LLVector3::z_axis, LLVector3::x_axis);
+    }
+    else
+    {
+        LLVector3d lpos_global = gAgentCamera.getCameraPositionGlobal();
+        LLVector3 lpos_global_f;
 
-    lpos_global_f.setVec(lpos_global);
+        lpos_global_f.setVec(lpos_global);
 
-    gAudiop->setListener(lpos_global_f,
-                          LLVector3::zero,  // LLViewerCamera::getInstance()->getVelocity(),    // !!! BUG need to replace this with smoothed velocity!
-                          LLViewerCamera::getInstance()->getUpAxis(),
-                          LLViewerCamera::getInstance()->getAtAxis());
+        gAudiop->setListener(lpos_global_f,
+                              LLVector3::zero,  // LLViewerCamera::getInstance()->getVelocity(),    // !!! BUG need to replace this with smoothed velocity!
+                              LLViewerCamera::getInstance()->getUpAxis(),
+                              LLViewerCamera::getInstance()->getAtAxis());
+
+    }
 
 // load up our initial set of sounds we'll want so they're in memory and ready to be played
 
@@ -569,7 +578,7 @@ void audio_update_volume(bool force_update)
         const F32 AUDIO_LEVEL_DOPPLER = 1.f;
         gAudiop->setDopplerFactor(AUDIO_LEVEL_DOPPLER);
 
-        if(!LLViewerCamera::getInstance()->cameraUnderWater())
+        if (gViewerWindow->isNativeVulkan() || !LLViewerCamera::getInstance()->cameraUnderWater())
         {
             const F32 AUDIO_LEVEL_ROLLOFF = 1.f;
             gAudiop->setRolloffFactor(AUDIO_LEVEL_ROLLOFF);
@@ -589,7 +598,7 @@ void audio_update_volume(bool force_update)
             LLDeferredSounds::instance().playdeferredSounds();
         }
 
-        if (force_update)
+        if (force_update && !gViewerWindow->isNativeVulkan())
         {
             audio_update_wind(true);
         }

@@ -1903,7 +1903,7 @@ void LLTabContainer::reshapeTuple(LLTabTuple* tuple)
         else
         {
             image_overlay_width = tuple->mButton->getImageOverlay().notNull() ?
-                    tuple->mButton->getImageOverlay()->getImage()->getWidth(0) : 0;
+                    tuple->mButton->getImageOverlay()->getTextureWidth() : 0;
         }
         // remove current width from total tab strip width
         mTotalTabWidth -= tuple->mButton->getRect().getWidth();

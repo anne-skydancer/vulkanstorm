@@ -26,6 +26,8 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llinventorypanel.h"
+#include "llviewerwindow.h"
+#include "vsnativeim.h"
 
 #include <utility> // for std::pair<>
 
@@ -281,7 +283,7 @@ void LLInventoryPanel::initFromParams(const LLInventoryPanel::Params& params)
     initFolderRoot();
 
     // <FS:Ansariel> Optional hiding of empty system folders
-    gSavedSettings.getControl("DebugHideEmptySystemFolders")->getSignal()->connect(boost::bind(&LLInventoryPanel::updateHideEmptySystemFolders, this, _2));
+    mHideEmptyFoldersConnection = gSavedSettings.getControl("DebugHideEmptySystemFolders")->getSignal()->connect(boost::bind(&LLInventoryPanel::updateHideEmptySystemFolders, this, _2));
 
     // Initialize base class params.
     LLPanel::initFromParams(mParams);
@@ -380,7 +382,7 @@ void LLInventoryPanel::initFolderRoot()
         {
             getFilter().setFilterCategoryTypes(getFilter().getFilterCategoryTypes() & ~(1ULL << LLFolderType::FT_INBOX));
         }
-        gSavedSettings.getControl("FSShowInboxFolder")->getSignal()->connect(boost::bind(&LLInventoryPanel::updateShowInboxFolder, this, _2));
+        mShowInboxConnection = gSavedSettings.getControl("FSShowInboxFolder")->getSignal()->connect(boost::bind(&LLInventoryPanel::updateShowInboxFolder, this, _2));
     }
     // </FS:Ansariel> Optional hiding of Received Items folder aka Inbox
 
@@ -2042,6 +2044,13 @@ bool LLInventoryPanel::isUploadLocationSelected(const LLSD& userdata)
 
 void LLInventoryPanel::openSingleViewInventory(LLUUID folder_id)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if (folder_id.isNull() && LLFolderBridge::sSelf.get()) folder_id = LLFolderBridge::sSelf.get()->getUUID();
+        auto* folder = gInventory.getCategory(folder_id);
+        if (folder) LLFloaterReg::showInstance("fs_partial_inventory", LLSD().with("start_folder_id", folder_id).with("start_folder_name", folder->getName()));
+        return;
+    }
     LLPanelMainInventory::newFolderWindow(folder_id.isNull() ? LLFolderBridge::sSelf.get()->getUUID() : folder_id);
 }
 
@@ -2072,7 +2081,7 @@ void LLInventoryPanel::purgeSelectedItems()
         }
     }
     args["COUNT"] = static_cast<S32>(count);
-    LLNotificationsUtil::add("PurgeSelectedItems", args, LLSD(), boost::bind(callbackPurgeSelectedItems, _1, _2, selected_items));
+    LLNotificationsUtil::add("PurgeSelectedItems", args, LLSD(), vs_native_im_ui_callback(this, boost::bind(callbackPurgeSelectedItems, _1, _2, selected_items)));
 }
 
 // static
@@ -2092,6 +2101,11 @@ void LLInventoryPanel::callbackPurgeSelectedItems(const LLSD& notification, cons
 
 bool LLInventoryPanel::attachObject(const LLSD& userdata)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return true;
+    }
     // Copy selected item UUIDs to a vector.
     std::set<LLFolderViewItem*> selected_items = mFolderRoot.get()->getSelectionList();
     uuid_vec_t items;
@@ -2167,6 +2181,17 @@ bool is_inventorysp_active()
 LLInventoryPanel* LLInventoryPanel::getActiveInventoryPanel(bool auto_open, bool ignore_secondary)
 // </FS:Beq>
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLSD key;
+        key["start_folder_id"] = gInventory.getRootFolderID();
+        if (auto* root = gInventory.getCategory(gInventory.getRootFolderID()))
+            key["start_folder_name"] = root->getName();
+        auto* floater = dynamic_cast<FSFloaterPartialInventory*>(auto_open
+            ? LLFloaterReg::showInstance("fs_partial_inventory", key)
+            : LLFloaterReg::findInstance("fs_partial_inventory", key));
+        return floater && (auto_open || floater->getVisible()) ? floater->getInventoryPanel() : nullptr;
+    }
     S32 z_min = S32_MAX;
     LLInventoryPanel* res = NULL;
     LLFloater* active_inv_floaterp = NULL;
@@ -2257,6 +2282,15 @@ LLInventoryPanel* LLInventoryPanel::getActiveInventoryPanel(bool auto_open, bool
 void LLInventoryPanel::openInventoryPanelAndSetSelection(bool auto_open, const LLUUID& obj_id,
     bool use_main_panel, bool take_keyboard_focus, bool reset_filter)
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if (auto* panel = getActiveInventoryPanel(auto_open, true))
+        {
+            if (reset_filter) panel->setFilterSubString(LLStringUtil::null);
+            panel->setSelection(obj_id, take_keyboard_focus);
+        }
+        return;
+    }
     // <FS:Ansariel> Use correct inventory floater
     //LLSidepanelInventory* sidepanel_inventory = LLFloaterSidePanelContainer::getPanel<LLSidepanelInventory>("inventory");
     //sidepanel_inventory->showInventoryPanel();

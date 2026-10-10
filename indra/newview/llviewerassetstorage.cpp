@@ -25,6 +25,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#include "vsnativesession.h"
 
 #include "llviewerassetstorage.h"
 
@@ -410,12 +412,12 @@ void LLViewerAssetStorage::queueRequestHttp(
             "LLViewerAssetStorage::assetRequestCoro",
             // <FS:Ansariel> [UDP Assets] Need request for UDP assets
             //[this, uuid, atype, callback, user_data]
-            [this, req, uuid, atype, callback, user_data]
+            [this, req, uuid, atype, callback, user_data, current = vs_native_im_guard()]
             (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t&, const LLUUID&)
             {
                 // <FS:Ansariel> [UDP Assets] Need request for UDP assets
                 //assetRequestCoro(uuid, atype, callback, user_data);
-                assetRequestCoro(req, uuid, atype, callback, user_data);
+                if (current() && gAssetStorage == this) assetRequestCoro(req, uuid, atype, callback, user_data);
             });
     }
 }
@@ -449,6 +451,13 @@ struct LLScopedIncrement
     S32& mCounter;
 };
 
+void LLViewerAssetStorage::resetAccountRequests()
+{
+    _cleanupRequests(true, LL_ERR_CIRCUIT_GONE);
+    mViewerAssetUrl.clear();
+    setUpstream(LLHost());
+}
+
 void LLViewerAssetStorage::assetRequestCoro(
     LLViewerAssetRequest *req, // <FS:Ansariel> [UDP Assets] Need request for UDP assets
     const LLUUID uuid,
@@ -456,6 +465,11 @@ void LLViewerAssetStorage::assetRequestCoro(
     LLGetAssetCallback callback,
     void *user_data)
 {
+    const auto current = vs_native_im_guard();
+    bool nativeConnected = false;
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) nativeConnected = owner->phase() == VSNativeSession::Phase::Connected;
+#endif
     LLScopedIncrement coro_count_boost(sAssetCoroCount); // static counter since corotine can outlive LLViewerAssetStorage
 
     S32 result_code = LL_ERR_NOERR;
@@ -469,7 +483,7 @@ void LLViewerAssetStorage::assetRequestCoro(
 
     mCountStarted++;
 
-    if (!gAgent.getRegion())
+    if (!nativeConnected && !gAgent.getRegion())
     {
         if (STATE_WORLD_INIT <= LLStartUp::getStartupState())
         {
@@ -489,7 +503,7 @@ void LLViewerAssetStorage::assetRequestCoro(
             gAgent.removeRegionChangedCallback(region_conn);
             region_conn.disconnect();
 
-            if (LLApp::isExiting() || !gAssetStorage)
+            if (LLApp::isExiting() || gAssetStorage != this || !current())
             {
                 return;
             }
@@ -514,7 +528,7 @@ void LLViewerAssetStorage::assetRequestCoro(
         }
     }
 
-    if (!gAgent.getRegion()->capabilitiesReceived())
+    if (!nativeConnected && !gAgent.getRegion()->capabilitiesReceived())
     {
         LL_WARNS_ONCE("ViewerAsset") << "Waiting for capabilities" << LL_ENDL;
 
@@ -528,7 +542,7 @@ void LLViewerAssetStorage::assetRequestCoro(
         LLSD result = llcoro::suspendUntilEventOnWithTimeout(capsRecv, timeout_seconds, LLSDMap("timeout", LLSD::Boolean(true)));
         caps_conn.disconnect();
 
-        if (LLApp::isExiting() || !gAssetStorage)
+        if (LLApp::isExiting() || gAssetStorage != this || !current())
         {
             return;
         }
@@ -546,13 +560,14 @@ void LLViewerAssetStorage::assetRequestCoro(
         LL_WARNS_ONCE("ViewerAsset") << "capsRecv got event" << LL_ENDL;
         LL_WARNS_ONCE("ViewerAsset") << "region " << gAgent.getRegion() << " mViewerAssetUrl " << mViewerAssetUrl << LL_ENDL;
     }
-    // <FS:Beq> FIRE-23657 [OPENSIM] Update the Viewer Asset Url irrespective of previous setting (Fix provided by Liru Færs)
+    // <FS:Beq> FIRE-23657 [OPENSIM] Update the Viewer Asset Url irrespective of previous setting (Fix provided by Liru FÃ¦rs)
     // if (mViewerAssetUrl.empty() && gAgent.getRegion())
     if (gAgent.getRegion())
     // </FS:Beq>
     {
         mViewerAssetUrl = gAgent.getRegion()->getViewerAssetUrl();
     }
+    if (nativeConnected) mViewerAssetUrl = gAgent.getRegionCapability("ViewerAsset");
     if (mViewerAssetUrl.empty())
     {
         // <FS:Ansariel> [UDP Assets]
@@ -610,7 +625,7 @@ void LLViewerAssetStorage::assetRequestCoro(
 
     LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts);
 
-    if (LLApp::isExiting() || !gAssetStorage)
+    if (LLApp::isExiting() || gAssetStorage != this || !current())
     {
         // Bail out if result arrives after shutdown has been started.
         return;

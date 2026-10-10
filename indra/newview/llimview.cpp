@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativeim.h"
+#endif
 
 #include "llimview.h"
 
@@ -446,7 +449,13 @@ void notify_of_message(const LLSD& msg, bool is_dnd_msg)
                 }
                 else
                 {
-                    LLAvatarNameCache::get(participant_id, boost::bind(&on_avatar_name_cache_toast, _1, _2, msg));
+                #if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    LLAvatarNameCache::get(participant_id, [native_guard, msg](const LLUUID& id, const LLAvatarName& name)
+        { if (native_guard()) on_avatar_name_cache_toast(id, name, msg); });
+#else
+    LLAvatarNameCache::get(participant_id, boost::bind(&on_avatar_name_cache_toast, _1, _2, msg));
+#endif
                 }
             }
         }
@@ -459,7 +468,13 @@ void notify_of_message(const LLSD& msg, bool is_dnd_msg)
             && participant_id.notNull()
             && !session_floater->isShown())
         {
-            LLAvatarNameCache::get(participant_id, boost::bind(&on_avatar_name_cache_toast, _1, _2, msg));
+        #if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    LLAvatarNameCache::get(participant_id, [native_guard, msg](const LLUUID& id, const LLAvatarName& name)
+        { if (native_guard()) on_avatar_name_cache_toast(id, name, msg); });
+#else
+    LLAvatarNameCache::get(participant_id, boost::bind(&on_avatar_name_cache_toast, _1, _2, msg));
+#endif
         }
     }
 #endif
@@ -550,7 +565,13 @@ void notify_of_message(const LLSD& msg, bool is_dnd_msg)
         return;
     }
 
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    LLAvatarNameCache::get(participant_id, [native_guard, msg](const LLUUID& id, const LLAvatarName& name)
+        { if (native_guard()) on_avatar_name_cache_toast(id, name, msg); });
+#else
     LLAvatarNameCache::get(participant_id, boost::bind(&on_avatar_name_cache_toast, _1, _2, msg));
+#endif
     // </FS:Ansariel> [FS communication UI]
 }
 
@@ -576,6 +597,10 @@ void on_new_message(const LLSD& msg)
 void startConferenceCoro(std::string url,
     LLUUID tempSessionId, LLUUID creatorId, LLUUID otherParticipantId, LLSD agents)
 {
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    if (!native_guard()) return;
+#endif
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("ConferenceChatStart", httpPolicy);
@@ -597,6 +622,9 @@ void startConferenceCoro(std::string url,
     postData["alt_params"]         = altParams;
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+#if VS_NATIVE_VULKAN
+    if (!native_guard()) return;
+#endif
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -626,6 +654,10 @@ void startConferenceCoro(std::string url,
 
 void startP2PVoiceCoro(std::string url, LLUUID sessionID, LLUUID creatorId, LLUUID otherParticipantId)
 {
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    if (!native_guard()) return;
+#endif
     LLCore::HttpRequest::policy_t               httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("StartP2PVoiceCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t                  httpRequest = std::make_shared<LLCore::HttpRequest>();
@@ -646,6 +678,9 @@ void startP2PVoiceCoro(std::string url, LLUUID sessionID, LLUUID creatorId, LLUU
     postData["alt_params"]         = altParams;
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+#if VS_NATIVE_VULKAN
+    if (!native_guard()) return;
+#endif
 
     LLSD               httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status      = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -665,6 +700,10 @@ void startP2PVoiceCoro(std::string url, LLUUID sessionID, LLUUID creatorId, LLUU
 
 void chatterBoxInvitationCoro(std::string url, LLUUID sessionId, LLIMMgr::EInvitationType invitationType, const LLSD& voiceChannelInfo)
 {
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    if (!native_guard()) return;
+#endif
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("ConferenceInviteStart", httpPolicy);
@@ -675,6 +714,9 @@ void chatterBoxInvitationCoro(std::string url, LLUUID sessionId, LLIMMgr::EInvit
     postData["session-id"] = sessionId;
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+#if VS_NATIVE_VULKAN
+    if (!native_guard()) return;
+#endif
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -782,7 +824,12 @@ void translateFailure(const LLUUID& session_id, const std::string& from, const L
 }
 
 void chatterBoxHistoryCoro(std::string url, LLUUID sessionId, std::string from, std::string message, U32 timestamp)
-{   // if parameters from, message and timestamp have values, they are a message that opened chat
+{
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    if (!native_guard()) return;
+#endif
+    // Nonempty from/message/timestamp identify the message which opened chat.
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("ChatHistory", httpPolicy);
@@ -796,6 +843,9 @@ void chatterBoxHistoryCoro(std::string url, LLUUID sessionId, std::string from, 
         << ", from " << from << ", message " << message << ", timestamp " << (S32)timestamp << LL_ENDL;
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+#if VS_NATIVE_VULKAN
+    if (!native_guard()) return;
+#endif
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -923,6 +973,11 @@ LLIMModel::LLIMSession::LLIMSession(const LLUUID& session_id,
         // determine whether it is group or conference session
         mSessionType = gAgent.isInGroup(mSessionID) ? GROUP_SESSION : ADHOC_SESSION;
     }
+
+    // Ordinary native text conversations are ready immediately; a missing
+    // platform voice interface must not turn them into a P2P voice handshake.
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() && mType == IM_NOTHING_SPECIAL)
+        mP2PAsAdhocCall = false;
 
     initVoiceChannel(voice_channel_info);
 
@@ -1961,9 +2016,18 @@ void LLIMModel::addMessage(const LLUUID& session_id, const std::string& from, co
         const std::string from_lang = ""; // leave empty to trigger autodetect
         const std::string to_lang = LLTranslate::getTranslateLanguage();
         U64 time_n_flags = ((U64) time_stamp) | (log2file ? (1LL << 32) : 0) | (is_region_msg ? (1LL << 33) : 0);   // boost::bind has limited parameters
+#if VS_NATIVE_VULKAN
+        const auto native_guard = vs_native_im_guard();
+        LLTranslate::translateMessage(from_lang, to_lang, utf8_text,
+            [=](std::string text, std::string language)
+            { if (native_guard()) translateSuccess(session_id, from, from_id, utf8_text, time_n_flags, utf8_text, from_lang, text, language); },
+            [=](int status, std::string error)
+            { if (native_guard()) translateFailure(session_id, from, from_id, utf8_text, time_n_flags, status, error); });
+#else
         LLTranslate::translateMessage(from_lang, to_lang, utf8_text,
             boost::bind(&translateSuccess, session_id, from, from_id, utf8_text, time_n_flags, utf8_text, from_lang, _1, _2),
             boost::bind(&translateFailure, session_id, from, from_id, utf8_text, time_n_flags, _1, _2));
+#endif
     }
     else
     {
@@ -2487,11 +2551,9 @@ bool LLIMModel::sendStartSession(
         }
 
         //we have a new way of starting conference calls now
-        LLViewerRegion* region = gAgent.getRegion();
-        if (region)
+        const std::string url = gAgent.getRegionCapability("ChatSessionRequest");
+        if (!url.empty())
         {
-            std::string url = region->getCapability(
-                "ChatSessionRequest");
 
             LLCoros::instance().launch("startConferenceCoro",
                 boost::bind(&startConferenceCoro, url,
@@ -2511,10 +2573,9 @@ bool LLIMModel::sendStartSession(
     }
     else if (p2p_as_adhoc_call && ((dialog == IM_SESSION_P2P_INVITE) || (dialog == IM_NOTHING_SPECIAL)))
     {
-        LLViewerRegion *region = gAgent.getRegion();
-        if (region)
+        const std::string url = gAgent.getRegionCapability("ChatSessionRequest");
+        if (!url.empty())
         {
-            std::string url = region->getCapability("ChatSessionRequest");
             LLCoros::instance().launch("startP2PVoiceCoro", boost::bind(&startP2PVoiceCoro, url, temp_session_id, gAgent.getID(), other_participant_id));
         }
         return true;
@@ -3413,10 +3474,9 @@ void LLIncomingCallDialog::processCallResponse(S32 response, const LLSD &payload
             else
             {
                 // webrtc-style decline.
-                LLViewerRegion *region = gAgent.getRegion();
-                if (region)
+                const std::string url = gAgent.getRegionCapability("ChatSessionRequest");
+                if (!url.empty())
                 {
-                    std::string url = region->getCapability("ChatSessionRequest");
 
                     LLSD data;
                     data["method"]     = "decline p2p voice";
@@ -3428,10 +3488,9 @@ void LLIncomingCallDialog::processCallResponse(S32 response, const LLSD &payload
         }
         else
         {
-            LLViewerRegion *region = gAgent.getRegion();
-            if (region)
+            const std::string url = gAgent.getRegionCapability("ChatSessionRequest");
+            if (!url.empty())
             {
-                std::string url = region->getCapability("ChatSessionRequest");
 
                 LLSD data;
                 data["method"]     = "decline invitation";
@@ -4261,8 +4320,14 @@ void LLIMMgr::inviteToSession(
         payload["voice_channel_info"] = voice_channel_info;
         if (caller_name.empty())
         {
+#if VS_NATIVE_VULKAN
+            const auto native_guard = vs_native_im_guard();
+            LLAvatarNameCache::get(caller_id, [native_guard, payload](const LLUUID& id, const LLAvatarName& name)
+                { if (native_guard()) LLIMMgr::onInviteNameLookup(payload, id, name); });
+#else
             LLAvatarNameCache::get(caller_id,
                 boost::bind(&LLIMMgr::onInviteNameLookup, payload, _1, _2));
+#endif
         }
         else
         {
@@ -4294,7 +4359,19 @@ void LLIMMgr::onInviteNameLookup(LLSD payload, const LLUUID& id, const LLAvatarN
 //*TODO disconnects all sessions
 void LLIMMgr::disconnectAllSessions()
 {
-    //*TODO disconnects all IM sessions
+    std::vector<LLUUID> sessions;
+    for (const auto& entry : LLIMModel::getInstance()->mId2SessionMap)
+        sessions.push_back(entry.first);
+    for (const LLUUID& id : sessions)
+    {
+        removeSession(id);
+        LLFloaterReg::destroyInstance("fs_impanel", id);
+    }
+    mPendingInvitations = LLSD::emptyMap();
+    mPendingAgentListUpdates = LLSD::emptyMap();
+    mSnoozedSessions.clear();
+    mNotifiedNonFriendSessions.clear();
+    LLIMModel::getInstance()->resetActiveSessionID();
 }
 
 bool LLIMMgr::hasSession(const LLUUID& session_id)
@@ -4834,7 +4911,13 @@ void LLIMMgr::processIMTypingCore(const LLUUID& from_id, const EInstantMessage i
     static LLCachedControl<bool> announceIncomingIM(gSavedSettings, "FSAnnounceIncomingIM");
     if (typing && !gIMMgr->hasSession(session_id) && announceIncomingIM)
     {
+#if VS_NATIVE_VULKAN
+        const auto native_guard = vs_native_im_guard();
+        LLAvatarNameCache::get(from_id, [native_guard, session_id](const LLUUID& id, const LLAvatarName& name)
+            { if (native_guard()) typingNameCallback(id, name, session_id); });
+#else
         LLAvatarNameCache::get(from_id, boost::bind(&typingNameCallback, _1, _2, session_id));
+#endif
     }
     // </FS:Ansariel>
 
@@ -5162,7 +5245,7 @@ public:
                 name,
                 buffer,
                 IM_OFFLINE == offline,
-                std::string((char*)&bin_bucket[0]),
+                bin_bucket.empty() ? std::string() : std::string(reinterpret_cast<const char*>(bin_bucket.data()), std::find(bin_bucket.begin(), bin_bucket.end(), U8(0)) - bin_bucket.begin()),
                 IM_SESSION_INVITE,
                 message_params["parent_estate_id"].asInteger(),
                 message_params["region_id"].asUUID(),

@@ -19,7 +19,16 @@
 #include "llfontgl.h"
 #include "lllayoutstack.h"
 #include "llnotifications.h"
+#include "llcommunicationchannel.h"
 #include "llnotificationhandler.h"
+#include "llnotificationmanager.h"
+#include "llchicletbar.h"
+#include "llbutton.h"
+#include "llimview.h"
+#include "llconsole.h"
+#include "llfloateravatarpicker.h"
+#include "llavataractions.h"
+#include "lltrans.h"
 #include "lluictrlfactory.h"
 #include "vsvulkancontext.h"
 #include "vsuicontext.h"
@@ -133,8 +142,8 @@ void LLViewerWindow::initNativeBase()
     // Initialize default channels before registering viewer-owned children.
     LLNotifications::instance();
     mSystemChannel.reset(new LLNotificationChannel("System", "Visible", LLNotificationFilters::includeEverything));
-    mAlertsChannel.reset(new LLNotificationsUI::LLAlertHandler("Alerts", "alert", false));
-    mModalAlertsChannel.reset(new LLNotificationsUI::LLAlertHandler("AlertModal", "alertmodal", true));
+    mCommunicationChannel.reset(new LLCommunicationChannel("Communication", "Visible"));
+    LLNotificationsUI::LLNotificationManager::getInstance();
     LLFloaterAboutUtil::registerFloater();
     LLFloaterReg::add("message_critical", "floater_critical.xml", &LLFloaterReg::build<LLFloaterTOS>);
     LLFloaterReg::add("message_tos", "floater_tos.xml", &LLFloaterReg::build<LLFloaterTOS>);
@@ -248,4 +257,38 @@ void LLViewerWindow::nativeScroll(S32 clicks, bool horizontal)
         target->handleScrollHWheel(x, y, clicks);
     else
         target->handleScrollWheel(x, y, clicks);
+}
+
+void LLViewerWindow::setNativeConnected(bool connected)
+{
+    if (!connected && mNativeUI) mNativeUI->resetAccountImages();
+    auto* controls = mRootView->findChild<LLPanel>("native_connected_controls");
+    if (!controls && connected)
+    {
+        LLPanel::Params params;
+        controls = LLUICtrlFactory::create<LLPanel>(params);
+        require(controls->buildFromFile("panel_vs_connected_controls.xml"), "Connected controls XUI is missing");
+        controls->setShape(LLRect(0, mWindowRectScaled.getHeight() - MENU_BAR_HEIGHT,
+                                  mWindowRectScaled.getWidth(), mWindowRectScaled.getHeight() - MENU_BAR_HEIGHT - 32));
+        mRootView->addChildInBack(controls);
+        controls->getChild<LLButton>("contacts")->setCommitCallback([](LLUICtrl*, const LLSD&)
+            { LLFloaterReg::showInstance("imcontacts", "friends"); });
+        controls->getChild<LLButton>("groups")->setCommitCallback([](LLUICtrl*, const LLSD&)
+            { LLFloaterReg::showInstance("imcontacts", "groups"); });
+        controls->getChild<LLButton>("conversations")->setCommitCallback([](LLUICtrl*, const LLSD&)
+            { LLFloaterReg::showInstance("fs_im_container"); });
+        controls->getChild<LLButton>("new_im")->setCommitCallback([](LLUICtrl*, const LLSD&)
+        {
+            LLFloaterAvatarPicker::show([](const uuid_vec_t& ids, const std::vector<LLAvatarName>&)
+                { for (const auto& id : ids) LLAvatarActions::startIM(id); }, false, true);
+        });
+        controls->getChild<LLButton>("preferences")->setCommitCallback([](LLUICtrl*, const LLSD&)
+            { LLFloaterReg::showInstance("preferences"); });
+        controls->getChild<LLButton>("notifications")->setCommitCallback([](LLUICtrl*, const LLSD&)
+            { LLFloaterReg::showInstance("notification_well_window"); });
+        auto* chiclets = LLChicletBar::getInstance();
+        chiclets->setShape(LLRect(640, 30, controls->getRect().getWidth(), 0));
+        controls->addChild(chiclets);
+    }
+    if (controls) controls->setVisible(connected);
 }

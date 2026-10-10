@@ -25,6 +25,9 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativeim.h"
+#endif
 
 #include "llimprocessing.h"
 
@@ -228,6 +231,8 @@ void translate_if_needed(std::string& message)
 
 class LLPostponedIMSystemTipNotification : public LLPostponedNotification
 {
+    std::function<bool()> mCurrent = vs_native_im_guard();
+    bool isCurrent() const override { return mCurrent() && vs_native_im_notification_current(mParams.payload); }
 protected:
     /* virtual */
     void modifyNotificationParams()
@@ -255,6 +260,8 @@ protected:
 
 class LLPostponedOfferNotification : public LLPostponedNotification
 {
+    std::function<bool()> mCurrent = vs_native_im_guard();
+    bool isCurrent() const override { return mCurrent() && vs_native_im_notification_current(mParams.payload); }
 protected:
     /* virtual */
     void modifyNotificationParams()
@@ -325,6 +332,7 @@ void inventory_offer_handler(LLOfferInfo* info)
     args["[OBJECTNAME]"] = msg;
 
     LLSD payload;
+    vs_native_im_stamp_notification(payload);
 
     // must protect against a NULL return from lookupHumanReadable()
     std::string typestr = ll_safe_string(LLAssetType::lookupHumanReadable(info->mType));
@@ -934,6 +942,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
 
     LLSD args;
     LLSD payload;
+#if VS_NATIVE_VULKAN
+    vs_native_im_stamp_notification(payload);
+#endif
     LLNotification::Params params;
 
     switch (dialog)
@@ -1190,7 +1201,7 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                     buffer = saved + message;
 
                     bool region_message = false;
-                    if (region_id.isNull())
+                    if (region_id.isNull() && !(gViewerWindow && gViewerWindow->isNativeVulkan()))
                     {
                         LLViewerRegion* regionp = LLWorld::instance().getRegionFromID(from_id);
                         if (regionp)
@@ -1301,9 +1312,12 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                     tokenizer tokens(str_bucket, sep);
                     tokenizer::iterator iter = tokens.begin();
 
+                    if (iter == tokens.end()) return;
                     asset_type = (LLAssetType::EType)(atoi((*(iter++)).c_str()));
-                    iter++; // wearable type if applicable, otherwise asset type
-                    item_name = std::string((*(iter++)).c_str());
+                    if (iter == tokens.end()) return;
+                    ++iter; // wearable type if applicable, otherwise asset type
+                    if (iter == tokens.end()) return;
+                    item_name = *iter;
                 }
             }
             else
@@ -1415,7 +1429,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
             tokenizer tokens(str, sep);
             tokenizer::iterator iter = tokens.begin();
 
+            if (iter == tokens.end()) return;
             std::string subj(*iter++);
+            if (iter == tokens.end()) return;
             std::string mes(*iter++);
 
             // Send the notification down the new path.
@@ -1445,7 +1461,13 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                 {
                     LL_WARNS() << "Received group notice with null id!" << LL_ENDL;
                 }
+#if VS_NATIVE_VULKAN
+                const auto native_guard = vs_native_im_guard();
+                gCacheName->get(group_id, true, [native_guard, name, subj, mes, payload, timestamp](const LLUUID&, const std::string& groupName, bool)
+                    { if (native_guard()) notification_group_name_cb(groupName, name, subj, mes, payload, timestamp); });
+#else
                 gCacheName->get(group_id, true, boost::bind(&notification_group_name_cb, _2, name, subj, mes, payload, timestamp));
+#endif
                 // </FS:Ansariel>
             }
 
@@ -1518,6 +1540,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                 S32 membership_fee = ntohl(invite_bucket->membership_fee);
 
                 LLSD payload;
+#if VS_NATIVE_VULKAN
+    vs_native_im_stamp_notification(payload);
+#endif
                 payload["transaction_id"] = session_id;
                 payload["group_id"] = from_group ? from_id : aux_id;
                 payload["name"] = name;
@@ -1590,12 +1615,12 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                     // still might be able to figure out the type... even though the offer is not retrievable.
 
                     // Should be safe to remove once DRTSIM-451 fully deploys
-                    std::string str_bucket(reinterpret_cast<char *>(binary_bucket));
+                    std::string str_bucket(reinterpret_cast<char *>(binary_bucket), binary_bucket_size);
                     std::string str_type(str_bucket.substr(0, str_bucket.find('|')));
 
                     std::stringstream type_convert(str_type);
 
-                    S32 type;
+                    S32 type = LLAssetType::AT_UNKNOWN;
                     type_convert >> type;
 
                     // We could try AT_UNKNOWN which would be more accurate, but that causes an auto decline
@@ -1663,6 +1688,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
             args["ORIGINAL_NAME"] = fRlvCanShowName ? original_name : (LLAvatarNameCache::get(from_id, &av_name) ? RlvStrings::getAnonym(av_name) : RlvStrings::getAnonym(original_name));
 // [/RLVa:KB]
             LLSD payload;
+#if VS_NATIVE_VULKAN
+    vs_native_im_stamp_notification(payload);
+#endif
             payload["from_id"] = from_id;
             // Passing the "SESSION_NAME" to use it for IM notification logging
             // in LLTipHandler::processNotification(). See STORM-941.
@@ -1680,6 +1708,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
             args["NAME"] = LLSLURL("agent", from_id, (fRlvCanShowName) ? "completename" : "rlvanonym").getSLURLString();;
 // [/RLVa:KB]
             LLSD payload;
+#if VS_NATIVE_VULKAN
+    vs_native_im_stamp_notification(payload);
+#endif
             payload["from_id"] = from_id;
             LLNotificationsUtil::add("InventoryDeclined", args, payload);
             break;
@@ -1833,6 +1864,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
             substitutions["MSG"] = message;
 
             LLSD payload;
+#if VS_NATIVE_VULKAN
+    vs_native_im_stamp_notification(payload);
+#endif
             payload["object_id"] = session_id;
             payload["owner_id"] = from_id;
             payload["from_id"] = from_id;
@@ -2110,6 +2144,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
                 args["MATURITY_ICON"] = region_access_icn;
                 args["REGION_CONTENT_MATURITY"] = region_access_lc;
                 LLSD payload;
+#if VS_NATIVE_VULKAN
+    vs_native_im_stamp_notification(payload);
+#endif
                 payload["from_id"] = from_id;
                 payload["lure_id"] = session_id;
                 payload["godlike"] = false;
@@ -2240,6 +2277,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
             args["MATURITY_ICON"] = region_access_icn;
             args["REGION_CONTENT_MATURITY"] = region_access_lc;
             LLSD payload;
+#if VS_NATIVE_VULKAN
+    vs_native_im_stamp_notification(payload);
+#endif
             payload["from_id"] = from_id;
             payload["lure_id"] = session_id;
             payload["godlike"] = true;
@@ -2289,6 +2329,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
             args["MESSAGE"] = message;
             args["URL"] = url;
             LLSD payload;
+#if VS_NATIVE_VULKAN
+    vs_native_im_stamp_notification(payload);
+#endif
             payload["url"] = url;
             LLNotificationsUtil::add("GotoURL", args, payload);
         }
@@ -2306,6 +2349,9 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
             // </FS:PP>
 
             LLSD payload;
+#if VS_NATIVE_VULKAN
+    vs_native_im_stamp_notification(payload);
+#endif
             payload["from_id"] = from_id;
             payload["session_id"] = session_id;
             payload["online"] = (offline == IM_ONLINE);
@@ -2372,8 +2418,17 @@ void LLIMProcessing::processNewMessage(LLUUID from_id,
 
             args["NAME"] = name;
             LLSD payload;
+#if VS_NATIVE_VULKAN
+    vs_native_im_stamp_notification(payload);
+#endif
             payload["from_id"] = from_id;
+#if VS_NATIVE_VULKAN
+            const auto native_guard = vs_native_im_guard();
+            LLAvatarNameCache::get(from_id, [native_guard, args, payload](const LLUUID& id, const LLAvatarName& name) mutable
+                { if (native_guard()) notification_display_name_callback(id, name, "FriendshipAccepted", args, payload); });
+#else
             LLAvatarNameCache::get(from_id, boost::bind(&notification_display_name_callback, _1, _2, "FriendshipAccepted", args, payload));
+#endif
         }
         break;
 

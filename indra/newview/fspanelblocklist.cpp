@@ -30,6 +30,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fspanelblocklist.h"
+#include "llviewerwindow.h"
 
 #include "fscommon.h"
 #include "fsblocklistmenu.h"
@@ -151,7 +152,8 @@ void FSPanelBlockList::showPanelAndSelect(const LLUUID& idToSelect)
         return;
     }
 
-    if (gSavedSettings.getBOOL("FSUseStandaloneBlocklistFloater"))
+    if ((gViewerWindow && gViewerWindow->isNativeVulkan()) ||
+        gSavedSettings.getBOOL("FSUseStandaloneBlocklistFloater"))
     {
         LLFloaterReg::showInstance("fs_blocklist", LLSD().with(BLOCKED_PARAM_NAME, idToSelect));
     }

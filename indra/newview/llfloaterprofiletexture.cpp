@@ -25,6 +25,11 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeim.h"
+#include "vsuiimageprovider.h"
+#endif
 
 #include "llfloaterprofiletexture.h"
 
@@ -63,6 +68,7 @@ LLProfileImageCtrl::~LLProfileImageCtrl()
 
 void LLProfileImageCtrl::releaseTexture()
 {
+    mNativeImageConnection.disconnect();
     if (mImage.notNull())
     {
         mImage->setBoostLevel(mImageOldBoostLevel);
@@ -118,6 +124,24 @@ void LLProfileImageCtrl::setImageAssetId(const LLUUID& asset_id)
     releaseTexture();
 
     mImageID = asset_id;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        auto image = mImageID.notNull() ? LLUI::getUIImageByID(mImageID) : LLUI::getUIImage("Generic_Person_Large");
+        LLIconCtrl::setImage(image);
+        if (image)
+        {
+            const auto handle = getHandle(); const auto guard = vs_native_im_guard();
+            mNativeImageConnection = image->addLoadedCallback([handle, guard, asset_id]()
+            {
+                if (auto* ctrl = dynamic_cast<LLProfileImageCtrl*>(handle.get());
+                    guard() && ctrl && ctrl->mImageID == asset_id)
+                    ctrl->onImageLoaded(true, nullptr);
+            });
+        }
+        return;
+    }
+#endif
     if (mImageID.notNull())
     {
         mImage = LLViewerTextureManager::getFetchedTexture(mImageID, FTT_DEFAULT, MIPMAP_YES, LLGLTexture::BOOST_NONE, LLViewerTexture::LOD_TEXTURE);
@@ -221,18 +245,20 @@ void LLFloaterProfileTexture::reshape(S32 width, S32 height, bool called_from_pa
 // When we receive it, reshape the window accordingly.
 void LLFloaterProfileTexture::updateDimensions()
 {
-    LLPointer<LLViewerFetchedTexture> image = mProfileIcon->getImage();
-    if (image.isNull())
+    S32 img_width = 0, img_height = 0;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
     {
-        return;
+        const auto image = mProfileIcon->LLIconCtrl::getImage();
+        if (image) { img_width = image->getWidth(); img_height = image->getHeight(); }
     }
-    if ((image->getFullWidth() * image->getFullHeight()) == 0)
+    else
+#endif
     {
-        return;
+        const auto image = mProfileIcon->getImage();
+        if (image) { img_width = image->getFullWidth(); img_height = image->getFullHeight(); }
     }
-
-    S32 img_width = image->getFullWidth();
-    S32 img_height = image->getFullHeight();
+    if (img_width <= 0 || img_height <= 0) return;
 
     mLastHeight = img_height;
     mLastWidth = img_width;
@@ -294,6 +320,13 @@ void LLFloaterProfileTexture::onImageLoaded(bool success, LLViewerFetchedTexture
 // <FS:Ansariel> Add refresh function
 void LLFloaterProfileTexture::refreshTexture()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        vs_refresh_ui_image(mProfileIcon->getImageAssetId());
+        return;
+    }
+#endif
 
     if (mProfileIcon->getImageAssetId().notNull() && mProfileIcon->getImage().notNull())
     {

@@ -1,20 +1,31 @@
-// Replay production native session dispatch; never authenticates to a grid. LGPL-2.1.
+// Replay ordinary login and native session dispatch against a loopback fixture. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsnativereplay.h"
+#include "vsnativeimreplay.h"
 #include "vsnativesession.h"
 #include "vsplainchat.h"
 #include "llappviewer.h"
 #include "llviewerwindow.h"
+#include "llrootview.h"
 #include "llviewercontrol.h"
 #include "llstartup.h"
+#include "lllogininstance.h"
+#include "lluri.h"
 #include "lltexteditor.h"
+#include "llcombobox.h"
+#include "lllineeditor.h"
+#include "llbutton.h"
+#include "llpersistentnotificationstorage.h"
+#include "lldonotdisturbnotificationstorage.h"
 #include "llworld.h"
 #include "vsvulkancontext.h"
 #include "llsdserialize.h"
 #include "llsdutil_math.h"
 #include "llchat.h"
 #include "llnotifications.h"
+#include "llcommunicationchannel.h"
 #include "llfloaterreg.h"
+#include "llfloater.h"
 #include "llurldispatcher.h"
 #include "llmutelist.h"
 #include "llxfermanager.h"
@@ -77,15 +88,22 @@ void udpChat(const LLHost& host)
 struct Replay
 {
     unsigned step = 0;
+    bool accountSetupStarted = false;
+    bool challengeAcknowledged = false;
+    bool reloginSubmitted = false;
+    bool reloginHandshake = false;
+    unsigned accountSetups = 0;
     U64 oldGeneration = 0;
     bool queuedExpired = false;
     std::shared_ptr<bool> readback = std::make_shared<bool>(false);
     bool captureRequested = false;
+    bool imCaptureRequested = false;
+    std::shared_ptr<bool> imReadback = std::make_shared<bool>(false);
     bool submitted = false;
     unsigned encodedChannels = 0;
     bool muteRequest = false, muteReplyQueued = false;
     bool encodedChat = false, encodedTypingStart = false, encodedTypingStop = false;
-    LLSD report;
+    LLSD report, imEvidence;
     unsigned deniedSettings = 0, allowedSettings = 0;
     static void outgoing(LLMessageSystem* msg, void** data)
     {
@@ -127,8 +145,12 @@ struct Replay
         gMessageSystem->setMessageAdmission([weak](const std::string& name, const LLHost& sender)
         {
             auto owner = weak.lock();
-            return owner && (((name == "ChatFromViewer" || name == "MuteListRequest") && sender == owner->host()) || owner->admit(name, sender));
+            const bool clientFixture = name == "ChatFromViewer" || name == "MuteListRequest" ||
+                name == "GroupMembersRequest" || name == "GroupRoleDataRequest" || name == "GroupRoleMembersRequest" ||
+                name == "GroupTitlesRequest" || name == "GroupTitleUpdate" || name == "ActivateGroup" || name == "DirFindQuery" || name == "MoneyTransferRequest" || name == "UpdateInventoryItem" || name == "EconomyDataRequest";
+            return owner && ((clientFixture && sender == owner->host()) || owner->admit(name, sender));
         });
+        gMessageSystem->setHandlerFunc("EconomyDataRequest", vs_native_im_replay_economy_request);
         gMessageSystem->setHandlerFunc("ChatFromViewer", outgoing, reinterpret_cast<void**>(this));
         gMessageSystem->setHandlerFunc("MuteListRequest", outgoingMute, reinterpret_cast<void**>(this));
     }
@@ -137,12 +159,54 @@ struct Replay
         require(!LLWorld::instanceExists(), "Replay instantiated a scene world");
         if (step == 0)
         {
-            if (LLStartUp::getStartupState() != STATE_LOGIN_WAIT) return;
+            if (!accountSetupStarted)
+            {
+                if (LLStartUp::getStartupState() != STATE_LOGIN_WAIT) return;
+                auto* root = gViewerWindow->getRootView();
+                auto* username = root->findChild<LLComboBox>("username_combo");
+                auto* password = root->findChild<LLLineEditor>("password_edit");
+                auto* connect = root->findChild<LLButton>("connect_btn");
+                require(username && password && connect, "Replay login controls missing");
+                gSavedSettings.setBOOL("FSLoginDontSavePassword", true);
+                username->setTextEntry(LLStringExplicit("Native Replay"));
+                username->onCommit();
+                password->setText(LLStringExplicit("offline-only"));
+                connect->onCommit();
+                require(LLStartUp::getStartupState() == STATE_LOGIN_CLEANUP, "Replay login callback did not submit");
+                accountSetupStarted = true;
+                return;
+            }
+            if (LLStartUp::getStartupState() == STATE_AGENTS_WAIT && accountSetups < 2)
+            {
+                require(LLPersistentNotificationStorage::instanceExists() &&
+                        LLDoNotDisturbNotificationStorage::instanceExists() &&
+                        dynamic_cast<LLCommunicationChannel*>(LLNotifications::instance().getChannel("Communication").get()),
+                        "Native login notification channel/storage was not initialized");
+                LLDoNotDisturbNotificationStorage::getInstance()->saveNotifications();
+                LLDoNotDisturbNotificationStorage::getInstance()->loadNotifications();
+                LLPersistentNotificationStorage::getInstance()->saveNotifications();
+                LLPersistentNotificationStorage::getInstance()->loadNotifications();
+                if (++accountSetups < 2) LLStartUp::setStartupState(STATE_LOGIN_CLEANUP);
+                return;
+            }
+            // Let the ordinary startup state machine construct the request,
+            // authenticate through XML-RPC, process its response and begin the
+            // session. Only the endpoint is replaced by the loopback fixture.
+            if (!challengeAcknowledged)
+            {
+                for (auto* challenge : LLFloaterReg::getFloaterList("message_critical"))
+                {
+                    if (!challenge || !challenge->getVisible()) continue;
+                    auto* button = challenge->getChild<LLButton>("Continue");
+                    require(button->getEnabled(), "Authentication policy acknowledgement was disabled");
+                    button->onCommit(); challengeAcknowledged = true; return;
+                }
+            }
+            if (owner.phase() != VSNativeSession::Phase::Connecting) return;
+            require(LLLoginInstance::getInstance()->authSuccess(), "Session bypassed authentication");
             gSavedPerAccountSettings.setBOOL("LogNearbyChat", false);
             gSavedPerAccountSettings.setBOOL("LogShowHistory", false);
-            require(!owner.acceptLogin(LLSD::emptyMap()), "Malformed login was admitted");
-            require(owner.acceptLogin(response()), "Synthetic CPU login identity rejected");
-            owner.begin(); oldGeneration = owner.generation();
+            oldGeneration = owner.generation();
             inspectOutgoing(owner);
             handshake(owner.host()); ++step;
         }
@@ -188,8 +252,19 @@ struct Replay
                 captureRequested = true; return;
             }
             if (!*readback) return;
+            if (!vs_native_im_replay_tick(owner, imEvidence)) return;
+            if (!imCaptureRequested)
+            {
+                const auto path = std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY")) / "im";
+                std::filesystem::create_directories(path);
+                vs_native_replay_capture(*gViewerWindow->nativeContext(), path.string(), imReadback);
+                imCaptureRequested = true; return;
+            }
+            if (!*imReadback) return;
+            imEvidence["im_readback"] = true;
             if (!submitted)
             {
+                chat->input()->setFocus(true);
                 chat->input()->setText(LLStringExplicit("V4 outgoing Unicode \xCE\xA9"));
                 require(chat->submit() && chat->input()->getText().empty(), "Production chat submit failed");
                 require(chat->input()->handleKeyHere(KEY_UP, MASK_CONTROL) && chat->input()->getText() == "V4 outgoing Unicode \xCE\xA9", "Submitted input history was not recalled");
@@ -210,15 +285,37 @@ struct Replay
             reply["AgentData"][0]["SessionID"] = LLUUID(response()["session_id"].asString());
             http("LogoutReply", reply, owner.host());
             require(owner.phase() == VSNativeSession::Phase::Login && !chat->getVisible(), "Logout did not detach session/UI");
+            require(vs_native_im_replay_expired(), "Logout retained a live IM callback generation");
+            imEvidence["im_callback_expired"] = true;
             chat->input()->handleKeyHere(KEY_UP, MASK_CONTROL);
             require(chat->input()->getText().empty(), "Logout retained input history from the previous identity");
             ++step;
         }
         else if (step == 3)
         {
-            if (!queuedExpired || LLStartUp::getStartupState() != STATE_LOGIN_WAIT) return;
-            require(owner.acceptLogin(response()), "Relogin identity rejected");
-            owner.begin(); handshake(owner.host()); ++step;
+            if (!queuedExpired) return;
+            if (!reloginSubmitted)
+            {
+                if (LLStartUp::getStartupState() != STATE_LOGIN_WAIT) return;
+                auto* root = gViewerWindow->getRootView();
+                auto* username = root->findChild<LLComboBox>("username_combo");
+                auto* password = root->findChild<LLLineEditor>("password_edit");
+                auto* connect = root->findChild<LLButton>("connect_btn");
+                require(username && password && connect, "Relogin controls missing");
+                username->setTextEntry(LLStringExplicit("Native Replay")); username->onCommit();
+                password->setText(LLStringExplicit("offline-only")); connect->onCommit();
+                reloginSubmitted = true; return;
+            }
+            for (auto* challenge : LLFloaterReg::getFloaterList("message_critical"))
+                if (challenge && challenge->getVisible())
+                {
+                    // Continue destroys the floater and its registry-list node.
+                    challenge->getChild<LLButton>("Continue")->onCommit();
+                    return;
+                }
+            if (owner.phase() != VSNativeSession::Phase::Connecting) return;
+            require(LLLoginInstance::getInstance()->authSuccess(), "Relogin bypassed authentication");
+            handshake(owner.host()); reloginHandshake = true; ++step;
         }
         else if (step == 4)
         {
@@ -233,11 +330,18 @@ struct Replay
             gSavedSettings.setBOOL("RenderGlow", !gSavedSettings.getBOOL("RenderGlow"));
             gSavedSettings.setBOOL("RenderDepthOfField", !gSavedSettings.getBOOL("RenderDepthOfField"));
             require(!LLWorld::instanceExists() && deniedSettings == 0 && allowedSettings == 1, "Settings admission/cascade policy failed");
-            require(!LLFloaterReg::getInstance("preferences"), "Optional UI was constructed during native session");
+            auto* preferences = LLFloaterReg::getInstance("preferences");
+            require(preferences != nullptr, "Connected Preferences UI construction failed");
+            preferences->closeFloater();
             report = owner.evidence(); report["schema"] = 1; report["mode"] = "viewer-native-session-replay";
+            for (auto item = imEvidence.beginMap(); item != imEvidence.endMap(); ++item) report[item->first] = item->second;
+            report["login_authentication"] = true;
+            report["login_challenge"] = challengeAcknowledged;
+            report["login_account_setup"] = accountSetups == 2;
+            report["notification_storage"] = true;
             report["malformed"] = true; report["unknown"] = true; report["wrong_host"] = true;
             report["udp_chat"] = true; report["http_gate"] = true; report["udp_gate"] = rejected > 0;
-            report["queued_expired"] = queuedExpired; report["relogin"] = true;
+            report["queued_expired"] = queuedExpired; report["relogin"] = reloginSubmitted && reloginHandshake;
             report["readback"] = *readback; report["chat_submit"] = true; report["typing"] = true; report["settings_gate"] = true;
             report["encoded_chat"] = encodedChat; report["encoded_typing"] = encodedTypingStart && encodedTypingStop;
             require(LLURLDispatcher::dispatchFromTextEditor("secondlife:///app/teleport/Native/10/20/30", false), "Deferred app URL was not consumed");
@@ -322,4 +426,15 @@ bool vs_native_replay_tick()
     static Replay replay;
     if (auto owner = VSNativeSession::active()) replay.tick(*owner);
     return true;
+}
+
+std::string vs_native_replay_login_uri(const std::string& selected)
+{
+    if (!std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY") || !VSNativeSession::active()) return selected;
+    const char* endpoint = std::getenv("VS_VULKAN_REPLAY_LOGIN");
+    if (!endpoint || !gMessageSystem) throw std::runtime_error("Missing loopback authentication fixture");
+    LLURI uri(endpoint);
+    if (uri.scheme() != "http" || uri.hostName() != "127.0.0.1" || uri.path() != "/login")
+        throw std::runtime_error("Authentication replay requires an explicit loopback endpoint");
+    return std::string(endpoint) + "?sim_port=" + std::to_string(gMessageSystem->getListenPort());
 }

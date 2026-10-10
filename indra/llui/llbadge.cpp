@@ -26,6 +26,7 @@
 
 #define LLBADGE_CPP
 #include "llbadge.h"
+#include "llrender2dutils.h"
 
 #include "llfontgl.h"
 #include "llfontvertexbuffer.h"
@@ -188,6 +189,27 @@ void LLBadge::setLabel(const LLStringExplicit& label)
 //
 void renderBadgeBackground(F32 centerX, F32 centerY, F32 width, F32 height, const LLColor4U &color)
 {
+    if (LLRender2D::isNativeUI())
+    {
+        // Match the pretransformed strip's rounding in root coordinates, then
+        // subtract the native owner origin: nativeTriangle applies it once.
+        const auto origin = LLRender2D::nativeOrigin();
+        const F32 left = static_cast<F32>(ll_round(origin[0] + centerX - width * .5f)) - origin[0];
+        const F32 bottom = static_cast<F32>(ll_round(origin[1] + centerY - height * .5f)) - origin[1];
+        const F32 right = left + width;
+        const F32 top = bottom + height;
+        const LLColor4 tint(color);
+        const auto vertex = [&](F32 x, F32 y)
+        {
+            return std::array<F32, 6>{x, y, tint.mV[0], tint.mV[1], tint.mV[2], tint.mV[3]};
+        };
+        const U8 previous_blend = LLRender2D::nativeBlend();
+        LLRender2D::setSceneBlendType(LLRender::BT_REPLACE);
+        LLRender2D::nativeTriangle({vertex(left, top), vertex(right, top), vertex(left, bottom)});
+        LLRender2D::nativeTriangle({vertex(right, top), vertex(right, bottom), vertex(left, bottom)});
+        LLRender2D::setSceneBlendType(previous_blend);
+        return;
+    }
     gGL.pushUIMatrix();
     gGL.loadUIIdentity();
     gGL.setSceneBlendType(LLRender::BT_REPLACE);

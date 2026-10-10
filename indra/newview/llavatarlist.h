@@ -189,6 +189,9 @@ private:
     avatar_drop_cb_t mAvatarDropCallback; // <FS:PP> FIRE-31146 Contact Sets - drag-and-drop support
 
     // <FS:Ansariel> Update voice volume slider on RLVa shownames restriction update
+    boost::signals2::scoped_connection mDisplayNameConnection;
+    boost::signals2::scoped_connection mUsernameConnection;
+    boost::signals2::scoped_connection mContactColorConnection;
     boost::signals2::connection mRlvBehaviorCallbackConnection;
     void updateRlvRestrictions(ERlvBehaviour behavior, ERlvParamType type);
     // </FS:Ansariel>
