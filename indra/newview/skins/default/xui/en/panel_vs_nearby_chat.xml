@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- Native nearby text owner; selected skins may override layout, editor resources and colors. -->
+<panel name="native_nearby_chat" layout="topleft" width="500" height="260" follows="left|bottom" background_visible="true">
+  <text layout="topleft" name="native_region" left="4" top="4" width="392" height="24" follows="left|right|top" />
+  <button layout="topleft" name="native_logout" label="Log out" left="400" top="4" width="96" height="24" follows="right|top" />
+  <text_editor layout="topleft" name="native_plain_transcript" left="4" top="32" width="492" height="192" follows="all"
+               bg_readonly_color="ChatHistoryBgColor" bg_writeable_color="ChatHistoryBgColor"
+               text_color="ChatHistoryTextColor" text_readonly_color="ChatHistoryTextColor"
+               word_wrap="true" track_bottom="true" read_only="true" parse_urls="false" spellcheck="false" embedded_items="false" max_length="65536" />
+  <vs_chat_input layout="topleft" name="native_chat_input" left="4" top="230" width="492" height="26" follows="left|right|bottom"
+                 label="Nearby Chat" max_length_bytes="1024" spellcheck="false" commit_on_focus_lost="false" />
+</panel>

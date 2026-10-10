@@ -89,7 +89,7 @@ std::array<F32,2> LLRender2D::nativeOrigin() { return native_origins.back(); }
 void LLRender2D::nativeClip(const LLRect* rect) { native_clip(rect); }
 void LLRender2D::nativeRectangle(S32 left,S32 top,S32 right,S32 bottom,const LLColor4& color,bool filled)
 {
-    const auto draw=[&](S32 l,S32 t,S32 r,S32 b)
+    const auto draw=[&](F32 l,F32 t,F32 r,F32 b)
     {
         if (r<=l || t<=b) return;
         const auto origin=nativeOrigin();
@@ -98,11 +98,20 @@ void LLRender2D::nativeRectangle(S32 left,S32 top,S32 right,S32 bottom,const LLC
             (static_cast<F32>(b)+origin[1])*LLFontGL::sScaleY),color);
     };
     if (right<=left || top<=bottom) return;
-    if (filled) draw(left,top,right,bottom);
+    if (filled) draw(static_cast<F32>(left),static_cast<F32>(top),static_cast<F32>(right),static_cast<F32>(bottom));
     else
     {
-        draw(left,top,right,top-1);draw(left,bottom+1,right,bottom);
-        draw(left,top-1,left+1,bottom+1);draw(right-1,top-1,right,bottom+1);
+        // Match the shared GL outline's top/right one-unit inset, with the
+        // requested stroke centered on its vertices. Disjoint bands prevent
+        // translucent corners from being composited twice.
+        const F32 half = native_line_width * .5f;
+        const F32 l = left - half, r = right - 1.f + half;
+        const F32 b = bottom - half, t = top - 1.f + half;
+        const F32 il = llmin(left + half, r), ir = llmax(right - 1.f - half, l);
+        const F32 ib = llmin(bottom + half, t), it = llmax(top - 1.f - half, b);
+        if (il >= ir || ib >= it) { draw(l,t,r,b); return; }
+        draw(l,t,r,it); draw(l,ib,r,b);
+        draw(l,it,il,ib); draw(ir,it,r,ib);
     }
 }
 
@@ -353,22 +362,19 @@ void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4 &color )
 {
     if (LLRender2D::isNativeUI())
     {
-        // Rasterize widget strokes as triangles; no Vulkan wide-line feature.
-        if (x1!=x2 && y1!=y2)
-        {
-            const float dx=float(x2)-x1, dy=float(y2)-y1;
-            const float half=std::max(1.f,native_line_width)*.5f/std::hypot(dx,dy);
-            const float nx=-dy*half, ny=dx*half;
-            const auto vertex=[&](float x,float y) { return std::array<float,6>{x,y,color.mV[0],color.mV[1],color.mV[2],color.mV[3]}; };
-            const auto a=vertex(x1+nx,y1+ny), b=vertex(x2+nx,y2+ny);
-            const auto c=vertex(x1-nx,y1-ny), d=vertex(x2-nx,y2-ny);
-            LLRender2D::nativeTriangle({a,b,c});
-            LLRender2D::nativeTriangle({c,b,d});
-            return;
-        }
-        const S32 width=llmax(1,static_cast<S32>(std::ceil(native_line_width)));
-        if (x1==x2) LLRender2D::nativeRectangle(x1,llmax(y1,y2),x1+width,llmin(y1,y2),color,true);
-        else LLRender2D::nativeRectangle(llmin(x1,x2),y1+width,llmax(x1,x2),y1,color,true);
+        // Center all widget strokes on their shared vertices, retaining the
+        // requested fractional width. Axis-aligned strokes must obey the same
+        // geometry as diagonals instead of expanding only toward +x/+y.
+        const float dx=float(x2)-x1, dy=float(y2)-y1;
+        const float length=std::hypot(dx,dy);
+        if (length == 0.f) return;
+        const float half=native_line_width * .5f / length;
+        const float nx=-dy*half, ny=dx*half;
+        const auto vertex=[&](float x,float y) { return std::array<float,6>{x,y,color.mV[0],color.mV[1],color.mV[2],color.mV[3]}; };
+        const auto a=vertex(x1+nx,y1+ny), b=vertex(x2+nx,y2+ny);
+        const auto c=vertex(x1-nx,y1-ny), d=vertex(x2-nx,y2-ny);
+        LLRender2D::nativeTriangle({a,b,c});
+        LLRender2D::nativeTriangle({c,b,d});
         return;
     }
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);

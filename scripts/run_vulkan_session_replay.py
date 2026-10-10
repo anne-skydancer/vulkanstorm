@@ -55,7 +55,7 @@ def append_llsd(parent, value):
     else:
         ET.SubElement(parent, 'string').text = str(value)
 
-REQUIRED = ('connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
+REQUIRED = ('connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
             'connected_inventory_texture_upload', 'connected_inventory_sound_upload',
             'connected_group_titles', 'connected_group_directory_search',
             'connected_inventory_share', 'connected_resident_pay', 'connected_payment_balance_gate',
@@ -128,7 +128,7 @@ class Handler(BaseHTTPRequestHandler):
     def handle(self):
         try:
             super().handle()
-        except (ConnectionResetError, BrokenPipeError):
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
             # Viewer shutdown closes outstanding event-poll HTTP connections.
             pass
 
@@ -497,8 +497,12 @@ def main():
     parser.add_argument('--skin', default='default')
     parser.add_argument('--theme', default='')
     parser.add_argument('--language', default='en')
+    parser.add_argument('--ui-scale', type=float, default=1.0,
+                        help='Viewer UI scale used for connected skin/readback qualification')
     parser.add_argument('--all-skins', action='store_true', help='Run the complete connected replay for every packaged skin/theme and German overlay')
     args = parser.parse_args()
+    if not .75 <= args.ui_scale <= 4:
+        parser.error('--ui-scale must be between 0.75 and 4')
     windows = platform.system() == 'Windows'
     build = args.build_directory.resolve()
     stage = build / 'newview' / ('RelWithDebInfo' if windows else 'packaged')
@@ -506,12 +510,16 @@ def main():
         directory = args.evidence.resolve()
         directory.mkdir(parents=True, exist_ok=True)
         results = {}
-        for name, (skin, theme, language) in skin_cases(stage).items():
+        cases = {name: (*selection, 1.0) for name, selection in skin_cases(stage).items()}
+        cases['skin-ansastorm_modern-125percent'] = ('ansastorm_modern', '', 'en', 1.25)
+        cases['skin-ansastorm_modern-150percent'] = ('ansastorm_modern', '', 'en', 1.5)
+        for name, (skin, theme, language, ui_scale) in cases.items():
             child = directory / name
             command = [sys.executable, str(Path(__file__).resolve()),
                        '--build-directory', str(build), '--runtime', str(args.runtime.resolve()),
                        '--harness-evidence', str(args.harness_evidence.resolve()), '--evidence', str(child),
-                       '--skin', skin, '--theme', theme, '--language', language]
+                       '--skin', skin, '--theme', theme, '--language', language,
+                       '--ui-scale', str(ui_scale)]
             if args.register_windows_manifests:
                 command.append('--register-windows-manifests')
             try:
@@ -571,6 +579,7 @@ def main():
     selection_file.write_bytes(ET.tostring(selection, encoding='utf-8'))
     # Empty theme strings cannot survive the viewer's command-line tokenizer.
     command.extend(['--sessionsettings', str(selection_file)])
+    command.extend(['--set', 'UIScaleFactor', str(args.ui_scale)])
     report = {}; log = ''; code = None; passed = False
     with SimulatorHTTP() as server:
         server.upload_directory = directory / 'upload-bodies'

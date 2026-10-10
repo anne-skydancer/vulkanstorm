@@ -10,6 +10,10 @@ class LLTextBox;
 class VSChatInput : public LLLineEditor
 {
 public:
+    struct Params : public LLInitParam::Block<Params, LLLineEditor::Params>
+    {
+        Params();
+    };
     explicit VSChatInput(const Params& p) : LLLineEditor(p) {}
     LLPreeditor& preeditor() { return *this; }
     void remember()
@@ -25,6 +29,7 @@ class VSPlainChat : public LLPanel
 {
 public:
     explicit VSPlainChat(const Params&);
+    bool postBuild() override;
     // Root view ownership destroys controls and disconnects their callbacks.
     void setSender(std::function<bool(const std::string&)>);
     void setSession(const std::string& region, std::function<void()> logout);
@@ -34,6 +39,7 @@ public:
     LLTextEditor* transcript() const { return mTranscript; }
     bool submit();
 private:
+    bool mSkinBuilt = false;
     VSChatInput* mInput = nullptr;
     LLTextEditor* mTranscript = nullptr;
     LLButton* mLogout = nullptr;

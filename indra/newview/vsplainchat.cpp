@@ -8,44 +8,38 @@
 #include "lluictrlfactory.h"
 #include <stdexcept>
 
-VSPlainChat::VSPlainChat(const Params& p) : LLPanel(p)
+static LLDefaultChildRegistry::Register<VSChatInput> rNativeChatInput("vs_chat_input");
+// ParamDefaults walks base_block_t and loads the selected skin's ordinary
+// line_editor template. Do not copy defaults while constructing this block:
+// the derived descriptor is not initialized until its constructor completes.
+VSChatInput::Params::Params() = default;
+VSPlainChat::VSPlainChat(const Params& p) : LLPanel(p) {}
+bool VSPlainChat::postBuild()
 {
-    LLTextEditor::Params history;
-    history.name = "native_plain_transcript";
-    history.rect = LLRect(0, getRect().getHeight(), getRect().getWidth(), 36);
-    history.follows.flags = FOLLOWS_ALL;
-    history.read_only = true;
-    history.parse_urls = false;
-    history.spellcheck = false;
-    history.embedded_items = false;
-    history.max_text_length = 65536;
-    mTranscript = LLUICtrlFactory::create<LLTextEditor>(history, this);
-    LLLineEditor::Params edit;
-    edit.name = "native_chat_input";
-    edit.rect = LLRect(0, 30, getRect().getWidth(), 0);
-    edit.follows.flags = FOLLOWS_LEFT | FOLLOWS_RIGHT | FOLLOWS_BOTTOM;
-    edit.label = LLTrans::getString("NearbyChatTitle");
-    edit.max_length.bytes = 1024;
-    edit.spellcheck = false;
-    edit.commit_on_focus_lost = false;
-    mInput = LLUICtrlFactory::create<VSChatInput>(edit, this);
-    if (!mInput || !mTranscript) throw std::runtime_error("Required native plain chat controls were not admitted");
+    if (!mSkinBuilt)
+    {
+        // Factory initFromParams runs after construction. Build layered XUI here
+        // so that original owner parameters cannot overwrite skin resources.
+        const LLRect owner_rect = getRect();
+        const bool owner_visible = getVisible();
+        mSkinBuilt = true; // initPanelXML calls postBuild after creating children.
+        if (!buildFromFile("panel_vs_nearby_chat.xml", LLPanel::getDefaultParams()))
+            throw std::runtime_error("Required native nearby chat skin panel could not be built");
+        setShape(owner_rect);
+        setVisible(owner_visible);
+        return true;
+    }
+    mTranscript = findChild<LLTextEditor>("native_plain_transcript");
+    mInput = findChild<VSChatInput>("native_chat_input");
+    mLogout = findChild<LLButton>("native_logout");
+    mRegion = findChild<LLTextBox>("native_region");
+    if (!mInput || !mTranscript || !mLogout || !mRegion)
+        throw std::runtime_error("Required skinned native nearby chat controls were not admitted");
     mInput->setEnableLineHistory(true);
     mInput->setCommitCallback([this](LLUICtrl*, const LLSD&) { submit(); });
-    LLButton::Params logout;
-    logout.name = "native_logout";
-    logout.rect = LLRect(getRect().getWidth() - 100, getRect().getHeight(), getRect().getWidth(), getRect().getHeight() - 24);
-    logout.follows.flags = FOLLOWS_RIGHT | FOLLOWS_TOP;
-    logout.label = LLTrans::getString("NativeSessionLogout");
-    mLogout = LLUICtrlFactory::create<LLButton>(logout, this);
-    LLTextBox::Params region;
-    region.name = "native_region";
-    region.rect = LLRect(0, getRect().getHeight(), getRect().getWidth() - 104, getRect().getHeight() - 24);
-    region.follows.flags = FOLLOWS_LEFT | FOLLOWS_RIGHT | FOLLOWS_TOP;
-    mRegion = LLUICtrlFactory::create<LLTextBox>(region, this);
-    if (!mLogout || !mRegion) throw std::runtime_error("Required native session controls were not admitted");
     setSession("", {});
     setSender({});
+    return true;
 }
 void VSPlainChat::setSession(const std::string& region, std::function<void()> logout)
 {
@@ -53,7 +47,6 @@ void VSPlainChat::setSession(const std::string& region, std::function<void()> lo
     mLogout->setVisible(connected); mRegion->setVisible(connected);
     mRegion->setText(region);
     mLogout->setCommitCallback([logout](LLUICtrl*, const LLSD&) { if (logout) logout(); });
-    mTranscript->setShape(LLRect(0, getRect().getHeight() - (connected ? 28 : 0), getRect().getWidth(), 36));
 }
 void VSPlainChat::setSender(std::function<bool(const std::string&)> sender)
 {

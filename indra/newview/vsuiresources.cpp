@@ -51,7 +51,7 @@ struct VSUIResources::Impl
     {
         check(std::isfinite(degrees), "Non-finite native UI image rotation");
         const auto first = packets.size();
-        draw(a,x,y,width,height,color,false,uv,LLRectf(0.f,1.f,1.f,0.f),true);
+        draw(a,x,y,width,height,color,false,uv,LLRectf(0.f,1.f,1.f,0.f),true,degrees == 0.f);
         const auto origin = LLRender2D::isNativeUI() ? LLRender2D::nativeOrigin() : std::array<F32,2>{0,0};
         // Preserve the GL helper's centre and counter-clockwise bottom-left
         // rotation after canonicalizing to the renderer's top-left space.
@@ -63,7 +63,7 @@ struct VSUIResources::Impl
             packets[i].transform = {c,-sn,sn,c,cx-c*cx-sn*cy,cy+sn*cx-c*cy};
     }
     void draw(const Asset& a,S32 x,S32 y,S32 width,S32 height,const LLColor4& color,
-              bool solid,const LLRectf& outer,const LLRectf& center,bool inner)
+              bool solid,const LLRectf& outer,const LLRectf& center,bool inner,bool snap_extent=true)
     {
         check(active,"Native UI facade draw outside packet collection");
         const auto origin=LLRender2D::isNativeUI()?LLRender2D::nativeOrigin():std::array<F32,2>{0,0};
@@ -88,7 +88,15 @@ struct VSUIResources::Impl
             packets.push_back(std::move(p));
         };
         if (center.mLeft==0 && center.mRight==1 && center.mBottom==0 && center.mTop==1)
-        { quad(0,0,float(width),float(height),outer.mLeft,outer.mBottom,outer.mRight,outer.mTop); return; }
+        {
+            // The ordinary GL image helper rounds the physical width/height,
+            // retaining its translated origin. Rotated quads retain their
+            // original extents before rotation, matching the GL rotation path.
+            const float w = snap_extent ? std::floor(width * dpi + .5f) / dpi : float(width);
+            const float h = snap_extent ? std::floor(height * dpi + .5f) / dpi : float(height);
+            quad(0,0,w,h,outer.mLeft,outer.mBottom,outer.mRight,outer.mTop);
+            return;
+        }
         const float uw=outer.getWidth(),uh=outer.getHeight();
         LLRectf uv(outer.mLeft+center.mLeft*uw,outer.mBottom+center.mTop*uh,
                    outer.mLeft+center.mRight*uw,outer.mBottom+center.mBottom*uh);
@@ -113,6 +121,16 @@ struct VSUIResources::Impl
             const float scale=std::min({float(width)/c.getWidth(),float(height)/c.getHeight(),1.f});
             c.setCenterAndSize(uv.getCenterX()*width,uv.getCenterY()*height,c.getWidth()*scale,c.getHeight()*scale);
         }
+        // The GL skin helper rounds the inner nine-slice boundaries in physical
+        // pixels after UI translation and scaling. Preserve that contract at
+        // fractional UI scales, rather than interpolating borders across a
+        // half-pixel seam. Outer bounds intentionally remain unrounded.
+        auto snap = [this](float value, float offset)
+        { return std::floor((offset + value) * dpi + .5f) / dpi - offset; };
+        c.mLeft = snap(c.mLeft, x + origin[0]);
+        c.mRight = snap(c.mRight, x + origin[0]);
+        c.mBottom = snap(c.mBottom, y + origin[1]);
+        c.mTop = snap(c.mTop, y + origin[1]);
         const float xs[]{0,c.mLeft,c.mRight,float(width)},ys[]{0,c.mBottom,c.mTop,float(height)};
         const float us[]{outer.mLeft,uv.mLeft,uv.mRight,outer.mRight};
         const float vs[]{outer.mBottom,uv.mBottom,uv.mTop,outer.mTop};

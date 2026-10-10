@@ -24,6 +24,100 @@ def record():
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_nearby_chat_xui_controls_are_inside_owner_and_use_chat_palette(self):
+        from xml.etree import ElementTree as ET
+        root = Path(__file__).resolve().parents[2]
+        panel = ET.parse(root / 'indra/newview/skins/default/xui/en/panel_vs_nearby_chat.xml').getroot()
+        self.assertEqual(panel.get('layout'), 'topleft')
+        width, height = int(panel.get('width')), int(panel.get('height'))
+        rectangles = {}
+        for child in panel:
+            self.assertEqual(child.get('layout'), 'topleft')
+            left, top = int(child.get('left')), int(child.get('top'))
+            w, h = int(child.get('width')), int(child.get('height'))
+            # Actual applyXUILayout top-left conversion: parentHeight-top.
+            rect = (left, height-top-h, left+w, height-top)
+            self.assertGreaterEqual(rect[0], 0)
+            self.assertGreaterEqual(rect[1], 0)
+            self.assertLessEqual(rect[2], width)
+            self.assertLessEqual(rect[3], height)
+            rectangles[child.get('name')] = rect
+        self.assertEqual(rectangles['native_region'], (4,232,396,256))
+        self.assertEqual(rectangles['native_logout'], (400,232,496,256))
+        self.assertEqual(rectangles['native_plain_transcript'], (4,36,496,228))
+        self.assertEqual(rectangles['native_chat_input'], (4,4,496,30))
+        transcript = panel.find("text_editor[@name='native_plain_transcript']")
+        self.assertEqual(transcript.get('bg_readonly_color'), 'ChatHistoryBgColor')
+        self.assertEqual(transcript.get('text_readonly_color'), 'ChatHistoryTextColor')
+        self.assertEqual(transcript.get('word_wrap'), 'true')
+        self.assertEqual(transcript.get('track_bottom'), 'true')
+
+    def test_native_notification_stamp_remains_expired_after_owner_shutdown(self):
+        root = Path(__file__).resolve().parents[2]
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        source = (root / 'indra/newview/vsnativeim.cpp').read_text(encoding='utf-8')
+        start = source.index('bool vs_native_im_notification_current(')
+        opening = source.index('{', start)
+        end, depth = opening + 1, 1
+        while depth:
+            depth += (source[end] == '{') - (source[end] == '}')
+            end += 1
+        fixture = r"""
+#include <cassert>
+#include <map>
+#include <memory>
+#include <string>
+using U64=unsigned long long;
+struct LLSD {
+ struct Value {std::string text;std::string asUUID()const{return text;}std::string asString()const{return text;}};
+ std::map<std::string,Value> values;
+ bool has(const char* key)const{return values.count(key)!=0;}
+ Value operator[](const char* key)const{auto it=values.find(key);return it==values.end()?Value{}:it->second;}
+};
+const std::string sNotificationEpoch="application-epoch";
+struct VSNativeSession {
+ enum class Phase{Login,Connected};
+ Phase state=Phase::Connected;U64 epoch=4;
+ static inline std::shared_ptr<VSNativeSession> owner;
+ static std::shared_ptr<VSNativeSession> active(){return owner;}
+ Phase phase()const{return state;}U64 generation()const{return epoch;}
+};
+""" + source[start:end] + r"""
+int main(){
+ LLSD legacy,stamp;
+ stamp.values["vs_notification_epoch"].text=sNotificationEpoch;
+ stamp.values["vs_notification_generation"].text="4";
+ assert(vs_native_im_notification_current(legacy));
+ assert(!vs_native_im_notification_current(stamp));
+ auto retained=std::make_shared<VSNativeSession>();VSNativeSession::owner=retained;
+ assert(vs_native_im_notification_current(legacy));
+ assert(vs_native_im_notification_current(stamp));
+ ++retained->epoch;assert(!vs_native_im_notification_current(stamp));
+ stamp.values["vs_notification_generation"].text="5";
+ assert(vs_native_im_notification_current(stamp));
+ stamp.values["vs_notification_epoch"].text="previous-application";
+ assert(!vs_native_im_notification_current(stamp));
+ stamp.values["vs_notification_epoch"].text=sNotificationEpoch;
+ retained->state=VSNativeSession::Phase::Login;
+ assert(!vs_native_im_notification_current(stamp));
+ assert(!vs_native_im_notification_current(legacy));
+ // Coroutine retention of the retired session must not restore authorization
+ // when final shutdown clears the public owner.
+ VSNativeSession::owner.reset();
+ assert(!vs_native_im_notification_current(stamp));
+ assert(vs_native_im_notification_current(legacy));
+}
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'notification_epoch.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            exe = Path(temp) / 'notification_epoch.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_sdl_native_window_initializes_ime_policy_and_routes_composition(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / 'indra/llwindow/llwindowsdl2.cpp').read_text(encoding='utf-8')
