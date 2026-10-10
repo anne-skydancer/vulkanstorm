@@ -234,7 +234,18 @@ void qualifyConnectedSkinGeometry(LLSD& report)
             "Context Copy did not use the active editor selection");
     commitEdit("Delete");
     require(editor->getText().empty(), "Context Delete did not edit the active selection");
+    const bool pasteFocusBefore = editor->hasFocus();
     commitEdit("Paste");
+    if (editor->getText() != "native menu editing proof")
+    {
+        LLWString clipboardAfter;
+        const bool readableAfter = window->pasteTextFromClipboard(clipboardAfter);
+        LL_WARNS("VSNativeReplay") << "Context Paste failure: focus_before=" << pasteFocusBefore
+            << ", focus_after=" << editor->hasFocus() << ", editor_text=" << editor->getText()
+            << ", copied_text_before=" << wstring_to_utf8str(copied)
+            << ", clipboard_read_after=" << readableAfter
+            << ", clipboard_text_after=" << wstring_to_utf8str(clipboardAfter) << LL_ENDL;
+    }
     require(editor->getText() == "native menu editing proof", "Context Paste did not restore clipboard text");
     editPopup->setVisible(false);
     editor->setText(LLStringExplicit(draft));

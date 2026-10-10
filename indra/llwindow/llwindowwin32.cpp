@@ -3528,13 +3528,35 @@ bool LLWindowWin32::isClipboardTextAvailable()
 }
 
 
+namespace
+{
+bool openClipboardWithRetry(HWND window, const char* operation)
+{
+    // Clipboard viewers can briefly hold the system lock after each write.
+    // Bound the UI-thread delay to 35ms; do not retry invalid handles/errors.
+    constexpr unsigned attempts = 8;
+    for (unsigned attempt = 0; attempt < attempts; ++attempt)
+    {
+        if (OpenClipboard(window)) return true;
+        const DWORD error = GetLastError();
+        if ((error != ERROR_ACCESS_DENIED && error != ERROR_BUSY) || attempt + 1 == attempts)
+        {
+            LL_WARNS("Clipboard") << "OpenClipboard " << operation << " failed after " << attempt + 1 << " attempts, error=" << error << LL_ENDL;
+            return false;
+        }
+        Sleep(5);
+    }
+    return false;
+}
+}
+
 bool LLWindowWin32::pasteTextFromClipboard(LLWString &dst)
 {
     bool success = false;
 
     if (IsClipboardFormatAvailable(CF_UNICODETEXT))
     {
-        if (OpenClipboard(mWindowHandle))
+        if (openClipboardWithRetry(mWindowHandle, "read"))
         {
             HGLOBAL h_data = GetClipboardData(CF_UNICODETEXT);
             if (h_data)
@@ -3547,6 +3569,14 @@ bool LLWindowWin32::pasteTextFromClipboard(LLWString &dst)
                     GlobalUnlock(h_data);
                     success = true;
                 }
+                else
+                {
+                    LL_WARNS("Clipboard") << "GlobalLock for clipboard read failed, error=" << GetLastError() << LL_ENDL;
+                }
+            }
+            else
+            {
+                LL_WARNS("Clipboard") << "GetClipboardData failed, error=" << GetLastError() << LL_ENDL;
             }
             CloseClipboard();
         }
@@ -3555,28 +3585,6 @@ bool LLWindowWin32::pasteTextFromClipboard(LLWString &dst)
     return success;
 }
 
-
-namespace
-{
-bool openClipboardForCopy(HWND window)
-{
-    // Clipboard viewers can briefly hold the system lock after each write.
-    // Bound the UI-thread delay to 35ms; do not retry invalid handles/errors.
-    constexpr unsigned attempts = 8;
-    for (unsigned attempt = 0; attempt < attempts; ++attempt)
-    {
-        if (OpenClipboard(window)) return true;
-        const DWORD error = GetLastError();
-        if ((error != ERROR_ACCESS_DENIED && error != ERROR_BUSY) || attempt + 1 == attempts)
-        {
-            LL_WARNS("Clipboard") << "OpenClipboard failed after " << attempt + 1 << " attempts, error=" << error << LL_ENDL;
-            return false;
-        }
-        Sleep(5);
-    }
-    return false;
-}
-}
 
 bool LLWindowWin32::copyTextToClipboard(const LLWString& wstr)
 {
@@ -3590,7 +3598,7 @@ bool LLWindowWin32::copyTextToClipboard(const LLWString& wstr)
     if (!bytes) { GlobalFree(data); return false; }
     memcpy(bytes, out_utf16.c_str(), size_utf16);
     GlobalUnlock(data);
-    if (!openClipboardForCopy(mWindowHandle)) { GlobalFree(data); return false; }
+    if (!openClipboardWithRetry(mWindowHandle, "write")) { GlobalFree(data); return false; }
 
     // Allocate/encode before replacing the old clipboard. Windows assumes
     // ownership only on successful SetClipboardData; free on every failure.
