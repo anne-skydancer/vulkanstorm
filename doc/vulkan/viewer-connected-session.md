@@ -175,3 +175,13 @@ Return. It records `login_os_input_verified` and `login_submit_actions`; CI reje
 missing evidence or a count other than two. The callback is intercepted only in
 the offline probe; production continues through the ordinary startup callback.
 This does not certify live authentication or a real server session.
+
+
+Local Windows requalification of the repair passed all 68 viewer cases, including
+OS credential-field clicks, synthetic text entry, Login and Return submission in
+every positive startup skin/theme/language case. Required modal and agreement
+buttons are now clicked through the same OS route. Core/synchronization validation
+reported zero errors and all 18 startup readbacks per positive case matched the
+existing pixel oracle. The production session replay also passed, as did 19 viewer
+regression tests and 21 source-documentation tests. This evidence uses the pinned
+SwiftShader runtime; live credentials/server testing remains unqualified.
