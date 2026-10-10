@@ -1,5 +1,5 @@
 {
-  "source_commit": "d34fe4920260edc12dd566c9525f9a4b625cc62d",
+  "source_commit": "fa6d71c213ebff00e3aad1640499d717ae2e231d",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -1060,7 +1060,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 174,
       "end": 175,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped-gate",
       "reason": "Admit only the existing sl_about floater and its LLTabContainer type for native rendering; register its existing XUI/controller during native startup. Credits, licenses and copy callback remain shared with OpenGL; no world/Preferences admission is added."
@@ -9511,7 +9511,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 1,
       "end": 1,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9520,7 +9520,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 4,
       "end": 4,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9529,7 +9529,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 11,
       "end": 11,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9538,7 +9538,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 14,
       "end": 15,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9547,7 +9547,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 17,
       "end": 19,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9556,7 +9556,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 32,
       "end": 33,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9565,7 +9565,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 48,
       "end": 48,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9574,7 +9574,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 50,
       "end": 50,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9583,7 +9583,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 370,
       "end": 374,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9592,7 +9592,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 379,
       "end": 380,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9601,7 +9601,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 390,
       "end": 390,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9610,7 +9610,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 487,
       "end": 489,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9619,7 +9619,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 493,
       "end": 493,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9628,7 +9628,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 508,
       "end": 516,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9637,7 +9637,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 518,
       "end": 553,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9646,7 +9646,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 556,
       "end": 556,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9655,7 +9655,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 614,
       "end": 623,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9664,7 +9664,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 626,
       "end": 626,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9673,7 +9673,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 656,
       "end": 657,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9682,7 +9682,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 664,
       "end": 686,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9691,7 +9691,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 932,
       "end": 942,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9997,7 +9997,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 3,
       "end": 114,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings."
@@ -10006,7 +10006,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 127,
       "end": 128,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings."
@@ -10015,7 +10015,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 142,
       "end": 142,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings."
@@ -10024,7 +10024,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 202,
       "end": 274,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings."
@@ -10033,7 +10033,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 277,
       "end": 277,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings."
@@ -10042,7 +10042,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 282,
       "end": 282,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings."
@@ -10051,7 +10051,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 288,
       "end": 289,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings."
@@ -10060,7 +10060,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 292,
       "end": 301,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings."
@@ -10069,7 +10069,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 305,
       "end": 315,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings."
@@ -10627,7 +10627,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 72,
       "end": 75,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10636,7 +10636,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 81,
       "end": 82,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10645,7 +10645,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 86,
       "end": 89,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10654,7 +10654,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 91,
       "end": 91,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10663,7 +10663,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 93,
       "end": 103,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10672,7 +10672,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 319,
       "end": 319,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10681,7 +10681,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 321,
       "end": 321,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10690,7 +10690,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 607,
       "end": 607,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -13604,9 +13604,9 @@
     },
     {
       "path": "indra/newview/llpanelmaininventory.cpp",
-      "start": 3518,
-      "end": 3558,
-      "sha256": "f8b2ee7735437c7a961db0bef96134fadd5b6cd05b9fc0505256e111f6861ba5",
+      "start": 3519,
+      "end": 3559,
+      "sha256": "c8a314c5095c3d1f95da0ed44af48c9c655aae5ac95aeb801487ca5a1aae6b81",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate."
@@ -13624,7 +13624,7 @@
       "path": "indra/newview/llpanelmarketplaceinbox.cpp",
       "start": 99,
       "end": 102,
-      "sha256": "4517d3aff45e70777b75cc4034c9afafabde3be5904f38c743506cd67a387b66",
+      "sha256": "6a76e685b1cc5f5e1b471e47d950d196cb6b3a80e8e1b73366cd73684a5c5c14",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Required real inbox inventory owner construction failure is explicit before setShape/use, replacing debug-only assertion followed by null dereference; no dummy or substitute owner. Exact inbox type admission establishes actual shared graph; runtime construction is separately required."
@@ -13858,43 +13858,43 @@
       "path": "indra/newview/llsidepanelinventory.cpp",
       "start": 28,
       "end": 30,
-      "sha256": "194da82ccd270f51f82cffa6f01c5ac74e8a4f00110afcb9cb9c2ccde8457cdc",
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate."
     },
     {
       "path": "indra/newview/llsidepanelinventory.cpp",
-      "start": 254,
-      "end": 257,
-      "sha256": "194da82ccd270f51f82cffa6f01c5ac74e8a4f00110afcb9cb9c2ccde8457cdc",
+      "start": 255,
+      "end": 258,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate."
     },
     {
       "path": "indra/newview/llsidepanelinventory.cpp",
-      "start": 261,
-      "end": 262,
-      "sha256": "194da82ccd270f51f82cffa6f01c5ac74e8a4f00110afcb9cb9c2ccde8457cdc",
+      "start": 262,
+      "end": 263,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate."
     },
     {
       "path": "indra/newview/llsidepanelinventory.cpp",
-      "start": 283,
-      "end": 290,
-      "sha256": "194da82ccd270f51f82cffa6f01c5ac74e8a4f00110afcb9cb9c2ccde8457cdc",
+      "start": 284,
+      "end": 291,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate."
     },
     {
       "path": "indra/newview/llsidepanelinventory.cpp",
-      "start": 735,
-      "end": 741,
-      "sha256": "194da82ccd270f51f82cffa6f01c5ac74e8a4f00110afcb9cb9c2ccde8457cdc",
+      "start": 747,
+      "end": 753,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate."
@@ -15019,7 +15019,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 7,
       "end": 8,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15028,7 +15028,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 20,
       "end": 31,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15037,7 +15037,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 39,
       "end": 44,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15046,7 +15046,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 46,
       "end": 47,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15055,7 +15055,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 52,
       "end": 56,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15064,7 +15064,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 76,
       "end": 80,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15073,7 +15073,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 83,
       "end": 85,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15082,7 +15082,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 90,
       "end": 90,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15091,7 +15091,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 92,
       "end": 92,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15100,7 +15100,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 104,
       "end": 236,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15109,7 +15109,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 238,
       "end": 238,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15118,7 +15118,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 249,
       "end": 318,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15127,7 +15127,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 320,
       "end": 320,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15136,7 +15136,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 322,
       "end": 322,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15145,7 +15145,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 369,
       "end": 369,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15154,7 +15154,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 383,
       "end": 383,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15163,7 +15163,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 386,
       "end": 389,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15172,7 +15172,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 394,
       "end": 394,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15181,7 +15181,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 411,
       "end": 414,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15190,7 +15190,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 418,
       "end": 428,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15199,7 +15199,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 437,
       "end": 475,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15208,7 +15208,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 486,
       "end": 486,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15217,7 +15217,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 491,
       "end": 492,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15226,7 +15226,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 495,
       "end": 495,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15235,7 +15235,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 500,
       "end": 504,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15244,7 +15244,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 517,
       "end": 517,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15253,7 +15253,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 592,
       "end": 596,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15262,16 +15262,16 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 600,
       "end": 606,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 631,
+      "start": 632,
       "end": 636,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15280,7 +15280,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 642,
       "end": 643,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15289,7 +15289,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 653,
       "end": 655,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15298,7 +15298,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 690,
       "end": 839,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15307,7 +15307,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 846,
       "end": 879,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15802,7 +15802,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 126,
       "end": 126,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings. Exact native widget, command and callback admission preserves real shared menus/toolbars and their saved layout, while preventing scene callback registration/evaluation. Factory omission is limited to the scene-only nearby subtree of the existing People panel. Shared configuration, drag/drop and CPU context callbacks are reviewed; legacy admission remains unrestricted. Runtime chrome/menu/cursor evidence is separate. Exact LLConsole type admission enables the real CPU shared console owner only, without broad superclass or fake registry admission. Profile.Commit/EnableItem now admit exact reviewed CPU account/image/clipboard/text action payloads including real change/upload/remove photo, display-name/account edit, IM/history/friendship/group invitations/share/pay/block/permissions/contact sets and description preview; Profile.CheckItem only block toggle. Shared controller retains capability/load/identity gates. Map/voice/scene moderation remain excluded; real photo Save protocol qualification remains required. Exact public LLDragAndDropButton (lldndbutton.h) is admitted after constructor/draw/input review: inherits reviewed LLButton and forwards DAD to owning inventory controller; real trash handler uses current selected account inventory deletion/permission gates. No scene drag/drop owner is constructed or admitted. Profile menu XML variants use only reviewed Profile.Commit/EnableItem/CheckItem names; FirstLife image controls bind actual programmatic native-safe picker/save handlers. Exact public marketplace inbox inventory panel and both inbox folder/item subclasses are admitted: constructors share reviewed inventory/folder/badge resources, freshness tracking uses account inventory IDs/settings, draws use native folder and badge producers. No new scene owner. Account freshness storage retirement must accompany inventory owner destruction; runtime inbox construction remains separately required."
@@ -15811,7 +15811,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 136,
       "end": 136,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings. Exact native widget, command and callback admission preserves real shared menus/toolbars and their saved layout, while preventing scene callback registration/evaluation. Factory omission is limited to the scene-only nearby subtree of the existing People panel. Shared configuration, drag/drop and CPU context callbacks are reviewed; legacy admission remains unrestricted. Runtime chrome/menu/cursor evidence is separate. Exact LLConsole type admission enables the real CPU shared console owner only, without broad superclass or fake registry admission. Profile.Commit/EnableItem now admit exact reviewed CPU account/image/clipboard/text action payloads including real change/upload/remove photo, display-name/account edit, IM/history/friendship/group invitations/share/pay/block/permissions/contact sets and description preview; Profile.CheckItem only block toggle. Shared controller retains capability/load/identity gates. Map/voice/scene moderation remain excluded; real photo Save protocol qualification remains required. Exact public LLDragAndDropButton (lldndbutton.h) is admitted after constructor/draw/input review: inherits reviewed LLButton and forwards DAD to owning inventory controller; real trash handler uses current selected account inventory deletion/permission gates. No scene drag/drop owner is constructed or admitted. Profile menu XML variants use only reviewed Profile.Commit/EnableItem/CheckItem names; FirstLife image controls bind actual programmatic native-safe picker/save handlers. Exact public marketplace inbox inventory panel and both inbox folder/item subclasses are admitted: constructors share reviewed inventory/folder/badge resources, freshness tracking uses account inventory IDs/settings, draws use native folder and badge producers. No new scene owner. Account freshness storage retirement must accompany inventory owner destruction; runtime inbox construction remains separately required."
@@ -15820,7 +15820,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 144,
       "end": 172,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings. Exact native widget, command and callback admission preserves real shared menus/toolbars and their saved layout, while preventing scene callback registration/evaluation. Factory omission is limited to the scene-only nearby subtree of the existing People panel. Shared configuration, drag/drop and CPU context callbacks are reviewed; legacy admission remains unrestricted. Runtime chrome/menu/cursor evidence is separate. Exact LLConsole type admission enables the real CPU shared console owner only, without broad superclass or fake registry admission. Profile.Commit/EnableItem now admit exact reviewed CPU account/image/clipboard/text action payloads including real change/upload/remove photo, display-name/account edit, IM/history/friendship/group invitations/share/pay/block/permissions/contact sets and description preview; Profile.CheckItem only block toggle. Shared controller retains capability/load/identity gates. Map/voice/scene moderation remain excluded; real photo Save protocol qualification remains required. Exact public LLDragAndDropButton (lldndbutton.h) is admitted after constructor/draw/input review: inherits reviewed LLButton and forwards DAD to owning inventory controller; real trash handler uses current selected account inventory deletion/permission gates. No scene drag/drop owner is constructed or admitted. Profile menu XML variants use only reviewed Profile.Commit/EnableItem/CheckItem names; FirstLife image controls bind actual programmatic native-safe picker/save handlers. Exact public marketplace inbox inventory panel and both inbox folder/item subclasses are admitted: constructors share reviewed inventory/folder/badge resources, freshness tracking uses account inventory IDs/settings, draws use native folder and badge producers. No new scene owner. Account freshness storage retirement must accompany inventory owner destruction; runtime inbox construction remains separately required."
@@ -15829,7 +15829,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 192,
       "end": 201,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings. Exact native widget, command and callback admission preserves real shared menus/toolbars and their saved layout, while preventing scene callback registration/evaluation. Factory omission is limited to the scene-only nearby subtree of the existing People panel. Shared configuration, drag/drop and CPU context callbacks are reviewed; legacy admission remains unrestricted. Runtime chrome/menu/cursor evidence is separate. Exact LLConsole type admission enables the real CPU shared console owner only, without broad superclass or fake registry admission. Profile.Commit/EnableItem now admit exact reviewed CPU account/image/clipboard/text action payloads including real change/upload/remove photo, display-name/account edit, IM/history/friendship/group invitations/share/pay/block/permissions/contact sets and description preview; Profile.CheckItem only block toggle. Shared controller retains capability/load/identity gates. Map/voice/scene moderation remain excluded; real photo Save protocol qualification remains required. Exact public LLDragAndDropButton (lldndbutton.h) is admitted after constructor/draw/input review: inherits reviewed LLButton and forwards DAD to owning inventory controller; real trash handler uses current selected account inventory deletion/permission gates. No scene drag/drop owner is constructed or admitted. Profile menu XML variants use only reviewed Profile.Commit/EnableItem/CheckItem names; FirstLife image controls bind actual programmatic native-safe picker/save handlers. Exact public marketplace inbox inventory panel and both inbox folder/item subclasses are admitted: constructors share reviewed inventory/folder/badge resources, freshness tracking uses account inventory IDs/settings, draws use native folder and badge producers. No new scene owner. Account freshness storage retirement must accompany inventory owner destruction; runtime inbox construction remains separately required."
@@ -15838,7 +15838,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 279,
       "end": 280,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings. Exact native widget, command and callback admission preserves real shared menus/toolbars and their saved layout, while preventing scene callback registration/evaluation. Factory omission is limited to the scene-only nearby subtree of the existing People panel. Shared configuration, drag/drop and CPU context callbacks are reviewed; legacy admission remains unrestricted. Runtime chrome/menu/cursor evidence is separate. Exact LLConsole type admission enables the real CPU shared console owner only, without broad superclass or fake registry admission. Profile.Commit/EnableItem now admit exact reviewed CPU account/image/clipboard/text action payloads including real change/upload/remove photo, display-name/account edit, IM/history/friendship/group invitations/share/pay/block/permissions/contact sets and description preview; Profile.CheckItem only block toggle. Shared controller retains capability/load/identity gates. Map/voice/scene moderation remain excluded; real photo Save protocol qualification remains required. Exact public LLDragAndDropButton (lldndbutton.h) is admitted after constructor/draw/input review: inherits reviewed LLButton and forwards DAD to owning inventory controller; real trash handler uses current selected account inventory deletion/permission gates. No scene drag/drop owner is constructed or admitted. Profile menu XML variants use only reviewed Profile.Commit/EnableItem/CheckItem names; FirstLife image controls bind actual programmatic native-safe picker/save handlers. Exact public marketplace inbox inventory panel and both inbox folder/item subclasses are admitted: constructors share reviewed inventory/folder/badge resources, freshness tracking uses account inventory IDs/settings, draws use native folder and badge producers. No new scene owner. Account freshness storage retirement must accompany inventory owner destruction; runtime inbox construction remains separately required."
@@ -15847,7 +15847,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 291,
       "end": 291,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings. Exact native widget, command and callback admission preserves real shared menus/toolbars and their saved layout, while preventing scene callback registration/evaluation. Factory omission is limited to the scene-only nearby subtree of the existing People panel. Shared configuration, drag/drop and CPU context callbacks are reviewed; legacy admission remains unrestricted. Runtime chrome/menu/cursor evidence is separate. Exact LLConsole type admission enables the real CPU shared console owner only, without broad superclass or fake registry admission. Profile.Commit/EnableItem now admit exact reviewed CPU account/image/clipboard/text action payloads including real change/upload/remove photo, display-name/account edit, IM/history/friendship/group invitations/share/pay/block/permissions/contact sets and description preview; Profile.CheckItem only block toggle. Shared controller retains capability/load/identity gates. Map/voice/scene moderation remain excluded; real photo Save protocol qualification remains required. Exact public LLDragAndDropButton (lldndbutton.h) is admitted after constructor/draw/input review: inherits reviewed LLButton and forwards DAD to owning inventory controller; real trash handler uses current selected account inventory deletion/permission gates. No scene drag/drop owner is constructed or admitted. Profile menu XML variants use only reviewed Profile.Commit/EnableItem/CheckItem names; FirstLife image controls bind actual programmatic native-safe picker/save handlers. Exact public marketplace inbox inventory panel and both inbox folder/item subclasses are admitted: constructors share reviewed inventory/folder/badge resources, freshness tracking uses account inventory IDs/settings, draws use native folder and badge producers. No new scene owner. Account freshness storage retirement must accompany inventory owner destruction; runtime inbox construction remains separately required."
@@ -15856,7 +15856,7 @@
       "path": "indra/newview/vsstartupui.cpp",
       "start": 302,
       "end": 304,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings. Exact native widget, command and callback admission preserves real shared menus/toolbars and their saved layout, while preventing scene callback registration/evaluation. Factory omission is limited to the scene-only nearby subtree of the existing People panel. Shared configuration, drag/drop and CPU context callbacks are reviewed; legacy admission remains unrestricted. Runtime chrome/menu/cursor evidence is separate. Exact LLConsole type admission enables the real CPU shared console owner only, without broad superclass or fake registry admission. Profile.Commit/EnableItem now admit exact reviewed CPU account/image/clipboard/text action payloads including real change/upload/remove photo, display-name/account edit, IM/history/friendship/group invitations/share/pay/block/permissions/contact sets and description preview; Profile.CheckItem only block toggle. Shared controller retains capability/load/identity gates. Map/voice/scene moderation remain excluded; real photo Save protocol qualification remains required. Exact public LLDragAndDropButton (lldndbutton.h) is admitted after constructor/draw/input review: inherits reviewed LLButton and forwards DAD to owning inventory controller; real trash handler uses current selected account inventory deletion/permission gates. No scene drag/drop owner is constructed or admitted. Profile menu XML variants use only reviewed Profile.Commit/EnableItem/CheckItem names; FirstLife image controls bind actual programmatic native-safe picker/save handlers. Exact public marketplace inbox inventory panel and both inbox folder/item subclasses are admitted: constructors share reviewed inventory/folder/badge resources, freshness tracking uses account inventory IDs/settings, draws use native folder and badge producers. No new scene owner. Account freshness storage retirement must accompany inventory owner destruction; runtime inbox construction remains separately required."
@@ -15864,8 +15864,8 @@
     {
       "path": "indra/newview/vsstartupui.cpp",
       "start": 321,
-      "end": 408,
-      "sha256": "3665f2c00bdad243ea5f127d51e2d3c3605001b550dfefc49d4af15f2060f89c",
+      "end": 405,
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings. Exact native widget, command and callback admission preserves real shared menus/toolbars and their saved layout, while preventing scene callback registration/evaluation. Factory omission is limited to the scene-only nearby subtree of the existing People panel. Shared configuration, drag/drop and CPU context callbacks are reviewed; legacy admission remains unrestricted. Runtime chrome/menu/cursor evidence is separate. Exact LLConsole type admission enables the real CPU shared console owner only, without broad superclass or fake registry admission. Profile.Commit/EnableItem now admit exact reviewed CPU account/image/clipboard/text action payloads including real change/upload/remove photo, display-name/account edit, IM/history/friendship/group invitations/share/pay/block/permissions/contact sets and description preview; Profile.CheckItem only block toggle. Shared controller retains capability/load/identity gates. Map/voice/scene moderation remain excluded; real photo Save protocol qualification remains required. Exact public LLDragAndDropButton (lldndbutton.h) is admitted after constructor/draw/input review: inherits reviewed LLButton and forwards DAD to owning inventory controller; real trash handler uses current selected account inventory deletion/permission gates. No scene drag/drop owner is constructed or admitted. Profile menu XML variants use only reviewed Profile.Commit/EnableItem/CheckItem names; FirstLife image controls bind actual programmatic native-safe picker/save handlers. Exact public marketplace inbox inventory panel and both inbox folder/item subclasses are admitted: constructors share reviewed inventory/folder/badge resources, freshness tracking uses account inventory IDs/settings, draws use native folder and badge producers. No new scene owner. Account freshness storage retirement must accompany inventory owner destruction; runtime inbox construction remains separately required."
@@ -16081,7 +16081,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 237,
       "end": 237,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged. Context Paste failure diagnostics preserve exact oracle and record editor focus/text and independent post-failure clipboard readability/content; no retry of the action or substitution of internal clipboard data."
@@ -16090,7 +16090,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 239,
       "end": 248,
-      "sha256": "e041503114c39e97de799637eba2b957e82e4464b343c48da292c2ebfbddee25",
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged. Context Paste failure diagnostics preserve exact oracle and record editor focus/text and independent post-failure clipboard readability/content; no retry of the action or substitution of internal clipboard data."
@@ -16256,10 +16256,163 @@
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image."
+    },
+    {
+      "path": "indra/newview/skins/vintage/xui/en/floater_fs_nearby_chat.xml",
+      "start": 359,
+      "end": 359,
+      "sha256": "ee5bb6541b4f443a604976dc2e70d121c856490482a2ddfa300976ff2b747074",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Matched build45 PDB/actual thrown-object evidence identifies nonexistent SplitButtonLeft_Press during real nearby Send button construction. Shared Vintage XUI pressed-selected state now uses existing SplitButtonLeft_Selected, identical to selected/pressed skin artwork. Missing/decode-error fail-fast remains decisive; exact packaged state-asset regression passes. Rebuilt Vintage runtime pending."
+    },
+    {
+      "path": "indra/newview/vsstartupui.cpp",
+      "start": 406,
+      "end": 412,
+      "sha256": "01970c9143c4feb333c7d48e65811ff973cc275e18485b85fcd07ff1b507c4f5",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings. Exact native widget, command and callback admission preserves real shared menus/toolbars and their saved layout, while preventing scene callback registration/evaluation. Factory omission is limited to the scene-only nearby subtree of the existing People panel. Shared configuration, drag/drop and CPU context callbacks are reviewed; legacy admission remains unrestricted. Runtime chrome/menu/cursor evidence is separate. Exact LLConsole type admission enables the real CPU shared console owner only, without broad superclass or fake registry admission. Profile.Commit/EnableItem now admit exact reviewed CPU account/image/clipboard/text action payloads including real change/upload/remove photo, display-name/account edit, IM/history/friendship/group invitations/share/pay/block/permissions/contact sets and description preview; Profile.CheckItem only block toggle. Shared controller retains capability/load/identity gates. Map/voice/scene moderation remain excluded; real photo Save protocol qualification remains required. Exact public LLDragAndDropButton (lldndbutton.h) is admitted after constructor/draw/input review: inherits reviewed LLButton and forwards DAD to owning inventory controller; real trash handler uses current selected account inventory deletion/permission gates. No scene drag/drop owner is constructed or admitted. Profile menu XML variants use only reviewed Profile.Commit/EnableItem/CheckItem names; FirstLife image controls bind actual programmatic native-safe picker/save handlers. Exact public marketplace inbox inventory panel and both inbox folder/item subclasses are admitted: constructors share reviewed inventory/folder/badge resources, freshness tracking uses account inventory IDs/settings, draws use native folder and badge producers. No new scene owner. Account freshness storage retirement must accompany inventory owner destruction; runtime inbox construction remains separately required. Native child construction gate now omits only nearby_voice_output_monitor under exact panel_toolbar_view.xml, including Vintage/localized skin layers, before factory invocation. Reviewed NearbyVoiceMonitor constructor creates LLLocalSpeakerMgr and draw updates scene avatars through LLWorld; no shared viewer name lookup requires that leaf. Other toolbar/text/skin controls remain constructed; OpenGL has no active gate and remains unchanged. Existing People nearby-panel scene omission now uses exact basename rather than suffix."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 631,
+      "end": 631,
+      "sha256": "3c292877250128defe56f63823e27401fa3b05e5e00ceb25d3a09b161ff30c79",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged. Context Paste failure diagnostics preserve exact oracle and record editor focus/text and independent post-failure clipboard readability/content; no retry of the action or substitution of internal clipboard data. Actual skinned toolbar chat qualification uses FSNearbyChatControl common production contract: Vintage supplies fs_nearby_chat_control while other skins supply derived FSNearbyChatVoiceControl. Existing actual visible/enabled Enter/send/packet identity requirements remain unchanged. Compiled exact lookup with actual Vintage/default XUI widget types passes; rebuilt runtime pending."
+    },
+    {
+      "path": "indra/newview/llpanelmaininventory.cpp",
+      "start": 423,
+      "end": 423,
+      "sha256": "c8a314c5095c3d1f95da0ed44af48c9c655aae5ac95aeb801487ca5a1aae6b81",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Selected Vintage XUI intentionally comments out options_visibility_btn. Optional visibility menu button now uses findChild and attaches existing menu only to a present real button; other menu/filter controls and XUI layout unchanged, both renderer paths."
+    },
+    {
+      "path": "indra/newview/llpanelmaininventory.cpp",
+      "start": 2127,
+      "end": 2128,
+      "sha256": "c8a314c5095c3d1f95da0ed44af48c9c655aae5ac95aeb801487ca5a1aae6b81",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Selected Vintage XUI intentionally comments out options_visibility_btn. Optional visibility menu button now uses findChild and attaches existing menu only to a present real button; other menu/filter controls and XUI layout unchanged, both renderer paths."
+    },
+    {
+      "path": "indra/newview/llpanelmarketplaceinbox.cpp",
+      "start": 73,
+      "end": 73,
+      "sha256": "6a76e685b1cc5f5e1b471e47d950d196cb6b3a80e8e1b73366cd73684a5c5c14",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Required real inbox inventory owner construction failure is explicit before setShape/use, replacing debug-only assertion followed by null dereference; no dummy or substitute owner. Exact inbox type admission establishes actual shared graph; runtime construction is separately required. Selected Vintage inbox is a real Marketplace tab with inbox_label rather than inbox_btn. Optional button lookup uses findChild; count changes update existing button or existing text label with unchanged localized strings, fresh count state and normal draw, without manufacturing dummy controls."
+    },
+    {
+      "path": "indra/newview/llpanelmarketplaceinbox.cpp",
+      "start": 280,
+      "end": 282,
+      "sha256": "6a76e685b1cc5f5e1b471e47d950d196cb6b3a80e8e1b73366cd73684a5c5c14",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Required real inbox inventory owner construction failure is explicit before setShape/use, replacing debug-only assertion followed by null dereference; no dummy or substitute owner. Exact inbox type admission establishes actual shared graph; runtime construction is separately required. Selected Vintage inbox is a real Marketplace tab with inbox_label rather than inbox_btn. Optional button lookup uses findChild; count changes update existing button or existing text label with unchanged localized strings, fresh count state and normal draw, without manufacturing dummy controls."
+    },
+    {
+      "path": "indra/newview/llpanelmarketplaceinbox.cpp",
+      "start": 286,
+      "end": 288,
+      "sha256": "6a76e685b1cc5f5e1b471e47d950d196cb6b3a80e8e1b73366cd73684a5c5c14",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Required real inbox inventory owner construction failure is explicit before setShape/use, replacing debug-only assertion followed by null dereference; no dummy or substitute owner. Exact inbox type admission establishes actual shared graph; runtime construction is separately required. Selected Vintage inbox is a real Marketplace tab with inbox_label rather than inbox_btn. Optional button lookup uses findChild; count changes update existing button or existing text label with unchanged localized strings, fresh count state and normal draw, without manufacturing dummy controls."
+    },
+    {
+      "path": "indra/newview/llsidepanelinventory.cpp",
+      "start": 190,
+      "end": 190,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Optional reload/inbox buttons use findChild. Existing collapsed inbox layout preserves present callbacks/toggle/height behavior; Vintage real tab layout uses actual inventory_tab_container marketplace tab on open and current tab for activity. Absent collapsed-stack controls are never dereferenced or manufactured. Shared account fetch/selection services unchanged. Fresh-item auto-expand paths reuse existing openInbox controller; activity requires a real non-null inbox panel before current-tab equality, preventing null/null selection false positives."
+    },
+    {
+      "path": "indra/newview/llsidepanelinventory.cpp",
+      "start": 217,
+      "end": 217,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Optional reload/inbox buttons use findChild. Existing collapsed inbox layout preserves present callbacks/toggle/height behavior; Vintage real tab layout uses actual inventory_tab_container marketplace tab on open and current tab for activity. Absent collapsed-stack controls are never dereferenced or manufactured. Shared account fetch/selection services unchanged. Fresh-item auto-expand paths reuse existing openInbox controller; activity requires a real non-null inbox panel before current-tab equality, preventing null/null selection false positives."
+    },
+    {
+      "path": "indra/newview/llsidepanelinventory.cpp",
+      "start": 219,
+      "end": 220,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Optional reload/inbox buttons use findChild. Existing collapsed inbox layout preserves present callbacks/toggle/height behavior; Vintage real tab layout uses actual inventory_tab_container marketplace tab on open and current tab for activity. Absent collapsed-stack controls are never dereferenced or manufactured. Shared account fetch/selection services unchanged. Fresh-item auto-expand paths reuse existing openInbox controller; activity requires a real non-null inbox panel before current-tab equality, preventing null/null selection false positives."
+    },
+    {
+      "path": "indra/newview/llsidepanelinventory.cpp",
+      "start": 224,
+      "end": 224,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Optional reload/inbox buttons use findChild. Existing collapsed inbox layout preserves present callbacks/toggle/height behavior; Vintage real tab layout uses actual inventory_tab_container marketplace tab on open and current tab for activity. Absent collapsed-stack controls are never dereferenced or manufactured. Shared account fetch/selection services unchanged. Fresh-item auto-expand paths reuse existing openInbox controller; activity requires a real non-null inbox panel before current-tab equality, preventing null/null selection false positives."
+    },
+    {
+      "path": "indra/newview/llsidepanelinventory.cpp",
+      "start": 439,
+      "end": 448,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Optional reload/inbox buttons use findChild. Existing collapsed inbox layout preserves present callbacks/toggle/height behavior; Vintage real tab layout uses actual inventory_tab_container marketplace tab on open and current tab for activity. Absent collapsed-stack controls are never dereferenced or manufactured. Shared account fetch/selection services unchanged. Fresh-item auto-expand paths reuse existing openInbox controller; activity requires a real non-null inbox panel before current-tab equality, preventing null/null selection false positives."
+    },
+    {
+      "path": "indra/newview/llsidepanelinventory.cpp",
+      "start": 461,
+      "end": 461,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Optional reload/inbox buttons use findChild. Existing collapsed inbox layout preserves present callbacks/toggle/height behavior; Vintage real tab layout uses actual inventory_tab_container marketplace tab on open and current tab for activity. Absent collapsed-stack controls are never dereferenced or manufactured. Shared account fetch/selection services unchanged. Fresh-item auto-expand paths reuse existing openInbox controller; activity requires a real non-null inbox panel before current-tab equality, preventing null/null selection false positives."
+    },
+    {
+      "path": "indra/newview/llsidepanelinventory.cpp",
+      "start": 468,
+      "end": 470,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Optional reload/inbox buttons use findChild. Existing collapsed inbox layout preserves present callbacks/toggle/height behavior; Vintage real tab layout uses actual inventory_tab_container marketplace tab on open and current tab for activity. Absent collapsed-stack controls are never dereferenced or manufactured. Shared account fetch/selection services unchanged. Fresh-item auto-expand paths reuse existing openInbox controller; activity requires a real non-null inbox panel before current-tab equality, preventing null/null selection false positives."
+    },
+    {
+      "path": "indra/newview/llsidepanelinventory.cpp",
+      "start": 501,
+      "end": 501,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Optional reload/inbox buttons use findChild. Existing collapsed inbox layout preserves present callbacks/toggle/height behavior; Vintage real tab layout uses actual inventory_tab_container marketplace tab on open and current tab for activity. Absent collapsed-stack controls are never dereferenced or manufactured. Shared account fetch/selection services unchanged. Fresh-item auto-expand paths reuse existing openInbox controller; activity requires a real non-null inbox panel before current-tab equality, preventing null/null selection false positives."
+    },
+    {
+      "path": "indra/newview/llsidepanelinventory.cpp",
+      "start": 504,
+      "end": 508,
+      "sha256": "f2adc25ec6f6421524f688035d77ceb67a9a8861e123af9bd3251d72d736ce00",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Optional reload/inbox buttons use findChild. Existing collapsed inbox layout preserves present callbacks/toggle/height behavior; Vintage real tab layout uses actual inventory_tab_container marketplace tab on open and current tab for activity. Absent collapsed-stack controls are never dereferenced or manufactured. Shared account fetch/selection services unchanged. Fresh-item auto-expand paths reuse existing openInbox controller; activity requires a real non-null inbox panel before current-tab equality, preventing null/null selection false positives."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "99f1ade5ac9183cfcd546cf7138e5e9bdd34da20",
+    "previous_source_commit": "88ef44eba83ce0d09ee2b75334a4a75ca3e1887e",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Only hash-verified existing insertion-review witnesses replace invalid platform rows; reasons/range extents retained and unchanged text mapped. Changed blocks have explicit source dispositions. No platform/runtime certification."
   }
