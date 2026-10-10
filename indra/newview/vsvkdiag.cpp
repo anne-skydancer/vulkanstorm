@@ -1011,7 +1011,6 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         LLKeyboard::setStringTranslatorFunc(LLTrans::getKeyboardString);
         init_menus();
         require(gLoginMenuBarView && gEditMenu, "Native login/edit menus were not admitted");
-        startup_menu_verified=true;
         startup_reply=LLEventPumps::instance().obtain("NativeStartupAgreementReply").listen("viewer-v3",[this](const LLSD& value)
         { if (value.asBoolean()) ++startup_accepted; else ++startup_rejected; return false; });
         FSPanelLogin::show(startup_window->getWindowRectScaled(), [](S32, void* data)
@@ -1337,6 +1336,16 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             require(window->setSize(LLCoordWindow(1280, 1024)), "Native About resize failed");
             window->gatherInput();
             startup_window->drawNativeUI(); // Lay out the resized menu before its OS clicks.
+            // Opening Viewer evaluates even hidden item enable callbacks. The native
+            // text-only UI must support these without a scene snapshot container.
+            auto* file_item = gLoginMenuBarView->getChild<LLMenuItemBranchGL>("File");
+            auto* file_menu = file_item->getBranch();
+            startupClick(file_item, [file_menu] { return file_menu->getVisible(); });
+            file_menu->buildDrawLabels();
+            require(!file_menu->getChild<LLMenuItemGL>("Close Window")->getEnabled(),
+                "Close Window enabled without a closable floater");
+            gMenuHolder->hideMenus();
+            startup_menu_verified = true;
             // Activate the existing Help menu action through the OS event route.
             auto* help_item = gLoginMenuBarView->findChild<LLMenuItemBranchGL>("Help");
             require(help_item != nullptr, "Native login Help menu is missing");
