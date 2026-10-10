@@ -1,5 +1,47 @@
 # Native presentation in the viewer: first implementation checkpoint
 
+## Shared connected UI checkpoint, 10 October 2026
+
+Current implementation source is `99f1ade5ac9183cfcd546cf7138e5e9bdd34da20`
+on `vkstorm-vulkan`. The fully staged Windows RelWithDebInfo viewer is at
+`build-vcuiparity-local/newview/RelWithDebInfo`; the original user-test image at
+`build-vcabout-local/newview/RelWithDebInfo` remains preserved. The build42
+executable SHA-256 is `0d97da860640d37f7243e9714cf541e856a7048abdebf54bf75bc6c630fe61bb`;
+its PDB SHA-256 is `9bec4b968e1367dc12342fc90761cd27631e35cdfadd1de3111e89efa1428ac9`.
+
+The current integration uses the ordinary skinned navigation/favorites/status,
+main menus, saved toolbars/Toybox, nearby-chat floater, conversations, People,
+Contacts and inventory controllers. Context actions retain their shared CPU
+account/protocol routes; scene-only radar/map/zoom/voice paths remain deferred.
+Native input pause/resume, optional scene-menu closure, console/notification
+completion, inbox freshness storage and account-scoped callback retirement now
+use their actual production owners. Logout/relogin retires those account owners.
+Contacts content has eight additional UI pixels of right inset in the default,
+Modern and Vintage English layouts, inherited by localized overlays. This is a
+shared XUI correction for both rendering backends.
+
+Build40's Modern skin at 150% passed all 99 connected replay assertions; its
+default and Modern base replays also passed. AnsaStorm failed the fixture's
+opaque-click test because it accepted an unrelated popup. The fixture now
+requires a fresh actual Url Popup and its exact clipboard result. Build41's
+AnsaStorm replay passes all 99 assertions with that stricter check; the original
+failure remains evidence. A subsequent AnsaStorm Paste failure has no proven
+single cause. Windows clipboard reads now use bounded Unicode text and match the
+write path's representation; extracted actual read/write-body tests preserve the
+exact clipboard oracle. This corrects a concrete read/write asymmetry without
+attributing the earlier failure to it conclusively. Build42's AnsaStorm replay
+passes all 99 assertions. Build40/41 captures and failures remain preserved.
+These are specific local Windows software-device results, not complete
+renderer/UI acceptance.
+
+The build42 matrix of all 26 packaged skin/theme/language/scale cases is running;
+its default case has passed. The 68-case staged viewer diagnostic matrix has not
+yet been rerun for this source. All 67 dedicated source/compiler/session-runner/staging tests and all
+22 documentation/source-pin tests passed. Final qualification remains pending
+until the full skin and viewer matrices finish with their required artifacts,
+validation and teardown evidence. No physical GPU or new Linux/live-grid result
+is implied by this checkpoint.
+
 Source: `05907fc6e4058ce21c79685cf86511bb70196c9e` on `vkstorm-vulkan`.
 Status: implemented development diagnostic. CI run
 [37742422223](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37742422223)
@@ -8,7 +50,7 @@ Linux Lavapipe. The expanded [V3 completion record](viewer-ui-substrate.md#v3-co
 records normal viewer integration and its 68-case interface/resource matrix.
 Dedicated CI run [37982489750](https://github.com/anne-skydancer/vulkanstorm/actions/runs/37982489750) passed
 all 68 expanded cases on each of the three platform/runtime combinations.
-Connected UI/chat and world rendering remain subsequent stages.
+Connected UI/chat was a subsequent stage at that historical checkpoint; the current integration is recorded above. World rendering remains deferred.
 
 The first CI run passed the Windows build and native viewer diagnostic. Its
 Linux Lavapipe viewer build failed because the diagnostic used unqualified SDL
