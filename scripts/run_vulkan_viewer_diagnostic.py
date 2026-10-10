@@ -300,6 +300,10 @@ def main():
                         path = directory / f'viewer-xui{suffix}.ppm'
                         if not path.is_file() or path.stat().st_size != len(b'P6\n320 240\n255\n') + 320 * 240 * 3:
                             raise RuntimeError('Missing or incomplete viewer XUI readback: ' + path.name)
+                    for suffix in ('', '-expected'):
+                        path = directory / f'viewer-xui-alpha{suffix}.pgm'
+                        if not path.is_file() or path.stat().st_size != len(b'P5\n320 240\n255\n') + 320 * 240:
+                            raise RuntimeError('Missing or incomplete viewer XUI alpha readback: ' + path.name)
                 if case in ('positive', 'ui-positive') or 'device-created' in record.get('stages', []) or case in startup_cases:
                     device = record['device'] if case not in STARTUP_CASES else expected_device
                     if any(device.get(k) != expected_device[k] for k in ('name', 'vendor_id', 'device_id')):
