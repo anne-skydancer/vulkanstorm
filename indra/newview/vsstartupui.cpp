@@ -403,8 +403,12 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view filename, std::string_view child)
         {
-            constexpr std::string_view people_file = "panel_people.xml";
-            return !(child == "nearby_panel" && filename.size() >= people_file.size() &&
-                     filename.substr(filename.size() - people_file.size()) == people_file);
+            const auto separator=filename.find_last_of("/\\");
+            const auto file=separator==std::string_view::npos?filename:filename.substr(separator+1);
+            // Spatial speaker updates require LLWorld and avatars. Vintage
+            // exposes this leaf directly in its otherwise shared CPU toolbar.
+            // Omit it before construction, retaining all ordinary skin controls.
+            return !((file=="panel_people.xml" && child=="nearby_panel") ||
+                     (file=="panel_toolbar_view.xml" && child=="nearby_voice_output_monitor"));
         });
 }

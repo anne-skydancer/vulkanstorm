@@ -4,8 +4,26 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 class OracleTest(unittest.TestCase):
+    def test_vintage_nearby_send_states_resolve_packaged_assets(self):
+        skins = Path(__file__).resolve().parents[2] / 'indra/newview/skins'
+        declarations = {}
+        for skin in ['default', 'vintage']:
+            for image in ET.parse(skins / skin / 'textures/textures.xml').getroot().iter('texture'):
+                declarations.setdefault(image.attrib['name'], {}).update(image.attrib)
+        button = ET.parse(skins / 'vintage/xui/en/floater_fs_nearby_chat.xml').getroot().find(".//button[@name='send_chat']")
+        self.assertIsNotNone(button)
+        for state, name in button.attrib.items():
+            if not state.startswith('image_'):
+                continue
+            with self.subTest(state=state, image=name):
+                self.assertIn(name, declarations, 'Every button state needs its real skin declaration')
+                asset = declarations[name].get('file_name', name)
+                self.assertTrue(any((skins / skin / 'textures' / asset).is_file() for skin in ['vintage', 'default']),
+                                'Selected/pressed state must resolve a packaged image')
+
     def test_native_tint_matches_actual_gl_vertex_bytes(self):
         root = Path(__file__).resolve().parents[2]
         native_source = (root / 'indra/newview/vsuiresources.cpp').read_text()
