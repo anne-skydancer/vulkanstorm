@@ -1,6 +1,27 @@
 # Native presentation in the viewer: first implementation checkpoint
 
-## Shared connected UI checkpoint, 10 October 2026
+## All-skin tint correction and final connected build, 10 October 2026
+
+Implementation source is `d34fe4920260edc12dd566c9525f9a4b625cc62d` on
+`vkstorm-vulkan`. The shared native image/primitive tint conversion now matches
+the actual OpenGL clamp and normalized U8 truncation. No skin colors or assets
+were changed. Independent selected inactive-tab asset readbacks and all 68
+staged viewer diagnostic cases passed under Windows SwiftShader with core and
+synchronization validation (`.tmp/connected/parity/diagnostic44/results.json`).
+Every packaged skin/theme and German overlay was exercised. The diagnostic
+image predates only the subsequent shared retired-IM-notification guard; the
+rendering source is identical in the final connected build.
+
+The final complete RelWithDebInfo stage is
+`build-vcuiparity-final-local/newview/RelWithDebInfo`. Its build45 executable
+SHA-256 is `2bead64453f0d98042ffadc86052680bac69c4c2a987f4e28fd51a2f67923fd1`;
+PDB SHA-256 is `db56e9501531443857b51d081edc662b7cb269efaaee31693908cb66d24dda4e`.
+Original user-test stages are preserved. The 26-case connected matrix with 100
+mandatory assertions and actual authenticated conference-start evidence is
+running at `.tmp/connected/parity/matrix45`. Final connected acceptance remains
+pending its results. There is no new Linux, physical-GPU or live-grid claim.
+
+## Historical shared connected UI checkpoint, 10 October 2026
 
 Current implementation source is `99f1ade5ac9183cfcd546cf7138e5e9bdd34da20`
 on `vkstorm-vulkan`. The fully staged Windows RelWithDebInfo viewer is at
@@ -34,9 +55,9 @@ passes all 99 assertions. Build40/41 captures and failures remain preserved.
 These are specific local Windows software-device results, not complete
 renderer/UI acceptance.
 
-The build42 matrix of all 26 packaged skin/theme/language/scale cases is running;
-its default case has passed. The 68-case staged viewer diagnostic matrix has not
-yet been rerun for this source. All 67 dedicated source/compiler/session-runner/staging tests and all
+The build42 matrix was stopped after nine completed passes to qualify the
+subsequent shared tint fix; it does not supply full-matrix acceptance.
+All 67 dedicated source/compiler/session-runner/staging tests and all
 22 documentation/source-pin tests passed. Final qualification remains pending
 until the full skin and viewer matrices finish with their required artifacts,
 validation and teardown evidence. No physical GPU or new Linux/live-grid result

@@ -1,5 +1,5 @@
 {
-  "source_commit": "99f1ade5ac9183cfcd546cf7138e5e9bdd34da20",
+  "source_commit": "d34fe4920260edc12dd566c9525f9a4b625cc62d",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -339,7 +339,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "1a73ef2310c8528f63ff30092e651368c6ea18bb140ba02092a36aeabf3ab9b3",
+      "sha256": "8847c0758ae0d6671bdfc639722bbd32107a45d850f330076eda3fe210e1499a",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -440,7 +440,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "badf5ee7387ee5abbafeac138682f2326f5a3ab7e3246604b5e0e2a2dbb1b537",
+      "sha256": "7b8be8356291b952cb5fe35066b8359f331b653d2824a6a856cbeb7847324319",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -645,7 +645,7 @@
       ]
     },
     "indra/newview/vsuifixture.cpp": {
-      "sha256": "5848869603aca07a59e5a3c9bf12d32cae3298591a4cad9c14b13e35aba5d8ee",
+      "sha256": "a9c11863c52086e9c7e73e2181189e2d24995ae7bb666b99aa7ea533e952dcdd",
       "anchors": [
         "VSUIFixture::verifyInput",
         "VSUIFixture::draw",
@@ -653,7 +653,7 @@
       ]
     },
     "indra/newview/vsuifixture.h": {
-      "sha256": "3e405c2acc221bb98b36cf454be6e278b13a140baa9b832a490afe07aa8c526d",
+      "sha256": "4abdb5b6ddfb84c28897929de928a2854f4cc50286600ef1e62b0ae5b783b8e2",
       "anchors": [
         "class VSUIFixture"
       ]
@@ -867,7 +867,7 @@
       ]
     },
     "indra/newview/vsnativeimreplay.cpp": {
-      "sha256": "5ef9fa1376ba29173499ec15e945d22f879dd72318b12d2c34a15e4eaf2643e4",
+      "sha256": "6caf0738bd7b65975cce3be69ac73655c7dce7057fcb227a22effaef16f0762a",
       "anchors": [
         "vs_native_im_replay_tick",
         "vs_native_im_replay_expired",
@@ -889,7 +889,7 @@
       ]
     },
     "indra/newview/llimview.cpp": {
-      "sha256": "d893f014423a7dab5932ce3eb504fc7372761de8ead3e7aad3d9b0c6c83e49f7",
+      "sha256": "a10bbec973335f3932523ed32087d727571ea7bc1dfd28f417037dfdef22ea29",
       "anchors": [
         "vs_native_im_guard",
         "onInviteNameLookup",
@@ -912,7 +912,7 @@
       ]
     },
     "indra/newview/fsfloaterimcontainer.cpp": {
-      "sha256": "71e9d0b95803940652b694cea132df1eb24e2e0375adcd2617a5f3152dc7092f",
+      "sha256": "ced3663d7640781b5d9af2bcd2d73688ba117426ada99c743be122c68354619a",
       "anchors": [
         "FSFloaterIMContainer::addFloater",
         "isNativeVulkan"
