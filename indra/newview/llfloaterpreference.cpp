@@ -3800,7 +3800,7 @@ void LLPanelPreference::updateMouselookCombatFeatures()
 // <FS:Ansariel> Minimap pick radius transparency
 void LLPanelPreference::updateMapPickRadiusTransparency(const LLSD& value)
 {
-    static LLColorSwatchCtrl* color_swatch = getChild<LLColorSwatchCtrl>("MapPickRadiusColor");
+    LLColorSwatchCtrl* color_swatch = getChild<LLColorSwatchCtrl>("MapPickRadiusColor");
 
     LLUIColorTable& color_table = LLUIColorTable::instance();
     LLColor4 color = color_table.getColor("MapPickRadiusColor").get();
@@ -4089,7 +4089,7 @@ bool LLPanelPreferenceGraphics::postBuild()
     setPresetText();
 
     LLPresetsManager* presetsMgr = LLPresetsManager::getInstance();
-    presetsMgr->setPresetListChangeCallback(boost::bind(&LLPanelPreferenceGraphics::onPresetsListChange, this));
+    mPresetListConnection = presetsMgr->setPresetListChangeCallback(boost::bind(&LLPanelPreferenceGraphics::onPresetsListChange, this));
     presetsMgr->createMissingDefault(PRESETS_GRAPHIC); // a no-op after the first time, but that's ok
 
 
@@ -4140,12 +4140,33 @@ void LLPanelPreferenceGraphics::onRenderBackendCommit()
         return;
     }
 
+    // Renderer identity is an application setting, also available before
+    // authentication. Retain view/session lifetime without requiring a logged-in
+    // account as ordinary account-service notification responders do.
+    const auto weak = getHandle();
+    std::function<bool()> current = [] { return true; };
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        const std::weak_ptr<VSNativeSession> session = owner;
+        const U64 generation = owner->generation();
+        current = [session, generation]
+        {
+            const auto owner = session.lock();
+            return owner && VSNativeSession::active() == owner && owner->generation() == generation &&
+                (owner->phase() == VSNativeSession::Phase::Login || owner->phase() == VSNativeSession::Phase::Connected);
+        };
+    }
+#endif
     LLSD args;
     args["BACKEND"] = selected_backend;
-    LLNotificationsUtil::add("ChangeRenderBackend",
-                                args,
-                                LLSD(),
-                                boost::bind(&LLPanelPreferenceGraphics::callbackRenderBackendRestart, this, _1, _2));
+    LLNotificationsUtil::add("ChangeRenderBackend", args, LLSD(),
+        [this, weak, current](const LLSD& notice, const LLSD& response) -> bool
+        {
+            if (!weak.get() || !current()) return false;
+            callbackRenderBackendRestart(notice, response);
+            return false;
+        });
 }
 
 void LLPanelPreferenceGraphics::callbackRenderBackendRestart(const LLSD& notification, const LLSD& response)
@@ -4192,7 +4213,9 @@ void LLPanelPreferenceGraphics::setPresetText()
 {
     // <FS:Ansariel> Performance improvement
     //LLTextBox* preset_text = getChild<LLTextBox>("preset_text");
-    static LLTextBox* preset_text = getChild<LLTextBox>("preset_text");
+    // Preferences can be destroyed and rebuilt on account/skin changes.
+    // A function-static child pointer would retain the previous panel's widget.
+    LLTextBox* preset_text = getChild<LLTextBox>("preset_text");
     // </FS:Ansariel>
 
     std::string preset_graphic_active = gSavedSettings.getString("PresetGraphicActive");

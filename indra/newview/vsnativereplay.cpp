@@ -42,6 +42,38 @@ void vs_native_replay_capture(VSVulkanContext&, const std::string&, std::shared_
 namespace
 {
 void require(bool condition, const char* reason) { if (!condition) { LL_WARNS("NativeSessionReplay") << reason << LL_ENDL; throw std::runtime_error(reason); } }
+void qualifyConnectedSkinGeometry(LLSD& report)
+{
+    auto* root = gViewerWindow->getRootView();
+    auto* chat = gViewerWindow->nativeChat();
+    auto* controls = root ? root->findChild<LLPanel>("native_connected_controls") : nullptr;
+    require(chat && controls && chat->getVisible() && controls->getVisible(), "Required connected skin owners are hidden");
+    auto contained = [&report](LLView* parent, const char* name)
+    {
+        auto* child = parent->findChild<LLView>(name);
+        require(child && child->getVisible(), "Required connected skin child is hidden or missing");
+        const LLRect r = child->getRect(), bounds = parent->getLocalRect();
+        LL_INFOS("NativeSessionReplay") << "Skin geometry " << parent->getName() << "/" << name
+            << " rect=" << r.mLeft << "," << r.mBottom << "," << r.mRight << "," << r.mTop
+            << " owner=" << bounds.mLeft << "," << bounds.mBottom << "," << bounds.mRight << "," << bounds.mTop << LL_ENDL;
+        require(r.getWidth() > 0 && r.getHeight() > 0 && r.mLeft >= bounds.mLeft &&
+                r.mRight <= bounds.mRight && r.mBottom >= bounds.mBottom && r.mTop <= bounds.mTop,
+                "Connected skin child lies outside its owner");
+        LLSD rect; rect.append(r.mLeft); rect.append(r.mBottom); rect.append(r.mRight); rect.append(r.mTop);
+        report["connected_skin_rects"][name] = rect;
+        return r;
+    };
+    const auto header = contained(chat, "native_region");
+    const auto logout = contained(chat, "native_logout");
+    const auto transcript = contained(chat, "native_plain_transcript");
+    const auto input = contained(chat, "native_chat_input");
+    require(input.mTop <= transcript.mBottom && transcript.mTop <= header.mBottom &&
+            transcript.mTop <= logout.mBottom && header.mRight <= logout.mLeft,
+            "Connected nearby skin controls overlap");
+    for (const char* name : {"contacts", "groups", "new_im", "conversations", "preferences", "notifications", "native_chiclet_host"})
+        contained(controls, name);
+    report["connected_skin_geometry"] = true;
+}
 LLSD response()
 {
     LLSD result;
@@ -246,6 +278,7 @@ struct Replay
             if (chat->transcript()->getText().find("Native nearby:") == std::string::npos || chat->transcript()->getText().find("Native event queue chat") == std::string::npos) return;
             if (!captureRequested)
             {
+                qualifyConnectedSkinGeometry(imEvidence);
                 const std::string path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));
                 std::filesystem::create_directories(path);
                 vs_native_replay_capture(*gViewerWindow->nativeContext(), path, readback);

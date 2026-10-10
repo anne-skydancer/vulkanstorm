@@ -47,6 +47,35 @@ The dummy-class failures exposed missing exact admission for the shared notifica
 
 ## Evidence and qualification limits
 
+### Connected skin corrections
+
+Nearby chat now loads its controls from the selected layered XUI rather than
+constructing their rectangles in C++. The custom chat-input parameter block
+uses the factory's ordinary inherited line-editor defaults; copying those
+defaults during descriptor construction produced an inverted input rectangle.
+Explicit top-left layout keeps the region heading, logout button, transcript
+and input within the panel. Transcript colors use the existing chat palette.
+The connected control strip also declares its layout and chiclet host in XUI.
+
+Native skin images now preserve the OpenGL helpers' physical-pixel rounding for
+image extents and inner nine-slice boundaries at fractional scaling. Native
+widget strokes retain their requested fractional width and are centered on
+their shared vertices; outline bands avoid double-compositing translucent
+corners. Compiler-backed regressions cover these production geometry paths.
+Driver-dependent OpenGL wide-line rasterization is not certified identical.
+
+The connected replay separately requires positive, contained, nonoverlapping
+chat/control geometry and records the actual rectangles. Pixel comparison alone
+previously passed an incorrectly laid-out panel, so it cannot substitute for
+this check. The standard skin at 125% now passes both checks and its captured
+chat layout has been visually inspected. The complete packaged skin matrix and
+the final rebuilt viewer's startup checks remain pending until recorded below.
+
+Relogin no longer reuses function-static Preferences child pointers. Account
+notifications remain expired after their owner disappears, and final native
+shutdown is idempotent even when a suspended seed coroutine retains the owner.
+These corrections address failures observed in the staged connected replay.
+
 Notification replay responses assign the selected existing button explicitly; `LLSD::with()` only inserts absent keys and leaves the response template's undefined values unchanged. Persisted DND restoration likewise assigns its restore flag explicitly. Payment qualification requires the actual confirmation callback and encoded transfer, including balance and retired-window rejection.
 
 The native connected frame now pumps the shared CPU idle callbacks and buddy observers. Inventory views depend on those callbacks for initial folder construction and filtering; creating their panels without running this service leaves the actual selectors unusable. Native UI audio initializes a neutral listener and pumps the existing audio engine without constructing a world camera.

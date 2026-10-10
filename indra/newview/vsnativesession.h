@@ -64,6 +64,7 @@ private:
     void finishLogout();
     void unbind();
     Phase mPhase = Phase::Login;
+    bool mShutdown = false;
     U64 mGeneration = 1;
     LLHost mHost;
     LLUUID mAgent, mSession, mRegionID, mOwner;

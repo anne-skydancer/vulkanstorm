@@ -6,6 +6,168 @@ import tempfile
 import unittest
 
 class OracleTest(unittest.TestCase):
+    def test_native_widget_strokes_center_fractional_width_and_outline_insets(self):
+        root = Path(__file__).resolve().parents[2]
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        source = (root / 'indra/llrender/llrender2dutils.cpp').read_text(encoding='utf-8')
+        def function(signature):
+            start = source.index(signature)
+            opening = source.index('{', start)
+            end, depth = opening + 1, 1
+            while depth:
+                depth += (source[end] == '{') - (source[end] == '}')
+                end += 1
+            return source[start:end]
+        rectangle = function('void LLRender2D::nativeRectangle(')
+        line = function('void gl_line_2d(S32 x1, S32 y1, S32 x2, S32 y2, const LLColor4')
+        line = line[:line.index('    gGL.getTexUnit')] + '}\n'
+        fixture = r"""
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cmath>
+#include <vector>
+using S32=int;using F32=float;
+template<class T>T llmin(T a,T b){return std::min(a,b);}
+template<class T>T llmax(T a,T b){return std::max(a,b);}
+struct LLColor4{float mV[4]{.2f,.4f,.6f,.5f};};
+struct LLRectf{float l,t,r,b;LLRectf(float a,float c,float d,float e):l(a),t(c),r(d),b(e){}};
+struct LLFontGL{static constexpr float sScaleX=1.25f,sScaleY=1.25f;};
+std::vector<LLRectf> rectangles;
+void native_rectangle(const LLRectf&r,const LLColor4&){rectangles.push_back(r);}
+float native_line_width=2.25f;
+struct LLRender2D{
+ using Triangle=std::array<std::array<float,6>,3>;
+ static inline std::vector<Triangle> triangles;
+ static bool isNativeUI(){return true;}
+ static std::array<float,2> nativeOrigin(){return {3,5};}
+ static void nativeTriangle(const Triangle&t){triangles.push_back(t);}
+ static void nativeRectangle(S32,S32,S32,S32,const LLColor4&,bool);
+};
+""" + rectangle + '\n' + line + r"""
+int main(){
+ auto close=[](float a,float b){assert(std::abs(a-b)<.0001f);};
+ gl_line_2d(2,4,12,4,{});
+ assert(LLRender2D::triangles.size()==2);
+ close(LLRender2D::triangles[0][0][1],5.125f);
+ close(LLRender2D::triangles[0][2][1],2.875f);
+ LLRender2D::triangles.clear();
+ gl_line_2d(2,4,2,14,{});
+ close(LLRender2D::triangles[0][0][0],.875f);
+ close(LLRender2D::triangles[0][2][0],3.125f);
+ LLRender2D::triangles.clear();
+ gl_line_2d(2,4,2,4,{});assert(LLRender2D::triangles.empty());
+ LLRender2D::nativeRectangle(2,14,12,4,{},false);
+ assert(rectangles.size()==4);
+ // Requested width centered on GL's inset top13/right11 path, then
+ // translated once and scaled to physical pixels. No ceil-to-three pixels.
+ close(rectangles[0].l,(2-1.125f+3)*1.25f);
+ close(rectangles[0].t,(13+1.125f+5)*1.25f);
+ close(rectangles[0].r,(11+1.125f+3)*1.25f);
+ close(rectangles[0].t-rectangles[0].b,2.25f*1.25f);
+ close(rectangles[2].t,rectangles[0].b);
+ close(rectangles[2].b,rectangles[1].t);
+ close(rectangles[3].t,rectangles[0].b);
+ close(rectangles[3].b,rectangles[1].t);
+ rectangles.clear();
+ LLRender2D::nativeRectangle(2,5,3,4,{},false);
+ assert(rectangles.size()==1); // Collapsed interior still draws once.
+}
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'skin_strokes.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            exe = Path(temp) / 'skin_strokes.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_skin_nine_slice_inner_edges_match_gl_pixel_rounding(self):
+        root = Path(__file__).resolve().parents[2]
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        source = (root / 'indra/newview/vsuiresources.cpp').read_text(encoding='utf-8')
+        start = source.index('    void draw(const Asset&')
+        opening = source.index('{', start)
+        end, depth = opening + 1, 1
+        while depth:
+            depth += (source[end] == '{') - (source[end] == '}')
+            end += 1
+        fixture = r"""
+#include "vsuirenderer.h"
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <stdexcept>
+using S32=int; using F32=float;
+struct LLColor4 { float mV[4]{1,1,1,1}; };
+struct LLRectf {
+    float mLeft,mTop,mRight,mBottom;
+    LLRectf(float l,float t,float r,float b):mLeft(l),mTop(t),mRight(r),mBottom(b){}
+    float getWidth()const{return mRight-mLeft;} float getHeight()const{return mTop-mBottom;}
+    float getCenterX()const{return (mLeft+mRight)/2;} float getCenterY()const{return (mBottom+mTop)/2;}
+    void setCenterAndSize(float x,float y,float w,float h){mLeft=x-w/2;mRight=x+w/2;mBottom=y-h/2;mTop=y+h/2;}
+};
+struct LLRender2D {
+    static bool isNativeUI(){return true;}
+    static std::array<float,2> nativeOrigin(){return {3,5};}
+};
+void check(bool condition,const char* text){if(!condition)throw std::runtime_error(text);}
+VSUIRenderer::Blend nativeBlend(){return VSUIRenderer::Blend::StraightAlpha;}
+struct Canvas {
+    struct Asset{unsigned width,height;VSUIRenderer::Image image;};
+    bool active=true;float dpi=1.25f,logical_height=100;
+    std::array<float,4> clip{0,0,100,100};
+    VSUIRenderer::Sampling sampling=VSUIRenderer::Sampling::Linear;
+    std::vector<VSUIRenderer::Packet> packets;
+""" + source[start:end] + r"""
+};
+int main(){
+    Canvas c;Canvas::Asset asset{8,8,{}};
+    // Independent known GL helper result at translated 125% DPI. Inner
+    // boundaries snap; outer boundaries retain their fractional positions.
+    c.draw(asset,1,2,17,13,{},false,{0,1,1,0},{.25f,.75f,.75f,.25f},true);
+    assert(c.packets.size()==9);
+    auto close=[](float a,float b){assert(std::abs(a-b)<.0001f);};
+    close(c.packets[0].bounds[0],4);
+    close(c.packets[0].bounds[2],6.4f);
+    close(c.packets[1].bounds[0],6.4f);
+    close(c.packets[1].bounds[2],19.2f);
+    close(c.packets[2].bounds[2],21);
+    close(c.packets[0].bounds[1],91.2f);
+    close(c.packets[3].bounds[3],91.2f);
+    close(c.packets[3].bounds[1],81.6f);
+    close(c.packets[6].bounds[3],81.6f);
+    // Both neighboring slices share exactly the same raster boundary.
+    for(unsigned row=0;row<3;++row)for(unsigned col=0;col<2;++col)
+        close(c.packets[row*3+col].bounds[2],c.packets[row*3+col+1].bounds[0]);
+    // Plain image GL extent: round(17*1.25)/1.25=16.8;
+    // round(13*1.25)/1.25=12.8. Origin is unchanged.
+    c.packets.clear();
+    c.draw(asset,1,2,17,13,{},false,{0,1,1,0},{0,1,1,0},true);
+    assert(c.packets.size()==1);
+    close(c.packets[0].bounds[0],4);
+    close(c.packets[0].bounds[2],20.8f);
+    close(c.packets[0].bounds[1],80.2f);
+    close(c.packets[0].bounds[3],93);
+    // Nonzero rotated calls explicitly retain the unrounded base extents.
+    c.packets.clear();
+    c.draw(asset,1,2,17,13,{},false,{0,1,1,0},{0,1,1,0},true,false);
+    close(c.packets[0].bounds[2],21);
+    close(c.packets[0].bounds[1],80);
+}
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'skin_nine_slice.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            exe = Path(temp) / 'skin_nine_slice.exe'
+            built = subprocess.run([compiler, '-std=c++17', '-I', str(root / 'indra/newview'), str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_native_clip_preserves_physical_pixel_margin_at_fractional_dpi(self):
         root = Path(__file__).resolve().parents[2]
         compiler = shutil.which('clang++') or shutil.which('g++')

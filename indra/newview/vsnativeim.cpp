@@ -138,7 +138,9 @@ void vs_native_im_stamp_notification(LLSD& payload)
 bool vs_native_im_notification_current(const LLSD& payload)
 {
     const auto owner = VSNativeSession::active();
-    if (!owner) return true;
+    // A native stamp remains retired after final shutdown clears the owner.
+    // Unstamped shared OpenGL notifications retain their ordinary admission.
+    if (!owner) return !payload.has("vs_notification_epoch");
     if (owner->phase() != VSNativeSession::Phase::Connected) return false;
     // Unstamped legacy persisted notifications are restored from the active
     // account's storage. Fresh native asynchronous work carries an epoch token

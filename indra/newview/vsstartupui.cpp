@@ -260,7 +260,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "script_colors" || name == "upload_image" || name == "upload_sound" ||
             name == "pay_resident" || name == "display_name"; },
         [](std::string_view name) { return name == "progress_view" || name == "progress_view_mini" || name == "popup_holder" ||
-            name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
+            name == "native_nearby_chat" || name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
             name == "panel_preference" || name == "panel_preference_graphics" || name == "panel_preference_privacy" ||
             name == "panel_preference_controls" || name == "panel_preference_crashreports" || name == "panel_preference_skins" ||
             name == "panel_preference_backup" || name == "panel_preference_opensim" || name == "panel_preference_sounds" ||

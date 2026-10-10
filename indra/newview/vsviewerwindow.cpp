@@ -261,6 +261,7 @@ void LLViewerWindow::nativeScroll(S32 clicks, bool horizontal)
 
 void LLViewerWindow::setNativeConnected(bool connected)
 {
+    if (!mRootView) return;
     if (!connected && mNativeUI) mNativeUI->resetAccountImages();
     auto* controls = mRootView->findChild<LLPanel>("native_connected_controls");
     if (!controls && connected)
@@ -268,8 +269,9 @@ void LLViewerWindow::setNativeConnected(bool connected)
         LLPanel::Params params;
         controls = LLUICtrlFactory::create<LLPanel>(params);
         require(controls->buildFromFile("panel_vs_connected_controls.xml"), "Connected controls XUI is missing");
+        const S32 controls_height = controls->getRect().getHeight();
         controls->setShape(LLRect(0, mWindowRectScaled.getHeight() - MENU_BAR_HEIGHT,
-                                  mWindowRectScaled.getWidth(), mWindowRectScaled.getHeight() - MENU_BAR_HEIGHT - 32));
+                                  mWindowRectScaled.getWidth(), mWindowRectScaled.getHeight() - MENU_BAR_HEIGHT - controls_height));
         mRootView->addChildInBack(controls);
         controls->getChild<LLButton>("contacts")->setCommitCallback([](LLUICtrl*, const LLSD&)
             { LLFloaterReg::showInstance("imcontacts", "friends"); });
@@ -287,8 +289,9 @@ void LLViewerWindow::setNativeConnected(bool connected)
         controls->getChild<LLButton>("notifications")->setCommitCallback([](LLUICtrl*, const LLSD&)
             { LLFloaterReg::showInstance("notification_well_window"); });
         auto* chiclets = LLChicletBar::getInstance();
-        chiclets->setShape(LLRect(640, 30, controls->getRect().getWidth(), 0));
-        controls->addChild(chiclets);
+        auto* chiclet_host = controls->getChild<LLPanel>("native_chiclet_host");
+        chiclets->setShape(chiclet_host->getLocalRect());
+        chiclet_host->addChild(chiclets);
     }
     if (controls) controls->setVisible(connected);
 }

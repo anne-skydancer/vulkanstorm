@@ -440,6 +440,7 @@ protected:
 private:
 
     void onPresetsListChange();
+    boost::signals2::scoped_connection mPresetListConnection;
 
     // <VulkanStorm> Renderer backend selector
     void onRenderBackendCommit();

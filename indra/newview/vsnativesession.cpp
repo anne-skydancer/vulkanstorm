@@ -140,7 +140,7 @@ std::shared_ptr<VSNativeSession> VSNativeSession::create()
     return owner;
 }
 std::shared_ptr<VSNativeSession> VSNativeSession::active() { return sOwner.lock(); }
-VSNativeSession::~VSNativeSession() { reset(); }
+VSNativeSession::~VSNativeSession() { if (!mShutdown) reset(); }
 void VSNativeSession::install(LLMessageSystem& msg)
 {
     const std::weak_ptr<VSNativeSession> owner = shared_from_this();
@@ -675,6 +675,7 @@ void VSNativeSession::disconnect(const std::string& reason)
 }
 void VSNativeSession::reset()
 {
+    if (mShutdown) return;
     if (mAgent.notNull() && (mPhase == Phase::Connected || mPhase == Phase::Logout || mPhase == Phase::Disconnected))
     {
         if (LLPersistentNotificationStorage::instanceExists()) LLPersistentNotificationStorage::getInstance()->saveNotifications();
@@ -749,7 +750,11 @@ void VSNativeSession::reset()
 }
 void VSNativeSession::shutdown()
 {
+    if (mShutdown) return;
     reset(); mSettingConnections.clear();
+    // Seed coroutines retain the owner while suspended. Their eventual release
+    // must not run account/UI teardown again after application services retire.
+    mShutdown = true;
     if (active().get() == this) sOwner.reset();
 }
 LLSD VSNativeSession::evidence() const
