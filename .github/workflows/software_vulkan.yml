@@ -105,7 +105,7 @@ jobs:
       - name: Cache immutable GHI packages and software runtime
         id: dependencies
         if: inputs.clean_dependencies != true
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .ci/ghi/*.tar.bz2
@@ -167,6 +167,17 @@ jobs:
           fi
           python scripts/run_software_vulkan_tests.py --executable "$executable" \
             --runtime .ci/runtime/runtime.json --evidence .ci/headless-evidence --headless "${options[@]}"
+      - name: Retain qualified dependencies before viewer compilation
+        if: inputs.clean_dependencies != true && steps.dependencies.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .ci/ghi/*.tar.bz2
+            .ci/ghi/autobuild.xml
+            .ci/runtime/staged
+            .ci/runtime/runtime.json
+            .autobuild-installables
+          key: ${{ steps.dependencies.outputs.cache-primary-key }}
       - name: Install the same GHI into the viewer Autobuild directory
         shell: bash
         run: |
