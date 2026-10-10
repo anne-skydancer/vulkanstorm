@@ -175,3 +175,48 @@ wires ordinary initialization, frames, login callbacks, browser pixels and
 shutdown, with a required CI launch outside diagnostic dispatch. Connected
 region/chat admission remains gated at the V4 boundary. Neither startup result
 establishes full V3 or connected-session acceptance.
+
+## Renderer-aware Help / About — 10 October 2026
+
+The shared About report follows the archived `H:\vulkanstorm` floater's
+backend-neutral **Rendering API** / **Version** wording. It identifies the
+running window's backend, rather than a preference awaiting restart. OpenGL
+(including Mesa/Zink) reports its initialized GL renderer and version. Native
+Vulkan reports cached properties of the Diligent-selected physical device,
+without calling GL or guessing a Windows adapter. Its API version is the
+physical device's supported Vulkan version; the vendor-specific driver value
+is explicitly labeled raw. Dedicated GPU memory is reported when available;
+shared system memory and GL texture budgets are not presented as Vulkan VRAM.
+The obsolete vendor row is removed from existing localized system reports.
+
+The existing corrected XUI, four tabs, and Copy to Clipboard remain shared.
+Native admission includes the About floater, tab container, and its exact
+private custom button type used by Starlight. Starlight's title-bar focus
+highlight uses the native explicit-color rectangle path. Development staging
+now includes the existing contributor extraction and Autobuild-generated
+package/license information, with missing files rejected by the staging check.
+
+Local Windows qualification passed all **68** staged viewer cases under the
+pinned SwiftShader ICD and core/synchronization validation. Every packaged
+startup skin/theme and German XUI opens About through actual Help-menu mouse
+input, verifies the selected device/API report, switches all four tabs, and
+copies the displayed report to the OS clipboard. Each startup positive case
+retains 24 actual/expected pixel readbacks and `viewer-about.txt`; validation
+errors and pixel mismatches were zero. The renderer-report regression suite
+passed 20 tests, including initialized/uninitialized GL, Mesa/Zink, native
+startup and post-window-teardown reporting. The staging suite passed 20 tests,
+and the documentation suites passed 21.
+
+The runnable `RelWithDebInfo` stage is `build-vcabout-local/newview/RelWithDebInfo`
+in the Vulkan worktree. It was linked with the existing Autobuild-installed
+libraries using the local configured build cache: changed compilation inputs
+were redirected to this worktree, unchanged compiled inputs were checked for
+byte identity, and temporary project overrides were restored afterwards.
+Runtime/assets were staged without generating an installer. The prior user-test
+stage was preserved. Evidence is in `.tmp/about-viewer-final/results.json`,
+which records the pre-commit HEAD plus dirty worktree accurately; the tested
+implementation is committed as `163ee9e2e8`. Its executable SHA-256 is
+`c442dd872e45e5bbfe0f6dd8b52646442d8813461ca75c623d5ad7dfd458ae19`.
+These results qualify local Windows software rendering; Linux CI and physical
+vendor-driver execution remain separate evidence. This About update makes no
+new claim of world-rendering parity or live-server authentication acceptance.
