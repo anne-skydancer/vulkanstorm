@@ -59,6 +59,7 @@
 #include "lltextbox.h"
 #include "llcheckboxctrl.h"
 #include "lllineeditor.h"
+#include "llcombobox.h"
 #include "llfloaterpreference.h"
 #include "llfloaterconversationpreview.h"
 #include "fschathistory.h"
@@ -79,6 +80,7 @@
 #include "llsdutil.h"
 #include <stdexcept>
 #include <fstream>
+#include <filesystem>
 
 namespace
 {
@@ -161,7 +163,45 @@ struct Replay : public LLAvatarPropertiesObserver
     const LLUUID profileImage{"60000000-0000-0000-0000-000000000006"};
     LLHandle<LLFloater> imageFloater;
     LLHandle<LLFloater> preferencesFloater, transcriptFloater, residentFloater, groupFloater;
-    bool originalItalic = false;
+    bool originalItalic = false, originalWater = false;
+    LLSD originalFSAA;
+    using PreferencePath = std::vector<std::pair<LLTabContainer*, S32>>;
+    std::vector<PreferencePath> preferencePaths;
+    size_t preferenceVisit = 0;
+    unsigned preferencePhase = 0;
+    void collectPreferencePaths(LLView* view, PreferencePath path = {})
+    {
+        if (auto* tabs = dynamic_cast<LLTabContainer*>(view))
+        {
+            for (S32 i = 0; i < tabs->getTabCount(); ++i)
+            {
+                auto selected = path;
+                selected.emplace_back(tabs, i);
+                preferencePaths.push_back(selected);
+                collectPreferencePaths(tabs->getPanelByIndex(i), selected);
+            }
+        }
+        else for (auto* child : *view->getChildList()) collectPreferencePaths(child, path);
+    }
+    bool visitPreferencePanel()
+    {
+        if (preferenceVisit == preferencePaths.size() * 2) return false;
+        const auto index = preferenceVisit < preferencePaths.size() ? preferenceVisit :
+            preferencePaths.size() * 2 - preferenceVisit - 1;
+        for (auto [tabs, tab] : preferencePaths[index])
+            require(tabs->selectTab(tab), "Preferences tab selection failed");
+        ++preferenceVisit;
+        // Return to the viewer loop so the selected panel is actually drawn.
+        return true;
+    }
+    void selectGraphics(LLFloaterPreference* prefs)
+    {
+        auto* graphics = prefs->getChild<LLPanel>("display");
+        require(prefs->getChild<LLTabContainer>("pref core")->selectTabPanel(graphics),
+            "Graphics preference panel unavailable");
+        require(graphics->getChild<LLTabContainer>("tabs")->selectTabByName("General"),
+            "Graphics General tab unavailable");
+    }
     bool groupRolesMembersSent = false, groupRequestsSent = false;
     LLUUID groupMemberRequest, groupRoleRequest, groupRoleMemberRequest;
     LLUUID titleRequest, searchRequest;
@@ -676,38 +716,97 @@ struct Replay : public LLAvatarPropertiesObserver
         }
         if (step == 7)
         {
-            auto* prefs = LLFloaterReg::showTypedInstance<LLFloaterPreference>("preferences");
-            require(prefs && prefs->getVisible(), "Production Preferences did not open");
-            preferencesFloater = prefs->getHandle();
-            originalItalic = gSavedSettings.getBOOL("EmotesUseItalic");
-            auto* control = prefs->getChild<LLCheckBoxCtrl>("EmotesUseItalic");
+            auto* prefs = dynamic_cast<LLFloaterPreference*>(preferencesFloater.get());
+            if (!prefs)
+            {
+                prefs = LLFloaterReg::showTypedInstance<LLFloaterPreference>("preferences");
+                require(prefs && prefs->getVisible(), "Production Preferences did not open");
+                preferencesFloater = prefs->getHandle();
+                originalItalic = gSavedSettings.getBOOL("EmotesUseItalic");
+                originalWater = gSavedSettings.getBOOL("RenderTransparentWater");
+                originalFSAA = gSavedSettings.getControl("RenderFSAAType")->getValue();
+                collectPreferencePaths(prefs->getChild<LLTabContainer>("pref core"));
+                require(!preferencePaths.empty(), "Preferences panel enumeration empty");
+                evidence["preferences_panel_paths"] = (S32)preferencePaths.size();
+            }
+            if (visitPreferencePanel()) return false;
+            selectGraphics(prefs);
+            clickCheckbox(prefs->getChild<LLCheckBoxCtrl>("TransparentWater"));
+            auto* fsaa = prefs->getChild<LLComboBox>("fsaa");
+            require(fsaa->getEnabled(), "Saved antialiasing choice disabled by shader availability");
+            fsaa->setValue(LLSD(1)); fsaa->onCommit();
+            require(gSavedSettings.getU32("RenderFSAAType") == 1, "Saved antialiasing did not change");
+            prefs->apply();
+            require(gSavedSettings.getBOOL("RenderTransparentWater") == !originalWater,
+                "Graphics Apply overwrote saved world setting");
             prefs->getChild<LLTabContainer>("pref core")->selectTabByName("chat");
             prefs->getChild<LLPanel>("chat")->getChild<LLTabContainer>("tabs")->selectTabByName("ChatVisuals");
-            clickCheckbox(control);
-            require(gSavedSettings.getBOOL("EmotesUseItalic") == !originalItalic, "Preferences checkbox did not edit setting");
-            ++step; return false; // Draw the entire production panel graph before applying.
+            clickCheckbox(prefs->getChild<LLCheckBoxCtrl>("EmotesUseItalic"));
+            ++step; return false;
         }
         if (step == 8)
         {
             auto* prefs = dynamic_cast<LLFloaterPreference*>(preferencesFloater.get());
             require(prefs != nullptr, "Preferences disappeared before apply");
             prefs->getChild<LLButton>("OK")->onCommit();
-            require(!prefs->getVisible() && gSavedSettings.getBOOL("EmotesUseItalic") == !originalItalic,
-                "Preferences OK did not apply edited value");
+            require(!prefs->getVisible() && gSavedSettings.getBOOL("EmotesUseItalic") == !originalItalic &&
+                gSavedSettings.getBOOL("RenderTransparentWater") == !originalWater,
+                "Preferences OK did not apply edited values");
+            LLControlGroup disk("PreferencesRegression");
+            disk.loadFromFile(gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "settings.xml"), true, false);
+            require(disk.loadFromFile(gSavedSettings.getString("ClientSettingsFile")) > 0 &&
+                disk.getBOOL("RenderTransparentWater") == !originalWater && disk.getU32("RenderFSAAType") == 1,
+                "Graphics settings did not persist to disk");
             prefs->openFloater();
-            auto* control = prefs->getChild<LLCheckBoxCtrl>("EmotesUseItalic");
-            clickCheckbox(control);
+            selectGraphics(prefs);
+            clickCheckbox(prefs->getChild<LLCheckBoxCtrl>("TransparentWater"));
+            auto* fsaa = prefs->getChild<LLComboBox>("fsaa");
+            fsaa->setValue(LLSD(2)); fsaa->onCommit();
+            prefs->getChild<LLTabContainer>("pref core")->selectTabByName("chat");
+            prefs->getChild<LLPanel>("chat")->getChild<LLTabContainer>("tabs")->selectTabByName("ChatVisuals");
+            clickCheckbox(prefs->getChild<LLCheckBoxCtrl>("EmotesUseItalic"));
+            preferenceVisit = 0;
             ++step; return false;
         }
         if (step == 9)
         {
             auto* prefs = dynamic_cast<LLFloaterPreference*>(preferencesFloater.get());
             require(prefs != nullptr, "Preferences disappeared before cancel");
+            if (preferencePhase == 0)
+            {
+                if (visitPreferencePanel()) return false;
+                prefs->getChild<LLButton>("Cancel")->onCommit();
+                require(!prefs->getVisible() && gSavedSettings.getBOOL("EmotesUseItalic") == !originalItalic &&
+                    gSavedSettings.getBOOL("RenderTransparentWater") == !originalWater &&
+                    gSavedSettings.getU32("RenderFSAAType") == 1,
+                    "Preferences Cancel did not restore applied settings");
+                prefs->openFloater();
+                preferenceVisit = 0; ++preferencePhase;
+                return false;
+            }
+            if (visitPreferencePanel()) return false;
+            require(gSavedSettings.getBOOL("RenderTransparentWater") == !originalWater &&
+                gSavedSettings.getU32("RenderFSAAType") == 1 && gSavedSettings.getString("RenderBackend") == "Vulkan",
+                "Reopening preferences changed graphics or active backend");
             prefs->getChild<LLButton>("Cancel")->onCommit();
-            require(!prefs->getVisible() && gSavedSettings.getBOOL("EmotesUseItalic") == !originalItalic,
-                "Preferences Cancel did not restore applied setting");
             gSavedSettings.setBOOL("EmotesUseItalic", originalItalic);
+            gSavedSettings.setBOOL("RenderTransparentWater", originalWater);
+            gSavedSettings.getControl("RenderFSAAType")->setValue(originalFSAA);
             evidence["connected_preferences_apply_cancel"] = true;
+            evidence["preferences_repeated_tabs"] = true;
+            evidence["preferences_graphics_persistence"] = true;
+            LLSD preferencesReport;
+            preferencesReport["mode"] = "viewer-native-preferences-replay";
+            preferencesReport["passed"] = true;
+            preferencesReport["panel_paths"] = (S32)preferencePaths.size();
+            preferencesReport["tab_draws"] = (S32)(preferencePaths.size() * 6);
+            preferencesReport["graphics_persistence"] = true;
+            preferencesReport["apply_cancel_reopen"] = true;
+            preferencesReport["render_backend"] = gSavedSettings.getString("RenderBackend");
+            std::ofstream preferencesOutput(std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY")) /
+                "preferences-replay.xml");
+            LLSDSerialize::toPrettyXML(preferencesReport, preferencesOutput);
+            require(preferencesOutput.good(), "Cannot preserve Preferences runtime evidence");
 
             auto& sets = LGGContactSets::instance();
             sets.addSet(contactSetName); // Fixture account setup; editing uses real controls.
@@ -1357,7 +1456,7 @@ struct Replay : public LLAvatarPropertiesObserver
             if (editor->getText().find("Native initial script") == std::string::npos) return false;
             require(editor->getEnabled() && editor->isInVisibleChain(), "Actual owned Script text cannot be edited");
             editor->setFocus(true); editor->selectAll();
-            const std::string text = "default { state_entry() { llOwnerSay(\"Native edited script\"); } }";
+            const std::string text = "default { state_entry() { llOwnerSay(\"Native edited script\"); }}";
             for (const auto c : text)
                 require(editor->handleUnicodeCharHere(static_cast<llwchar>(static_cast<unsigned char>(c))),
                     "Actual Script editor rejected typed text");

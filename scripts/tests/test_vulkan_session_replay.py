@@ -184,7 +184,7 @@ class SessionEvidenceTests(unittest.TestCase):
                 response = connection.getresponse()
                 self.assertEqual(response.status, 200)
                 self.assertEqual(read_llsd(ET.fromstring(response.read()))['state'], 'upload')
-                data = b'default { state_entry() { llOwnerSay("Native edited script"); } }\0'
+                data = b'default { state_entry() { llOwnerSay("Native edited script"); }}\0'
                 connection.request('POST', '/script-data', data)
                 response = connection.getresponse()
                 self.assertEqual(response.status, 200)

@@ -754,9 +754,8 @@ bool LLFloaterPreference::postBuild()
     });
 
     LLSliderCtrl* fov_slider = getChild<LLSliderCtrl>("camera_fov");
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-        fov_slider->setEnabled(false); // World-camera ownership is deferred.
-    else
+    // Native sessions use the saved/XUI range without constructing a world camera.
+    if (!(gViewerWindow && gViewerWindow->isNativeVulkan()))
     {
         fov_slider->setMinValue(LLViewerCamera::getInstance()->getMinView());
         fov_slider->setMaxValue(LLViewerCamera::getInstance()->getMaxView());
@@ -1047,9 +1046,8 @@ void LLFloaterPreference::apply()
     gViewerWindow->requestResolutionUpdate(); // for UIScaleFactor
 
     LLSliderCtrl* fov_slider = getChild<LLSliderCtrl>("camera_fov");
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-        fov_slider->setEnabled(false); // World-camera ownership is deferred.
-    else
+    // Native sessions use the saved/XUI range without constructing a world camera.
+    if (!(gViewerWindow && gViewerWindow->isNativeVulkan()))
     {
         fov_slider->setMinValue(LLViewerCamera::getInstance()->getMinView());
         fov_slider->setMaxValue(LLViewerCamera::getInstance()->getMaxView());
@@ -2242,18 +2240,11 @@ void LLFloaterPreference::refreshEnabledState()
 #if VS_NATIVE_VULKAN
     if (VSNativeSession::active())
     {
-        std::function<void(LLView*, bool)> refresh_native = [&](LLView* view, bool graphics)
-        {
-            graphics = graphics || dynamic_cast<LLPanelPreferenceGraphics*>(view) != nullptr;
-            if (graphics && view->getName() != "render_backend")
-            {
-                if (auto* ctrl = dynamic_cast<LLUICtrl*>(view);
-                    ctrl && (ctrl->getControlVariable() || dynamic_cast<LLButton*>(ctrl)))
-                    ctrl->setEnabled(false);
-            }
-            for (auto* child : *view->getChildList()) refresh_native(child, graphics);
-        };
-        refresh_native(this, false);
+        // Saved graphics choices remain editable even without a world renderer.
+        // Skip legacy capability probing, which also overwrites unavailable values.
+        // Hardware recommendations and wireframe require an active scene owner.
+        getChildView("Defaults")->setEnabled(false);
+        getChildView("Wireframe")->setEnabled(false);
         getChildView("render_backend")->setEnabled(true);
         getChild<LLButton>("fs_default_creation_permissions")->setEnabled(LLStartUp::getStartupState() >= STATE_STARTED);
         getChildView("block_list")->setEnabled(LLLoginInstance::getInstance()->authSuccess());
@@ -4061,9 +4052,11 @@ bool LLPanelPreferenceGraphics::postBuild()
     //LLFloaterReg::hideInstance("prefs_graphics_advanced");
     // </FS:Ansariel>
 
+    // Shader availability belongs to the running renderer, not the saved choices.
     // <FS:Ansariel> Advanced graphics preferences
-    // Disable FSAA combo when shaders are not loaded
-    //
+    // Disable FSAA combo when shaders are not loaded in a legacy session.
+    // Native preferences retain these choices for a future world renderer.
+    if (!(gViewerWindow && gViewerWindow->isNativeVulkan()))
     {
         LLComboBox* combo = getChild<LLComboBox>("fsaa");
         if (!gFXAAProgram[0].isComplete())
@@ -4090,7 +4083,9 @@ bool LLPanelPreferenceGraphics::postBuild()
 
     LLPresetsManager* presetsMgr = LLPresetsManager::getInstance();
     mPresetListConnection = presetsMgr->setPresetListChangeCallback(boost::bind(&LLPanelPreferenceGraphics::onPresetsListChange, this));
-    presetsMgr->createMissingDefault(PRESETS_GRAPHIC); // a no-op after the first time, but that's ok
+    // Default presets consult legacy hardware recommendations and can change settings.
+    if (!(gViewerWindow && gViewerWindow->isNativeVulkan()))
+        presetsMgr->createMissingDefault(PRESETS_GRAPHIC);
 
 
 // <FS:CR> Hide this until we have fullscreen mode functional on OSX again
