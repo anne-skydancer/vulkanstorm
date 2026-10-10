@@ -26,6 +26,11 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llviewerchat.h"
+#include "lluri.h"
+#include "llviewerwindow.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 // newview includes
 #include "llagent.h"    // gAgent
@@ -345,6 +350,13 @@ std::string LLViewerChat::getSenderSLURL(const LLChat& chat, const LLSD& args)
 //static
 std::string LLViewerChat::getObjectImSLURL(const LLChat& chat, const LLSD& args)
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto owner = VSNativeSession::active();
+        if (!owner || owner->phase() != VSNativeSession::Phase::Connected) return LLStringUtil::null;
+    }
+#endif
     std::string url = LLSLURL("objectim", chat.mFromID, "").getSLURLString();
     // <FS:Ansariel> FIRE-6238: objectim SLURLs don't get handled correctly if the object's name contains ampersands
     //url += "?name=" + chat.mFromName;
@@ -352,20 +364,36 @@ std::string LLViewerChat::getObjectImSLURL(const LLChat& chat, const LLSD& args)
     // </FS:Ansariel>
     url += "&owner=" + chat.mOwnerID.asString();
 
-    std::string slurl = args["slurl"].asString();
-    if (slurl.empty())
-    {
-        LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosAgent(chat.mPosAgent);
-        if(region)
-        {
-            LLSLURL region_slurl(region->getName(), chat.mPosAgent);
-            slurl = region_slurl.getLocationString();
-        }
-    }
-
-    url += "&slurl=" + LLURI::escape(slurl);
+    url += "&slurl=" + LLURI::escape(getObjectLocation(chat, args));
 
     return url;
+}
+
+//static
+std::string LLViewerChat::getObjectLocation(const LLChat& chat, const LLSD& args)
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner = VSNativeSession::active();
+        // Synchronous history rebuilding belongs to the currently connected
+        // account. Retired owners never fall through to a scene lookup.
+        if (!owner || owner->phase() != VSNativeSession::Phase::Connected) return LLStringUtil::null;
+        if (!args["slurl"].asString().empty()) return args["slurl"].asString();
+        if (chat.mURL.find("secondlife:///app/objectim/") == 0)
+        {
+            const auto location = LLURI(chat.mURL).queryMap()["slurl"].asString();
+            if (!location.empty()) return location;
+        }
+        return owner->regionName().empty() ? LLStringUtil::null :
+            LLSLURL(owner->regionName(), chat.mPosAgent).getLocationString();
+    }
+#endif
+    std::string location = args["slurl"].asString();
+    if (location.empty())
+        if (auto* region = LLWorld::getInstance()->getRegionFromPosAgent(chat.mPosAgent))
+            location = LLSLURL(region->getName(), chat.mPosAgent).getLocationString();
+    return location;
 }
 
 //static

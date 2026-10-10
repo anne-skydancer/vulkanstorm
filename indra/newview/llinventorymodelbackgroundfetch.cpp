@@ -1352,7 +1352,8 @@ void LLInventoryModelBackgroundFetch::bulkFetch()
                 const LLViewerInventoryCategory* cat(gInventory.getCategory(cat_id));
                 if (cat)
                 {
-                    if (LLViewerInventoryCategory::VERSION_UNKNOWN == cat->getVersion())
+                    if (LLViewerInventoryCategory::VERSION_UNKNOWN == cat->getVersion()
+                        || fetch_info.mFetchType == FT_FORCED)
                     {
                         if (std::find(all_cats.begin(), all_cats.end(), cat_id) == all_cats.end())
                         {
@@ -1406,6 +1407,7 @@ void LLInventoryModelBackgroundFetch::bulkFetch()
             all_cats.emplace_back(cat_id);
         }
 
+        if (fetch_info.mFetchType == FT_FORCED) mForceFetchSet.erase(fetch_info.mUUID);
         mFetchFolderQueue.pop_front();
     }
 
@@ -1434,6 +1436,7 @@ void LLInventoryModelBackgroundFetch::bulkFetch()
             item_count++;
         }
 
+        if (fetch_info.mFetchType == FT_FORCED) mForceFetchSet.erase(fetch_info.mUUID);
         mFetchItemQueue.pop_front();
     }
 

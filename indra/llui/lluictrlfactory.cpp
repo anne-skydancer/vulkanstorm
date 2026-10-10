@@ -28,6 +28,7 @@
 
 #define LLUICTRLFACTORY_CPP
 #include "lluictrlfactory.h"
+#include "vsuiadmission.h"
 
 #include "llxmlnode.h"
 
@@ -129,6 +130,11 @@ void LLUICtrlFactory::createChildren(LLView* viewp, LLXMLNodePtr node, const wid
 
     for (LLXMLNodePtr child_node = node->getFirstChild(); child_node.notNull(); child_node = child_node->getNextSibling())
     {
+        std::string child_name;
+        child_node->getAttributeString("name", child_name);
+        // Explicitly deferred scene subtrees are omitted before any widget or
+        // specialized panel factory runs. All other children retain strict admission.
+        if (!VSUIAdmission::child(instance().getCurFileName(), child_name)) continue;
         LLXMLNodePtr outputChild;
         if (output_node)
         {

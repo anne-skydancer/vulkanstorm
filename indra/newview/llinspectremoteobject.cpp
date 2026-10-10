@@ -28,6 +28,9 @@
 #include "llfloaterreg.h"
 #include "llinspectremoteobject.h"
 #include "llinspect.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
+#include "fspanelblocklist.h"
 #include "llmutelist.h"
 #include "llpanelblockedlist.h"
 #include "llslurl.h"
@@ -65,6 +68,7 @@ private:
     void update();
 
 private:
+    std::function<bool()> mAccountCurrent = vs_native_im_guard();
     LLUUID       mObjectID;
     LLUUID       mOwnerID;
     std::string  mSLurl;
@@ -105,6 +109,7 @@ bool LLInspectRemoteObject::postBuild(void)
 /*virtual*/
 void LLInspectRemoteObject::onOpen(const LLSD& data)
 {
+    mAccountCurrent = vs_native_im_guard();
     // Start animation
     LLInspect::onOpen(data);
 
@@ -136,9 +141,11 @@ void LLInspectRemoteObject::onClickMap()
 
 void LLInspectRemoteObject::onClickBlock()
 {
+    if (!mAccountCurrent()) return;
     LLMute mute(mObjectID, mName, LLMute::OBJECT);
     LLMuteList::getInstance()->add(mute);
-    LLPanelBlockedList::showPanelAndSelect(mute.mID);
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) FSPanelBlockList::showPanelAndSelect(mute.mID);
+    else LLPanelBlockedList::showPanelAndSelect(mute.mID);
     closeFloater();
 }
 
@@ -184,7 +191,7 @@ void LLInspectRemoteObject::update()
     getChild<LLUICtrl>("object_slurl")->setValue(url);
 
     // disable the Map button if we don't have a SLurl
-    getChild<LLUICtrl>("map_btn")->setEnabled(! mSLurl.empty());
+    getChild<LLUICtrl>("map_btn")->setEnabled(!mSLurl.empty() && !(gViewerWindow && gViewerWindow->isNativeVulkan()));
 
     // disable the Block button if we don't have the object ID (will this ever happen?)
     getChild<LLUICtrl>("block_btn")->setEnabled(!mObjectID.isNull() && !LLMuteList::getInstance()->isMuted(mObjectID));
@@ -205,4 +212,9 @@ void LLInspectRemoteObjectUtil::registerFloater()
 {
     LLFloaterReg::add("inspect_remote_object", "inspect_remote_object.xml",
                       &LLFloaterReg::build<LLInspectRemoteObject>);
+}
+
+bool LLInspectRemoteObjectUtil::isNativeInternalType(const std::type_info& type)
+{
+    return type == typeid(LLInspectRemoteObject);
 }

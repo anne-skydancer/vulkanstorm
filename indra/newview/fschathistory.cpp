@@ -27,6 +27,9 @@
 // Original file: LLChatHistory.cpp
 
 #include "llviewerprecompiledheaders.h"
+#include "llviewerwindow.h"
+#include "llviewerchat.h"
+#include "vsnativeim.h"
 
 #include "fschathistory.h"
 
@@ -69,6 +72,10 @@
 #include "llfocusmgr.h"
 #include "llkeyboard.h"
 #include "llpanelblockedlist.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "fspanelblocklist.h"
+#endif
 #include "rlvactions.h"
 #include "rlvhandler.h"
 
@@ -118,6 +125,18 @@ LLObjectIMHandler gObjectIMHandler;
 class FSChatHistoryHeader: public LLPanel
 {
 public:
+    static bool isNativeCallback(const std::string& name, const LLSD& data)
+    {
+        const std::string item = data.asString();
+        if (name == "AvatarIcon.Action") return item == "profile" || item == "im" || item == "chat_history" || item == "add" || item == "add_set" || item == "remove" || item == "invite_to_group" || item == "share" || item == "pay" || item == "copy_name" || item == "copy_url" || item == "block_unblock" || item == "mute_unmute" || item == "allow_text_chat" || item == "forbid_text_chat" || item == "ban_member" || item == "teleport" || item == "request_teleport";
+        if (name == "AvatarIcon.Check") return item == "is_blocked" || item == "is_muted" || item == "is_allowed_text_chat";
+        if (name == "AvatarIcon.Enable") return item == "can_allow_text_chat" || item == "can_mute" || item == "can_unmute" || item == "can_pay" || item == "can_ban_member";
+        if (name == "AvatarIcon.Visible") return item == "show_mute" || item == "show_unmute";
+        if (name == "ObjectIcon.Action") return item == "profile" || item == "block" || item == "unblock" || item == "teleport";
+        if (name == "ObjectIcon.Visible") return item == "is_blocked" || item == "not_blocked";
+        return name == "Mention.CopyURI" || name == "Mention.Chat";
+    }
+
     typedef boost::function<void (const std::string& speaker_id)> insert_mention_callback_t;
 
     FSChatHistoryHeader()
@@ -198,6 +217,7 @@ public:
 
     void onObjectIconContextMenuItemClicked(const LLSD& userdata)
     {
+        if (!mAccountCurrent()) return;
         std::string level = userdata.asString();
 
         if (level == "profile")
@@ -207,6 +227,10 @@ public:
         else if (level == "block")
         {
             LLMuteList::getInstance()->add(LLMute(getAvatarId(), mFrom, LLMute::OBJECT));
+#if VS_NATIVE_VULKAN
+            if (VSNativeSession::active()) FSPanelBlockList::showPanelAndSelect(getAvatarId());
+            else
+#endif
             LLPanelBlockedList::showPanelAndSelect(getAvatarId());
         }
         else if (level == "unblock")
@@ -235,6 +259,7 @@ public:
 
     bool onObjectIconContextMenuItemVisible(const LLSD& userdata)
     {
+        if (!mAccountCurrent()) return false;
         std::string level = userdata.asString();
         if (level == "is_blocked")
         {
@@ -414,7 +439,15 @@ public:
 
     void onAvatarIconContextMenuItemClicked(const LLSD& userdata)
     {
+        if (!mAccountCurrent()) return;
         std::string param = userdata.asString();
+        if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
+            (param == "zoom_in" || param == "map" || param == "track" ||
+             param == "teleport_to" || param == "voice_call" || param == "report_abuse"))
+        {
+            LLNotificationsUtil::add("NativeWorldUnavailable");
+            return;
+        }
 
         if (param == "profile")
         {
@@ -541,12 +574,12 @@ public:
         else if (param == "allow_text_chat")
         {
             LLIMSpeakerMgr* speaker_mgr = LLIMModel::getInstance()->getSpeakerManager(mSessionID);
-            speaker_mgr->allowTextChat(getAvatarId(), true);
+            if (speaker_mgr) speaker_mgr->allowTextChat(getAvatarId(), true);
         }
         else if (param == "forbid_text_chat")
         {
             LLIMSpeakerMgr* speaker_mgr = LLIMModel::getInstance()->getSpeakerManager(mSessionID);
-            speaker_mgr->allowTextChat(getAvatarId(), false);
+            if (speaker_mgr) speaker_mgr->allowTextChat(getAvatarId(), false);
         }
         else if (param == "group_mute")
         {
@@ -580,6 +613,7 @@ public:
 
     bool onAvatarIconContextMenuItemChecked(const LLSD& userdata)
     {
+        if (!mAccountCurrent()) return false;
         std::string param = userdata.asString();
 
         if (param == "is_blocked")
@@ -595,6 +629,7 @@ public:
             if (gAgent.isInGroup(mSessionID))
             {
                 LLIMSpeakerMgr* speaker_mgr = LLIMModel::getInstance()->getSpeakerManager(mSessionID);
+                if (!speaker_mgr) return false;
                 const LLSpeaker * speakerp = speaker_mgr->findSpeaker(getAvatarId());
 
                 if (NULL != speakerp)
@@ -609,6 +644,7 @@ public:
 
     bool onAvatarIconContextMenuItemEnabled(const LLSD& userdata)
     {
+        if (!mAccountCurrent()) return false;
         std::string param = userdata.asString();
 
         if (param == "can_allow_text_chat" || param == "can_mute" || param == "can_unmute")
@@ -617,7 +653,7 @@ public:
         }
         else if (param == "report_abuse")
         {
-            return gAgentID != mAvatarID;
+            return !(gViewerWindow && gViewerWindow->isNativeVulkan()) && gAgentID != mAvatarID;
         }
         // [RLVa:KB] - @pay
         else if (param == "can_pay")
@@ -634,6 +670,7 @@ public:
 
     bool onAvatarIconContextMenuItemVisible(const LLSD& userdata)
     {
+        if (!mAccountCurrent()) return false;
         std::string param = userdata.asString();
 
         if (param == "show_mute")
@@ -721,6 +758,7 @@ public:
 
     void showInspector()
     {
+        if (!mAccountCurrent()) return;
 //      if (mAvatarID.isNull() && CHAT_SOURCE_SYSTEM != mSourceType && CHAT_SOURCE_REGION != mSourceType) return;
 // [RLVa:KB] - Checked: 2010-04-22 (RLVa-1.2.2a) | Added: RLVa-1.2.0f
         // Don't double-click show the inspector if we're not showing the info control
@@ -956,16 +994,7 @@ public:
         // to be able properly show its profile.
         if ( chat.mSourceType == CHAT_SOURCE_OBJECT)
         {
-            std::string slurl = args["slurl"].asString();
-            if (slurl.empty())
-            {
-                LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosAgent(chat.mPosAgent);
-                if(region)
-                {
-                    LLSLURL region_slurl(region->getName(), chat.mPosAgent);
-                    slurl = region_slurl.getLocationString();
-                }
-            }
+            const std::string slurl = LLViewerChat::getObjectLocation(chat, args);
 
             LLSD payload;
             payload["object_id"]    = chat.mFromID;
@@ -1135,7 +1164,7 @@ protected:
                 menu->setItemEnabled("Teleport to", FSCommon::checkIsActionEnabled(mAvatarID, EFSRegistrarFunctionActionType::FS_RGSTR_ACT_TELEPORT_TO));
                 menu->setItemEnabled("Offer Teleport", LLAvatarActions::canOfferTeleport(mAvatarID));
                 menu->setItemEnabled("Request Teleport", LLAvatarActions::canRequestTeleport(mAvatarID));
-                menu->setItemEnabled("Voice Call", LLAvatarActions::canCall());
+                menu->setItemEnabled("Voice Call", !(gViewerWindow && gViewerWindow->isNativeVulkan()) && LLAvatarActions::canCall());
                 menu->setItemEnabled("Zoom In", FSCommon::checkIsActionEnabled(mAvatarID, EFSRegistrarFunctionActionType::FS_RGSTR_ACT_ZOOM_IN));
                 menu->setItemEnabled("track", FSCommon::checkIsActionEnabled(mAvatarID, EFSRegistrarFunctionActionType::FS_RGSTR_ACT_TRACK_AVATAR));
                 menu->setItemEnabled("Block Unblock", LLAvatarActions::canBlock(mAvatarID));
@@ -1143,7 +1172,15 @@ protected:
                 menu->setItemEnabled("Chat History", LLLogChat::isTranscriptExist(mAvatarID));
             }
 
-            menu->setItemEnabled("Map", (LLAvatarTracker::instance().isBuddyOnline(mAvatarID) && is_agent_mappable(mAvatarID)) || gAgent.isGodlike() );
+            const bool native = gViewerWindow && gViewerWindow->isNativeVulkan();
+            menu->setItemEnabled("Map", !native && ((LLAvatarTracker::instance().isBuddyOnline(mAvatarID) && is_agent_mappable(mAvatarID)) || gAgent.isGodlike()));
+            if (native)
+            {
+                // Manual enable setters must obey the same scene boundary as
+                // registered callbacks, including the self-avatar branch.
+                for (const auto* scene : { "Zoom In", "track", "Teleport to", "Voice Call" })
+                    menu->setItemEnabled(scene, false);
+            }
             menu->buildDrawLabels();
             menu->updateParent(LLMenuGL::sMenuContainer);
             LLMenuGL::showPopup(this, menu, x, y);
@@ -1245,6 +1282,7 @@ protected:
 
     LLUICtrl*           mInfoCtrl;
 
+    std::function<bool()> mAccountCurrent = vs_native_im_guard();
     LLUUID              mAvatarID;
     LLSD                mObjectData;
     EChatSourceType     mSourceType;
@@ -2013,3 +2051,8 @@ void FSChatHistory::draw()
     }
 }
 // </FS:Zi>
+
+bool FSChatHistory::isNativeCallback(const std::string& name, const LLSD& data)
+{
+    return FSChatHistoryHeader::isNativeCallback(name, data);
+}

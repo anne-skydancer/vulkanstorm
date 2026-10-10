@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llviewerwindow.h"
 
 #include "fsnamelistavatarmenu.h"
 
@@ -85,6 +86,9 @@ LLContextMenu* FSNameListAvatarMenu::createMenu()
 bool FSNameListAvatarMenu::enableContextMenuItem(const LLSD& userdata)
 {
     std::string item = userdata.asString();
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
+        (item == "teleport_to" || item == "track_avatar")) return false;
+
     bool isSelf = !mUUIDs.empty() && mUUIDs.front() == gAgentID;
 
     if (item == "remove_friend")

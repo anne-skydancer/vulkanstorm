@@ -24,6 +24,256 @@ def record():
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_shared_edit_delete_needs_no_scene_menu_owner(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/newview/llviewermenu.cpp').read_text()
+        body = source.split('class LLEditDelete : public view_listener_t', 1)[1].split('void handle_spellcheck_replace', 1)[0]
+        fixture = r'''#include <cassert>
+struct LLSD {};
+struct view_listener_t { virtual bool handleEvent(const LLSD&)=0; };
+struct Menu { int hidden=0;void hide(){++hidden;}void hideMenus(){++hidden;} };
+Menu* gMenuHolder=nullptr;Menu* gMenuObject=nullptr;
+struct LLEditMenuHandler { static LLEditMenuHandler* gEditMenuHandler;int deleted=0;bool allowed=true;
+ bool canDoDelete(){return allowed;}void doDelete(){++deleted;} };
+LLEditMenuHandler* LLEditMenuHandler::gEditMenuHandler=nullptr;
+class LLEditDelete : public view_listener_t BODY
+int main(){
+ LLEditDelete action;LLEditMenuHandler editor;LLEditMenuHandler::gEditMenuHandler=&editor;
+ view_listener_t& dispatch=action;assert(dispatch.handleEvent(LLSD{}));assert(editor.deleted==1);
+ Menu holder;gMenuHolder=&holder;dispatch.handleEvent(LLSD{});assert(editor.deleted==2 && holder.hidden==1);
+ Menu object;gMenuObject=&object;dispatch.handleEvent(LLSD{});assert(editor.deleted==3 && object.hidden==1);
+ editor.allowed=false;dispatch.handleEvent(LLSD{});assert(editor.deleted==3 && object.hidden==2);
+ LLEditMenuHandler::gEditMenuHandler=nullptr;dispatch.handleEvent(LLSD{});assert(object.hidden==3);
+}
+'''.replace('BODY', body)
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'edit_delete.cpp';path.write_text(fixture)
+            exe = Path(directory) / 'edit_delete.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            run = subprocess.run([str(exe)],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+
+    def test_native_root_and_following_chrome_share_scaled_extent(self):
+        root = Path(__file__).resolve().parents[2]
+        context = (root / 'indra/newview/vsuicontext.cpp').read_text()
+        viewer = (root / 'indra/newview/vsviewerwindow.cpp').read_text()
+        expression = context.split('panel.rect       = LLRect(0, ', 1)[1].split(', 0);', 1)[0]
+        initial = viewer.split('mWindowRectScaled    = LLRect(0, ', 1)[1].split(', 0);', 1)[0]
+        resize = viewer.split('mWindowRectScaled    = LLRect(0, ', 2)[2].split(', 0);', 1)[0]
+        fixture = r'''#include <cassert>
+#include <cmath>
+int ll_round(float value){return int(std::floor(value+0.5f));}
+struct Rect { int height,width; };
+struct Size { int mX,mY; } size;
+Rect root(float width,float height,float dpi){return {ROOT};}
+Rect initial(float dpi){return {INITIAL};}
+Rect resized(float width,float height,float dpi){return {RESIZE};}
+int main(){
+ for(float dpi:{1.25f,1.5f,1.75f}){
+  size={1024,739}; auto r=root(size.mX,size.mY,dpi), child=initial(dpi);
+  assert(r.width==child.width && r.height==child.height);
+  // Shared LLView followers preserve each initial difference on reshape.
+  auto next=resized(1025,740,dpi);
+  child.width+=next.width-r.width;child.height+=next.height-r.height;
+  assert(child.width==next.width && child.height==next.height);
+ }
+}
+'''.replace('#include <cmath>', '#include <cmath>\n#include <initializer_list>')
+        fixture = fixture.replace('ROOT', expression).replace('INITIAL', initial).replace('RESIZE', resize)
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'scaled_chrome.cpp'; path.write_text(fixture)
+            exe = Path(directory) / 'scaled_chrome.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_native_status_and_empty_stats_do_not_read_scene_recordings(self):
+        root = Path(__file__).resolve().parents[2]
+        def condition(source, marker):
+            start = source.index(marker) + source[source.index(marker):].index('(')
+            depth = 0
+            for end in range(start, len(source)):
+                depth += (source[end] == '(') - (source[end] == ')')
+                if depth == 0:
+                    return source[start + 1:end]
+            self.fail('Unclosed production condition')
+        fps = condition((root / 'indra/newview/llstatusbar.cpp').read_text(),
+                        'if (fsStatusBarShowFPS && !native_status_bar()')
+        stat = condition((root / 'indra/llui/llstatgraph.cpp').read_text(),
+                         'if (mNewStatFloatp && LLTrace::')
+        fixture = r'''#include <cassert>
+struct Timer { float elapsed=2; float getElapsedTimeF32(){return elapsed;} } mFPSUpdateTimer;
+bool native=false, fsStatusBarShowFPS=true, mNewStatFloatp=true;
+bool native_status_bar(){return native;}
+namespace LLTrace { struct Recorder { int periods=0,queries=0; int getNumRecordedPeriods(){++queries;return periods;} } recording;
+Recorder& get_frame_recording(){return recording;} }
+int fpsReads=0,statReads=0;
+void fps(){ if (FPS_CONDITION) ++fpsReads; }
+void stat(){ if (STAT_CONDITION) ++statReads; }
+int main(){
+ native=true;fps();assert(fpsReads==0 && LLTrace::recording.queries==0);
+ native=false;fps();stat();assert(fpsReads==0 && statReads==0);
+ LLTrace::recording.periods=4;fps();stat();assert(fpsReads==1 && statReads==1);
+ native=true;fps();assert(fpsReads==1);
+ mNewStatFloatp=false;stat();assert(statReads==1);
+}
+'''.replace('FPS_CONDITION', fps).replace('STAT_CONDITION', stat)
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'empty_recording.cpp';path.write_text(fixture)
+            exe=Path(directory)/'empty_recording.exe'
+            built=subprocess.run([compiler,'-std=c++17',str(path),'-o',str(exe)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            run=subprocess.run([str(exe)],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+
+    def test_people_scene_omission_is_exact_and_precedes_widget_construction(self):
+        root = Path(__file__).resolve().parents[2]
+        factory = (root / 'indra/llui/lluictrlfactory.cpp').read_text(encoding='utf-8')
+        start = factory.index('void LLUICtrlFactory::createChildren(')
+        end = factory.index('bool LLUICtrlFactory::getLayeredXMLNode(', start)
+        children = factory[start:end]
+        self.assertLess(children.index('VSUIAdmission::child('), children.index('instance().createFromXML('))
+        source = (root / 'indra/newview/vsstartupui.cpp').read_text(encoding='utf-8')
+        start = source.index('[](std::string_view filename, std::string_view child)')
+        end = source.index('});', start)
+        policy = source[start:end+1]
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        fixture = '#include <cassert>\n#include <string_view>\nint main(){auto policy = ' + policy + r""";
+ assert(!policy("skins/ansastorm_modern/xui/en/panel_people.xml","nearby_panel"));
+ assert(!policy("panel_people.xml","nearby_panel"));
+ assert(policy("panel_people.xml","friends_panel"));
+ assert(policy("panel_people.xml","groups_panel"));
+ assert(policy("panel_people.xml","contact_sets_panel"));
+ assert(policy("panel_people.xml","blocked_panel"));
+ assert(policy("panel_profile.xml","nearby_panel"));
+ assert(policy("","nearby_panel"));
+}
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'people_scene_gate.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            exe = Path(temp) / 'people_scene_gate.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_native_menu_callbacks_deny_scene_before_registration_and_keep_labels(self):
+        root = Path(__file__).resolve().parents[2]
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        source = (root / 'indra/llui/llmenugl.cpp').read_text(encoding='utf-8')
+        start = source.index('void LLMenuItemCallGL::initFromParams(')
+        end = source.index('void LLMenuItemCallGL::onCommit', start)
+        fixture = r"""
+#include <cassert>
+#include <iostream>
+#include <string>
+struct LLSD{};
+#include "vsuiadmission.h"
+#define LL_WARNS() std::cerr
+#define LL_ENDL std::endl
+struct Name{std::string value;std::string operator()()const{return value;}bool isProvided()const{return false;}};
+struct Callback{bool supplied=false;Name function_name,control_name;LLSD parameter()const{return{};}bool isProvided()const{return supplied;}};
+struct LLControlVariable{};
+struct LLUICtrl{template<class P>void initFromParams(const P&){};};
+struct Signal{int installed=0;void connect(int){++installed;}};
+struct LLMenuItemCallGL:LLUICtrl {
+ struct Params{Callback on_visible,on_enable,on_click;};
+ bool mNativeCallbacksAllowed=true,enabled=true,visible=true;Signal mVisibleSignal;
+ int enables=0,commits=0;
+ void initFromParams(const Params&);
+ int initEnableCallback(const Callback&){return 1;}
+ int initCommitCallback(const Callback&){return 1;}
+ void setEnableCallback(int){++enables;}void setCommitCallback(int){++commits;}
+ void setEnabled(bool v){enabled=v;}void setEnabledControlVariable(LLControlVariable*){}
+ LLControlVariable* findControl(const std::string&){return nullptr;}
+ std::string getName(){return "retained scene menu label";}
+};
+""" + source[start:end] + r"""
+int main(){LLMenuItemCallGL::Params p;
+ p.on_click={true,{"Edit.Copy"},{}};p.on_visible={true,{"Scene.Visible"},{}};
+ {VSUIAdmission scope([](const std::type_info&){return true;},[](std::string_view){return true;}, {}, {}, {},
+  [](std::string_view name,const LLSD&){return name=="Edit.Copy";});
+  LLMenuItemCallGL item;item.initFromParams(p);
+  assert(item.visible&&!item.enabled&&!item.mNativeCallbacksAllowed);
+  assert(item.mVisibleSignal.installed==0&&item.commits==1);
+  p.on_click.function_name.value="Scene.Execute";p.on_visible.supplied=false;
+  LLMenuItemCallGL blocked;blocked.initFromParams(p);
+  assert(blocked.visible&&!blocked.enabled&&blocked.commits==0);
+  p.on_click.function_name.value="Edit.Copy";
+  LLMenuItemCallGL allowed;allowed.initFromParams(p);assert(allowed.enabled&&allowed.commits==1);
+ }
+ p.on_visible.supplied=true;p.on_click.function_name.value="Scene.Execute";
+ LLMenuItemCallGL legacy;legacy.initFromParams(p);
+ assert(legacy.enabled&&legacy.mVisibleSignal.installed==1&&legacy.commits==1);
+}
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'native_menu.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            exe = Path(temp) / 'native_menu.exe'
+            built = subprocess.run([compiler, '-std=c++17', '-I'+str(root / 'indra/llui'), str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_native_hover_restores_visibility_and_releases_stale_cursor(self):
+        root = Path(__file__).resolve().parents[2]
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        source = (root / 'indra/newview/vsviewerwindow.cpp').read_text(encoding='utf-8')
+        start = source.index('void LLViewerWindow::nativeHover(')
+        end = source.index('void LLViewerWindow::nativeScroll(', start)
+        fixture = r"""
+#include <cassert>
+#include <cmath>
+using S32=int;using MASK=int;
+enum {VX,VY,UI_CURSOR_ARROW=10,UI_CURSOR_IBEAM=11};
+int ll_round(float v){return int(std::lround(v));}
+struct LLCoordGL{int mX,mY;};
+struct Window{bool hidden=true;int cursor=UI_CURSOR_IBEAM;int calls=0;
+ void showCursorFromMouseMove(){hidden=false;++calls;}
+ void setCursor(int c){cursor=c;++calls;}};
+struct View{Window* window;bool editor=false;int x=-1,y=-1,mask=-1;
+ void screenPointToLocal(int sx,int sy,int* x,int* y){*x=sx-3;*y=sy-4;}
+ void handleHover(int sx,int sy,int m){x=sx;y=sy;mask=m;if(editor)window->setCursor(UI_CURSOR_IBEAM);}};
+struct Focus{View* capture=nullptr;View* getMouseCapture(){return capture;}}gFocusMgr;
+struct LLViewerWindow{Window* mWindow;View* mRootView;
+ struct{float mV[2]={2,2};}mDisplayScale;
+ LLCoordGL mCurrentMousePoint{0,0};bool mMouseInWindow=false;
+ void nativeHover(LLCoordGL,MASK);};
+""" + source[start:end] + r"""
+int main(){Window window;View root{&window},editor{&window,true};
+ LLViewerWindow viewer{&window,&root};viewer.nativeHover({20,30},7);
+ assert(!window.hidden&&window.cursor==UI_CURSOR_ARROW);
+ assert(root.x==7&&root.y==11&&root.mask==7&&viewer.mMouseInWindow);
+ gFocusMgr.capture=&editor;viewer.nativeHover({24,34},1);
+ assert(editor.x==9&&editor.y==13&&window.cursor==UI_CURSOR_IBEAM);
+ gFocusMgr.capture=nullptr;viewer.nativeHover({20,30},0);
+ assert(window.cursor==UI_CURSOR_ARROW);
+ viewer.mRootView=nullptr;int calls=window.calls;viewer.nativeHover({1,1},0);
+ assert(window.calls==calls);
+}
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'native_cursor.cpp'
+            path.write_text(fixture, encoding='utf-8')
+            exe = Path(temp) / 'native_cursor.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_nearby_chat_xui_controls_are_inside_owner_and_use_chat_palette(self):
         from xml.etree import ElementTree as ET
         root = Path(__file__).resolve().parents[2]
@@ -617,7 +867,8 @@ struct LLFloaterReg {
 int main() {
     {
         VSUIAdmission admission([](const std::type_info&) { return false; },
-                                [](std::string_view n) { return n=="agreement"; });
+                                [](std::string_view n) { return n=="agreement"; }, {}, {},
+                            [](std::string_view n) { return n=="chat"; });
         LLFloaterReg::showInitialVisibleInstances();
         assert(settings_reads==2 && callbacks==1 && transparency==0);
     }
@@ -647,14 +898,18 @@ int main() {
     assert(VSUIAdmission::widget(typeid(Optional)));
     assert(VSUIAdmission::floater("media"));
     assert(VSUIAdmission::panelFactory("media_panel"));
+    assert(VSUIAdmission::command("build"));
     try {
         VSUIAdmission scope([](const std::type_info& t) { return t==typeid(Required); },
-                            [](std::string_view n) { return n=="agreement"; });
+                            [](std::string_view n) { return n=="agreement"; }, {}, {},
+                            [](std::string_view n) { return n=="chat"; });
         assert(VSUIAdmission::widget(typeid(Required)));
         assert(!VSUIAdmission::widget(typeid(Optional)));
         assert(VSUIAdmission::floater("agreement"));
         assert(!VSUIAdmission::floater("media"));
         assert(!VSUIAdmission::panelFactory("media_panel"));
+        assert(VSUIAdmission::command("chat"));
+        assert(!VSUIAdmission::command("build"));
         bool rejected=false;
         try {
             VSUIAdmission nested([](const std::type_info&) { return true; },
@@ -666,6 +921,7 @@ int main() {
     assert(VSUIAdmission::widget(typeid(Optional)));
     assert(VSUIAdmission::floater("media"));
     assert(VSUIAdmission::panelFactory("media_panel"));
+    assert(VSUIAdmission::command("build"));
     bool rejected=false;
     try { VSUIAdmission incomplete({},[](std::string_view) { return true; }); }
     catch (const std::logic_error&) { rejected=true; }

@@ -70,6 +70,10 @@ public:
 
     // On LoginCompleted - show StartUp toast
     void onLoginCompleted();
+    // Native startup explicitly completes CPU notification ownership, without
+    // broadcasting the legacy login signal to scene-dependent subscribers.
+    void onNativeLoginCompleted();
+    void resetNativeAccount();
     // removes a channel intended for the startup toast and allows other channels to show their toasts
     void onStartUpToastClose();
 

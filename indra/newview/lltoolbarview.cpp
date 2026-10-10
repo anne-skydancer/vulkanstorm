@@ -739,9 +739,9 @@ bool LLToolBarView::handleDragTool( S32 x, S32 y, const LLUUID& uuid, LLAssetTyp
 
 bool LLToolBarView::handleDropTool( void* cargo_data, EDragAndDropType cargo_type, S32 x, S32 y, LLToolBar* toolbar)
 {
-    if (cargo_type == DAD_PERSON)
+    if (cargo_type != DAD_WIDGET || !cargo_data || !toolbar)
     {
-        // DAD_PERSON means that cargo_data contains an uuid, not an LLInventoryObject
+        // Only toolbar commands carry the inventory object consumed below.
         resetDragTool(NULL);
         return false;
     }
@@ -822,9 +822,12 @@ LLInventoryObject* LLToolBarView::getDragItem()
     if (mDragToolbarButton)
     {
         LLUUID item_uuid = mDragToolbarButton->getCommandId().uuid();
-        mDragItem = new LLInventoryObject (item_uuid, LLUUID::null, LLAssetType::AT_WIDGET, "");
+        if (!mDragItem || mDragItem->getUUID() != item_uuid)
+        {
+            mDragItem = new LLInventoryObject(item_uuid, LLUUID::null, LLAssetType::AT_WIDGET, "");
+        }
     }
-    return mDragItem;
+    return mDragItem.get();
 }
 
 void LLToolBarView::setToolBarsVisible(bool visible)

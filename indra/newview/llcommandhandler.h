@@ -104,6 +104,7 @@ public:
 class LLCommandDispatcher
 {
 public:
+    static bool isNativeConnectedCommand(const std::string& cmd, const LLSD& params);
     static bool dispatch(const std::string& cmd,
                          const LLSD& params,
                          const LLSD& query_map,

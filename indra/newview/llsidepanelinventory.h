@@ -28,6 +28,8 @@
 #define LL_LLSIDEPANELINVENTORY_H
 
 #include "llpanel.h"
+#include <boost/signals2/connection.hpp>
+#include <vector>
 
 class LLButton;
 class LLFolderViewItem;
@@ -87,6 +89,7 @@ public:
     bool isInboxEnabled() const { return mInboxEnabled; }
 
     static void cleanup();
+    static void resetNativeAccountState();
 
     // <FS:Ansariel> Secondary inventory window
     static LLFloater* createSecondaryInventoryWindow(const LLSD& key);
@@ -119,6 +122,7 @@ public:
     void                        onBackButtonClicked();
 
 private:
+    std::vector<boost::signals2::scoped_connection> mAccountConnections;
     bool                        mInboxEnabled;
 
     LLInventoryCategoriesObserver*  mCategoriesObserver;

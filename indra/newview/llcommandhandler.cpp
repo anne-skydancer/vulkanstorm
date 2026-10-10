@@ -33,6 +33,7 @@
 #endif
 
 #include "llcommandhandler.h"
+#include "lluuid.h"
 #include "llnotificationsutil.h"
 #include "lltrans.h"
 #include "llcommanddispatcherlistener.h"
@@ -225,6 +226,18 @@ LLCommandHandler::~LLCommandHandler()
 //---------------------------------------------------------------------------
 
 // static
+bool LLCommandDispatcher::isNativeConnectedCommand(const std::string& cmd, const LLSD& params)
+{
+    if (cmd == "teleport") return true; // Ordinary handler validates positions/grid and asks for confirmation.
+    if (cmd == "group" && params.size() == 1) return params[0].asString() == "create" || params[0].asString() == "list" || params[0].asString() == "show";
+    if (params.size() < 2 || !LLUUID::validate(params[0].asString()) || LLUUID(params[0].asString()).isNull()) return false;
+    const std::string verb = params[1].asString();
+    if (cmd == "agent") return verb == "about" || verb == "mention" || verb == "inspect" || verb == "im" || verb == "pay" || verb == "requestfriend" || verb == "removefriend" || verb == "mute" || verb == "unmute" || verb == "block" || verb == "unblock";
+    if (cmd == "group") return verb == "about" || verb == "inspect";
+    if (cmd == "firestorm") return verb == "addtocontactset" || verb == "blockavatar" || verb == "viewlog" || verb == "groupjoin" || verb == "groupleave" || verb == "groupactivate";
+    return false;
+}
+
 bool LLCommandDispatcher::dispatch(const std::string& cmd,
                                    const LLSD& params,
                                    const LLSD& query_map,
@@ -234,7 +247,8 @@ bool LLCommandDispatcher::dispatch(const std::string& cmd,
                                    bool trusted_browser)
 {
 #if VS_NATIVE_VULKAN
-    if (auto owner = VSNativeSession::active(); owner && !(cmd == "login" && owner->phase() == VSNativeSession::Phase::Login))
+    if (auto owner = VSNativeSession::active(); owner && !(cmd == "login" && owner->phase() == VSNativeSession::Phase::Login)
+        && !(owner->phase() == VSNativeSession::Phase::Connected && isNativeConnectedCommand(cmd, params)))
     {
         LLSD args; args["ERROR_MESSAGE"] = LLTrans::getString("NativeSessionCommandUnavailable");
         LLNotificationsUtil::add("ErrorMessage", args); return true;

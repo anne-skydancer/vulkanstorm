@@ -338,7 +338,10 @@ LLInboxNewItemsStorage::LLInboxNewItemsStorage()
 // static
 void LLInboxNewItemsStorage::destroyClass()
 {
-    LLInboxNewItemsStorage::getInstance()->saveNewItemsIds();
+    // Native account retirement can already have saved and deleted this owner.
+    // Do not recreate empty storage during final cleanup and overwrite its file.
+    if (LLInboxNewItemsStorage::instanceExists())
+        LLInboxNewItemsStorage::instance().saveNewItemsIds();
 }
 
 void LLInboxNewItemsStorage::saveNewItemsIds()

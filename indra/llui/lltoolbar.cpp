@@ -28,6 +28,8 @@
 #include "linden_common.h"
 
 #include "lltoolbar.h"
+#include "vsuiadmission.h"
+#include <typeinfo>
 
 #include "llcommandmanager.h"
 #include "llmenugl.h"
@@ -428,6 +430,7 @@ bool LLToolBar::stopCommandInProgress(const LLCommandId& commandId)
     {
         LLCommand* command = LLCommandManager::instance().getCommand(commandId);
         llassert(command);
+        if (!command || !VSUIAdmission::command(command->name())) return false;
 
         // If this command has an explicit function for execution stop
         if (command->executeStopFunctionName().length() > 0)
@@ -990,6 +993,13 @@ void LLToolBar::draw()
             LLToolBarButton* btn = *btn_it;
             LLCommand* command = LLCommandManager::instance().getCommand(btn->mId);
 
+            if (!command || !VSUIAdmission::command(command->name()))
+            {
+                btn->setEnabled(false);
+                btn->setToggleState(false);
+                continue;
+            }
+
             if (command && btn->mIsEnabledSignal)
             {
                 const bool button_command_enabled = (*btn->mIsEnabledSignal)(btn, command->isEnabledParameters());
@@ -1010,15 +1020,17 @@ void LLToolBar::draw()
     LLUI::pushMatrix();
     LLUI::translate((F32)getRect().mLeft, (F32)getRect().mBottom);
 
-    // Position the caret
-    if (!mCaretIcon)
+    // Read-only command palettes are drag sources, not insertion targets, and
+    // intentionally have no caret in their XUI. Editable toolbars require one.
+    if (!mReadOnly && !mCaretIcon)
     {
-        mCaretIcon = getChild<LLIconCtrl>("caret");
+        mCaretIcon = findChild<LLIconCtrl>("caret");
+        if (!mCaretIcon) LL_ERRS("ToolBar") << "Editable toolbar is missing its insertion caret: " << getName() << LL_ENDL;
     }
 
     LLIconCtrl* caret = mCaretIcon;
-    caret->setVisible(false);
-    if (mDragAndDropTarget && !mButtonCommands.empty())
+    if (caret) caret->setVisible(false);
+    if (caret && mDragAndDropTarget && !mButtonCommands.empty())
     {
         LLRect caret_rect = caret->getRect();
         if (getOrientation(mSideType) == LLLayoutStack::HORIZONTAL)
@@ -1039,7 +1051,7 @@ void LLToolBar::draw()
     }
 
     LLUICtrl::draw();
-    caret->setVisible(false);
+    if (caret) caret->setVisible(false);
     mDragAndDropTarget = false;
 }
 
@@ -1094,6 +1106,7 @@ void LLToolBar::createButtons()
 void LLToolBarButton::callIfEnabled(LLUICtrl::commit_callback_t commit, LLUICtrl* ctrl, const LLSD& param )
 {
     LLCommand* command = LLCommandManager::instance().getCommand(mId);
+    if (!command || !VSUIAdmission::command(command->name())) return;
 
     if (!mIsEnabledSignal || (*mIsEnabledSignal)(this, command->isEnabledParameters()))
     {
@@ -1138,6 +1151,12 @@ LLToolBarButton* LLToolBar::createButton(const LLCommandId& id)
     button_p.button_flash_enable = commandp->isFlashingAllowed();
     button_p.overwriteFrom(mButtonParams[mButtonType]);
     LLToolBarButton* button = LLUICtrlFactory::create<LLToolBarButton>(button_p);
+
+    if (!VSUIAdmission::command(commandp->name()))
+    {
+        button->setEnabled(false);
+        return button;
+    }
 
     if (!mReadOnly)
     {
@@ -1400,6 +1419,7 @@ void LLToolBarButton::onMouseCaptureLost()
 void LLToolBarButton::onCommit()
 {
     LLCommand* command = LLCommandManager::instance().getCommand(mId);
+    if (!command || !VSUIAdmission::command(command->name())) return;
 
     if (!mIsEnabledSignal || (*mIsEnabledSignal)(this, command->isEnabledParameters()))
     {
@@ -1595,4 +1615,10 @@ void LLToolBar::onLayoutStyleChanged(const LLSD& userdata)
 S32 LLToolBarButton::getInitialWidth() const
 {
     return mInitialWidth;
+}
+
+// Exact identity for the toolbar-owned layout control, without admitting derived widgets.
+bool LLToolBar::isNativeInternalType(const std::type_info& type)
+{
+    return type == typeid(LLCenterLayoutPanel);
 }

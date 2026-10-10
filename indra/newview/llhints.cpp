@@ -355,16 +355,22 @@ LLHints::LLHints()
 {
     LLControlVariablePtr control = gSavedSettings.getControl("EnableUIHints");
     mControlConnection = control->getSignal()->connect(boost::bind(&LLHints::showHints, this, _2));
-    gViewerWindow->getHintHolder()->setVisible(control->getValue().asBoolean());
+    if (auto* holder = gViewerWindow ? gViewerWindow->getHintHolder() : nullptr)
+        holder->setVisible(control->getValue().asBoolean());
 }
 
 LLHints::~LLHints()
 {
     mControlConnection.disconnect();
+    for (auto& entry : mHints)
+        if (auto* popup = entry.second.get()) popup->die();
+    mHints.clear();
 }
 
 void LLHints::show(LLNotificationPtr hint)
 {
+    auto* hint_holder = gViewerWindow ? gViewerWindow->getHintHolder() : nullptr;
+    if (!hint_holder) return;
     LLHintPopup::Params p(LLUICtrlFactory::getDefaultParams<LLHintPopup>());
 
     LLParamSDParser parser;
@@ -375,9 +381,8 @@ void LLHints::show(LLNotificationPtr hint)
     {
         LLHintPopup* popup = new LLHintPopup(p);
 
-        mHints[hint] = popup;
+        mHints[hint] = popup->getHandle();
 
-        LLView* hint_holder = gViewerWindow->getHintHolder();
         if (hint_holder)
         {
             hint_holder->addChild(popup);
@@ -391,7 +396,7 @@ void LLHints::hide(LLNotificationPtr hint)
     hint_map_t::iterator found_it = mHints.find(hint);
     if (found_it != mHints.end())
     {
-        found_it->second->hide();
+        if (auto* popup = dynamic_cast<LLHintPopup*>(found_it->second.get())) popup->hide();
         mHints.erase(found_it);
     }
 }
@@ -417,5 +422,11 @@ LLHandle<LLView> LLHints::getHintTarget(const std::string& name)
 void LLHints::showHints(const LLSD& show)
 {
     bool visible = show.asBoolean();
-    gViewerWindow->getHintHolder()->setVisible(visible);
+    if (auto* holder = gViewerWindow ? gViewerWindow->getHintHolder() : nullptr)
+        holder->setVisible(visible);
+}
+
+bool LLHints::isNativeInternalType(const std::type_info& type)
+{
+    return type == typeid(LLHintPopup);
 }

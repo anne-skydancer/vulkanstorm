@@ -112,6 +112,9 @@ public:
      */
     const slurl_list_t&     getItems() const { return mItems; }
     void                    purgeItems();
+    // CPU sessions have no parcel-owned history lifecycle.
+    void                    resetNativeSession();
+    void                    updateNativeLocation(const LLVector3d& new_pos) { updateCurrentLocation(new_pos); }
     /**
      * Is the history empty?
      *

@@ -281,11 +281,31 @@ void LLLandmark::processRegionIDAndHandle(LLMessageSystem* msg, void**)
 {
     LLUUID region_id;
     msg->getUUID("ReplyBlock", "RegionID", region_id);
+    U64 handle;
+    msg->getU64("ReplyBlock", "RegionHandle", handle);
+    receiveRegionHandle(region_id, handle);
+}
+
+bool LLLandmark::hasPendingRegionHandle(const LLUUID& region_id)
+{
+    return sRegionCallbackMap.find(region_id) != sRegionCallbackMap.end();
+}
+
+void LLLandmark::resetRegionHandles()
+{
+    mLocalRegion = std::make_pair(LLUUID::null, U64(0));
+    mRegions.clear();
+    sRegionCallbackMap.clear();
+}
+
+void LLLandmark::receiveRegionHandle(const LLUUID& region_id, U64 region_handle)
+{
+    if (region_id.isNull()) return;
     mRegions.erase(region_id);
     CacheInfo info;
     const F32 CACHE_EXPIRY_SECONDS = 60.0f * 10.0f; // ten minutes
     info.mTimer.setTimerExpirySec(CACHE_EXPIRY_SECONDS);
-    msg->getU64("ReplyBlock", "RegionHandle", info.mRegionHandle);
+    info.mRegionHandle = region_handle;
     region_map_t::value_type vt(region_id, info);
     mRegions.insert(vt);
 
@@ -300,8 +320,9 @@ void LLLandmark::processRegionIDAndHandle(LLMessageSystem* msg, void**)
     region_callback_map_t::iterator it;
     while((it = sRegionCallbackMap.find(region_id)) != sRegionCallbackMap.end())
     {
-        (*it).second(region_id, info.mRegionHandle);
+        auto callback = std::move(it->second);
         sRegionCallbackMap.erase(it);
+        callback(region_id, info.mRegionHandle);
     }
 }
 

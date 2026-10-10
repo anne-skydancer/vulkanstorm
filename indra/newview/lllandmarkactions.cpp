@@ -26,6 +26,9 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "lllandmarkactions.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "roles_constants.h"
 
@@ -342,6 +345,13 @@ void LLLandmarkActions::createLandmarkHere()
 // <FS:Beq> FIRE-30534 - changes related to var regions in opensim
 void LLLandmarkActions::getSLURLfromPosGlobalAndLocal(const LLVector3d& global_pos, const LLVector3& region_pos, slurl_callback_t cb, bool escaped /* = true */)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        session->resolveLocation(global_pos - LLVector3d(region_pos), [cb, region_pos](const std::string& name, const LLVector3&) { std::string url = LLSLURL(name, region_pos).getSLURLString(); cb(url); });
+        return;
+    }
+#endif
     std::string sim_name;
     LLVector3d tmp_global_pos{global_pos};
     tmp_global_pos.mdV[VX] -= region_pos.mV[VX];
@@ -380,6 +390,13 @@ void LLLandmarkActions::getSLURLfromPosGlobalAndLocal(const LLVector3d& global_p
 // </FS:Beq>
 void LLLandmarkActions::getSLURLfromPosGlobal(const LLVector3d& global_pos, slurl_callback_t cb, bool escaped /* = true */)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        session->resolveLocation(global_pos, [cb](const std::string& name, const LLVector3& pos) { std::string url = LLSLURL(name, pos).getSLURLString(); cb(url); });
+        return;
+    }
+#endif
     // <FS:Beq pp Oren> FIRE-30768: SLURL's don't work in VarRegions
     //std::string sim_name;
     //bool gotSimName = LLWorldMap::getInstance()->simNameFromPosGlobal(global_pos, sim_name);
@@ -423,6 +440,17 @@ void LLLandmarkActions::getSLURLfromPosGlobal(const LLVector3d& global_pos, slur
 
 void LLLandmarkActions::getRegionNameAndCoordsFromPosGlobal(const LLVector3d& global_pos, region_name_and_coords_callback_t cb)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        session->resolveLocation(global_pos, [cb](const std::string& name, const LLVector3& pos)
+        {
+            std::string region_name = name;
+            cb(region_name, ll_round(pos.mV[VX]), ll_round(pos.mV[VY]), ll_round(pos.mV[VZ]));
+        });
+        return;
+    }
+#endif
     std::string sim_name;
     LLSimInfo* sim_infop = LLWorldMap::getInstance()->simInfoFromPosGlobal(global_pos);
     if (sim_infop)

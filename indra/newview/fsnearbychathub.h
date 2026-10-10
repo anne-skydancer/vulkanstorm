@@ -46,6 +46,7 @@ class FSNearbyChat : public LLSingleton<FSNearbyChat>
 
 public:
     void registerChatBar(FSNearbyChatControl* chatBar);
+    void unregisterChatBar(FSNearbyChatControl* chatBar);
 
     // set the contents of the chat bar to "text" if it was empty, otherwise just show it
     void showDefaultChatBar(bool visible, const char* text = NULL) const;

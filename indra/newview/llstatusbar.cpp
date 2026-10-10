@@ -118,6 +118,14 @@
 // Globals
 //
 
+namespace
+{
+bool native_status_bar()
+{
+    return gViewerWindow && gViewerWindow->isNativeVulkan();
+}
+}
+
 LLStatusBar *gStatusBar = NULL;
 S32 STATUS_BAR_HEIGHT = 26;
 extern S32 MENU_BAR_HEIGHT;
@@ -220,16 +228,18 @@ LLStatusBar::LLStatusBar(const LLRect& rect)
     LLUICtrl::CommitCallbackRegistry::currentRegistrar()
             .add("TopInfoBar.Action", boost::bind(&LLStatusBar::onContextMenuItemClicked, this, _2));
 
-    gSavedSettings.getControl("ShowNetStats")->getSignal()->connect(boost::bind(&LLStatusBar::updateNetstatVisibility, this, _2));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("ShowNetStats")->getSignal()->connect(boost::bind(&LLStatusBar::updateNetstatVisibility, this, _2)));
 
     // <FS:PP> Option to hide volume controls (sounds, media, stream) in upper right
-    gSavedSettings.getControl("FSEnableVolumeControls")->getSignal()->connect(boost::bind(&LLStatusBar::updateVolumeControlsVisibility, this, _2));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("FSEnableVolumeControls")->getSignal()->connect(boost::bind(&LLStatusBar::updateVolumeControlsVisibility, this, _2)));
 
     buildFromFile("panel_status_bar.xml");
 }
 
 LLStatusBar::~LLStatusBar()
 {
+    mSettingsConnections.clear();
+    if (bakeTimeout) { delete bakeTimeout; bakeTimeout = nullptr; }
     if (mParcelChangedObserver)
     {
         LLViewerParcelMgr::getInstance()->removeObserver(mParcelChangedObserver);
@@ -355,7 +365,7 @@ bool LLStatusBar::postBuild()
 
     LLHints::getInstance()->registerHintTarget("linden_balance", getChild<LLView>("balance_bg")->getHandle());
 
-    gSavedSettings.getControl("MuteAudio")->getSignal()->connect(boost::bind(&LLStatusBar::onVolumeChanged, this, _2));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("MuteAudio")->getSignal()->connect(boost::bind(&LLStatusBar::onVolumeChanged, this, _2)));
     // <FS:Ansariel> Fix LL voice disabled on 2nd instance nonsense
     //gSavedSettings.getControl("EnableVoiceChat")->getSignal()->connect(boost::bind(&LLStatusBar::onVoiceChanged, this, _2));
     // <FS:Ansariel> Prefer custom FS balance hiding method
@@ -370,7 +380,7 @@ bool LLStatusBar::postBuild()
     //mObscureBalance = gSavedSettings.getBOOL("ObscureBalanceInStatusBar"); // <FS:Ansariel> Prefer custom FS balance hiding method
 
     // <FS:Ansariel> FIRE-19697: Add setting to disable graphics preset menu popup on mouse over
-    gSavedSettings.getControl("FSStatusBarMenuButtonPopupOnRollover")->getSignal()->connect(boost::bind(&LLStatusBar::onPopupRolloverChanged, this, _2));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("FSStatusBarMenuButtonPopupOnRollover")->getSignal()->connect(boost::bind(&LLStatusBar::onPopupRolloverChanged, this, _2)));
 
     // Adding Net Stat Graph
     S32 x = getRect().getWidth() - 2;
@@ -429,26 +439,32 @@ bool LLStatusBar::postBuild()
     mSGPacketLoss = LLUICtrlFactory::create<LLStatGraph>(pgp);
     addChild(mSGPacketLoss);
 
-    mPanelPresetsCameraPulldown = new LLPanelPresetsCameraPulldown();
-    addChild(mPanelPresetsCameraPulldown);
-    mPanelPresetsCameraPulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
-    mPanelPresetsCameraPulldown->setVisible(false);
+    if (!native_status_bar())
+    {
+        mPanelPresetsCameraPulldown = new LLPanelPresetsCameraPulldown();
+        addChild(mPanelPresetsCameraPulldown);
+        mPanelPresetsCameraPulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
+        if (mPanelPresetsCameraPulldown) mPanelPresetsCameraPulldown->setVisible(false);
 
-    mPanelPresetsPulldown = new LLPanelPresetsPulldown();
-    addChild(mPanelPresetsPulldown);
-    mPanelPresetsPulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
-    mPanelPresetsPulldown->setVisible(false);
+        mPanelPresetsPulldown = new LLPanelPresetsPulldown();
+        addChild(mPanelPresetsPulldown);
+        mPanelPresetsPulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
+        if (mPanelPresetsPulldown) mPanelPresetsPulldown->setVisible(false);
 
+    }
     mPanelVolumePulldown = new LLPanelVolumePulldown();
     addChild(mPanelVolumePulldown);
     mPanelVolumePulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
     mPanelVolumePulldown->setVisible(false);
 
-    mPanelNearByMedia = new LLPanelNearByMedia();
-    addChild(mPanelNearByMedia);
-    mPanelNearByMedia->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
-    mPanelNearByMedia->setVisible(false);
+    if (!native_status_bar())
+    {
+        mPanelNearByMedia = new LLPanelNearByMedia();
+        addChild(mPanelNearByMedia);
+        mPanelNearByMedia->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
+        if (mPanelNearByMedia) mPanelNearByMedia->setVisible(false);
 
+    }
     updateBalancePanelPosition();
 
     // Hook up and init for filtering
@@ -461,7 +477,7 @@ bool LLStatusBar::postBuild()
     mFilterEdit->setKeystrokeCallback(boost::bind(&LLStatusBar::onUpdateFilterTerm, this));
     mFilterEdit->setCommitCallback(boost::bind(&LLStatusBar::onUpdateFilterTerm, this));
     collectSearchableItems();
-    gSavedSettings.getControl("MenuSearch")->getCommitSignal()->connect(boost::bind(&LLStatusBar::updateMenuSearchVisibility, this, _2));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("MenuSearch")->getCommitSignal()->connect(boost::bind(&LLStatusBar::updateMenuSearchVisibility, this, _2)));
 
     if (search_panel_visible)
     {
@@ -475,7 +491,7 @@ bool LLStatusBar::postBuild()
     // <FS:Ansariel> Script debug
     mScriptOut = getChild<LLIconCtrl>("scriptout");
     mScriptOut->setMouseDownCallback(boost::bind(&LLFloaterScriptDebug::show, LLUUID::null));
-    mNearbyIcons = LLHUDIcon::scriptIconsNearby();
+    mNearbyIcons = !native_status_bar() && LLHUDIcon::scriptIconsNearby();
     // </FS:Ansariel> Script debug
 
     mParcelInfoPanel = getChild<LLPanel>("parcel_info_panel");
@@ -505,8 +521,11 @@ bool LLStatusBar::postBuild()
 
     initParcelIcons();
 
-    mParcelChangedObserver = new LLParcelChangeObserver(this);
-    LLViewerParcelMgr::getInstance()->addObserver(mParcelChangedObserver);
+    if (!native_status_bar())
+    {
+        mParcelChangedObserver = new LLParcelChangeObserver(this);
+        LLViewerParcelMgr::getInstance()->addObserver(mParcelChangedObserver);
+    }
 
     // Connecting signal for updating parcel icons on "Show Parcel Properties" setting change.
     LLControlVariable* ctrl = gSavedSettings.getControl("NavBarShowParcelProperties").get();
@@ -532,7 +551,7 @@ bool LLStatusBar::postBuild()
     }
 
     // <FS:Ansariel> FIRE-14482: Show FPS in status bar
-    gSavedSettings.getControl("FSStatusBarShowFPS")->getSignal()->connect(boost::bind(&LLStatusBar::onShowFPSChanged, this, _2));
+    mSettingsConnections.emplace_back(gSavedSettings.getControl("FSStatusBarShowFPS")->getSignal()->connect(boost::bind(&LLStatusBar::onShowFPSChanged, this, _2)));
     if (!gSavedSettings.getBOOL("FSStatusBarShowFPS"))
     {
         onShowFPSChanged(LLSD(false));
@@ -561,6 +580,15 @@ bool LLStatusBar::postBuild()
 
     mClockFormat = gSavedSettings.getString("FSStatusBarTimeFormat");
     // </FS:Zi>
+
+    if (native_status_bar())
+    {
+        mIconPresetsCamera->setEnabled(false);
+        mIconPresetsGraphic->setEnabled(false);
+        mMediaToggle->setEnabled(false);
+        mStreamToggle->setEnabled(false);
+        mScriptOut->setVisible(false);
+    }
 
     return true;
 }
@@ -613,7 +641,14 @@ void LLStatusBar::refresh()
 
     // <FS:Ansariel> FIRE-14482: Show FPS in status bar
     static LLCachedControl<bool> fsStatusBarShowFPS(gSavedSettings, "FSStatusBarShowFPS");
-    if (fsStatusBarShowFPS && mFPSUpdateTimer.getElapsedTimeF32() > 1.f)
+    if (fsStatusBarShowFPS && native_status_bar())
+    {
+        // Native presentation does not populate the legacy scene frame recorder.
+        // An unknown value is preferable to invented FPS or an empty median.
+        mFPSText->setText(LLStringExplicit("--"));
+    }
+    if (fsStatusBarShowFPS && !native_status_bar() && mFPSUpdateTimer.getElapsedTimeF32() > 1.f &&
+        LLTrace::get_frame_recording().getNumRecordedPeriods() > 0)
     {
         static LLCachedControl<bool> fsStatusBarShowFPSColors(gSavedSettings, "FSStatusBarShowFPSColors");
         static LLCachedControl<U32>  max_fps(gSavedSettings, "FramePerSecondLimit");
@@ -706,6 +741,19 @@ void LLStatusBar::refresh()
         sendMoneyBalanceRequest();
     }
 
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (owner->balanceKnown())
+        {
+            if (!mNativeBalanceKnown || mBalance != owner->balance()) setBalance(owner->balance());
+            mNativeBalanceKnown = true;
+        }
+        else { mNativeBalanceKnown = false; mBoxBalance->setText(LLStringExplicit("--")); }
+    }
+#endif
+    if (!native_status_bar())
+    {
     // <FS:Zi> Pathfinding rebake functions
     LLMenuOptionPathfindingRebakeNavmesh& navmesh = LLMenuOptionPathfindingRebakeNavmesh::instance();
     static LLMenuOptionPathfindingRebakeNavmesh::ERebakeNavMeshMode pathfinding_mode = LLMenuOptionPathfindingRebakeNavmesh::kRebakeNavMesh_Default;
@@ -741,6 +789,7 @@ void LLStatusBar::refresh()
         updateParcelIcons();
     }
     // </FS:Zi>
+    }
 
     LLRect r;
 
@@ -770,6 +819,15 @@ void LLStatusBar::refresh()
     // update the master volume button state
     bool mute_audio = LLAppViewer::instance()->getMasterSystemAudioMute();
     mBtnVolume->setToggleState(mute_audio);
+
+    if (native_status_bar())
+    {
+        mMediaToggle->setEnabled(false);
+        mStreamToggle->setEnabled(false);
+        mMediaToggle->setValue(true);
+        mStreamToggle->setValue(true);
+        return;
+    }
 
     LLViewerMedia* media_inst = LLViewerMedia::getInstance();
 
@@ -982,6 +1040,7 @@ S32 LLStatusBar::getSquareMetersLeft() const
 
 void LLStatusBar::onClickBuyCurrency()
 {
+    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     // open a currency floater - actual one open depends on
     // value specified in settings.xml
     LLBuyCurrencyHTML::openCurrencyFloater();
@@ -999,6 +1058,7 @@ void LLStatusBar::onClickShop()
 
 void LLStatusBar::onMouseEnterPresetsCamera()
 {
+    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     LLView* popup_holder = gViewerWindow->getRootView()->getChildView("popup_holder");
     // <FS:Ansariel> Changed presets icon to LLButton
     //LLIconCtrl* icon =  getChild<LLIconCtrl>( "presets_icon_camera" );
@@ -1018,14 +1078,15 @@ void LLStatusBar::onMouseEnterPresetsCamera()
     // show the master presets pull-down
     LLUI::getInstance()->clearPopups();
     LLUI::getInstance()->addPopup(mPanelPresetsCameraPulldown);
-    mPanelNearByMedia->setVisible(false);
+    if (mPanelNearByMedia) mPanelNearByMedia->setVisible(false);
     mPanelVolumePulldown->setVisible(false);
-    mPanelPresetsPulldown->setVisible(false);
+    if (mPanelPresetsPulldown) mPanelPresetsPulldown->setVisible(false);
     mPanelPresetsCameraPulldown->setVisible(true);
 }
 
 void LLStatusBar::onMouseEnterPresets()
 {
+    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     LLView* popup_holder = gViewerWindow->getRootView()->getChildView("popup_holder");
     // <FS:Ansariel> Changed presets icon to LLButton
     //LLIconCtrl* icon =  getChild<LLIconCtrl>( "presets_icon_graphic" );
@@ -1045,7 +1106,7 @@ void LLStatusBar::onMouseEnterPresets()
     // show the master presets pull-down
     LLUI::getInstance()->clearPopups();
     LLUI::getInstance()->addPopup(mPanelPresetsPulldown);
-    mPanelNearByMedia->setVisible(false);
+    if (mPanelNearByMedia) mPanelNearByMedia->setVisible(false);
     mPanelVolumePulldown->setVisible(false);
     mPanelPresetsPulldown->setVisible(true);
 }
@@ -1072,14 +1133,15 @@ void LLStatusBar::onMouseEnterVolume()
     // show the master volume pull-down
     LLUI::getInstance()->clearPopups();
     LLUI::getInstance()->addPopup(mPanelVolumePulldown);
-    mPanelPresetsCameraPulldown->setVisible(false);
-    mPanelPresetsPulldown->setVisible(false);
-    mPanelNearByMedia->setVisible(false);
+    if (mPanelPresetsCameraPulldown) mPanelPresetsCameraPulldown->setVisible(false);
+    if (mPanelPresetsPulldown) mPanelPresetsPulldown->setVisible(false);
+    if (mPanelNearByMedia) mPanelNearByMedia->setVisible(false);
     mPanelVolumePulldown->setVisible(true);
 }
 
 void LLStatusBar::onMouseEnterNearbyMedia()
 {
+    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     LLView* popup_holder = gViewerWindow->getRootView()->getChildView("popup_holder");
     LLRect nearby_media_rect = mPanelNearByMedia->getRect();
     LLButton* nearby_media_btn =  getChild<LLButton>( "media_toggle_btn" );
@@ -1097,8 +1159,8 @@ void LLStatusBar::onMouseEnterNearbyMedia()
     LLUI::getInstance()->clearPopups();
     LLUI::getInstance()->addPopup(mPanelNearByMedia);
 
-    mPanelPresetsCameraPulldown->setVisible(false);
-    mPanelPresetsPulldown->setVisible(false);
+    if (mPanelPresetsCameraPulldown) mPanelPresetsCameraPulldown->setVisible(false);
+    if (mPanelPresetsPulldown) mPanelPresetsPulldown->setVisible(false);
     mPanelVolumePulldown->setVisible(false);
     mPanelNearByMedia->setVisible(true);
 }
@@ -1743,6 +1805,7 @@ void LLStatusBar::onAgentParcelChange()
 
 void LLStatusBar::onContextMenuItemClicked(const LLSD::String& item)
 {
+    if (native_status_bar() && item == "landmark") { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     if (item == "landmark")
     {
         if (!gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC))
@@ -1772,6 +1835,7 @@ void LLStatusBar::onContextMenuItemClicked(const LLSD::String& item)
 
 void LLStatusBar::onInfoButtonClicked()
 {
+    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     if (gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC))
     {
         return;
@@ -1781,6 +1845,7 @@ void LLStatusBar::onInfoButtonClicked()
 
 void LLStatusBar::onBuyLandClicked()
 {
+    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     if (gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC))
     {
         return;

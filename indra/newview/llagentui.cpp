@@ -27,12 +27,16 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llagentui.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 // Library includes
 #include "llparcel.h"
 
 // Viewer includes
 #include "llagent.h"
+#include "llagentdata.h"
 #include "llviewercontrol.h"
 #include "llviewerregion.h"
 #include "llviewerparcelmgr.h"
@@ -52,6 +56,11 @@
 //static
 void LLAgentUI::buildFullname(std::string& name)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active(); session && session->phase() == VSNativeSession::Phase::Connected)
+        name = gAgentUsername;
+    else
+#endif
     if (isAgentAvatarValid())
         name = gAgentAvatarp->getFullname();
 }
@@ -59,6 +68,10 @@ void LLAgentUI::buildFullname(std::string& name)
 //static
 void LLAgentUI::buildSLURL(LLSLURL& slurl, const bool escaped /*= true*/)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active(); session && session->phase() == VSNativeSession::Phase::Connected)
+    { slurl = LLSLURL(session->regionName(), session->position()); return; }
+#endif
     LLSLURL return_slurl;
     LLViewerRegion *regionp = gAgent.getRegion();
     if (regionp)
@@ -99,6 +112,19 @@ bool LLAgentUI::checkAgentDistance(const LLVector3& pole, F32 radius)
 }
 bool LLAgentUI::buildLocationString(std::string& str, ELocationFormat fmt,const LLVector3& agent_pos_region)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active(); session && session->phase() == VSNativeSession::Phase::Connected)
+    {
+        const auto& pos = session->position();
+        const auto access = LLViewerRegion::accessToString(session->access());
+        str = session->regionName();
+        if (fmt != LOCATION_FORMAT_LANDMARK && fmt != LOCATION_FORMAT_NORMAL && fmt != LOCATION_FORMAT_NO_COORDS && fmt != LOCATION_FORMAT_V1_NO_COORDS)
+            str += llformat(" (%d, %d, %d)", ll_round(pos.mV[VX]), ll_round(pos.mV[VY]), ll_round(pos.mV[VZ]));
+        if (fmt == LOCATION_FORMAT_NO_COORDS || fmt == LOCATION_FORMAT_FULL || fmt == LOCATION_FORMAT_V1 || fmt == LOCATION_FORMAT_V1_NO_COORDS)
+            str += " - " + access;
+        return !str.empty();
+    }
+#endif
     LLViewerRegion* region = gAgent.getRegion();
     LLParcel* parcel = LLViewerParcelMgr::getInstance()->getAgentParcel();
 

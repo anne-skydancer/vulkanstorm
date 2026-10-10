@@ -26,6 +26,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "llpanelpeople.h"
 
 #include "llgroupactions.h"
 
@@ -130,6 +131,13 @@ public:
         {
             if (tokens[1].asString() == "show")
             {
+#if VS_NATIVE_VULKAN
+                if (gViewerWindow && gViewerWindow->isNativeVulkan())
+                {
+                    LLPanelPeople::showNativeAccountTab("groups");
+                    return true;
+                }
+#endif
                 // <FS:Ansariel> Obey FSUseV2Friends setting where to open the group list
                 //LLSD params;
                 //params["people_panel_tab_name"] = "groups_panel";
@@ -170,6 +178,10 @@ public:
         {
             if (group_id.isNull())
                 return true;
+#if VS_NATIVE_VULKAN
+            if (gViewerWindow && gViewerWindow->isNativeVulkan()) LLGroupActions::show(group_id);
+            else
+#endif
             LLGroupActions::inspect(group_id);
             return true;
         }

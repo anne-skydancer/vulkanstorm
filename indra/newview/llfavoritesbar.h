@@ -28,6 +28,7 @@
 #define LL_LLFAVORITESBARCTRL_H
 
 #include "llbutton.h"
+#include <typeinfo>
 #include "lluictrl.h"
 #include "lltextbox.h"
 
@@ -42,6 +43,8 @@ class LLToggleableMenu;
 class LLFavoritesBarCtrl : public LLUICtrl, public LLInventoryObserver
 {
 public:
+    static bool isNativeInternalType(const std::type_info& type);
+    void handleNativeLoginComplete();
     struct Params : public LLInitParam::Block<Params, LLUICtrl::Params>
     {
         Optional<LLUIImage*> image_drag_indication;
@@ -204,6 +207,9 @@ public:
     void removeSortIndex(const LLUUID& inv_item_id);
 
     void getSLURL(const LLUUID& asset_id);
+
+    // Retire account caches after saving, or reload after the next account directory is selected.
+    void resetAccount(bool load_from_account);
 
     // Saves current order of the passed items using inventory item sort field.
     // Resets 'items' sort fields and saves them on server.

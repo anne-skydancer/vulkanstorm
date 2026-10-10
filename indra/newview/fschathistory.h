@@ -38,6 +38,7 @@ class LLChatEntry;  // <FS_Zi> FIRE-8602: Typing in chat history focuses chat in
 class FSChatHistory : public LLTextEditor   // <FS:Zi> FIRE-8600: TAB out of chat history
 {
     public:
+        static bool isNativeCallback(const std::string& name, const LLSD& data);
         struct Params : public LLInitParam::Block<Params, LLTextEditor::Params>
         {
             //Message header filename

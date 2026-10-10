@@ -43,6 +43,9 @@
 #include "llgesturemgr.h"
 #include "llgiveinventory.h"
 #include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llgltfmateriallist.h"
 #include "llhudmanager.h"
 #include "llhudeffecttrail.h"
@@ -355,7 +358,12 @@ void LLToolDragAndDrop::beginDrag(EDragAndDropType type,
     mObjectID = object_id;
 
     setMouseCapture( true );
-    LLToolMgr::getInstance()->setTransientTool( this );
+    // Native connected UI owns mouse capture directly; selecting a world tool
+    // would construct camera/inspect services which this text-only session lacks.
+#if VS_NATIVE_VULKAN
+    if (!VSNativeSession::active())
+#endif
+        LLToolMgr::getInstance()->setTransientTool( this );
     mCursor = UI_CURSOR_NO;
     if ((mCargoTypes[0] == DAD_CATEGORY)
        && ((mSource == SOURCE_AGENT) || (mSource == SOURCE_LIBRARY)))
@@ -422,7 +430,12 @@ void LLToolDragAndDrop::beginMultiDrag(
     mSourceID = source_id;
 
     setMouseCapture( true );
-    LLToolMgr::getInstance()->setTransientTool( this );
+    // Native connected UI owns mouse capture directly; selecting a world tool
+    // would construct camera/inspect services which this text-only session lacks.
+#if VS_NATIVE_VULKAN
+    if (!VSNativeSession::active())
+#endif
+        LLToolMgr::getInstance()->setTransientTool( this );
     mCursor = UI_CURSOR_NO;
     if ((mSource == SOURCE_AGENT) || (mSource == SOURCE_LIBRARY))
     {
@@ -468,14 +481,20 @@ void LLToolDragAndDrop::beginMultiDrag(
 void LLToolDragAndDrop::endDrag()
 {
     mEndDragSignal();
-    LLSelectMgr::getInstance()->unhighlightAll();
+#if VS_NATIVE_VULKAN
+    if (!VSNativeSession::active())
+#endif
+        LLSelectMgr::getInstance()->unhighlightAll();
     setMouseCapture(false);
 }
 
 void LLToolDragAndDrop::onMouseCaptureLost()
 {
     // Called whenever the drag ends or if mouse capture is simply lost
-    LLToolMgr::getInstance()->clearTransientTool();
+#if VS_NATIVE_VULKAN
+    if (!VSNativeSession::active())
+#endif
+        LLToolMgr::getInstance()->clearTransientTool();
     mCargoTypes.clear();
     mCargoIDs.clear();
     mSource = SOURCE_AGENT;
@@ -789,6 +808,16 @@ void LLToolDragAndDrop::dragOrDrop( S32 x, S32 y, MASK mask, bool drop,
 
     if (!handled)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            // Toolbar and account inventory drops use the shared UI targets.
+            // An unhandled drop has no world target in a text-only session.
+            *acceptance = ACCEPT_NO;
+            mLastAccept = ACCEPT_NO;
+            return;
+        }
+#endif
         // Disallow drag and drop to 3D from the marketplace
         const LLUUID marketplacelistings_id = gInventory.getMarketplaceListingsUUID();
         if (marketplacelistings_id.notNull())

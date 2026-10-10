@@ -5,6 +5,10 @@
 #include "llbutton.h"
 #include "lltextbox.h"
 #include "lltrans.h"
+#include "llchat.h"
+#include "llchatentry.h"
+#include "fsfloaternearbychat.h"
+#include "llviewercontrol.h"
 #include "lluictrlfactory.h"
 #include <stdexcept>
 
@@ -65,14 +69,59 @@ bool VSPlainChat::submit()
 }
 void VSPlainChat::append(const std::string& text)
 {
+    if (mSharedFrontend)
+    {
+        LLChat chat;
+        chat.mSourceType = CHAT_SOURCE_SYSTEM;
+        chat.mText = text;
+        LLSD args; args["do_not_log"] = true;
+        if (auto* floater = FSFloaterNearbyChat::findInstance()) floater->addMessage(chat, true, args);
+    }
     // Limit history before appending so the editor never silently drops new text.
     const std::string bounded = wstring_to_utf8str(utf8str_to_wstring(text).substr(0, 8192));
     while (mTranscript->getText().size() + bounded.size() + 1 > 65536)
         if (mTranscript->removeFirstLine() <= 0) { mTranscript->setText(LLStringExplicit("")); break; }
     mTranscript->appendText(bounded, !mTranscript->getText().empty());
 }
+void VSPlainChat::appendChat(const LLChat& chat)
+{
+    if (mSharedFrontend)
+    {
+        LLSD args; args["do_not_log"] = true; // Session/IM owner already applies account log policy.
+        if (auto* floater = FSFloaterNearbyChat::findInstance()) floater->addMessage(chat, true, args);
+    }
+    // Keep protocol evidence without stripping metadata from the real frontend.
+    const bool shared = mSharedFrontend;
+    mSharedFrontend = false;
+    const std::string prefix = chat.mChatType == CHAT_TYPE_IM || chat.mChatType == CHAT_TYPE_IM_GROUP ? "IM: " : "";
+    append(prefix + chat.mFromNameGroup + chat.mFromName + (chat.mFromName.empty() ? "" : ": ") + chat.mText);
+    mSharedFrontend = shared;
+}
+bool VSPlainChat::useSharedFrontend(bool enabled)
+{
+    if (enabled == mSharedFrontend) return true;
+    if (enabled)
+    {
+        auto* floater = FSFloaterNearbyChat::getInstance();
+        if (!floater) return false;
+        if (gSavedPerAccountSettings.getBOOL("LogShowHistory")) floater->loadHistory();
+        floater->openFloater(LLSD());
+        floater->getChatBox()->setFocus(true);
+    }
+    else if (auto* floater = FSFloaterNearbyChat::findInstance()) floater->setVisible(false);
+    mSharedFrontend = enabled;
+    setVisible(!enabled);
+    return true;
+}
 void VSPlainChat::clear()
 {
+    if (mSharedFrontend)
+        if (auto* floater = FSFloaterNearbyChat::findInstance())
+        {
+            floater->clearChatHistory();
+            floater->setVisible(false);
+        }
+    mSharedFrontend = false;
     setSender({});
     setSession("", {});
     mInput->clearHistory();

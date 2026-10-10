@@ -6,12 +6,69 @@ from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
 import threading
+import tempfile
+import os
 import http.client
 import xmlrpc.client
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT
+from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_replay_profile_is_fresh_and_does_not_mutate_parent_environment(self):
+        parent = dict(os.environ)
+        with tempfile.TemporaryDirectory() as directory:
+            source = dict(APPDATA='user-roaming', LOCALAPPDATA='user-local',
+                          VULKANSTORM_X64_USER_DIR='user-linux', OTHER_SETTING='preserved')
+            original = dict(source)
+            windows, first = isolated_profile_environment(source, directory, True)
+            repeated, second = isolated_profile_environment(source, directory, True)
+            linux, third = isolated_profile_environment(source, directory, False)
+            self.assertEqual(len({first, second, third}), 3, 'Retries must not inherit aborted-run settings')
+            for profile in [first, second, third]:
+                self.assertTrue(profile.is_relative_to(Path(directory).resolve()))
+                self.assertTrue((profile / 'cache').is_dir())
+            for env in [windows, repeated]:
+                self.assertTrue(Path(env['APPDATA']).is_dir())
+                self.assertTrue(Path(env['LOCALAPPDATA']).is_dir())
+            self.assertTrue(Path(linux['VULKANSTORM_X64_USER_DIR']).is_dir())
+            self.assertEqual(linux['VULKANSTORM_USER_DIR'], linux['VULKANSTORM_X64_USER_DIR'])
+            self.assertEqual(windows['OTHER_SETTING'], 'preserved')
+            self.assertEqual(source, original)
+        self.assertEqual(dict(os.environ), parent)
+
+    def test_native_transport_handlers_match_packaged_wire_schema(self):
+        root = Path(__file__).resolve().parents[2]
+        template = (root / 'scripts/messages/message_template.msg').read_text()
+        messages = set(re.findall(r'\{\s*(\w+)\s+(?:Low|Medium|High|Fixed)\s+', template))
+        source = (root / 'indra/newview/vsnativesession.cpp').read_text()
+        install = source.split('void VSNativeSession::install(', 1)[1].split('void VSNativeSession::', 1)[0]
+        handlers = re.findall(r'setHandlerFunc\("(\w+)"', install)
+        for names in re.findall(r'for \(const char\* name : \{([^}]+)\}\)', install):
+            handlers.extend(re.findall(r'"(\w+)"', names))
+        self.assertTrue(handlers, 'Production native transport handlers must be surveyed')
+        for name in handlers:
+            with self.subTest(handler=name):
+                self.assertIn(name, messages, 'Native handler registration must use a real packaged message')
+        reply = re.search(r'RegionIDAndHandleReply\s+Low\s+310\s+Trusted\s+Unencoded\s*\{\s*ReplyBlock\s+Single\s*\{\s*RegionID\s+LLUUID\s*\}\s*\{\s*RegionHandle\s+U64\s*\}', template)
+        self.assertIsNotNone(reply, 'Landmark reply decoder requires UUID/U64 ReplyBlock schema')
+        self.assertIn('msg->getUUID("ReplyBlock", "RegionID", id)', source)
+        self.assertIn('msg->getU64("ReplyBlock", "RegionHandle", handle)', source)
+
+    def test_server_im_fixtures_include_packaged_required_tail(self):
+        root = Path(__file__).resolve().parents[2]
+        template = (root / 'scripts/messages/message_template.msg').read_text()
+        schema = template.split('ImprovedInstantMessage Low 254', 1)[1].split('// RetrieveInstantMessages', 1)[0]
+        self.assertRegex(schema, r'EstateBlock\s+Single\s*\{\s*EstateID\s+U32\s*\}')
+        self.assertRegex(schema, r'MetaData\s+Variable\s*\{\s*Data\s+Variable\s+2\s*\}')
+        replay = (root / 'indra/newview/vsnativeimreplay.cpp').read_text()
+        server_packets = re.findall(r'pack_instant_message\(.*?sendReliable\(owner.host\(\)\);', replay, re.S)
+        self.assertTrue(server_packets)
+        for packet in server_packets:
+            self.assertIn('finishServerIM();', packet, 'Server fixture packets must include required EstateBlock tail')
+        tail = replay.split('void finishServerIM()', 1)[1].split('void incoming(', 1)[0]
+        self.assertIn('nextBlock("EstateBlock")', tail)
+        self.assertIn('addU32("EstateID", 0)', tail)
+
     def test_native_notifications_have_packaged_templates(self):
         root = Path(__file__).resolve().parents[2]
         notifications = ET.parse(root / 'indra/newview/skins/default/xui/en/notifications.xml')
@@ -134,12 +191,51 @@ class SessionEvidenceTests(unittest.TestCase):
                 server.shutdown()
                 worker.join()
 
+    def test_favorites_transport_cannot_be_replaced_by_other_inventory(self):
+        real = dict(path='/inventory', request=dict(folders=[dict(
+            folder_id='70000000-0000-0000-0000-000000000016', fetch_items=True)]))
+        self.assertTrue(favorites_fetch_observed([real]))
+        self.assertFalse(favorites_fetch_observed([]))
+        real['request']['folders'][0]['folder_id'] = INVENTORY_ROOT
+        self.assertFalse(favorites_fetch_observed([real]))
+        real['request']['folders'][0]['folder_id'] = '70000000-0000-0000-0000-000000000016'
+        real['request']['folders'][0]['fetch_items'] = False
+        self.assertFalse(favorites_fetch_observed([real]))
+
+    def test_favorite_inventory_and_landmark_asset_are_real_fixture_data(self):
+        with SimulatorHTTP() as server:
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            connection = http.client.HTTPConnection(*server.server_address, timeout=5)
+            try:
+                request = dict(folders=[dict(folder_id='70000000-0000-0000-0000-000000000016',
+                    owner_id='10000000-0000-0000-0000-000000000001', fetch_items=True, fetch_folders=True)])
+                root = ET.Element('llsd'); append_llsd(root, request)
+                connection.request('POST', '/inventory', ET.tostring(root))
+                response = connection.getresponse(); self.assertEqual(response.status, 200)
+                folder = read_llsd(ET.fromstring(response.read()))['folders'][0]
+                self.assertEqual(folder['descendents'], len(folder['items']) + len(folder['categories']))
+                item = folder['items'][0]
+                self.assertEqual(item['type'], 'landmark')
+                self.assertEqual(item['inv_type'], 'landmark')
+                self.assertEqual(item['parent_id'], folder['folder_id'])
+                connection.request('GET', '/asset/?landmark_id=' + item['asset_id'])
+                response = connection.getresponse(); self.assertEqual(response.status, 200)
+                self.assertEqual(response.read(), b'Landmark version 2\nregion_id 40000000-0000-0000-0000-000000000004\nlocal_pos 128 128 25\n')
+            finally:
+                connection.close(); server.shutdown(); worker.join()
+
     def test_inventory_upload_requires_handshake_and_encoded_image(self):
         with SimulatorHTTP() as server:
             worker = threading.Thread(target=server.serve_forever, daemon=True)
             worker.start()
             connection = http.client.HTTPConnection(*server.server_address, timeout=5)
             try:
+                connection.request('POST', '/upload-data/texture', bytes.fromhex('ff4fff51'))
+                response = connection.getresponse()
+                self.assertEqual(response.status, 400)
+                self.assertEqual(read_llsd(ET.fromstring(response.read()))['state'], 'error')
+                self.assertEqual(server.requests, [], 'Upload bytes bypassed required handshake')
                 metadata = dict(folder_id='70000000-0000-0000-0000-000000000003',
                                 asset_type='texture', inventory_type='texture',
                                 name='Native uploaded texture', description='Fixture upload',
@@ -153,7 +249,11 @@ class SessionEvidenceTests(unittest.TestCase):
                 connection.request('POST', '/upload-data/texture', b'invalid image')
                 response = connection.getresponse()
                 self.assertEqual(response.status, 400)
-                response.read()
+                self.assertEqual(read_llsd(ET.fromstring(response.read()))['state'], 'error')
+                self.assertEqual(server.requests[-1]['path'], '/upload-request',
+                                 'Rejected image must not produce an accepted upload receipt')
+                # Retrying on the same connection proves that the rejected body
+                # was consumed and its HTTP response remained correctly framed.
                 data = (Path(__file__).resolve().parents[2] / 'indra/newview/skins/default/textures/transparent.j2c').read_bytes()
                 connection.request('POST', '/upload-data/texture', data)
                 response = connection.getresponse()

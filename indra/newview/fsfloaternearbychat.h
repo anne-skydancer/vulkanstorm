@@ -167,6 +167,8 @@ private:
 
     bool FSUseNearbyChatConsole;
 
+    boost::signals2::scoped_connection mConsoleSettingConnection;
+    boost::signals2::scoped_connection mMutedHistorySettingConnection;
     boost::signals2::connection mRecentEmojisUpdatedCallbackConnection{};
     boost::signals2::connection mEmojiCloseConn{};
     boost::signals2::connection mRlvBehaviorCallbackConnection{};

@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import threading
+import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import xml.etree.ElementTree as ET
@@ -55,7 +56,7 @@ def append_llsd(parent, value):
     else:
         ET.SubElement(parent, 'string').text = str(value)
 
-REQUIRED = ('connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
+REQUIRED = ('connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
             'connected_inventory_texture_upload', 'connected_inventory_sound_upload',
             'connected_group_titles', 'connected_group_directory_search',
             'connected_inventory_share', 'connected_resident_pay', 'connected_payment_balance_gate',
@@ -71,7 +72,7 @@ REQUIRED = ('connected_skin_geometry', 'connected_account_benefits', 'connected_
             'im_group_event_error', 'im_group_force_close', 'im_callback_expired',
             'login_authentication', 'login_challenge', 'login_account_setup', 'notification_storage', 'malformed', 'unknown', 'wrong_host', 'udp_chat', 'http_gate', 'udp_gate',
             'queued_expired', 'relogin', 'chat_submit', 'typing', 'settings_gate', 'readback',
-            'partial_init_cleanup', 'connection_timeout', 'encoded_chat', 'encoded_typing', 'ui_gate', 'logout_timeout', 'crossing_disconnect', 'encoded_channels', 'queued_http_chat', 'mute_request', 'mute_transfer_cleanup', 'input_history', 'status_messages', 'connected_timeout', 'reliable_failure')
+            'partial_init_cleanup', 'connection_timeout', 'encoded_chat', 'encoded_typing', 'ui_gate', 'logout_timeout', 'native_people_account_ui', 'native_navigation_request', 'native_navigation_transition', 'native_navigation_epoch', 'native_navigation_identity', 'native_navigation_local', 'native_location_lookup', 'native_landmark_v2', 'encoded_channels', 'queued_http_chat', 'mute_request', 'mute_transfer_cleanup', 'input_history', 'status_messages', 'connected_timeout', 'reliable_failure')
 
 
 def read_llsd(element):
@@ -105,6 +106,35 @@ def assess(record, returncode, log):
             and not re.search(r'with no handler function received: \w+Reply\b', log))
 
 
+def isolated_profile_environment(environment, evidence, windows):
+    """Use existing LLDir overrides only in the spawned viewer environment."""
+    evidence = Path(evidence).resolve()
+    evidence.mkdir(parents=True, exist_ok=True)
+    profile = Path(tempfile.mkdtemp(prefix='profile-', dir=evidence)).resolve()
+    result = dict(environment)
+    if windows:
+        for name, child in [('APPDATA', 'roaming'), ('LOCALAPPDATA', 'local')]:
+            target = profile / child
+            target.mkdir()
+            result[name] = str(target)
+    else:
+        target = profile / 'application'
+        target.mkdir()
+        # APP_NAME is Vulkanstorm; ADDRESS_SIZE64 initAppDirs appends _x64.
+        result['VULKANSTORM_X64_USER_DIR'] = str(target)
+        result['VULKANSTORM_USER_DIR'] = str(target)
+    (profile / 'cache').mkdir()
+    return result, profile
+
+
+def favorites_fetch_observed(requests):
+    """Require account favorites to come through the real descendants service."""
+    return any(record.get('path') == '/inventory' and any(
+        folder.get('folder_id') == '70000000-0000-0000-0000-000000000016'
+        and folder.get('fetch_items') is True
+        for folder in record.get('request', {}).get('folders', [])) for record in requests)
+
+
 class SimulatorHTTP(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -135,10 +165,10 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-    def respond_llsd(self, body):
+    def respond_llsd(self, body, status=200):
         root = ET.Element('llsd'); append_llsd(root, body)
         data = ET.tostring(root, encoding='utf-8')
-        self.send_response(200)
+        self.send_response(status)
         self.send_header('Content-Type', 'application/llsd+xml')
         self.send_header('Content-Length', str(len(data)))
         self.end_headers()
@@ -148,7 +178,11 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path.rstrip('/') == '/asset':
             query = parse_qs(urlsplit(self.path).query)
-            if query.get('lsltext_id') == ['60000000-0000-0000-0000-000000000009']:
+            if query.get('texture_id'):
+                data = (Path(__file__).resolve().parents[1] / 'indra/newview/skins/default/textures/transparent.j2c').read_bytes()
+            elif query.get('landmark_id') == ['60000000-0000-0000-0000-000000000020']:
+                data = b'Landmark version 2\nregion_id 40000000-0000-0000-0000-000000000004\nlocal_pos 128 128 25\n'
+            elif query.get('lsltext_id') == ['60000000-0000-0000-0000-000000000009']:
                 data = b'default { state_entry() { llOwnerSay("Native initial script"); } }'
             elif (query.get('sound_id') == ['60000000-0000-0000-0000-000000000008']
                   and self.server.upload_directory is not None
@@ -266,7 +300,10 @@ class Handler(BaseHTTPRequestHandler):
             valid_signature = (kind == 'texture' and payload.startswith(bytes.fromhex('ff4fff51'))) or (
                 kind == 'sound' and payload.startswith(b'OggS') and b'vorbis' in payload[:128])
             if not metadata or not valid_signature:
-                self.send_error(400)
+                # The bounded request body has been consumed. Return a fully
+                # framed error on this connection; send_error closes the socket
+                # and can reset a Windows client before it reads the error body.
+                self.respond_llsd(dict(state='error', message='Missing upload handshake or invalid encoded asset'), status=400)
                 return
             if self.server.upload_directory:
                 self.server.upload_directory.mkdir(parents=True, exist_ok=True)
@@ -426,7 +463,19 @@ class Handler(BaseHTTPRequestHandler):
                                         ('version', 'integer', '1'), ('descendents', 'integer', str(len(children)))]:
                     ET.SubElement(result, 'key').text = key; ET.SubElement(result, tag).text = value
                 ET.SubElement(result, 'key').text = 'categories'; append_llsd(result, children)
-                ET.SubElement(result, 'key').text = 'items'; ET.SubElement(result, 'array')
+                favorites = folder['folder_id'] == '70000000-0000-0000-0000-000000000016'
+                landmark_items = [dict(item_id='71000000-0000-0000-0000-000000000020',
+                    parent_id=folder['folder_id'], asset_id='60000000-0000-0000-0000-000000000020',
+                    type='landmark', inv_type='landmark', flags=1, name='Native favorite', desc='Replay connected landmark',
+                    created_at=1, permissions=dict(base_mask=2147483647, owner_mask=2147483647,
+                    group_mask=0, everyone_mask=0, next_owner_mask=2147483647,
+                    creator_id='10000000-0000-0000-0000-000000000001', owner_id='10000000-0000-0000-0000-000000000001',
+                    last_owner_id='10000000-0000-0000-0000-000000000001', group_id='00000000-0000-0000-0000-000000000000',
+                    is_owner_group=False), sale_info=dict(sale_type=0, sale_price=0))] if favorites else []
+                if favorites:
+                    for idx, element in enumerate(list(result)):
+                        if element.tag == 'key' and element.text == 'descendents': list(result)[idx+1].text = str(len(children) + len(landmark_items))
+                ET.SubElement(result, 'key').text = 'items'; append_llsd(result, landmark_items)
         elif self.path == '/message':
             root = ET.Element('llsd'); append_llsd(root, {})
         elif self.path in ('/user-info', '/agent-info', '/agent-language'):
@@ -473,6 +522,7 @@ class Handler(BaseHTTPRequestHandler):
                     ('Audible', 'integer', '1'), ('Message', 'string', 'Native event queue chat')):
                     ET.SubElement(row, 'key').text = name
                     ET.SubElement(row, tag).text = value
+                ET.SubElement(row, 'key').text = 'Position'; append_llsd(row, [128.0, 128.0, 25.0])
         else:
             self.send_error(404)
             return
@@ -556,6 +606,9 @@ def main():
                  'im/session-chat.ppm', 'im/session-chat-expected.ppm', 'results.json'):
         (directory / name).unlink(missing_ok=True)
     env = {key: value for key, value in os.environ.items() if not key.startswith('VS_VULKAN_DIAGNOSTIC')}
+    env, isolated_profile = isolated_profile_environment(env, directory, windows)
+    (directory / 'profile-isolation.json').write_text(json.dumps(dict(profile=str(isolated_profile),
+        platform='windows' if windows else 'linux'), indent=2) + '\n')
     for key in ('VK_ICD_FILENAMES', 'VK_ADD_DRIVER_FILES', 'VK_ADD_LAYER_PATH', 'VK_INSTANCE_LAYERS',
                 'VK_LOADER_DRIVERS_SELECT', 'VK_LOADER_DRIVERS_DISABLE', 'VK_LAYER_ENABLES', 'VK_LAYER_DISABLES'):
         env.pop(key, None)
@@ -580,6 +633,8 @@ def main():
     # Empty theme strings cannot survive the viewer's command-line tokenizer.
     command.extend(['--sessionsettings', str(selection_file)])
     command.extend(['--set', 'UIScaleFactor', str(args.ui_scale)])
+    command.extend(['--set', 'CacheLocation', str(isolated_profile / 'cache'),
+                    '--set', 'FSUseNearbyChatConsole', 'true'])
     report = {}; log = ''; code = None; passed = False
     with SimulatorHTTP() as server:
         server.upload_directory = directory / 'upload-bodies'
@@ -593,6 +648,9 @@ def main():
             code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
             report = read_llsd(ET.parse(directory / 'session-replay.xml').getroot())
             passed = assess(report, code, log)
+            report['favorites_inventory_fetch'] = favorites_fetch_observed(server.requests)
+            if not report['favorites_inventory_fetch']:
+                raise RuntimeError('Native favorites never fetched their real account descendants')
             for suffix in ('', '-expected'):
                 if (directory / ('session-chat' + suffix + '.ppm')).stat().st_size < 640 * 480 * 3:
                     raise RuntimeError('Missing native chat readback')

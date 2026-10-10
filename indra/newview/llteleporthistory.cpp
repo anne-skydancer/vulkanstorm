@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llteleporthistory.h"
 
@@ -102,6 +105,13 @@ void LLTeleportHistory::goToItem(int idx)
         return;
     }
 
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active())
+    {
+        if (session->teleportToRegion(mItems[idx].mSLURL.getRegion(), mItems[idx].mSLURL.getPosition())) mRequestedItem = idx;
+        return;
+    }
+#endif
     // <FS:TJ> [FIRE-35355] OpenSim global position is dependent on the Grid you are on
     #ifdef OPENSIM
     if (LLGridManager::getInstance()->isInOpenSim())
@@ -183,6 +193,22 @@ static void on_avatar_name_update_title(const LLAvatarName& av_name)
 
 void LLTeleportHistory::updateCurrentLocation(const LLVector3d& new_pos)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active(); session && session->phase() == VSNativeSession::Phase::Connected)
+    {
+        if (mRequestedItem >= 0 && mRequestedItem < (int)mItems.size())
+        { mCurrentItem = mRequestedItem; mRequestedItem = -1; }
+        else
+        {
+            if (mCurrentItem >= 0 && mCurrentItem + 1 < (int)mItems.size()) mItems.erase(mItems.begin() + mCurrentItem + 1, mItems.end());
+            const LLSLURL slurl(session->regionName(), session->position());
+            LLTeleportHistoryItem item(session->regionName(), new_pos, slurl);
+            item.mFullTitle = session->regionName() + llformat(" (%d, %d, %d)", ll_round(session->position().mV[VX]), ll_round(session->position().mV[VY]), ll_round(session->position().mV[VZ]));
+            mItems.push_back(item); mCurrentItem = (int)mItems.size() - 1;
+        }
+        mGotInitialUpdate = true; mHistoryChangedSignal(); return;
+    }
+#endif
     if (!gAgent.getRegion()) return;
 
     if (!mTeleportHistoryStorage)
@@ -297,6 +323,13 @@ boost::signals2::connection LLTeleportHistory::setHistoryChangedCallback(history
 void LLTeleportHistory::onHistoryChanged()
 {
     mHistoryChangedSignal();
+}
+
+void LLTeleportHistory::resetNativeSession()
+{
+    mItems.clear(); mCurrentItem = -1; mRequestedItem = -1;
+    mGotInitialUpdate = false; mTeleportHistoryStorage = nullptr;
+    onHistoryChanged();
 }
 
 void LLTeleportHistory::purgeItems()

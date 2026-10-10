@@ -44,6 +44,7 @@ public:
 
     LLLandmarkList() {}
     ~LLLandmarkList();
+    void resetAccount();
 
     //S32                   getLength() { return mList.getLength(); }
     //const LLLandmark* getFirst()  { return mList.getFirstData(); }

@@ -66,8 +66,10 @@ void LLStatGraph::draw()
 {
     F32 range, frac;
     range = mMax - mMin;
-    if (mNewStatFloatp)
+    bool sample_available = !mNewStatFloatp;
+    if (mNewStatFloatp && LLTrace::get_frame_recording().getNumRecordedPeriods() > 0)
     {
+        sample_available = true;
         LLTrace::Recording& recording = LLTrace::get_frame_recording().getLastRecording();
 
         if (mPerSec)
@@ -91,7 +93,7 @@ void LLStatGraph::draw()
         }
     }
 
-    frac = (mValue - mMin) / range;
+    frac = sample_available && range > 0.f ? (mValue - mMin) / range : 0.f;
     frac = llmax(0.f, frac);
     frac = llmin(1.f, frac);
 
@@ -100,13 +102,14 @@ void LLStatGraph::draw()
         std::string format_str;
         std::string tmp_str;
         format_str = llformat("%%s%%.%df%%s", mPrecision);
-        tmp_str = llformat(format_str.c_str(), mLabel.c_str(), mValue, mUnits.c_str());
+        tmp_str = sample_available ? llformat(format_str.c_str(), mLabel.c_str(), mValue, mUnits.c_str())
+                                   : mLabel + "--" + mUnits;
         setToolTip(tmp_str);
 
         mUpdateTimer.reset();
     }
 
-    threshold_vec_t::iterator it = std::lower_bound(mThresholds.begin(), mThresholds.end(), Threshold(mValue / mMax, LLUIColor()));
+    threshold_vec_t::iterator it = std::lower_bound(mThresholds.begin(), mThresholds.end(), Threshold(sample_available && mMax > 0.f ? mValue / mMax : 0.f, LLUIColor()));
 
     if (it != mThresholds.begin())
     {
@@ -114,14 +117,9 @@ void LLStatGraph::draw()
     }
 
     static LLUIColor default_color = LLUIColorTable::instance().getColor( "MenuDefaultBgColor" );
-    gGL.color4fv(default_color.get().mV);
-    gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 0, true);
-
-    gGL.color4fv(LLColor4::black.mV);
-    gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 0, false);
-
-    gGL.color4fv(it->mColor().mV);
-    gl_rect_2d(1, ll_round(frac*getRect().getHeight()), getRect().getWidth() - 1, 0, true);
+    gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 0, default_color.get(), true);
+    gl_rect_2d(0, getRect().getHeight(), getRect().getWidth(), 0, LLColor4::black, false);
+    gl_rect_2d(1, ll_round(frac*getRect().getHeight()), getRect().getWidth() - 1, 0, (it != mThresholds.end() ? it->mColor() : LLColor4::green), true);
 }
 
 void LLStatGraph::setMin(const F32 min)

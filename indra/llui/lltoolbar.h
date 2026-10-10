@@ -29,6 +29,7 @@
 #define LL_LLTOOLBAR_H
 
 #include "llbutton.h"
+#include <typeinfo>
 #include "llcommandmanager.h"
 #include "lllayoutstack.h"
 #include "lluictrl.h"
@@ -207,6 +208,7 @@ class LLToolBar
 {
     friend class LLToolBarButton;
 public:
+    static bool isNativeInternalType(const std::type_info& type);
 
     class LLCenterLayoutPanel : public LLLayoutPanel
     {

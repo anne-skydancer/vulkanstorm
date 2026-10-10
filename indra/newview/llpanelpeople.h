@@ -38,6 +38,7 @@
 // [FS:CR] Contact sets
 #include "lggcontactsets.h"
 #include <boost/signals2.hpp>
+#include <string_view>
 
 class LLAvatarList;
 class LLAvatarName;
@@ -61,6 +62,9 @@ class LLPanelPeople
     LOG_CLASS(LLPanelPeople);
 public:
     LLPanelPeople();
+    static void showNativeAccountTab(const std::string& tab_name);
+    static bool nativeAccountTabVisible(std::string_view tab_name);
+    static bool isNativeCallback(const std::string& name, const LLSD& data);
     virtual ~LLPanelPeople();
 
     bool postBuild() override;
