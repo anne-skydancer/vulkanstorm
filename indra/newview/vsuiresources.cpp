@@ -14,6 +14,12 @@
 namespace
 {
 void check(bool condition,const char* text) { if (!condition) throw std::runtime_error(text); }
+float nativeVertexColor(float value)
+{
+    // LLRender::color4f stores a normalized U8 vertex channel, truncating
+    // after clamp. Preserve that representation for image/primitive parity.
+    return static_cast<U8>(llclamp(value, 0.f, 1.f) * 255.f) / 255.f;
+}
 VSUIRenderer::Blend nativeBlend()
 {
     if (!LLRender2D::isNativeUI()) return VSUIRenderer::Blend::StraightAlpha;
@@ -81,7 +87,7 @@ struct VSUIResources::Impl
             VSUIRenderer::Packet p; p.blend=nativeBlend(); p.image=a.image;
             p.bounds={x+origin[0]+l,logical_height-y-origin[1]-t,x+origin[0]+r,logical_height-y-origin[1]-b};
             p.uv={ul,1-vt,ur,1-vb}; p.clip=clip;
-            std::copy_n(color.mV,4,p.color.begin());
+            std::transform(color.mV, color.mV + 4, p.color.begin(), nativeVertexColor);
             // drawSolid uses the image alpha mask, with RGB replaced by tint.
             p.alpha_mask=solid;
             p.sampling=sampling;
@@ -315,7 +321,7 @@ void VSUIResources::rectangle(const LLRectf& r,const LLColor4& color)
     }
     VSUIRenderer::Packet p; p.blend=nativeBlend();p.image=c.assets.at(key).asset->image;
     p.bounds={r.mLeft/c.dpi,c.logical_height-r.mTop/c.dpi,r.mRight/c.dpi,c.logical_height-r.mBottom/c.dpi};
-    p.clip=c.clip;std::copy_n(color.mV,4,p.color.begin());c.packets.push_back(std::move(p));
+    p.clip=c.clip;std::transform(color.mV, color.mV + 4, p.color.begin(), nativeVertexColor);c.packets.push_back(std::move(p));
 }
 void VSUIResources::screenClip(const LLRect* rect)
 {
@@ -349,7 +355,7 @@ void VSUIResources::triangle(const std::array<std::array<float, 6>, 3>& vertices
     for (unsigned i=0; i<6; ++i)
     {
         const auto& v = vertices[i < 3 ? i : 2]; // A single triangle plus a degenerate triangle.
-        (*p.triangles)[i] = {v[0]/c.dpi, c.logical_height-v[1]/c.dpi, 0.f, 0.f, v[2],v[3],v[4],v[5]};
+        (*p.triangles)[i] = {v[0]/c.dpi, c.logical_height-v[1]/c.dpi, 0.f, 0.f, nativeVertexColor(v[2]),nativeVertexColor(v[3]),nativeVertexColor(v[4]),nativeVertexColor(v[5])};
     }
     c.packets.push_back(std::move(p));
 }

@@ -15,6 +15,9 @@
 #include "llscrollcontainer.h"
 #include "lltextbox.h"
 #include "lltexteditor.h"
+#include "lltabcontainer.h"
+#include "llimage.h"
+#include <cmath>
 #include "lltrans.h"
 #include "llui.h"
 #include "lluicolortable.h"
@@ -55,6 +58,7 @@ struct VSUIFixture::Impl
     LLTextEditor *transcript = nullptr;
     VSPlainChat *chat = nullptr;
     LLError::RecorderPtr log;
+    std::vector<std::array<unsigned,5>> tab_shade_probes;
     Impl(VSUIResources &r, LLWindow *window)
         : resources(r), admission(
                             widget, [](std::string_view) { return false; },
@@ -286,5 +290,61 @@ std::vector<VSUIRenderer::Packet> VSUIFixture::draw()
     auto packets=c.resources.finish();
     glow.insert(glow.end(),packets.begin(),packets.end());
     packets=std::move(glow);
+    // Resolve the same layered default inactive-tab declaration as the shared
+    // LLTabContainer, without changing skin colors or assets. The isolated
+    // swatches qualify tint/opacity; ordinary XUI above retains tab geometry.
+    const auto& defaults=LLUICtrlFactory::getDefaultParams<LLTabContainer>();
+    LLUIImage* selected=defaults.middle_tab().tab_top_image_unselected();
+    require(selected,"Selected skin has no middle inactive-tab image");
+    auto raw=c.resources.rawImage("skin:"+selected->getName());
+    require(raw && raw->getWidth()>0 && raw->getHeight()>0,
+            "Selected inactive-tab CPU asset was not published");
+    auto swatch=c.resources.region("skin:"+selected->getName(),"inactive-tab-shade-probe",
+                                  LLRectf(0,1,1,0));
+    c.tab_shade_probes.clear();
+    c.resources.begin(320,240,1);
+    LLRender2D::setSceneBlendType(LLRender::BT_REPLACE);
+    gl_rect_2d(176,49,248,25,LLColor4(.25f,.1875f,.125f,1.f));
+    LLRender2D::setSceneBlendType(LLRender::BT_ALPHA);
+    for(unsigned index=0;index<2;++index)
+    {
+        const unsigned left=176+index*40;
+        const LLColor4 tint(.267f,.953f,.5f,index?.7f:.5f);
+        swatch->draw(left,25,32,24,tint);
+        // Independently sample the decoded bottom-row-first asset at the
+        // actual pixel centre. This calculation never reads packet colors,
+        // nativeVertexColor, the shader, or the packet pixel oracle.
+        const float sx=(16.5f/32)*raw->getWidth()-.5f;
+        const float sy=(12.5f/24)*raw->getHeight()-.5f;
+        const int x0=static_cast<int>(std::floor(sx)),y0=static_cast<int>(std::floor(sy));
+        const float fx=sx-x0,fy=sy-y0;
+        std::array<float,4> texel{};
+        for(unsigned channel=0;channel<4;++channel)
+            for(int y=0;y<2;++y) for(int x=0;x<2;++x)
+            {
+                const int px=llclamp(x0+x,0,raw->getWidth()-1);
+                const int py=llclamp(y0+y,0,raw->getHeight()-1);
+                const auto* source=raw->getData()+(py*raw->getWidth()+px)*raw->getComponents();
+                const float value=channel<static_cast<unsigned>(raw->getComponents())?source[channel]/255.f:1.f;
+                texel[channel]+=value*(x?fx:1-fx)*(y?fy:1-fy);
+            }
+        // GL's color4f explicitly truncates normalized U8 vertex colors.
+        const float alpha=texel[3]*static_cast<U8>(tint.mV[3]*255.f)/255.f;
+        const unsigned background[]{63,47,31};
+        std::array<unsigned,5> probe{left+16,202,0,0,0};
+        for(unsigned channel=0;channel<3;++channel)
+        {
+            const float color=texel[channel]*static_cast<U8>(tint.mV[channel]*255.f)/255.f;
+            probe[channel+2]=static_cast<unsigned>(std::floor(
+                (color*alpha+background[channel]/255.f*(1-alpha))*255.f+.5f));
+        }
+        c.tab_shade_probes.push_back(probe);
+    }
+    auto shade_packets=c.resources.finish();
+    packets.insert(packets.end(),shade_packets.begin(),shade_packets.end());
+    std::cout<<"VIEWER_INACTIVE_TAB_ASSET="<<selected->getName()<<'\n';
     return packets;
 }
+
+std::vector<std::array<unsigned,5>> VSUIFixture::inactiveTabShadeProbes() const
+{ return mImpl->tab_shade_probes; }

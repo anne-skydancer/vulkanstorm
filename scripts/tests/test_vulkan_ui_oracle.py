@@ -6,6 +6,50 @@ import tempfile
 import unittest
 
 class OracleTest(unittest.TestCase):
+    def test_native_tint_matches_actual_gl_vertex_bytes(self):
+        root = Path(__file__).resolve().parents[2]
+        native_source = (root / 'indra/newview/vsuiresources.cpp').read_text()
+        helper = native_source[native_source.index('float nativeVertexColor('):native_source.index('VSUIRenderer::Blend nativeBlend()')]
+        gl_source = (root / 'indra/llrender/llrender.cpp').read_text()
+        gl = gl_source[gl_source.index('void LLRender::color4f('):gl_source.index('void LLRender::color4fv(')]
+        fixture = r'''#include <algorithm>
+#include <cassert>
+#include <cmath>
+using U8=unsigned char;using GLubyte=unsigned char;using GLfloat=float;
+template<class T>T llclamp(T v,T lo,T hi){return std::clamp(v,lo,hi);}
+struct LLRender { U8 bytes[4]{};void color4f(const GLfloat&,const GLfloat&,const GLfloat&,const GLfloat&);
+ void color4ub(U8 r,U8 g,U8 b,U8 a){bytes[0]=r;bytes[1]=g;bytes[2]=b;bytes[3]=a;} };
+''' + helper + gl + r'''
+int main(){
+ LLRender gl;
+ for(int i=-1;i<=256;++i){
+  for(float delta:{-0.000001f,0.f,0.000001f}){
+   float v=i/255.f+delta;gl.color4f(v,v,v,v);
+   for(U8 byte:gl.bytes)assert(nativeVertexColor(v)==byte/255.f);
+  }
+ }
+ for(float opacity:{0.f,.1f,.25f,.5f,.7f,.9f,1.f}){
+  gl.color4f(.267f,.953f,.5f,opacity);
+  assert(nativeVertexColor(opacity)==gl.bytes[3]/255.f);
+  // Independently known inactive-tab alpha blended onto a fixed background.
+  float src=68/255.f,alpha=157/255.f*gl.bytes[3]/255.f,dst=24/255.f;
+  float expected=src*alpha+dst*(1-alpha);
+  float actual=src*(157/255.f*nativeVertexColor(opacity))+dst*(1-157/255.f*nativeVertexColor(opacity));
+  assert(std::abs(expected-actual)<0.000001f);
+ }
+ assert(nativeVertexColor(.5f)==127/255.f);
+}
+'''
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'vertex_tint.cpp';path.write_text(fixture)
+            exe=Path(directory)/'vertex_tint.exe'
+            built=subprocess.run([compiler,'-std=c++17',str(path),'-o',str(exe)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            run=subprocess.run([str(exe)],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+
     def test_native_widget_strokes_center_fractional_width_and_outline_insets(self):
         root = Path(__file__).resolve().parents[2]
         compiler = shutil.which('clang++') or shutil.which('g++')
@@ -89,6 +133,7 @@ int main(){
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)
         source = (root / 'indra/newview/vsuiresources.cpp').read_text(encoding='utf-8')
+        color_helper = source[source.index('float nativeVertexColor('):source.index('VSUIRenderer::Blend nativeBlend()')]
         start = source.index('    void draw(const Asset&')
         opening = source.index('{', start)
         end, depth = opening + 1, 1
@@ -116,6 +161,9 @@ struct LLRender2D {
 };
 void check(bool condition,const char* text){if(!condition)throw std::runtime_error(text);}
 VSUIRenderer::Blend nativeBlend(){return VSUIRenderer::Blend::StraightAlpha;}
+using U8=unsigned char;
+template<class T>T llclamp(T v,T lo,T hi){return std::clamp(v,lo,hi);}
+NATIVE_COLOR_HELPER
 struct Canvas {
     struct Asset{unsigned width,height;VSUIRenderer::Image image;};
     bool active=true;float dpi=1.25f,logical_height=100;
@@ -159,6 +207,7 @@ int main(){
     close(c.packets[0].bounds[1],80);
 }
 """
+        fixture = fixture.replace('NATIVE_COLOR_HELPER', color_helper)
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'skin_nine_slice.cpp'
             path.write_text(fixture, encoding='utf-8')

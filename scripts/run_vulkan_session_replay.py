@@ -15,6 +15,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import xml.etree.ElementTree as ET
 import xmlrpc.client
+from uuid import UUID
 from urllib.parse import urlsplit, parse_qs
 
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
@@ -56,7 +57,7 @@ def append_llsd(parent, value):
     else:
         ET.SubElement(parent, 'string').text = str(value)
 
-REQUIRED = ('connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
+REQUIRED = ('connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
             'connected_inventory_texture_upload', 'connected_inventory_sound_upload',
             'connected_group_titles', 'connected_group_directory_search',
             'connected_inventory_share', 'connected_resident_pay', 'connected_payment_balance_gate',
@@ -133,6 +134,20 @@ def favorites_fetch_observed(requests):
         folder.get('folder_id') == '70000000-0000-0000-0000-000000000016'
         and folder.get('fetch_items') is True
         for folder in record.get('request', {}).get('folders', [])) for record in requests)
+
+
+def conference_start_observed(requests):
+    """Require the real capability start with exactly the selected recipient."""
+    starts = [record['request'] for record in requests
+              if record.get('path') == '/chat' and isinstance(record.get('request'), dict)
+              and record['request'].get('method') == 'start conference']
+    if len(starts) != 1 or starts[0].get('params') != ['50000000-0000-0000-0000-000000000005']:
+        return False
+    try:
+        temporary = UUID(starts[0].get('session-id', ''))
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return temporary.int != 0 and temporary != UUID('84000000-0000-0000-0000-000000000008')
 
 
 class SimulatorHTTP(ThreadingHTTPServer):
@@ -648,6 +663,9 @@ def main():
             code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
             report = read_llsd(ET.parse(directory / 'session-replay.xml').getroot())
             passed = assess(report, code, log)
+            report['conference_start_request'] = conference_start_observed(server.requests)
+            if not report['conference_start_request']:
+                raise RuntimeError('Missing or incorrect actual authenticated conference start request')
             report['favorites_inventory_fetch'] = favorites_fetch_observed(server.requests)
             if not report['favorites_inventory_fetch']:
                 raise RuntimeError('Native favorites never fetched their real account descendants')

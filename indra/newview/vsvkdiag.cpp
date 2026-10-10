@@ -842,6 +842,17 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             // Replacement blending writes source alpha; it need not stay opaque.
             if(std::abs(int(pixel[3])-int(oracle[3]))>3) ++mismatches;
         }
+        const auto tab_probes=fixture.inactiveTabShadeProbes();
+        require(tab_probes.size()==2,"Selected inactive-tab shade probes are missing");
+        for(const auto& probe:tab_probes)
+        {
+            const auto* pixel=static_cast<const unsigned char*>(mapped.pData)+probe[1]*mapped.Stride+probe[0]*4;
+            const unsigned char rgb[]{pixel[bgra?2:0],pixel[1],pixel[bgra?0:2]};
+            for(unsigned channel=0;channel<3;++channel)
+                require(std::abs(int(rgb[channel])-int(probe[channel+2]))<=1,
+                        "Inactive-tab shade differs from independent GL tint/alpha oracle");
+        }
+        std::cout<<"VIEWER_INACTIVE_TAB_SHADE_PROBES="<<tab_probes.size()<<'\n';
         context->UnmapTextureSubresource(readback,0,0);
         require(actual.good() && expected.good() && alpha.good() && expected_alpha.good(),"Cannot preserve existing XUI readbacks");
         std::cout<<"VIEWER_XUI_MISMATCHES="<<mismatches<<'\n';

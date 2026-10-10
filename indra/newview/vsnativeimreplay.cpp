@@ -198,6 +198,12 @@ struct Replay : public LLAvatarPropertiesObserver
     bool muteQueued = false;
     bool mutedDelivered = false;
     LLUUID direct;
+    LLUUID conferenceTemporary;
+    const LLUUID conferenceID{"84000000-0000-0000-0000-000000000008"};
+    LLHandle<LLFloater> conferenceFloater;
+    bool conferenceEncoded = false, conferenceIncoming = false, conferenceLeft = false;
+    bool conferenceRetiredIncoming = false, conferenceReopened = false;
+    U32 conferenceLeaves = 0;
     U32 pauseSerial = 0, resumeSerial = 0;
     bool savedIMInNearby = false;
     bool sharedNearbyEncoded = false;
@@ -432,6 +438,45 @@ struct Replay : public LLAvatarPropertiesObserver
         if (dialog == IM_TYPING_START || dialog == IM_TYPING_STOP) replay.incomingTyping = true;
         if (dialog == IM_NOTHING_SPECIAL) replay.incomingText = contains(replay.direct, "Native incoming offline");
         if (dialog == IM_SESSION_SEND) replay.incomingGroup = contains(group, "Native incoming group");
+    }
+    static void conferencePacket(LLMessageSystem* message, void** data)
+    {
+        auto& replay = *reinterpret_cast<Replay*>(data);
+        LLUUID agent, identity, target, id; U8 dialog; std::string text;
+        message->getUUID("AgentData", "AgentID", agent);
+        message->getUUID("AgentData", "SessionID", identity);
+        message->getUUID("MessageBlock", "ToAgentID", target);
+        message->getUUID("MessageBlock", "ID", id);
+        message->getU8("MessageBlock", "Dialog", dialog);
+        message->getString("MessageBlock", "Message", text);
+        if (agent == gAgentID)
+        {
+            require(identity == gAgentSessionID, "Conference client packet lost account identity");
+            if (dialog == IM_SESSION_SEND && text == "Native remapped conference Unicode \xCE\xA9")
+            {
+                require(id == replay.conferenceID && target == peer,
+                    "Real conference Send retained its temporary session/recipient identity");
+                replay.conferenceEncoded = true;
+            }
+            if (dialog == IM_SESSION_LEAVE && id == replay.conferenceID)
+            {
+                require(target == peer, "Conference Close lost participant identity");
+                replay.conferenceLeft = true;
+                ++replay.conferenceLeaves;
+            }
+            return;
+        }
+        vs_native_im_receive(message, nullptr);
+        if (id == replay.conferenceID && text == "Native remapped conference incoming")
+            replay.conferenceIncoming = contains(id, text);
+        if (id == replay.conferenceID && text == "Native retired conference incoming")
+        {
+            require(!gIMMgr->hasSession(id) && !FSFloaterIM::findInstance(id),
+                "Uninvited incoming conference text resurrected a retired session");
+            replay.conferenceRetiredIncoming = true;
+        }
+        if (id == replay.conferenceID && text == "Native remapped conference reopened")
+            replay.conferenceReopened = contains(id, text);
     }
     static void groupRequest(LLMessageSystem* message, void** data)
     {
@@ -1975,6 +2020,102 @@ struct Replay : public LLAvatarPropertiesObserver
                 "Actual inventory context Properties did not open the shared account editor");
             require(!LLWorld::instanceExists(), "Account context actions constructed a scene");
             evidence["connected_account_context_actions"] = true;
+            ++step; return false;
+        }
+        if (step == 60)
+        {
+            // Start through the production text-conference action, which sends
+            // ChatSessionRequest on this authenticated native account.
+            conferenceTemporary = LLAvatarActions::startConference(uuid_vec_t{peer});
+            auto* floater = FSFloaterIM::findInstance(conferenceTemporary);
+            require(conferenceTemporary.notNull() && conferenceTemporary != conferenceID && floater && floater->isInVisibleChain(),
+                "Real conference creation did not open its temporary skinned session");
+            if (!floater->getHost()) FSFloaterIMContainer::getInstance()->addFloater(floater, true);
+            require(dynamic_cast<FSFloaterIMContainer*>(floater->getHost()),
+                "Conference lifetime qualification did not use the actual shared tab host");
+            conferenceFloater = floater->getHandle();
+            gMessageSystem->setHandlerFunc("ImprovedInstantMessage", conferencePacket, reinterpret_cast<void**>(this));
+            ++step; return false;
+        }
+        if (step == 61)
+        {
+            // Deliver the simulator's authenticated session-start event through
+            // the installed native message dispatcher, exactly as for group IM.
+            LLSD reply; reply["success"] = true;
+            reply["temp_session_id"] = conferenceTemporary; reply["session_id"] = conferenceID;
+            reply["agents"].append(gAgentID); reply["agents"].append(peer);
+            event(owner, "ChatterBoxSessionStartReply", reply);
+            auto* floater = conferenceFloater.get();
+            auto* model = LLIMModel::instance().findIMSession(conferenceID);
+            require(floater && floater->getKey().asUUID() == conferenceID && model && model->mSessionInitialized &&
+                    !gIMMgr->hasSession(conferenceTemporary),
+                "Authenticated conference remap did not update the actual model/floater identity");
+            auto* input = floater->getChild<LLChatEntry>("chat_editor");
+            input->setText(LLStringExplicit("Native remapped conference Unicode \xCE\xA9"));
+            floater->getChild<LLButton>("send_chat")->onCommit();
+            require(input->getText().empty(), "Real remapped conference Send retained its input");
+            incoming(owner, IM_SESSION_SEND, conferenceID, "Native remapped conference incoming");
+            ++step; return false;
+        }
+        if (step == 62)
+        {
+            if (!conferenceEncoded || !conferenceIncoming) return false;
+            auto* floater = conferenceFloater.get();
+            require(floater && floater->isInVisibleChain(), "Remapped conference retired before Close");
+            floater->closeFloater();
+            require(!gIMMgr->hasSession(conferenceID) && !gIMMgr->hasSession(conferenceTemporary),
+                "Real conference Close retained a temporary/remapped session model");
+            LLFloaterReg::destroyInstance("fs_impanel", conferenceID);
+            ++step; return false; // Retire the panel before delayed message notification.
+        }
+        if (step == 63)
+        {
+            if (!conferenceLeft || conferenceFloater.get()) return false;
+            // A queued shared message notification can outlive the closed
+            // conversation. Its normal observer must not retain a stale panel.
+            LLSD delayed; delayed["session_id"] = conferenceID; delayed["from_id"] = peer;
+            delayed["message"] = "Native retired conference notification";
+            LLIMModel::instance().mNewMsgSignal(delayed);
+            require(!FSFloaterIM::findInstance(conferenceID), "Retired conference notification recreated its closed panel");
+            incoming(owner, IM_SESSION_SEND, conferenceID, "Native retired conference incoming");
+            ++step; return false;
+        }
+        if (step == 64)
+        {
+            if (!conferenceRetiredIncoming) return false;
+            // Text after Leave is discarded until the simulator sends a fresh
+            // authenticated invitation. Exercise that real account controller.
+            LLSD invite; auto& params = invite["instantmessage"]["message_params"];
+            params["from_id"] = peer; params["from_name"] = "CPU Sender"; params["id"] = conferenceID;
+            params["message"] = "Native conference reinvitation"; params["offline"] = IM_ONLINE;
+            params["timestamp"] = 1; params["parent_estate_id"] = 0; params["region_id"] = LLUUID::null;
+            LLSD::Binary bucket; const std::string name = "Native replay conference";
+            bucket.insert(bucket.end(), name.begin(), name.end()); bucket.push_back(0);
+            params["data"]["binary_bucket"] = bucket;
+            event(owner, "ChatterBoxInvitation", invite);
+            require(gIMMgr->hasSession(conferenceID) && contains(conferenceID, "Native conference reinvitation"),
+                "Authenticated reinvitation did not restore the actual conference model");
+            incoming(owner, IM_SESSION_SEND, conferenceID, "Native remapped conference reopened");
+            ++step; return false;
+        }
+        if (step == 65)
+        {
+            if (!conferenceReopened) return false;
+            auto* reopened = FSFloaterIM::show(conferenceID);
+            require(reopened && reopened->getKey().asUUID() == conferenceID && reopened->isInVisibleChain(),
+                "Incoming conference message did not reopen the actual current session UI");
+            conferenceFloater = reopened->getHandle();
+            reopened->closeFloater();
+            LLFloaterReg::destroyInstance("fs_impanel", conferenceID);
+            ++step; return false;
+        }
+        if (step == 66)
+        {
+            if (conferenceLeaves != 2 || conferenceFloater.get()) return false;
+            gMessageSystem->setHandlerFunc("ImprovedInstantMessage", vs_native_im_receive);
+            require(!gIMMgr->hasSession(conferenceID) && !LLWorld::instanceExists(),
+                "Conference retirement retained a session or constructed a scene");
+            evidence["connected_conference_remap_retirement"] = true;
             ++step; return false;
         }
         return true;
