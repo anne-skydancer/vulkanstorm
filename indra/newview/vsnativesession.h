@@ -4,6 +4,7 @@
 #include "llsd.h"
 #include "lluuid.h"
 #include "v3math.h"
+#include "v3dmath.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -35,16 +36,30 @@ public:
     void disconnect(const std::string& reason);
     bool admit(const std::string&, const LLHost&);
     bool sendChat(const std::string&, U8 type = 1, S32 channel = 0);
+    bool sendChatProcessed(const std::string&, U8 type, S32 channel);
     void typing(bool active);
     void receive(LLMessageSystem*);
     bool deliver(const std::string&, const LLSD&, const LLHost&, U64 generation);
-    void capabilities(const LLSD&, U64 generation);
-    void circuitResult(U64 generation, S32 result);
+    void capabilities(const LLSD&, U64 generation, U64 regionEpoch = 0);
+    void circuitResult(U64 generation, S32 result, U64 regionEpoch = 0);
     U64 generation() const { return mGeneration; }
     Phase phase() const { return mPhase; }
     const LLHost& host() const { return mHost; }
     std::string capability(const std::string&) const;
     LLSD evidence() const;
+    const std::string& regionName() const { return mName; }
+    const LLVector3& position() const { return mPosition; }
+    U64 handle() const { return mHandle; }
+    U8 access() const { return mAccess; }
+    std::string locationURL() const;
+    using LocationCallback = std::function<void(const std::string&, const LLVector3&)>;
+    bool resolveLocation(const LLVector3d&, LocationCallback);
+    bool teleportToRegion(const std::string&, const LLVector3&);
+    bool teleportToLocation(const LLVector3d&);
+    bool teleportToLandmark(const LLUUID&);
+    bool teleportHome() { return teleportToLandmark(LLUUID::null); }
+    bool teleportToLure(const LLUUID&, bool godlike);
+
     // Unknown balance stays unknown until an authenticated simulator reply.
     bool balanceKnown() const { return mBalanceKnown; }
     S32 balance() const { return mBalance; }
@@ -57,7 +72,9 @@ public:
 #endif
 private:
     bool send(const std::string&, const LLSD&);
-    void seedCoro(std::string, U64);
+    void seedCoro(std::string, U64, U64);
+    bool changeRegion(const LLSD&);
+    bool teleportRequest(U64, const LLVector3&);
     void connected();
     void appendChat(LLSD, U64);
     void publishChat(const LLSD&, const std::string&, U64);
@@ -66,6 +83,14 @@ private:
     Phase mPhase = Phase::Login;
     bool mShutdown = false;
     U64 mGeneration = 1;
+    U64 mRegionEpoch = 1;
+    bool mChangingRegion = false;
+    LLHost mPreviousHost;
+    std::string mRequestedRegion;
+    LLVector3 mRequestedPosition;
+    double mNavigationDeadline = 0;
+    struct LocationRequest { LLVector3d position; LocationCallback callback; double deadline; };
+    std::vector<LocationRequest> mLocationRequests;
     LLHost mHost;
     LLUUID mAgent, mSession, mRegionID, mOwner;
     U64 mHandle = 0, mFlags = 0;

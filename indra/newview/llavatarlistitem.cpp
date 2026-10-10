@@ -31,6 +31,9 @@
 
 #include "llavataractions.h"
 #include "llavatarlistitem.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llbutton.h"
 #include "llfloaterreg.h"
@@ -518,6 +521,9 @@ void LLAvatarListItem::showUsername(bool show, bool updateName /* = true*/)
 
 void LLAvatarListItem::onInfoBtnClick()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { LLAvatarActions::showProfile(mAvatarId); return; }
+#endif
     LLFloaterReg::showInstance("inspect_avatar", LLSD().with("avatar_id", mAvatarId));
 }
 

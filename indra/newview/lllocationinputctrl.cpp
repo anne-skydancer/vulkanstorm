@@ -28,6 +28,9 @@
 
 // file includes
 #include "lllocationinputctrl.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 // common includes
 #include "llbutton.h"
@@ -451,6 +454,9 @@ LLLocationInputCtrl::LLLocationInputCtrl(const LLLocationInputCtrl::Params& p)
     mTooltips.push_back( LLTrans::getString("LocationCtrlAdultIconTooltip") );
     mTooltips.push_back( LLTrans::getString("LocationCtrlModerateIconTooltip") );
     // </FS:ND>
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) refresh();
+#endif
 }
 
 LLLocationInputCtrl::~LLLocationInputCtrl()
@@ -616,6 +622,10 @@ void LLLocationInputCtrl::onFocusLost()
 void LLLocationInputCtrl::draw()
 {
     static LLUICachedControl<bool> show_coords("NavBarShowCoordinates", false);
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && !hasFocus()) refreshLocation();
+    else
+#endif
     if(!hasFocus() && show_coords)
     {
         refreshLocation();
@@ -650,6 +660,9 @@ void LLLocationInputCtrl::reshape(S32 width, S32 height, bool called_from_parent
 
 void LLLocationInputCtrl::onInfoButtonClicked()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return; // Requires simulator parcel ownership, unavailable in CPU text mode.
+#endif
 // [RLVa:KB] - Checked: 2010-04-05 (RLVa-1.4.5) | Added: RLVa-1.2.0
     if (gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC))
         return;
@@ -663,6 +676,9 @@ void LLLocationInputCtrl::onInfoButtonClicked()
 
 void LLLocationInputCtrl::onForSaleButtonClicked()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return; // Requires simulator parcel ownership, unavailable in CPU text mode.
+#endif
 // [RLVa:KB] - Checked: 2010-04-05 (RLVa-1.4.5) | Added: RLVa-1.2.0
     if (gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC))
         return;
@@ -673,6 +689,9 @@ void LLLocationInputCtrl::onForSaleButtonClicked()
 
 void LLLocationInputCtrl::onAddLandmarkButtonClicked()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return; // Requires simulator parcel ownership, unavailable in CPU text mode.
+#endif
 // [RLVa:KB] - Checked: 2010-04-05 (RLVa-1.4.5) | Added: RLVa-1.2.0
     if (gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC))
         return;
@@ -739,6 +758,25 @@ void LLLocationInputCtrl::onLocationPrearrange(const LLSD& data)
 {
     std::string filter = data.asString();
     rebuildLocationHistory(filter);
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        if (!filter.empty())
+        {
+            const auto landmarks = LLLandmarkActions::fetchLandmarksByName(filter, true);
+            for (const auto& item : landmarks)
+            { LLSD value; value["item_type"] = LANDMARK; value["AssetUUID"] = item->getAssetUUID(); addLocationHistoryEntry(item->getName(), value); }
+            for (const auto& item : LLTeleportHistory::instance().getItems())
+                if (item.mTitle.find(filter) != std::string::npos)
+                {
+                    LLSD value; value["item_type"] = TELEPORT_HISTORY; value["global_pos"] = item.mGlobalPos.getValue();
+                    value["slurl"] = item.mSLURL.getSLURLString(); value["tooltip"] = value["slurl"];
+                    addLocationHistoryEntry(item.getTitle(), value);
+                }
+        }
+        sortByName(); mList->mouseOverHighlightNthItem(-1); return;
+    }
+#endif
 
     //Let's add landmarks to the top of the list if any
     if(!filter.empty() )
@@ -833,6 +871,10 @@ void LLLocationInputCtrl::onTextEditorRightClicked(S32 x, S32 y, MASK mask)
 void LLLocationInputCtrl::refresh()
 {
 // [RLVa:KB] - Checked: 2010-04-05 (RLVa-1.4.5) | Added: RLVa-1.2.0
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) mInfoBtn->setEnabled(false);
+    else
+#endif
     mInfoBtn->setEnabled(!gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC));
 // [/RLVa:KB]
 
@@ -863,6 +905,9 @@ void LLLocationInputCtrl::refreshLocation()
     {
         location_name = "???";
     }
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && isHumanReadableLocationVisible && location_name == mHumanReadableLocation) return;
+#endif
     // store human-readable location to compare it in changeLocationPresentation()
     mHumanReadableLocation = location_name;
     setText(location_name);
@@ -887,6 +932,21 @@ static S32 layout_widget(LLUICtrl* widget, S32 right)
 
 void LLLocationInputCtrl::refreshParcelIcons()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        // No parcel grant has been received by the CPU session. Unknown
+        // permissions must never appear as affirmative restriction icons.
+        for (S32 i = 0; i < ICON_COUNT; ++i) mParcelIcon[i]->setVisible(false);
+        mForSaleBtn->setVisible(false); mDamageText->setVisible(false);
+        if (mTextEntry)
+        {
+            S32 left_pad, right_pad; mTextEntry->getTextPadding(&left_pad, &right_pad);
+            mTextEntry->setTextPadding(left_pad, llmax(0, mTextEntry->getRect().mRight - mButton->getRect().mLeft));
+        }
+        return;
+    }
+#endif
     // Our "cursor" moving right to left
     S32 x = mAddLandmarkBtn->getRect().mLeft;
 
@@ -1001,14 +1061,22 @@ void LLLocationInputCtrl::refreshMaturityButton()
 {
     // Updating maturity rating icon.
     LLViewerRegion* region = gAgent.getRegion();
-    if (!region)
-        return;
+#if VS_NATIVE_VULKAN
+    const auto native = VSNativeSession::active();
+    if (!region && !native) return;
+#else
+    if (!region) return;
+#endif
 
     bool button_visible = true;
     LLPointer<LLUIImage> rating_image = NULL;
     std::string rating_tooltip;
 
+#if VS_NATIVE_VULKAN
+    U8 sim_access = native ? native->access() : region->getSimAccess();
+#else
     U8 sim_access = region->getSimAccess();
+#endif
     switch(sim_access)
     {
     case SIM_ACCESS_PG:
@@ -1147,6 +1215,9 @@ void LLLocationInputCtrl::enableAddLandmarkButton(bool val)
 // depending on whether current parcel has been landmarked.
 void LLLocationInputCtrl::updateAddLandmarkButton()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { mAddLandmarkBtn->setVisible(false); mAddLandmarkBtn->setEnabled(false); return; }
+#endif
 // [RLVa:KB] - Checked: 2010-04-05 (RLVa-1.4.5) | Added: RLVa-1.2.0
     mAddLandmarkBtn->setVisible(!gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC));
 // [/RLVa:KB]
@@ -1167,6 +1238,13 @@ void LLLocationInputCtrl::updateAddLandmarkTooltip()
 }
 
 void LLLocationInputCtrl::updateContextMenu(){
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        if (mLocationContextMenu) mLocationContextMenu->getChild<LLMenuItemGL>("Landmark")->setEnabled(false);
+        return;
+    }
+#endif
 
     if (mLocationContextMenu)
     {
@@ -1223,6 +1301,9 @@ void LLLocationInputCtrl::changeLocationPresentation()
 void LLLocationInputCtrl::onLocationContextMenuItemClicked(const LLSD& userdata)
 {
     std::string item = userdata.asString();
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && item == "landmark") return;
+#endif
 
     if (item == "show_coordinates")
     {

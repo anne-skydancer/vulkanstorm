@@ -2674,13 +2674,17 @@ void LLViewerWindow::shutdownViews()
             mCommunicationChannel.reset();
             mSystemChannel.reset();
         }
+        LLNavigationBar::deleteSingleton();
         if (gMenuHolder) cleanup_menus();
         LLMenuGL::sMenuContainer = nullptr;
         gLoginMenuBarView = nullptr;
         gEditMenu = nullptr;
         gPopupMenuView = nullptr;
         mNativeChat = nullptr;
+        gConsole = nullptr; // The native root owns it; retire async observers before deletion.
         mNativeUI.reset();
+        gStatusBar = nullptr;
+        gToolBarView = nullptr;
         mFloaterSnapRegion = nullptr;
         mNativeAdmission.reset();
 #endif

@@ -177,6 +177,7 @@ void PeopleContextMenu::buildContextMenu(class LLMenuGL& menu, U32 flags)
 
 bool PeopleContextMenu::enableContextMenuItem(const LLSD& userdata)
 {
+    if (mUUIDs.empty()) return false;
     std::string item = userdata.asString();
     if(gAgent.getID() == mUUIDs.front())
     {
@@ -313,6 +314,7 @@ bool PeopleContextMenu::enableContextMenuItem(const LLSD& userdata)
 
 bool PeopleContextMenu::checkContextMenuItem(const LLSD& userdata)
 {
+    if (mUUIDs.empty()) return false;
     std::string item = userdata.asString();
     const LLUUID& id = mUUIDs.front();
 

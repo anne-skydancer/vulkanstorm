@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llviewerwindow.h"
 
 #include "fscontactsfriendsmenu.h"
 
@@ -87,6 +88,9 @@ LLContextMenu* FSContactsFriendsMenu::createMenu()
 bool FSContactsFriendsMenu::enableContextMenuItem(const LLSD& userdata)
 {
     std::string item = userdata.asString();
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
+        (item == "teleport_to" || item == "track_avatar")) return false;
+
 
     if (item == "remove_friend")
     {

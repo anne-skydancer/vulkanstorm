@@ -74,6 +74,7 @@
 #include "llmutelist.h"
 #include "llnotificationsutil.h"
 #include "llpanelblockedlist.h"
+#include "fspanelblocklist.h"
 #include "llpanelprofileclassifieds.h"
 #include "llpanelprofilepicks.h"
 #include "llthumbnailctrl.h"
@@ -359,6 +360,9 @@ public:
 
         if (verb == "inspect")
         {
+#if VS_NATIVE_VULKAN
+            if (VSNativeSession::active()) { LLAvatarActions::showProfile(avatar_id); return true; }
+#endif
             LLFloaterReg::showInstance("inspect_avatar", LLSD().with("avatar_id", avatar_id));
             return true;
         }
@@ -424,6 +428,10 @@ public:
                 const std::string object_name = LLURI::unescape(params[2].asString());
                 LLMute mute(avatar_id, object_name, LLMute::OBJECT);
                 LLMuteList::getInstance()->add(mute);
+#if VS_NATIVE_VULKAN
+                if (VSNativeSession::active()) FSPanelBlockList::showPanelAndSelect(mute.mID);
+                else
+#endif
                 LLPanelBlockedList::showPanelAndSelect(mute.mID);
             }
             return true;

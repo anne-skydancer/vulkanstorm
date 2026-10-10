@@ -2552,7 +2552,7 @@ void LLTextBase::createUrlContextMenu(S32 x, S32 y, const std::string &in_url)
         if (mIsObjectReachableSignal)
         {
             bool is_reachable = *(*mIsObjectReachableSignal)(LLUUID(LLUrlAction::getObjectId(url)));
-            if (LLView* zoom_btn = menu->getChild<LLView>("zoom_in"))
+            if (LLView* zoom_btn = menu->findChild<LLView>("zoom_in"))
             {
                 zoom_btn->setEnabled(is_reachable);
             }
@@ -2562,16 +2562,16 @@ void LLTextBase::createUrlContextMenu(S32 x, S32 y, const std::string &in_url)
         LLFloater* parent_floater = getParentByType<LLFloater>();
         if (!parent_floater || parent_floater->getName() != "panel_im")
         {
-            menu->getChild<LLView>("GroupModerationSubmenu")->setVisible(false);
-            menu->getChild<LLView>("GroupModerationSeparator")->setVisible(false);
+            if (auto* item = menu->findChild<LLView>("GroupModerationSubmenu")) item->setVisible(false);
+            if (auto* item = menu->findChild<LLView>("GroupModerationSeparator")) item->setVisible(false);
         }
         // </FS:Zi>
 
         // <FS:Zi> Add menu items to copy and/or insert mention URIs into chat
         if (!parent_floater || (parent_floater->getName() != "panel_im" && parent_floater->getName() != "nearby_chat"))
         {
-            menu->getChild<LLView>("MentionURISeparator")->setVisible(false);
-            menu->getChild<LLView>("mention_in_chat")->setVisible(false);
+            if (auto* item = menu->findChild<LLView>("MentionURISeparator")) item->setVisible(false);
+            if (auto* item = menu->findChild<LLView>("mention_in_chat")) item->setVisible(false);
         }
         // </FS:Zi>
 
@@ -2582,6 +2582,13 @@ void LLTextBase::createUrlContextMenu(S32 x, S32 y, const std::string &in_url)
 
 void LLTextBase::setText(const LLStringExplicit &utf8str, const LLStyle::Params& input_params)
 {
+    // A URL popup captures identifiers from the previous contents. Replacing
+    // the text also retires that selection, including an account reset.
+    if (auto* menu = static_cast<LLContextMenu*>(mPopupMenuHandle.get()))
+    {
+        menu->die();
+        mPopupMenuHandle.markDead();
+    }
     // clear out the existing text and segments
     getViewModel()->setDisplay(LLWStringUtil::null);
 

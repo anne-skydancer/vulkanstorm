@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llviewerwindow.h"
 
 #include "fscommon.h"
 #include "fsradar.h"
@@ -334,6 +335,13 @@ bool FSCommon::requestGroupData(const LLUUID& groupID)
 bool FSCommon::checkIsActionEnabled(const LLUUID& av_id, EFSRegistrarFunctionActionType action)
 {
     const bool isSelf = (av_id == gAgentID);
+
+    // Some shared context controllers query this helper directly, bypassing
+    // menu registrar admission. These three actions require scene/radar owners.
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
+        (action == EFSRegistrarFunctionActionType::FS_RGSTR_ACT_ZOOM_IN ||
+         action == EFSRegistrarFunctionActionType::FS_RGSTR_ACT_TRACK_AVATAR ||
+         action == EFSRegistrarFunctionActionType::FS_RGSTR_ACT_TELEPORT_TO)) return false;
 
     switch (action)
     {

@@ -27,6 +27,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llworld.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "llviewerwindow.h"
+#endif
 #include "llrender.h"
 
 #include "indra_constants.h"
@@ -1762,6 +1766,18 @@ void send_agent_pause()
     gAgentPauseSerialNum++;
     gMessageSystem->addU32Fast(_PREHASH_SerialNum, gAgentPauseSerialNum);
 
+#if VS_NATIVE_VULKAN
+    const auto session = VSNativeSession::active();
+    if (session || (gViewerWindow && gViewerWindow->isNativeVulkan()))
+    {
+        // Native text sessions own the simulator circuit, not an LLWorld.
+        // Window modal/focus events must still pause the authenticated agent.
+        if (session && session->phase() == VSNativeSession::Phase::Connected && !gDisconnected && session->host().isOk())
+            gMessageSystem->sendReliable(session->host());
+        return;
+    }
+#endif
+
     for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();
          iter != LLWorld::getInstance()->getRegionList().end(); ++iter)
     {
@@ -1782,6 +1798,9 @@ void send_agent_resume()
     // system has been initialized. -MG
     if (!gMessageSystem)
     {
+#if VS_NATIVE_VULKAN
+        if (gViewerWindow && gViewerWindow->isNativeVulkan()) LLAppViewer::instance()->resumeMainloopTimeout();
+#endif
         return;
     }
 
@@ -1793,6 +1812,17 @@ void send_agent_resume()
     gAgentPauseSerialNum++;
     gMessageSystem->addU32Fast(_PREHASH_SerialNum, gAgentPauseSerialNum);
 
+
+#if VS_NATIVE_VULKAN
+    const auto session = VSNativeSession::active();
+    if (session || (gViewerWindow && gViewerWindow->isNativeVulkan()))
+    {
+        if (session && session->phase() == VSNativeSession::Phase::Connected && !gDisconnected && session->host().isOk())
+            gMessageSystem->sendReliable(session->host());
+        LLAppViewer::instance()->resumeMainloopTimeout();
+        return;
+    }
+#endif
 
     for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();
          iter != LLWorld::getInstance()->getRegionList().end(); ++iter)

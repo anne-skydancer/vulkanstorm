@@ -7,7 +7,8 @@ legacy world initialization. The viewer establishes the reliable simulator
 circuit, obtains reviewed seed capabilities, processes region handshake and
 agent movement completion, and opens its native connected controls. The connected
 UI uses the existing skinned Contacts, direct/group IM conversations, notification,
-profile, Preferences and transcript controls, alongside native nearby chat.
+profile, Preferences and transcript controls, together with the actual skinned
+nearby-chat floater and shared navigation/status/menu/toolbar chrome.
 Vulkan continues to use available machine drivers during normal execution.
 
 ## Ownership and admission
@@ -26,9 +27,13 @@ admission. Reviewed simulator messages preserve handshake, movement, nearby chat
 name replies, CPU mute-list transfers, direct/group IM, account inventory/profile/
 group replies, alerts, logout and disconnect behavior.
 Unknown messages, world updates and child-simulator admission are consumed without
-calling legacy handlers. Teleport/crossing requests cause a controlled disconnect.
-Command URLs are gated before legacy command execution or region lookup; login
-location selection and the login command remain available before connection.
+calling legacy handlers. Reviewed named/location/landmark/home/lure navigation
+uses native wire requests and an authenticated destination seed/circuit/handshake/
+movement transition. Account UI survives the transition; retired-region callbacks
+cannot publish into its replacement. These new paths still require the current
+integration replay qualification. Command URLs are gated before legacy command
+execution or scene lookup; login location selection remains available before
+connection.
 
 The session generation changes before teardown. Circuit, seed-capability,
 event-queue, name, translation, mute transfer and notification callbacks carry
@@ -51,16 +56,40 @@ qualify the expanded integration by itself.
 
 ## Nearby chat and settings
 
-The existing native chat panel gains region status and a Log out control. Input history retains at most 128 submitted
-lines, supports recall and draft restoration, and clears when the session detaches. Its real
-input sends reliable UTF-8 ChatFromViewer packets with agent/session identity,
-channel and chat type. `/whisper`, `/shout`, `/123` and repeat-channel `//` syntax
-are supported; rejected sends retain input. Typing start/stop uses protocol packets
-without an avatar. Incoming source/owner/type/audibility metadata drives mute and
-anti-spam filtering, display-name caching, optional translation and saved history.
-Immediate simulator-name display preserves arrival order while a bounded owned
-name lookup updates subsequent messages. Stale callbacks cannot publish into a
-new session. Required controls retain the selected skin and native font resources.
+Normal connected execution uses the existing `FSFloaterNearbyChat` XUI and
+`FSChatHistory`, with its real chat editor, Send/volume/channel controls, rich/plain
+history, transcript/search, emoji and mention controls. The standard bottom-toolbar
+chat entry remains the shared `FSNearbyChatVoiceControl`. Both send through the
+native account transport after shared text transformations and RLV policy; they
+require no avatar animation or scene command owner. The optional shared `LLConsole`
+uses native font/image drawing, ordinary console preferences and visible-session
+suppression; spatial voice rendering remains deferred. Notification history remains
+available independently of console visibility. Queued/drawn console text and
+session suppression retire at account reset, and asynchronous name formatting
+retains the account generation and weak console owner. The shared floater is hidden immediately during logout,
+and its account-owned instance and scoped setting callbacks retire during reset.
+
+`VSPlainChat` retains a diagnostic transcript/input for the independent pixel and
+protocol oracle. Its `useSharedFrontend(true)` bridge opens and focuses the real
+nearby-chat editor for normal execution. Local-chat source/owner/type metadata and
+IM/group metadata reach the actual shared history through `appendChat`, while the
+diagnostic transcript preserves fixture evidence. Existing account log ownership
+prevents duplicate writes and observes the nearby/IM logging preferences.
+
+The shared XUI context menus retain their production account callbacks. Native
+resident/object headers open the reviewed profile and CPU object inspector;
+object location metadata comes from the connected transport instead of a scene
+lookup. Conversation options and Block List use the shared controllers. Inventory
+gallery actions and delayed rename responses retain account ownership. The replay
+now commits real nearby/direct/group options, header menus and inventory Properties;
+their successful staged execution remains a qualification requirement.
+
+Reliable UTF-8 ChatFromViewer packets preserve agent/session identity, channel and
+volume; negative-channel chat uses ScriptDialogReply. Typing start/stop remains
+protocol-only. Incoming source/owner/type/audibility metadata drives mute,
+anti-spam, display-name caching, translation and saved history. Immediate
+simulator-name display preserves arrival order; bounded name lookups update later
+messages and cannot publish into a later login.
 
 Saved setting values remain intact while legacy graphics/optional observers are
 denied at invocation. Native owners handle font replacement, scale, vsync and SDL
@@ -77,7 +106,9 @@ and queued events; real encoded UDP loopback packets establish the circuit and
 exercise incoming chat, outgoing chat/channel/type/typing payloads and identity.
 The replay checks malformed and unknown messages, wrong host, UDP/HTTP admission,
 queued expired work, relogin, settings cascades, denied optional UI and URL commands,
-connection/logout deadlines, controlled crossing and partial-init cancellation.
+connection/logout deadlines and partial-init cancellation. The new navigation
+assertions exercise authenticated transitions instead of the earlier controlled
+crossing-disconnect behavior.
 It asserts that LLWorld was never instantiated and compares the native connected
 chat frame against the independent CPU pixel oracle.
 
@@ -89,13 +120,25 @@ validation errors, GL traps, crashes, timeouts or unexpected devices fail the jo
 The launcher verifies locked runtime revisions and staged library checksums.
 These tests publish no release and do not advance latest.
 
-**Live server qualification is untested:** no credentials or accessible test
-server have been supplied. Replay does not demonstrate authentication against a
-real server, real-server nearby send/receive, disconnect or logout. Those are the
-separate connected-chat acceptance criteria in the roadmap. World rendering and
-full supported parity remain V5 and subsequent work.
+**Current qualification is incomplete.** The user has achieved live credential
+login, but reported connected chrome/layout gaps and an IM-interaction crash.
+That observation does not qualify all local/direct/group messaging, account
+controls, reconnect or logout behavior. The expanded shared frontend and native
+navigation implementation requires a new completely staged replay and live
+retest. The expanded replay has reached shared chrome and actual context-menu actions,
+but has not completed all newly required stages; it is not accepted yet. World rendering and full
+supported rendering parity remain V5 and subsequent work.
 
-## Execution evidence
+The reported live dump resolves to `send_agent_pause`, `llworld.cpp:1765`, called
+from Win32 input gathering. Native focus/modal pause and resume now send the
+ordinary authenticated agent/session/serial packets without iterating legacy
+world regions. Native window block/unblock before login or after teardown also
+avoids that region path and balances timeout resume without a message system. The replay adds `connected_window_pause_resume` to exercise that
+path alongside actual IM controls. New assertions also cover the shared inventory,
+bottom chat, nearby frontend and reversible toolbar configuration. Their source
+implementation is not a substitute for successful execution.
+
+## Historical execution evidence
 
 The final production source is `d617185e40d0df7ac866fb47fb0d17252e0e185e`.
 The complete RelWithDebInfo viewer stage and Windows SwiftShader replay are

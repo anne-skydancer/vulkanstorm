@@ -285,7 +285,7 @@ void LLHandlerUtil::logToNearbyChat(const LLNotificationPtr& notification, EChat
         nearby_chat->addMessage(chat_msg);
 
         // Ansariel: Also log to console if enabled
-        if (gSavedSettings.getBOOL("FSUseNearbyChatConsole"))
+        if (gSavedSettings.getBOOL("FSUseNearbyChatConsole") && gConsole)
         {
             F32 alpha = 1.f;
             LLUIColor chatcolor;

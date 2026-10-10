@@ -520,6 +520,7 @@ private:
     std::unique_ptr<VSUIContext> mNativeUI;
     VSPlainChat* mNativeChat = nullptr; // Owned by the native root, like required startup panels.
     F32 mNativeSystemScale = 1.f;
+    bool mNativeConnectedUI = false;
 #endif
     LLWindow*       mWindow;                        // graphical window object
     bool            mActive;

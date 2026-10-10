@@ -34,6 +34,7 @@
 #include "llfloaterreg.h"
 #include "llfloatersidepanelcontainer.h"
 #include "llviewercontrol.h"
+#include "llviewerwindow.h"
 
 void FSChatOptionsMenu::onMenuItemClick(const LLSD& userdata, LLUICtrl* source)
 {
@@ -41,7 +42,7 @@ void FSChatOptionsMenu::onMenuItemClick(const LLSD& userdata, LLUICtrl* source)
 
     if (option == "blocklist")
     {
-        if (gSavedSettings.getBOOL("FSUseStandaloneBlocklistFloater"))
+        if ((gViewerWindow && gViewerWindow->isNativeVulkan()) || gSavedSettings.getBOOL("FSUseStandaloneBlocklistFloater"))
         {
             LLFloaterReg::toggleInstance("fs_blocklist");
         }
@@ -151,7 +152,7 @@ bool FSChatOptionsMenu::onMenuItemCheck(const LLSD& userdata, LLUICtrl* source)
 
     if (option == "blocklist")
     {
-        if (gSavedSettings.getBOOL("FSUseStandaloneBlocklistFloater"))
+        if ((gViewerWindow && gViewerWindow->isNativeVulkan()) || gSavedSettings.getBOOL("FSUseStandaloneBlocklistFloater"))
         {
             return LLFloaterReg::instanceVisible("fs_blocklist");
         }

@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llgrouplist.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 // libs
 #include "llbutton.h"
@@ -845,6 +848,9 @@ void LLGroupListItem::setBold(bool bold)
 
 void LLGroupListItem::onInfoBtnClick()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { LLGroupActions::show(mGroupID); return; }
+#endif
     LLFloaterReg::showInstance("inspect_group", LLSD().with("group_id", mGroupID));
 }
 

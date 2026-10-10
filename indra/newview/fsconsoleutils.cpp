@@ -38,6 +38,8 @@
 #include "lltrans.h"
 #include "llviewerchat.h"
 #include "llviewercontrol.h"
+#include "llviewerwindow.h"
+#include "vsnativeim.h"
 
 // static
 bool FSConsoleUtils::ProcessChatMessage(const LLChat& chat_msg, const LLSD &args)
@@ -46,14 +48,15 @@ bool FSConsoleUtils::ProcessChatMessage(const LLChat& chat_msg, const LLSD &args
     static LLCachedControl<bool> useChatBubbles(gSavedSettings, "UseChatBubbles");
     static LLCachedControl<bool> fsBubblesHideConsoleAndToasts(gSavedSettings, "FSBubblesHideConsoleAndToasts");
 
-    if (!fsUseNearbyChatConsole)
+    if (!fsUseNearbyChatConsole || !gConsole)
     {
         return false;
     }
 
     // Don't write to console if avatar chat and user wants
     // bubble chat or if the user is busy.
-    if ( (chat_msg.mSourceType == CHAT_SOURCE_AGENT && useChatBubbles && fsBubblesHideConsoleAndToasts)
+    if ( (chat_msg.mSourceType == CHAT_SOURCE_AGENT && useChatBubbles && fsBubblesHideConsoleAndToasts &&
+          !(gViewerWindow && gViewerWindow->isNativeVulkan()))
         || gAgent.isDoNotDisturb() )
     {
         return true;
@@ -63,7 +66,13 @@ bool FSConsoleUtils::ProcessChatMessage(const LLChat& chat_msg, const LLSD &args
 
     if (chat_msg.mSourceType == CHAT_SOURCE_AGENT)
     {
-        LLAvatarNameCache::get(chat_msg.mFromID, boost::bind(&FSConsoleUtils::onProcessChatAvatarNameLookup, _1, _2, chat_msg));
+        const auto current = vs_native_im_guard();
+        const auto console = gConsole->getHandle();
+        LLAvatarNameCache::get(chat_msg.mFromID, [current, console, chat_msg](const LLUUID& id, const LLAvatarName& name)
+        {
+            if (!current() || !console.get() || console.get() != gConsole) return;
+            FSConsoleUtils::onProcessChatAvatarNameLookup(id, name, chat_msg);
+        });
     }
     else if (chat_msg.mSourceType == CHAT_SOURCE_OBJECT)
     {
@@ -132,6 +141,7 @@ bool FSConsoleUtils::ProcessChatMessage(const LLChat& chat_msg, const LLSD &args
 //static
 void FSConsoleUtils::onProcessChatAvatarNameLookup(const LLUUID& agent_id, const LLAvatarName& av_name, const LLChat& chat_msg)
 {
+    if (!gConsole) return;
     std::string console_chat;
     std::string sender_name(chat_msg.mFromName);
 
@@ -182,7 +192,7 @@ bool FSConsoleUtils::ProcessInstantMessage(const LLUUID& session_id, const LLUUI
     static LLCachedControl<bool> fsLogGroupImToChatConsole(gSavedSettings, "FSLogGroupImToChatConsole");
     static LLCachedControl<bool> fsLogImToChatConsole(gSavedSettings, "FSLogImToChatConsole");
 
-    if (!fsUseNearbyChatConsole)
+    if (!fsUseNearbyChatConsole || !gConsole)
     {
         return false;
     }
@@ -216,7 +226,13 @@ bool FSConsoleUtils::ProcessInstantMessage(const LLUUID& session_id, const LLUUI
         group = session->mName.substr(0, groupNameLength);
     }
 
-    LLAvatarNameCache::get(from_id, boost::bind(&FSConsoleUtils::onProccessInstantMessageNameLookup, _1, _2, message, group, session_id));
+    const auto current = vs_native_im_guard();
+    const auto console = gConsole->getHandle();
+    LLAvatarNameCache::get(from_id, [current, console, message, group, session_id](const LLUUID& id, const LLAvatarName& name)
+    {
+        if (!current() || !console.get() || console.get() != gConsole) return;
+        FSConsoleUtils::onProccessInstantMessageNameLookup(id, name, message, group, session_id);
+    });
 
     return true;
 }
@@ -224,6 +240,7 @@ bool FSConsoleUtils::ProcessInstantMessage(const LLUUID& session_id, const LLUUI
 //static
 void FSConsoleUtils::onProccessInstantMessageNameLookup(const LLUUID& agent_id, const LLAvatarName& av_name, const std::string& message_str, const std::string& group, const LLUUID& session_id)
 {
+    if (!gConsole) return;
     const bool is_group = !group.empty();
 
     std::string sender_name;

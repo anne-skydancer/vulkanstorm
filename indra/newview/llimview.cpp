@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativeim.h"
+#include "vsplainchat.h"
 #endif
 
 #include "llimview.h"
@@ -1961,9 +1962,26 @@ bool LLIMModel::addToHistory(const LLUUID& session_id,
         chat.mTimeStr = timestr;
         // <FS:Ansariel> [FS communication UI]
         //LLFloaterNearbyChat* nearby_chat = LLFloaterReg::getTypedInstance<LLFloaterNearbyChat>("nearby_chat", LLSD());
-        FSFloaterNearbyChat* nearby_chat = LLFloaterReg::getTypedInstance<FSFloaterNearbyChat>("fs_nearby_chat", LLSD());
-        // </FS:Ansariel> [FS communication UI]
-        nearby_chat->addMessage(chat, true, LLSD());
+#if VS_NATIVE_VULKAN
+        if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            // The native owner forwards typed chat into the actual nearby
+            // floater while retaining its diagnostic transcript.
+            if (auto* nearby = gViewerWindow->nativeChat())
+            {
+                const std::string from_name = "IM: " + chat.mFromNameGroup + chat.mFromName;
+                nearby->appendChat(chat);
+                if (gSavedPerAccountSettings.getBOOL("LogNearbyChat") && gSavedSettings.getBOOL("FSLogIMInChatHistory"))
+                    LLLogChat::saveHistory("chat", from_name, chat.mFromID, chat.mText);
+            }
+        }
+        else
+#endif
+        {
+            FSFloaterNearbyChat* nearby_chat = LLFloaterReg::getTypedInstance<FSFloaterNearbyChat>("fs_nearby_chat", LLSD());
+            // </FS:Ansariel> [FS communication UI]
+            nearby_chat->addMessage(chat, true, LLSD());
+        }
     }
     // </FS:Ansariel>
 

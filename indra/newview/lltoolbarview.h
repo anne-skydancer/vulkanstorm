@@ -32,6 +32,7 @@
 #include "lltoolbar.h"
 #include "llcommandmanager.h"
 #include "llinventory.h"
+#include "llpointer.h"
 
 class LLUICtrlFactory;
 
@@ -100,6 +101,9 @@ public:
     LLView* getBottomToolbar() { return mBottomToolbarPanel; }
     LLToolBar* getToolbar(LLToolBarEnums::EToolBarLocation toolbar) { return mToolbars[toolbar]; }
     bool isModified() const;
+    // Save before a native account retires its per-account settings directory.
+    void persistToolbars() const { saveToolbars(); }
+    void retireAccountToolbars() { saveToolbars(); mToolbarsLoaded = false; clearToolbars(); }
 
     // <FS:Ansariel> Getters for member variables needed for console chat bottom offset
     LLView* getBottomChatStack() const { return mBottomChatStack; }
@@ -128,7 +132,7 @@ private:
 
     bool                mDragStarted;
     LLToolBarButton*    mDragToolbarButton;
-    LLInventoryObject*  mDragItem;
+    LLPointer<LLInventoryObject> mDragItem;
     bool                mShowToolbars;
     LLView*             mBottomToolbarPanel;
 

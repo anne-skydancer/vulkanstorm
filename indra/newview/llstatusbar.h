@@ -28,6 +28,7 @@
 #define LL_LLSTATUSBAR_H
 
 #include "llpanel.h"
+#include <vector>
 
 // <FS:Ansariel> Pathfinding support
 #include "llpathfindingnavmesh.h"
@@ -343,6 +344,7 @@ private:
 
     S32             mVolumeIconsWidth; // <FS:PP> Option to hide volume controls (sounds, media, stream) in upper right
     S32             mBalance;
+    bool            mNativeBalanceKnown = false;
     bool            mBalanceClicked;
     bool            mObscureBalance;
     LLTimer         mBalanceClickTimer;
@@ -351,20 +353,21 @@ private:
     S32             mSquareMetersCommitted;
     bool            mAudioStreamEnabled;
     bool            mShowParcelIcons;
-    LLPanelPresetsCameraPulldown* mPanelPresetsCameraPulldown;
-    LLPanelPresetsPulldown* mPanelPresetsPulldown;
+    LLPanelPresetsCameraPulldown* mPanelPresetsCameraPulldown = nullptr;
+    LLPanelPresetsPulldown* mPanelPresetsPulldown = nullptr;
     LLPanelVolumePulldown* mPanelVolumePulldown;
-    LLPanelNearByMedia* mPanelNearByMedia;
+    LLPanelNearByMedia* mPanelNearByMedia = nullptr;
 
     LLPanel*                mParcelInfoPanel;
     LLTextBox*              mParcelInfoText;
     LLTextBox*              mDamageText;
     LLIconCtrl*             mParcelIcon[ICON_COUNT];
-    LLParcelChangeObserver* mParcelChangedObserver;
+    LLParcelChangeObserver* mParcelChangedObserver = nullptr;
     LLPanel*                mBalancePanel;
     LLButton*               mBuyParcelBtn;
     LLPanel*                mTimeMediaPanel;
 
+    std::vector<boost::signals2::scoped_connection> mSettingsConnections;
     boost::signals2::connection mParcelPropsCtrlConnection;
     boost::signals2::connection mShowCoordsCtrlConnection;
     boost::signals2::connection mParcelMgrConnection;

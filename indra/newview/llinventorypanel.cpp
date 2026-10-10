@@ -2044,14 +2044,9 @@ bool LLInventoryPanel::isUploadLocationSelected(const LLSD& userdata)
 
 void LLInventoryPanel::openSingleViewInventory(LLUUID folder_id)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        if (folder_id.isNull() && LLFolderBridge::sSelf.get()) folder_id = LLFolderBridge::sSelf.get()->getUUID();
-        auto* folder = gInventory.getCategory(folder_id);
-        if (folder) LLFloaterReg::showInstance("fs_partial_inventory", LLSD().with("start_folder_id", folder_id).with("start_folder_name", folder->getName()));
-        return;
-    }
-    LLPanelMainInventory::newFolderWindow(folder_id.isNull() ? LLFolderBridge::sSelf.get()->getUUID() : folder_id);
+    if (folder_id.isNull() && LLFolderBridge::sSelf.get()) folder_id = LLFolderBridge::sSelf.get()->getUUID();
+    if (folder_id.isNull()) return;
+    LLPanelMainInventory::newFolderWindow(folder_id);
 }
 
 void LLInventoryPanel::purgeSelectedItems()
@@ -2181,17 +2176,6 @@ bool is_inventorysp_active()
 LLInventoryPanel* LLInventoryPanel::getActiveInventoryPanel(bool auto_open, bool ignore_secondary)
 // </FS:Beq>
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLSD key;
-        key["start_folder_id"] = gInventory.getRootFolderID();
-        if (auto* root = gInventory.getCategory(gInventory.getRootFolderID()))
-            key["start_folder_name"] = root->getName();
-        auto* floater = dynamic_cast<FSFloaterPartialInventory*>(auto_open
-            ? LLFloaterReg::showInstance("fs_partial_inventory", key)
-            : LLFloaterReg::findInstance("fs_partial_inventory", key));
-        return floater && (auto_open || floater->getVisible()) ? floater->getInventoryPanel() : nullptr;
-    }
     S32 z_min = S32_MAX;
     LLInventoryPanel* res = NULL;
     LLFloater* active_inv_floaterp = NULL;
@@ -3365,4 +3349,12 @@ namespace LLInitParam
         declare(LLFolderType::lookup(LLFolderType::FT_MARKETPLACE_STOCK), LLFolderType::FT_MARKETPLACE_STOCK);
         declare(LLFolderType::lookup(LLFolderType::FT_MARKETPLACE_VERSION), LLFolderType::FT_MARKETPLACE_VERSION);
     }
+}
+
+// Exact named-XUI inventory subclasses share the CPU folder-view renderer.
+bool LLInventoryPanel::isNativeInternalType(const std::type_info& type)
+{
+    return type == typeid(LLInventoryRecentItemsPanel) ||
+        type == typeid(LLInventoryFavoritesItemsPanel) ||
+        type == typeid(LLInventoryWornItemsPanel);
 }

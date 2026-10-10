@@ -58,6 +58,8 @@ namespace LLInitParam
 
 class LLInventoryPanel : public LLPanel
 {
+public:
+    static bool isNativeInternalType(const std::type_info&);
     //--------------------------------------------------------------------
     // Data
     //--------------------------------------------------------------------

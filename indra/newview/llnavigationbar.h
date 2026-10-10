@@ -31,6 +31,7 @@
 // #include "llpanel.h"
 // </FS:Zi>
 #include "llbutton.h"
+#include <typeinfo>
 #include "lllayoutstack.h"
 #include "llinitdestroyclass.h"
 #include "rlvdefines.h"
@@ -97,6 +98,7 @@ class LLNavigationBar
     friend class LLDestroyClass<LLNavigationBar>;
 
 public:
+    static bool isNativeInternalType(const std::type_info&);
 
     // <FS:Zi> Make navigation bar part of the UI
     // /*virtual*/ void draw() override;
@@ -119,6 +121,7 @@ public:
     void refreshLocationCtrl();
 // [/RLVa:KB]
 private:
+    U64 mNativeLoginGeneration = 0;
     // the distance between navigation panel and favorites panel in pixels
     // const static S32 FAVBAR_TOP_PADDING = 10;    // <FS:Zi> No size calculations in code please. XUI handles it all now with visibility_control
 
@@ -188,6 +191,8 @@ private:
     boost::signals2::connection mTeleportFailedConnection;
     boost::signals2::connection mTeleportFinishConnection;
     boost::signals2::connection mHistoryMenuConnection;
+    boost::signals2::scoped_connection mLoginConnection;
+    boost::signals2::scoped_connection mHistoryConnection;
     // if true, save location to location history when teleport finishes
     bool                        mSaveToLocationHistory;
 

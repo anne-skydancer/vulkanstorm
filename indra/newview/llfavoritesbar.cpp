@@ -26,6 +26,9 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llfavoritesbar.h"
+#include "llinventorymodelbackgroundfetch.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
 
 #include "llfloaterreg.h"
 #include "llfocusmgr.h"
@@ -184,8 +187,11 @@ private:
             mIsLoading = true;
             mEventTimer.start();
             // </FS:Ansariel>
+            const auto current = vs_native_im_guard();
+            const LLHandle<LLLandmarkInfoGetter> weak = mHandle;
             LLLandmarkActions::getRegionNameAndCoordsFromPosGlobal(g_pos,
-                boost::bind(&LLLandmarkInfoGetter::landmarkNameCallback, static_cast<LLHandle<LLLandmarkInfoGetter> >(mHandle), _1, _2, _3, _4));
+                [current, weak](const std::string& name, S32 x, S32 y, S32 z)
+                { if (current()) landmarkNameCallback(weak, name, x, y, z); });
         }
         // <FS:Ansariel> FIRE-20370: Viewer sends multiple map block requests when hovering over favorites bar button
         else
@@ -602,6 +608,7 @@ LLFavoritesBarCtrl::LLFavoritesBarCtrl(const LLFavoritesBarCtrl::Params& p)
 
 LLFavoritesBarCtrl::~LLFavoritesBarCtrl()
 {
+    mEndDragConnection.disconnect();
     gInventory.removeObserver(this);
 
     if (mOverflowMenuHandle.get())
@@ -916,6 +923,20 @@ bool LLFavoritesBarCtrl::findDragAndDropTarget(LLUUID& target_id, bool& insert_b
     }
 
     return true;
+}
+
+void LLFavoritesBarCtrl::handleNativeLoginComplete()
+{
+    // Native chrome is built after the skeleton notification, and survives
+    // account changes. Seed its observer snapshot for this account explicitly.
+    mFavoriteFolderId.setNull(); mSelectedItemID.setNull();
+    mItems.clear(); mGetPrevItems = true; mRestoreOverflowMenu = false;
+    if (auto* menu = mContextMenuHandle.get()) menu->setVisible(false);
+    if (auto* menu = mOverflowMenuHandle.get()) menu->setVisible(false);
+    changed(LLInventoryObserver::ALL);
+    if (mFavoriteFolderId.notNull() && !gInventory.isCategoryComplete(mFavoriteFolderId))
+        LLInventoryModelBackgroundFetch::instance().scheduleFolderFetch(mFavoriteFolderId, true);
+    updateButtons(true);
 }
 
 //virtual
@@ -1471,7 +1492,7 @@ void LLFavoritesBarCtrl::positionAndShowOverflowMenu()
 
     // the menu should be offset of the right edge of the window
     // so it's no covered by buttons in the right-side toolbar.
-    LLToolBar* right_toolbar = gToolBarView->getChild<LLToolBar>("toolbar_right");
+    LLToolBar* right_toolbar = gToolBarView ? gToolBarView->findChild<LLToolBar>("toolbar_right") : nullptr;
     if (right_toolbar && right_toolbar->hasButtons())
     {
         S32 toolbar_top = 0;
@@ -1561,6 +1582,7 @@ void copy_slurl_to_clipboard_cb(std::string& slurl)
 bool LLFavoritesBarCtrl::enableSelected(const LLSD& userdata)
 {
     std::string param = userdata.asString();
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() && (param == "show_on_map" || param == "create_pick")) return false;
 
     if (param == std::string("can_paste"))
     {
@@ -1590,6 +1612,12 @@ bool LLFavoritesBarCtrl::enableSelected(const LLSD& userdata)
 void LLFavoritesBarCtrl::doToSelected(const LLSD& userdata)
 {
     std::string action = userdata.asString();
+    if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
+        (action == "show_on_map" || action == "create_pick"))
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
     LL_INFOS("FavoritesBar") << "Action = " << action << " Item = " << mSelectedItemID.asString() << LL_ENDL;
 
     LLViewerInventoryItem* item = gInventory.getItem(mSelectedItemID);
@@ -1602,6 +1630,11 @@ void LLFavoritesBarCtrl::doToSelected(const LLSD& userdata)
     }
     else if (action == "about")
     {
+        if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            LLFloaterReg::showInstance("properties", LLSD().with("item_id", item->getUUID()));
+            return;
+        }
         LLSD key;
         key["type"] = "landmark";
         key["id"] = mSelectedItemID;
@@ -1621,7 +1654,9 @@ void LLFavoritesBarCtrl::doToSelected(const LLSD& userdata)
         // only need to check location validity
         if (!posGlobal.isExactlyZero())
         {
-            LLLandmarkActions::getSLURLfromPosGlobal(posGlobal, copy_slurl_to_clipboard_cb);
+            const auto current = vs_native_im_guard();
+            LLLandmarkActions::getSLURLfromPosGlobal(posGlobal, [current](std::string& slurl)
+            { if (current()) copy_slurl_to_clipboard_cb(slurl); });
         }
         else
         {
@@ -1663,7 +1698,8 @@ void LLFavoritesBarCtrl::doToSelected(const LLSD& userdata)
     }
     else if (action == "copy")
     {
-        LLClipboard::instance().copyToClipboard(mSelectedItemID, LLAssetType::AT_LANDMARK);
+        if (!LLClipboard::instance().copyToClipboard(mSelectedItemID, LLAssetType::AT_LANDMARK))
+            LL_WARNS("FavoritesBar") << "Failed to copy selected favorite " << mSelectedItemID << " to clipboard" << LL_ENDL;
     }
     else if (action == "paste")
     {
@@ -1681,6 +1717,7 @@ void LLFavoritesBarCtrl::doToSelected(const LLSD& userdata)
         LLSD payload;
         payload["id"] = mSelectedItemID;
 
+        vs_native_im_stamp_notification(payload);
         LLNotificationsUtil::add("RenameLandmark", args, payload, boost::bind(onRenameCommit, _1, _2));
     }
     else if (action == "move_to_landmarks")
@@ -1701,6 +1738,7 @@ void LLFavoritesBarCtrl::doToSelected(const LLSD& userdata)
 
 bool LLFavoritesBarCtrl::onRenameCommit(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if (0 == option)
     {
@@ -1935,8 +1973,10 @@ void LLFavoritesOrderStorage::getSLURL(const LLUUID& asset_id)
     slurls_map_t::iterator slurl_iter = mSLURLs.find(asset_id);
     if (slurl_iter != mSLURLs.end()) return; // SLURL for current landmark is already cached
 
+    const auto current = vs_native_im_guard();
     LLLandmark* lm = gLandmarkList.getAsset(asset_id,
-        boost::bind(&LLFavoritesOrderStorage::onLandmarkLoaded, this, asset_id, _1));
+        [this, asset_id, current](LLLandmark* landmark)
+        { if (current()) onLandmarkLoaded(asset_id, landmark); });
     if (lm)
     {
         LL_DEBUGS("FavoritesBar") << "landmark for " << asset_id << " already loaded" << LL_ENDL;
@@ -2009,6 +2049,21 @@ std::string LLFavoritesOrderStorage::getSavedOrderFileName()
     // C:\Program Files\SecondLife\ or similar. JC
     std::string user_dir = gDirUtilp->getLindenUserDir();
     return (user_dir.empty() ? "" : gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT, SORTING_DATA_FILE_NAME));
+}
+
+void LLFavoritesOrderStorage::resetAccount(bool load_from_account)
+{
+    mSortIndexes.clear();
+    mSLURLs.clear();
+    mMissingSLURLs.clear();
+    mPrevFavorites.clear();
+    mFavoriteNames.clear();
+    mStorageFavorites = LLSD();
+    mIsDirty = false;
+    mSaveOnExit = false;
+    mUpdateRequired = false;
+    mRecreateFavoriteStorage = false;
+    if (load_from_account) load();
 }
 
 void LLFavoritesOrderStorage::load()
@@ -2230,8 +2285,10 @@ void LLFavoritesOrderStorage::onLandmarkLoaded(const LLUUID& asset_id, LLLandmar
         if (!pos_global.isExactlyZero())
         {
             LL_DEBUGS("FavoritesBar") << "requesting slurl for landmark " << asset_id << LL_ENDL;
+            const auto current = vs_native_im_guard();
             LLLandmarkActions::getSLURLfromPosGlobal(pos_global,
-            boost::bind(&LLFavoritesOrderStorage::storeFavoriteSLURL, this, asset_id, _1));
+                [this, asset_id, current](std::string& slurl)
+                { if (current()) storeFavoriteSLURL(asset_id, slurl); });
         }
     }
 }
@@ -2502,3 +2559,11 @@ void AddFavoriteLandmarkCallback::fire(const LLUUID& inv_item_id)
 }
 
 // EOF
+
+// Favorite controls are local implementation classes; expose only exact identities.
+bool LLFavoritesBarCtrl::isNativeInternalType(const std::type_info& type)
+{
+    return type == typeid(LLFavoriteLandmarkButton) ||
+           type == typeid(LLFavoriteLandmarkMenuItem) ||
+           type == typeid(LLFavoriteLandmarkToggleableMenu);
+}

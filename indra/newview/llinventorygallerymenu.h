@@ -27,6 +27,7 @@
 #define LL_LLINVENTORYGALLERYMENU_H
 
 #include "lllistcontextmenu.h"
+#include "vsnativeim.h"
 
 class LLInventoryGalleryContextMenu : public LLListContextMenu
 {
@@ -56,6 +57,7 @@ private:
     bool enableContextMenuItem(const LLSD& userdata);
     bool checkContextMenuItem(const LLSD& userdata);
 
+    std::function<bool()> mAccountCurrent = vs_native_im_guard();
     LLInventoryGallery* mGallery;
     bool mRootFolder;
 };

@@ -78,6 +78,10 @@ public:
     // Call this method to create a lookup for this region. This
     // simplifies a lot of the code.
     static void setRegionHandle(const LLUUID& region_id, U64 region_handle);
+    // CPU session adapters supply decoded replies after transport authentication.
+    static void receiveRegionHandle(const LLUUID& region_id, U64 region_handle);
+    static void resetRegionHandles();
+    static bool hasPendingRegionHandle(const LLUUID& region_id);
 
 private:
     LLLandmark();

@@ -31,6 +31,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsfloaternearbychat.h"
+#include "llviewerchat.h"
 
 #include "chatbar_as_cmdline.h"
 #include "fschathistory.h"
@@ -39,6 +40,9 @@
 #include "fsfloaterim.h"
 #include "fsfloaterimcontainer.h"
 #include "fsnearbychathub.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llagent.h"            // gAgent
 #include "llagentcamera.h"  // gAgentCamera
 #include "llanimationstates.h"  // ANIM_AGENT_WHISPER, ANIM_AGENT_TALK, ANIM_AGENT_SHOUT
@@ -128,7 +132,13 @@ FSFloaterNearbyChat::~FSFloaterNearbyChat()
 void FSFloaterNearbyChat::updateFSUseNearbyChatConsole(const LLSD &data)
 {
     FSUseNearbyChatConsole = data.asBoolean();
-
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if (gConsole) gConsole->setVisible(FSUseNearbyChatConsole);
+        return; // The shared text console has no scene toast channel.
+    }
+#endif
     if (FSUseNearbyChatConsole)
     {
         removeScreenChat();
@@ -223,9 +233,9 @@ bool FSFloaterNearbyChat::postBuild()
     mChatHistoryMuted->setUnreadMessagesUpdateCallback(boost::bind(&FSFloaterNearbyChat::updateUnreadMessageNotification, this, _1, true));
 
     FSUseNearbyChatConsole = gSavedSettings.getBOOL("FSUseNearbyChatConsole");
-    gSavedSettings.getControl("FSUseNearbyChatConsole")->getSignal()->connect(boost::bind(&FSFloaterNearbyChat::updateFSUseNearbyChatConsole, this, _2));
+    mConsoleSettingConnection = gSavedSettings.getControl("FSUseNearbyChatConsole")->getSignal()->connect(boost::bind(&FSFloaterNearbyChat::updateFSUseNearbyChatConsole, this, _2));
 
-    gSavedSettings.getControl("FSShowMutedChatHistory")->getSignal()->connect(boost::bind(&FSFloaterNearbyChat::updateShowMutedChatHistory, this, _2));
+    mMutedHistorySettingConnection = gSavedSettings.getControl("FSShowMutedChatHistory")->getSignal()->connect(boost::bind(&FSFloaterNearbyChat::updateShowMutedChatHistory, this, _2));
 
     return LLFloater::postBuild();
 }
@@ -305,7 +315,10 @@ void FSFloaterNearbyChat::addMessage(const LLChat& chat,bool archive,const LLSD 
 
     if (archive)
     {
-        mMessageArchive.push_back(chat);
+        LLChat archived(chat);
+        if (gViewerWindow && gViewerWindow->isNativeVulkan() && archived.mSourceType == CHAT_SOURCE_OBJECT && archived.mURL.empty())
+            archived.mURL = LLViewerChat::getSenderSLURL(archived, args);
+        mMessageArchive.push_back(archived);
         if (mMessageArchive.size() > 200)
         {
             mMessageArchive.erase(mMessageArchive.begin());
@@ -455,10 +468,16 @@ void FSFloaterNearbyChat::openFloater(const LLSD& key)
         setVisible(true);
         LLFloater::openFloater(key);
     }
+#if VS_NATIVE_VULKAN
+    else if (gViewerWindow && gViewerWindow->isNativeVulkan()) LLFloater::openFloater(key);
+#endif
 }
 
 void FSFloaterNearbyChat::removeScreenChat()
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return;
+#endif
     LLNotificationsUI::LLScreenChannelBase* chat_channel = LLNotificationsUI::LLChannelManager::getInstance()->findChannelByID(LLNotificationsUI::NEARBY_CHAT_CHANNEL_UUID);
     if (chat_channel)
     {
@@ -492,6 +511,7 @@ void FSFloaterNearbyChat::setVisible(bool visible)
         }
     }
 
+    if (!gConsole) return;
     if (visible && isInVisibleChain())
     {
         gConsole->addSession(LLUUID::null);
@@ -847,6 +867,13 @@ void FSFloaterNearbyChat::reshapeChatLayoutPanel()
 
 void FSFloaterNearbyChat::sendChat( EChatType type )
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner = VSNativeSession::active();
+        if (!owner || owner->phase() != VSNativeSession::Phase::Connected) return;
+    }
+#endif
     if (mInputEditor)
     {
         LLWString text = mInputEditor->getConvertedText();
@@ -876,6 +903,30 @@ void FSFloaterNearbyChat::sendChat( EChatType type )
                 channel = (S32)(FSFloaterNearbyChat::getInstance()->getChild<LLSpinCtrl>("ChatChannel")->get());
             }
 
+#if VS_NATIVE_VULKAN
+            if (auto session = VSNativeSession::active())
+            {
+                const LLWString outgoing = FSNearbyChat::stripChannelNumber(text, &channel, &sLastSpecialChatChannel, &is_set);
+                if (!is_set && gSavedSettings.getBOOL("FSNearbyChatbar") && gSavedSettings.getBOOL("FSShowChatChannel"))
+                    channel = static_cast<S32>(getChild<LLSpinCtrl>("ChatChannel")->get());
+                std::string native_text = wstring_to_utf8str(outgoing);
+                if (channel == 0)
+                {
+                    native_text = FSCommon::applyAutoCloseOoc(native_text);
+                    native_text = FSCommon::applyMuPose(native_text);
+                }
+                const auto volume = FSNearbyChat::processChatTypeTriggers(type == CHAT_TYPE_OOC ? CHAT_TYPE_NORMAL : type, native_text);
+                // Keep the standard chat transformations, controls and RLV policy.
+                // A connected text session has no gesture animation/world command target.
+                FSNearbyChat::sendChatFromViewer(text, utf8str_to_wstring(native_text), volume, false, channel);
+                mInputEditor->setText(LLStringExplicit(""));
+                session->typing(false);
+                if (gSavedSettings.getBOOL("CloseChatOnReturn") && !gSavedSettings.getBOOL("FSCloseChatOnReturnInMouselook") &&
+                    !gSavedSettings.getBOOL("FSCloseChatOnReturnOnlyBar") && gSavedSettings.getBOOL("FSUnfocusChatHistoryOnReturn"))
+                    stopChat();
+                return;
+            }
+#endif
             std::string utf8text = wstring_to_utf8str(text);
             // Try to trigger a gesture, if not chat to a script.
             std::string utf8_revised_text;
@@ -1031,6 +1082,7 @@ void FSFloaterNearbyChat::updateShowMutedChatHistory(const LLSD &data)
 
 void FSFloaterNearbyChat::handleMinimized(bool minimized)
 {
+    if (!gConsole) return;
     if (minimized)
     {
         gConsole->removeSession(LLUUID::null);

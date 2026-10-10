@@ -9,10 +9,18 @@
 #include "llpanelprofile.h"
 #include "llavatarpropertiesprocessor.h"
 #include "llavatarnamecache.h"
+#include "llavatariconctrl.h"
 #include "fsradar.h"
 #include "lltexturectrl.h"
 #include "llinventorypanel.h"
+#include "llinventoryfilter.h"
+#include "llfloatersidepanelcontainer.h"
+#include "llsidepanelinventory.h"
+#include "llpanelmaininventory.h"
+#include "llfiltereditor.h"
 #include "llfolderviewitem.h"
+#include "llfolderview.h"
+#include "llviewermenu.h"
 #include "llviewermenufile.h"
 #include "llfloaterimagepreview.h"
 #include "llfloaternamedesc.h"
@@ -27,6 +35,8 @@
 #include "lldir.h"
 #include "fsfloaterpartialinventory.h"
 #include "lltooldraganddrop.h"
+#include "lltoolbarview.h"
+#include "llfloatertoybox.h"
 #include "lltransactiontypes.h"
 #include "llmenubutton.h"
 #include "lltoggleablemenu.h"
@@ -44,17 +54,26 @@
 #include "llaccordionctrltab.h"
 #include "llui.h"
 #include "llagent.h"
+#include "llworld.h"
 #include "llagentbenefits.h"
 #include "llviewernetwork.h"
 #include "llimview.h"
 #include "llspeakers.h"
 #include "llfloaterreg.h"
 #include "fsfloaterim.h"
+#include "fsfloaternearbychat.h"
 #include "fsfloaterimcontainer.h"
 #include "fsfloatercontacts.h"
 #include "llnotificationmanager.h"
+#include "llchannelmanager.h"
+#include "llscreenchannel.h"
+#include "lltoast.h"
+#include "llconsole.h"
 #include "vsplainchat.h"
 #include "llviewerwindow.h"
+#include "llwindow.h"
+#include "llweb.h"
+#include "llslurl.h"
 #include "lltexteditor.h"
 #include "fsscrolllistctrl.h"
 #include "llgrouplist.h"
@@ -111,6 +130,37 @@ void clickCheckbox(LLCheckBoxCtrl* control)
     require(control->handleMouseDown(x, y, MASK_NONE), "Real checkbox rejected mouse down");
     require(control->handleMouseUp(x, y, MASK_NONE), "Real checkbox rejected mouse up");
 }
+void commitContextItem(LLMenuGL* menu, const char* name)
+{
+    require(menu != nullptr, "Real context menu did not open");
+    auto* item = menu->getChild<LLMenuItemGL>(name);
+    item->buildDrawLabel();
+    require(item->getEnabled() && item->getVisible(), "Real context action is disabled or hidden");
+    item->onCommit();
+}
+LLPanel* chatHeader(LLView* view, bool object)
+{
+    if (view->getName() == "im_header")
+    {
+        auto* panel = dynamic_cast<LLPanel*>(view);
+        auto* icon = panel ? panel->findChild<LLAvatarIconCtrl>("avatar_icon") : nullptr;
+        auto* name = panel ? panel->findChild<LLTextBox>("user_name") : nullptr;
+        if (icon && name && (object ? name->getText().find("CPU Object") != std::string::npos : icon->getAvatarId() == peer)) return panel;
+    }
+    for (auto* child : *view->getChildList())
+        if (auto* header = chatHeader(child, object)) return header;
+    return nullptr;
+}
+LLMenuGL* openChatHeaderContext(LLView* history, bool object)
+{
+    auto* header = chatHeader(history, object);
+    require(header != nullptr, "Actual rich chat header is missing");
+    auto* icon = header->getChild<LLUICtrl>("avatar_icon");
+    S32 x = 0, y = 0;
+    icon->localPointToOtherView(icon->getRect().getWidth()/2, icon->getRect().getHeight()/2, &x, &y, header);
+    require(header->handleRightMouseDown(x, y, MASK_NONE), "Actual chat header rejected its context click");
+    return dynamic_cast<LLMenuGL*>(gMenuHolder->getVisibleMenu());
+}
 void event(VSNativeSession& owner, const char* name, const LLSD& body)
 {
     LLSD input; input["sender"] = owner.host().getIPandPort(); input["body"] = body;
@@ -142,11 +192,16 @@ struct Replay : public LLAvatarPropertiesObserver
 {
     unsigned step = 0;
     unsigned loggedStep = ~0u;
+    bool contextInspectorOpened = false;
     bool namesSent = false;
     bool membershipSent = false;
     bool muteQueued = false;
     bool mutedDelivered = false;
     LLUUID direct;
+    U32 pauseSerial = 0, resumeSerial = 0;
+    bool savedIMInNearby = false;
+    bool sharedNearbyEncoded = false;
+    bool sharedNearbyIMPreference = false;
     bool directSend = false, groupStart = false, groupSend = false, left = false;
     bool incomingText = false, incomingGroup = false, incomingTyping = false;
     bool typingStart = false, typingStop = false;
@@ -223,6 +278,7 @@ struct Replay : public LLAvatarPropertiesObserver
     std::string waveFilename;
     LLUUID shareConfirmation, payConfirmation, unknownBalanceAlert, insufficientBalanceAlert;
     LLHandle<LLFloater> shareInventory, payFloater;
+    unsigned inventoryTabVisit = 0;
     bool savedPaymentConfirm = false;
     S32 savedPaymentThreshold = 0;
     boost::signals2::scoped_connection accountNotifications;
@@ -303,6 +359,18 @@ struct Replay : public LLAvatarPropertiesObserver
         auto notification = LLNotifications::instance().find(id);
         require(notification != nullptr, "IM error did not produce real notification");
         notification->respond(notification->getResponseTemplate(LLNotification::WITH_DEFAULT_BUTTON));
+    }
+    static void pausePacket(LLMessageSystem* message, void** data)
+    {
+        auto& replay = *reinterpret_cast<Replay*>(data);
+        LLUUID agent, session; U32 serial;
+        message->getUUID("AgentData", "AgentID", agent);
+        message->getUUID("AgentData", "SessionID", session);
+        message->getU32("AgentData", "SerialNum", serial);
+        require(agent == gAgentID && session == gAgentSessionID,
+            "Window pause/resume lost authenticated account identity");
+        if (std::string(message->getMessageName()) == "AgentPause") replay.pauseSerial = serial;
+        else replay.resumeSerial = serial;
     }
     static void packet(LLMessageSystem* message, void** data)
     {
@@ -529,8 +597,19 @@ struct Replay : public LLAvatarPropertiesObserver
             direct = LLIMMgr::computeSessionID(IM_NOTHING_SPECIAL, peer);
             auto* floater = FSFloaterIM::findInstance(direct);
             require(floater && gIMMgr->hasSession(direct), "Contacts IM action did not construct shared conversation");
+            savedIMInNearby = gSavedSettings.getBOOL("FSShowIMInChatHistory");
+            gSavedSettings.setBOOL("FSShowIMInChatHistory", true);
             floater->getChild<LLChatEntry>("chat_editor")->setText(LLStringExplicit("Native direct Unicode \xCE\xA9"));
             floater->getChild<LLButton>("send_chat")->onCommit();
+            // Reproduce the native window modal/focus path around a real IM send.
+            // This used to dereference the intentionally absent scene LLWorld.
+            require(!LLWorld::instanceExists(), "Native IM qualification unexpectedly owns a scene world");
+            gMessageSystem->setHandlerFunc("AgentPause", pausePacket, reinterpret_cast<void**>(this));
+            gMessageSystem->setHandlerFunc("AgentResume", pausePacket, reinterpret_cast<void**>(this));
+            send_agent_pause();
+            send_agent_resume();
+            require(!LLWorld::instanceExists(), "Window pause/resume created scene resources");
+
             incoming(owner, IM_NOTHING_SPECIAL, direct, "Native incoming offline", IM_OFFLINE);
             incoming(owner, IM_TYPING_START, direct, "typing");
             incoming(owner, IM_TYPING_STOP, direct, "typing");
@@ -559,6 +638,17 @@ struct Replay : public LLAvatarPropertiesObserver
         if (step == 1)
         {
             if (!directSend || !incomingText || !incomingTyping || !typingStart || !typingStop || !groupStart) return false;
+            if (!pauseSerial || !resumeSerial) return false;
+            require(resumeSerial > pauseSerial, "Window resume did not advance pause sequence");
+            evidence["connected_window_pause_resume"] = true;
+            auto* nearby = gViewerWindow->nativeChat();
+            require(nearby && nearby->transcript()->getText().find("Native direct Unicode \xCE\xA9") != std::string::npos &&
+                nearby->transcript()->getText().find("Native incoming offline") != std::string::npos,
+                "Configured IM-to-nearby forwarding lost sent or received text");
+            evidence["im_nearby_forwarding"] = true;
+            gSavedSettings.setBOOL("FSShowIMInChatHistory", savedIMInNearby);
+
+
 
             LLSD reply; reply["success"] = true; reply["temp_session_id"] = group; reply["session_id"] = group;
             reply["agents"].append(gAgentID); reply["agents"].append(peer);
@@ -644,6 +734,14 @@ struct Replay : public LLAvatarPropertiesObserver
         }
         if (step == 4)
         {
+            require(gConsole && gConsole->getVisible() && gSavedSettings.getBOOL("FSUseNearbyChatConsole"),
+                "Saved native notification console is not connected to its shared owner");
+            bool consoleEvent = false;
+            for (const auto& paragraph : gConsole->mParagraphs)
+                consoleEvent |= wstring_to_utf8str(paragraph.mParagraphText).find(expectedEventText) != std::string::npos;
+            require(consoleEvent, "Shared console did not retain the real translated group-event notification");
+            gViewerWindow->drawNativeUI(); // Visible processed text must traverse native drawing, with GL traps active.
+            evidence["connected_notification_console"] = true;
             if (!notificationSent)
             {
                 incoming(owner, IM_FRIENDSHIP_OFFERED, LLUUID::generateNewID(), "");
@@ -715,13 +813,26 @@ struct Replay : public LLAvatarPropertiesObserver
                 auto offer = LLNotifications::instance().find(inventoryOffer);
                 auto notice = LLNotifications::instance().find(groupNotice);
                 require(offer && notice && notice->getPayload()["inventory_offer"].isMap(), "Real inventory offer/attachment missing");
-                LLSD show; show["Show"] = true; offer->respond(show);
+                // Complete the mounted attachment before accepting the direct
+                // offer: Show opens its real texture-preview floater, which may
+                // cover this toast under the saved FSShowToastsInFront policy.
                 // Exercise the production skinned group attachment controller.
-                LLToastGroupNotifyPanel panel(notice);
-                auto* link = panel.getChild<LLTextBox>("attachment");
-                const S32 x = link->getRect().getWidth() / 2, y = link->getRect().getHeight() / 2;
-                require(link->handleMouseDown(x, y, MASK_NONE), "Attachment link did not receive click");
-                require(link->handleMouseUp(x, y, MASK_NONE), "Attachment link did not invoke real controller");
+                auto* channel = LLNotificationsUI::LLChannelManager::getNotificationScreenChannel();
+                auto* toast = channel ? channel->getToastByNotificationID(groupNotice) : nullptr;
+                auto* panel = toast ? dynamic_cast<LLToastGroupNotifyPanel*>(toast->getPanel()) : nullptr;
+                require(panel && panel->isInVisibleChain(), "Actual mounted group-attachment notification is missing or hidden");
+                auto* link = panel->getChild<LLTextBox>("attachment");
+                if (auto* capture = gFocusMgr.getMouseCapture())
+                    LL_WARNS("NativeIMReplay") << "Attachment input is held by " << capture->getName() << LL_ENDL;
+                require(!gFocusMgr.getMouseCapture(), "Prior UI action retained mouse capture before attachment click");
+                const LLRect bounds = link->calcScreenRect();
+                LLCoordGL point;
+                LLUI::getInstance()->screenPointToGL(bounds.getCenterX(), bounds.getCenterY(), &point.mX, &point.mY);
+                require(gViewerWindow->handleMouseDown(gViewerWindow->getWindow(), point, MASK_NONE), "Attachment link did not receive native window click");
+                require(link->hasMouseCapture(), "Mounted attachment did not acquire mouse capture");
+                require(gViewerWindow->handleMouseUp(gViewerWindow->getWindow(), point, MASK_NONE), "Attachment link did not invoke real controller");
+                require(!gFocusMgr.getMouseCapture(), "Attachment action retained mouse capture after release");
+                LLSD show; show["Show"] = true; offer->respond(show);
                 inventoryResponded = true; return false;
             }
             if (!inventoryAccepted || !attachmentAccepted || !gInventory.getItem(offeredItem)) return false;
@@ -1243,12 +1354,40 @@ struct Replay : public LLAvatarPropertiesObserver
         {
             auto* panel = LLInventoryPanel::getActiveInventoryPanel(false, true);
             require(panel && shareInventory.get(), "Share inventory browser retired before selection");
+            auto* inventory = dynamic_cast<LLFloaterSidePanelContainer*>(shareInventory.get());
+            require(inventory && inventory->getInstanceName() == "inventory", "Share bypassed the full skinned account inventory");
+            auto* side = inventory->findChild<LLSidepanelInventory>("main_panel");
+            require(side != nullptr, "Full inventory sidebar owner is missing");
+            auto* main = side->getMainInventoryPanel();
+            require(main && main->isInVisibleChain(), "Full inventory main controller is unavailable");
+            auto* tabs = main->getChild<LLTabContainer>("inventory filter tabs");
+            if (inventoryTabVisit < unsigned(tabs->getTabCount()))
+            {
+                require(tabs->selectTab(inventoryTabVisit++), "Actual inventory tab selection failed");
+                return false; // Draw every actual skin tab through the viewer loop.
+            }
+            side->selectAllItemsPanel();
+            panel = main->getAllItemsPanel();
+            require(panel && panel->isInVisibleChain(), "Full inventory All Items panel is hidden");
+
             if (!panel->getItemByID(offeredItem)) return false;
             panel->setSelection(offeredItem, true);
             const auto selected = panel->getSelectedItems();
             if (selected.size() != 1 || *selected.begin() != panel->getItemByID(offeredItem)) return false;
             auto* item = gInventory.getItem(offeredItem);
             require(item != nullptr, "Selected Share item missing from authenticated inventory");
+            auto* search = main->getChild<LLFilterEditor>("inventory search editor");
+            search->setText(item->getName()); search->onCommit();
+            require(!main->getCurrentFilter().getFilterSubString().empty(), "Full inventory search control did not set its filter");
+            search->setText(LLStringUtil::null); search->onCommit();
+            require(main->getCurrentFilter().getFilterSubString().empty(), "Full inventory search did not clear its filter");
+            auto* gear = main->getChild<LLMenuButton>("options_gear_btn");
+            auto* sort = gear->getMenu()->getChild<LLMenuItemCallGL>("sort_by_name");
+            sort->onCommit();
+            require((panel->getSortOrder() & LLInventoryFilter::SO_DATE) == 0,
+                "Full inventory sort menu did not update the production panel");
+            evidence["connected_inventory_main"] = true;
+
             auto* conversation = FSFloaterIM::show(direct);
             require(conversation && conversation->getVisible(), "Real direct conversation unavailable for inventory drop");
             EAcceptance accept = ACCEPT_NO; std::string tooltip;
@@ -1525,6 +1664,310 @@ struct Replay : public LLAvatarPropertiesObserver
             evidence["connected_inventory_script_edit_save"] = true;
             ++step; return false;
         }
+        if (step == 52)
+        {
+            auto* toybox = LLFloaterReg::getTypedInstance<LLFloaterToybox>("toybox");
+            require(toybox != nullptr, "Actual shared toolbar configurator is unavailable");
+            toybox->openFloater(); ++step; return false;
+        }
+        if (step == 53)
+        {
+            require(gToolBarView != nullptr, "Actual shared toolbar controller is unavailable");
+            auto* toybox = LLFloaterReg::getTypedInstance<LLFloaterToybox>("toybox");
+            require(toybox && toybox->isInVisibleChain(), "Toolbar configurator did not open");
+            // Keep this fixture reversible even when an assertion throws. It runs
+            // against the isolated replay account, never the live user's profile.
+            struct Restore
+            {
+                struct Toolbar
+                {
+                    command_id_list_t commands;
+                    LLToolBarEnums::ButtonType mode;
+                    LLToolBarEnums::Alignment alignment;
+                    LLToolBarEnums::LayoutStyle layout;
+                };
+                std::vector<Toolbar> bars;
+                bool locked = gSavedSettings.getBOOL("LockToolbars");
+                std::string file = gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT, "toolbars.xml");
+                bool existed = LLFile::isfile(file);
+                std::string contents;
+                Restore()
+                {
+                    if (existed)
+                    {
+                        std::ifstream input(file, std::ios::binary);
+                        contents.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+                    }
+                    for (int i = LLToolBarEnums::TOOLBAR_FIRST; i <= LLToolBarEnums::TOOLBAR_LAST; ++i)
+                    {
+                        auto* bar = gToolBarView->getToolbar(static_cast<LLToolBarEnums::EToolBarLocation>(i));
+                        bars.push_back({bar->getCommandsList(), bar->getButtonType(), bar->getAlignment(), bar->getLayoutStyle()});
+                    }
+                }
+                ~Restore()
+                {
+                    if (LLToolDragAndDrop::getInstance()->hasMouseCapture()) LLToolDragAndDrop::getInstance()->endDrag();
+                    LLToolBarView::resetDragTool(nullptr);
+                    gToolBarView->clearToolbars();
+                    for (int i = LLToolBarEnums::TOOLBAR_FIRST; i <= LLToolBarEnums::TOOLBAR_LAST; ++i)
+                    {
+                        auto* bar = gToolBarView->getToolbar(static_cast<LLToolBarEnums::EToolBarLocation>(i));
+                        const auto& saved = bars[i - LLToolBarEnums::TOOLBAR_FIRST];
+                        bar->setButtonType(saved.mode); bar->setAlignment(saved.alignment); bar->setLayoutStyle(saved.layout);
+                        for (const auto& id : saved.commands) bar->addCommand(id);
+                    }
+                    gSavedSettings.setBOOL("LockToolbars", locked);
+                    if (existed)
+                    {
+                        std::ofstream output(file, std::ios::binary | std::ios::trunc); output << contents;
+                    }
+                    else LLFile::remove(file);
+                }
+            } restore;
+            gSavedSettings.setBOOL("LockToolbars", false);
+            const LLCommandId command("inventory");
+            const S32 original = gToolBarView->hasCommand(command);
+            const auto destination = original == LLToolBarEnums::TOOLBAR_LEFT ?
+                LLToolBarEnums::TOOLBAR_RIGHT : LLToolBarEnums::TOOLBAR_LEFT;
+            auto* target = gToolBarView->getToolbar(destination);
+            auto* source = original == LLToolBarEnums::TOOLBAR_NONE ? toybox->getChild<LLToolBar>("toybox_toolbar") :
+                gToolBarView->getToolbar(static_cast<LLToolBarEnums::EToolBarLocation>(original));
+            auto* button = source->findChild<LLToolBarButton>("inventory");
+            require(button != nullptr, "Actual Inventory toolbar button is missing");
+            LLToolBarView::startDragTool(0, 0, button);
+            require(LLToolBarView::handleDragTool(100, 100, command.uuid(), LLAssetType::AT_WIDGET),
+                "Shared toolbar command could not start dragging");
+            auto* drag = LLToolDragAndDrop::getInstance();
+            require(drag->hasMouseCapture() && !LLWorld::instanceExists(), "Toolbar drag lost UI capture or created a world");
+            require(LLToolBarView::handleDropTool(gToolBarView->getDragItem(), DAD_WIDGET, 0, 0, target),
+                "Actual toolbar drop rejected a command");
+            drag->endDrag();
+            require(gToolBarView->hasCommand(command) == destination && !drag->hasMouseCapture(),
+                "Toolbar command position or drag release is incorrect");
+            target->setButtonType(LLToolBarEnums::BTNTYPE_ICONS_ONLY);
+            target->setAlignment(LLToolBarEnums::ALIGN_END);
+            target->setLayoutStyle(LLToolBarEnums::LAYOUT_STYLE_EQUALIZE);
+            const auto expected = target->getCommandsList();
+            gToolBarView->persistToolbars();
+            require(LLFile::isfile(restore.file) && gToolBarView->loadToolbars(), "Toolbar configuration did not save/reload");
+            target = gToolBarView->getToolbar(destination);
+            require(target->getCommandsList() == expected && target->getButtonType() == LLToolBarEnums::BTNTYPE_ICONS_ONLY &&
+                target->getAlignment() == LLToolBarEnums::ALIGN_END && target->getLayoutStyle() == LLToolBarEnums::LAYOUT_STYLE_EQUALIZE,
+                "Saved toolbar positions, display mode, alignment or layout did not round-trip");
+            require(!LLWorld::instanceExists(), "Toolbar configuration constructed a scene");
+            toybox->closeFloater();
+            evidence["connected_toolbar_customization"] = true;
+            ++step; return false;
+        }
+        if (step == 54)
+        {
+            auto* chat = gViewerWindow->nativeChat();
+            require(chat && chat->useSharedFrontend(true), "Actual skinned nearby frontend could not initialize");
+            auto* floater = FSFloaterNearbyChat::findInstance();
+            require(floater != nullptr, "Actual Nearby Chat floater is missing");
+            floater->openFloater(LLSD());
+            ++step; return false;
+        }
+        if (step == 55)
+        {
+            auto* floater = FSFloaterNearbyChat::findInstance();
+            auto* input = floater->getChatBox();
+            require(input && input->getEnabled() && input->isInVisibleChain(), "Actual Nearby Chat input is disabled or hidden");
+            input->setFocus(true); input->setText(LLStringExplicit("V4 shared nearby Unicode \xCE\xA9"));
+            auto* send = floater->getChild<LLButton>("send_chat");
+            require(send->getEnabled() && send->isInVisibleChain(), "Actual Nearby Chat Send button is disabled or hidden");
+            send->onCommit();
+            require(input->getText().empty(), "Actual Nearby Chat Send retained accepted input");
+            sharedNearbyIMPreference = gSavedSettings.getBOOL("FSShowIMInChatHistory");
+            gSavedSettings.setBOOL("FSShowIMInChatHistory", true);
+            incoming(owner, IM_NOTHING_SPECIAL, direct, "Shared nearby forwarded IM");
+            ++step; return false;
+        }
+        if (step == 56)
+        {
+            if (!sharedNearbyEncoded) return false;
+            auto* floater = FSFloaterNearbyChat::findInstance();
+            auto* history = floater->getChild<FSChatHistory>("chat_history");
+            const auto text = history->getValue().asString();
+            if (text.find("Shared nearby server reply") == std::string::npos || text.find("Shared nearby forwarded IM") == std::string::npos) return false;
+            const bool plain = gSavedSettings.getBOOL("PlainTextChatHistory");
+            gSavedSettings.setBOOL("PlainTextChatHistory", !plain);
+            floater->updateChatHistoryStyle();
+            require(history->getValue().asString().find("Shared nearby server reply") != std::string::npos,
+                "Actual Nearby Chat style switch lost archived messages");
+            gSavedSettings.setBOOL("PlainTextChatHistory", plain); floater->updateChatHistoryStyle();
+            gSavedSettings.setBOOL("FSShowIMInChatHistory", sharedNearbyIMPreference);
+            require(!LLWorld::instanceExists(), "Actual Nearby Chat frontend constructed a scene");
+            require(gViewerWindow->nativeChat()->useSharedFrontend(false), "Nearby frontend could not return to diagnostic oracle");
+            evidence["connected_nearby_frontend"] = true;
+            ++step; return false;
+        }
+        if (step == 57)
+        {
+            require(gViewerWindow->nativeChat()->useSharedFrontend(true), "Nearby context frontend unavailable");
+            auto* nearby = FSFloaterNearbyChat::findInstance();
+            const bool plain = gSavedSettings.getBOOL("PlainTextChatHistory");
+            // Each commit goes through the actual XUI menu item and registrar.
+            // The two commits restore the setting, including its controller callbacks.
+            auto exerciseOptions = [](LLFloater* floater)
+            {
+                require(floater != nullptr, "Actual conversation options owner is missing");
+                auto* button = floater->getChild<LLMenuButton>("chat_options_btn");
+                require(button->getEnabled() && button->isInVisibleChain(), "Actual conversation options are unavailable");
+                const bool before = gSavedSettings.getBOOL("PlainTextChatHistory");
+                const S32 x = button->getRect().getWidth()/2, y = button->getRect().getHeight()/2;
+                button->handleMouseDown(x, y, MASK_NONE); button->handleMouseUp(x, y, MASK_NONE);
+                commitContextItem(button->getMenu(), "plain_text_chat_history");
+                require(gSavedSettings.getBOOL("PlainTextChatHistory") != before, "Real conversation context toggle was not wired");
+                button->handleMouseDown(x, y, MASK_NONE); button->handleMouseUp(x, y, MASK_NONE);
+                commitContextItem(button->getMenu(), "plain_text_chat_history");
+                require(gSavedSettings.getBOOL("PlainTextChatHistory") == before, "Real context toggle did not restore its setting");
+                button->hideMenu();
+            };
+            exerciseOptions(nearby);
+            exerciseOptions(FSFloaterIM::show(direct));
+            // The earlier force-close test deliberately retired this group
+            // session. Reopen through the real selected Contacts group action,
+            // rather than asking FSFloaterIM::show to invent a missing model.
+            if (!gIMMgr->hasSession(group))
+            {
+                auto* contacts = FSFloaterContacts::getInstance();
+                contacts->openTab("groups");
+                auto* groups = contacts->getPanelByName("groups_panel");
+                auto* list = groups->getChild<LLGroupList>("group_list");
+                list->resetSelection();
+                require(list->selectItemByUUID(group), "Context qualification group membership row is missing");
+                list->onCommit();
+                auto* start = groups->getChild<LLButton>("chat_btn");
+                require(start->getEnabled(), "Actual group context reopen action is disabled");
+                start->onCommit();
+                require(gIMMgr->hasSession(group), "Actual group context reopen did not create its session");
+            }
+            exerciseOptions(FSFloaterIM::show(group));
+            // Earlier mute/context qualification can leave this toggle target
+            // open. Establish its closed production state before testing Open.
+            if (auto* existingBlock = LLFloaterReg::findInstance("fs_blocklist"))
+                existingBlock->closeFloater();
+            const bool standalone = gSavedSettings.getBOOL("FSUseStandaloneBlocklistFloater");
+            gSavedSettings.setBOOL("FSUseStandaloneBlocklistFloater", false);
+            nearby->openFloater(LLSD());
+            auto* options = nearby->getChild<LLMenuButton>("chat_options_btn");
+            options->handleMouseDown(options->getRect().getWidth()/2, options->getRect().getHeight()/2, MASK_NONE);
+            options->handleMouseUp(options->getRect().getWidth()/2, options->getRect().getHeight()/2, MASK_NONE);
+            commitContextItem(options->getMenu(), "block_list");
+            gSavedSettings.setBOOL("FSUseStandaloneBlocklistFloater", standalone);
+            auto* block = LLFloaterReg::findInstance("fs_blocklist");
+            require(block && block->isInVisibleChain(), "Actual chat Block List silently used a scene sidebar");
+            block->closeFloater();
+            gSavedSettings.setBOOL("PlainTextChatHistory", false);
+            nearby->updateChatHistoryStyle();
+            LLChat object;
+            object.mFromName = "CPU Object";
+            object.mFromID = LLUUID("90000000-0000-0000-0000-000000000009");
+            object.mOwnerID = peer; object.mSourceType = CHAT_SOURCE_OBJECT;
+            object.mChatType = CHAT_TYPE_NORMAL; object.mPosAgent = LLVector3(10,20,30);
+            object.mText = "Native object context qualification";
+            gViewerWindow->nativeChat()->appendChat(object);
+            // Keep the original preference while real headers are drawn for one frame.
+            sharedNearbyIMPreference = plain;
+            nearby->openFloater(LLSD());
+            ++step; return false;
+        }
+        if (step == 58)
+        {
+            auto* nearby = FSFloaterNearbyChat::findInstance();
+            auto* history = nearby->getChild<FSChatHistory>("chat_history");
+            if (!contextInspectorOpened)
+            {
+                commitContextItem(openChatHeaderContext(history, false), "Show Profile");
+                auto* profile = LLFloaterReg::findInstance("profile", LLSD().with("id", peer));
+                require(profile && profile->isInVisibleChain(),
+                    "Actual resident context Profile did not reach the shared controller");
+                commitContextItem(openChatHeaderContext(history, true), "Object Profile");
+                auto* inspector = LLFloaterReg::findInstance("inspect_remote_object");
+                require(inspector && inspector->isInVisibleChain(), "Actual object context inspector did not open");
+                contextInspectorOpened = true;
+                return false; // Draw/reflow the real inspector before hit-testing its URL labels.
+            }
+            auto* inspector = LLFloaterReg::findInstance("inspect_remote_object");
+            require(inspector && inspector->isInVisibleChain(), "Actual object inspector retired before metadata input");
+            require(inspector->getChild<LLUICtrl>("object_name")->getValue().asString().find("CPU Object") != std::string::npos,
+                "Actual object context inspector lost selected object name");
+            // Parsed URL labels resolve to resident/location names. Verify the
+            // actual link targets through their shared text context controller,
+            // rather than expecting raw UUIDs/paths in the displayed labels.
+            auto verifyInspectorURL = [](LLTextBox* field, const std::string& expected)
+            {
+                require(field && field->isInVisibleChain() && field->getLength() > 2,
+                    "Actual inspector metadata link is missing");
+                bool opened = false;
+                const LLRect visible = field->getVisibleTextRect();
+                for (S32 index = 0; index < field->getLength() && !opened; ++index)
+                {
+                    // This API returns an insertion caret, not a character box.
+                    // Hit the interior between adjacent carets after real drawing.
+                    const LLRect first = field->getLocalRectFromDocIndex(index);
+                    const LLRect next = field->getLocalRectFromDocIndex(index + 1);
+                    if (next.mLeft <= first.mLeft || next.mBottom != first.mBottom) continue;
+                    const S32 x = (first.mLeft + next.mLeft) / 2, y = first.getCenterY();
+                    if (!visible.pointInRect(x, y)) continue;
+                    opened = field->handleRightMouseDown(x, y, MASK_NONE);
+                    if (opened)
+                        LL_INFOS("NativeIMReplay") << "Inspector link context field=" << field->getName()
+                            << " index=" << index << " point=" << x << "," << y
+                            << " label=" << field->getText() << LL_ENDL;
+                }
+                if (!opened)
+                    LL_WARNS("NativeIMReplay") << "Inspector link hit failed field=" << field->getName()
+                        << " label=" << field->getText() << " visible=" << visible.mLeft << ","
+                        << visible.mBottom << "," << visible.mRight << "," << visible.mTop
+                        << " lines=" << field->getLineCount() << LL_ENDL;
+                require(opened, "Actual inspector metadata link did not open its context menu");
+                auto* menu = dynamic_cast<LLMenuGL*>(gMenuHolder->getVisibleMenu());
+                gViewerWindow->getWindow()->copyTextToClipboard(utf8str_to_wstring("before inspector URL copy"));
+                commitContextItem(menu, "url_copy");
+                LLWString copied;
+                require(gViewerWindow->getWindow()->pasteTextFromClipboard(copied) && wstring_to_utf8str(copied) == expected,
+                    "Actual object inspector metadata link lost selected target identity");
+            };
+            verifyInspectorURL(inspector->getChild<LLTextBox>("object_owner"),
+                LLSLURL("agent", peer, "about").getSLURLString());
+            verifyInspectorURL(inspector->getChild<LLTextBox>("object_slurl"),
+                "secondlife:///app/teleport/" + LLWeb::escapeURL(LLSLURL(owner.regionName(), LLVector3(10,20,30)).getLocationString()));
+            inspector->closeFloater();
+            gSavedSettings.setBOOL("PlainTextChatHistory", sharedNearbyIMPreference);
+            nearby->updateChatHistoryStyle();
+            gViewerWindow->nativeChat()->useSharedFrontend(false);
+            LLFloaterSidePanelContainer::showPanel("inventory", LLSD());
+            auto* inventory = LLFloaterReg::findInstance("inventory");
+            require(inventory != nullptr, "Actual context inventory unavailable");
+            auto* side = inventory->findChild<LLSidepanelInventory>("main_panel");
+            auto* main = inventory->findChild<LLPanelMainInventory>("panel_main_inventory");
+            require(side && main, "Actual inventory context controller missing");
+            side->selectAllItemsPanel();
+            main->getAllItemsPanel()->setSelection(offeredItem, true);
+            ++step; return false;
+        }
+        if (step == 59)
+        {
+            auto* inventory = LLFloaterReg::findInstance("inventory");
+            auto* main = inventory->getChild<LLPanelMainInventory>("panel_main_inventory");
+            auto* panel = main->getAllItemsPanel();
+            auto* row = panel->getItemByID(offeredItem);
+            require(row != nullptr, "Actual context inventory item missing");
+            auto* root = panel->getRootFolder();
+            S32 x = 0, y = 0;
+            row->localPointToOtherView(row->getRect().getWidth()/2, row->getRect().getHeight()/2, &x, &y, root);
+            require(root->handleRightMouseDown(x, y, MASK_NONE), "Actual inventory right-click was rejected");
+            commitContextItem(dynamic_cast<LLMenuGL*>(gMenuHolder->getVisibleMenu()), "Properties");
+            auto* legacy = LLFloaterReg::findInstance("properties", LLSD().with("item_id", offeredItem));
+            auto* modern = LLFloaterReg::findInstance("item_properties", LLSD().with("id", offeredItem));
+            require((legacy && legacy->isInVisibleChain()) || (modern && modern->isInVisibleChain()),
+                "Actual inventory context Properties did not open the shared account editor");
+            require(!LLWorld::instanceExists(), "Account context actions constructed a scene");
+            evidence["connected_account_context_actions"] = true;
+            ++step; return false;
+        }
         return true;
     }
 };
@@ -1546,6 +1989,25 @@ void vs_native_im_replay_economy_request(LLMessageSystem* message, void**)
     for (const char* field : {"TeleportPriceExponent", "PriceParcelClaimFactor", "EnergyEfficiency", "PriceObjectRent", "PriceObjectScaleFactor"})
         reply->addF32(field, 0.f);
     reply->sendReliable(owner->host());
+}
+bool vs_native_im_replay_nearby_request(LLMessageSystem* message)
+{
+    std::string text; message->getString("ChatData", "Message", text);
+    if (text != "V4 shared nearby Unicode \xCE\xA9") return false;
+    const auto owner = VSNativeSession::active();
+    LLUUID agent, identity; U8 type; S32 channel;
+    message->getUUID("AgentData", "AgentID", agent); message->getUUID("AgentData", "SessionID", identity);
+    message->getU8("ChatData", "Type", type); message->getS32("ChatData", "Channel", channel);
+    require(owner && message->getSender() == owner->host() && agent == gAgentID && identity == gAgentSessionID &&
+        type == CHAT_TYPE_NORMAL && channel == 0, "Actual Nearby Chat Send changed encoded identity, channel or volume");
+    replay.sharedNearbyEncoded = true;
+    gMessageSystem->newMessage("ChatFromSimulator"); gMessageSystem->nextBlock("ChatData");
+    gMessageSystem->addString("FromName", "CPU Sender"); gMessageSystem->addUUID("SourceID", peer);
+    gMessageSystem->addUUID("OwnerID", peer); gMessageSystem->addU8("SourceType", CHAT_SOURCE_AGENT);
+    gMessageSystem->addU8("ChatType", CHAT_TYPE_NORMAL); gMessageSystem->addU8("Audible", CHAT_AUDIBLE_FULLY);
+    gMessageSystem->addVector3("Position", LLVector3(10, 20, 30));
+    gMessageSystem->addString("Message", "Shared nearby server reply"); gMessageSystem->sendReliable(owner->host());
+    return true;
 }
 bool vs_native_im_replay_tick(VSNativeSession& session, LLSD& evidence)
 {
@@ -1580,7 +2042,8 @@ bool vs_native_im_replay_expired()
 {
     const bool expired = replay.retiredGuard && !replay.retiredGuard() &&
         !vs_native_im_notification_current(replay.retiredNotification) &&
-        !vs_ui_image_ready(replay.profileImage);
+        !vs_ui_image_ready(replay.profileImage) &&
+        (!gConsole || (gConsole->mParagraphs.empty() && gConsole->mLineColors.empty() && gConsole->mSessionIDs.empty()));
     if (auto* floater = replay.imageFloater.get()) delete floater;
     return expired;
 }

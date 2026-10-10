@@ -37,6 +37,8 @@
 #include "llcriticaldamp.h"
 #include "llfontgl.h"
 #include "llgl.h"
+#include "llrender2dutils.h"
+#include <memory>
 #include "llui.h"
 #include "lluiimage.h"
 //#include "llviewerimage.h"
@@ -164,7 +166,8 @@ void LLConsole::draw()
     constexpr F32 padding_horizontal = 15;
     constexpr F32 padding_vertical = 8;
     // </FS>
-    LLGLSUIDefault gls_ui;
+    std::unique_ptr<LLGLSUIDefault> gls_ui;
+    if (!LLRender2D::isNativeUI()) gls_ui = std::make_unique<LLGLSUIDefault>();
 
     // skip lines added more than mLinePersistTime ago
     F32 cur_time = mTimer.getElapsedTimeF32();
@@ -513,6 +516,7 @@ void LLConsole::clear()
     mLineStyle.clear();
     mSessionIDs.clear();
     mMarkdownMessages.clear();
+    mParagraphs.clear();
     mMutex.unlock();
 
     mTimer.reset();

@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llsidepanelinventory.h"
 
 #include "llagent.h"
@@ -248,12 +251,15 @@ bool LLSidepanelInventory::postBuild()
         // </FS:Ansariel>
 
         // Trigger callback for after login so we can setup to track inbox changes after initial inventory load
-        LLAppViewer::instance()->setOnLoginCompletedCallback(boost::bind(&LLSidepanelInventory::updateInbox, this));
+#if VS_NATIVE_VULKAN
+        if (!VSNativeSession::active())
+#endif
+            mAccountConnections.emplace_back(LLAppViewer::instance()->setOnLoginCompletedCallback(boost::bind(&LLSidepanelInventory::updateInbox, this)));
         // </FS:Ansariel>
 
         // <FS:Ansariel> Optional hiding of Received Items folder aka Inbox
-        gSavedSettings.getControl("FSShowInboxFolder")->getSignal()->connect(boost::bind(&LLSidepanelInventory::refreshInboxVisibility, this));
-        gSavedSettings.getControl("FSAlwaysShowInboxButton")->getSignal()->connect(boost::bind(&LLSidepanelInventory::refreshInboxVisibility, this));
+        mAccountConnections.emplace_back(gSavedSettings.getControl("FSShowInboxFolder")->getSignal()->connect(boost::bind(&LLSidepanelInventory::refreshInboxVisibility, this)));
+        mAccountConnections.emplace_back(gSavedSettings.getControl("FSAlwaysShowInboxButton")->getSignal()->connect(boost::bind(&LLSidepanelInventory::refreshInboxVisibility, this)));
 
         sInboxInitalized = true; // <FS:Ansariel> Inbox panel randomly shown on secondary inventory window
     }
@@ -274,6 +280,14 @@ bool LLSidepanelInventory::postBuild()
         // Primary inventory floater will have undefined key
         initInventoryViews();
     }
+
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active())
+    {
+        initInventoryViews();
+        if (session->phase() == VSNativeSession::Phase::Connected) updateInbox();
+    }
+#endif
 
     return true;
 }
@@ -718,3 +732,10 @@ LLFloater* LLSidepanelInventory::createSecondaryInventoryWindow(const LLSD& key)
     return LLFloaterReg::build<LLFloaterSidePanelContainer>(LLSD().with("is_secondary", true));
 }
 // </FS:Ansariel>
+
+void LLSidepanelInventory::resetNativeAccountState()
+{
+    // Called after account inventory floaters are destroyed, before relogin.
+    sInboxInitalized = false;
+    sLoginCompleted = false;
+}

@@ -95,6 +95,7 @@ private:
     LLUIImage*                  mBgImage;
     LLUIImage*                  mBgImageDisabled;
     LLUIImage*                  mBgImageFocused;
+    boost::signals2::scoped_connection mFontChangedConnection;
     boost::signals2::connection mRlvBehaviorCallbackConnection;
     boost::signals2::connection mEmojiHelperSettingConnection;
 };

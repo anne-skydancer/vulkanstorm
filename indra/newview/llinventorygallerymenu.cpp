@@ -96,6 +96,7 @@ LLContextMenu* LLInventoryGalleryContextMenu::createMenu()
     registrar.add("Inventory.EmptyLostAndFound", boost::bind(&LLInventoryModel::emptyFolderType, &gInventory, "ConfirmEmptyLostAndFound", LLFolderType::FT_LOST_AND_FOUND));
     registrar.add("Inventory.DoCreate", [this](LLUICtrl*, const LLSD& data)
                           {
+                              if (!mAccountCurrent() || (!mRootFolder && mUUIDs.empty())) return;
                               if (mRootFolder)
                               {
                                   mGallery->doCreate(mGallery->getRootFolder(), data);
@@ -133,6 +134,7 @@ LLContextMenu* LLInventoryGalleryContextMenu::createMenu()
 
 void LLInventoryGalleryContextMenu::doToSelected(const LLSD& userdata)
 {
+    if (!mAccountCurrent() || mUUIDs.empty()) return;
     std::string action = userdata.asString();
     LLInventoryObject* obj = gInventory.getObject(mUUIDs.front());
     if(!obj) return;
@@ -457,6 +459,7 @@ void LLInventoryGalleryContextMenu::doToSelected(const LLSD& userdata)
 
 void LLInventoryGalleryContextMenu::rename(const LLUUID& item_id)
 {
+    if (!mAccountCurrent()) return;
     LLInventoryObject* obj = gInventory.getObject(item_id);
     if (!obj) return;
 
@@ -464,13 +467,15 @@ void LLInventoryGalleryContextMenu::rename(const LLUUID& item_id)
     args["NAME"] = obj->getName();
 
     LLSD payload;
-    payload["id"] = mUUIDs.front();
+    payload["id"] = item_id;
+    vs_native_im_stamp_notification(payload);
 
     LLNotificationsUtil::add("RenameItem", args, payload, boost::bind(onRename, _1, _2));
 }
 
 void LLInventoryGalleryContextMenu::onRename(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     if (option != 0) return; // canceled
 
@@ -501,18 +506,21 @@ void LLInventoryGalleryContextMenu::onRename(const LLSD& notification, const LLS
 
 void LLInventoryGalleryContextMenu::fileUploadLocation(const LLSD& userdata)
 {
+    if (!mAccountCurrent() || mUUIDs.empty()) return;
     const std::string param = userdata.asString();
     LLInventoryAction::fileUploadLocation(mUUIDs.front(), param);
 }
 
 bool LLInventoryGalleryContextMenu::isUploadLocationSelected(const LLSD& userdata)
 {
+    if (!mAccountCurrent() || mUUIDs.empty()) return false;
     const std::string param = userdata.asString();
     return LLInventoryAction::isFileUploadLocation(mUUIDs.front(), param);
 }
 
 bool LLInventoryGalleryContextMenu::canSetUploadLocation(const LLSD& userdata)
 {
+    if (!mAccountCurrent()) return false;
     if (mUUIDs.size() != 1)
     {
         return false;
@@ -589,6 +597,7 @@ bool check_folder_for_contents_of_type(const LLUUID &id, LLInventoryModel* model
 
 void LLInventoryGalleryContextMenu::updateMenuItemsVisibility(LLContextMenu* menu)
 {
+    if (!mAccountCurrent() || mUUIDs.empty()) return;
     LLUUID selected_id = mUUIDs.front();
     LLInventoryObject* obj = gInventory.getObject(selected_id);
     if (!obj)

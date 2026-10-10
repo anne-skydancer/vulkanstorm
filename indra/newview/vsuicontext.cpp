@@ -82,7 +82,10 @@ struct VSUIContext::Impl
             LLPanel::Params panel;
             panel.name       = "native_ui_root";
             panel.focus_root = true;
-            panel.rect       = LLRect(0, static_cast<S32>(height / dpi), static_cast<S32>(width / dpi), 0);
+            // Use the same logical-pixel rounding as LLViewerWindow's native
+            // extent. A truncated root and rounded children retain their one-pixel
+            // mismatch through every subsequent follows-based reshape.
+            panel.rect       = LLRect(0, ll_round(height / dpi), ll_round(width / dpi), 0);
             root.reset(root_factory ? root_factory(panel.rect()) : LLUICtrlFactory::create<LLPanel>(panel));
             require(bool(root), "Native UI root was not admitted");
             LLUI::getInstance()->setRootView(root.get());

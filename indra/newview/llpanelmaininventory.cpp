@@ -3515,3 +3515,44 @@ void LLPanelMainInventory::scrollToInvPanelSelection()
 
 // List Commands                                                              //
 ////////////////////////////////////////////////////////////////////////////////
+
+bool LLPanelMainInventory::isNativeInternalType(const std::type_info& type)
+{
+    return type == typeid(LLFloaterInventoryFinder);
+}
+
+bool LLPanelMainInventory::isNativeCallback(std::string_view name, const LLSD& payload)
+{
+    for (const auto* safe : { "Inventory.CloseAllFolders", "Inventory.EmptyTrash", "Inventory.EmptyLostAndFound",
+        "Inventory.ShowFilters", "Inventory.ResetFilters", "Inventory.FilterLinks.Set", "Inventory.FilterLinks.Check",
+        "Inventory.FilterPermissions.Set", "Inventory.FilterPermissions.Check", "Inventory.SearchType.Set", "Inventory.SearchType.Check",
+        "Inventory.SortBy.Set", "Inventory.SortBy.Check", "Inventory.CoalescedObjects.Toggle", "Inventory.CoalescedObjects.Check",
+        "Inventory.ShowFilters.Check", "Inventory.OpenNewFolderWindow", "Inventory.Share", "Inventory.FileUploadLocation",
+        "Inventory.FileUploadLocation.Check", "Inventory.CanSetUploadLocation" })
+        if (name == safe) return true;
+    const auto action = payload.asString();
+    if (name == "Inventory.DoCreate")
+        return action == "category" || action == "lsl" || action == "notecard";
+    if (name == "Inventory.DoToSelected")
+        return action == "open" || action == "properties" || action == "rename" || action == "delete" ||
+            action == "copy" || action == "cut" || action == "paste" || action == "goto" ||
+            action == "open_original" || action == "purge" || action == "restore" || action == "thumbnail" ||
+            action == "copy_uuid" || action == "copy_folder_uuid" || action == "paste_link" ||
+            action == "show_in_main_panel" || action == "show_in_new_window" || action == "open_in_current_window" ||
+            action == "open_selected_folder" || action == "open_in_new_window" || action == "protect_folder" ||
+            action == "unprotect_folder" || action == "reload_folder" || action == "move_to_default_folder" ||
+            action == "move_to_lost_and_found" || action == "new_folder_from_selected" || action == "ungroup_folder_items" ||
+            action == "add_to_favorites" || action == "remove_from_favorites" || action == "begin_im";
+    if (name == "Inventory.BeginIMSession") return action == "everyone" || action == "selected";
+    if (name == "Inventory.CustomAction" || name == "Inventory.GearDefault.Custom.Action" ||
+        name == "Inventory.GearDefault.Check" || name == "Inventory.GearDefault.Enable" || name == "Inventory.GearDefault.Visible")
+    {
+        for (const auto* safe : { "new_window", "sort_by_name", "sort_by_recent", "sort_folders_by_name", "sort_system_folders_to_top",
+            "show_filters", "reset_filters", "close_folders", "empty_trash", "empty_lostnfound", "find_original", "find_links",
+            "regenerate_link", "share", "delete", "shop", "close_inv_windows", "toggle_search_library", "toggle_search_outfits",
+            "toggle_search_trash", "list_view", "gallery_view", "combination_view", "single_folder_view", "multi_folder_view",
+            "coalesced_objects_only", "show_filters_modified" })
+            if (action == safe) return true;
+    }
+    return false;
+}

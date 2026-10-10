@@ -123,6 +123,7 @@
 #include "llpopupview.h"
 #include "llpanel.h"
 #include "llbutton.h"
+#include "lldndbutton.h"
 #include "llflyoutbutton.h"
 #include "llbadge.h"
 #include "llcheckboxctrl.h"
@@ -132,6 +133,7 @@
 #include "lltexteditor.h"
 #include "llviewertexteditor.h"
 #include "lltextbox.h"
+#include "llconsole.h"
 #include "lllayoutstack.h"
 #include "llprogressbar.h"
 #include "llscrollbar.h"
@@ -139,6 +141,35 @@
 #include "llscrolllistctrl.h"
 #include "llscrolllistcolumn.h"
 #include "llviewborder.h"
+#include <algorithm>
+#include <iterator>
+#include "lltoolbarview.h"
+#include "llpanelpeople.h"
+#include "fsfloaternearbychat.h"
+#include "llsidetraypanelcontainer.h"
+#include "llfloatersearch.h"
+#include "llfloatersearchreplace.h"
+#include "llfloaterwebcontent.h"
+#include "llfloatertoybox.h"
+#include "llnavigationbar.h"
+#include "llfloatersidepanelcontainer.h"
+#include "llsidepanelinventory.h"
+#include "llpanelmaininventory.h"
+#include "llpanelmarketplaceinbox.h"
+#include "llpanelmarketplaceinboxinventory.h"
+#include "llinventorygallery.h"
+#include "llstatusbar.h"
+#include "llhints.h"
+#include "llinspectremoteobject.h"
+#include "llstatgraph.h"
+#include "llpanelvolumepulldown.h"
+#include "llpanelpulldown.h"
+#include "lltoolbar.h"
+#include "lllocationinputctrl.h"
+#include "llurllineeditorctrl.h"
+#include "fsnearbychatcontrol.h"
+#include "fsnearbychatvoicemonitor.h"
+#include "llfavoritesbar.h"
 #include "llfloater.h"
 #include "llfloaterabout.h"
 #include "lltabcontainer.h"
@@ -158,7 +189,16 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
     return std::make_unique<VSUIAdmission>(
         [](const std::type_info& t)
         {
-            const bool admitted = t == typeid(LLMultiPreview) || t == typeid(LLPreview) || t == typeid(LLPreviewTexture) || t == typeid(LLPreviewNotecard) || t == typeid(LLInventoryPanel) || t == typeid(LLAssetFilteredInventoryPanel) ||
+            const bool admitted = t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
+                t == typeid(LLPanelMainInventory) || LLPanelMainInventory::isNativeInternalType(t) ||
+                t == typeid(LLPanelMarketplaceInbox) || t == typeid(LLInboxInventoryPanel) ||
+                t == typeid(LLInboxFolderViewFolder) || t == typeid(LLInboxFolderViewItem) || t == typeid(LLInventoryGallery) || t == typeid(LLInventoryGalleryItem) ||
+                LLInventoryPanel::isNativeInternalType(t) || LLInspectRemoteObjectUtil::isNativeInternalType(t) || LLHints::isNativeInternalType(t) || t == typeid(LLStatusBar) || t == typeid(LLStatGraph) ||
+                t == typeid(LLPanelVolumePulldown) || t == typeid(LLPanelPulldown) || t == typeid(LLToolBarView) || t == typeid(LLToolBar) ||
+                t == typeid(LLToolBarVertical) || t == typeid(LLToolBarButton) || LLToolBar::isNativeInternalType(t) || LLNavigationBar::isNativeInternalType(t) || t == typeid(FSNearbyChatControl) || t == typeid(FSNearbyChatVoiceControl) || t == typeid(FSFloaterNearbyChat) || t == typeid(LLPanelPeople) || t == typeid(LLSideTrayPanelContainer) || t == typeid(LLFloaterSearchReplace) || t == typeid(LLFloaterSearch) || t == typeid(LLFloaterWebContent) || t == typeid(LLFloaterToybox) ||
+                t == typeid(LLPullButton) || t == typeid(LLLocationInputCtrl) || t == typeid(LLURLLineEditor) ||
+                t == typeid(LLFavoritesBarCtrl) || LLFavoritesBarCtrl::isNativeInternalType(t) ||
+                t == typeid(LLMultiPreview) || t == typeid(LLPreview) || t == typeid(LLPreviewTexture) || t == typeid(LLPreviewNotecard) || t == typeid(LLInventoryPanel) || t == typeid(LLAssetFilteredInventoryPanel) ||
                 t == typeid(LLInventorySingleFolderPanel) || t == typeid(LLFolderView) ||
                 t == typeid(LLFolderViewItem) || t == typeid(LLFolderViewFolder) ||
                 t == typeid(LLFolderViewScrollContainer) || t == typeid(FSFloaterBlocklist) || t == typeid(FSPanelBlockList) ||
@@ -236,8 +276,8 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                    t == typeid(LLMenuItemCheckGL) || t == typeid(LLMenuItemSeparatorGL) ||
                    t == typeid(LLMenuItemBranchGL) || t == typeid(LLContextMenuBranch) || t == typeid(LLMenuItemTearOffGL) ||
                    t == typeid(LLView) || t == typeid(LLPopupView) || t == typeid(LLRootView) || t == typeid(LLUICtrl) || t == typeid(LLPanel) ||
-                   LLUICtrlFactory::isNativeLayoutType(t) || t == typeid(LLFlyoutButton) || t == typeid(LLButton) || t == typeid(LLBadge) || t == typeid(LLCheckBoxCtrl) || t == typeid(LLComboBox) || t == typeid(LLIconCtrl) ||
-                   t == typeid(LLLineEditor) || t == typeid(LLTextEditor) || t == typeid(LLViewerTextEditor) || t == typeid(LLTextBox) || t == typeid(LLLayoutStack) ||
+                   LLUICtrlFactory::isNativeLayoutType(t) || t == typeid(LLFlyoutButton) || t == typeid(LLButton) || t == typeid(LLDragAndDropButton) || t == typeid(LLBadge) || t == typeid(LLCheckBoxCtrl) || t == typeid(LLComboBox) || t == typeid(LLIconCtrl) ||
+                   t == typeid(LLLineEditor) || t == typeid(LLTextEditor) || t == typeid(LLViewerTextEditor) || t == typeid(LLTextBox) || t == typeid(LLConsole) || t == typeid(LLLayoutStack) ||
                    t == typeid(LLLayoutPanel) || t == typeid(LLProgressBar) || t == typeid(LLScrollbar) || t == typeid(LLScrollContainer) ||
                    t == typeid(LLScrollListCtrl) || t == typeid(LLScrollColumnHeader) || t == typeid(LLViewBorder) || t == typeid(LLFloaterView) || t == typeid(LLFloater) ||
                    t == typeid(LLModalDialog) || t == typeid(LLFloaterTOS) ||
@@ -248,7 +288,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             if (!admitted) LL_WARNS("NativeUI") << "Rejected native widget type: " << t.name() << LL_ENDL;
             return admitted;
         },
-        [](std::string_view name) { return name == "sl_about" || name == "message_critical" || name == "message_tos" ||
+        [](std::string_view name) { return name == "inspect_remote_object" || name == "web_content" || name == "search_replace" || name == "fs_nearby_chat" || name == "people" || name == "search" || name == "toybox" || name == "inventory" || name == "secondary_inventory" || name == "sl_about" || name == "message_critical" || name == "message_tos" ||
             name == "fs_impanel" || name == "fs_im_container" || name == "imcontacts" || name == "avatar_picker" ||
             name == "fs_blocklist" || name == "fs_add_contact" || name == "fs_contact_set_config" ||
             name == "mute_object_by_name" || name == "group_picker" || name == "fs_group_titles" || name == "vs_group_search" || name == "fs_group" || name == "profile" || name == "publish_classified" || name == "preferences" || name == "prefs_proxy" || name == "prefs_translation" || name == "prefs_autoreplace" ||
@@ -259,8 +299,9 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "change_item_thumbnail" || name == "preview_sound" || name == "preview_script" ||
             name == "script_colors" || name == "upload_image" || name == "upload_sound" ||
             name == "pay_resident" || name == "display_name"; },
-        [](std::string_view name) { return name == "progress_view" || name == "progress_view_mini" || name == "popup_holder" ||
-            name == "native_nearby_chat" || name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
+        [](std::string_view name) { return name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
+            name == "panel_marketplace_inbox" || name == "inventory_gallery" || name == "progress_view" || name == "progress_view_mini" || name == "popup_holder" ||
+            name == "status" || name == "volumepulldown_floater" || name == "navigation_bar" || name == "toolbar_view" || name == "toolbar view" || name == "native_nearby_chat" || name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
             name == "panel_preference" || name == "panel_preference_graphics" || name == "panel_preference_privacy" ||
             name == "panel_preference_controls" || name == "panel_preference_crashreports" || name == "panel_preference_skins" ||
             name == "panel_preference_backup" || name == "panel_preference_opensim" || name == "panel_preference_sounds" ||
@@ -277,5 +318,93 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             LLSD substitution; substitution["CONTROL"] = std::string(name);
             LLSD args; args["MESSAGE"] = LLTrans::getString("NativeVulkanUIUnavailable", substitution);
             LLNotificationsUtil::add("GenericAlert", args);
+        },
+        [](std::string_view name)
+        {
+            return name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
+                   name == "preferences" || name == "profile" || name == "contact_sets" ||
+                   name == "conversation_log" || name == "block_list" || name == "group_titles";
+        },
+        [](std::string_view name, const LLSD& parameter)
+        {
+            if (LLPanelMainInventory::isNativeCallback(name, parameter) ||
+                LLPanelPeople::isNativeCallback(std::string(name), parameter) || FSChatHistory::isNativeCallback(std::string(name), parameter)) return true;
+            if (name == "Profile.Commit" || name == "Profile.EnableItem")
+            {
+                // Existing profile callbacks own ordinary account/text/image
+                // actions. Scene map/moderation/voice commands stay excluded.
+                const std::string action = parameter.asString();
+                return action == "im" || action == "chat_history" || action == "add_friend" ||
+                    action == "remove_friend" || action == "invite_to_group" || action == "share" ||
+                    action == "pay" || action == "toggle_block_agent" || action == "copy_user_id" ||
+                    action == "agent_permissions" || action == "copy_display_name" || action == "copy_username" ||
+                    action == "edit_display_name" || action == "edit_partner" || action == "upload_photo" ||
+                    action == "change_photo" || action == "remove_photo" || action == "add_to_contact_set" ||
+                    action == "copy_uri" || action == "preview";
+            }
+            if (name == "Profile.CheckItem") return parameter.asString() == "toggle_block_agent";
+            if (name == "TopInfoBar.Action") return parameter.asString() == "copy";
+            if (name == "Toolbars.EnableSetting" || name == "Toolbars.CheckSetting")
+                return parameter.asString() == "icons_with_text" || parameter.asString() == "icons_only" || parameter.asString() == "text_only";
+            if (name == "Toolbars.SetAlignment" || name == "Toolbars.CheckAlignment")
+            {
+                const auto alignment = parameter.asString();
+                return alignment == "center" || alignment == "left" || alignment == "top" || alignment == "right" || alignment == "bottom";
+            }
+            if (name == "Toolbars.SetLayoutStyle" || name == "Toolbars.CheckLayoutStyle")
+            {
+                const auto layout = parameter.asString();
+                return layout == "none" || layout == "equalize" || layout == "fill";
+            }
+            if (name == "Floater.Show" || name == "Floater.Toggle" || name == "Floater.Visible" ||
+                name == "Floater.IsOpen" || name == "Floater.ToggleOrBringToFront")
+                return parameter.asString() == "fs_nearby_chat" || VSUIAdmission::floater(parameter.asString());
+            if (name == "SideTray.PanelPeopleTab" || name == "SideTray.CheckPanelPeopleTab")
+            {
+                const std::string tab = parameter.asString();
+                return tab == "friends_panel" || tab == "groups_panel" || tab == "contact_sets_panel" || tab == "blocked_panel";
+            }
+            if (name == "ToggleControl" || name == "CheckControl")
+            {
+                const std::string setting = parameter.asString();
+                return setting == "ShowChatMiniIcons" || setting == "FSTypingChevronPrefix" ||
+                       setting == "FSNearbyChatbar" || setting == "FSShowChatChannel" || setting == "FSShowEmojiButton" ||
+                       setting == "FSShowChatType" || setting == "FSShowIMSendButton" || setting == "LockToolbars" || setting == "MainChatbarVisible" || setting == "ChatHistoryTearOff" ||
+                       setting == "FSUseBuiltInHistory" || setting == "PlainTextChatHistory" ||
+                       setting == "ShowNavbarNavigationPanel" || setting == "ShowNavbarFavoritesPanel" ||
+                       setting == "NavBarShowCoordinates" || setting == "NavBarShowParcelProperties" ||
+                       setting == "MenuSearch" || setting == "ShowNetStats" || setting == "MuteAudio";
+            }
+            static const std::string_view callbacks[] = {
+                "Toybox.RestoreDefaults", "Toybox.ClearAll", "Toolbars.RemoveSelectedCommand",
+                "File.Quit", "File.CloseWindow", "File.EnableCloseWindow", "File.CloseAllWindows",
+                "File.EnableCloseAllWindows", "File.CloseWindowGroup", "File.EnableCloseWindowGroup",
+                "File.UploadImage", "File.UploadSound", "File.UploadBulk", "File.EnableUpload",
+                "Edit.Copy", "Edit.Cut", "Edit.Delete", "Edit.Deselect", "Edit.Paste", "Edit.Redo",
+                "Edit.SelectAll", "Edit.Undo", "Edit.EnableCopy", "Edit.EnableCut", "Edit.EnableDelete",
+                "Edit.EnableDeselect", "Edit.EnablePaste", "Edit.EnableRedo", "Edit.EnableSelectAll", "Edit.EnableUndo",
+                "SpellCheck.AddToDictionary", "SpellCheck.AddToIgnore", "SpellCheck.EnableAddToDictionary",
+                "SpellCheck.EnableAddToIgnore", "SpellCheck.ReplaceWithSuggestion", "SpellCheck.VisibleSuggestion",
+                "Favorites.DoToSelected", "Favorites.EnableSelected", "PromptShowURL", "ShowHelp",
+                "Avatar.ToggleSearch", "Avatar.SearchVisible", "Avatar.TogglePicks",
+                "Avatar.ToggleMyProfile", "Avatar.IsMyProfileOpen", "IMChicletMenu.Action",
+                "IMSession.Menu.Action", "IMSession.Menu.Enable", "ChatOptions.Action", "ChatOptions.Check",
+                "ChatOptions.Visible", "ChatOptions.Enable", "IMWellChicletMenu.Action", "IMWellChicletMenu.EnableItem",
+                "NotificationWellChicletMenu.Action", "NotificationWellChicletMenu.EnableItem",
+                "InvOfferChiclet.Action", "Mention.CopyURI", "Mention.Chat",
+                "Url.Open", "Url.OpenInternal", "Url.OpenExternal", "Url.Execute", "Url.Teleport", "Url.Block", "Url.Unblock",
+                "Url.CopyLabel", "Url.CopyUrl", "Url.ShowProfile", "Url.SendIM", "Url.AddFriend", "Url.RemoveFriend",
+                "Url.EnableShowProfile", "Url.EnableSendIM", "Url.EnableAddFriend", "Url.EnableRemoveFriend",
+                "FS.ViewLog", "FS.EnableViewLog", "FS.AddToContactSet", "FS.BlockAvatar", "FS.CheckIsAgentBlocked", "FS.EnableBlockAvatar",
+                "FS.JoinGroup", "FS.LeaveGroup", "FS.ActivateGroup", "FS.EnableJoinGroup", "FS.EnableLeaveGroup", "FS.EnableActivateGroup",
+                "FS.WaitingForGroupData", "FS.HaveGroupData"
+            };
+            return std::find(std::begin(callbacks), std::end(callbacks), name) != std::end(callbacks);
+        },
+        [](std::string_view filename, std::string_view child)
+        {
+            constexpr std::string_view people_file = "panel_people.xml";
+            return !(child == "nearby_panel" && filename.size() >= people_file.size() &&
+                     filename.substr(filename.size() - people_file.size()) == people_file);
         });
 }

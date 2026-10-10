@@ -24,6 +24,7 @@
  * $/LicenseInfo$
  */
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llurldispatcher.h"
 #if VS_NATIVE_VULKAN
@@ -230,10 +231,27 @@ bool LLURLDispatcherImpl::dispatchRegion(const LLSLURL& slurl, const std::string
         return true;
     }
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active())
+    if (auto session = VSNativeSession::active())
     {
-        LLSD args; args["ERROR_MESSAGE"] = LLTrans::getString("NativeSessionRegionUnavailable");
-        LLNotificationsUtil::add("ErrorMessage", args); return true;
+        // CPU navigation keeps the connected account UI alive and never enters
+        // map/camera/scene URL callbacks. Cross-grid URLs need explicit grid login.
+        if (slurl.getGrid().empty() || slurl.getGrid() == LLGridManager::instance().getGrid())
+        {
+            if (gSavedSettings.getBOOL("SLURLTeleportDirectly")) session->teleportToRegion(slurl.getRegion(), slurl.getPosition());
+            else
+            {
+                LLSD args; args["LOCATION"] = slurl.getRegion();
+                LLSD payload; payload["region_name"] = slurl.getRegion(); payload["callback_url"] = slurl.getSLURLString();
+                vs_native_im_stamp_notification(payload);
+                LLNotificationsUtil::add("TeleportViaSLAPP", args, payload);
+            }
+        }
+        else
+        {
+            LLSD args; args["ERROR_MESSAGE"] = LLTrans::getString("NativeSessionRegionUnavailable");
+            LLNotificationsUtil::add("ErrorMessage", args);
+        }
+        return true;
     }
 #endif
 // <FS:AW hypergrid support >
@@ -457,6 +475,7 @@ public:
         LLSD payload;
         payload["region_name"] = region_name;
         payload["callback_url"] = callback_url;
+        vs_native_im_stamp_notification(payload);
 
         LLNotificationsUtil::add("TeleportViaSLAPP", args, payload);
 
@@ -489,7 +508,11 @@ public:
             LLVector3d global_pos(params["x"].asReal(), params["y"].asReal(),
                                   params["z"].asReal());
             gAgent.teleportViaLocation(global_pos);
+#if VS_NATIVE_VULKAN
+            LLFloaterWorldMap* instance = VSNativeSession::active() ? nullptr : LLFloaterWorldMap::getInstance();
+#else
             LLFloaterWorldMap* instance = LLFloaterWorldMap::getInstance();
+#endif
             if (instance)
             {
                 instance->trackLocation(global_pos);
@@ -501,6 +524,11 @@ public:
     static void teleport_via_slapp(std::string region_name, std::string callback_url)
     {
 
+#if VS_NATIVE_VULKAN
+        if (auto session = VSNativeSession::active())
+        { const LLSLURL slurl(callback_url); session->teleportToRegion(region_name, slurl.getPosition()); return; }
+#endif
+
         LLWorldMapMessage::getInstance()->sendNamedRegionRequest(region_name,
             LLURLDispatcherImpl::regionHandleCallback,
             callback_url,
@@ -509,6 +537,7 @@ public:
 
     static bool teleport_via_slapp_callback(const LLSD& notification, const LLSD& response)
     {
+        if (!vs_native_im_notification_current(notification["payload"])) return false;
         S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
 
         std::string region_name = notification["payload"]["region_name"].asString();

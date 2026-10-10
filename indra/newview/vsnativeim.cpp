@@ -17,9 +17,14 @@
 #include "fsfloaterim.h"
 #include "llfloaterreg.h"
 #include "llfloater.h"
+#include "llmultifloater.h"
+#include "llviewercontrol.h"
 #include "llfloaterperms.h"
 #include "llfloatergroupinvite.h"
 #include "llfloatergroupbulkban.h"
+#include "llsidepanelinventory.h"
+#include "llpanelmarketplaceinboxinventory.h"
+#include "llchannelmanager.h"
 
 namespace
 {
@@ -101,6 +106,20 @@ void vs_native_im_request_offline()
 }
 void vs_native_im_reset()
 {
+    // Removing pinned tabs is normally a user's tear-off action. Account
+    // retirement must remove live host tuples without changing that layout.
+    struct RestoreDocking
+    {
+        bool nearby = gSavedSettings.getBOOL("ChatHistoryTornOff");
+        bool contacts = gSavedSettings.getBOOL("ContactsTornOff");
+        ~RestoreDocking()
+        {
+            gSavedSettings.setBOOL("ChatHistoryTornOff", nearby);
+            gSavedSettings.setBOOL("ContactsTornOff", contacts);
+        }
+    } restoreDocking;
+    if (LLNotificationsUI::LLChannelManager::instanceExists())
+        LLNotificationsUI::LLChannelManager::instance().resetNativeAccount();
     LLUploadDialog::modalUploadFinished();
     sOfflineGeneration = 0;
     LLFloaterPermsDefault::setCapSent(false);
@@ -108,12 +127,36 @@ void vs_native_im_reset()
     LLFloaterGroupBulkBan::destroyAccountFloaters();
     // Panels retain pointers into shared group/profile account data. Destroy
     // them while those services still exist, before discarding the old login.
-    for (const char* name : { "avatar_picker", "group_picker", "pay_resident", "display_name", "pay_object", "upload_image", "upload_sound", "properties", "item_properties", "change_item_thumbnail", "preview_sound", "preview_script", "script_colors", "fs_partial_inventory", "preview_texture", "preview_notecard", "preview_conversation", "conversation", "fs_add_contact", "fs_contact_set_config", "fs_blocklist", "mute_object_by_name", "publish_classified", "fs_group_titles", "vs_group_search", "fs_group", "profile", "prefs_translation", "prefs_autoreplace", "prefs_spellchecker", "prefs_spellchecker_import", "perms_default", "preferences", "prefs_proxy", "keybind_dialog" })
+    for (const char* name : { "web_content", "search", "inspect_remote_object", "search_replace", "fs_nearby_chat", "imcontacts", "toybox", "inventory", "secondary_inventory", "people", "avatar_picker", "group_picker", "pay_resident", "display_name", "pay_object", "upload_image", "upload_sound", "properties", "item_properties", "change_item_thumbnail", "preview_sound", "preview_script", "script_colors", "fs_partial_inventory", "preview_texture", "preview_notecard", "preview_conversation", "conversation", "fs_add_contact", "fs_contact_set_config", "fs_blocklist", "mute_object_by_name", "publish_classified", "fs_group_titles", "vs_group_search", "fs_group", "profile", "prefs_translation", "prefs_autoreplace", "prefs_spellchecker", "prefs_spellchecker_import", "perms_default", "preferences", "prefs_proxy", "keybind_dialog" })
     {
         const auto floaters = LLFloaterReg::getFloaterList(name);
         for (auto* floater : floaters)
-            if (floater) LLFloaterReg::destroyInstance(name, floater->getKey());
+            if (floater)
+            {
+                // LLFloater's destructor removes its LLView child, but does not
+                // remove a host's LLTabTuple. Detach while the derived panel and
+                // all remaining conversation models are alive before deleting.
+                if (auto* host = floater->getHost()) host->removeFloater(floater);
+                LLFloaterReg::destroyInstance(name, floater->getKey());
+            }
     }
+    // Retire conversation panels/observers while shared group/profile account
+    // data is still alive. Tab selection and close callbacks may query it.
+    // Expire model sessions, initialization timers, pending invitations and UI
+    // observers together. The shared implementation owns their removal order.
+    if (gIMMgr && LLIMModel::instanceExists()) gIMMgr->disconnectAllSessions();
+    // Session observers/close signals have completed before their shared host
+    // retires. The next account constructs a fresh container and pinned tabs.
+    LLFloaterReg::destroyInstance("fs_im_container");
+    // Inbox panel destructors unregister from this account's freshness owner.
+    // Retire all inventory views first, then persist while the old account
+    // directory is still selected and discard IDs before the next login loads.
+    if (LLInboxNewItemsStorage::instanceExists())
+    {
+        LLInboxNewItemsStorage::instance().saveNewItemsIds();
+        LLInboxNewItemsStorage::deleteSingleton();
+    }
+    LLSidepanelInventory::resetNativeAccountState();
     if (LGGContactSets::instanceExists()) LGGContactSets::instance().resetAccount();
     LLFloaterReg::destroyInstance("display_name");
     LLGroupActions::resetAccountRequests();
@@ -121,10 +164,6 @@ void vs_native_im_reset()
     if (LLGroupMgr::instanceExists()) LLGroupMgr::instance().clearAccountGroups();
     if (LLAvatarPropertiesProcessor::instanceExists())
         LLAvatarPropertiesProcessor::instance().resetAccountRequests();
-    if (!gIMMgr || !LLIMModel::instanceExists()) return;
-    // Expire model sessions, initialization timers, pending invitations and UI
-    // observers together. The shared implementation owns their removal order.
-    gIMMgr->disconnectAllSessions();
 }
 
 void vs_native_im_stamp_notification(LLSD& payload)

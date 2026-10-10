@@ -2616,6 +2616,14 @@ bool LLAgent::needsRenderHead()
 //-----------------------------------------------------------------------------
 void LLAgent::startTyping()
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active())
+    {
+        if (RlvActions::canSendTypingStart()) session->typing(true);
+        return;
+    }
+#endif
+
 // [RLVa:KB] - @redirchat
     if (!RlvActions::canSendTypingStart())
     {
@@ -2657,6 +2665,10 @@ void LLAgent::startTyping()
 //-----------------------------------------------------------------------------
 void LLAgent::stopTyping()
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->typing(false); return; }
+#endif
+
     if (mRenderState & AGENT_STATE_TYPING)
     {
         clearRenderState(AGENT_STATE_TYPING);
@@ -5147,6 +5159,9 @@ void LLAgent::onCapabilitiesReceivedAfterTeleport()
 void LLAgent::teleportRequest(const U64& region_handle, const LLVector3& pos_local, const LLVector3& look_at)
 // [/RLVa:KB]
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->teleportToLocation(from_region_handle(region_handle) + LLVector3d(pos_local)); return; }
+#endif
     LLViewerRegion* regionp = getRegion();
     if (regionp && teleportCore(region_handle == regionp->getHandle()))
     {
@@ -5173,6 +5188,9 @@ void LLAgent::teleportRequest(const U64& region_handle, const LLVector3& pos_loc
 // Landmark ID = LLUUID::null means teleport home
 void LLAgent::teleportViaLandmark(const LLUUID& landmark_asset_id)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->teleportToLandmark(landmark_asset_id); return; }
+#endif
     // <FS:Ansariel> FIRE-21576: Prevent TPing home while still logging in if RLVa is enabled
     if (RlvActions::isRlvEnabled() && LLStartUp::getStartupState() < STATE_STARTED)
     {
@@ -5240,6 +5258,9 @@ void LLAgent::doTeleportViaLandmark(const LLUUID& landmark_asset_id)
 
 void LLAgent::teleportViaLure(const LLUUID& lure_id, bool godlike)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->teleportToLure(lure_id, godlike); return; }
+#endif
     mTeleportRequest = LLTeleportRequestPtr(new LLTeleportRequestViaLure(lure_id, godlike));
     startTeleportRequest();
 }
@@ -5317,6 +5338,9 @@ void LLAgent::restoreCanceledTeleportRequest()
 
 void LLAgent::teleportViaLocation(const LLVector3d& pos_global)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->teleportToLocation(pos_global); return; }
+#endif
 // [RLVa:KB] - Checked: RLVa-2.0.0
     if ( (RlvActions::isRlvEnabled()) && (!RlvUtil::isForceTp()) )
     {
@@ -5469,6 +5493,9 @@ void LLAgent::doTeleportViaLocation(const LLVector3d& pos_global)
 // [RLVa:KB] - Checked: RLVa-2.0.0
 void LLAgent::teleportViaLocationLookAt(const LLVector3d& pos_global, const LLVector3& look_at)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active()) { session->teleportToLocation(pos_global); return; }
+#endif
     if ( (RlvActions::isRlvEnabled()) && (!RlvUtil::isForceTp()) )
     {
         if (LLStartUp::getStartupState() < STATE_STARTED)

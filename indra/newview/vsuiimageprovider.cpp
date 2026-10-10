@@ -193,16 +193,19 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32)
                     }
             });
     }
-    if (owner && owner->phase() == VSNativeSession::Phase::Connected && owner->capability("GetTexture").empty())
+    // Match the viewer texture fetcher: ViewerAsset is the current asset
+    // endpoint; GetTexture is only the legacy endpoint when it is absent.
+    const std::string capability = owner ? (owner->capability("ViewerAsset").empty()
+        ? owner->capability("GetTexture") : owner->capability("ViewerAsset")) : std::string();
+    if (owner && owner->phase() == VSNativeSession::Phase::Connected && capability.empty())
         entry.failedGeneration = generation;
     if (!owner || owner->phase() != VSNativeSession::Phase::Connected ||
-        owner->capability("GetTexture").empty() || entry.generation == generation || entry.attempts >= 3 || mImpl->requests.size() >= 32)
+        capability.empty() || entry.generation == generation || entry.attempts >= 3 || mImpl->requests.size() >= 32)
         return entry.facade;
     entry.generation = generation; ++entry.attempts;
     entry.retryAt = LLTimer::getTotalSeconds() + 5 * entry.attempts;
     const std::weak_ptr<Impl> weak = mImpl;
     const std::weak_ptr<VSNativeSession> session = owner;
-    const std::string capability = owner->capability("GetTexture");
     const std::string url = capability + (capability.find('?') == std::string::npos ? "?" : "&") + "texture_id=" + id.asString();
     LLCoros::instance().launch("nativeUITexture", [weak, session, generation, id, url]()
     {

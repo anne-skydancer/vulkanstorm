@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 #include "llinventorybridge.h"
 
 // external projects
@@ -7182,6 +7183,7 @@ void LLLandmarkBridge::performAction(LLInventoryModel* model, std::string action
 
 static bool open_landmark_callback(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
 
     LLUUID asset_id = notification["payload"]["asset_id"].asUUID();
@@ -9163,6 +9165,7 @@ public:
             LLSD args;
             args["LOCATION"] = item->getName();
 
+            vs_native_im_stamp_notification(payload);
             LLNotificationsUtil::add("TeleportFromLandmark", args, payload);
         }
         LLInvFVBridgeAction::doIt();

@@ -279,6 +279,7 @@ public:
 protected:
     LLMenuItemCallGL(const Params&);
     friend class LLUICtrlFactory;
+    bool mNativeCallbacksAllowed = true;
     void updateEnabled( void );
     void updateVisible( void );
 

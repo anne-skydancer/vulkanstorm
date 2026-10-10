@@ -28,6 +28,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "fsnearbychathub.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "chatbar_as_cmdline.h"
 #include "fscommon.h"
@@ -67,6 +70,15 @@ static LLChatTypeTrigger sChatTypeTriggers[] = {
 // of send_chat_from_viewer.
 void really_send_chat_from_viewer(const std::string& utf8_out_text, EChatType type, S32 channel)
 {
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active())
+    {
+        if (type == CHAT_TYPE_START || type == CHAT_TYPE_STOP) session->typing(type == CHAT_TYPE_START);
+        else session->sendChatProcessed(utf8_out_text, U8(type), channel);
+        return;
+    }
+#endif
+
     LLMessageSystem* msg = gMessageSystem;
 
     if (!msg)
@@ -265,6 +277,23 @@ void FSNearbyChat::sendChat(LLWString text, EChatType type)
         stripChannelNumber(text, &channel, &sLastSpecialChatChannel, &is_set);
 
         std::string utf8text = wstring_to_utf8str(text);
+#if VS_NATIVE_VULKAN
+        if (auto session = VSNativeSession::active())
+        {
+            if (channel == 0)
+            {
+                utf8text = FSCommon::applyAutoCloseOoc(utf8text);
+                utf8text = FSCommon::applyMuPose(utf8text);
+            }
+            const auto volume = processChatTypeTriggers(type == CHAT_TYPE_OOC ? CHAT_TYPE_NORMAL : type, utf8text);
+            // Gesture animation and scene-oriented command-line hooks are not
+            // part of the connected text renderer. Shared transport retains RLV.
+            sendChatFromViewer(utf8text, volume, false);
+            session->typing(false);
+            return;
+        }
+#endif
+
         // Try to trigger a gesture, if not chat to a script.
         std::string utf8_revised_text;
         if (0 == channel)
@@ -323,6 +352,12 @@ void FSNearbyChat::registerChatBar(FSNearbyChatControl* chatBar)
 }
 
 // unhide the default nearby chat bar on request (pressing Enter or a letter key)
+void FSNearbyChat::unregisterChatBar(FSNearbyChatControl* chatBar)
+{
+    if (mDefaultChatBar == chatBar) mDefaultChatBar = nullptr;
+    if (mFocusedInputEditor == chatBar) mFocusedInputEditor = nullptr;
+}
+
 void FSNearbyChat::showDefaultChatBar(bool visible, const char* text) const
 {
     if (!mDefaultChatBar)
@@ -428,6 +463,10 @@ void FSNearbyChat::sendChatFromViewer(const LLWString& wtext, const LLWString& o
     }
 // [/RLVa:KB]
 
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) animate = false;
+#endif
+
     // Don't animate for chats people can't hear (chat to scripts)
     if (animate && (channel == 0))
     {
@@ -508,7 +547,7 @@ LLWString FSNearbyChat::stripChannelNumber(const LLWString &mesg, S32* channel, 
 {
     *is_set = false;
 
-    if (mesg[0] == '/'
+    if (mesg.size() > 1 && mesg[0] == '/'
         && mesg[1] == '/')
     {
         // This is a "repeat channel send"
@@ -516,7 +555,7 @@ LLWString FSNearbyChat::stripChannelNumber(const LLWString &mesg, S32* channel, 
         *channel = *last_channel;
         return mesg.substr(2, mesg.length() - 2);
     }
-    else if (mesg[0] == '/'
+    else if (mesg.size() > 1 && mesg[0] == '/'
              && mesg[1]
     //<FS:TS> FIRE-11412: Allow saying /-channel for negative numbers
     //        (this code was here; documenting for the future)

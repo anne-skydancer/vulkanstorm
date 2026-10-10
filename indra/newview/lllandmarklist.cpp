@@ -44,6 +44,15 @@ LLLandmarkList gLandmarkList;
 
 LLLandmarkList::~LLLandmarkList()
 {
+    resetAccount();
+}
+
+void LLLandmarkList::resetAccount()
+{
+    mLoadedCallbackMap.clear();
+    mRequestedList.clear();
+    mBadList.clear();
+    mRetryList.clear();
     std::for_each(mList.begin(), mList.end(), DeletePairedPointer());
     mList.clear();
 }

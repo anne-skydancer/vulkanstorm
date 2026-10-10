@@ -3556,40 +3556,53 @@ bool LLWindowWin32::pasteTextFromClipboard(LLWString &dst)
 }
 
 
+namespace
+{
+bool openClipboardForCopy(HWND window)
+{
+    // Clipboard viewers can briefly hold the system lock after each write.
+    // Bound the UI-thread delay to 35ms; do not retry invalid handles/errors.
+    constexpr unsigned attempts = 8;
+    for (unsigned attempt = 0; attempt < attempts; ++attempt)
+    {
+        if (OpenClipboard(window)) return true;
+        const DWORD error = GetLastError();
+        if ((error != ERROR_ACCESS_DENIED && error != ERROR_BUSY) || attempt + 1 == attempts)
+        {
+            LL_WARNS("Clipboard") << "OpenClipboard failed after " << attempt + 1 << " attempts, error=" << error << LL_ENDL;
+            return false;
+        }
+        Sleep(5);
+    }
+    return false;
+}
+}
+
 bool LLWindowWin32::copyTextToClipboard(const LLWString& wstr)
 {
-    bool success = false;
+    LLWString sanitized_string(wstr);
+    LLWStringUtil::addCRLF(sanitized_string);
+    std::wstring out_utf16 = ll_convert<std::wstring>(sanitized_string);
+    const size_t size_utf16 = (out_utf16.length() + 1) * sizeof(wchar_t);
+    HGLOBAL data = GlobalAlloc(GMEM_MOVEABLE, size_utf16);
+    if (!data) return false;
+    WCHAR* bytes = static_cast<WCHAR*>(GlobalLock(data));
+    if (!bytes) { GlobalFree(data); return false; }
+    memcpy(bytes, out_utf16.c_str(), size_utf16);
+    GlobalUnlock(data);
+    if (!openClipboardForCopy(mWindowHandle)) { GlobalFree(data); return false; }
 
-    if (OpenClipboard(mWindowHandle))
+    // Allocate/encode before replacing the old clipboard. Windows assumes
+    // ownership only on successful SetClipboardData; free on every failure.
+    const bool cleared = EmptyClipboard();
+    const bool success = cleared && SetClipboardData(CF_UNICODETEXT, data);
+    const DWORD error = success ? ERROR_SUCCESS : GetLastError();
+    CloseClipboard();
+    if (!success)
     {
-        EmptyClipboard();
-
-        // Provide a copy of the data in Unicode format.
-        LLWString sanitized_string(wstr);
-        LLWStringUtil::addCRLF(sanitized_string);
-        std::wstring out_utf16 = ll_convert<std::wstring>(sanitized_string);
-        const size_t size_utf16 = (out_utf16.length() + 1) * sizeof(wchar_t);
-
-        // Memory is allocated and then ownership of it is transfered to the system.
-        HGLOBAL hglobal_copy_utf16 = GlobalAlloc(GMEM_MOVEABLE, size_utf16);
-        if (hglobal_copy_utf16)
-        {
-            WCHAR* copy_utf16 = (WCHAR*) GlobalLock(hglobal_copy_utf16);
-            if (copy_utf16)
-            {
-                memcpy(copy_utf16, out_utf16.c_str(), size_utf16);  /* Flawfinder: ignore */
-                GlobalUnlock(hglobal_copy_utf16);
-
-                if (SetClipboardData(CF_UNICODETEXT, hglobal_copy_utf16))
-                {
-                    success = true;
-                }
-            }
-        }
-
-        CloseClipboard();
+        GlobalFree(data);
+        LL_WARNS("Clipboard") << (cleared ? "SetClipboardData" : "EmptyClipboard") << " failed, error=" << error << LL_ENDL;
     }
-
     return success;
 }
 

@@ -874,15 +874,7 @@ void LLAvatarActions::share(const LLUUID& id)
     // </FS:Ansariel>
 
     LLSD key;
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        key["start_folder_id"] = gInventory.getRootFolderID();
-        auto* root = gInventory.getCategory(gInventory.getRootFolderID());
-        key["start_folder_name"] = root ? root->getName() : LLTrans::getString("Inventory");
-        LLFloaterReg::showInstance("fs_partial_inventory", key);
-    }
-    else
-        LLFloaterSidePanelContainer::showPanel("inventory", key);
+    LLFloaterSidePanelContainer::showPanel("inventory", key);
     // <FS:Ansariel> [FS Communication UI]
     //LLFloaterReg::showInstance("im_container");
     LLFloaterReg::showInstance("fs_im_container");

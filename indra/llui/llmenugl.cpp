@@ -39,6 +39,7 @@
 #include "linden_common.h"
 
 #include "llmenugl.h"
+#include "vsuiadmission.h"
 
 #include "llgl.h"
 #include "llmath.h"
@@ -617,7 +618,8 @@ LLMenuItemSeparatorGL::LLMenuItemSeparatorGL(const LLMenuItemSeparatorGL::Params
 {
     if (p.on_visible.isProvided())
     {
-        mVisibleSignal.connect(initEnableCallback(p.on_visible));
+        if (VSUIAdmission::callback(p.on_visible.function_name(), p.on_visible.parameter()))
+            mVisibleSignal.connect(initEnableCallback(p.on_visible));
     }
 }
 
@@ -815,11 +817,15 @@ LLMenuItemCallGL::LLMenuItemCallGL(const LLMenuItemCallGL::Params& p)
 
 void LLMenuItemCallGL::initFromParams(const Params& p)
 {
-    if (p.on_visible.isProvided())
+    const bool on_visible_allowed = VSUIAdmission::callback(p.on_visible.function_name(), p.on_visible.parameter());
+    if (p.on_visible.isProvided() && !on_visible_allowed) mNativeCallbacksAllowed = false;
+    if (p.on_visible.isProvided() && on_visible_allowed)
     {
         mVisibleSignal.connect(initEnableCallback(p.on_visible));
     }
-    if (p.on_enable.isProvided())
+    const bool on_enable_allowed = VSUIAdmission::callback(p.on_enable.function_name(), p.on_enable.parameter());
+    if (p.on_enable.isProvided() && !on_enable_allowed) mNativeCallbacksAllowed = false;
+    if (p.on_enable.isProvided() && on_enable_allowed)
     {
         setEnableCallback(initEnableCallback(p.on_enable));
         // Set the enabled control variable (for backwards compatability)
@@ -838,16 +844,20 @@ void LLMenuItemCallGL::initFromParams(const Params& p)
             }
         }
     }
-    if (p.on_click.isProvided())
+    const bool on_click_allowed = VSUIAdmission::callback(p.on_click.function_name(), p.on_click.parameter());
+    if (p.on_click.isProvided() && !on_click_allowed) mNativeCallbacksAllowed = false;
+    if (p.on_click.isProvided() && on_click_allowed)
     {
         setCommitCallback(initCommitCallback(p.on_click));
     }
 
     LLUICtrl::initFromParams(p);
+    if (!mNativeCallbacksAllowed) setEnabled(false);
 }
 
 void LLMenuItemCallGL::onCommit( void )
 {
+    if (!mNativeCallbacksAllowed) return;
     // RN: menu item can be deleted in callback, so beware
     getMenu()->setItemLastSelected( this );
 
@@ -856,6 +866,7 @@ void LLMenuItemCallGL::onCommit( void )
 
 void LLMenuItemCallGL::updateEnabled( void )
 {
+    if (!mNativeCallbacksAllowed) { setEnabled(false); return; }
     if (mEnableSignal.num_slots() > 0)
     {
         bool enabled = mEnableSignal(this, LLSD());
@@ -922,7 +933,9 @@ LLMenuItemCheckGL::LLMenuItemCheckGL (const LLMenuItemCheckGL::Params& p)
 
 void LLMenuItemCheckGL::initFromParams(const Params& p)
 {
-    if (p.on_check.isProvided())
+    const bool check_allowed = VSUIAdmission::callback(p.on_check.function_name(), p.on_check.parameter());
+    if (p.on_check.isProvided() && !check_allowed) mNativeCallbacksAllowed = false;
+    if (p.on_check.isProvided() && check_allowed)
     {
         setCheckCallback(initEnableCallback(p.on_check));
         // Set the control name (for backwards compatability)
@@ -966,6 +979,7 @@ LLSD LLMenuItemCheckGL::getValue() const
 // called to rebuild the draw label
 void LLMenuItemCheckGL::buildDrawLabel( void )
 {
+    if (!mNativeCallbacksAllowed) { LLMenuItemCallGL::buildDrawLabel(); return; }
     // Note: mCheckSignal() returns true if no callbacks are set
     bool checked = mCheckSignal(this, LLSD());
     if (mControlVariable)

@@ -26,9 +26,12 @@
 #ifndef LLINSPECTREMOTEOBJECT_H
 #define LLINSPECTREMOTEOBJECT_H
 
+#include <typeinfo>
+
 namespace LLInspectRemoteObjectUtil
 {
     void registerFloater();
+    bool isNativeInternalType(const std::type_info& type);
 }
 
 #endif

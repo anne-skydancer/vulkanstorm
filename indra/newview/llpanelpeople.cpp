@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 // libs
 #include "llavatarname.h"
@@ -42,6 +45,7 @@
 #include "lluictrlfactory.h"
 
 #include "llpanelpeople.h"
+#include "fsfloatercontacts.h"
 
 // newview
 #include "llaccordionctrl.h"
@@ -584,6 +588,74 @@ public:
 
 //=============================================================================
 
+void LLPanelPeople::showNativeAccountTab(const std::string& requested)
+{
+#if VS_NATIVE_VULKAN
+    const auto session = VSNativeSession::active();
+    if (!session || session->phase() != VSNativeSession::Phase::Connected) return;
+    std::string tab = requested;
+    if (tab == "friends" || tab == "people") tab = FRIENDS_TAB_NAME;
+    if (tab == "groups") tab = GROUP_TAB_NAME;
+    if (tab == "contact_sets") tab = CONTACT_SETS_TAB_NAME;
+    if (tab == "blocked") tab = BLOCKED_TAB_NAME;
+    if (tab == "nearby_panel") tab = FRIENDS_TAB_NAME;
+    if (gSavedSettings.getString("FSInternalSkinCurrent") == "Vintage" || !gSavedSettings.getBOOL("FSUseV2Friends"))
+    {
+        if (tab == BLOCKED_TAB_NAME) LLFloaterReg::showInstance("fs_blocklist");
+        else FSFloaterContacts::getInstance()->openTab(tab == GROUP_TAB_NAME ? "groups" : tab == CONTACT_SETS_TAB_NAME ? "contact_sets" : "friends");
+        return;
+    }
+    LLFloaterSidePanelContainer::showPanel("people", "panel_people", LLSD().with("people_panel_tab_name", tab));
+#endif
+}
+
+bool LLPanelPeople::nativeAccountTabVisible(std::string_view requested)
+{
+    std::string tab(requested);
+    if (tab == "friends" || tab == "people" || tab == "nearby_panel") tab = FRIENDS_TAB_NAME;
+    if (tab == "groups") tab = GROUP_TAB_NAME;
+    if (tab == "contact_sets") tab = CONTACT_SETS_TAB_NAME;
+    if (tab == "blocked") tab = BLOCKED_TAB_NAME;
+    LLFloater* floater = nullptr;
+    if (gSavedSettings.getString("FSInternalSkinCurrent") == "Vintage" || !gSavedSettings.getBOOL("FSUseV2Friends"))
+    {
+        if (tab == BLOCKED_TAB_NAME)
+        {
+            floater = LLFloaterReg::findInstance("fs_blocklist");
+            return floater && floater->isInVisibleChain();
+        }
+        floater = FSFloaterContacts::findInstance();
+        if (!floater || !floater->isInVisibleChain()) return false;
+        const auto tabs = floater->findChild<LLTabContainer>("friends_and_groups");
+        return tabs && tabs->getCurrentPanel() && tabs->getCurrentPanel()->getName() == tab;
+    }
+    floater = LLFloaterReg::findInstance("people");
+    if (!floater || !floater->isInVisibleChain()) return false;
+    const auto people = floater->findChild<LLPanelPeople>("panel_people");
+    return people && people->mTabContainer && people->mTabContainer->getCurrentPanel() &&
+        people->mTabContainer->getCurrentPanel()->getName() == tab;
+}
+
+bool LLPanelPeople::isNativeCallback(const std::string& name, const LLSD& data)
+{
+    const std::string item = data.asString();
+    if (name == "People.Friends.ViewSort.Action") return item == "sort_name" || item == "sort_username" || item == "sort_status" || item == "view_icons" || item == "view_permissions" || item == "view_usernames";
+    if (name == "People.Friends.ViewSort.CheckItem") return item == "sort_name" || item == "sort_username" || item == "sort_status";
+    if (name == "People.Recent.ViewSort.Action") return item == "sort_recent" || item == "sort_name" || item == "view_icons";
+    if (name == "People.Recent.ViewSort.CheckItem") return item == "sort_recent" || item == "sort_name";
+    if (name == "People.Groups.ViewSort.Action") return item == "show_icons";
+    if (name == "People.Groups.Action" || name == "People.Groups.Enable") return item == "view_info" || item == "chat" || item == "activate" || item == "leave" || item == "copy_slurl" || item == "favorite" || item == "unfavorite";
+    if (name == "People.Groups.Visible") return item == "favorite" || item == "unfavorite";
+    if (name == "People.Group.Plus.Action") return item == "join_group" || item == "new_group";
+    if (name == "ContactSet.Action") return item == "add_set" || item == "remove_set" || item == "add_contact" || item == "remove_contact" || item == "move_contact" || item == "set_config" || item == "profile" || item == "im" || item == "set_pseudonym" || item == "remove_pseudonym" || item == "remove_display_name";
+    if (name == "ContactSet.Enable") return item == "has_mutable_set" || item == "has_selection" || item == "has_mutable_set_and_selection" || item == "has_single_selection" || item == "has_pseudonym" || item == "has_display_name";
+    if (name == "Conversation.IsConversationLoggingAllowed") return true;
+    if (name == "CheckControl") return item == "FriendsListShowIcons" || item == "FriendsListShowPermissions" || item == "GroupListShowIcons" || item == "RecentPeopleListShowIcons";
+    if (name == "Avatar.EnableItem") return item == "can_add" || item == "can_delete" || item == "can_open_inventory" || item == "can_block" || item == "can_callog" || item == "can_pay" || item == "can_im" || item == "can_invite" || item == "can_share";
+    if (name == "Avatar.CheckItem") return item == "is_blocked";
+    return name == "Avatar.Profile" || name == "Avatar.AddFriend" || name == "Avatar.AddToContactSet" || name == "Avatar.RemoveFriend" || name == "Avatar.IM" || name == "Avatar.Share" || name == "Avatar.Pay" || name == "Avatar.InviteToGroup" || name == "Avatar.GroupInvite" || name == "Avatar.BlockUnblock" || name == "Avatar.Calllog";
+}
+
 LLPanelPeople::LLPanelPeople()
     :   LLPanel(),
         mTabContainer(NULL),
@@ -741,7 +813,13 @@ bool LLPanelPeople::postBuild()
     mAllFriendList->showPermissions(gSavedSettings.getBOOL("FriendsListShowPermissions"));
     mAllFriendList->setShowCompleteName(!gSavedSettings.getBOOL("FriendsListHideUsernames"));
 
+#if VS_NATIVE_VULKAN
+    LLPanel* nearby_tab = VSNativeSession::active() ? nullptr : getChild<LLPanel>(NEARBY_TAB_NAME);
+#else
     LLPanel* nearby_tab = getChild<LLPanel>(NEARBY_TAB_NAME);
+#endif
+    if (nearby_tab)
+    {
     // <FS:Ansariel> Firestorm radar
     //nearby_tab->setVisibleCallback(boost::bind(&Updater::setActive, mNearbyListUpdater, _2));
 
@@ -771,6 +849,7 @@ bool LLPanelPeople::postBuild()
 
     mNearbyGearBtn = nearby_tab->getChild<LLButton>("gear_btn");
     mNearbyAddFriendBtn = nearby_tab->getChild<LLButton>("add_friend_btn");
+    }
 
     LLPanel* recent_tab = getChild<LLPanel>(RECENT_TAB_NAME);
     mRecentList = recent_tab->getChild<LLAvatarList>("avatar_list");
@@ -889,7 +968,11 @@ bool LLPanelPeople::postBuild()
     // </FS:Ansariel> Friend list accordion replacement
 
     // Must go after setting commit callback and initializing all pointers to children.
+#if VS_NATIVE_VULKAN
+    mTabContainer->selectTabByName(VSNativeSession::active() ? FRIENDS_TAB_NAME : NEARBY_TAB_NAME);
+#else
     mTabContainer->selectTabByName(NEARBY_TAB_NAME);
+#endif
 
     // <FS:PP> FIRE-21531: Sort Contact Sets by Online Status
     // LLVoiceClient::addObserver(this);
@@ -938,7 +1021,8 @@ void LLPanelPeople::changed(U32 mask)
 void LLPanelPeople::updateFriendListHelpText()
 {
     // show special help text for just created account to help finding friends. EXT-4836
-    static LLTextBox* no_friends_text = getChild<LLTextBox>("no_friends_help_text");
+    LLTextBox* no_friends_text = findChild<LLTextBox>("no_friends_help_text");
+    if (!no_friends_text) return;
 
     // Seems sometimes all_friends can be empty because of issue with Inventory loading (clear cache, slow connection...)
     // So, lets check all lists to avoid overlapping the text with online list. See EXT-6448.
@@ -1033,6 +1117,9 @@ void LLPanelPeople::updateFriendList()
 
 void LLPanelPeople::updateNearbyList()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return;
+#endif
     if (!mNearbyList)
         return;
 
@@ -1160,7 +1247,7 @@ LLUUID LLPanelPeople::getCurrentItemID() const
     if (cur_tab == NEARBY_TAB_NAME)
     // <FS:AO> Adapted for scrolllist
         //return mNearbyList->getSelectedUUID();
-        return mRadarPanel->getCurrentItemID();
+        return mRadarPanel ? mRadarPanel->getCurrentItemID() : LLUUID::null;
     // </FS:AO>
 
     else if (cur_tab == RECENT_TAB_NAME)
@@ -1193,7 +1280,7 @@ void LLPanelPeople::getCurrentItemIDs(uuid_vec_t& selected_uuids) const
     else if (cur_tab == NEARBY_TAB_NAME)
     // <FS:AO> Adapted for scrolllist
         //mNearbyList->getSelectedUUIDs(selected_uuids);
-        mRadarPanel->getCurrentItemIDs(selected_uuids);
+        { if (mRadarPanel) mRadarPanel->getCurrentItemIDs(selected_uuids); else selected_uuids.clear(); }
     // </FS:AO>
     else if (cur_tab == RECENT_TAB_NAME)
         mRecentList->getSelectedUUIDs(selected_uuids);
@@ -1416,7 +1503,7 @@ void LLPanelPeople::onAvatarListCommitted(LLAvatarList* list)
     {
         uuid_vec_t selected_uuids;
         getCurrentItemIDs(selected_uuids);
-        mMiniMap->setSelected(selected_uuids);
+        if (mMiniMap) mMiniMap->setSelected(selected_uuids);
     }
     // Make sure only one of the friends lists (online/all) has selection.
     else if (getActiveTabName() == FRIENDS_TAB_NAME)
@@ -1731,6 +1818,9 @@ void LLPanelPeople::onMoreButtonClicked()
 void LLPanelPeople::onOpen(const LLSD& key)
 {
     std::string tab_name = key["people_panel_tab_name"];
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && tab_name == NEARBY_TAB_NAME) tab_name = FRIENDS_TAB_NAME;
+#endif
     if (!tab_name.empty())
     {
         mTabContainer->selectTabByName(tab_name);
@@ -1859,6 +1949,9 @@ bool LLPanelPeople::isAccordionCollapsedByUser(const std::string& name)
 
 bool LLPanelPeople::updateNearbyArrivalTime()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return false;
+#endif
     std::vector<LLVector3d> positions;
     std::vector<LLUUID> uuids;
     static LLCachedControl<F32> range(gSavedSettings, "NearMeRange");
@@ -2077,7 +2170,7 @@ void LLPanelPeople::onContactSetsMenuItemClicked(const LLSD& userdata)
     {
         LLFloater* root_floater = gFloaterView->getParentFloater(this);
         LLFloater* avatar_picker = LLFloaterAvatarPicker::show(boost::bind(&LLPanelPeople::handlePickerCallback, this, _1, mContactSetCombo->getValue().asString()),
-                                                               true, true, true, root_floater->getName());
+                                                               true, true, true, root_floater ? root_floater->getName() : LLStringUtil::null);
         if (root_floater && avatar_picker)
             root_floater->addDependentFloater(avatar_picker);
     }

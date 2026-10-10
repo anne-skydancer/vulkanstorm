@@ -172,6 +172,7 @@ public:
     void addConsoleLine(const std::string& utf8line, const LLColor4 &color, const LLUUID& session_id = LLUUID::null, LLFontGL::StyleFlags styleflags = LLFontGL::NORMAL, S32 markdown_offset = -1, bool markdown_emote = false);
     void addConsoleLine(const LLWString& wline, const LLColor4 &color, const LLUUID& session_id = LLUUID::null, LLFontGL::StyleFlags styleflags = LLFontGL::NORMAL, S32 markdown_offset = -1, bool markdown_emote = false);
     void clear();
+    void clearSessions() { mCurrentSessions.clear(); }
     void addSession(const LLUUID& session_id);
     void removeSession(const LLUUID& session_id);
 

@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llnavigationbar.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "v2math.h"
 
@@ -273,6 +276,9 @@ TODO:
 - Load navbar height from saved settings (as it's done for status bar) or think of a better way.
 */
 
+bool LLNavigationBar::isNativeInternalType(const std::type_info& type)
+{ return type == typeid(LLTeleportHistoryMenuItem); }
+
 LLNavigationBar::LLNavigationBar()
 :   mTeleportHistoryMenu(NULL),
     mBtnBack(NULL),
@@ -289,7 +295,7 @@ LLNavigationBar::LLNavigationBar()
     // buildFromFile( "panel_navigation_bar.xml");  // <FS:Zi> Make navigation bar part of the UI
 
     // set a listener function for LoginComplete event
-    LLAppViewer::instance()->setOnLoginCompletedCallback(boost::bind(&LLNavigationBar::handleLoginComplete, this));
+    mLoginConnection = LLAppViewer::instance()->setOnLoginCompletedCallback(boost::bind(&LLNavigationBar::handleLoginComplete, this));
     setupPanel();   // <FS:Zi> Make navigation bar part of the UI
 }
 
@@ -332,6 +338,9 @@ void LLNavigationBar::setupPanel()
     mView->getChild<LLUICtrl>("navigation_bar_context_menu_panel")->
         setRightMouseDownCallback(boost::bind(&LLNavigationBar::onRightMouseDown, this, _2, _3, _4));
 
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) mView->getChild<LLButton>("PersonalLighting")->setEnabled(false);
+#endif
     mView->getChild<LLButton>("PersonalLighting")->setCommitCallback(boost::bind(&LLNavigationBar::onClickedLightingBtn, this)); // <FS:CR> FIRE-11847
     // </FS:Zi>
 
@@ -373,7 +382,7 @@ void LLNavigationBar::setupPanel()
     // </FS:Zi>
 
     // we'll be notified on teleport history changes
-    LLTeleportHistory::getInstance()->setHistoryChangedCallback(
+    mHistoryConnection = LLTeleportHistory::getInstance()->setHistoryChangedCallback(
             boost::bind(&LLNavigationBar::onTeleportHistoryChanged, this));
 
     // <FS:Zi> Make navigation bar part of the UI
@@ -536,6 +545,36 @@ void LLNavigationBar::onLocationSelection()
         // So there is no sense to try to change the location
         return;
     }
+#if VS_NATIVE_VULKAN
+    if (auto native = VSNativeSession::active())
+    {
+        const LLSLURL selected(value.has("slurl") ? value["slurl"].asString() : typed_location);
+        if (selected.getType() == LLSLURL::LOCATION && !selected.getGrid().empty() && selected.getGrid() != LLGridManager::instance().getGrid())
+        { LLSD args; args["SLURL"] = selected.getSLURLString(); args["GRID"] = selected.getGrid(); args["CURRENT_GRID"] = LLGridManager::instance().getGrid(); LLNotificationsUtil::add("CantTeleportToGrid", args); return; }
+
+        if (value.has("AssetUUID"))
+            native->teleportToLandmark(value["AssetUUID"].asUUID());
+        else if (value.has("global_pos"))
+            native->teleportToLocation(LLVector3d(value["global_pos"]));
+        else
+        {
+            const LLSLURL slurl(typed_location);
+            if (slurl.getType() == LLSLURL::LOCATION)
+            {
+                if (slurl.getGrid().empty() || slurl.getGrid() == LLGridManager::instance().getGrid())
+                    native->teleportToRegion(slurl.getRegion(), slurl.getPosition());
+                else
+                { LLSD args; args["SLURL"] = slurl.getSLURLString(); args["GRID"] = slurl.getGrid(); args["CURRENT_GRID"] = LLGridManager::instance().getGrid(); LLNotificationsUtil::add("CantTeleportToGrid", args); }
+            }
+            else if (slurl.getType() == LLSLURL::APP)
+                LLURLDispatcher::dispatchFromTextEditor(typed_location, false);
+            else if (typed_location.compare(0, 7, "http://") == 0 || typed_location.compare(0, 8, "https://") == 0)
+                LLWeb::loadURL(typed_location);
+            else native->teleportToRegion(typed_location.substr(0, typed_location.find(',')), LLVector3(128, 128, 0));
+        }
+        return;
+    }
+#endif
     /* since navbar list support autocompletion it contains several types of item: landmark, teleport hystory item,
      * typed by user slurl or region name. Let's find out which type of item the user has selected
      * to make decision about adding this location into typed history. see mSaveToLocationHistory
@@ -909,6 +948,14 @@ void LLNavigationBar::onNavigationButtonHeldUp(LLButton* nav_button)
 
 void LLNavigationBar::handleLoginComplete()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        if (mNativeLoginGeneration == session->generation()) return;
+        mNativeLoginGeneration = session->generation();
+        if (auto* favorites = mView->findChild<LLFavoritesBarCtrl>("favorite")) favorites->handleNativeLoginComplete();
+    }
+#endif
     LLTeleportHistory::getInstance()->handleLoginComplete();
     // <FS:Zi> We don't use the mini location panel in Firestorm
     // LLPanelTopInfoBar::instance().handleLoginComplete();
@@ -939,7 +986,11 @@ void LLNavigationBar::invokeSearch(std::string search_text)
 {
     // <FS:PP> FIRE-36483 Menu, navbar and toolbar button must open the same search window
     // LLFloaterReg::showInstance("search", LLSD().with("category", "standard").with("query", LLSD(search_text)));
+#if VS_NATIVE_VULKAN
+    const std::string search_floater_name = VSNativeSession::active() ? "search" : (gSavedSettings.getBOOL("FSUseFSLegacySearch") ? "search" : "legacy_search");
+#else
     const std::string search_floater_name = gSavedSettings.getBOOL("FSUseFSLegacySearch") ? "search" : "legacy_search";
+#endif
     LLFloaterReg::showInstance(search_floater_name, LLSD().with("category", "standard").with("query", LLSD(search_text)));
     // </FS:PP>
 }
@@ -990,11 +1041,17 @@ void LLNavigationBar::onRightMouseDown(S32 x,S32 y,MASK mask)
 // <FS:CR> FIRE-11847
 void LLNavigationBar::onClickedLightingBtn()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return;
+#endif
     LLFloaterReg::showInstance("env_adjust_snapshot");
 }
 
 void LLNavigationBar::updateRlvRestrictions(ERlvBehaviour behavior, ERlvParamType type)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return;
+#endif
     if (behavior == RLV_BHVR_SETENV)
     {
         mView->getChild<LLButton>("PersonalLighting")->setEnabled(type != RLV_TYPE_ADD);

@@ -37,13 +37,14 @@ class LLHints :  public LLSingleton<LLHints>
     LLSINGLETON(LLHints);
     ~LLHints();
 public:
+    static bool isNativeInternalType(const std::type_info& type);
     void show(LLNotificationPtr hint);
     void hide(LLNotificationPtr hint);
     void registerHintTarget(const std::string& name, LLHandle<LLView> target);
     LLHandle<LLView> getHintTarget(const std::string& name);
 private:
     LLRegistry<std::string, LLHandle<LLView> > mTargetRegistry;
-    typedef std::map<LLNotificationPtr, class LLHintPopup*> hint_map_t;
+    typedef std::map<LLNotificationPtr, LLHandle<LLView>> hint_map_t;
     hint_map_t mHints;
     void showHints(const LLSD& show);
 

@@ -33,6 +33,12 @@
 #endif
 
 #include "llviewermenu.h"
+#if VS_NATIVE_VULKAN
+#include "vsplainchat.h"
+#include "vsnativesession.h"
+#include "llpanelpeople.h"
+#include "vsuiadmission.h"
+#endif
 
 // linden library includes
 #include "llavatarnamecache.h"  // IDEVO (I Are Not Men!)
@@ -561,6 +567,50 @@ void check_merchant_status(bool force)
 {
    if (gSLMMenuUpdater)
        gSLMMenuUpdater->checkMerchantStatus(force);
+}
+
+void init_native_connected_menus()
+{
+    if (gMenuBarView) return;
+#if VS_NATIVE_VULKAN
+    // Vintage's People layout is a scene radar. Keep its existing skinned
+    // Contacts frontend for native account operations and menu check states.
+    auto& commits = LLUICtrl::CommitCallbackRegistry::defaultRegistrar();
+    for (const char* name : {"Floater.Show", "Floater.Toggle", "Floater.ToggleOrBringToFront", "Floater.ShowOrBringToFront"})
+    {
+        auto original = *LLUICtrl::CommitCallbackRegistry::getValue(name);
+        commits.replace(name, [original](LLUICtrl* ctrl, const LLSD& parameter)
+        {
+            if (parameter.asString() == "people" && gViewerWindow && gViewerWindow->isNativeVulkan() &&
+                gSavedSettings.getString("FSInternalSkinCurrent") == "Vintage")
+            {
+                original(ctrl, LLSD("imcontacts"));
+                return;
+            }
+            original(ctrl, parameter);
+        });
+    }
+    auto& enables = LLUICtrl::EnableCallbackRegistry::defaultRegistrar();
+    for (const char* name : {"Floater.Visible", "Floater.IsOpen"})
+    {
+        auto original = *LLUICtrl::EnableCallbackRegistry::getValue(name);
+        enables.replace(name, [original](LLUICtrl* ctrl, const LLSD& parameter)
+        {
+            if (parameter.asString() == "people" && gViewerWindow && gViewerWindow->isNativeVulkan() &&
+                gSavedSettings.getString("FSInternalSkinCurrent") == "Vintage")
+                return original(ctrl, LLSD("imcontacts"));
+            return original(ctrl, parameter);
+        });
+    }
+#endif
+    gMenuBarView = LLUICtrlFactory::createFromFile<LLMenuBarGL>("menu_viewer.xml", gMenuHolder,
+        LLViewerMenuHolderGL::child_registry_t::instance());
+    if (!gMenuBarView) throw std::runtime_error("Native connected menu XUI is missing");
+    auto* holder = gViewerWindow->getRootView()->getChildView("menu_bar_holder");
+    holder->addChild(gMenuBarView);
+    gMenuBarView->arrangeAndClear();
+    gMenuBarView->setRect(LLRect(0, holder->getRect().getHeight(), gMenuBarView->getRect().getWidth(), 0));
+    gMenuBarView->createJumpKeys();
 }
 
 void init_menus()
@@ -5290,6 +5340,9 @@ class LLCheckPanelPeopleTab : public view_listener_t
     bool handleEvent(const LLSD& userdata)
         {
             std::string panel_name = userdata.asString();
+#if VS_NATIVE_VULKAN
+            if (VSNativeSession::active()) return LLPanelPeople::nativeAccountTabVisible(panel_name);
+#endif
 
             LLPanel *panel = LLFloaterSidePanelContainer::getPanel("people", panel_name);
             if(panel && panel->isInVisibleChain())
@@ -5305,6 +5358,13 @@ class LLTogglePanelPeopleTab : public view_listener_t
     bool handleEvent(const LLSD& userdata)
     {
         std::string panel_name = userdata.asString();
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            LLPanelPeople::showNativeAccountTab(panel_name);
+            return true;
+        }
+#endif
 
         LLSD param;
         param["people_panel_tab_name"] = panel_name;
@@ -7365,11 +7425,11 @@ class LLEditDelete : public view_listener_t
         }
 
         // and close any pie/context menus when done
-        gMenuHolder->hideMenus();
+        if (gMenuHolder) gMenuHolder->hideMenus();
 
         // When deleting an object we may not actually be done
         // Keep selection so we know what to delete when confirmation is needed about the delete
-        gMenuObject->hide();
+        if (gMenuObject) gMenuObject->hide();
         return true;
     }
 };
@@ -8279,7 +8339,8 @@ class LLAvatarToggleSearch : public view_listener_t
     bool handleEvent(const LLSD& userdata)
     {
         // <FS:Ansariel> Legacy search toggle
-        const std::string instance_name = gSavedSettings.getBOOL("FSUseFSLegacySearch") ? "search" : "legacy_search";
+        const std::string instance_name = gViewerWindow && gViewerWindow->isNativeVulkan() ? "search" :
+            (gSavedSettings.getBOOL("FSUseFSLegacySearch") ? "search" : "legacy_search");
 
         LLFloater* instance = LLFloaterReg::findInstance(instance_name);
         if (LLFloater::isMinimized(instance))
@@ -8308,7 +8369,8 @@ class FSAvatarSearchVisible : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
-        return LLFloaterReg::instanceVisible(gSavedSettings.getBOOL("FSUseFSLegacySearch") ? "search" : "legacy_search", LLSD());
+        return LLFloaterReg::instanceVisible(gViewerWindow && gViewerWindow->isNativeVulkan() ? "search" :
+            (gSavedSettings.getBOOL("FSUseFSLegacySearch") ? "search" : "legacy_search"), LLSD());
     }
 };
 // </FS:Ansariel>

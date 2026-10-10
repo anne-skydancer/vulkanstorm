@@ -65,6 +65,8 @@ class LLPanelMainInventory : public LLPanel, LLInventoryObserver
 {
 public:
     friend class LLFloaterInventoryFinder;
+    static bool isNativeInternalType(const std::type_info&);
+    static bool isNativeCallback(std::string_view, const LLSD&);
 
     LLPanelMainInventory(const LLPanel::Params& p = getDefaultParams());
     ~LLPanelMainInventory();

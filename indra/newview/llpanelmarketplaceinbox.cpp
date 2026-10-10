@@ -96,7 +96,10 @@ LLInventoryPanel * LLPanelMarketplaceInbox::setupInventoryPanel()
                                                           inbox_inventory_parent,
                                                           LLInventoryPanel::child_registry_t::instance());
 
-    llassert(mInventoryPanel);
+    if (!mInventoryPanel)
+    {
+        LL_ERRS("Inventory") << "Required inbox inventory XUI failed construction" << LL_ENDL;
+    }
 
     // Reshape the inventory to the proper size
     LLRect inventory_placeholder_rect = inbox_inventory_placeholder->getRect();

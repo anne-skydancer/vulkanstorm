@@ -49,6 +49,7 @@ void initialize_edit_menu();
 void initialize_spellcheck_menu();
 void initialize_volume_controls_callbacks(); //<FS:KC> Centralize a some of these volume panel callbacks
 void init_menus();
+void init_native_connected_menus();
 void cleanup_menus();
 
 void show_debug_menus(); // checks for if menus should be shown first.

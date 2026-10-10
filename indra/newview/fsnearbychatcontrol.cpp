@@ -74,11 +74,12 @@ FSNearbyChatControl::FSNearbyChatControl(const FSNearbyChatControl::Params& p) :
             boost::bind(&FSNearbyChatControl::updateEmojiHelperSetting, this, _2));
 
     // Register for font change notifications
-    LLViewerChat::setFontChangedCallback(boost::bind(&FSNearbyChatControl::setFont, this, _1));
+    mFontChangedConnection = LLViewerChat::setFontChangedCallback(boost::bind(&FSNearbyChatControl::setFont, this, _1));
 }
 
 FSNearbyChatControl::~FSNearbyChatControl()
 {
+    if (FSNearbyChat::instanceExists()) FSNearbyChat::instance().unregisterChatBar(this);
     if (mRlvBehaviorCallbackConnection.connected())
     {
         mRlvBehaviorCallbackConnection.disconnect();

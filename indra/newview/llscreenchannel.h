@@ -219,7 +219,7 @@ public:
     // get StartUp Toast's state
     static bool getStartUpToastShown() { return mWasStartUpToastShown; }
     // tell all channels that the StartUp toast was shown and allow them showing of toasts
-    static void setStartUpToastShown() { mWasStartUpToastShown = true; }
+    static void setStartUpToastShown(bool shown = true) { mWasStartUpToastShown = shown; }
     // let a channel update its ShowToast flag
     void updateShowToastsState();
 

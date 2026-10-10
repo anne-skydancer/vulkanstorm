@@ -36,6 +36,8 @@
 #include "lltoolbar.h"
 #include "lltoolbarview.h"
 #include "lltrans.h"
+#include "vsuiadmission.h"
+#include "vsnativeim.h"
 
 LLFloaterToybox::LLFloaterToybox(const LLSD& key)
     : LLFloater(key)
@@ -107,7 +109,9 @@ void LLFloaterToybox::draw()
     {
         const LLCommandId& id = *it;
 
-        const bool command_not_present = (gToolBarView->hasCommand(id) == LLToolBarEnums::TOOLBAR_NONE);
+        const LLCommand* command = LLCommandManager::instance().getCommand(id);
+        const bool command_not_present = command && VSUIAdmission::command(command->name()) &&
+            (gToolBarView->hasCommand(id) == LLToolBarEnums::TOOLBAR_NONE);
         mToolBar->enableCommand(id, command_not_present);
     }
 
@@ -116,6 +120,7 @@ void LLFloaterToybox::draw()
 
 static bool finish_restore_toybox(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
 
     if (option == 0)
@@ -128,6 +133,7 @@ static bool finish_restore_toybox(const LLSD& notification, const LLSD& response
 
 static bool finish_clear_all_toybox(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
 
     if (option == 0)
@@ -143,12 +149,16 @@ static LLNotificationFunctorRegistration finish_clear_all_toybox_reg("ConfirmCle
 
 void LLFloaterToybox::onBtnRestoreDefaults()
 {
-    LLNotificationsUtil::add("ConfirmRestoreToybox");
+    LLSD payload;
+    vs_native_im_stamp_notification(payload);
+    LLNotificationsUtil::add("ConfirmRestoreToybox", LLSD(), payload);
 }
 
 void LLFloaterToybox::onBtnClearAll()
 {
-    LLNotificationsUtil::add("ConfirmClearAllToybox");
+    LLSD payload;
+    vs_native_im_stamp_notification(payload);
+    LLNotificationsUtil::add("ConfirmClearAllToybox", LLSD(), payload);
 }
 
 bool LLFloaterToybox::handleDragAndDrop(S32 x, S32 y, MASK mask, bool drop,

@@ -37,8 +37,10 @@
 #include "llsyswellwindow.h"
 #include "llfloaternotificationstabbed.h"
 #include "llfloaterreg.h"
+#include "lltoast.h"
 
 #include <algorithm>
+#include <set>
 
 using namespace LLNotificationsUI;
 
@@ -175,6 +177,40 @@ void LLChannelManager::onLoginCompleted()
 
     LLPersistentNotificationStorage::getInstance()->loadNotifications();
     LLDoNotDisturbNotificationStorage::getInstance()->loadNotifications();
+}
+
+void LLChannelManager::onNativeLoginCompleted()
+{
+    // Account directory/grid selection and native shared chrome are established
+    // by the caller. Reset filenames/load state before restoring this account.
+    LLPersistentNotificationStorage::getInstance()->reset();
+    LLDoNotDisturbNotificationStorage::getInstance()->reset();
+    onLoginCompleted();
+}
+
+void LLChannelManager::resetNativeAccount()
+{
+    auto* startup = mStartUpChannel;
+    onStartUpToastClose();
+    if (startup) delete startup;
+    struct AllToasts final : LLScreenChannel::Matcher
+    {
+        bool matches(const LLNotificationPtr) const override { return true; }
+    } all;
+    // Copy handles: deleting a toast can run channel/notification callbacks.
+    const auto channels = mChannelList;
+    for (const auto& element : channels)
+        if (auto* channel = dynamic_cast<LLScreenChannel*>(element.channel.get()))
+        {
+            std::set<LLUUID> ids;
+            for (const auto* toast : channel->findToasts(all)) ids.insert(toast->getNotificationID());
+            // A storable toast also occurs in the displayed list. Snapshot IDs
+            // once and retire the actual UI owner without invoking an offer's
+            // response/default action or relying on notification validity.
+            for (const auto& id : ids) channel->removeToastByNotificationID(id);
+            channel->setVisible(false);
+        }
+    LLScreenChannel::setStartUpToastShown(false);
 }
 
 //--------------------------------------------------------------------------
