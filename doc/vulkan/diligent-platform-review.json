@@ -1,5 +1,5 @@
 {
-  "source_commit": "4581519cddb0d0d98ae231dd108ae20cd5f21194",
+  "source_commit": "f560e6b41e03756f05c4531bb79ae1d0c1babd04",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -824,30 +824,30 @@
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 4098,
-      "end": 4142,
+      "start": 4093,
+      "end": 4137,
       "record": "I01",
       "disposition": "mapped",
       "reason": "Renderer callbacks retain OpenGL/Zink/Vulkan identity. Vulkan selection explains unavailable normal-session admission and restores the active selector without persisting or quitting; restart callbacks independently enforce availability before commit. Existing supported renderer restart/cancel semantics are preserved.",
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6"
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628"
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 4161,
-      "end": 4162,
+      "start": 4156,
+      "end": 4157,
       "record": "I01",
       "disposition": "mapped",
       "reason": "Renderer callbacks retain OpenGL/Zink/Vulkan identity. Vulkan selection explains unavailable normal-session admission and restores the active selector without persisting or quitting; restart callbacks independently enforce availability before commit. Existing supported renderer restart/cancel semantics are preserved.",
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6"
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628"
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 4170,
-      "end": 4197,
+      "start": 4165,
+      "end": 4192,
       "record": "I01",
       "disposition": "mapped",
       "reason": "Renderer callbacks retain OpenGL/Zink/Vulkan identity. Vulkan selection explains unavailable normal-session admission and restores the active selector without persisting or quitting; restart callbacks independently enforce availability before commit. Existing supported renderer restart/cancel semantics are preserved.",
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6"
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628"
     },
     {
       "path": "indra/cmake/DiligentCore.cmake",
@@ -3841,7 +3841,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 35,
       "end": 38,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3850,7 +3850,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 349,
       "end": 349,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3859,7 +3859,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 541,
       "end": 541,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3868,7 +3868,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 593,
       "end": 603,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3877,7 +3877,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 636,
       "end": 639,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3886,7 +3886,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 654,
       "end": 656,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3895,7 +3895,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 686,
       "end": 687,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3904,7 +3904,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 689,
       "end": 689,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3913,7 +3913,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 691,
       "end": 691,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3922,7 +3922,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 695,
       "end": 695,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3931,7 +3931,7 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 697,
       "end": 701,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -3940,79 +3940,88 @@
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 749,
       "end": 754,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 757,
-      "end": 763,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 759,
+      "end": 762,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 832,
-      "end": 832,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 831,
+      "end": 831,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 838,
-      "end": 838,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 837,
+      "end": 837,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 854,
-      "end": 855,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 853,
+      "end": 854,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 858,
-      "end": 861,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 857,
+      "end": 860,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 866,
-      "end": 866,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 865,
+      "end": 865,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 987,
-      "end": 987,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 986,
+      "end": 986,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 1050,
-      "end": 1056,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 1051,
+      "end": 1054,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
+    },
+    {
+      "path": "indra/newview/llfloaterpreference.cpp",
+      "start": 1179,
+      "end": 1179,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -4020,125 +4029,125 @@
     {
       "path": "indra/newview/llfloaterpreference.cpp",
       "start": 1181,
-      "end": 1181,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "end": 1186,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 1183,
-      "end": 1188,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 1331,
+      "end": 1335,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 1333,
-      "end": 1337,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 1477,
+      "end": 1480,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 1479,
-      "end": 1482,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 2240,
+      "end": 2242,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 2242,
-      "end": 2263,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 2248,
+      "end": 2254,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 2477,
-      "end": 2480,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 2468,
+      "end": 2471,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 3159,
-      "end": 3159,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 3150,
+      "end": 3150,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 3520,
+      "start": 3511,
+      "end": 3511,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
+    },
+    {
+      "path": "indra/newview/llfloaterpreference.cpp",
+      "start": 3519,
       "end": 3520,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 3528,
-      "end": 3529,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 3955,
+      "end": 3955,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 3964,
-      "end": 3964,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 4039,
+      "end": 4043,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 4048,
-      "end": 4052,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 5989,
+      "end": 5990,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 5994,
-      "end": 5995,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 6591,
+      "end": 6591,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 6596,
-      "end": 6596,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
-      "record": "I08",
-      "disposition": "mapped",
-      "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
-    },
-    {
-      "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 6618,
-      "end": 6618,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 6613,
+      "end": 6613,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -9060,8 +9069,116 @@
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 1,
-      "end": 1444,
-      "sha256": "ba6a68f074f36b3dfc0f2d765b6464d3dfa9e685e826e2e90d24b1c1a767b93b",
+      "end": 61,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 63,
+      "end": 82,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 84,
+      "end": 165,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 205,
+      "end": 718,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 742,
+      "end": 743,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 746,
+      "end": 751,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 760,
+      "end": 760,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 769,
+      "end": 774,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 791,
+      "end": 791,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 792,
+      "end": 792,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 795,
+      "end": 795,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 810,
+      "end": 1458,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 1460,
+      "end": 1543,
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -10022,45 +10139,45 @@
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 3803,
-      "end": 3803,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 3794,
+      "end": 3794,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 4092,
-      "end": 4092,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 4085,
+      "end": 4085,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 4143,
-      "end": 4160,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 4138,
+      "end": 4155,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 4163,
-      "end": 4169,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 4158,
+      "end": 4164,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterpreference.cpp",
-      "start": 4216,
-      "end": 4218,
-      "sha256": "6ffb318de398eeb2486d00993976d8b4f1dd2d8d92957440a86fa1ba3dd928c6",
+      "start": 4211,
+      "end": 4213,
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -10541,6 +10658,177 @@
       "record": "I08",
       "disposition": "mapped",
       "reason": "Open the actual Viewer menu through Win32/SDL events and evaluate hidden Close Window enable callback before the existing Help/About interaction. This closes the construction-only menu coverage gap."
+    },
+    {
+      "path": "indra/newview/llcolorswatch.cpp",
+      "start": 233,
+      "end": 233,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed translucent swatch draw: remove redundant legacy GL color mutation and use backend-neutral LLUI matrices; image tint retains alpha. Native and legacy source fixtures exercise repeated draws.",
+      "sha256": "8541402b68f762e824b2ed7ebca5d2cbc8f047b6c88b738943304cba667b286b"
+    },
+    {
+      "path": "indra/newview/llcolorswatch.cpp",
+      "start": 237,
+      "end": 237,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed translucent swatch draw: remove redundant legacy GL color mutation and use backend-neutral LLUI matrices; image tint retains alpha. Native and legacy source fixtures exercise repeated draws.",
+      "sha256": "8541402b68f762e824b2ed7ebca5d2cbc8f047b6c88b738943304cba667b286b"
+    },
+    {
+      "path": "indra/newview/llfloaterpreference.cpp",
+      "start": 757,
+      "end": 758,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native graphics preference gates: retain saved controls, FOV range and FSAA choices, bypass GL capabilities and recommendation preset creation; only scene wireframe and hardware Defaults remain unavailable. Account gates and legacy behavior retained.",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628"
+    },
+    {
+      "path": "indra/newview/llfloaterpreference.cpp",
+      "start": 1049,
+      "end": 1050,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native graphics preference gates: retain saved controls, FOV range and FSAA choices, bypass GL capabilities and recommendation preset creation; only scene wireframe and hardware Defaults remain unavailable. Account gates and legacy behavior retained.",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628"
+    },
+    {
+      "path": "indra/newview/llfloaterpreference.cpp",
+      "start": 2243,
+      "end": 2247,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native graphics preference gates: retain saved controls, FOV range and FSAA choices, bypass GL capabilities and recommendation preset creation; only scene wireframe and hardware Defaults remain unavailable. Account gates and legacy behavior retained.",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628"
+    },
+    {
+      "path": "indra/newview/llfloaterpreference.cpp",
+      "start": 4055,
+      "end": 4055,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native graphics preference gates: retain saved controls, FOV range and FSAA choices, bypass GL capabilities and recommendation preset creation; only scene wireframe and hardware Defaults remain unavailable. Account gates and legacy behavior retained.",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628"
+    },
+    {
+      "path": "indra/newview/llfloaterpreference.cpp",
+      "start": 4057,
+      "end": 4059,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native graphics preference gates: retain saved controls, FOV range and FSAA choices, bypass GL capabilities and recommendation preset creation; only scene wireframe and hardware Defaults remain unavailable. Account gates and legacy behavior retained.",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628"
+    },
+    {
+      "path": "indra/newview/llfloaterpreference.cpp",
+      "start": 4086,
+      "end": 4088,
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Reviewed native graphics preference gates: retain saved controls, FOV range and FSAA choices, bypass GL capabilities and recommendation preset creation; only scene wireframe and hardware Defaults remain unavailable. Account gates and legacy behavior retained.",
+      "sha256": "6a1cbe73a8c8ae96066179874cac2a4276f7db5605f6d8dbcbfa302572cec628"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 62,
+      "end": 62,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 83,
+      "end": 83,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 166,
+      "end": 204,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 719,
+      "end": 741,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 744,
+      "end": 745,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 752,
+      "end": 759,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 761,
+      "end": 768,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 775,
+      "end": 790,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 793,
+      "end": 794,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 796,
+      "end": 809,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 1459,
+      "end": 1459,
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
+      "sha256": "006773bf8ce9ce646a0eba4e4c2240f496b696c74d9f27af5232e9ca5e1a0923"
     }
   ],
   "source_review_reconciliation": {
