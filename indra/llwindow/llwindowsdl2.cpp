@@ -1910,7 +1910,11 @@ void LLWindowSDL::gatherInput()
                 if (!mUseGL && mPreeditor)
                 {
                     const auto composition = utf8str_to_wstring(event.edit.text);
-                    mPreeditor->resetPreedit();
+                    S32 position = 0, length = 0;
+                    mPreeditor->getPreeditRange(&position, &length);
+                    // resetPreedit also deletes ordinary selected text. An
+                    // empty composition/cancel must leave committed text intact.
+                    if (!composition.empty() || length > 0) mPreeditor->resetPreedit();
                     if (!composition.empty())
                         mPreeditor->updatePreedit(composition, {S32(composition.size())}, {true},
                             llclamp(event.edit.start, 0, S32(composition.size())));
@@ -2912,7 +2916,13 @@ void LLWindowSDL::allowLanguageTextInput(LLPreeditor *preeditor, bool b)
     // Take care of old and new preeditors.
     if (preeditor != mPreeditor || !b)
     {
-        if (!mUseGL && mPreeditor) mPreeditor->resetPreedit();
+        if (!mUseGL && mPreeditor)
+        {
+            S32 position = 0, length = 0;
+            mPreeditor->getPreeditRange(&position, &length);
+            // Changing focus cancels composition, not a normal text selection.
+            if (length > 0) mPreeditor->resetPreedit();
+        }
         mPreeditor = (b ? preeditor : nullptr);
     }
 

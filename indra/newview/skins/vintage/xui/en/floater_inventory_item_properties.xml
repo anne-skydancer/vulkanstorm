@@ -242,6 +242,13 @@
      name="CheckOwnerTransfer"
      left_delta="78"
      width="78" />
+    <check_box
+     height="16"
+     label="Export"
+     layout="topleft"
+     name="CheckOwnerExport"
+     left_delta="78"
+     width="78" />
 
     <text
      type="string"
@@ -389,20 +396,20 @@
      left_delta="78"
      layout="topleft"
      follows="left|top"
-     name="ComboSaleType"
+     name="ComboBoxSaleType"
      width="110">
         <combo_box.item
          label="Original"
          name="Original"
-         value="Original" />
+         value="1" />
         <combo_box.item
          label="Copy"
          name="Copy"
-         value="Copy" />
+         value="2" />
         <combo_box.item
          label="Contents"
          name="Contents"
-         value="Contents" />
+         value="3" />
     </combo_box>
     <spinner
         follows="left|top"

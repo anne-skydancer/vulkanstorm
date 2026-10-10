@@ -1038,7 +1038,15 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         startupType("offline-only", [password] { return password->getText() == "offline-only"; });
         require(connect->getEnabled(), "Typed login credentials did not enable Login");
         startupClick(connect, [this] { return startup_login_actions == 1; });
+        std::cout << "NATIVE_STARTUP_CREDENTIAL_STATE=after-button-submit:username="
+                  << username->getValue().asString() << ";selected=" << username->getSelectedValue().asString()
+                  << ";password_length=" << password->getText().size() << '\n';
+        require(username->getValue().asString() == "Offline Test", "Native login first submit cleared the typed username");
         startupClick(password, [password] { return password->hasFocus(); });
+        std::cout << "NATIVE_STARTUP_CREDENTIAL_STATE=after-password-refocus:username="
+                  << username->getValue().asString() << ";selected=" << username->getSelectedValue().asString()
+                  << ";password_length=" << password->getText().size() << '\n';
+        require(username->getValue().asString() == "Offline Test", "Native login password refocus cleared the typed username");
         startupType("\r", [this] { return startup_login_actions == 2; });
         stages.emplace_back("native-login-os-input-and-submit-verified");
         password->setText(LLStringExplicit(""));
@@ -1287,7 +1295,9 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         }
         if (frames == 14)
         {
-            require(LLFloaterReg::showInstance("preferences")==nullptr,"Optional native preferences escaped admission");
+            // Preferences is part of the connected UI now. Keep the denial
+            // check on a scene owner that this text-only stage cannot create.
+            require(LLFloaterReg::showInstance("world_map")==nullptr,"Native world map escaped text-only admission");
             require(!LLNotificationChannel::getInstance("AlertModal")->isEmpty(),"Denied native UI action did not show unsupported status");
             startup_denial_verified=true;
         }
