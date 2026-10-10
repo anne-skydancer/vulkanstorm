@@ -6,36 +6,61 @@ This inventory describes implementation and outstanding qualification separately
 
 ## Connected chrome and nearby frontend: current integration
 
-### All-skin tint correction, 10 October 2026
+### All-skin tint and connected qualification, 10 October 2026
 
-Source `d34fe4920260edc12dd566c9525f9a4b625cc62d` corrects a shared
-native-renderer mismatch: OpenGL clamps float vertex tint channels and truncates
-them to normalized U8, whereas native images and primitives retained the full
-float channels. Native image, rectangle and triangle packets now preserve the
-same byte representation. Font colors were already normalized U8. Skin colors,
-assets and the shared tab/button controllers retain their existing definitions.
+Implementation source is `fa6d71c213ebff00e3aad1640499d717ae2e231d` on
+`vkstorm-vulkan`. Shared native image, rectangle and triangle tints now use the
+same clamp and normalized U8 truncation as the actual OpenGL renderer. This
+corrects inactive-tab shading across all eight packaged skin families and every
+catalogued theme, without changing their color definitions. All **68** staged Windows viewer diagnostic cases passed, including independent
+selected inactive-tab asset/readback probes for every skin/theme
+(`.tmp/connected/parity/diagnostic44/results.json`).
+The diagnostic image's rendering implementation is identical to the final stage;
+it predates the later retired-IM guard, precise Vintage corrections and replay
+control-type correction. Subsequent inventory changes respect optional skin
+controls while preserving each existing button or label/tab layout.
 
-The independent regression extracts the actual GL conversion and tests byte
-boundaries and fractional opacity against the native conversion. Each selected
-skin's real layered inactive-tab image is also decoded independently and drawn
-in two fractional-tint/opacity swatches; mapped Vulkan pixels are compared with
-the GL byte-tint/alpha expectation with at most one byte of rounding tolerance.
-All 68 staged Windows viewer diagnostic cases passed in
-`.tmp/connected/parity/diagnostic44/results.json`, including every packaged
-skin/theme and the German overlay, presentation failures and normal login.
-The corrected executable was built as RelWithDebInfo with the viewer's
-Autobuild-installed libraries and complete assets, without an installer.
+All **26 connected cases** passed with **100 mandatory assertions per case**,
+actual authenticated conference-start receipts, pinned SwiftShader and
+core/synchronization validation, clean shutdown and no GL access. They cover
+all 23 catalogued English skin/theme selections, the default German overlay,
+and Modern at 125%/150% scale. This is all-skin/theme coverage, not every
+skin/language combination. The evidence ledger is
+`.tmp/connected/parity/matrix-qualified.json`: 22 successful build45 cases are
+retained, German and both scale cases passed canonically on build47, and
+Vintage passed canonically on build48. Subsequent changes only correct Vintage's
+missing Send-button image reference, omit the exact scene-owned spatial voice-monitor leaf (including
+German), make the replay use the common chat-input base class, and correct the
+optional inventory controls omitted by Vintage. Existing button bindings and
+labels in the retained successful skin cases preserve their prior behavior.
+Their scope and each tested executable/source revision are recorded; this is not a claim
+that all cases ran on one binary. Reused reports record loaded DLL hashes; their
+main executable hash is supported separately by the contemporaneous
+`build45-manifest.json` and retained build45 image, rather than by the per-case
+DLL observer.
 
-The final connected replay also covers real conference start, temporary-to-server
-session remapping, send/leave/reinvite and delayed notification retirement.
-Shared conversation-close callbacks now resolve the current panel identity and
-retain weak host ownership. Message and delayed name-resolution notification
-callbacks reject retired non-null sessions before dereferencing their models.
-Replay43 exposed that notification crash; its failed evidence is preserved.
-The rebuilt final stage is `build-vcuiparity-final-local/newview/RelWithDebInfo`.
-Its complete 26-case connected skin/theme/language/scale matrix is still running;
-these source fixes and the successful rendering matrix do not imply live-grid,
-Linux or physical-driver qualification.
+Vintage's real repeated Preferences traversal retains all 66 paths and 396
+draws. Profiling measured sustained main-thread work in the pinned software
+renderer; the original 180-second self-quit interrupted the exhaustive replay.
+The canonical viewer/process/case deadlines are now finite 480/500/530 seconds.
+A real stalled-child test proves termination, output preservation and failure;
+no acceptance assertion or pixel tolerance was relaxed. Failed Vintage45,
+Vintage46, its privately bounded fixture failure, Vintage47 dummy controls,
+and aborted German45 evidence remain preserved separately from accepted results. The real conference
+remap/close and delayed-notification fixes also retain the original replay43
+failure evidence.
+
+The complete Autobuild-library RelWithDebInfo stage, without an installer, is
+`build-vcuiparity-final-local/newview/RelWithDebInfo`. Its build48 executable
+SHA-256 is `a9cc8510879ec9d861e675fe6526273956a6f31aef60c329230986f7e25eec84`;
+PDB SHA-256 is `14242731f95b65d6fdb37049d4c8387faaa535c3afba996683b83b2f517213ba`.
+Original user-test stages are preserved. The 76 dedicated source/compiler,
+runner and staging tests and 22 documentation/source-pin tests passed.
+These results qualify local Windows software rendering and deterministic
+connected protocol/UI replay. They do not establish new Linux, physical-driver
+or live-grid interoperability results. Normal native viewer launches continue
+to use the machine's Vulkan driver; the software ICD is selected by the isolated
+test environment.
 
 The user's live login establishes that ordinary credentials can connect the native viewer. It also exposed missing address/favorites controls, toolbar placement and pointer behavior, plus a crash during IM interaction. Those reports prevent treating the earlier diagnostic replay as connected OpenGL UI parity.
 

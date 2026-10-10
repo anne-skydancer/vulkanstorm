@@ -1,25 +1,32 @@
 # V4 connected UI/chat implementation
 
-## All-skin tint correction and final connected build, 10 October 2026
+## All-skin tint and connected qualification, 10 October 2026
 
-Implementation source is `d34fe4920260edc12dd566c9525f9a4b625cc62d` on
-`vkstorm-vulkan`. Shared native image and primitive colors now match OpenGL's
-actual normalized U8 tint truncation. All 68 staged viewer diagnostic cases
-passed, including independent inactive-tab asset/tint readbacks for every
-packaged skin/theme and the German overlay. Evidence is preserved at
-`.tmp/connected/parity/diagnostic44/results.json`; this image predates only the
-subsequent shared retired-IM-notification guard and has identical rendering code.
+Source `fa6d71c213ebff00e3aad1640499d717ae2e231d` on `vkstorm-vulkan`
+corrects the shared native tint conversion to match OpenGL's normalized U8
+truncation. All eight packaged skin families and every catalogued theme are
+covered; their color definitions are preserved. All **68 viewer diagnostic
+cases** passed, including independent inactive-tab asset/readback checks.
 
-The final fully staged RelWithDebInfo viewer is at
-`build-vcuiparity-final-local/newview/RelWithDebInfo`. Its build45 executable
-SHA-256 is `2bead64453f0d98042ffadc86052680bac69c4c2a987f4e28fd51a2f67923fd1`;
-PDB SHA-256 is `db56e9501531443857b51d081edc662b7cb269efaaee31693908cb66d24dda4e`.
-It includes the shared remapped-conference close and delayed notification fixes
-exposed by actual replay43. That failed run remains preserved. The final
-26-case connected skin/theme/language/scale matrix requires 100 assertions and
-actual authenticated conference-start requests and is still running at
-`.tmp/connected/parity/matrix45`. Connected acceptance remains pending; no new
-Linux, physical-driver or live-grid result is implied.
+All **26 connected cases** passed with **100 mandatory assertions per case**,
+actual authenticated conference-start requests, core/synchronization validation,
+no GL access and clean shutdown. Coverage is the 23 English skin/theme
+selections, default German and Modern at 125%/150% scale. The ledger at
+`.tmp/connected/parity/matrix-qualified.json` records the distinct tested images:
+22 retained build45 passes, three build47 passes and the final Vintage build48
+pass. [The all-skin audit](connected-ui-gap-audit.md#all-skin-tint-and-connected-qualification-10-october-2026)
+records exact source reuse, preserved failures, executable-hash witnesses,
+Vintage's image/optional-control fixes and measured finite replay deadlines.
+This is not every skin/language combination or a new Linux/live-grid result.
+
+The complete RelWithDebInfo stage is
+`build-vcuiparity-final-local/newview/RelWithDebInfo`, without an installer.
+Build48 executable SHA-256 is
+`a9cc8510879ec9d861e675fe6526273956a6f31aef60c329230986f7e25eec84`.
+Original user-test stages are preserved. All 76 dedicated source/compiler,
+runner/staging tests and 22 documentation/source-pin tests passed. Qualification
+uses isolated Windows SwiftShader; ordinary native viewer launches use the
+machine's Vulkan driver.
 
 ## Historical shared connected UI checkpoint, 10 October 2026
 
