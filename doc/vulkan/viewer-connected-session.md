@@ -291,7 +291,7 @@ hashes still match the qualified executable; the two ancestry-only merges need
 no recompilation. Source analysis acceptance remains separate from runtime
 qualification, and the software-runtime limits above still apply.
 
-### Login friend-status crash: uncommitted qualification
+### Login friend-status crash: qualification
 
 The scoped working-tree fix based on HEAD
 `d2570e155f01604c12195d3b4cdee5e1cdb2c574` routes friend-status notices to the
@@ -314,15 +314,20 @@ original crash executable/PDB and dump/log are retained in `.tmp/login-crash`;
 the older `build-vcloginfix-local` image remains unchanged. The handed-off image
 has not been rebuilt or replaced during this documentation reconciliation.
 
-This fix is **uncommitted**. Its [scoped working-tree source review](login-crash-working-tree-review.json)
-records the actual changed-file hashes/ranges and pending boundary hash update
-separately from the canonical committed source pin. It does not claim committed
-source acceptance. The insertion negative fixtures isolate malformed review
+The fix and regressions are committed as
+`f06d246d3c79c1c12c06f58df1425f6e4dbfca16` directly on `vkstorm-vulkan`; no
+separate fix branch exists to merge. Its [scoped source review](login-crash-working-tree-review.json)
+preserves the pre-commit build evidence and records the canonical source-pin
+resolution against that actual commit. The insertion negative fixtures isolate malformed review
 metadata after the clean-source precondition; an additional regression checks
 that dirty source is rejected before review. Their original rejection assertions
-remain intact. The canonical catalog and boundary acceptance commands still
-reject the modified renderer files, and the canonical boundary current-evidence
-test still reports a stale hash. A subsequently authorized source commit and
-reviewed repin are required to close these checks. The sidecar is not substituted
-for a commit, and the source-pin guards remain unchanged. Live-grid, physical
+remain intact. After explicit local commit approval, the existing insertion and
+platform review ranges were remapped against unchanged text and supplemented
+with the scoped I08/I25 changed-block reviews. The boundary hash and generated
+insertion artifacts were refreshed. Catalog generation and independent
+verification with `--accept`, the boundary acceptance command and all 22
+documentation tests passed. The previously rejected committed-source checks are
+closed without changing their production guards. The executable was built before
+the commit from the same reviewed source bytes and remains byte-for-byte
+unchanged; this repin does not claim a new build. Live-grid, physical
 GPU, manual interaction and Linux acceptance of this fix remain unqualified.
