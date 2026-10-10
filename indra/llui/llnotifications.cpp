@@ -2050,6 +2050,7 @@ void LLPostponedNotification::onAvatarNameCache(const LLUUID& agent_id,
 
 void LLPostponedNotification::finalizeName(const std::string& name)
 {
+    if (!isCurrent()) { cleanup(); return; }
     mName = name;
     modifyNotificationParams();
     LLNotifications::instance().add(mParams);

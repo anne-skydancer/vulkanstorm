@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llcheckboxctrl.h"
 
@@ -225,7 +226,7 @@ bool LLPanelGroupRoles::handleSubTabSwitch(const LLSD& data)
         args["NEEDS_APPLY_MESSAGE"] = mesg;
         args["WANT_APPLY_MESSAGE"] = mWantApplyMesg;
         LLNotificationsUtil::add("PanelGroupApply", args, LLSD(),
-            boost::bind(&LLPanelGroupRoles::handleNotifyCallback, this, _1, _2));
+            vs_native_im_ui_callback(this, boost::bind(&LLPanelGroupRoles::handleNotifyCallback, this, _1, _2)));
         mHasModal = true;
 
         // Returning false will block a close action from finishing until
@@ -274,7 +275,7 @@ bool LLPanelGroupRoles::handleNotifyCallback(const LLSD& notification, const LLS
                 mHasModal = true;
                 LLSD args;
                 args["MESSAGE"] = apply_mesg;
-                LLNotificationsUtil::add("GenericAlert", args, LLSD(), boost::bind(&LLPanelGroupRoles::onModalClose, this, _1, _2));
+                LLNotificationsUtil::add("GenericAlert", args, LLSD(), vs_native_im_ui_callback(this, boost::bind(&LLPanelGroupRoles::onModalClose, this, _1, _2)));
             }
             // Skip switching tabs.
             break;
@@ -1206,7 +1207,7 @@ void LLPanelGroupMembersSubTab::confirmEjectMembers()
         LLNotificationsUtil::add("EjectGroupMemberWarning",
                                  args,
                                  payload,
-                                 boost::bind(&LLPanelGroupMembersSubTab::handleEjectCallback, this, _1, _2));
+                                 vs_native_im_ui_callback(this, boost::bind(&LLPanelGroupMembersSubTab::handleEjectCallback, this, _1, _2)));
     }
     else
     {
@@ -1216,7 +1217,7 @@ void LLPanelGroupMembersSubTab::confirmEjectMembers()
         LLNotificationsUtil::add("EjectGroupMembersWarning",
                                  args,
                                  payload,
-                                 boost::bind(&LLPanelGroupMembersSubTab::handleEjectCallback, this, _1, _2));
+                                 vs_native_im_ui_callback(this, boost::bind(&LLPanelGroupMembersSubTab::handleEjectCallback, this, _1, _2)));
     }
 }
 
@@ -1478,7 +1479,7 @@ bool LLPanelGroupMembersSubTab::apply(std::string& mesg)
                 LLNotificationsUtil::add("AddGroupOwnerWarning",
                                         args,
                                         LLSD(),
-                                        boost::bind(&LLPanelGroupMembersSubTab::addOwnerCB, this, _1, _2));
+                                        vs_native_im_ui_callback(this, boost::bind(&LLPanelGroupMembersSubTab::addOwnerCB, this, _1, _2)));
             }
             else
             {
@@ -1918,7 +1919,7 @@ void LLPanelGroupMembersSubTab::confirmBanMembers()
         LLNotificationsUtil::add("BanGroupMemberWarning",
                                  args,
                                  payload,
-                                 boost::bind(&LLPanelGroupMembersSubTab::handleBanCallback, this, _1, _2));
+                                 vs_native_im_ui_callback(this, boost::bind(&LLPanelGroupMembersSubTab::handleBanCallback, this, _1, _2)));
     }
     else
     {
@@ -1928,7 +1929,7 @@ void LLPanelGroupMembersSubTab::confirmBanMembers()
         LLNotificationsUtil::add("BanGroupMembersWarning",
                                  args,
                                  payload,
-                                 boost::bind(&LLPanelGroupMembersSubTab::handleBanCallback, this, _1, _2));
+                                 vs_native_im_ui_callback(this, boost::bind(&LLPanelGroupMembersSubTab::handleBanCallback, this, _1, _2)));
     }
 }
 
@@ -2528,7 +2529,7 @@ void LLPanelGroupRolesSubTab::handleActionCheck(LLUICtrl* ctrl, bool force)
             {
                 warning = "AssignDangerousAbilityWarning";
             }
-            LLNotificationsUtil::add(warning, args, LLSD(), boost::bind(&LLPanelGroupRolesSubTab::addActionCB, this, _1, _2, check));
+            LLNotificationsUtil::add(warning, args, LLSD(), vs_native_im_ui_callback(this, boost::bind(&LLPanelGroupRolesSubTab::addActionCB, this, _1, _2, check)));
         }
         else
         {

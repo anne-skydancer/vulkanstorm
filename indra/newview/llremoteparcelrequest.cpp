@@ -27,6 +27,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "message.h"
 
@@ -187,9 +188,12 @@ bool LLRemoteParcelInfoProcessor::requestRegionParcelInfo(const std::string &url
 
     if (!url.empty())
     {
+        const auto current = vs_native_im_guard();
         LLCoros::instance().launch("LLRemoteParcelInfoProcessor::regionParcelInfoCoro",
-            boost::bind(&LLRemoteParcelInfoProcessor::regionParcelInfoCoro, this, url,
-            regionId, regionPos, globalPos, observerHandle));
+            [this, current, url, regionId, regionPos, globalPos, observerHandle]()
+            {
+                if (current()) regionParcelInfoCoro(url, regionId, regionPos, globalPos, observerHandle);
+            });
         return true;
     }
 
@@ -200,6 +204,8 @@ void LLRemoteParcelInfoProcessor::regionParcelInfoCoro(std::string url,
     LLUUID regionId, LLVector3 posRegion, LLVector3d posGlobal,
     LLHandle<LLRemoteParcelInfoObserver> observerHandle)
 {
+    const auto current = vs_native_im_guard();
+    if (!current()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("RemoteParcelRequest", httpPolicy);
@@ -221,6 +227,7 @@ void LLRemoteParcelInfoProcessor::regionParcelInfoCoro(std::string url,
     }
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, bodyData);
+    if (!current()) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

@@ -28,6 +28,7 @@
 #define LL_LLDONOTDISTURBNOTIFICATIONSTORAGE_H
 
 #include "llerror.h"
+#include <boost/signals2/connection.hpp>
 #include "lleventtimer.h"
 #include "llnotifications.h"
 #include "llnotificationstorage.h"
@@ -67,6 +68,7 @@ protected:
 
 private:
     void initialize();
+    boost::signals2::scoped_connection mChannelConnection;
 
     bool mDirty;
     LLDoNotDisturbNotificationStorageTimer mTimer;

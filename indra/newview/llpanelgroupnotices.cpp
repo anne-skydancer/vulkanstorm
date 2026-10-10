@@ -108,6 +108,11 @@ protected:
 
 static LLDefaultChildRegistry::Register<LLGroupDropTarget> r("group_drop_target");
 
+bool LLPanelGroupNotices::isDropTargetType(const std::type_info& type)
+{
+    return type == typeid(LLGroupDropTarget);
+}
+
 LLGroupDropTarget::LLGroupDropTarget(const LLGroupDropTarget::Params& p)
 :   LLView(p),
     mGroupNoticesPanel(p.panel),

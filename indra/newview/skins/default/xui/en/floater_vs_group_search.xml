@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<floater name="vs_group_search" title="Group Search" width="790" height="590"
+ can_resize="true" min_width="790" min_height="590" save_rect="true" single_instance="true" layout="topleft">
+ <panel class="panel_dir_groups" filename="panel_dir_groups.xml" name="panel_dir_groups"
+  left="0" top="0" width="790" height="533" follows="all" layout="topleft" />
+ <button name="open_profile_btn" label="Profile" left="665" top="550" width="110" height="23"
+  follows="right|bottom" layout="topleft" />
+</floater>

@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpreview.h"
+#include "vsnativeim.h"
 
 #include "lllineeditor.h"
 #include "llinventorydefines.h"
@@ -66,6 +67,7 @@
 
 LLPreview::LLPreview(const LLSD& key)
 :   LLFloater(key),
+    mPreviewCurrent(vs_native_im_guard()),
     mItemUUID(key.has("itemid") ? key.get("itemid").asUUID() : key.asUUID()),
     mObjectUUID(),          // set later by setObjectID()
     mCopyToInvBtn( NULL ),
@@ -119,6 +121,7 @@ void LLPreview::setItem( LLInventoryItem* item )
 
 const LLInventoryItem *LLPreview::getItem() const
 {
+    if (!mPreviewCurrent()) return nullptr;
     const LLInventoryItem *item = NULL;
     if (mItem.notNull())
     {
@@ -164,6 +167,7 @@ const LLInventoryItem *LLPreview::getItem() const
 // Sub-classes should override this function if they allow editing
 void LLPreview::onCommit()
 {
+    if (!mPreviewCurrent()) return;
     const LLViewerInventoryItem *item = dynamic_cast<const LLViewerInventoryItem*>(getItem());
     if(item)
     {
@@ -180,10 +184,11 @@ void LLPreview::onCommit()
         LLPointer<LLViewerInventoryItem> new_item = new LLViewerInventoryItem(item);
         new_item->setDescription(getChild<LLUICtrl>("desc")->getValue().asString());
 
-        std::string new_name = getChild<LLUICtrl>("name")->getValue().asString();
+        const auto* name = findChild<LLUICtrl>("name");
+        std::string new_name = name ? name->getValue().asString() : std::string();
         if ( (new_item->getName() != new_name) && !new_name.empty())
         {
-            new_item->rename(getChild<LLUICtrl>("name")->getValue().asString());
+            new_item->rename(new_name);
         }
 
         if(mObjectUUID.notNull())
@@ -440,6 +445,7 @@ void LLPreview::setAuxItem( const LLInventoryItem* item )
 void LLPreview::onBtnCopyToInv(void* userdata)
 {
     LLPreview* self = (LLPreview*) userdata;
+    if (!self->mPreviewCurrent()) return;
     LLInventoryItem *item = self->mAuxItem;
 
     if(item && item->getUUID().notNull())

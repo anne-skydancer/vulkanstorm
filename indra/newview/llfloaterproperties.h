@@ -28,6 +28,7 @@
 #define LL_LLFLOATERPROPERTIES_H
 
 #include <map>
+#include <functional>
 #include "llmultifloater.h"
 #include "lliconctrl.h"
 
@@ -85,6 +86,7 @@ protected:
 
 protected:
     // The item id of the inventory item in question.
+    std::function<bool()> mPropertiesCurrent;
     LLUUID mItemID;
 
     // mObjectID will have a value if it is associated with a task in

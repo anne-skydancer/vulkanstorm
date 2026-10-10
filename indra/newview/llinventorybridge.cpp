@@ -7253,6 +7253,12 @@ static LLNotificationFunctorRegistration open_landmark_callback_reg("TeleportFro
 
 void LLLandmarkBridge::openItem()
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     LLViewerInventoryItem* item = getItem();
 
     if (item)
@@ -7721,6 +7727,12 @@ void LLGestureBridge::performAction(LLInventoryModel* model, std::string action)
 
 void LLGestureBridge::openItem()
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     LLViewerInventoryItem* item = getItem();
 
     if (item)
@@ -7916,6 +7928,12 @@ void LLAnimationBridge::performAction(LLInventoryModel* model, std::string actio
 
 void LLAnimationBridge::openItem()
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     LLViewerInventoryItem* item = getItem();
 
     if (item)
@@ -8075,6 +8093,12 @@ void LLObjectBridge::performAction(LLInventoryModel* model, std::string action)
 
 void LLObjectBridge::openItem()
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     static LLCachedControl<bool> replace_item(gSavedSettings, "FSDoubleClickAddInventoryObjects", false); // <FS> Double-click add/replace
     // object double-click action is to wear/unwear object
     performAction(getInventoryModel(),
@@ -8494,6 +8518,12 @@ void LLWearableBridge::performAction(LLInventoryModel* model, std::string action
 
 void LLWearableBridge::openItem()
 {
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     // <FS:Ansariel> Don't take off body parts!
     if (get_is_item_worn(mUUID) && !canRemoveFromAvatar(this))
     {

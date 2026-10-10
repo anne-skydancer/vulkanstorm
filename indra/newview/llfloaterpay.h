@@ -27,6 +27,7 @@
 #define LLFLOATERPAY_H
 
 #include "llsafehandle.h"
+#include <typeinfo>
 
 class LLObjectSelection;
 class LLUUID;
@@ -38,6 +39,7 @@ namespace LLFloaterPayUtil
 {
     /// Register with LLFloaterReg
     void registerFloater();
+    bool isNativeFloaterType(const std::type_info& type);
 
     /// Pay into an in-world object, which will trigger scripts and eventually
     /// transfer the L$ to the resident or group that owns the object.

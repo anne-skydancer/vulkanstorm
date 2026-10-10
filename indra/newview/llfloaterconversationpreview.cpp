@@ -69,6 +69,7 @@ LLFloaterConversationPreview::LLFloaterConversationPreview(const LLSD& session_i
 
 LLFloaterConversationPreview::~LLFloaterConversationPreview()
 {
+    mHistoryConnection.disconnect();
 }
 
 bool LLFloaterConversationPreview::postBuild()
@@ -141,11 +142,7 @@ void LLFloaterConversationPreview::setPages(std::list<LLSD>* messages, const std
         getChild<LLTextBox>("page_num_label")->setValue(total_page_num);
         mShowHistory = true;
     }
-    LLLoadHistoryThread* loadThread = LLLogChat::getInstance()->getLoadHistoryThread(mSessionID);
-    if (loadThread)
-    {
-        loadThread->removeLoadEndSignal(boost::bind(&LLFloaterConversationPreview::setPages, this, _1, _2));
-    }
+    mHistoryConnection.disconnect();
 }
 
 void LLFloaterConversationPreview::draw()
@@ -200,7 +197,7 @@ void LLFloaterConversationPreview::onOpen(const LLSD& key)
     log_chat_inst->cleanupHistoryThreads();
 
     LLLoadHistoryThread* loadThread = new LLLoadHistoryThread(mChatHistoryFileName, messages, load_params);
-    loadThread->setLoadEndSignal(boost::bind(&LLFloaterConversationPreview::setPages, this, _1, _2));
+    mHistoryConnection = loadThread->setLoadEndSignal(boost::bind(&LLFloaterConversationPreview::setPages, this, _1, _2));
     loadThread->start();
     log_chat_inst->addLoadHistoryThread(mSessionID, loadThread);
 

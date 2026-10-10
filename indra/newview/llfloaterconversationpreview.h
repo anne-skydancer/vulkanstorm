@@ -61,6 +61,7 @@ private:
     void onBtnOpenExternal();   // <FS:CR> Open chat history externally
     void onClickSearch();   // [FS:CR] FIRE-6545
 
+    boost::signals2::scoped_connection mHistoryConnection;
     LLMutex         mMutex;
     LLSpinCtrl*     mPageSpinner;
     // <FS:CR> [FS communication UI]

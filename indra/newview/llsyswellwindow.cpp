@@ -25,6 +25,7 @@
 
 #include "llviewerprecompiledheaders.h" // must be first include
 #include "llsyswellwindow.h"
+#include "vsnativeim.h"
 
 #include "llchiclet.h"
 #include "llchicletbar.h"
@@ -305,7 +306,7 @@ LLIMWellWindow::RowPanel::RowPanel(const LLSysWellWindow* parent, const LLUUID& 
     }
 
     // Initialize chiclet.
-    mChiclet->setChicletSizeChangedCallback(boost::bind(&LLIMWellWindow::RowPanel::onChicletSizeChanged, this, mChiclet, _2));
+    mChicletSizeConnection = mChiclet->setChicletSizeChangedCallback(boost::bind(&LLIMWellWindow::RowPanel::onChicletSizeChanged, this, mChiclet, _2));
     mChiclet->enableCounterControl(true);
     mChiclet->setCounter(chicletCounter);
     mChiclet->setSessionId(sessionId);
@@ -315,7 +316,7 @@ LLIMWellWindow::RowPanel::RowPanel(const LLSysWellWindow* parent, const LLUUID& 
 
     if (im_chiclet_type == LLIMChiclet::TYPE_IM)
     {
-        LLAvatarNameCache::get(otherParticipantId,
+        mAvatarNameConnection = LLAvatarNameCache::get(otherParticipantId,
             boost::bind(&LLIMWellWindow::RowPanel::onAvatarNameCache,
                 this, _1, _2));
     }
@@ -350,6 +351,8 @@ void LLIMWellWindow::RowPanel::onChicletSizeChanged(LLChiclet* ctrl, const LLSD&
 //---------------------------------------------------------------------------------
 LLIMWellWindow::RowPanel::~RowPanel()
 {
+    mAvatarNameConnection.disconnect();
+    mChicletSizeConnection.disconnect();
 }
 
 //---------------------------------------------------------------------------------
@@ -666,6 +669,8 @@ LLIMWellWindow::LLIMWellWindow(const LLSD& key)
 
 LLIMWellWindow::~LLIMWellWindow()
 {
+    mObjectChicletConnection.disconnect();
+    mIMChicletConnection.disconnect();
     // <FS:Ansariel> [FS communication UI]
     LLIMMgr::getInstance()->removeSessionObserver(this);
 }
@@ -688,10 +693,10 @@ bool LLIMWellWindow::postBuild()
     bool rv = LLSysWellWindow::postBuild();
     setTitle(getString("title_im_well_window"));
 
-    LLIMChiclet::sFindChicletsSignal.connect(boost::bind(&LLIMWellWindow::findObjectChiclet, this, _1));
+    mObjectChicletConnection = LLIMChiclet::sFindChicletsSignal.connect(boost::bind(&LLIMWellWindow::findObjectChiclet, this, _1));
 
     // <FS:Ansariel> [FS communication UI]
-    LLIMChiclet::sFindChicletsSignal.connect(boost::bind(&LLIMWellWindow::findIMChiclet, this, _1));
+    mIMChicletConnection = LLIMChiclet::sFindChicletsSignal.connect(boost::bind(&LLIMWellWindow::findIMChiclet, this, _1));
 
     return rv;
 }
@@ -908,7 +913,7 @@ void LLIMWellWindow::closeAll()
         //Bring up a confirmation dialog
         LLNotificationsUtil::add
             ("ConfirmCloseAll", LLSD(), LLSD(),
-             boost::bind(&LLIMWellWindow::confirmCloseAll, this, _1, _2));
+             vs_native_im_ui_callback(this, boost::bind(&LLIMWellWindow::confirmCloseAll, this, _1, _2)));
     }
     else
     {

@@ -28,6 +28,7 @@
 #include "linden_common.h"
 
 #include "llscrolllistitem.h"
+#include "llrender2dutils.h"
 
 #include "llrect.h"
 #include "llui.h"
@@ -148,7 +149,7 @@ std::string LLScrollListItem::getContentsCSV() const
 void LLScrollListItem::draw(const LLRect& rect, const LLColor4& fg_color, const LLColor4& hover_color, const LLColor4& select_color, const LLColor4& highlight_color, S32 column_padding)
 {
     // draw background rect
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+    if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
     LLRect bg_rect = rect;
     if (mSelectedIndex < 0 && getSelected())
     {

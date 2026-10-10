@@ -250,17 +250,18 @@ jobs:
               --harness-evidence .ci/evidence/results.json --evidence .ci/viewer-evidence
           fi
       - name: Connected UI and chat through the staged viewer
+        timeout-minutes: 60
         shell: bash
         run: |
           set -euo pipefail
           if [[ "$RUNNER_OS" == Windows ]]; then
             python scripts/run_vulkan_session_replay.py \
               --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
-              --harness-evidence .ci/evidence/results.json --evidence .ci/session-evidence --register-windows-manifests
+              --harness-evidence .ci/evidence/results.json --evidence .ci/session-evidence --all-skins --register-windows-manifests
           else
             xvfb-run -a -s '-screen 0 1024x768x24' python scripts/run_vulkan_session_replay.py \
               --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
-              --harness-evidence .ci/evidence/results.json --evidence .ci/session-evidence
+              --harness-evidence .ci/evidence/results.json --evidence .ci/session-evidence --all-skins
           fi
       - name: Record source and build environment
         if: always()

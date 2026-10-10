@@ -29,6 +29,11 @@
 #include "llwindow.h"
 
 #include "llpreviewtexture.h"
+#include "vsnativeim.h"
+#include "llrender2dutils.h"
+#if VS_NATIVE_VULKAN
+#include "vsuiimageprovider.h"
+#endif
 
 #include "llagent.h"
 #include "llavataractions.h"
@@ -175,7 +180,6 @@ void LLPreviewTexture::populateRatioList()
 // virtual
 bool LLPreviewTexture::postBuild()
 {
-    mButtonsPanel = getChild<LLLayoutPanel>("buttons_panel");
     mDimensionsText = getChild<LLUICtrl>("dimensions");
     mAspectRatioText = getChild<LLUICtrl>("aspect_ratio");
     mDimensionsPanel = findChild<LLPanel>("dimensions_panel"); // <FS:Ansariel> Texture preview mode
@@ -282,6 +286,24 @@ void LLPreviewTexture::draw()
     updateDimensions();
 
     LLPreview::draw();
+#if VS_NATIVE_VULKAN
+    if (LLRender2D::isNativeUI())
+    {
+        if (!isMinimized())
+        {
+            LLRect interior = mClientRect;
+            interior.stretch(-PREVIEW_BORDER_WIDTH);
+            gl_rect_2d(mClientRect, LLColor4::black);
+            gl_rect_2d_checkerboard(interior);
+            if (mNativeImage.notNull())
+                mNativeImage->draw(interior.mLeft, interior.mBottom,
+                    interior.getWidth(), interior.getHeight(), LLColor4::white);
+        }
+        getChildView("save_tex_btn")->setEnabled(canSaveAs());
+        getChildView("save_tex_btn")->setVisible(mIsFullPerm);
+        return;
+    }
+#endif
 
     if (!isMinimized())
     {
@@ -379,6 +401,9 @@ void LLPreviewTexture::draw()
 // virtual
 bool LLPreviewTexture::canSaveAs() const
 {
+#if VS_NATIVE_VULKAN
+    if (LLRender2D::isNativeUI()) return mIsFullPerm && !mLoadingFullImage && vs_ui_image_ready(mImageID);
+#endif
     return mIsFullPerm && !mLoadingFullImage && mImage.notNull() && !mImage->isMissingAsset();
 }
 
@@ -436,7 +461,13 @@ void LLPreviewTexture::saveAs(EFileformatType format, uuid_vec_t remaining_ids)
     //std::string filename = getItem() ? LLDir::getScrubbedFileName(getItem()->getName()) : LLStringUtil::null;
     //LLFilePickerReplyThread::startPicker(boost::bind(&LLPreviewTexture::saveTextureToFile, this, _1), LLFilePicker::FFSAVE_TGAPNG, filename);
     std::string filename = getItem() ? checkFileExtension(LLDir::getScrubbedFileName(getItem()->getName()), format) : LLStringUtil::null;
-    LLFilePickerReplyThread::startPicker(boost::bind(&LLPreviewTexture::saveTextureToFile, this, _1, format, callback, remaining_ids), saveFilter, filename);
+    const auto handle = getHandle();
+    const auto current = vs_native_im_guard();
+    LLFilePickerReplyThread::startPicker([handle, current, format, callback, remaining_ids](const std::vector<std::string>& filenames, LLFilePicker::ELoadFilter, LLFilePicker::ESaveFilter)
+    {
+        if (current()) if (auto* self = dynamic_cast<LLPreviewTexture*>(handle.get()))
+            if (!filenames.empty()) self->saveTextureToFile(filenames, format, callback, remaining_ids);
+    }, saveFilter, filename);
     // </FS:Ansariel>
 }
 
@@ -460,6 +491,14 @@ void LLPreviewTexture::saveTextureToFile(const std::vector<std::string>& filenam
     mLoadingFullImage = true;
     getWindow()->incBusyCount();
 
+#if VS_NATIVE_VULKAN
+    if (LLRender2D::isNativeUI())
+    {
+        saveNativeImage(format);
+        saveMultiple(remaining_ids);
+        return;
+    }
+#endif
     mImage->forceToSaveRawImage(0);//re-fetch the raw image if the old one is removed.
     // <FS:Ansariel> Undo MAINT-2897 and use our own texture format selection
     //mImage->setLoadedCallback(LLPreviewTexture::onFileLoadedForSave,
@@ -510,6 +549,13 @@ void LLPreviewTexture::saveMultipleToFile(const std::string& file_name)
     mLoadingFullImage = true;
     getWindow()->incBusyCount();
 
+#if VS_NATIVE_VULKAN
+    if (LLRender2D::isNativeUI())
+    {
+        saveNativeImage(gSavedSettings.getBOOL("FSTextureDefaultSaveAsFormat") ? FORMAT_PNG : FORMAT_TGA);
+        return;
+    }
+#endif
     mImage->forceToSaveRawImage(0);//re-fetch the raw image if the old one is removed.
     // <FS:Ansariel> Allow to use user-defined default save format for textures
     //mImage->setLoadedCallback(LLPreviewTexture::onFileLoadedForSavePNG,
@@ -543,10 +589,6 @@ void LLPreviewTexture::reshape(S32 width, S32 height, bool called_from_parent)
     //    info_height += dim_rect.mTop;
     //}
 
-    //if (mButtonsPanel->getVisible())
-    //{
-    //  info_height += mButtonsPanel->getRect().getHeight();
-    //}
     if (mDimensionsPanel)
     {
         LLRect dim_rect(mDimensionsPanel->getRect());
@@ -621,7 +663,6 @@ void LLPreviewTexture::openToSave()
 //  getChildView("desc txt")->setVisible(false);
 //  getChildView("desc")->setVisible(false);
 //  getChild<LLLayoutStack>("preview_stack")->collapsePanel(getChild<LLLayoutPanel>("buttons_panel"), true);
-//  mButtonsPanel->setVisible(false);
 //  getChild<LLComboBox>("combo_aspect_ratio")->setCurrentByIndex(0); //unconstrained
 //  reshape(getRect().getWidth(), getRect().getHeight());
 //}
@@ -770,6 +811,26 @@ void LLPreviewTexture::onFileLoadedForSavePNG(bool success,
 // When we receive it, reshape the window accordingly.
 void LLPreviewTexture::updateDimensions()
 {
+#if VS_NATIVE_VULKAN
+    if (LLRender2D::isNativeUI())
+    {
+        if (!vs_ui_image_ready(mImageID) || mNativeImage.isNull()) return;
+        const S32 width = mNativeImage->getTextureWidth(), height = mNativeImage->getTextureHeight();
+        if (width <= 0 || height <= 0) return;
+        const bool changed = mLastWidth != width || mLastHeight != height;
+        mLastWidth = width; mLastHeight = height;
+        mAssetStatus = PREVIEW_ASSET_LOADED;
+        mDimensionsText->setTextArg("[WIDTH]", llformat("%d", width));
+        mDimensionsText->setTextArg("[HEIGHT]", llformat("%d", height));
+        if (changed) adjustAspectRatio();
+        if (mUpdateDimensions)
+        {
+            mUpdateDimensions = false;
+            reshape(getRect().getWidth(), getRect().getHeight());
+        }
+        return;
+    }
+#endif
     if (!mImage)
     {
         return;
@@ -1095,6 +1156,20 @@ void LLPreviewTexture::onAspectRatioCommit(LLUICtrl* ctrl, void* userdata)
 
 void LLPreviewTexture::loadAsset()
 {
+#if VS_NATIVE_VULKAN
+    if (LLRender2D::isNativeUI())
+    {
+        mNativeImage = LLUI::getUIImageByID(mImageID);
+        mAssetStatus = PREVIEW_ASSET_LOADING;
+        mUpdateDimensions = true;
+        updateDimensions();
+        getChildView("save_tex_btn")->setEnabled(canSaveAs());
+        getChildView("save_tex_btn")->setVisible(mIsFullPerm);
+        getChildView("Keep")->setEnabled(mIsCopyable);
+        getChildView("Discard")->setEnabled(!gInventory.isObjectDescendentOf(mItemUUID, gInventory.getLibraryRootFolderID()));
+        return;
+    }
+#endif
     // <FS:Beq> FIRE-30559 texture fetch speedup for user previews (based on patches from Oren Hurvitz)
     // mImage = LLViewerTextureManager::getFetchedTexture(mImageID, FTT_DEFAULT, MIPMAP_TRUE, LLGLTexture::BOOST_NONE, LLViewerTexture::LOD_TEXTURE);
     // mImageOldBoostLevel = mImage->getBoostLevel();
@@ -1129,6 +1204,13 @@ void LLPreviewTexture::loadAsset()
 
 LLPreview::EAssetStatus LLPreviewTexture::getAssetStatus()
 {
+#if VS_NATIVE_VULKAN
+    if (LLRender2D::isNativeUI())
+    {
+        updateDimensions();
+        return mAssetStatus;
+    }
+#endif
     if (mImage.notNull() && (mImage->getFullWidth() * mImage->getFullHeight() > 0))
     {
         mAssetStatus = PREVIEW_ASSET_LOADED;
@@ -1138,8 +1220,11 @@ LLPreview::EAssetStatus LLPreviewTexture::getAssetStatus()
 
 void LLPreviewTexture::adjustAspectRatio()
 {
-    S32 w = mImage->getFullWidth();
-    S32 h = mImage->getFullHeight();
+    S32 image_width = mImage.notNull() ? mImage->getFullWidth() : mLastWidth;
+    S32 image_height = mImage.notNull() ? mImage->getFullHeight() : mLastHeight;
+    S32 w = image_width;
+    S32 h = image_height;
+    if (w <= 0 || h <= 0) return;
 
     // Determine aspect ratio of the image
     S32 tmp;
@@ -1150,8 +1235,8 @@ void LLPreviewTexture::adjustAspectRatio()
         h = tmp;
     }
     S32 divisor = w;
-    S32 num = mImage->getFullWidth() / divisor;
-    S32 denom = mImage->getFullHeight() / divisor;
+    S32 num = image_width / divisor;
+    S32 denom = image_height / divisor;
 
     if (setAspectRatio((F32)num, (F32)denom))
     {
@@ -1241,6 +1326,14 @@ void LLPreviewTexture::setObjectID(const LLUUID& object_id)
 // <FS:Ansariel> FIRE-20150: Add refresh button to texture preview
 void LLPreviewTexture::onButtonRefresh()
 {
+#if VS_NATIVE_VULKAN
+    if (LLRender2D::isNativeUI())
+    {
+        vs_refresh_ui_image(mImageID);
+        loadAsset();
+        return;
+    }
+#endif
     destroy_texture(mImageID);
 }
 // </FS:Ansariel>
@@ -1265,3 +1358,24 @@ void LLPreviewTexture::saveMultiple(uuid_vec_t ids)
     }
 }
 // </FS:Ansariel>
+
+#if VS_NATIVE_VULKAN
+void LLPreviewTexture::saveNativeImage(EFileformatType format)
+{
+    const auto raw = vs_ui_image_raw(mImageID);
+    LLPointer<LLImageFormatted> encoded = format == FORMAT_PNG
+        ? static_cast<LLImageFormatted*>(new LLImagePNG) : static_cast<LLImageFormatted*>(new LLImageTGA);
+    LLSD args; args["FILE"] = mSaveFileName;
+    if (raw.isNull()) LLNotificationsUtil::add("CannotDownloadFile");
+    else if (!encoded->encode(raw, 0)) LLNotificationsUtil::add("CannotEncodeFile", args);
+    else if (!encoded->save(mSaveFileName)) LLNotificationsUtil::add("CannotWriteFile", args);
+    else
+    {
+        mSavedFileTimer.reset();
+        mSavedFileTimer.setTimerExpirySec(SECONDS_TO_SHOW_FILE_SAVED_MSG);
+    }
+    getWindow()->decBusyCount();
+    mLoadingFullImage = false;
+    mSaveFileName.clear();
+}
+#endif

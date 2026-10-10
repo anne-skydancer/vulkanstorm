@@ -54,12 +54,39 @@
 #include "rlvcommon.h"
 #include "rlvui.h"
 // [/RLVa:KB]
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llworld.h"    // <FS:CR> Aurora Sim
 
 // MAX ITEMS is based on (sizeof(uuid)+2) * count must be < MTUBYTES
 // or 18 * count < 1200 => count < 1200/18 => 66. I've cut it down a
 // bit from there to give some pad.
 const S32 MAX_ITEMS = 42;
+
+namespace
+{
+bool inventory_give_owner_ready()
+{
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        auto owner = VSNativeSession::active();
+        return owner && owner->phase() == VSNativeSession::Phase::Connected && gAgentID.notNull();
+    }
+#endif
+    return isAgentAvatarValid();
+}
+S32 inventory_give_limit()
+{
+    // The native text session has no LLWorld. Retain the protocol-safe
+    // bucket bound used by the standard simulator instead of creating it.
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return MAX_ITEMS;
+    return LLWorld::getInstance()->getMaxInventoryItemsTransfer();
+}
+}
 
 class LLGiveable : public LLInventoryCollectFunctor
 {
@@ -126,7 +153,7 @@ bool LLGiveInventory::isInventoryGiveAcceptable(const LLInventoryItem* item)
 {
     if (!item) return false;
 
-    if (!isAgentAvatarValid()) return false;
+    if (!inventory_give_owner_ready()) return false;
 
     if (!item->getPermissions().allowOperationBy(PERM_TRANSFER, gAgentID))
     {
@@ -158,7 +185,7 @@ bool LLGiveInventory::isInventoryGroupGiveAcceptable(const LLInventoryItem* item
 {
     if (!item) return false;
 
-    if (!isAgentAvatarValid()) return false;
+    if (!inventory_give_owner_ready()) return false;
 
     // These permissions are double checked in the simulator in
     // LLGroupNoticeInventoryItemFetch::result().
@@ -176,7 +203,7 @@ bool LLGiveInventory::isInventoryGroupGiveAcceptable(const LLInventoryItem* item
     switch(item->getType())
     {
     case LLAssetType::AT_OBJECT:
-        if (gAgentAvatarp->isWearingAttachment(item->getUUID()))
+        if (isAgentAvatarValid() && gAgentAvatarp->isWearingAttachment(item->getUUID()))
         {
             acceptable = false;
         }
@@ -217,6 +244,7 @@ bool LLGiveInventory::doGiveInventoryItem(const LLUUID& to_agent,
         LLSD items = LLSD::emptyArray();
         items.append(item->getUUID());
         payload["items"] = items;
+        vs_native_im_stamp_notification(payload);
         LLNotificationsUtil::add("CannotCopyWarning", substitutions, payload,
             &LLGiveInventory::handleCopyProtectedItem);
         res = false;
@@ -231,14 +259,14 @@ bool LLGiveInventory::doGiveInventoryCategory(const LLUUID& to_agent,
                                               const std::string& notification_name)
 
 {
-    if (!cat)
+    if (!cat || !inventory_give_owner_ready() || to_agent.isNull())
     {
         return false;
     }
     LL_INFOS() << "LLGiveInventory::giveInventoryCategory() - "
         << cat->getUUID() << LL_ENDL;
 
-    if (!isAgentAvatarValid())
+    if (!inventory_give_owner_ready())
     {
         return false;
     }
@@ -271,7 +299,7 @@ bool LLGiveInventory::doGiveInventoryCategory(const LLUUID& to_agent,
     count = items.size() + cats.size();
 // <FS:CR> Aurora Sim
     //if (count > MAX_ITEMS)
-    if (count > LLWorld::getInstance()->getMaxInventoryItemsTransfer())
+    if (count > static_cast<size_t>(inventory_give_limit()))
 // </FS:CR> Aurora Sim
     {
         LLNotificationsUtil::add("TooManyItems");
@@ -299,6 +327,7 @@ bool LLGiveInventory::doGiveInventoryCategory(const LLUUID& to_agent,
             {
                 payload["success_notification"] = notification_name;
             }
+            vs_native_im_stamp_notification(payload);
             LLNotificationsUtil::add("CannotCopyCountItems", args, payload, &LLGiveInventory::handleCopyProtectedCategory);
             give_successful = false;
         }
@@ -373,6 +402,7 @@ void LLGiveInventory::logInventoryOffer(const LLUUID& to_agent, const LLUUID &im
 // static
 bool LLGiveInventory::handleCopyProtectedItem(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     LLSD itmes = notification["payload"]["items"];
     LLInventoryItem* item = NULL;
@@ -432,7 +462,7 @@ bool LLGiveInventory::commitGiveInventoryItem(const LLUUID& to_agent,
 {
 //  if (!item) return;
 // [RLVa:KB] - @share
-    if (!item) return false;
+    if (!item || !inventory_give_owner_ready() || to_agent.isNull()) return false;
     if ( (RlvActions::isRlvEnabled()) && (!RlvActions::canGiveInventory(to_agent)) )
     {
         return false;
@@ -465,11 +495,19 @@ bool LLGiveInventory::commitGiveInventoryItem(const LLUUID& to_agent,
         NO_TIMESTAMP,
         bucket,
         BUCKET_SIZE);
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        // Complete the current IM template; the builder emits an empty MetaData count.
+        gMessageSystem->nextBlock("EstateBlock");
+        gMessageSystem->addU32("EstateID", 0);
+    }
+#endif
     gAgent.sendReliableMessage();
 
     // VEFFECT: giveInventory
     // <FS:Ansariel> Make the particle effect optional
-    if (gSavedSettings.getBOOL("FSCreateGiveInventoryParticleEffect"))
+    if (!(gViewerWindow && gViewerWindow->isNativeVulkan()) && gSavedSettings.getBOOL("FSCreateGiveInventoryParticleEffect"))
     {
         LLHUDEffectSpiral *effectp = (LLHUDEffectSpiral *)LLHUDManager::getInstance()->createViewerEffect(LLHUDObject::LL_HUD_EFFECT_BEAM, true);
         effectp->setSourceObject(gAgentAvatarp);
@@ -503,6 +541,7 @@ bool LLGiveInventory::commitGiveInventoryItem(const LLUUID& to_agent,
 // static
 bool LLGiveInventory::handleCopyProtectedCategory(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     LLInventoryCategory* cat = NULL;
     bool give_successful = true;
@@ -563,7 +602,7 @@ bool LLGiveInventory::commitGiveInventoryCategory(const LLUUID& to_agent,
                                                     const LLUUID& im_session_id)
 
 {
-    if (!cat)
+    if (!cat || !inventory_give_owner_ready() || to_agent.isNull())
     {
         return false;
     }
@@ -605,7 +644,7 @@ bool LLGiveInventory::commitGiveInventoryCategory(const LLUUID& to_agent,
     auto count = items.size() + cats.size();
 // <FS:CR> Aurora Sim>
     //if (count > MAX_ITEMS)
-    if (count > LLWorld::getInstance()->getMaxInventoryItemsTransfer())
+    if (count > static_cast<size_t>(inventory_give_limit()))
 // <FS:CR> Aurora Sim
     {
         LLNotificationsUtil::add("TooManyItems");
@@ -665,12 +704,19 @@ bool LLGiveInventory::commitGiveInventoryCategory(const LLUUID& to_agent,
             NO_TIMESTAMP,
             bucket,
             bucket_size);
+#if VS_NATIVE_VULKAN
+        if (gViewerWindow && gViewerWindow->isNativeVulkan())
+        {
+            gMessageSystem->nextBlock("EstateBlock");
+            gMessageSystem->addU32("EstateID", 0);
+        }
+#endif
         gAgent.sendReliableMessage();
         delete[] bucket;
 
         // VEFFECT: giveInventoryCategory
         // <FS:Ansariel> Make the particle effect optional
-        if (gSavedSettings.getBOOL("FSCreateGiveInventoryParticleEffect"))
+        if (!(gViewerWindow && gViewerWindow->isNativeVulkan()) && gSavedSettings.getBOOL("FSCreateGiveInventoryParticleEffect"))
         {
             LLHUDEffectSpiral *effectp = (LLHUDEffectSpiral *)LLHUDManager::getInstance()->createViewerEffect(LLHUDObject::LL_HUD_EFFECT_BEAM, true);
             effectp->setSourceObject(gAgentAvatarp);

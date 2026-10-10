@@ -29,6 +29,7 @@
 
 #include "llinventoryobserver.h"
 #include "llpanel.h"
+#include <functional>
 #include "llstyle.h"
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -97,6 +98,7 @@ private:
     boost::signals2::connection mOwnerCacheConnection;
     boost::signals2::connection mCreatorCacheConnection;
 
+    std::function<bool()> mPropertiesCurrent;
     LLUUID mItemID;     // inventory UUID for the inventory item.
     LLUUID mObjectID;   // in-world task UUID, or null if in agent inventory.
     LLObjectInventoryObserver* mObjectInventoryObserver; // for syncing changes to items inside an object

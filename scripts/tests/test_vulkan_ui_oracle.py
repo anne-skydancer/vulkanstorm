@@ -102,6 +102,8 @@ int main() {
     assert(pixel(0,0,0)==144 && pixel(0,0,1)==32 && pixel(0,0,2)==48);
     packet.blend=VSUIRenderer::Blend::Additive;pixels=vs_ui_expected_pixels(4,4,1,{packet});
     assert(pixel(0,0,0)==255 && pixel(0,0,1)==32 && pixel(0,0,2)==48);
+    packet.blend=VSUIRenderer::Blend::Replace;pixels=vs_ui_expected_pixels(4,4,1,{packet});
+    assert(pixel(0,0,0)==255 && pixel(0,0,1)==0 && pixel(0,0,2)==0 && pixel(0,0,3)==128);
     packet.blend=VSUIRenderer::Blend::StraightAlpha;
     packet.image=texture;packet.sampling=VSUIRenderer::Sampling::Linear;packet.bounds={0,0,1,1};
     pixels=vs_ui_expected_pixels(4,4,1,{packet});assert(pixel(0,0,0)==128 && pixel(0,0,1)==128 && pixel(0,0,2)==128);

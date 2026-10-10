@@ -394,7 +394,7 @@ void LLPanelDirBrowser::showDetailPanel(S32 type, LLSD id)
 
     // <FS:Ansariel> Add "open profile" button
     mSelectedID = id;
-    mFloaterDirectory->updateProfileButtonVisibility();
+    if (mFloaterDirectory) mFloaterDirectory->updateProfileButtonVisibility();
 }
 
 
@@ -1099,7 +1099,7 @@ void LLPanelDirBrowser::setupNewSearch()
     mHaveSearchResults = false;
 
     // Set all panels to be invisible
-    mFloaterDirectory->hideAllDetailPanels();
+    if (mFloaterDirectory) mFloaterDirectory->hideAllDetailPanels();
 
     updateResultCount();
 }

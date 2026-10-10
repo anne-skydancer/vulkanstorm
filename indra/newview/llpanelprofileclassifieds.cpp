@@ -27,6 +27,11 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpanelprofileclassifieds.h"
+#include "vsnativeim.h"
+#include "llrender2dutils.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llagent.h"
 #include "llavataractions.h"
@@ -353,7 +358,7 @@ void LLPanelProfileClassifieds::onClickDelete()
         payload["classified_id"] = classified_id;
         payload["tab_idx"] = mTabContainer->getCurrentPanelIndex();
         LLNotificationsUtil::add("ProfileDeleteClassified", args, payload,
-            boost::bind(&LLPanelProfileClassifieds::callbackDeleteClassified, this, _1, _2));
+            vs_native_im_ui_callback(this, boost::bind(&LLPanelProfileClassifieds::callbackDeleteClassified, this, _1, _2)));
     }
 }
 
@@ -782,19 +787,27 @@ void LLPanelProfileClassified::onOpen(const LLSD& key)
 
         gGenericDispatcher.addHandler("classifiedclickthrough", &sClassifiedClickThrough);
 
-        if (gAgent.getRegion())
+        if (!gAgent.getRegionCapability("SearchStatRequest").empty())
         {
             // While we're at it let's get the stats from the new table if that
             // capability exists.
-            std::string url = gAgent.getRegion()->getCapability("SearchStatRequest");
+            std::string url = gAgent.getRegionCapability("SearchStatRequest");
             if (!url.empty())
             {
                 LL_INFOS() << "Classified stat request via capability" << LL_ENDL;
                 LLSD body;
                 LLUUID classifiedId = getClassifiedId();
                 body["classified_id"] = classifiedId;
+#if VS_NATIVE_VULKAN
+                const auto current = vs_native_im_guard();
+#else
+                const auto current = [] { return true; };
+#endif
                 LLCoreHttpUtil::HttpCoroutineAdapter::callbackHttpPost(url, body,
-                    boost::bind(&LLPanelProfileClassified::handleSearchStatResponse, classifiedId, _1));
+                    [current, classifiedId](const LLSD& result)
+                    {
+                        if (current()) handleSearchStatResponse(classifiedId, result);
+                    });
             }
         }
         // Update classified click stats.
@@ -1017,7 +1030,7 @@ void LLPanelProfileClassified::onSaveClick()
     {
         // <FS:Ansariel> OpenSim compatibility
         //if(gStatusBar->getBalance() < MINIMUM_PRICE_FOR_LISTING)
-        if(gStatusBar->getBalance() < getClassifiedFee())
+        if(!can_afford_transaction(getClassifiedFee()))
         {
             LLNotificationsUtil::add("ClassifiedInsufficientFunds");
             return;
@@ -1255,7 +1268,7 @@ void LLPanelProfileClassified::sendClickMessage(
         const LLVector3d& global_pos,
         const std::string& sim_name)
 {
-    if (gAgent.getRegion())
+    if (!gAgent.getRegionCapability("SearchStatTracking").empty())
     {
         // You're allowed to click on your own ads to reassure yourself
         // that the system is working.
@@ -1267,7 +1280,7 @@ void LLPanelProfileClassified::sendClickMessage(
         body["dest_pos_global"] = global_pos.getValue();
         body["region_name"]     = sim_name;
 
-        std::string url = gAgent.getRegion()->getCapability("SearchStatTracking");
+        std::string url = gAgent.getRegionCapability("SearchStatTracking");
         LL_INFOS() << "Sending click msg via capability (url=" << url << ")" << LL_ENDL;
         LL_INFOS() << "body: [" << body << "]" << LL_ENDL;
         LLCoreHttpUtil::HttpCoroutineAdapter::messageHttpPost(url, body,
@@ -1288,18 +1301,32 @@ void LLPanelProfileClassified::sendClickMessage(const std::string& type)
 
 void LLPanelProfileClassified::onMapClick()
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     sendClickMessage("map");
-    LLFloaterWorldMap::getInstance()->trackLocation(getPosGlobal());
-    LLFloaterReg::showInstance("world_map", "center");
+    if (!LLRender2D::isNativeUI())
+        if (auto* map = LLFloaterWorldMap::getInstance()) map->trackLocation(getPosGlobal());
+    if (!LLRender2D::isNativeUI()) LLFloaterReg::showInstance("world_map", "center");
 }
 
 void LLPanelProfileClassified::onTeleportClick()
 {
+    if (LLRender2D::isNativeUI())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+
     if (!getPosGlobal().isExactlyZero())
     {
         sendClickMessage("teleport");
         gAgent.teleportViaLocation(getPosGlobal());
-        LLFloaterWorldMap::getInstance()->trackLocation(getPosGlobal());
+        if (!LLRender2D::isNativeUI())
+        if (auto* map = LLFloaterWorldMap::getInstance()) map->trackLocation(getPosGlobal());
     }
 }
 

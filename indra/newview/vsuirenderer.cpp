@@ -40,7 +40,7 @@ struct VSUIRenderer::Impl
     RefCntAutoPtr<IRenderDevice> device;
     RefCntAutoPtr<IDeviceContext> context;
     RefCntAutoPtr<IShader> vertex, fragments[2];
-    RefCntAutoPtr<IPipelineState> pipelines[2][4][2][2]; // format, blend, sampler, mask
+    RefCntAutoPtr<IPipelineState> pipelines[2][5][2][2]; // format, blend, sampler, mask
     std::uint64_t next_generation = 1;
     struct Submission
     {
@@ -109,7 +109,7 @@ void main() { result=vec4(color.rgb,texture(g_Texture,texUV).a*color.a); }
         gp.DepthStencilDesc.DepthEnable = false;
         const LayoutElement layout[] = {{0,0,2,VT_FLOAT32,false}, {1,0,2,VT_FLOAT32,false}, {2,0,4,VT_FLOAT32,false}};
         gp.InputLayout.LayoutElements = layout; gp.InputLayout.NumElements = 3;
-        auto& rt = gp.BlendDesc.RenderTargets[0]; rt.BlendEnable = true;
+        auto& rt = gp.BlendDesc.RenderTargets[0]; rt.BlendEnable = blend != Blend::Replace;
         rt.SrcBlend = blend == Blend::StraightAlpha || blend == Blend::AdditiveAlpha ? BLEND_FACTOR_SRC_ALPHA : BLEND_FACTOR_ONE;
         rt.DestBlend = blend == Blend::Additive || blend == Blend::AdditiveAlpha ? BLEND_FACTOR_ONE : BLEND_FACTOR_INV_SRC_ALPHA;
         rt.SrcBlendAlpha = BLEND_FACTOR_ONE; rt.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA;
@@ -192,7 +192,7 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
         check(p.image != nullptr, "Native UI packet has no texture generation");
         check(p.image->owner.RawPtr() == mImpl->device.RawPtr(),"Native UI texture belongs to a different device");
         check((p.blend == Blend::StraightAlpha || p.blend == Blend::PremultipliedAlpha ||
-               p.blend == Blend::Additive || p.blend == Blend::AdditiveAlpha) &&
+               p.blend == Blend::Additive || p.blend == Blend::AdditiveAlpha || p.blend == Blend::Replace) &&
               (p.sampling == Sampling::Nearest || p.sampling == Sampling::Linear),"Invalid native UI packet state");
         for (const auto* values : {&p.bounds, &p.uv, &p.color, &p.clip})
             for (float value : *values) check(std::isfinite(value), "Non-finite native UI packet");

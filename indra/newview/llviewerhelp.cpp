@@ -37,6 +37,7 @@
 
 #include "llviewerhelputil.h"
 #include "llviewerhelp.h"
+#include "llviewerwindow.h"
 #include "llweb.h" // <FS:Beq/> Support for opening help in external browser
 
 // support for secondlife:///app/help/{TOPIC} SLapps
@@ -98,7 +99,7 @@ void LLViewerHelp::showTopic(const std::string& topic)
 {
     // <FS:Beq> allow external browser for help topics
     auto url = getURL(topic);
-    if ( LLWeb::useExternalBrowser(url) )
+    if ((gViewerWindow && gViewerWindow->isNativeVulkan()) || LLWeb::useExternalBrowser(url))
     {
         LLWeb::loadURLExternal(url);
     }

@@ -137,3 +137,4 @@ const std::string& VSUIContext::theme() const
 { return mImpl->theme; }
 const std::string& VSUIContext::language() const
 { return mImpl->language; }
+void VSUIContext::resetAccountImages() { mImpl->images->resetAccount(); }

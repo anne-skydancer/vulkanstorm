@@ -27,6 +27,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llpersistentnotificationstorage.h"
 
@@ -128,6 +129,9 @@ void LLPersistentNotificationStorage::loadNotifications()
         ++notification_it)
     {
         LLSD notification_params = *notification_it;
+        // Persisted account records receive this login's delivery epoch.
+        vs_native_im_stamp_notification(notification_params["payload"]);
+        vs_native_im_stamp_notification(notification_params["responder"]);
         notifications_array.push_back(notification_params);
 
         ++processed_notifications;
@@ -144,6 +148,9 @@ void LLPersistentNotificationStorage::loadNotifications()
             ++notification_it)
     {
         LLSD notification_params = *notification_it;
+        // Persisted account records receive this login's delivery epoch.
+        vs_native_im_stamp_notification(notification_params["payload"]);
+        vs_native_im_stamp_notification(notification_params["responder"]);
         LLNotificationPtr notification = std::make_shared<LLNotification>(notification_params);
 
         LLNotificationResponderPtr responder(createResponder(notification_params["name"], notification_params["responder"]));
@@ -161,8 +168,6 @@ void LLPersistentNotificationStorage::loadNotifications()
         }
     }
 
-    LLNotifications::instance().getChannel("Persistent")->
-            connectChanged(boost::bind(&LLPersistentNotificationStorage::onPersistentChannelChanged, this, _1));
     endBulkUpdate(); // <FS:ND>
     LL_INFOS("LLPersistentNotificationStorage") << "finished loading notifications" << LL_ENDL;
 }
@@ -173,6 +178,8 @@ void LLPersistentNotificationStorage::reset()
     //std::string file_name = "open_notifications_" + LLGridManager::getInstance()->getGrid() + ".xml";
     std::string file_name = "open_notifications_" + LLDir::getScrubbedFileName(LLGridManager::getInstance()->getGrid()) + ".xml";
     // </FS:Ansariel>
+    mLoaded = false;
+    mDuringBulkUpdate = false;
     setFileName(gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT, file_name));
     setOldFileName(gDirUtilp->getExpandedFilename(LL_PATH_PER_SL_ACCOUNT, "open_notifications.xml"));
 }
@@ -180,7 +187,7 @@ void LLPersistentNotificationStorage::reset()
 void LLPersistentNotificationStorage::initialize()
 {
     reset();
-    LLNotifications::instance().getChannel("Persistent")->
+    mChannelConnection = LLNotifications::instance().getChannel("Persistent")->
         connectChanged(boost::bind(&LLPersistentNotificationStorage::onPersistentChannelChanged, this, _1));
 }
 

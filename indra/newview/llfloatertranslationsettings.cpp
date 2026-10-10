@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatertranslationsettings.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativeim.h"
+#endif
 
 // Viewer includes
 // <FS:Ansariel> [FS communication UI]
@@ -331,8 +334,18 @@ void LLFloaterTranslationSettings::setVerificationStatus(int service, bool ok, b
 
 void LLFloaterTranslationSettings::verifyKey(int service, const LLSD& key, bool alert)
 {
+    const LLHandle<LLFloater> weak = getHandle();
+#if VS_NATIVE_VULKAN
+    const auto current = vs_native_im_guard();
+#else
+    const auto current = [] { return true; };
+#endif
     LLTranslate::verifyKey(static_cast<LLTranslate::EService>(service), key,
-        boost::bind(&LLFloaterTranslationSettings::setVerificationStatus, _1, _2, alert, _3));
+        [weak, current, alert](int verified_service, bool ok, S32 status)
+        {
+            if (current() && weak.get())
+                setVerificationStatus(verified_service, ok, alert, status);
+        });
 }
 
 void LLFloaterTranslationSettings::onEditorFocused(LLFocusableElement* control)

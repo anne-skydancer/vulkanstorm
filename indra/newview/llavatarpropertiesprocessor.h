@@ -261,6 +261,7 @@ class LLAvatarPropertiesProcessor
     virtual ~LLAvatarPropertiesProcessor();
 
 public:
+    void resetAccountRequests() { mRequestTimestamps.clear(); mIsHideAgeSupportedByServer = false; }
     void addObserver(const LLUUID& avatar_id, LLAvatarPropertiesObserver* observer);
 
     void removeObserver(const LLUUID& avatar_id, LLAvatarPropertiesObserver* observer);
@@ -348,6 +349,7 @@ protected:
 
     // Call this when the reply to the request is received
     void removePendingRequest(const LLUUID& avatar_id, EAvatarProcessorType type);
+
 
     typedef void* (*processor_method_t)(LLMessageSystem*);
     static processor_method_t getProcessor(EAvatarProcessorType type);

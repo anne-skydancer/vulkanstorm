@@ -24,6 +24,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llpanelgroupcreate.h"
 
@@ -244,7 +245,7 @@ void LLPanelGroupCreate::onBtnCreate()
         mComboMature->getCurrentIndex() == DECLINE_TO_STATE)
     {
         LLNotificationsUtil::add("SetGroupMature", LLSD(), LLSD(),
-            boost::bind(&LLPanelGroupCreate::confirmMatureApply, this, _1, _2));
+            vs_native_im_ui_callback(this, boost::bind(&LLPanelGroupCreate::confirmMatureApply, this, _1, _2)));
     }
     else
     {

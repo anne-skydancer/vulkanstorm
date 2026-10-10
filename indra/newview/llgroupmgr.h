@@ -444,6 +444,8 @@ public:
 
     static void debugClearAllGroups(void*);
     void clearGroups();
+    // Account retry retains UI observers and shared role action definitions.
+    void clearAccountGroups();
     void clearGroupData(const LLUUID& group_id);
 
 private:

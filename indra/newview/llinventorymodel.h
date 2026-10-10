@@ -31,6 +31,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <functional>
 
 #include "llassettype.h"
 #include "llfoldertype.h"
@@ -140,6 +141,7 @@ public:
 
     private:
         LLSD mRequestSD;
+        std::function<bool()> mSessionCurrent;
     };
 
 /********************************************************************************
@@ -154,6 +156,8 @@ public:
     LLInventoryModel();
     ~LLInventoryModel();
     void cleanupInventory();
+    // Retire account data while retaining the existing UI observer ownership.
+    void clearAccountInventory();
 protected:
     void empty(); // empty the entire contents
 

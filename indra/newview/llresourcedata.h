@@ -29,6 +29,7 @@
 
 #include "llassetstorage.h"
 #include "llinventorytype.h"
+#include <functional>
 
 struct LLResourceData
 {
@@ -38,6 +39,8 @@ struct LLResourceData
     U32 mNextOwnerPerm;
     S32 mExpectedUploadCost;
     void *mUserData;
+    // Account ownership of an asynchronous viewer upload. Empty on legacy callers.
+    std::function<bool()> mCurrentAccount;
     static const S8 INVALID_LOCATION = -2;
 };
 

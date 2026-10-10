@@ -27,6 +27,7 @@
 #include "linden_common.h"
 
 #include "llslider.h"
+#include "llrender2dutils.h"
 #include "llui.h"
 
 #include "llgl.h"
@@ -298,7 +299,7 @@ void LLSlider::draw()
     // Draw background and thumb.
 
     // drawing solids requires texturing be disabled
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+    if (!LLRender2D::isNativeUI()) gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     // Track
     LLPointer<LLUIImage>& trackImage = ( mOrientation == HORIZONTAL )

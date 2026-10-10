@@ -132,3 +132,9 @@ void LLFloaterGroupBulkBan::showForGroup(const LLUUID& group_id, uuid_vec_t* age
     fgb->openFloater();
     fgb->mImpl->mBulkBanPanelp->update();
 }
+
+void LLFloaterGroupBulkBan::destroyAccountFloaters()
+{
+    while (!impl::sInstances.empty())
+        delete impl::sInstances.begin()->second;
+}

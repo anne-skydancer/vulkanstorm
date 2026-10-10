@@ -2670,9 +2670,11 @@ void LLViewerWindow::shutdownViews()
             LLModalDialog::shutdownModals();
             LLNotificationsUI::LLToast::cleanupToasts();
             if (LLNotifications::instanceExists()) LLNotifications::instance().clear();
+            LLNotificationsUI::LLNotificationManager::deleteSingleton();
             LLNotificationsUI::LLChannelManager::deleteSingleton();
             mAlertsChannel.reset();
             mModalAlertsChannel.reset();
+            mCommunicationChannel.reset();
             mSystemChannel.reset();
         }
         if (gMenuHolder) cleanup_menus();

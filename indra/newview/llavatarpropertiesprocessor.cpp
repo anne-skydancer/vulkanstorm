@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativeim.h"
+#include "vsnativesession.h"
+#endif
 
 #include "llavatarpropertiesprocessor.h"
 
@@ -309,6 +313,11 @@ bool LLAvatarPropertiesProcessor::hasPaymentInfoOnFile(const LLAvatarData* avata
 // static
 void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_url, LLUUID avatar_id, EAvatarProcessorType type)
 {
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    if (!native_guard()) return;
+#endif
+
     LLAvatarPropertiesProcessor& inst = instance();
 
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -323,6 +332,10 @@ void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_ur
     std::string finalUrl = cap_url + "/" + avatar_id.asString();
 
     LLSD result = httpAdapter->getAndSuspend(httpRequest, finalUrl, httpOpts, httpHeaders);
+#if VS_NATIVE_VULKAN
+    if (!native_guard()) return;
+#endif
+
 
     // Response is being processed, no longer pending is required
     inst.removePendingRequest(avatar_id, type);
@@ -420,8 +433,15 @@ void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_ur
     }
 
     LLAppViewer::instance()->postToMainCoro(
-        [avatar_id, avatar_data, type]()
+        [avatar_id, avatar_data, type
+#if VS_NATIVE_VULKAN
+         , native_guard
+#endif
+        ]()
         {
+#if VS_NATIVE_VULKAN
+            if (!native_guard()) return;
+#endif
             LLAvatarPropertiesProcessor::instance().notifyObservers(avatar_id, (void*) &avatar_data, type);
         });
 }

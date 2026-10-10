@@ -28,6 +28,7 @@
 #define LL_LLPREVIEWTEXTURE_H
 
 #include "llpreview.h"
+#include "lluiimage.h"
 #include "llbutton.h"
 #include "llframetimer.h"
 #include "llviewertexture.h"
@@ -37,7 +38,6 @@
 
 class LLComboBox;
 class LLImageRaw;
-class LLLayoutPanel;
 class LLPanel;
 
 class LLPreviewTexture : public LLPreview
@@ -127,6 +127,10 @@ protected:
 private:
     void                updateImageID(); // set what image is being uploaded.
     void                updateDimensions();
+#if VS_NATIVE_VULKAN
+    void saveNativeImage(EFileformatType format);
+    LLPointer<LLUIImage> mNativeImage;
+#endif
     LLUUID              mImageID;
     LLPointer<LLViewerFetchedTexture>       mImage;
     S32                 mImageOldBoostLevel;
@@ -156,7 +160,6 @@ private:
     LLLoadedCallbackEntry::source_callback_list_t mCallbackTextureList ;
     std::vector<std::string>        mRatiosList;
 
-    LLLayoutPanel* mButtonsPanel = nullptr;
     LLUICtrl* mDimensionsText = nullptr;
     LLUICtrl* mAspectRatioText = nullptr;
 

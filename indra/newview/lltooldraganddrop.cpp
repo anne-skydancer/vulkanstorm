@@ -42,6 +42,7 @@
 #include "llfloatertools.h"
 #include "llgesturemgr.h"
 #include "llgiveinventory.h"
+#include "vsnativeim.h"
 #include "llgltfmateriallist.h"
 #include "llhudmanager.h"
 #include "llhudeffecttrail.h"
@@ -2232,6 +2233,7 @@ EAcceptance LLToolDragAndDrop::willObjectAcceptInventory(LLViewerObject* obj, LL
 
 static void give_inventory_cb(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     // if Cancel pressed
     if (option == 1)
@@ -2287,6 +2289,7 @@ static void show_object_sharing_confirmation(const std::string name,
     payload["item_id"] = inv_item->getUUID();
     payload["session_id"] = session_id;
     payload["d&d_dest"] = dest.asString();
+    vs_native_im_stamp_notification(payload);
     LLNotificationsUtil::add("ShareItemsConfirmation", substitutions, payload, &give_inventory_cb);
 }
 
@@ -2361,7 +2364,14 @@ bool LLToolDragAndDrop::handleGiveDragAndDrop(LLUUID dest_agent, LLUUID session_
                     }
                     else
                     {
-                        LLAvatarNameCache::get(dest_agent, boost::bind(&get_name_cb, _1, _2, inv_obj, dest, dest_agent));
+                        const LLUUID item_id = inv_obj->getUUID();
+                        const auto current = vs_native_im_guard();
+                        LLAvatarNameCache::get(dest_agent, [current, item_id, dest, dest_agent](const LLUUID& id, const LLAvatarName& name)
+                        {
+                            if (!current()) return;
+                            auto* item = gInventory.getObject(item_id);
+                            if (item) get_name_cb(id, name, item, dest, dest_agent);
+                        });
                     }
 
                     return true;

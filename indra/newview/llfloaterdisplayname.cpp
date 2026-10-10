@@ -27,6 +27,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 #include "llfloaterreg.h"
 #include "llfloater.h"
 
@@ -56,6 +57,17 @@ private:
     void onCacheSetName(bool success,
                                           const std::string& reason,
                                           const LLSD& content);
+    LLViewerDisplayName::set_name_slot_t setNameCallback()
+    {
+        const auto weak = getHandle();
+        const auto current = vs_native_im_guard();
+        return [weak, current](bool success, const std::string& reason, const LLSD& content)
+        {
+            if (!current()) return;
+            if (auto* floater = dynamic_cast<LLFloaterDisplayName*>(weak.get()))
+                floater->onCacheSetName(success, reason, content);
+        };
+    }
     bool mIsLockedOut = false;
 };
 
@@ -189,7 +201,7 @@ void LLFloaterDisplayName::onReset()
     //}
     if (LLAvatarNameCache::getInstance()->hasNameLookupURL())
     {
-        LLViewerDisplayName::set("", boost::bind(&LLFloaterDisplayName::onCacheSetName, this, _1, _2, _3));
+        LLViewerDisplayName::set("", setNameCallback());
     }
     else
     {
@@ -223,7 +235,7 @@ void LLFloaterDisplayName::onSave()
         && LLAvatarNameCache::getInstance()->hasNameLookupURL())
     {
         // A reset
-        LLViewerDisplayName::set("", boost::bind(&LLFloaterDisplayName::onCacheSetName, this, _1, _2, _3));
+        LLViewerDisplayName::set("", setNameCallback());
         return;
     }
 
@@ -239,7 +251,7 @@ void LLFloaterDisplayName::onSave()
 
     if (LLAvatarNameCache::getInstance()->hasNameLookupURL())
     {
-        LLViewerDisplayName::set(display_name_utf8,boost::bind(&LLFloaterDisplayName::onCacheSetName, this, _1, _2, _3));
+        LLViewerDisplayName::set(display_name_utf8,setNameCallback());
     }
     else
     {
@@ -257,4 +269,9 @@ void LLFloaterDisplayNameUtil::registerFloater()
 {
     LLFloaterReg::add("display_name", "floater_display_name.xml",
                       &LLFloaterReg::build<LLFloaterDisplayName>);
+}
+
+bool LLFloaterDisplayNameUtil::isNativeFloaterType(const std::type_info& type)
+{
+    return type == typeid(LLFloaterDisplayName);
 }

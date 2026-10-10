@@ -14,7 +14,7 @@ public:
     struct Texture;
     // A packet owns its exact generation, even after its producer replaces it.
     using Image = std::shared_ptr<const Texture>;
-    enum class Blend { StraightAlpha, PremultipliedAlpha, Additive, AdditiveAlpha };
+    enum class Blend { StraightAlpha, PremultipliedAlpha, Additive, AdditiveAlpha, Replace };
     enum class Sampling { Nearest, Linear };
     struct Vertex { float x,y,u,v,r,g,b,a; };
     struct Packet

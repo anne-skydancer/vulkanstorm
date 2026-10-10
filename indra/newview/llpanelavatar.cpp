@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativeim.h"
+#endif
 #include "llpanelavatar.h"
 
 #include "llagent.h"
@@ -140,6 +143,11 @@ void LLPanelProfileTab::setApplyProgress(bool started)
 
 static void put_avatar_properties_coro(std::string cap_url, LLUUID agent_id, LLSD data, std::function<void(bool)> callback)
 {
+#if VS_NATIVE_VULKAN
+    const auto native_guard = vs_native_im_guard();
+    if (!native_guard()) return;
+#endif
+
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("put_avatar_properties_coro", httpPolicy);
@@ -152,6 +160,10 @@ static void put_avatar_properties_coro(std::string cap_url, LLUUID agent_id, LLS
     std::string finalUrl = cap_url + "/" + agent_id.asString();
 
     LLSD result = httpAdapter->putAndSuspend(httpRequest, finalUrl, data, httpOpts, httpHeaders);
+#if VS_NATIVE_VULKAN
+    if (!native_guard()) return;
+#endif
+
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -180,8 +192,18 @@ bool LLPanelProfileTab::saveAgentUserInfoCoro(std::string name, LLSD value, std:
         return false;
     }
 
+#if VS_NATIVE_VULKAN
+    const auto current = vs_native_im_guard();
+    const LLUUID avatar = getAvatarId();
+    const LLSD update = LLSD().with(name, value);
+    LLCoros::instance().launch("putAgentUserInfoCoro", [current, cap_url, avatar, update, callback]()
+    {
+        if (current()) put_avatar_properties_coro(cap_url, avatar, update, callback);
+    });
+#else
     LLCoros::instance().launch("putAgentUserInfoCoro",
         boost::bind(put_avatar_properties_coro, cap_url, getAvatarId(), LLSD().with(name, value), callback));
+#endif
 
     return true;
 }

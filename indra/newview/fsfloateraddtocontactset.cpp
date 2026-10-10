@@ -28,6 +28,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 #include "fsfloateraddtocontactset.h"
 
 #include "llnotificationsutil.h"
@@ -171,7 +172,7 @@ void FSFloaterAddToContactSet::onClickCancel()
 
 void FSFloaterAddToContactSet::onClickAddSet()
 {
-    LLNotificationsUtil::add("AddNewContactSet", LLSD(), LLSD(), &LGGContactSets::handleAddContactSetCallback);
+    LLNotificationsUtil::add("AddNewContactSet", LLSD(), LLSD(), vs_native_im_ui_callback(this, &LGGContactSets::handleAddContactSetCallback));
 }
 
 void FSFloaterAddToContactSet::updateSets(LGGContactSets::EContactSetUpdate type)

@@ -1,3 +1,4 @@
+#include <typeinfo>
 /**
 * @file llpanelprofile.h
 * @brief Profile panel
@@ -91,6 +92,7 @@ class LLPanelProfileSecondLife
 {
 public:
     LLPanelProfileSecondLife();
+    static bool isPermissionsFloaterType(const std::type_info&);
     /*virtual*/ ~LLPanelProfileSecondLife();
 
     void onOpen(const LLSD& key) override;
@@ -248,6 +250,7 @@ private:
     // <FS:Zi> Allow proper texture swatch handling
     // LLThumbnailCtrl*         mSecondLifePic;
     LLTextureCtrl*      mSecondLifePic;
+    boost::signals2::scoped_connection mNativeImageConnection;
     // </FS:Zi>
     LLPanel*            mSecondLifePicLayout;
     LLTextEditor*       mDescriptionEdit;

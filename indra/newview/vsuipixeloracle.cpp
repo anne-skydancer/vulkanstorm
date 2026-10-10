@@ -118,11 +118,13 @@ std::vector<std::uint8_t> vs_ui_expected_pixels(unsigned width, unsigned height,
                         const bool additive =
                             p.blend == VSUIRenderer::Blend::Additive || p.blend == VSUIRenderer::Blend::AdditiveAlpha;
                         const bool unmodulated = p.blend == VSUIRenderer::Blend::PremultipliedAlpha ||
-                                                 p.blend == VSUIRenderer::Blend::Additive;
+                                                 p.blend == VSUIRenderer::Blend::Additive || p.blend == VSUIRenderer::Blend::Replace;
                         const double value =
-                            src * (unmodulated ? 1 : alpha) + dst[channel] / 255. * (additive ? 1 : 1 - alpha);
+                            src * (unmodulated ? 1 : alpha) + dst[channel] / 255. * (p.blend == VSUIRenderer::Blend::Replace ? 0 : additive ? 1 : 1 - alpha);
                         dst[channel] = std::uint8_t(std::clamp(std::lround(value * 255), 0l, 255l));
                     }
+                    const double outputAlpha = alpha + (p.blend == VSUIRenderer::Blend::Replace ? 0 : dst[3] / 255. * (1 - alpha));
+                    dst[3] = std::uint8_t(std::clamp(std::lround(outputAlpha * 255), 0l, 255l));
                 }
         }
     }

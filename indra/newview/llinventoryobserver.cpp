@@ -239,7 +239,7 @@ void fetch_items_from_llsd(const LLSD& items_llsd)
 
     for (S32 i=0; i<body.size(); i++)
     {
-        if (!gAgent.getRegion())
+        if (!gAgent.getRegion() && !(gViewerWindow && gViewerWindow->isNativeVulkan()))
         {
             LL_WARNS() << "Agent's region is null" << LL_ENDL;
             break;
@@ -250,7 +250,7 @@ void fetch_items_from_llsd(const LLSD& items_llsd)
             continue;
         }
 
-        std::string url = gAgent.getRegion()->getCapability(body[i]["cap_name"].asString());
+        std::string url = gAgent.getRegionCapability(body[i]["cap_name"].asString());
         if (!url.empty())
         {
             body[i]["agent_id"] = gAgent.getID();

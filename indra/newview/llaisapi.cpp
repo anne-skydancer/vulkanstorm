@@ -27,6 +27,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llaisapi.h"
+#include "vsnativeim.h"
 
 #include "llagent.h"
 #include "llappviewer.h"
@@ -65,10 +66,10 @@ bool AISAPI::isAvailable()
 {
     // <FS:Ansariel> Add AIS3 debug setting
     //if (gAgent.getRegion())
-    if (gAgent.getRegion() && (gSavedSettings.getBOOL("FSUseAis3Api") || LLGridManager::instance().isInSecondLife()))
+    if (gSavedSettings.getBOOL("FSUseAis3Api") || LLGridManager::instance().isInSecondLife())
     // </FS:Ansariel>
     {
-        return gAgent.getRegion()->isCapabilityAvailable(INVENTORY_CAP_NAME);
+        return !gAgent.getRegionCapability(INVENTORY_CAP_NAME).empty();
     }
     return false;
 }
@@ -83,21 +84,13 @@ void AISAPI::getCapNames(LLSD& capNames)
 /*static*/
 std::string AISAPI::getInvCap()
 {
-    if (gAgent.getRegion())
-    {
-        return gAgent.getRegion()->getCapability(INVENTORY_CAP_NAME);
-    }
-    return std::string();
+    return gAgent.getRegionCapability(INVENTORY_CAP_NAME);
 }
 
 /*static*/
 std::string AISAPI::getLibCap()
 {
-    if (gAgent.getRegion())
-    {
-        return gAgent.getRegion()->getCapability(LIBRARY_CAP_NAME);
-    }
-    return std::string();
+    return gAgent.getRegionCapability(LIBRARY_CAP_NAME);
 }
 
 /*static*/
@@ -790,6 +783,9 @@ void AISAPI::FetchOrphans(completion_t callback)
 /*static*/
 void AISAPI::EnqueueAISCommand(const std::string &procName, LLCoprocedureManager::CoProcedure_t proc)
 {
+    const auto current = vs_native_im_guard();
+    proc = [current, work = std::move(proc)](LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t& adapter, const LLUUID& id)
+    { if (current()) work(adapter, id); };
     LLCoprocedureManager &inst = LLCoprocedureManager::instance();
     auto pending_in_pool = inst.countPending("AIS");
     std::string procFullName = "AIS(" + procName + ")";
@@ -815,6 +811,8 @@ void AISAPI::EnqueueAISCommand(const std::string &procName, LLCoprocedureManager
 }
 
 /*static*/
+void AISAPI::pumpPending() { onIdle(nullptr); }
+
 void AISAPI::onIdle(void *userdata)
 {
     if (!sPostponedQuery.empty())
@@ -857,6 +855,7 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
         invokationFn_t invoke, std::string url,
         LLUUID targetId, LLSD body, completion_t callback, COMMAND_TYPE type)
 {
+    const auto current = vs_native_im_guard();
     if (gDisconnected)
     {
         if (callback)
@@ -879,6 +878,7 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
     LLCore::HttpStatus status;
 
     result = invoke(httpAdapter , httpRequest , url , body , httpOptions , httpHeaders);
+    if (!current()) return;
     httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 

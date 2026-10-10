@@ -42,6 +42,7 @@ public:
     LLViewerAssetStorage(LLMessageSystem *msg, LLXferManager *xfer);
 
     ~LLViewerAssetStorage();
+    void resetAccountRequests();
 
     void storeAssetData(
         const LLTransactionID& tid,

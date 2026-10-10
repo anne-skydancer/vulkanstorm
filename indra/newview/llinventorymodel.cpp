@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include <typeinfo>
 #include <random>
@@ -515,6 +516,17 @@ void LLInventoryModel::cleanupInventory()
     mHttpRequestFG = NULL;
     delete mHttpRequestBG;
     mHttpRequestBG = NULL;
+}
+
+void LLInventoryModel::clearAccountInventory()
+{
+    empty();
+    mRootFolderID.setNull(); mLibraryRootFolderID.setNull(); mLibraryOwnerID.setNull();
+    mIsAgentInvUsable = false;
+    mChangedItemIDs.clear();
+    mModifyMask = LLInventoryObserver::ALL;
+    mValidationInfo = new LLInventoryValidationInfo;
+    notifyObservers();
 }
 
 // This is a convenience function to check if one object has a parent
@@ -1177,10 +1189,7 @@ void LLInventoryModel::createNewCategory(const LLUUID& parent_id,
         return;
     }
 
-    LLViewerRegion* viewer_region = gAgent.getRegion();
-    std::string url;
-    if ( viewer_region )
-        url = viewer_region->getCapability("CreateInventoryCategory");
+    const std::string url = gAgent.getRegionCapability("CreateInventoryCategory");
 
     if (!url.empty())
     {
@@ -5683,7 +5692,7 @@ bool decompress_file(const char* src_filename, const char* dst_filename)
 
 LLInventoryModel::FetchItemHttpHandler::FetchItemHttpHandler(const LLSD & request_sd)
     : LLCore::HttpHandler(),
-      mRequestSD(request_sd)
+      mRequestSD(request_sd), mSessionCurrent(vs_native_im_guard())
 {}
 
 LLInventoryModel::FetchItemHttpHandler::~FetchItemHttpHandler()
@@ -5692,6 +5701,7 @@ LLInventoryModel::FetchItemHttpHandler::~FetchItemHttpHandler()
 void LLInventoryModel::FetchItemHttpHandler::onCompleted(LLCore::HttpHandle handle,
                                                          LLCore::HttpResponse * response)
 {
+    if (!mSessionCurrent()) return;
     do      // Single-pass do-while used for common exit handling
     {
         LLCore::HttpStatus status(response->getStatus());

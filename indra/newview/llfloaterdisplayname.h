@@ -26,11 +26,14 @@
 #ifndef LLFLOATERDISPLAYNAME_H
 #define LLFLOATERDISPLAYNAME_H
 
+#include <typeinfo>
+
 
 namespace LLFloaterDisplayNameUtil
 {
     // Register with LLFloaterReg
     void registerFloater();
+    bool isNativeFloaterType(const std::type_info& type);
 }
 
 

@@ -1,3 +1,4 @@
+#include <typeinfo>
 /**
  * @file llpanelgroupnotices.h
  * @brief A panel to display group notices.
@@ -42,6 +43,7 @@ class LLPanelGroupNotices : public LLPanelGroupTab
 {
 public:
     LLPanelGroupNotices();
+    static bool isDropTargetType(const std::type_info&);
     virtual ~LLPanelGroupNotices();
 
     // LLPanelGroupTab

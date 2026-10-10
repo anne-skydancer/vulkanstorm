@@ -1075,6 +1075,7 @@ protected:
      * and before notification will be added to the notification system.
      */
     virtual void modifyNotificationParams() = 0;
+    virtual bool isCurrent() const { return true; }
 
     LLNotification::Params mParams;
     std::string mName;

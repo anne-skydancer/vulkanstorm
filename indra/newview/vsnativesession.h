@@ -45,6 +45,13 @@ public:
     const LLHost& host() const { return mHost; }
     std::string capability(const std::string&) const;
     LLSD evidence() const;
+    // Unknown balance stays unknown until an authenticated simulator reply.
+    bool balanceKnown() const { return mBalanceKnown; }
+    S32 balance() const { return mBalance; }
+    S32 squareMetersLeft() const { return mLandCredit - mLandCommitted; }
+    void updateBalance(S32 value) { mBalance = value; mBalanceKnown = true; }
+    void clearBalance() { mBalance = 0; mBalanceKnown = false; mLandCredit = mLandCommitted = 0; }
+
 #if VS_VULKAN_DIAGNOSTICS
     void expireDeadlineForReplay() { mDeadline = 0; }
 #endif
@@ -63,6 +70,9 @@ private:
     U64 mHandle = 0, mFlags = 0;
     U8 mAccess = 0;
     U32 mCircuit = 0;
+    bool mBalanceKnown = false;
+    S32 mBalance = 0;
+    S32 mLandCredit = 0, mLandCommitted = 0;
     S32 mLastChannel = 0;
     U32 mWidth = 256, mHeight = 256;
     LLVector3 mPosition;

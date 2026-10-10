@@ -25,6 +25,11 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
+#include <limits>
 #include "llviewermessage.h"
 
 // Linden libraries
@@ -222,6 +227,8 @@ FSHelloToKokuaRefreshAttachmentsTimer gFSRefreshAttachmentsTimer;
 
 void accept_friendship_coro(std::string url, LLSD notification)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return;
+    const auto current = vs_native_im_guard();
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("friendshipResponceErrorProcessing", httpPolicy);
@@ -234,10 +241,11 @@ void accept_friendship_coro(std::string url, LLSD notification)
 
     LLSD payload = notification["payload"];
     url += "?from=" + payload["from_id"].asString();
-    url += "&agent_name=\"" + LLURI::escape(gAgentAvatarp->getFullname()) + "\"";
+    url += "&agent_name=\"" + LLURI::escape(gAgentAvatarp ? gAgentAvatarp->getFullname() : gAgentUsername) + "\"";
 
     LLSD data;
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, data);
+    if (!current()) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -267,6 +275,8 @@ void accept_friendship_coro(std::string url, LLSD notification)
 
 void decline_friendship_coro(std::string url, LLSD notification, S32 option)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return;
+    const auto current = vs_native_im_guard();
     if (url.empty())
     {
         LL_WARNS("Friendship") << "Empty capability!" << LL_ENDL;
@@ -281,6 +291,7 @@ void decline_friendship_coro(std::string url, LLSD notification, S32 option)
     url += "?from=" + payload["from_id"].asString();
 
     LLSD result = httpAdapter->deleteAndSuspend(httpRequest, url);
+    if (!current()) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -315,6 +326,7 @@ void decline_friendship_coro(std::string url, LLSD notification, S32 option)
 
 bool friendship_offer_callback(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     LLMessageSystem* msg = gMessageSystem;
     const LLSD& payload = notification["payload"];
@@ -459,7 +471,27 @@ static LLNotificationFunctorRegistration friendship_offer_callback_reg_nm("Offer
 void give_money(const LLUUID& uuid, LLViewerRegion* region, S32 amount, bool is_group,
                 S32 trx_type, const std::string& desc)
 {
-    if(0 == amount || !region) return;
+    if (amount == 0 || amount == std::numeric_limits<S32>::min()) return;
+    LLHost destination = region ? region->getHost() : LLHost();
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (owner->phase() != VSNativeSession::Phase::Connected ||
+            !owner->host().isOk() || uuid.isNull() || amount < 0) return;
+        if (!owner->balanceKnown())
+        {
+            LLNotificationsUtil::add("NativePaymentBalanceUnavailable");
+            return;
+        }
+        if (!can_afford_transaction(amount))
+        {
+            LLNotificationsUtil::add("NativePaymentInsufficientFunds");
+            return;
+        }
+        destination = owner->host();
+    }
+#endif
+    if (!destination.isOk()) return;
     amount = abs(amount);
     LL_INFOS("Messaging") << "give_money(" << uuid << "," << amount << ")"<< LL_ENDL;
     if(can_afford_transaction(amount))
@@ -484,7 +516,7 @@ void give_money(const LLUUID& uuid, LLViewerRegion* region, S32 amount, bool is_
         msg->addU8Fast(_PREHASH_AggregatePermInventory, (U8)LLAggregatePermissions::AP_EMPTY);
         msg->addS32Fast(_PREHASH_TransactionType, trx_type );
         msg->addStringFast(_PREHASH_Description, desc);
-        msg->sendReliable(region->getHost());
+        msg->sendReliable(destination);
     }
     else
     {
@@ -647,6 +679,7 @@ static LLSD sSavedResponse;
 
 void response_group_invitation_coro(std::string url, LLUUID group_id, bool notify_and_update)
 {
+    const auto current = vs_native_im_guard();
     if (url.empty())
     {
         LL_WARNS("GroupInvite") << "Empty capability!" << LL_ENDL;
@@ -663,6 +696,7 @@ void response_group_invitation_coro(std::string url, LLUUID group_id, bool notif
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, payload);
 
+    if (!current()) return;
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -694,6 +728,7 @@ void response_group_invitation_coro(std::string url, LLUUID group_id, bool notif
 
 void send_join_group_response(LLUUID group_id, LLUUID transaction_id, bool accept_invite, S32 fee, bool use_offline_cap, LLSD &payload)
 {
+    if (!vs_native_im_notification_current(payload)) return;
     if (accept_invite && fee > 0)
     {
         // If there is a fee to join this group, make
@@ -767,6 +802,7 @@ void send_join_group_response(LLUUID group_id, LLUUID transaction_id, bool accep
 
 bool join_group_response(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
 //  A bit of variable saving and restoring is used to deal with the case where your group list is full and you
 //  receive an invitation to another group.  The data from that invitation is stored in the sSaved
 //  variables.  If you then drop a group and click on the Join button the stored data is restored and used
@@ -1199,9 +1235,11 @@ protected:
 
 class LLOpenTaskGroupOffer : public LLInventoryAddedObserver
 {
+    std::function<bool()> mCurrent = vs_native_im_guard();
 protected:
     /*virtual*/ void done()
     {
+        if (!mCurrent()) { gInventory.removeObserver(this); delete this; return; }
         uuid_vec_t added;
         for(uuid_set_t::const_iterator it = gInventory.getAddedIDs().begin(); it != gInventory.getAddedIDs().end(); ++it)
         {
@@ -1281,7 +1319,10 @@ public:
         // So defer moving the item to trash until viewer gets idle (in a moment).
         // Use removeObject() rather than removeItem() because at this level,
         // the object could be either an item or a folder.
-        LLAppViewer::instance()->addOnIdleCallback(boost::bind(&LLInventoryModel::removeObject, &gInventory, mObjectID));
+        const auto current = mCurrent;
+        const LLUUID object = mObjectID;
+        LLAppViewer::instance()->addOnIdleCallback([current, object]
+        { if (current()) gInventory.removeObject(object); });
         gInventory.removeObserver(this);
         delete this;
     }
@@ -1289,6 +1330,7 @@ public:
 protected:
     LLUUID mFolderID;
     LLUUID mObjectID;
+    std::function<bool()> mCurrent = vs_native_im_guard();
 };
 
 
@@ -1429,7 +1471,8 @@ void open_inventory_offer(const uuid_vec_t& objects, const std::string& from_nam
 
         // Either an inventory item or a category.
         const LLInventoryItem* item = dynamic_cast<const LLInventoryItem*>(obj);
-        if (item && check_asset_previewable(asset_type))
+        if (item && check_asset_previewable(asset_type)
+            && (!LLRender2D::isNativeUI() || asset_type == LLAssetType::AT_NOTECARD || asset_type == LLAssetType::AT_TEXTURE))
         {
             ////////////////////////////////////////////////////////////////////////////////
             // Special handling for various types.
@@ -1662,10 +1705,12 @@ LLOfferInfo::LLOfferInfo()
  , mType(LLAssetType::AT_NONE)
  , mPersist(false)
 {
+    vs_native_im_stamp_notification(mNativeScope);
 }
 
 LLOfferInfo::LLOfferInfo(const LLSD& sd)
 {
+    mNativeScope = sd;
     mIM = (EInstantMessage)sd["im_type"].asInteger();
     mFromID = sd["from_id"].asUUID();
     mFromGroup = sd["from_group"].asBoolean();
@@ -1682,6 +1727,8 @@ LLOfferInfo::LLOfferInfo(const LLSD& sd)
 
 LLOfferInfo::LLOfferInfo(const LLOfferInfo& info)
 {
+    mCurrent = info.mCurrent;
+    mNativeScope = info.mNativeScope;
     mIM = info.mIM;
     mFromID = info.mFromID;
     mFromGroup = info.mFromGroup;
@@ -1698,7 +1745,7 @@ LLOfferInfo::LLOfferInfo(const LLOfferInfo& info)
 
 LLSD LLOfferInfo::asLLSD()
 {
-    LLSD sd;
+    LLSD sd = mNativeScope;
     sd["responder_type"] = mResponderType;
     sd["im_type"] = mIM;
     sd["from_id"] = mFromID;
@@ -1718,10 +1765,12 @@ LLSD LLOfferInfo::asLLSD()
 void LLOfferInfo::fromLLSD(const LLSD& params)
 {
     *this = params;
+    mRespondFunctions.clear(); // Bind the restored responder to this instance.
 }
 
 void LLOfferInfo::sendReceiveResponse(bool accept, const LLUUID &destination_folder_id)
 {
+    if (!current()) return;
     if(IM_INVENTORY_OFFERED == mIM)
     {
         // add buddy to recent people list
@@ -1803,6 +1852,7 @@ void LLOfferInfo::sendReceiveResponse(bool accept, const LLUUID &destination_fol
 // <FS:Ansariel> Optional V1-like inventory accept messages
 void LLOfferInfo::send_decline_response(void)
 {
+    if (!current()) return;
     LLUUID destination_folder_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_TRASH);
 
     LLMessageSystem* msg = gMessageSystem;
@@ -1831,6 +1881,7 @@ void LLOfferInfo::send_decline_response(void)
 
 void LLOfferInfo::handleRespond(const LLSD& notification, const LLSD& response)
 {
+    if (!current()) return;
     initRespondFunctionMap();
 
     const std::string name = notification["name"].asString();
@@ -1853,6 +1904,7 @@ void inventory_offer_name_callback(const LLAvatarName& av_name, const std::strin
 
 bool LLOfferInfo::inventory_offer_callback(const LLSD& notification, const LLSD& response)
 {
+    if (!current()) return false;
     LLChat chat;
     std::string log_message;
     S32 button = LLNotificationsUtil::getSelectedOption(notification, response);
@@ -1879,11 +1931,15 @@ bool LLOfferInfo::inventory_offer_callback(const LLSD& notification, const LLSD&
         {
             if (mFromGroup)
             {
-                gCacheName->getGroup(mFromID, boost::bind(&inventory_offer_mute_callback, _1, _2, _3));
+                const auto current = mCurrent;
+                gCacheName->getGroup(mFromID, [current](const LLUUID& id, const std::string& name, bool group)
+                { if (current()) inventory_offer_mute_callback(id, name, group); });
             }
             else
             {
-                LLAvatarNameCache::get(mFromID, boost::bind(&inventory_offer_mute_avatar_callback, _1, _2));
+                const auto current = mCurrent;
+                LLAvatarNameCache::get(mFromID, [current](const LLUUID& id, const LLAvatarName& name)
+                { if (current()) inventory_offer_mute_avatar_callback(id, name); });
             }
         }
     }
@@ -1996,7 +2052,10 @@ bool LLOfferInfo::inventory_offer_callback(const LLSD& notification, const LLSD&
             size_t separator_idx = mFromName.find('|');
             if (separator_idx != std::string::npos && LLUUID::parseUUID(mFromName.substr(0, separator_idx), &inv_sender_id) && mFromName.size() > (++separator_idx))
             {
-                LLAvatarNameCache::instance().get(inv_sender_id, boost::bind(&inventory_offer_name_callback, _2, mFromName.substr(separator_idx), log_message));
+                const auto current = mCurrent;
+                const auto from = mFromName.substr(separator_idx);
+                LLAvatarNameCache::instance().get(inv_sender_id, [current, from, log_message](const LLUUID&, const LLAvatarName& name)
+                { if (current()) inventory_offer_name_callback(name, from, log_message); });
             }
             else
             {
@@ -2136,6 +2195,7 @@ bool LLOfferInfo::inventory_offer_callback(const LLSD& notification, const LLSD&
 
 bool LLOfferInfo::inventory_task_offer_callback(const LLSD& notification, const LLSD& response)
 {
+    if (!current()) return false;
     LLChat chat;
     std::string log_message;
     S32 button = LLNotification::getSelectedOption(notification, response);
@@ -2154,11 +2214,15 @@ bool LLOfferInfo::inventory_task_offer_callback(const LLSD& notification, const 
         {
             if (mFromGroup)
             {
-                gCacheName->getGroup(mFromID, boost::bind(&inventory_offer_mute_callback, _1, _2, _3));
+                const auto current = mCurrent;
+                gCacheName->getGroup(mFromID, [current](const LLUUID& id, const std::string& name, bool group)
+                { if (current()) inventory_offer_mute_callback(id, name, group); });
             }
             else
             {
-                LLAvatarNameCache::get(mFromID, boost::bind(&inventory_offer_mute_avatar_callback, _1, _2));
+                const auto current = mCurrent;
+                LLAvatarNameCache::get(mFromID, [current](const LLUUID& id, const LLAvatarName& name)
+                { if (current()) inventory_offer_mute_avatar_callback(id, name); });
             }
         }
     }
@@ -8902,6 +8966,11 @@ void invalid_message_callback(LLMessageSystem* msg,
 
 void LLOfferInfo::forceResponse(InventoryOfferResponse response)
 {
+    if (!current())
+    {
+        if (!mPersist) delete this;
+        return;
+    }
     // <FS:Ansariel> Now this is a hell of piece of... forceResponse() will look for the
     //               ELEMENT index, and NOT the button index. So if we want to force a
     //               response of IOR_ACCEPT, we need to pass the correct element

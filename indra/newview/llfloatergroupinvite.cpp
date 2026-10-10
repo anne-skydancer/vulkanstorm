@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloatergroupinvite.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llpanelgroupinvite.h"
 #include "lltrans.h"
 #include "lldraghandle.h"
@@ -130,7 +133,19 @@ void LLFloaterGroupInvite::showForGroup(const LLUUID& group_id, uuid_vec_t *agen
     {
         // refresh group information
         gAgent.sendAgentDataUpdateRequest();
-        LLGroupMgr::getInstance()->clearGroupData(group_id);
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            // Connected profile/group panels retain member iterators. Refresh
+            // the shared object rather than deleting it under their controls.
+            LLGroupMgr::instance().sendGroupPropertiesRequest(group_id);
+            LLGroupMgr::instance().sendGroupRoleDataRequest(group_id);
+            LLGroupMgr::instance().sendGroupRoleMembersRequest(group_id);
+            LLGroupMgr::instance().sendCapGroupMembersRequest(group_id);
+        }
+        else
+#endif
+            LLGroupMgr::getInstance()->clearGroupData(group_id);
     }
 
 
@@ -156,4 +171,10 @@ void LLFloaterGroupInvite::showForGroup(const LLUUID& group_id, uuid_vec_t *agen
     fgi->center();
     fgi->openFloater();
     fgi->mImpl->mInvitePanelp->update();
+}
+
+void LLFloaterGroupInvite::destroyAccountFloaters()
+{
+    while (!impl::sInstances.empty())
+        delete impl::sInstances.begin()->second;
 }

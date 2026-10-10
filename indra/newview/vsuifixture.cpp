@@ -269,10 +269,13 @@ std::vector<VSUIRenderer::Packet> VSUIFixture::draw()
     gl_rect_2d(240, 15, 250, 5, LLColor4(.1f, .2f, .3f, .5f));
     LLRender2D::setSceneBlendType(LLRender::BT_ADD_WITH_ALPHA);
     gl_rect_2d(260, 15, 270, 5, LLColor4(.1f, .2f, .3f, .5f));
+    LLRender2D::setSceneBlendType(LLRender::BT_REPLACE);
+    gl_rect_2d(280, 15, 290, 5, LLColor4(.1f, .2f, .3f, .5f));
     LLRender2D::setSceneBlendType(LLRender::BT_ALPHA);
     auto glow = c.resources.finish();
-    require(glow.size() >= 2 && glow[glow.size() - 2].blend == VSUIRenderer::Blend::Additive &&
-                glow.back().blend == VSUIRenderer::Blend::AdditiveAlpha,
+    require(glow.size() >= 3 && glow[glow.size() - 3].blend == VSUIRenderer::Blend::Additive &&
+                glow[glow.size() - 2].blend == VSUIRenderer::Blend::AdditiveAlpha &&
+                glow.back().blend == VSUIRenderer::Blend::Replace,
             "Native glow blend state was lost");
     c.resources.begin(320,240,1);
     gl_line_2d(2,15,8,5,LLColor4(.7f,.4f,.2f,1.f));

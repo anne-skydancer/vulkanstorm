@@ -28,6 +28,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "fspanelcontactsets.h"
 
@@ -350,7 +351,7 @@ void FSPanelContactSets::onClickRemoveAvatar()
     {
         payload["ids"].append(id);
     }
-    LLNotificationsUtil::add((selected_size > 1 ? "RemoveContactsFromSet" : "RemoveContactFromSet"), args, payload, &LGGContactSets::handleRemoveAvatarFromSetCallback);
+    LLNotificationsUtil::add((selected_size > 1 ? "RemoveContactsFromSet" : "RemoveContactFromSet"), args, payload, vs_native_im_ui_callback(this, &LGGContactSets::handleRemoveAvatarFromSetCallback));
 }
 
 void FSPanelContactSets::onClickMoveAvatar()
@@ -371,7 +372,7 @@ void FSPanelContactSets::onClickMoveAvatar()
 
 void FSPanelContactSets::onClickAddSet()
 {
-    LLNotificationsUtil::add("AddNewContactSet", LLSD(), LLSD(), &LGGContactSets::handleAddContactSetCallback);
+    LLNotificationsUtil::add("AddNewContactSet", LLSD(), LLSD(), vs_native_im_ui_callback(this, &LGGContactSets::handleAddContactSetCallback));
 }
 
 void FSPanelContactSets::onClickRemoveSet()
@@ -380,7 +381,7 @@ void FSPanelContactSets::onClickRemoveSet()
     std::string set = mContactSetCombo->getValue().asString();
     args["SET_NAME"] = set;
     payload["contact_set"] = set;
-    LLNotificationsUtil::add("RemoveContactSet", args, payload, &LGGContactSets::handleRemoveContactSetCallback);
+    LLNotificationsUtil::add("RemoveContactSet", args, payload, vs_native_im_ui_callback(this, &LGGContactSets::handleRemoveContactSetCallback));
 }
 
 void FSPanelContactSets::onClickConfigureSet(LLUICtrl* ctrl)
@@ -440,7 +441,7 @@ void FSPanelContactSets::onClickSetPseudonym()
             payload["ids"].append(id);
         }
     }
-    LLNotificationsUtil::add((mAvatarSelections.size() > 1 ? "SetAvatarPseudonymMultiple" : "SetAvatarPseudonym"), args, payload, &LGGContactSets::handleSetAvatarPseudonymCallback);
+    LLNotificationsUtil::add((mAvatarSelections.size() > 1 ? "SetAvatarPseudonymMultiple" : "SetAvatarPseudonym"), args, payload, vs_native_im_ui_callback(this, &LGGContactSets::handleSetAvatarPseudonymCallback));
 }
 
 void FSPanelContactSets::onClickRemovePseudonym()

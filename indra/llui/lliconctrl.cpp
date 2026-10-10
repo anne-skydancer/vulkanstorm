@@ -38,6 +38,7 @@
 #include "llwindow.h"
 
 #include "llgltexture.h"
+#include "llrender2dutils.h"
 
 static LLDefaultChildRegistry::Register<LLIconCtrl> r("icon");
 
@@ -145,7 +146,8 @@ void LLIconCtrl::loadImage(const LLSD& tvalue, S32 priority)
         mImagep = LLUI::getUIImage(tvalue.asString(), priority);
     }
 
-    if(mImagep.notNull()
+    if (!LLRender2D::isNativeUI()
+        && mImagep.notNull()
         && mImagep->getImage().notNull()
         && mMinWidth
         && mMinHeight)

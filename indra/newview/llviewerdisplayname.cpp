@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llviewerdisplayname.h"
 
@@ -36,6 +37,7 @@
 #include "llfloaterreg.h"
 #include "llviewercontrol.h"
 #include "llviewerregion.h"
+#include "llviewerwindow.h"
 #include "llvoavatar.h"
 
 // library includes
@@ -64,9 +66,7 @@ void LLViewerDisplayName::set(const std::string& display_name, const set_name_sl
 {
     // TODO: simple validation here
 
-    LLViewerRegion* region = gAgent.getRegion();
-    llassert(region);
-    std::string cap_url = region->getCapability("SetDisplayName");
+    std::string cap_url = gAgent.getRegionCapability("SetDisplayName");
     if (cap_url.empty())
     {
         // this server does not support display names, report error
@@ -92,7 +92,11 @@ void LLViewerDisplayName::set(const std::string& display_name, const set_name_sl
     LL_INFOS() << "Set name POST to " << cap_url << LL_ENDL;
 
     // Record our caller for when the server sends back a reply
-    sSetDisplayNameSignal.connect(slot);
+    const auto current = vs_native_im_guard();
+    sSetDisplayNameSignal.connect([current, slot](bool success, const std::string& reason, const LLSD& content)
+    {
+        if (current()) slot(success, reason, content);
+    });
 
     // POST the requested change.  The sim will not send a response back to
     // this request directly, rather it will send a separate message after it
@@ -100,11 +104,21 @@ void LLViewerDisplayName::set(const std::string& display_name, const set_name_sl
     LLSD body;
     body["display_name"] = change_array;
     LLCoros::instance().launch("LLViewerDisplayName::SetDisplayNameCoro",
-            boost::bind(&LLViewerDisplayName::setDisplayNameCoro, cap_url, body));
+        [current, cap_url, body]()
+        {
+            if (current()) LLViewerDisplayName::setDisplayNameCoro(cap_url, body);
+        });
+}
+
+void LLViewerDisplayName::resetAccountRequests()
+{
+    sSetDisplayNameSignal.disconnect_all_slots();
 }
 
 void LLViewerDisplayName::setDisplayNameCoro(const std::string& cap_url, const LLSD& body)
 {
+    const auto current = vs_native_im_guard();
+    if (!current()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("SetDisplayNameCoro", httpPolicy);
@@ -116,6 +130,7 @@ void LLViewerDisplayName::setDisplayNameCoro(const std::string& cap_url, const L
     httpHeaders->append(HTTP_OUT_HEADER_ACCEPT_LANGUAGE, LLUI::getLanguage());
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, cap_url, body, httpHeaders);
+    if (!current()) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -200,7 +215,8 @@ class LLDisplayNameUpdate : public LLHTTPNode
         LLAvatarNameCache::getInstance()->insert(agent_id, av_name);
 
         // force name tag to update
-        LLVOAvatar::invalidateNameTag(agent_id);
+        if (!gViewerWindow || !gViewerWindow->isNativeVulkan())
+            LLVOAvatar::invalidateNameTag(agent_id);
 
         LLSD args;
         args["OLD_NAME"] = old_display_name;
@@ -212,7 +228,11 @@ class LLDisplayNameUpdate : public LLHTTPNode
             LLSD payload;
             payload["agent_id"] = agent_id;
             LLNotificationsUtil::add("DisplayNameUpdateRemoveAlias", args, payload,
-                boost::bind(&LGGContactSets::callbackAliasReset, LGGContactSets::getInstance(), _1, _2));
+                [current = vs_native_im_guard()](const LLSD& notification, const LLSD& response)
+                {
+                    if (!current()) return false;
+                    return LGGContactSets::instance().callbackAliasReset(notification, response);
+                });
         }
         else if (gSavedSettings.getBOOL("FSShowDisplayNameUpdateNotification"))
         {
@@ -223,7 +243,7 @@ class LLDisplayNameUpdate : public LLHTTPNode
         {
             LLViewerDisplayName::sNameChangedSignal();
         }
-        else
+        else if (!gViewerWindow || !gViewerWindow->isNativeVulkan())
         {
             FSRadar::getInstance()->updateName(agent_id);
         }

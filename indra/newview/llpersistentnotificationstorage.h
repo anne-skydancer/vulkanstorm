@@ -28,6 +28,7 @@
 #define LL_LLPERSISTENTNOTIFICATIONSTORAGE_H
 
 #include "llerror.h"
+#include <boost/signals2/connection.hpp>
 #include "llnotificationstorage.h"
 #include "llsingleton.h"
 
@@ -58,6 +59,7 @@ protected:
 
 private:
     void initialize();
+    boost::signals2::scoped_connection mChannelConnection;
 
     bool onPersistentChannelChanged(const LLSD& payload);
     bool mLoaded;
