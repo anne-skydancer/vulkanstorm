@@ -3962,11 +3962,14 @@ void LLViewerWindow::updateUI()
     }
 
     // only update mouse hover set when UI is visible (since we shouldn't send hover events to invisible UI
-    if (gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+    if (mMouseInWindow && gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
     {
         // include all ancestors of captor_view as automatically having mouse
         if (captor_view)
         {
+            // Keep the captor until release, including drags outside its rect,
+            // so the next ordinary hover delivers onMouseLeave to that button.
+            mouse_hover_set.insert(captor_view->getHandle());
             LLView* captor_parent_view = captor_view->getParent();
             while(captor_parent_view)
             {
@@ -4098,7 +4101,7 @@ void LLViewerWindow::updateUI()
     swap(mMouseHoverViews, mouse_hover_set);
 
     // only handle hover events when UI is enabled
-    if (gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+    if (mMouseInWindow && gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
     {
 
         if( mouse_captor )
