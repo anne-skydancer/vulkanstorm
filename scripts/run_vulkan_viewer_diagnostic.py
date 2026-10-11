@@ -11,6 +11,8 @@ import xml.etree.ElementTree as ET
 
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
 
+from vulkan_viewer_process import run_viewer_process, process_isolation_evidence
+
 ROOT = Path(__file__).resolve().parents[1]
 STAGES = ['viewer-window-created', 'device-created', 'swapchain-created-320x240',
           'present-initial', 'resize-present-640x360', 'zero-extents-suspended',
@@ -58,10 +60,9 @@ def run_normal_login(executable, stage, env, evidence, expected_device):
                '--set', 'RenderBackend', 'Vulkan', '--set', 'AutoLogin', 'false',
                '--set', 'QuitAfterSeconds', '30', '--set', 'RenderDebugGLSession', 'true',
                '--set', 'UpdaterShowReleaseNotes', '0', '--set', 'FSShowWhitelistReminder', 'false']
-    log = ''; code = None; passed = False
+    log = ''; code = None; passed = False; process = None
     try:
-        process = subprocess.run(command, cwd=stage, env=child_env, stdout=subprocess.PIPE,
-                                 stderr=subprocess.STDOUT, timeout=90)
+        process = run_viewer_process(command, cwd=stage, env=child_env, timeout=90)
         code = process.returncode
         log = process.stdout.decode('utf-8', errors='replace')
         required = ('Native Vulkan normal login initialized', 'Initializing Login Screen',
@@ -78,7 +79,7 @@ def run_normal_login(executable, stage, env, evidence, expected_device):
               'application_lifecycle': 'normal LLAppViewer::init/frame/cleanup',
               'diagnostic_dispatch': False, 'browser_pixels_published': 'Native media pixels: login_html' in log,
               'authentication_qualified': False,
-              'connected_session_qualified': False}
+              'connected_session_qualified': False, 'process_isolation': process_isolation_evidence(process)}
     (directory / 'result.json').write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
     return record
 
@@ -264,10 +265,9 @@ def main():
                     child_env['VS_VULKAN_DIAGNOSTIC_' + key] = value
             if case not in ('positive', 'ui-positive', 'startup-positive') and case not in skins and case not in startup_skins:
                 child_env['VS_VULKAN_DIAGNOSTIC_FAIL'] = case
-            record = None; mapped = {}; log = ''; code = None; passed = False
+            record = None; mapped = {}; log = ''; code = None; passed = False; process = None
             try:
-                process = subprocess.run([str(executable)], cwd=stage, env=child_env,
-                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=90)
+                process = run_viewer_process([str(executable)], cwd=stage, env=child_env, timeout=90)
                 code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
                 record = json.loads(artifact.read_text())
                 passed = assess_startup(record, code, log, "startup-positive" if case in startup_skins else case) if case in startup_cases else assess(record, code, log, case, platform.system())
@@ -324,7 +324,7 @@ def main():
                 log += '\nEVIDENCE FAILURE: ' + str(exc) + '\n'; passed = False
             (directory / 'viewer.log').write_text(log, encoding='utf-8')
             results['tests'].append(dict(case=case, returncode=code, passed=passed, presentation=record,
-                                         loaded_library_sha256=mapped))
+                                         loaded_library_sha256=mapped, process_isolation=process_isolation_evidence(process)))
             print(('PASS' if passed else 'FAIL') + ': viewer ' + case)
         normal = run_normal_login(executable, stage, env, evidence, expected_device)
     results['presentation_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] not in (*ui_cases, *startup_cases))

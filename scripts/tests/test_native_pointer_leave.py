@@ -41,9 +41,9 @@ struct Keyboard { int currentMask(bool value) { assert(value); return 7; } } key
 Keyboard* gKeyboard=&keyboard;
 struct Window;
 struct Callbacks {
- int leaves=0,moves=0; Window* owner=nullptr;
- void handleMouseLeave(Window* window) { ++leaves; owner=window; }
- void handleMouseMove(Window* window,int,int) { ++moves; owner=window; }
+ int leaves=0,moves=0; Window* owner=nullptr; std::vector<int> events;
+ void handleMouseLeave(Window* window) { ++leaves; owner=window; events.push_back(2); }
+ void handleMouseMove(Window* window,int,int) { ++moves; owner=window; events.push_back(1); }
 };
 struct Coord { int value=0; Coord(int v=0):value(v){} int convert()const{return value;} operator int()const{return value;} };
 struct Window {
@@ -77,15 +77,16 @@ int main() {
  native.drain();
  assert(native.mMouseMask==7 && native.mCursorPosition==37);
  assert(native.callbacks.leaves==1 && native.callbacks.owner==&native);
- assert(native.callbacks.moves==0 && native.mLastCursorPosition==37);
+ assert(native.callbacks.moves==1 && native.mLastCursorPosition==37);
+ assert((native.callbacks.events==std::vector<int>{1,2}));
  // A new move after Leave must still be coalesced and delivered on reentry.
  native.dispatch(WM_MOUSELEAVE,hwnd);
  native.dispatch(WM_MOUSEMOVE,hwnd,38);native.drain();
- assert(native.callbacks.leaves==2 && native.callbacks.moves==1 && native.mCursorPosition==38);
+ assert(native.callbacks.leaves==2 && native.callbacks.moves==2 && native.mCursorPosition==38);
  // Reentry at identical coordinates also delivers motion after a departure.
  native.dispatch(WM_MOUSELEAVE,hwnd);native.drain();
  native.dispatch(WM_MOUSEMOVE,hwnd,38);native.drain();
- assert(native.callbacks.leaves==3 && native.callbacks.moves==2 && !native.mNativeMouseMovePending);
+ assert(native.callbacks.leaves==3 && native.callbacks.moves==3 && !native.mNativeMouseMovePending);
  // Tracking rearms on a later native entry/movement, retaining the correct HWND.
  native.dispatch(WM_MOUSEMOVE,hwnd); assert(trackingCalls.size()==4);native.drain();
  Window legacy; legacy.mUseGL=true;

@@ -76,14 +76,14 @@ class RunnerFailureTests(unittest.TestCase):
                 if mode == 'offscreen':
                     for name in ('first.ppm', 'replacement.ppm'): (cwd / name).write_bytes(b'readback')
                     log = identity + 'DILIGENT_DEVICE=SwiftShader\n' + ''.join('LOADED='+str(root/name)+'\n' for name in libraries) + 'PASS offscreen'
-                    return SimpleNamespace(returncode=0, stdout=log)
+                    return SimpleNamespace(returncode=0, stdout=log.encode('utf-8'))
                 diagnostic = {'invalid': 'VUID-VkBufferCreateInfo-size-00912 Validation reported an error',
                               'invalid-sync': 'SYNC-HAZARD-WRITE-AFTER-WRITE Validation reported an error',
                               'bad-pixels': 'Pixel oracle mismatch', 'bad-orientation': 'Pixel oracle mismatch'}[mode]
-                return SimpleNamespace(returncode=1, stdout=identity+diagnostic)
+                return SimpleNamespace(returncode=1, stdout=(identity+diagnostic).encode('utf-8'))
 
             with patch('run_software_vulkan_tests.platform.system', return_value='Linux'), \
-                 patch('run_software_vulkan_tests.subprocess.run', side_effect=execute), \
+                 patch('run_software_vulkan_tests.run_viewer_process', side_effect=execute), \
                  patch.dict(os.environ, {'DISPLAY': ':99', 'WAYLAND_DISPLAY': 'wayland-0', 'VK_DRIVER_FILES': 'decoy'}), \
                  patch.object(sys, 'argv', ['runner', '--executable', str(executable), '--runtime', str(runtime), '--evidence', str(root/'evidence'), '--headless']):
                 with self.assertRaises(SystemExit) as result: main()

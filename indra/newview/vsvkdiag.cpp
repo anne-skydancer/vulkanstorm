@@ -101,37 +101,6 @@ void DILIGENT_CALL_TYPE diagnostic(Diligent::DEBUG_MESSAGE_SEVERITY severity,
     std::cerr << "DILIGENT " << severity << ": " << message << '\n';
     if (severity >= Diligent::DEBUG_MESSAGE_SEVERITY_ERROR) ++diagnostic_errors;
 }
-#if LL_WINDOWS
-struct DiagnosticPointerPlacement
-{
-    POINT original{};
-    DiagnosticPointerPlacement()
-    {
-        require(GetCursorPos(&original) != FALSE, "Cannot preserve diagnostic OS pointer position");
-    }
-    ~DiagnosticPointerPlacement()
-    {
-        if (!SetCursorPos(original.x, original.y))
-            std::cerr << "DIAGNOSTIC_POINTER_RESTORE_FAILED=" << GetLastError() << '\n';
-    }
-    void place(HWND hwnd, POINT client)
-    {
-        // Posted mouse messages alone do not put the physical pointer in a
-        // window. Real leave tracking requires an unobscured test surface.
-        require(SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE) != FALSE,
-            "Cannot expose diagnostic client window for real pointer input");
-        require(ClientToScreen(hwnd, &client) != FALSE && SetCursorPos(client.x, client.y) != FALSE,
-            "Cannot place diagnostic OS pointer in the tested client window");
-        const HWND target = WindowFromPoint(client);
-        if (target != hwnd && !IsChild(hwnd, target))
-            std::cerr << "DIAGNOSTIC_POINTER_TARGET: expected=" << hwnd << " actual=" << target
-                << " foreground=" << GetForegroundWindow() << " screen=" << client.x << ',' << client.y << '\n';
-        require(target == hwnd || IsChild(hwnd, target),
-            "Diagnostic OS pointer is occluded by another window");
-    }
-};
-#endif
 void loadedLibraries()
 {
 #if LL_WINDOWS
@@ -299,15 +268,10 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     void reportMouseFailure(HWND hwnd, const char* stage, unsigned baseline)
     {
         RECT rect{}; const bool clientValid = GetClientRect(hwnd, &rect) != FALSE;
-        POINT physical{}; const bool pointerValid = GetCursorPos(&physical) != FALSE;
-        const HWND hit = pointerValid ? WindowFromPoint(physical) : nullptr;
-        const bool converted = pointerValid && ScreenToClient(hwnd, &physical) != FALSE;
         std::cerr << "DIAGNOSTIC_MOUSE_FAILURE: stage=" << stage << " moves_before=" << baseline
             << " moves_after=" << mouse_moves << " delivered=" << mouse_point.mX << ',' << mouse_point.mY
             << " client_valid=" << clientValid << " rect=" << rect.left << ',' << rect.top << ','
-            << rect.right << ',' << rect.bottom << " pointer_client_valid=" << converted
-            << " pointer_client=" << physical.x << ',' << physical.y << " hwnd=" << hwnd
-            << " hit=" << hit << " foreground=" << GetForegroundWindow() << '\n';
+            << rect.right << ',' << rect.bottom << " hwnd=" << hwnd << '\n';
     }
 #endif
     void inject(const char* stage)
@@ -753,14 +717,13 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         fixture.prepareMouseInput();
 #if LL_WINDOWS
         const auto hwnd=static_cast<HWND>(window->getPlatformWindow());
-        DiagnosticPointerPlacement pointer;
-        pointer.place(hwnd, POINT{25,65});
         const auto editor_moves = mouse_moves;
         require(PostMessageW(hwnd,WM_MOUSEMOVE,0,MAKELPARAM(25,65)),"Cannot queue native editor hover");
         for(unsigned attempt=0;attempt<100 && (mouse_moves==editor_moves || mouse_point.mX!=25 || mouse_point.mY!=174);++attempt)
         { window->gatherInput();std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
         if (mouse_moves==editor_moves || mouse_point.mX!=25 || mouse_point.mY!=174)
-            reportMouseFailure(hwnd, "editor", editor_moves);
+            std::cerr << "NATIVE_EDITOR_HOVER_FAILURE: moves=" << mouse_moves << " baseline=" << editor_moves
+                << " delivered=" << mouse_point.mX << ',' << mouse_point.mY << '\n';
         require(mouse_moves!=editor_moves && mouse_point.mX==25 && mouse_point.mY==174,"Native editor hover did not establish click coordinates");
         require(PostMessageW(hwnd,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(25,65)) &&
                 PostMessageW(hwnd,WM_LBUTTONUP,0,MAKELPARAM(25,65)),"Cannot queue native viewer mouse input");
@@ -822,7 +785,6 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         const auto previous_top=fixture.transcriptTop();
         const auto previous_moves=mouse_moves;
 #if LL_WINDOWS
-        pointer.place(hwnd, POINT{30,150});
         require(PostMessageW(hwnd,WM_MOUSEMOVE,0,MAKELPARAM(30,150)),"Cannot queue native viewer hover");
 #else
         mouse={};mouse.type=SDL_MOUSEMOTION;

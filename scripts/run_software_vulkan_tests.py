@@ -9,6 +9,8 @@ import platform
 import re
 import subprocess
 
+from vulkan_viewer_process import run_viewer_process, process_isolation_evidence
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -182,14 +184,13 @@ def main():
             for name in ('first.ppm', 'replacement.ppm', 'presentation.json'):
                 (directory / name).unlink(missing_ok=True)
             mapped_libraries = {}
-            native_presentation = None
+            native_presentation = None; process = None
             try:
                 command = [str(executable), expected, mode]
                 if system_driver and runtime.get('device_name'):
                     command.append(runtime['device_name'])
-                process = subprocess.run(command, cwd=directory, env=env,
-                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
-                log = process.stdout
+                process = run_viewer_process(command, cwd=directory, env=env, timeout=180)
+                log = process.stdout.decode('utf-8', errors='replace')
                 passed = assess(mode, process.returncode, log)
                 code = process.returncode
                 identity = device_evidence(log, runtime.get('vendor') if system_driver else None)
@@ -217,7 +218,7 @@ def main():
                 passed &= all((directory / name).is_file() for name in ('first.ppm', 'replacement.ppm'))
             result['tests'].append({'mode': mode, 'passed': passed, 'exit_code': code,
                                     'loaded_library_sha256': mapped_libraries,
-                                    'presentation': native_presentation})
+                                    'presentation': native_presentation, 'process_isolation': process_isolation_evidence(process)})
             print(f'{mode}: {"PASS" if passed else "FAIL"}', flush=True)
             if not passed:
                 print(log[-8000:], flush=True)
