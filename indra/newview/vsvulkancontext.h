@@ -8,6 +8,7 @@ namespace Diligent { struct GraphicsAdapterInfo; }
 class LLWindow;
 class LLSD;
 class VSUIResources;
+class VSWorldScene;
 class VSVulkanContext
 {
 public:
@@ -18,6 +19,7 @@ public:
     VSVulkanContext(const VSVulkanContext&)              = delete;
     VSVulkanContext&   operator=(const VSVulkanContext&) = delete;
     VSUIResources&     resources();
+    VSWorldScene&      world();
     bool               present(float dpi, const std::function<void()>& draw);
     using FrameObserver = std::function<void(Diligent::IRenderDevice*, Diligent::IDeviceContext*, Diligent::ITextureView*, unsigned, unsigned, float, const std::vector<VSUIRenderer::Packet>&)>;
     void setFrameObserver(FrameObserver);

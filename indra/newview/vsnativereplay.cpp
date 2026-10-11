@@ -628,10 +628,10 @@ struct Replay
             if (!LLMuteList::getInstance()->isLoadedFromServer()) return;
             require(owner.evidence()["circuit_ack"].asBoolean(), "Circuit was not acknowledged");
             require(!owner.deliver("AgentMovementComplete", LLSD::emptyArray(), owner.host(), owner.generation()), "Malformed semantic message admitted");
-            require(!owner.admit("ObjectUpdate", owner.host()), "Scene message admitted");
+            require(owner.admit("ObjectUpdate", owner.host()), "Reviewed primitive message route denied");
             require(!owner.admit("NewUnknownMessage", owner.host()), "Unknown message admitted");
             require(!owner.admit("ChatFromSimulator", LLHost("127.0.0.2", owner.host().getPort())), "Wrong simulator admitted");
-            http("ObjectUpdate", LLSD::emptyMap(), owner.host()); // HTTP gate before node/scene execution.
+            http("ObjectUpdate", LLSD::emptyMap(), owner.host()); // Malformed scene payload cannot create a primitive.
             LLMessageSystem* msg = gMessageSystem;
             msg->newMessage("EnableSimulator"); msg->nextBlock("SimulatorInfo");
             msg->addU64("Handle", 1); msg->addIPAddr("IP", owner.host().getAddress()); msg->addIPPort("Port", owner.host().getPort());

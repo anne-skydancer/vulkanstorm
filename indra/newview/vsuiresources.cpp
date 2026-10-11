@@ -237,6 +237,11 @@ std::vector<VSUIRenderer::Packet> VSUIResources::finish()
     return std::move(mImpl->packets);
 }
 void VSUIResources::erase(const std::string& key) { mImpl->assets.erase(key); }
+VSUIRenderer::Image VSUIResources::image(const std::string& key) const
+{
+    const auto found=mImpl->assets.find(key);
+    return found==mImpl->assets.end() ? VSUIRenderer::Image{} : found->second.asset->image;
+}
 std::uint64_t VSUIResources::generation(const std::string& key) const
 {
     auto found=mImpl->assets.find(key); check(found!=mImpl->assets.end(),"Unknown native UI generation");

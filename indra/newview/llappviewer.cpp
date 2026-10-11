@@ -1647,6 +1647,22 @@ bool LLAppViewer::initNativeVulkanLogin()
     return true;
 }
 
+#if VS_NATIVE_VULKAN
+static void pump_native_account_services(bool connected)
+{
+    if (!connected) return;
+    // These production update entry points do not create scene resources.
+    // The importer checks instanceExists itself; notifications drain only
+    // an existing queue of account inventory actions.
+    LLMarketplaceInventoryImporter::update();
+    LLMarketplaceInventoryNotifications::update();
+    // Gesture playback needs an initialized avatar as well as its manager.
+    // Text-only accounts must not instantiate an appearance owner here.
+    if (LLGestureMgr::instanceExists() && isAgentAvatarValid())
+        LLGestureMgr::instance().update();
+}
+#endif
+
 bool LLAppViewer::frameNativeVulkanLogin()
 {
 #if VS_NATIVE_VULKAN
@@ -1689,6 +1705,7 @@ bool LLAppViewer::frameNativeVulkanLogin()
 #if VS_NATIVE_VULKAN
         else if (LLStartUp::getStartupState() == STATE_WORLD_INIT && mNativeSession) mNativeSession->begin();
         if (mNativeSession) mNativeSession->tick();
+        pump_native_account_services(mNativeSession && mNativeSession->phase() == VSNativeSession::Phase::Connected);
         if (gAudiop && mNativeSession && mNativeSession->phase() == VSNativeSession::Phase::Connected)
         {
             audio_update_volume(false);

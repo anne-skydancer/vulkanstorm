@@ -1,8 +1,11 @@
 // Native CPU session and nearby transport. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "lleventnotifier.h"
+#include "lfsimfeaturehandler.h"
 #include "llviewergenericmessage.h"
 #include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
 #include "fsconsoleutils.h"
 #include "fslslbridge.h"
 #include "vsnativeim.h"
@@ -84,6 +87,7 @@
 #include <cmath>
 #include <set>
 #include <charconv>
+#include <utility>
 #include <cctype>
 #include <limits>
 
@@ -96,6 +100,7 @@ namespace
 std::weak_ptr<VSNativeSession> sOwner;
 double now() { return LLFrameTimer::getTotalSeconds(); }
 const std::set<std::string> transport = {"StartPingCheck", "CompletePingCheck", "PacketAck"};
+const std::set<std::string> worldMessages = {"ObjectUpdate", "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject"};
 const std::set<std::string> session = {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator",
     "LogoutReply", "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "TeleportStart", "TeleportFinish",
     "TeleportLocal", "TeleportProgress", "TeleportFailed", "ViewerFrozenMessage", "FeatureDisabled", "CrossedRegion", "CloseCircuit", "DisableSimulator", "UUIDNameReply", "UUIDGroupNameReply",
@@ -167,6 +172,7 @@ void VSNativeSession::install(LLMessageSystem& msg)
         return locked && locked->admit(name, sender);
     });
     // Mixed viewer handlers are replaced before any session messages can execute.
+    for (const auto& name : worldMessages) msg.setHandlerFunc(name.c_str(), receiveMessage);
     for (const char* name : {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
          "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
@@ -337,7 +343,7 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
     auto request = std::make_shared<LLCore::HttpRequest>();
     auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(15); options->setRetries(0);
     LLSD wanted = LLSD::emptyArray();
-    for (const char* name : {"EventQueueGet", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "AvatarPickerSearch",
+    for (const char* name : {"EventQueueGet", "SimulatorFeatures", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "AvatarPickerSearch",
          "GroupAPIv1", "GroupMemberData", "AgentProfile", "UploadAgentProfileImage", "NewFileAgentInventory", "InventoryThumbnailUpload", "SetDisplayName", "RemoteParcelRequest", "AcceptFriendship", "DeclineFriendship",
          "AcceptGroupInvite", "DeclineGroupInvite", "FetchInventory2", "FetchLib2",
          "FetchInventoryDescendents2", "FetchLibDescendents2", "InventoryAPIv3", "LibraryAPIv3", "CreateInventoryCategory", "ViewerAsset", "CopyInventoryFromNotecard", "UpdateAgentLanguage", "UpdateAgentInformation", "UpdateNotecardAgentInventory", "UpdateNotecardTaskInventory", "UpdateScriptAgent", "UserInfo", "AgentPreferences", "SearchStatRequest", "Tracking",
@@ -357,8 +363,9 @@ void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionE
 {
     if (generation != mGeneration || (regionEpoch && regionEpoch != mRegionEpoch) || (mPhase != Phase::Connecting && !mChangingRegion)) { ++mExpired; return; }
     if (!caps.isMap() || !webURL(caps["EventQueueGet"].asString())) { disconnect(LLTrans::getString("NativeSessionInvalidCapabilities")); return; }
+    clearSimulatorFeatures();
     mCapabilities = LLSD::emptyMap();
-    for (const char* name : {"EventQueueGet", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "AvatarPickerSearch",
+    for (const char* name : {"EventQueueGet", "SimulatorFeatures", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "AvatarPickerSearch",
          "GroupAPIv1", "GroupMemberData", "AgentProfile", "UploadAgentProfileImage", "NewFileAgentInventory", "InventoryThumbnailUpload", "SetDisplayName", "RemoteParcelRequest", "AcceptFriendship", "DeclineFriendship",
          "AcceptGroupInvite", "DeclineGroupInvite", "FetchInventory2", "FetchLib2",
          "FetchInventoryDescendents2", "FetchLibDescendents2", "InventoryAPIv3", "LibraryAPIv3", "CreateInventoryCategory", "ViewerAsset", "CopyInventoryFromNotecard", "UpdateAgentLanguage", "UpdateAgentInformation", "UpdateNotecardAgentInventory", "UpdateNotecardTaskInventory", "UpdateScriptAgent", "UserInfo", "AgentPreferences", "SearchStatRequest", "Tracking",
@@ -376,7 +383,57 @@ void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionE
     LLExperienceCache::instance().setCapabilityQuery([](const std::string& name) { return gAgent.getRegionCapability(name); });
     LLExperienceCache::instance().setAccountGuardQuery([] { return vs_native_im_guard(); });
     mSeedReady = true;
+    const std::string features = capability("SimulatorFeatures");
+    if (!features.empty())
+    {
+        const auto weak = weak_from_this(); const U64 epoch = mRegionEpoch;
+        LLCoros::instance().launch("nativeSimulatorFeatures", [weak, features, generation, epoch]()
+        { simulatorFeaturesCoro(weak, features, generation, epoch); });
+    }
     connected();
+}
+void VSNativeSession::clearSimulatorFeatures()
+{
+    auto cancel = std::exchange(mCancelSimulatorFeatures, {}); if (cancel) cancel();
+    mSimulatorFeatures = LLSD::emptyMap(); mSimulatorFeaturesReceived = false;
+    LFSimFeatureHandler::instance().setSupportedFeatures(mSimulatorFeatures, false);
+}
+bool VSNativeSession::applySimulatorFeatures(const LLSD& features, U64 generation, U64 regionEpoch)
+{
+    if (mShutdown || generation != mGeneration || regionEpoch != mRegionEpoch ||
+        (mPhase != Phase::Connecting && mPhase != Phase::Connected) || !features.isMap()) return false;
+    mSimulatorFeatures = features; mSimulatorFeaturesReceived = true;
+    LFSimFeatureHandler::instance().setSupportedFeatures(mSimulatorFeatures, false);
+    return true;
+}
+void VSNativeSession::simulatorFeaturesCoro(std::weak_ptr<VSNativeSession> weak, std::string url, U64 generation, U64 regionEpoch)
+{
+    auto adapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("nativeSimulatorFeatures", LLCore::HttpRequest::DEFAULT_POLICY_ID);
+    const std::weak_ptr<LLCoreHttpUtil::HttpCoroutineAdapter> requestOwner = adapter;
+    {
+        auto owner = weak.lock();
+        if (!owner || owner->mShutdown || generation != owner->mGeneration || regionEpoch != owner->mRegionEpoch) return;
+        owner->mCancelSimulatorFeatures = [requestOwner]() { if (auto request = requestOwner.lock()) request->cancelSuspendedOperation(); };
+    }
+    auto request = std::make_shared<LLCore::HttpRequest>();
+    auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(15); options->setRetries(0);
+    for (unsigned attempt = 0; attempt < 2; ++attempt)
+    {
+        LLSD result = adapter->getAndSuspend(request, url, options);
+        auto owner = weak.lock();
+        if (!owner || owner->mShutdown || generation != owner->mGeneration || regionEpoch != owner->mRegionEpoch ||
+            (owner->mPhase != Phase::Connecting && owner->mPhase != Phase::Connected)) return;
+        if (result.isMap() && LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]))
+        {
+            result.erase("http_result"); owner->mCancelSimulatorFeatures = {};
+            owner->applySimulatorFeatures(result, generation, regionEpoch); return;
+        }
+    }
+    if (auto owner = weak.lock(); owner && generation == owner->mGeneration && regionEpoch == owner->mRegionEpoch)
+    {
+        owner->mCancelSimulatorFeatures = {};
+        LL_WARNS("NativeSession") << "SimulatorFeatures request failed; advertised features remain unavailable" << LL_ENDL;
+    }
 }
 std::string VSNativeSession::capability(const std::string& name) const { return mCapabilities[name].asString(); }
 void VSNativeSession::requestParcel()
@@ -737,8 +794,9 @@ bool VSNativeSession::changeRegion(const LLSD& body)
     // packets and capability/circuit completions from the retired region expire.
     mLocationRequests.clear();
     clearParcelPlayback();
+    if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().reset();
     if (FSLSLBridge::instanceExists()) FSLSLBridge::instance().resetNativeAccount();
-    ++mRegionEpoch; mPreviousHost = mHost; mHost = destination;
+    ++mRegionEpoch; clearSimulatorFeatures(); mPreviousHost = mHost; mHost = destination;
     mHandle = ll_U64_from_sd(body["handle"]); mSeed = seed; mName.clear();
     mWidth = body.has("width") ? U32(body["width"].asInteger()) : 256; mHeight = body.has("height") ? U32(body["height"].asInteger()) : 256;
     mChangingRegion = true; mNavigationDeadline = now() + 60;
@@ -761,6 +819,7 @@ bool VSNativeSession::changeRegion(const LLSD& body)
 bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
 {
     if (transport.count(name)) return mHost.isOk() && sender == mHost && mPhase != Phase::Disconnected;
+    if (worldMessages.count(name)) return sender==mHost && !mChangingRegion && mPhase==Phase::Connected;
     if ((mPhase == Phase::Connecting || mPhase == Phase::Connected || mPhase == Phase::Logout)
         && sender == mHost && session.count(name)) return true;
     // Consume after transport decoding/ACK; do not invoke a scene or HTTP node.
@@ -770,6 +829,14 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
 void VSNativeSession::receive(LLMessageSystem* msg)
 {
     const std::string name = msg->getMessageName();
+    if (worldMessages.count(name))
+    {
+        // Apply the same admission at the consumer boundary, including direct
+        // callers; stale/foreign simulator traffic cannot mutate this scene.
+        if (admit(name,msg->getSender()) && gViewerWindow && gViewerWindow->nativeContext())
+            gViewerWindow->nativeContext()->world().receive(*msg,mHandle);
+        return;
+    }
     LLSD body = LLSD::emptyMap();
     if (name == "ParcelProperties")
     {
@@ -1244,13 +1311,15 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
         msg->addQuat("BodyRotation", LLQuaternion()); msg->addQuat("HeadRotation", LLQuaternion()); msg->addU8("State", 0);
         msg->addVector3("CameraCenter", mPosition); msg->addVector3("CameraAtAxis", LLVector3::x_axis);
         msg->addVector3("CameraLeftAxis", LLVector3::y_axis); msg->addVector3("CameraUpAxis", LLVector3::z_axis);
-        msg->addF32("Far", 16.f); msg->addU32("ControlFlags", 0); msg->addU8("Flags", 0);
+        msg->addF32("Far", llclamp(gSavedSettings.getF32("RenderFarClip"),16.f,1024.f)); msg->addU32("ControlFlags", 0); msg->addU8("Flags", 0);
     }
     if (msg->sendReliable(mHost) <= 0) return false;
     ++mSent; return true;
 }
 void VSNativeSession::tick()
 {
+    if (mPhase==Phase::Connected && !mChangingRegion && gMessageSystem && gViewerWindow && gViewerWindow->nativeContext())
+        gViewerWindow->nativeContext()->world().requestUpdates(*static_cast<LLMessageSystem*>(gMessageSystem),mHost,mAgent,mSession);
     // Do not let late packets revive a retired connected circuit before the
     // session notices its loss. Login/connecting still have their own deadline.
     mLocationRequests.erase(std::remove_if(mLocationRequests.begin(), mLocationRequests.end(), [](const LocationRequest& request) { return now() >= request.deadline; }), mLocationRequests.end());
@@ -1343,10 +1412,11 @@ void VSNativeSession::reset()
         if (LLDoNotDisturbNotificationStorage::instanceExists()) LLDoNotDisturbNotificationStorage::getInstance()->saveNotifications();
     }
     clearParcelPlayback();
+    if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().reset();
     if (FSLSLBridge::instanceExists()) FSLSLBridge::instance().resetNativeAccount();
     mMusicUserStopped = mMediaUserStopped = false;
     if (LLViewerParcelMedia::instanceExists()) LLViewerParcelMedia::deleteSingleton();
-    ++mGeneration; ++mRegionEpoch; mLocationRequests.clear(); mChangingRegion = false; mRequestedRegion.clear(); mNavigationDeadline = 0; unbind();
+    ++mGeneration; ++mRegionEpoch; clearSimulatorFeatures(); mLocationRequests.clear(); mChangingRegion = false; mRequestedRegion.clear(); mNavigationDeadline = 0; unbind();
     if (LLNotifications::instanceExists())
     {
         std::vector<LLNotificationPtr> retired;
@@ -1433,6 +1503,7 @@ LLSD VSNativeSession::evidence() const
     result["received"] = LLSD::Integer(mReceived); result["sent"] = LLSD::Integer(mSent);
     result["rejected"] = LLSD::Integer(mRejected); result["expired"] = LLSD::Integer(mExpired);
     result["region"] = mName; result["handshake"] = mHandshake; result["movement"] = mMovement;
+    result["simulator_features_received"] = mSimulatorFeaturesReceived;
     result["capabilities"] = mSeedReady; result["circuit_ack"] = mCircuitAck;
     result["region_width"] = S32(mWidth); result["region_height"] = S32(mHeight);
     result["frozen"] = mFrozen;

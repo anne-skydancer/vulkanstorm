@@ -25,6 +25,7 @@ public:
     LLPointer<LLImageRaw> rawImage(const std::string& key) const;
     void erase(const std::string& key);
     std::uint64_t generation(const std::string& key) const;
+    VSUIRenderer::Image image(const std::string& key) const;
     void fontBatch(LLImageRaw*,S32,const LLVector4a*,const LLVector2*,const LLColor4U*,S32);
     // End a font producer epoch; queued packets keep their GPU generations.
     void releaseFontPages();

@@ -11,6 +11,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <functional>
+#include "vsworldrenderer.h"
 #if PLATFORM_WIN32
 #include <windows.h>
 #include <tlhelp32.h>
@@ -471,6 +473,67 @@ static void compare(IDeviceContext* context, ITexture* texture, const Image& ima
     require(mismatches == 0, "Pixel oracle mismatch (one UNORM rounding unit permitted)");
 }
 
+// Execute the production native-world renderer; no substitute test renderer.
+static void worldContract(IRenderDevice* device, IDeviceContext* context, ITexture* target, ITexture* readback)
+{
+    VSWorldRenderer renderer(device,context);
+    auto quad=[&](float z) {
+        std::vector<VSWorldRenderer::Vertex> vertices{{-1,1,z,0,0,1,0,0},{1,1,z,0,0,1,1,0},
+            {-1,-1,z,0,0,1,0,1},{1,-1,z,0,0,1,1,1}};
+        return renderer.upload(vertices,{0,2,1,1,2,3});
+    };
+    auto nearGeometry=quad(-.5f), farGeometry=quad(.5f);
+    VSWorldRenderer::View view;view.projection={1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};
+    VSWorldRenderer::Packet nearPacket;nearPacket.mesh=nearGeometry;nearPacket.fullbright=true;nearPacket.color={1,0,0,1};
+    VSWorldRenderer::Packet farPacket;farPacket.mesh=farGeometry;farPacket.fullbright=true;farPacket.color={0,0,1,1};
+    auto* rtv=target->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+    auto capture=[&](const char* file,const std::function<Pixel(unsigned,unsigned)>& oracle) {
+        context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        CopyTextureAttribs copy{};copy.pSrcTexture=target;copy.pDstTexture=readback;
+        copy.SrcTextureTransitionMode=copy.DstTextureTransitionMode=RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+        context->CopyTexture(copy);context->Flush();context->WaitForIdle();
+        MappedTextureSubresource mapped{};context->MapTextureSubresource(readback,0,0,MAP_READ,MAP_FLAG_NONE,nullptr,mapped);
+        require(mapped.pData!=nullptr,"World readback failed");
+        std::ofstream artifact(file,std::ios::binary);artifact<<"P6\n8 8\n255\n";
+        unsigned mismatches=0;
+        for (unsigned y=0;y<8;++y) for(unsigned x=0;x<8;++x) {
+            const auto* pixel=static_cast<const unsigned char*>(mapped.pData)+y*mapped.Stride+x*4;
+            artifact.write(reinterpret_cast<const char*>(pixel),3);
+            const auto expected=oracle(x,y);
+            for(unsigned c=0;c<4;++c) if(std::abs(int(pixel[c])-int(expected[c]))>1) ++mismatches;
+        }
+        context->UnmapTextureSubresource(readback,0,0);
+        require(artifact.good(),"World artifact write failed");require(!mismatches,"World pixel oracle mismatch");
+    };
+    renderer.draw(rtv,8,8,view,{nearPacket,farPacket});capture("first.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
+    // Replace caller-owned geometry with an alpha generation; old submitted
+    // resources must remain valid until the renderer's completion fence retires.
+    VSWorldRenderer::Packet alpha;alpha.mesh=quad(-.75f);alpha.fullbright=true;
+    alpha.alpha=true;alpha.color={0,1,0,128.f/255};alpha.distanceSquared=1;
+    renderer.draw(rtv,8,8,view,{nearPacket,farPacket,alpha});capture("replacement.ppm",[](unsigned,unsigned){return Pixel{127,128,0,255};});
+    VSUIRenderer images(device,context);
+    const std::vector<std::uint8_t> texels{255,0,0,255,0,255,0,255,0,0,255,255,255,255,0,255};
+    VSWorldRenderer::Packet textured; textured.mesh=quad(0);textured.fullbright=true;
+    textured.image=images.upload(2,2,texels);
+    // Sample texel centers: repeat + linear filtering then cannot blur the oracle.
+    // A second generation has each corner fixed to one texel center.
+    for (unsigned corner=0;corner<4;++corner) {
+        const float u=(corner&1)?.75f:.25f,v=(corner&2)?.75f:.25f;
+        std::vector<VSWorldRenderer::Vertex> verts{{-1,1,0,0,0,1,u,v},{1,1,0,0,0,1,u,v},
+            {-1,-1,0,0,0,1,u,v},{1,-1,0,0,0,1,u,v}};
+        textured.mesh=renderer.upload(verts,{0,2,1,1,2,3});
+        renderer.draw(rtv,8,8,view,{textured});
+        textured.mesh.reset(); // Submission retains this exact geometry generation.
+        const Pixel expected{texels[corner*4],texels[corner*4+1],texels[corner*4+2],255};
+        const auto path="texture-"+std::to_string(corner)+".ppm";
+        capture(path.c_str(),[expected](unsigned,unsigned){return expected;});
+    }
+    auto clipped=quad(-2.f);farPacket.mesh=clipped;farPacket.color={0,0,1,1};
+    renderer.draw(rtv,8,8,view,{nearPacket,farPacket});
+    capture("near-clip.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
+    context->WaitForIdle();renderer.retire();images.retire();
+}
+
 static void loadedLibraries()
 {
 #if PLATFORM_WIN32
@@ -506,7 +569,7 @@ int main(int argc, char** argv)
         require(std::string(argv[1]) == "SwiftShader" || std::string(argv[1]) == "llvmpipe" ||
                 std::string(argv[1]) == "amd" || std::string(argv[1]) == "nvidia" || std::string(argv[1]) == "auto", "Unknown device selector");
         const std::string mode = argv[2];
-        require(mode == "offscreen" || mode == "present" || mode == "invalid" || mode == "invalid-sync" || mode == "bad-pixels" || mode == "bad-orientation", "Unknown mode");
+        require(mode == "world" || mode == "offscreen" || mode == "present" || mode == "invalid" || mode == "invalid-sync" || mode == "bad-pixels" || mode == "bad-orientation", "Unknown mode");
         const auto selected = preflight(argv[1], mode, argc == 4 ? argv[3] : "");
 #if PLATFORM_WIN32
         auto* factory = LoadAndGetEngineFactoryVk();
@@ -539,10 +602,14 @@ int main(int argc, char** argv)
             std::cout << "DILIGENT_DEVICE=" << device->GetAdapterInfo().Description << '\n';
             auto target = texture(device, false, true);
             auto a = texture(device, true, false), b = texture(device, true, false);
+            if (mode == "world") worldContract(device,context,target,a);
+            else
+            {
             draw(device, context, target, a, first, mode == "bad-orientation"); draw(device, context, target, b, second);
             context->WaitForIdle();
             compare(context, a, first, "first.ppm", mode == "bad-pixels");
             compare(context, b, second, "replacement.ppm", false);
+            }
             if (mode == "present")
                 presentationEvidence = presentation(factory, device, context);
             context->WaitForIdle(); loadedLibraries();

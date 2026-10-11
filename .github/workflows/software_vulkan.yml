@@ -2,7 +2,7 @@ name: Vulkan qualification
 
 on:
   push:
-    branches: [vkstorm-vulkan, vkstorm_1.1.0]
+    branches: [vkstorm-vulkan, vkstorm_1.1.0, codex/vulkan-world-parity]
   pull_request:
     branches: [vkstorm-vulkan, vkstorm-devel, vkstorm_1.1.0]
   workflow_dispatch:
@@ -45,6 +45,9 @@ jobs:
       - run: python scripts/tests/test_emoji_connected_controller.py
       - run: python scripts/tests/test_native_marketplace_account.py
       - run: python scripts/tests/test_native_bridge_retirement.py
+      - run: python scripts/tests/test_native_simulator_features.py
+      - run: python scripts/tests/test_native_account_service_pump.py
+      - run: python scripts/tests/test_world_scene_contracts.py
       - run: python scripts/tests/test_experience_account_lifetime.py
       - run: python scripts/tests/test_event_notifier_account.py
       - run: python scripts/tests/test_vulkan_viewer_diagnostic.py

@@ -177,12 +177,12 @@ def main():
               'tests': []}
     failed = False
     with windows_manifest_registration(runtime, args.register_windows_manifests):
-        modes = ('offscreen', 'invalid', 'invalid-sync', 'bad-pixels', 'bad-orientation') if args.headless else (
-            'offscreen', 'present', 'invalid', 'invalid-sync', 'bad-pixels', 'bad-orientation')
+        modes = ('offscreen', 'world', 'invalid', 'invalid-sync', 'bad-pixels', 'bad-orientation') if args.headless else (
+            'offscreen', 'world', 'present', 'invalid', 'invalid-sync', 'bad-pixels', 'bad-orientation')
         selected_device = None
         for mode in modes:
             directory = evidence / mode; directory.mkdir(exist_ok=True)
-            for name in ('first.ppm', 'replacement.ppm', 'presentation.json'):
+            for name in ('first.ppm', 'replacement.ppm', 'presentation.json', 'near-clip.ppm', *(f'texture-{i}.ppm' for i in range(4))):
                 (directory / name).unlink(missing_ok=True)
             mapped_libraries = {}
             native_presentation = None; process = None
@@ -201,7 +201,7 @@ def main():
                 if selected_device is not None and identity != selected_device:
                     passed = False
                 selected_device = identity
-                if mode in ('offscreen', 'present'):
+                if mode in ('offscreen', 'world', 'present'):
                     normalized = log.replace('\\', '/').lower()
                     passed &= all(str(executable.parent / name).replace('\\', '/').lower() in normalized for name in libraries)
                     if system_driver and runtime.get('installed_driver'):
@@ -215,8 +215,10 @@ def main():
                 log = (error.stdout or b'').decode(errors='replace') if isinstance(error.stdout, bytes) else (error.stdout or '')
                 log += '\nTIMEOUT\n'; passed = False; code = None
             (directory / 'test.log').write_text(log, encoding='utf-8')
-            if mode in ('offscreen', 'present'):
+            if mode in ('offscreen', 'world', 'present'):
                 passed &= all((directory / name).is_file() for name in ('first.ppm', 'replacement.ppm'))
+            if mode == 'world':
+                passed &= all((directory / name).is_file() for name in ('near-clip.ppm', *(f'texture-{i}.ppm' for i in range(4))))
             result['tests'].append({'mode': mode, 'passed': passed, 'exit_code': code,
                                     'loaded_library_sha256': mapped_libraries,
                                     'presentation': native_presentation, 'process_isolation': process_isolation_evidence(process)})
