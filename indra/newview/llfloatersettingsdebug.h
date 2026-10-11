@@ -28,6 +28,7 @@
 #define LLFLOATERDEBUGSETTINGS_H
 
 #include "llcontrol.h"
+#include <boost/signals2/connection.hpp>
 #include "llfloater.h"
 #include "llmath.h"
 
@@ -81,6 +82,8 @@ protected:
     LLControlVariable* mCurrentControlVariable;
     LLControlVariable* mOldControlVariable;
     bool mOldVisibility;
+    boost::signals2::scoped_connection mSelectedControlConnection;
+    boost::signals2::scoped_connection mFilterConnection;
 
     LLSearchEditor* mSearchSettingsInput;
     LLScrollListCtrl* mSettingsScrollList;

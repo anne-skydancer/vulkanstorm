@@ -55,6 +55,9 @@
 #include "llui.h"
 #include "llagent.h"
 #include "llworld.h"
+#include "llviewerstats.h"
+#include "llstatbar.h"
+#include "llfloaterlagmeter.h"
 #include "llagentbenefits.h"
 #include "llviewernetwork.h"
 #include "llimview.h"
@@ -2116,6 +2119,47 @@ struct Replay : public LLAvatarPropertiesObserver
             require(!gIMMgr->hasSession(conferenceID) && !LLWorld::instanceExists(),
                 "Conference retirement retained a session or constructed a scene");
             evidence["connected_conference_remap_retirement"] = true;
+            ++step; return false;
+        }
+        if (step == 67)
+        {
+            // Complete server datagram through the authenticated native host;
+            // production SimStats decoding is retained, not synthetic cache data.
+            gMessageSystem->newMessage("SimStats");
+            gMessageSystem->nextBlock("Region");
+            gMessageSystem->addU32("RegionX", 256); gMessageSystem->addU32("RegionY", 512);
+            gMessageSystem->addU32("RegionFlags", 0); gMessageSystem->addU32("ObjectCapacity", 15000);
+            gMessageSystem->nextBlock("Stat");
+            gMessageSystem->addU32("StatID", LL_SIM_STAT_FRAMEMS); gMessageSystem->addF32("StatValue", 22.f);
+            gMessageSystem->nextBlock("PidStat"); gMessageSystem->addS32("PID", 1);
+            gMessageSystem->sendReliable(owner.host());
+            require(LLFloaterReg::showInstance("stats") && LLFloaterReg::showInstance("lagmeter"),
+                    "Actual shared statistics or lag meter failed construction");
+            ++step; return false;
+        }
+        if (step == 68)
+        {
+            auto& recording = LLViewerStats::instance().getRecording();
+            if (!recording.getSampleCount(LLStatViewer::SIM_FRAME_TIME)) return false;
+            require(std::abs(recording.getLastValue(LLStatViewer::SIM_FRAME_TIME).value() - 22.f) < .01f,
+                    "Trusted encoded simulator frame sample was not decoded");
+            require(recording.getSum(LLStatViewer::FPS) > 0 &&
+                    recording.getSampleCount(LLStatViewer::FRAME_STACKTIME) > 0,
+                    "Native frame loop did not record actual FPS/frame timing");
+            auto* stats = LLFloaterReg::findInstance("stats");
+            auto* lag = LLFloaterReg::findTypedInstance<LLFloaterLagMeter>("lagmeter");
+            require(stats && stats->findChild<LLStatBar>("fps") && lag && lag->isInVisibleChain(),
+                    "Actual shared statistics controls are missing");
+            gViewerWindow->drawNativeUI();
+            require(!LLWorld::instanceExists(), "Statistics UI constructed a scene owner");
+            const bool shrunk = gSavedSettings.getBOOL("LagMeterShrunk");
+            lag->getChild<LLButton>("minimize")->onCommit();
+            require(gSavedSettings.getBOOL("LagMeterShrunk") != shrunk, "Real lag meter compact control is unwired");
+            lag->getChild<LLButton>("minimize")->onCommit();
+            require(gSavedSettings.getBOOL("LagMeterShrunk") == shrunk, "Lag meter compact control did not restore state");
+            stats->closeFloater(); lag->closeFloater();
+            LLFloaterReg::destroyInstance("stats"); LLFloaterReg::destroyInstance("lagmeter");
+            evidence["connected_native_statistics"] = true;
             ++step; return false;
         }
         return true;

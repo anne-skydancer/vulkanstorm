@@ -51,6 +51,22 @@
 #include "llnotificationsutil.h"
 #include "llwindow.h"
 #include "llfloaterreg.h"
+#include "llviewerwindow.h"
+#include "vsuiadmission.h"
+
+namespace
+{
+bool native_debug_setting_editable(const LLControlVariable* control)
+{
+    if (!control) return false;
+    if (!gViewerWindow || !gViewerWindow->isNativeVulkan()) return true;
+    // Retain inspection of all settings. Only reviewed CPU observers may be
+    // invoked before native scene owners exist; use the shared menu policy.
+    return control->getName() == "DebugSettingsHideDefault" ||
+        VSUIAdmission::callback("ToggleControl", LLSD(control->getName()));
+}
+}
+
 
 LLFloaterSettingsDebug::LLFloaterSettingsDebug(const LLSD& key)
 :   LLFloater(key)
@@ -72,10 +88,7 @@ LLFloaterSettingsDebug::LLFloaterSettingsDebug(const LLSD& key)
 
 LLFloaterSettingsDebug::~LLFloaterSettingsDebug()
 {
-    if (mOldControlVariable)
-    {
-        mOldControlVariable->getCommitSignal()->disconnect(boost::bind(&LLFloaterSettingsDebug::onSettingSelect, this));
-    }
+
 }
 
 void LLFloaterSettingsDebug::onUpdateFilter()
@@ -206,7 +219,7 @@ bool LLFloaterSettingsDebug::postBuild()
         gSavedPerAccountSettings.applyToAll(&func);
     }
 
-    gSavedSettings.getControl("DebugSettingsHideDefault")->getCommitSignal()->connect(boost::bind(&LLFloaterSettingsDebug::onUpdateFilter, this)); // <FS:Beq/> bind the show changed settings toggle
+    mFilterConnection = gSavedSettings.getControl("DebugSettingsHideDefault")->getCommitSignal()->connect(boost::bind(&LLFloaterSettingsDebug::onUpdateFilter, this)); // <FS:Beq/> bind the show changed settings toggle
 
     onUpdateFilter();
     mSettingsScrollList->sortByColumnIndex(1,true); // <FS:Beq/> Sort by name (column 1) 
@@ -235,16 +248,10 @@ void LLFloaterSettingsDebug::onSettingSelect()
 
     if (mOldControlVariable != mCurrentControlVariable)
     {
-        // unbind change control signal from previously selected control
-        if (mOldControlVariable)
-        {
-            mOldControlVariable->getCommitSignal()->disconnect(boost::bind(&LLFloaterSettingsDebug::onSettingSelect, this));
-        }
-
-        // bind change control signal, so we can see updates to the current control in realtime
+        mSelectedControlConnection.disconnect();
         if (mCurrentControlVariable)
         {
-            mCurrentControlVariable->getCommitSignal()->connect(boost::bind(&LLFloaterSettingsDebug::onSettingSelect, this));
+            mSelectedControlConnection = mCurrentControlVariable->getCommitSignal()->connect(boost::bind(&LLFloaterSettingsDebug::onSettingSelect, this));
         }
 
         mOldControlVariable = mCurrentControlVariable;
@@ -258,7 +265,8 @@ void LLFloaterSettingsDebug::draw()
     if (mCurrentControlVariable)
     {
         // check for changes in control visibility, like RLVa does
-        if (mCurrentControlVariable->isHiddenFromSettingsEditor() != mOldVisibility)
+        if ((mCurrentControlVariable->isHiddenFromSettingsEditor() ||
+             !native_debug_setting_editable(mCurrentControlVariable)) != mOldVisibility)
         {
             updateControl();
         }
@@ -268,19 +276,21 @@ void LLFloaterSettingsDebug::draw()
 
 void LLFloaterSettingsDebug::onSanityCheck()
 {
-    SanityCheck::instance().onSanity(mCurrentControlVariable);
+    if (native_debug_setting_editable(mCurrentControlVariable))
+        SanityCheck::instance().onSanity(mCurrentControlVariable);
 }
 
 void LLFloaterSettingsDebug::onClickSanityWarning()
 {
     // pass "true" to tell the sanity checker to pop up the warning, even when
     // it was shown before and would be suppressed otherwise
-    SanityCheck::instance().onSanity(mCurrentControlVariable, true);
+    if (native_debug_setting_editable(mCurrentControlVariable))
+        SanityCheck::instance().onSanity(mCurrentControlVariable, true);
 }
 
 void LLFloaterSettingsDebug::onCommitSettings()
 {
-    if (!mCurrentControlVariable)
+    if (!native_debug_setting_editable(mCurrentControlVariable))
         return;
 
     LLVector3 vector;
@@ -355,7 +365,7 @@ void LLFloaterSettingsDebug::onCommitSettings()
 
 void LLFloaterSettingsDebug::onClickDefault()
 {
-    if (mCurrentControlVariable)
+    if (native_debug_setting_editable(mCurrentControlVariable))
     {
         mCurrentControlVariable->resetToDefault(true);
         updateControl();
@@ -402,7 +412,8 @@ void LLFloaterSettingsDebug::updateControl()
 // [RLVa:KB] - Checked: 2011-05-28 (RLVa-1.4.0a) | Modified: RLVa-1.4.0a
         // If "HideFromEditor" was toggled while the floater is open then we need to manually disable access to the control
         // NOTE: this runs per-frame so there's no need to explictly handle onCommitSettings() or onClickDefault()
-        mOldVisibility=mCurrentControlVariable->isHiddenFromSettingsEditor();
+        mOldVisibility = mCurrentControlVariable->isHiddenFromSettingsEditor() ||
+            !native_debug_setting_editable(mCurrentControlVariable);
         mSpinner1->setEnabled(!mOldVisibility);
         mSpinner2->setEnabled(!mOldVisibility);
         mSpinner3->setEnabled(!mOldVisibility);
@@ -415,6 +426,7 @@ void LLFloaterSettingsDebug::updateControl()
 
         mCopyButton->setEnabled(true);
         mSanityButton->setVisible(!mCurrentControlVariable->isSane());
+        mSanityButton->setEnabled(native_debug_setting_editable(mCurrentControlVariable));
 
         eControlType type=mCurrentControlVariable->type();
 

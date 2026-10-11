@@ -255,8 +255,11 @@ running window's backend, rather than a preference awaiting restart. OpenGL
 Vulkan reports cached properties of the Diligent-selected physical device,
 without calling GL or guessing a Windows adapter. Its API version is the
 physical device's supported Vulkan version; the vendor-specific driver value
-is explicitly labeled raw. Dedicated GPU memory is reported when available;
-shared system memory and GL texture budgets are not presented as Vulkan VRAM.
+is explicitly labeled raw. Device-local GPU memory is reported when available;
+separate host heaps are not presented as Vulkan VRAM. The VRAM budget row uses
+the shared saved-setting report on both backends: the configured MB limit, or
+localized Unlimited. That row describes the viewer setting, not driver-reported
+free memory or a Vulkan heap's changing allocation budget.
 The obsolete vendor row is removed from existing localized system reports.
 
 The existing corrected XUI, four tabs, and Copy to Clipboard remain shared.
@@ -351,3 +354,38 @@ requires decoded ScriptDialogReply packets with the connected identities,
 object, channel, button index and text. Missing control or packet evidence
 fails qualification. This extends CI coverage; passing console/build checks
 does not establish live-account or isolated UI runtime acceptance.
+
+### Shared budget and chat editing (11 October 2026)
+
+About no longer clears the native renderer's VRAM budget row after formatting
+the shared saved settings. Both backends report the same configured MB limit
+or localized Unlimited. A compiler fixture executes that actual reporting
+block for both backends, including an explicit zero limit.
+
+The shared chat entry now preserves the text editor's successful key-handling
+result. Previously Backspace edited the text but returned unhandled, allowing
+native focus/root routing to delete again or sound an error on the newly empty
+field. Impossible deletion still sounds once; Return continues to bubble to
+the enclosing chat submit controller. A compiler fixture exercises the actual
+editor branch, chat override and native routing, including selection, word
+deletion, read-only state and input history, without opening a viewer window.
+
+### Native connected playback and statistics (11 October 2026)
+
+The text UI receives authenticated current-parcel metadata and exposes the
+shared music and parcel-media status controls. Music uses the existing
+streaming audio fade/volume engine. Parcel media opens the existing 2D native
+LLMediaCtrl frontend and selects CEF/VLC using the parcel MIME type. First-use
+notices, filter lists/prompts, autoplay settings and explicit stop remain in
+use. Region/account replacement retires playback and pending approvals.
+Accepted URLs are HTTP(S); other media transport schemes, media on world-object
+surfaces, and live codec/output qualification remain outside this evidence.
+
+Native frame/network measurements feed the shared Statistics, Lag Meter and
+status FPS controls. Simulator measurements come from admitted current-host
+SimStats messages. Chart history uses native primitives, and absent network
+or simulator measurements are reported as unavailable. The client lag cause
+describes native UI frame time instead of blaming disabled world settings.
+Console fixtures and decisive connected replay assertions cover these paths;
+the rebuilt executable still requires isolated CI and live playback/UI
+qualification. This does not establish complete connected UI parity.

@@ -32,6 +32,8 @@
 #include "llmath.h"
 #include "llui.h"
 #include "llgl.h"
+#include "llrender2dutils.h"
+#include <memory>
 #include "llfontgl.h"
 
 #include "lluictrlfactory.h"
@@ -367,7 +369,18 @@ void LLStatBar::draw()
     S32         num_rapid_changes = 0;
     S32         decimal_digits = mDecimalDigits;
 
-    switch(mStatType)
+    bool sample_available = true;
+    if (LLRender2D::isNativeUI())
+    {
+        switch (mStatType)
+        {
+        case STAT_COUNT: sample_available = frame_recording.getSampleCount(*mStat.countStatp) > 0; break;
+        case STAT_EVENT: sample_available = frame_recording.getSampleCount(*mStat.eventStatp) > 0; break;
+        case STAT_SAMPLE: sample_available = frame_recording.getSampleCount(*mStat.sampleStatp) > 0; break;
+        default: sample_available = false; break;
+        }
+    }
+    if (sample_available) switch(mStatType)
     {
     case STAT_COUNT:
         {
@@ -463,14 +476,19 @@ void LLStatBar::draw()
     {
         mLastDisplayValueTimer.reset();
     }
+    if (!sample_available) display_value = std::numeric_limits<F32>::quiet_NaN();
     drawLabelAndValue(display_value, unit_label, bar_rect, decimal_digits);
     mLastDisplayValue = display_value;
 
-    if (mDisplayBar && mStat.valid)
+    if (mDisplayBar && mStat.valid && sample_available)
     {
         // Draw the tick marks.
-        LLGLSUIDefault gls_ui;
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        std::unique_ptr<LLGLSUIDefault> gls_ui;
+        if (!LLRender2D::isNativeUI())
+        {
+            gls_ui = std::make_unique<LLGLSUIDefault>();
+            gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        }
 
         F32 value_scale;
         if (mCurMaxBar == mCurMinBar)
@@ -520,8 +538,25 @@ void LLStatBar::draw()
                 F32 min_value = 0.f,
                     max_value = 0.f;
 
-                gGL.color4f(1.f, 0.f, 0.f, 1.f);
-                gGL.begin(LLRender::TRIANGLES);
+                LLRender2D::native_triangle_t triangle;
+                unsigned vertex_count = 0;
+                auto history_vertex = [&](F32 x, F32 y)
+                {
+                    if (!LLRender2D::isNativeUI()) { gGL.vertex2f(x, y); return; }
+                    const auto origin = LLRender2D::nativeOrigin();
+                    triangle[vertex_count++] = {(x + origin[0]) * LLFontGL::sScaleX,
+                                                (y + origin[1]) * LLFontGL::sScaleY, 1.f, 0.f, 0.f, 1.f};
+                    if (vertex_count == 3)
+                    {
+                        LLRender2D::nativeTriangle(triangle);
+                        vertex_count = 0;
+                    }
+                };
+                if (!LLRender2D::isNativeUI())
+                {
+                    gGL.color4f(1.f, 0.f, 0.f, 1.f);
+                    gGL.begin(LLRender::TRIANGLES);
+                }
                 const S32 max_frame = llmin(num_frames, num_values);
                 U32 num_samples = 0;
                 for (S32 i = 1; i <= max_frame; i++)
@@ -556,26 +591,26 @@ void LLStatBar::draw()
                     F32 max = llmax(min + 1, (max_value - mCurMinBar) * value_scale);
                     if (mOrientation == HORIZONTAL)
                     {
-                        gGL.vertex2f((F32)bar_rect.mRight - offset, max);
-                        gGL.vertex2f((F32)bar_rect.mRight - offset, min);
-                        gGL.vertex2f((F32)bar_rect.mRight - offset - 1, min);
+                        history_vertex((F32)bar_rect.mRight - offset, max);
+                        history_vertex((F32)bar_rect.mRight - offset, min);
+                        history_vertex((F32)bar_rect.mRight - offset - 1, min);
 
-                        gGL.vertex2f((F32)bar_rect.mRight - offset, max);
-                        gGL.vertex2f((F32)bar_rect.mRight - offset - 1, min);
-                        gGL.vertex2f((F32)bar_rect.mRight - offset - 1, max);
+                        history_vertex((F32)bar_rect.mRight - offset, max);
+                        history_vertex((F32)bar_rect.mRight - offset - 1, min);
+                        history_vertex((F32)bar_rect.mRight - offset - 1, max);
                     }
                     else
                     {
-                        gGL.vertex2f(min, (F32)bar_rect.mBottom + offset + 1);
-                        gGL.vertex2f(min, (F32)bar_rect.mBottom + offset);
-                        gGL.vertex2f(max, (F32)bar_rect.mBottom + offset);
+                        history_vertex(min, (F32)bar_rect.mBottom + offset + 1);
+                        history_vertex(min, (F32)bar_rect.mBottom + offset);
+                        history_vertex(max, (F32)bar_rect.mBottom + offset);
 
-                        gGL.vertex2f(min, (F32)bar_rect.mBottom + offset + 1);
-                        gGL.vertex2f(max, (F32)bar_rect.mBottom + offset);
-                        gGL.vertex2f(max, (F32)bar_rect.mBottom + offset + 1);
+                        history_vertex(min, (F32)bar_rect.mBottom + offset + 1);
+                        history_vertex(max, (F32)bar_rect.mBottom + offset);
+                        history_vertex(max, (F32)bar_rect.mBottom + offset + 1);
                     }
                 }
-                gGL.end();
+                if (!LLRender2D::isNativeUI()) gGL.end();
             }
             else
             {

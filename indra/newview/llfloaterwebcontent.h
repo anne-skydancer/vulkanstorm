@@ -50,6 +50,7 @@ public:
     struct _Params : public LLInitParam::Block<_Params>
     {
         Optional<std::string>   url,
+                                mime_type,
                                 target,
                                 window_class,
                                 id;

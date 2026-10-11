@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewerstats.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llviewerthrottle.h"
 
 #include "message.h"
@@ -463,6 +466,69 @@ U32Bytes            gTotalTextureBytesPerBoostLevel[LLViewerTexture::MAX_GL_IMAG
 
 extern U32  gVisCompared;
 extern U32  gVisTested;
+
+#if VS_NATIVE_VULKAN
+void LLViewerStats::resetNativeFrameStats()
+{
+    resetStats();
+    mLastTimeDiff = mTotalFrametimeJitter = mTotalTime = F64Seconds(0);
+    mLastFrameTimeSample = mTimeSinceLastEventSample = F64Seconds(0);
+    mFrameJitterEvents = mFrameJitterEventsLastMinute = mEventMinutes = 0;
+    mFrameTimes.clear();
+    mFrameTimesJitter.clear();
+    mLastNoramlizedSessionJitter = mLastNormalizedFrametimeVariance = mLastNormalizedPeriodJitter = 0;
+}
+#endif
+
+#if VS_NATIVE_VULKAN
+void update_native_statistics()
+{
+    static LLTimer clock;
+    const F64Seconds elapsed(clock.getElapsedTimeAndResetF64());
+    auto& frames = LLTrace::get_frame_recording();
+    const auto owner = VSNativeSession::active();
+    static U64 generation = 0;
+    static LLHost host;
+    static U32 packets = 0, lost = 0;
+    const U64 current_generation = owner ? owner->generation() : 0;
+    const LLHost current_host = owner && owner->phase() == VSNativeSession::Phase::Connected ? owner->host() : LLHost();
+    if (generation != current_generation || host != current_host)
+    {
+        // Account/region replacement must not retain a prior simulator's data.
+        frames.reset();
+        LLViewerStats::instance().resetNativeFrameStats();
+        generation = current_generation;
+        host = current_host;
+        packets = lost = 0;
+    }
+    frames.nextPeriod();
+    if (elapsed > F64Seconds(0))
+    {
+        add(LLStatViewer::FPS, 1);
+        record(LLStatViewer::FRAME_STACKTIME, elapsed);
+        LLViewerStats::instance().updateFrameStats(elapsed);
+        sample(LLStatViewer::FPS_SAMPLE, 1.0 / elapsed.value());
+    }
+    if (!gMessageSystem || !host.isOk()) return;
+    auto* circuit = gMessageSystem->mCircuitInfo.findCircuit(host);
+    if (!circuit) return;
+    sample(LLStatViewer::SIM_PING, F64Milliseconds(circuit->getPingDelay()));
+    const U32 received = circuit->getPacketsIn(), missing = circuit->getPacketsLost();
+    const U32 received_delta = received - packets, lost_delta = missing - lost;
+    packets = received;
+    lost = missing;
+    add(LLStatViewer::PACKETS_IN, received_delta);
+    add(LLStatViewer::PACKETS_LOST, lost_delta);
+    if (received_delta)
+        sample(LLStatViewer::PACKETS_LOST_PERCENT,
+               LLUnits::Ratio::fromValue(F32(lost_delta) / F32(received_delta)));
+    const F64Bits input(gMessageSystem->mPacketRing.getAndResetActualInBits());
+    const F64Bits output(gMessageSystem->mPacketRing.getAndResetActualOutBits());
+    add(LLStatViewer::MESSAGE_SYSTEM_DATA_IN, input);
+    add(LLStatViewer::MESSAGE_SYSTEM_DATA_OUT, output);
+    add(LLStatViewer::ACTIVE_MESSAGE_DATA_RECEIVED, input);
+}
+#endif
 
 void update_statistics()
 {

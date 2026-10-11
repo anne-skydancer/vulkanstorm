@@ -641,13 +641,7 @@ void LLStatusBar::refresh()
 
     // <FS:Ansariel> FIRE-14482: Show FPS in status bar
     static LLCachedControl<bool> fsStatusBarShowFPS(gSavedSettings, "FSStatusBarShowFPS");
-    if (fsStatusBarShowFPS && native_status_bar())
-    {
-        // Native presentation does not populate the legacy scene frame recorder.
-        // An unknown value is preferable to invented FPS or an empty median.
-        mFPSText->setText(LLStringExplicit("--"));
-    }
-    if (fsStatusBarShowFPS && !native_status_bar() && mFPSUpdateTimer.getElapsedTimeF32() > 1.f &&
+    if (fsStatusBarShowFPS && mFPSUpdateTimer.getElapsedTimeF32() > 1.f &&
         LLTrace::get_frame_recording().getNumRecordedPeriods() > 0)
     {
         static LLCachedControl<bool> fsStatusBarShowFPSColors(gSavedSettings, "FSStatusBarShowFPSColors");
@@ -822,10 +816,14 @@ void LLStatusBar::refresh()
 
     if (native_status_bar())
     {
-        mMediaToggle->setEnabled(false);
-        mStreamToggle->setEnabled(false);
-        mMediaToggle->setValue(true);
-        mStreamToggle->setValue(true);
+#if VS_NATIVE_VULKAN
+        auto owner = VSNativeSession::active();
+        const bool connected = owner && owner->phase() == VSNativeSession::Phase::Connected;
+        mMediaToggle->setEnabled(connected && !owner->mediaURL().empty() && gSavedSettings.getBOOL("AudioStreamingMedia"));
+        mStreamToggle->setEnabled(connected && gAudiop && !owner->musicURL().empty() && gSavedSettings.getBOOL("AudioStreamingMusic"));
+        mMediaToggle->setValue(!connected || !owner->mediaEnabled());
+        mStreamToggle->setValue(!connected || !owner->musicEnabled());
+#endif
         return;
     }
 
@@ -1219,6 +1217,9 @@ void LLStatusBar::onClickMediaToggle(void* data)
 //  LLViewerMedia::getInstance()->setAllMediaPaused(pause);
 // }
     bool enable = ! status_bar->mMediaToggle->getValue();
+#if VS_NATIVE_VULKAN
+    if (native_status_bar()) { status_bar->toggleMedia(enable); return; }
+#endif
     // <FS:Ansariel> Open popup panels on click if FSStatusBarMenuButtonPopupOnRollover is disabled
     if (gSavedSettings.getBOOL("FSStatusBarMenuButtonPopupOnRollover"))
     {
@@ -1236,6 +1237,9 @@ void LLStatusBar::onClickMediaToggle(void* data)
 void LLStatusBar::toggleMedia(bool enable)
 {
 // </FS:Zi>
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) { owner->setMediaEnabled(enable); return; }
+#endif
     LLViewerMedia::getInstance()->setAllMediaEnabled(enable);
 }
 
@@ -1253,6 +1257,12 @@ void LLStatusBar::onClickStreamToggle(void* data)
 
 void LLStatusBar::toggleStream(bool enable)
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        owner->setMusicEnabled(enable); mAudioStreamEnabled = owner->musicEnabled(); return;
+    }
+#endif
     if (!gAudiop)
     {
         return;
