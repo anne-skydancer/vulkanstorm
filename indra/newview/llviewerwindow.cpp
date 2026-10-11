@@ -4101,7 +4101,7 @@ void LLViewerWindow::updateUI()
     swap(mMouseHoverViews, mouse_hover_set);
 
     // only handle hover events when UI is enabled
-    if (mMouseInWindow && gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+    if ((mouse_captor || mMouseInWindow) && gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
     {
 
         if( mouse_captor )
@@ -4167,7 +4167,8 @@ void LLViewerWindow::updateUI()
         // Show a new tool tip (or update one that is already shown)
         bool tool_tip_handled = false;
         std::string tool_tip_msg;
-        if( handled
+        if( mMouseInWindow
+            && handled
             && !mWindow->isCursorHidden())
         {
             LLRect screen_sticky_rect = mRootView->getLocalRect();
