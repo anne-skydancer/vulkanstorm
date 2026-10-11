@@ -29,7 +29,7 @@ class ChatLinkDefaultsTest(unittest.TestCase):
                 self.assertEqual(values["Type"], "Boolean")
                 self.assertEqual(values["Value"], "1")
                 self.assertEqual(values["Persist"], "1")
-                self.assertIn("keep their label", values["Comment"])
+                self.assertIn("supplied link label is displayed", values["Comment"])
                 self.assertIn("real destination URL", values["Comment"])
 
     def test_label_and_destination_have_separate_rendering_paths(self):
