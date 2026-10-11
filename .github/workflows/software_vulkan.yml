@@ -48,6 +48,7 @@ jobs:
       - run: python scripts/tests/test_native_simulator_features.py
       - run: python scripts/tests/test_native_account_service_pump.py
       - run: python scripts/tests/test_world_scene_contracts.py
+      - run: python scripts/tests/test_terrain_packet.py
       - run: python scripts/tests/test_experience_account_lifetime.py
       - run: python scripts/tests/test_event_notifier_account.py
       - run: python scripts/tests/test_vulkan_viewer_diagnostic.py

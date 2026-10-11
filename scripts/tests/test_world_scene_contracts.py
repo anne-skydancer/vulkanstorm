@@ -76,7 +76,7 @@ struct LLHost {int value=1;bool isOk()const{return value!=0;}bool operator==(con
 std::ostringstream sink;
 #define LL_WARNS(x) sink
 #define LL_ENDL ""
-const std::set<std::string> transport={"PacketAck"},session={"ChatFromSimulator"},worldMessages={"ObjectUpdate","KillObject"};
+const std::set<std::string> transport={"PacketAck"},session={"ChatFromSimulator"},worldMessages={"ObjectUpdate","KillObject","LayerData"};
 struct VSNativeSession {
  enum class Phase {Login,Connecting,Connected,Logout,Disconnected};
  LLHost mHost;Phase mPhase=Phase::Login;bool mChangingRegion=false;unsigned mRejected=0;
@@ -85,9 +85,9 @@ struct VSNativeSession {
 '''+definitions+'''
 int main(){
  VSNativeSession s;assert(!s.admit("ObjectUpdate",{1}));
- s.mPhase=VSNativeSession::Phase::Connecting;assert(!s.admit("ObjectUpdate",{1}));
+ s.mPhase=VSNativeSession::Phase::Connecting;assert(!s.admit("ObjectUpdate",{1}));assert(s.admit("LayerData",{1}));assert(!s.admit("LayerData",{2}));
  s.mPhase=VSNativeSession::Phase::Connected;assert(s.admit("ObjectUpdate",{1}));
- assert(!s.admit("ObjectUpdate",{2}));assert(!s.admit("LayerData",{1}));
+ assert(!s.admit("ObjectUpdate",{2}));assert(s.admit("LayerData",{1}));
  s.mChangingRegion=true;assert(!s.admit("KillObject",{1}));
  s.mChangingRegion=false;s.mPhase=VSNativeSession::Phase::Logout;assert(!s.admit("ObjectUpdate",{1}));
 }''')

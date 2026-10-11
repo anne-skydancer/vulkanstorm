@@ -29,9 +29,9 @@ avatar, camera, environment or spatial-audio owners. The OpenGL renderer's
 | `LLViewerTextureList`, `LLTextureFetch`, `LLGLTexture` | Uses current native CPU image service and immutable image generations for first primitive textures | World texture streaming, mip/LOD priorities, encoding, sampler variants, cache/VRAM budgets |
 | `LLAgentCamera`, tools, selection/picking | Fixed +X region camera at authenticated agent position plus eye height | Ordinary camera and movement controls, picking, selection, editing, HUD world content |
 | Avatar/appearance/animation/bake owners | Not admitted | Skeleton/palette publication, rigged meshes, bakes, attachment ownership, gestures/AO/animation |
-| Terrain/sky/environment | Not admitted | LayerData decoding and terrain meshes, EEP/sky, environment history, interpolation |
+| Terrain/sky/environment | Bounded LayerData decoder, viewer CPU inverse DCT, native terrain meshes and default sky gradient | Variable/neighbor regions, four-way splatting, EEP/atmosphere/environment history and interpolation |
 | Deferred lighting, shadows, probes/mirrors | First geometry uses explicit simple sun/ambient shader inputs | Exact lighting model and attachments, local/projector lights, cascades, probes and dependent views |
-| Water/transparency/post-processing | Straight-alpha sorted draw substrate only | Water/haze/exclusion, particles, glow, PPLL and independent path, exposure/SSR/DoF/AA and temporal resets |
+| Water/transparency/post-processing | Region water-height surface and straight-alpha sorted draw substrate | Animated water, environment inputs, reflection/refraction/underwater/haze/exclusion, particles, glow, PPLL and independent path, exposure/SSR/DoF/AA and temporal resets |
 | Auxiliary passes | Not admitted | Previews, local bakes, impostors/maps, snapshots, debug/query/selection consumers |
 | SimulatorFeatures / `LFSimFeatureHandler` | Bounded authenticated current-region fetch, shared parser and CPU signals | Actual network interoperability and scene-dependent feature consumers |
 | Marketplace idle services | Existing importer and notification queues now pumped while connected | Authenticated runtime confirmation |
@@ -94,3 +94,61 @@ renderer-independent authenticated region context, not a fabricated GL region.
 Each opened route needs matching init/tick/reset/teardown and native viewer
 qualification. Full parity cannot be inferred from an allowlist, a build, or this
 geometry contract test. Live world, voice and bridge acceptance remain untested.
+
+## Ground, sky and water increment
+
+The ordinary connected frame now receives authenticated current-simulator
+`LayerData` during connection and while connected. A bounded bit reader validates
+16/32-sample patch streams before calling the same CPU inverse DCT as the OpenGL
+viewer. Truncated/invalid packets are rejected atomically. Received height patches
+produce native indexed meshes with neighbor edge samples and terrain normals;
+missing terrain is not filled with invented ground. Scene reset removes terrain
+and water on crossing/logout. Submitted GPU generations retain their usual fence
+ownership. The current heightfield is limited to a standard 256m region.
+
+`RegionHandshake` supplies real water height, four terrain detail textures and
+height metadata. The first terrain material selects one detail texture per patch
+by height. It is not the reference's four-way splatting/PBR terrain material.
+Water is a translucent depth-tested region surface at the advertised height;
+terrain above it remains visible. A native gradient sky draws first without
+writing depth. Its colors are default procedural colors, not EEP data. Full
+atmospheric shading, animated water, reflections/refraction and underwater views
+remain required by the complete rendering-chain acceptance target.
+
+The production renderer passes headless sky-gradient orientation and background/
+opaque/alpha depth-order pixel comparisons on Windows SwiftShader with validation.
+Nine images and diagnostics are retained in `.tmp/terrain-contracts-evidence`.
+The CPU fixture runs the actual established inverse DCT and verifies a known
+height, chunked bit order, signed coefficients, truncation, invalid sizes/IDs,
+standard/extended patch IDs and atomic rejection. The executable has been rebuilt
+and complete runtime/assets staging checked in the canonical RelWithDebInfo tree.
+Live ground/water streaming still requires authenticated runtime evidence.
+
+The overall job remains **the complete rendering chain, all connected UI and
+Firestorm bridge integration with no gaps**. These surface passes are progress
+increments and do not satisfy that complete acceptance boundary.
+
+## Required bridge ownership closure
+
+The bridge is part of full feature acceptance. Its native guard must only be
+replaced after real service owners exist; a primitive mesh does not supply an
+avatar or a worn attachment. The surveyed production dependency order is:
+
+1. Preserve authenticated avatar/attachment identities, attachment points,
+   inventory-item identities and parent transforms with account/region lifetime.
+2. Provide actual self-avatar/attachment services, COF/wearable ownership and the
+   attachment queue, including attach/detach notifications.
+3. Receive task-inventory replies and asset-transfer completion with listener
+   cancellation. Adapt bridge prim mutation and script-save/upload operations.
+4. Start/reuse/create the bridge at the real ownership-readiness transition,
+   replace blanket native rejection, and route authenticated owner chat through
+   bridge processing before translation and transcript publication.
+5. Qualify creation, reuse, forced detach/reattach, script installation, crossing,
+   logout/reconnect, and the UI actions using bridge services.
+
+These are implementation dependencies, not an alternative reduced acceptance
+criterion. The remaining scene chain includes world assets/materials, ordinary
+camera/movement, avatars/animation/attachments, terrain/environment parity,
+lighting/shadows/dependent views, water/post-processing, and every auxiliary pass
+and connected UI consumer. The native path remains incomplete until those owners
+and routes are working in the viewer.

@@ -14,6 +14,7 @@ public:
     VSWorldScene(VSWorldRenderer&, VSUIResources&);
     ~VSWorldScene();
     void reset();
+    void configureRegion(const LLSD& handshake);
     bool receive(LLMessageSystem&, U64 regionHandle);
     void requestUpdates(LLMessageSystem&, const LLHost&, const LLUUID&, const LLUUID&);
     std::vector<VSWorldRenderer::Packet> packets(const LLVector3& eye, float farClip);

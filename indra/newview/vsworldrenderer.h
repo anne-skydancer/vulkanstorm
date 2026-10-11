@@ -19,6 +19,7 @@ public:
         bool fullbright = false;
         bool alpha = false;
         bool masked = false;
+        bool background = false; // Clip-space sky, drawn before depth-tested geometry.
         float distanceSquared = 0;
     };
     struct View
