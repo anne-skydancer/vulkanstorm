@@ -18,7 +18,18 @@ class HoverLifecycleTest(unittest.TestCase):
 #include <stdexcept>
 using HWND=void*; constexpr int FALSE=0;
 struct POINT { int x=0,y=0; } position{800,900};
-bool captureFail=false,convertFail=false;unsigned sets=0;HWND convertedWindow=nullptr;
+bool captureFail=false,convertFail=false,occluded=false;unsigned sets=0,raised=0;
+HWND convertedWindow=nullptr,raisedWindow=nullptr;
+constexpr unsigned SWP_NOMOVE=1,SWP_NOSIZE=2,SWP_SHOWWINDOW=4,SWP_NOACTIVATE=8;
+HWND HWND_TOP=nullptr;
+int SetWindowPos(HWND hwnd,HWND top,int x,int y,int w,int h,unsigned flags){
+ assert(top==HWND_TOP&&x==0&&y==0&&w==0&&h==0);
+ assert(flags==(SWP_NOMOVE|SWP_NOSIZE|SWP_SHOWWINDOW|SWP_NOACTIVATE));
+ ++raised;raisedWindow=hwnd;return 1;
+}
+HWND WindowFromPoint(POINT){return occluded?nullptr:raisedWindow;}
+int IsChild(HWND,HWND){return 0;}
+HWND GetForegroundWindow(){return nullptr;}
 int GetCursorPos(POINT* out){if(captureFail)return 0;*out=position;return 1;}
 int SetCursorPos(int x,int y){++sets;position={x,y};return 1;}
 int ClientToScreen(HWND hwnd,POINT* point){convertedWindow=hwnd;if(convertFail)return 0;point->x+=100;point->y+=200;return 1;}
@@ -31,18 +42,22 @@ int main(){
    guard.place(&window,{25,65});assert(position.x==125&&position.y==265&&convertedWindow==&window);
    guard.place(&window,{30,150});assert(position.x==130&&position.y==350);
  }
- assert(position.x==800&&position.y==900&&sets==3);
+ assert(position.x==800&&position.y==900&&sets==3&&raised==2);
+ occluded=true;
+ try {DiagnosticPointerPlacement guard;guard.place(&window,{25,65});assert(false);}
+ catch(const std::runtime_error&){}
+ assert(position.x==800&&position.y==900&&sets==5);occluded=false;
  try {DiagnosticPointerPlacement guard;guard.place(&window,{25,65});throw std::runtime_error("input failure");}
  catch(const std::runtime_error&){}
- assert(position.x==800&&position.y==900&&sets==5);
+ assert(position.x==800&&position.y==900&&sets==7);
  convertFail=true;
  try {DiagnosticPointerPlacement guard;guard.place(&window,{25,65});assert(false);}
  catch(const std::runtime_error&){}
- assert(position.x==800&&position.y==900&&sets==6);
+ assert(position.x==800&&position.y==900&&sets==8);
  captureFail=true;
  try {DiagnosticPointerPlacement guard;assert(false);}
  catch(const std::runtime_error&){}
- assert(sets==6); // failed snapshot cannot move or restore an unknown cursor
+ assert(sets==8); // failed snapshot cannot move or restore an unknown cursor
 }
 '''
         compiler = shutil.which('clang++') or shutil.which('g++')
