@@ -2399,13 +2399,14 @@ void LLWindowWin32::gatherInput()
     }
 
     // send one and only one mouse move event per frame BEFORE handling mouse button presses
-    if (mLastCursorPosition != mCursorPosition)
+    if (mLastCursorPosition != mCursorPosition || mNativeMouseMovePending)
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_WIN32("gi - mouse move");
         mCallbacks->handleMouseMove(this, mCursorPosition.convert(), mMouseMask);
     }
 
     mLastCursorPosition = mCursorPosition;
+    mNativeMouseMovePending = false;
 
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_WIN32("gi - mouse queue");
@@ -3097,6 +3098,7 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
                         // Retire motion already queued before this departure. Otherwise
                         // gatherInput's coalesced move would reenter the departed UI.
                         window_imp->mLastCursorPosition = window_imp->mCursorPosition;
+                        window_imp->mNativeMouseMovePending = false;
                         window_imp->mCallbacks->handleMouseLeave(window_imp);
                     });
             }
@@ -3160,6 +3162,7 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
                     MASK mask = gKeyboard->currentMask(true);
                     window_imp->mMouseMask = mask;
                     window_imp->mCursorPosition = window_coord;
+                    if (!window_imp->mUseGL) window_imp->mNativeMouseMovePending = true;
                 });
             return 0;
         }

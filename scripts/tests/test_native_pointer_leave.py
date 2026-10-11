@@ -21,6 +21,10 @@ class NativePointerLeaveTests(unittest.TestCase):
                 end += 1
             return source[start:end]
 
+        begin = source.index('    // send one and only one mouse move event per frame BEFORE handling mouse button presses')
+        end = source.index('    mNativeMouseMovePending = false;', begin) + len('    mNativeMouseMovePending = false;')
+        motion = source[begin:end]
+
         fixture = r'''
 #include <cassert>
 #include <functional>
@@ -41,15 +45,14 @@ struct Callbacks {
  void handleMouseLeave(Window* window) { ++leaves; owner=window; }
  void handleMouseMove(Window* window,int,int) { ++moves; owner=window; }
 };
+struct Coord { int value=0; Coord(int v=0):value(v){} int convert()const{return value;} operator int()const{return value;} };
 struct Window {
- bool mUseGL=false; int mMouseMask=0,mCursorPosition=0,mLastCursorPosition=0;
+ bool mUseGL=false,mNativeMouseMovePending=false; int mMouseMask=0; Coord mCursorPosition,mLastCursorPosition;
  Callbacks callbacks; Callbacks* mCallbacks=&callbacks;
  std::vector<std::function<void()>> queue;
  void drain() {
   auto pending=std::move(queue);queue.clear();for(auto& callback:pending)callback();
-  // Match gatherInput: queued callbacks precede the coalesced motion delivery.
-  if(mLastCursorPosition!=mCursorPosition) mCallbacks->handleMouseMove(this,mCursorPosition,mMouseMask);
-  mLastCursorPosition=mCursorPosition;
+  COALESCED_MOTION
  }
  int dispatch(int message,HWND h_wnd,int window_coord=37) {
   auto* window_imp=this;
@@ -79,18 +82,22 @@ int main() {
  native.dispatch(WM_MOUSELEAVE,hwnd);
  native.dispatch(WM_MOUSEMOVE,hwnd,38);native.drain();
  assert(native.callbacks.leaves==2 && native.callbacks.moves==1 && native.mCursorPosition==38);
+ // Reentry at identical coordinates also delivers motion after a departure.
+ native.dispatch(WM_MOUSELEAVE,hwnd);native.drain();
+ native.dispatch(WM_MOUSEMOVE,hwnd,38);native.drain();
+ assert(native.callbacks.leaves==3 && native.callbacks.moves==2 && !native.mNativeMouseMovePending);
  // Tracking rearms on a later native entry/movement, retaining the correct HWND.
- native.dispatch(WM_MOUSEMOVE,hwnd); assert(trackingCalls.size()==3);native.drain();
+ native.dispatch(WM_MOUSEMOVE,hwnd); assert(trackingCalls.size()==4);native.drain();
  Window legacy; legacy.mUseGL=true;
  legacy.dispatch(WM_MOUSEMOVE,hwnd);
- assert(trackingCalls.size()==3 && legacy.queue.size()==1);
+ assert(trackingCalls.size()==4 && legacy.queue.size()==1);
  legacy.dispatch(WM_MOUSELEAVE,hwnd);
  assert(legacy.queue.size()==1 && legacy.callbacks.leaves==0);
  legacy.drain();
  assert(legacy.mMouseMask==7 && legacy.mCursorPosition==37 && legacy.callbacks.leaves==0);
  assert(legacy.callbacks.moves==1);
 }
-'''.replace('MOVE_BRANCH', branch('WM_MOUSEMOVE')).replace('LEAVE_BRANCH', branch('WM_MOUSELEAVE'))
+'''.replace('MOVE_BRANCH', branch('WM_MOUSEMOVE')).replace('LEAVE_BRANCH', branch('WM_MOUSELEAVE')).replace('COALESCED_MOTION', motion)
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)
         with tempfile.TemporaryDirectory() as directory:
