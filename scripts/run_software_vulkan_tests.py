@@ -72,7 +72,8 @@ def assess(mode, code, log):
 
 
 def device_evidence(log, vendor=None):
-    match = re.search(r'^ICD_DEVICE=(.+) API=(\d+) DRIVER=(\d+) VENDOR=(\d+) DEVICE=(\d+) TYPE=(\d+)$', log, re.MULTILINE)
+    # Captured Windows output retains CRLF; $ alone leaves the trailing CR unmatched.
+    match = re.search(r'^ICD_DEVICE=(.+) API=(\d+) DRIVER=(\d+) VENDOR=(\d+) DEVICE=(\d+) TYPE=(\d+)\r?$', log, re.MULTILINE)
     if not match:
         raise RuntimeError('Missing Vulkan device identity')
     name, api, driver, vendor_id, device_id, kind = match.groups()

@@ -54,6 +54,18 @@ class RunnerFailureTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Missing Vulkan device identity'):
             device_evidence('driver enumeration failed')
 
+    def test_device_identity_accepts_lf_and_windows_crlf_without_relaxing_fields(self):
+        line = 'ICD_DEVICE=SwiftShader Device (LLVM 10.0.0) API=4206592 DRIVER=20971520 VENDOR=6880 DEVICE=49374 TYPE=4'
+        expected = device_evidence(line)
+        for newline in ('\n', '\r\n'):
+            with self.subTest(newline=repr(newline)):
+                log = 'loader diagnostic' + newline + line + newline + 'FAIL: Pixel oracle mismatch' + newline
+                self.assertEqual(device_evidence(log), expected)
+                self.assertTrue(assess('bad-pixels', 1, log))
+                self.assertTrue(assess('bad-orientation', 1, log))
+                with self.assertRaisesRegex(RuntimeError, 'Missing Vulkan device identity'):
+                    device_evidence(line.replace(' TYPE=4', '') + newline)
+
     def test_headless_system_discovery_does_not_force_an_icd_or_create_a_display(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -80,7 +92,7 @@ class RunnerFailureTests(unittest.TestCase):
                 diagnostic = {'invalid': 'VUID-VkBufferCreateInfo-size-00912 Validation reported an error',
                               'invalid-sync': 'SYNC-HAZARD-WRITE-AFTER-WRITE Validation reported an error',
                               'bad-pixels': 'Pixel oracle mismatch', 'bad-orientation': 'Pixel oracle mismatch'}[mode]
-                return SimpleNamespace(returncode=1, stdout=(identity+diagnostic).encode('utf-8'))
+                return SimpleNamespace(returncode=1, stdout=(identity+diagnostic).replace('\n', '\r\n').encode('utf-8'))
 
             with patch('run_software_vulkan_tests.platform.system', return_value='Linux'), \
                  patch('run_software_vulkan_tests.run_viewer_process', side_effect=execute), \
