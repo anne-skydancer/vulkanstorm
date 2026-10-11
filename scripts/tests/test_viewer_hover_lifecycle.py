@@ -17,10 +17,15 @@ class HoverLifecycleTest(unittest.TestCase):
         begin = native.index('void LLViewerWindow::nativeHoverUpdate(')
         finish = native.index('void LLViewerWindow::nativeScroll', begin)
         native_body = native[begin:finish]
+        diagnostic = (root / 'indra/newview/vsvkdiag.cpp').read_text()
+        begin = diagnostic.index('        // OS input pumping also processes initial resize/layout events.')
+        finish = diagnostic.index('        gFocusMgr.setMouseCapture(button);', begin)
+        layout_probe = diagnostic[begin:finish]
         fixture = r'''
 #include <algorithm>
 #include <cassert>
 #include <iterator>
+#include <iostream>
 #include <memory>
 #include <set>
 #include <vector>
@@ -34,6 +39,9 @@ template<class T> struct LLHandle {
 struct LLRect {
  int mLeft=0,mBottom=0,mRight=100,mTop=100;
  bool pointInRect(int x,int y) const { return x>=mLeft && x<mRight && y>=mBottom && y<mTop; }
+ int getCenterX()const{return (mLeft+mRight)/2;}int getCenterY()const{return (mBottom+mTop)/2;}
+ int getHeight()const{return mTop-mBottom;}
+ void translate(int x,int y){mLeft+=x;mRight+=x;mBottom+=y;mTop+=y;}
 };
 struct LLMouseHandler {
  virtual ~LLMouseHandler()=default;
@@ -58,6 +66,8 @@ struct LLView:LLMouseHandler {
  bool getMouseOpaque() const { return opaque; }
  LLRect calcScreenBoundingRect() const { return rect; }
  LLRect calcScreenRect() const { return rect; }
+ LLRect getRect()const{return rect;}void setShape(LLRect value){rect=value;}
+ bool getHighlight()const{return highlight;}
  void onMouseEnter(int,int,MASK) { ++entered; highlight=true; }
  void onMouseLeave(int,int,MASK) { ++left; highlight=false; }
  void add(LLView& child) { child.parent=this; children.push_back(&child); }
@@ -92,8 +102,10 @@ struct LLViewerWindow {
  struct Point { int mX=0,mY=0; } mCurrentMousePoint;
  void updateMouseHoverViews(S32,S32,MASK,bool);
  void nativeHoverUpdate(MASK);
+ void updateUI(){nativeHoverUpdate(0);}
+ Point getCurrentMouse()const{return mCurrentMousePoint;}
 };
-''' + body + native_body + r'''
+''' + body + native_body + '\nvoid require(bool value,const char*) { assert(value); }\n' + r'''
 int main() {
  LLView root, first, second; LLPopupView popups; root.add(first); root.add(second);
  first.rect={0,0,40,40}; second.rect={50,0,90,40};
@@ -131,8 +143,19 @@ int main() {
  assert(!drag.highlight && drag.left==1);
  viewer.mCurrentMousePoint={10,10}; viewer.nativeHoverUpdate(0); assert(drag.highlight);
  viewer.mMouseInWindow=false; viewer.nativeHoverUpdate(0); assert(!drag.highlight);
+ {
+  // Resize handled while pumping OS leave relocated the authored login button.
+  // The actual diagnostic must capture its current position after that pump.
+  LLView layoutRoot, layoutButton; layoutRoot.rect={0,0,500,500}; layoutRoot.add(layoutButton);
+  layoutButton.rect={100,200,200,240};layoutButton.entered=layoutButton.left=2;
+  viewer.mRootView=&layoutRoot; viewer.mMouseInWindow=true;viewer.mCurrentMousePoint={-10,-10};
+  auto* startup_window=&viewer;auto* button=&layoutButton;
+  auto& enters=layoutButton.entered;auto& leaves=layoutButton.left;
+  auto hoverAt=[&](int x,int y){viewer.mCurrentMousePoint={x,y};viewer.nativeHoverUpdate(0);};
+  LAYOUT_PROBE
+ }
 }
-'''
+'''.replace('LAYOUT_PROBE', layout_probe)
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)
         with tempfile.TemporaryDirectory() as directory:
