@@ -19,6 +19,62 @@ import run_vulkan_session_replay as session_runner
 from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_actual_script_notification_widget_admission(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/newview/vsstartupui.cpp').read_text(encoding='utf-8')
+        expression = source.split('const bool admitted = ', 1)[1].split(';', 1)[0]
+        types = set(re.findall(r'typeid\(([\w:]+)\)', expression))
+        calls = re.findall(r'(\w+)::(\w+)\(t\)', expression)
+        declarations = {name: set() for name in types}
+        for owner, method in calls:
+            declarations.setdefault(owner, set()).add(method)
+        fixture = '#include <typeinfo>\n#include <cassert>\n'
+        for owner, methods in declarations.items():
+            namespace, _, name = owner.rpartition('::')
+            if namespace:
+                fixture += 'namespace ' + namespace + '{'
+            fixture += 'struct ' + name + '{' + ''.join(
+                'static bool ' + method + '(const std::type_info&){return false;}' for method in methods)
+            if owner == 'LLRadioGroup':
+                fixture += 'static const std::type_info& itemType(){return typeid(int);}'
+            fixture += '};' + ('}' if namespace else '') + '\n'
+        fixture += 'bool admitted(const std::type_info& t){return ' + expression + ';}\n'
+        fixture += '''struct SceneWidget{};
+int main(){assert(admitted(typeid(LLScriptFloater)));assert(admitted(typeid(LLToastScriptTextbox)));
+assert(admitted(typeid(LLToastNotifyPanel)));assert(!admitted(typeid(SceneWidget)));}'''
+        self.compile_script_fixture(fixture)
+
+    def compile_script_fixture(self, fixture):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'script_notification.cpp'
+            executable = Path(directory) / 'script_notification.exe'
+            source.write_text(fixture, encoding='utf-8')
+            built = subprocess.run([compiler, '-std=c++17', str(source), '-o', str(executable)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            ran = subprocess.run([str(executable)], capture_output=True, text=True)
+            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+
+    def test_script_show_handles_failed_construction_before_dereference(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/newview/llscriptfloater.cpp').read_text(encoding='utf-8')
+        # The earlier implementation is commented out; exercise the active one.
+        method = source.rsplit('LLScriptFloater* LLScriptFloater::show(', 1)[1]
+        prefix = 'LLScriptFloater* LLScriptFloater::show(' + method.split('    floater->setNotificationId', 1)[0]
+        fixture = '''#include <cassert>
+#include <sstream>
+using LLUUID=int;
+#define LL_WARNS() std::ostringstream()
+#define LL_ENDL ""
+struct LLScriptFloater {static LLScriptFloater* show(const LLUUID&);};
+LLScriptFloater* instance=nullptr;
+struct LLFloaterReg {template<class T>static T* getTypedInstance(const char*,const LLUUID&){return instance;}};
+''' + prefix + '''return floater;}
+int main(){assert(LLScriptFloater::show(1)==nullptr);LLScriptFloater real;instance=&real;
+assert(LLScriptFloater::show(1)==&real);}'''
+        self.compile_script_fixture(fixture)
+
     def test_stalled_viewer_is_killed_and_timeout_remains_failed_evidence(self):
         self.assertGreater(session_runner.VIEWER_REPLAY_SECONDS, 0)
         self.assertLess(session_runner.VIEWER_REPLAY_SECONDS, session_runner.PROCESS_REPLAY_SECONDS)

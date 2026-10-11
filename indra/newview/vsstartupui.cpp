@@ -31,6 +31,8 @@
 #include "llnotificationlistitem.h"
 #include "lltoastgroupnotifypanel.h"
 #include "lltoastscriptquestion.h"
+#include "llscriptfloater.h"
+#include "lltoastscripttextbox.h"
 #include "lltoastpanel.h"
 #include "lltoastimpanel.h"
 #include "lltoastnotifypanel.h"
@@ -270,6 +272,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(LLGroupNotificationListItem) || t == typeid(LLGroupInviteNotificationListItem) ||
                 t == typeid(LLGroupNoticeNotificationListItem) || t == typeid(LLTransactionNotificationListItem) ||
                 t == typeid(LLSystemNotificationListItem) || t == typeid(LLToastGroupNotifyPanel) ||
+                t == typeid(LLScriptFloater) || t == typeid(LLToastScriptTextbox) ||
                 t == typeid(LLToastScriptQuestion) || t == typeid(LLToastPanel) || t == typeid(LLCheckBoxToastPanel) ||
                 t == typeid(FSFloaterIM) || t == typeid(FSFloaterIMContainer) || t == typeid(FSPanelContactSets) || t == typeid(FSFloaterContacts) || t == typeid(FSFloaterPartialInventory) || t == typeid(FSChatHistory) || t == typeid(FSPanelIMControlPanel) || t == typeid(FSPanelGroupControlPanel) || t == typeid(FSPanelAdHocControlPanel) || t == typeid(FSScrollListCtrl) || t == typeid(LLChicletBar) || t == typeid(LLChicletPanel) || t == typeid(LLChicletNotificationCounterCtrl) || t == typeid(LLChicletAvatarIconCtrl) || t == typeid(LLChicletGroupIconCtrl) || t == typeid(LLChicletInvOfferIconCtrl) || t == typeid(LLChicletSpeakerCtrl) || t == typeid(LLScriptChiclet) || t == typeid(LLInvOfferChiclet) || t == typeid(LLIMP2PChiclet) || t == typeid(LLAdHocChiclet) || t == typeid(LLIMGroupChiclet) || t == typeid(LLNotificationChiclet) || t == typeid(LLIMWellChiclet) || t == typeid(LLAvatarList) || t == typeid(LLAvatarListItem) || t == typeid(LLAvatarIconCtrl) || t == typeid(LLGroupIconCtrl) || t == typeid(LLGroupList) || t == typeid(LLGroupListItem) || t == typeid(LLChatEntry) || t == typeid(LLFilterEditor) || t == typeid(LLMenuButton) || t == typeid(LLOutputMonitorCtrl) || t == typeid(LLSliderCtrl) || t == typeid(LLFlatListView) || t == typeid(LLFlatListViewEx) || t == typeid(LLMultiFloater) || t == typeid(LLDockableFloater) || t == typeid(LLContextMenu) || t == typeid(LLIMWellWindow) || t == typeid(LLNotificationWellWindow) || t == typeid(LLSysWellItem) || t == typeid(LLFloaterNotificationsTabbed) || t == typeid(LLToastIMPanel) || t == typeid(LLToastNotifyPanel) || t == typeid(LLIMToastNotifyPanel) || t == typeid(LLFloaterAvatarPicker) || t == typeid(LLFloaterGroupPicker) || t == typeid(LLPanelEmojiComplete) || LLTabContainer::isNativeTabButtonType(t) || LLFloaterAboutUtil::isFloaterType(t) || t == typeid(LLTabContainer) || t == typeid(VSPlainChat) || t == typeid(VSChatInput) || LLMenuBarGL::isNativeLoginItemType(t) || t == typeid(LLViewerMenuHolderGL) || t == typeid(LLMenuHolderGL) || t == typeid(LLMenuGL) ||
                    t == typeid(LLMenuBarGL) || t == typeid(LLMenuItemGL) || t == typeid(LLMenuItemCallGL) ||

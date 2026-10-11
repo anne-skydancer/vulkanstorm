@@ -45,6 +45,11 @@
 #include "llnotifications.h"
 #include "lltoast.h"
 #include "lltoastalertpanel.h"
+#include "llscriptfloater.h"
+#include "lltoastscripttextbox.h"
+#include "lltoastnotifypanel.h"
+#include "llviewertexteditor.h"
+#include "lllslconstants.h"
 #include "llcommunicationchannel.h"
 #include "llfloaterreg.h"
 #include "llfloater.h"
@@ -69,6 +74,44 @@ void vs_native_replay_capture(VSVulkanContext&, const std::string&, std::shared_
 namespace
 {
 void require(bool condition, const char* reason) { if (!condition) { LL_WARNS("NativeSessionReplay") << reason << LL_ENDL; throw std::runtime_error(reason); } }
+void qualifyScriptNotifications(LLSD& report, const LLHost& host)
+{
+    for (const bool textbox : {false, true})
+    {
+        LLSD args, payload;
+        args["TITLE"] = "Native scripted object";
+        args["NAME"] = "Native Replay";
+        args["GROUPNAME"] = "Native replay group";
+        args["MESSAGE"] = "Connected scripted notification";
+        payload["sender"] = host.getIPandPort();
+        payload["object_id"] = LLUUID("92000000-0000-0000-0000-000000000001");
+        payload["object_name"] = "Native scripted object";
+        payload["chat_channel"] = -43;
+        LLNotificationForm form;
+        form.addElement("button", textbox ? TEXTBOX_MAGIC_TOKEN : "Native reply");
+        auto notification = LLNotifications::instance().add(LLNotification::Params(
+            textbox ? "ScriptDialogGroup" : "ScriptDialog").substitutions(args).payload(payload).form_elements(form.asLLSD()));
+        auto* floater = LLFloaterReg::findTypedInstance<LLScriptFloater>("script_floater", notification->getID());
+        require(floater && floater->isInVisibleChain(), "Real connected script floater failed to open");
+        if (textbox)
+        {
+            auto* panel = floater->findChild<LLToastScriptTextbox>("panel_notify_textbox");
+            auto* input = panel ? panel->findChild<LLViewerTextEditor>("message") : nullptr;
+            auto* submit = panel ? panel->findChild<LLButton>("btn_submit") : nullptr;
+            require(input && submit && submit->getEnabled(), "Real connected script textbox controls are missing");
+            input->setText(LLStringExplicit("Native textbox reply"));
+            submit->onCommit();
+        }
+        else
+        {
+            auto* button = floater->findChild<LLButton>("Native reply");
+            require(button && button->getEnabled(), "Real connected script dialog reply is missing");
+            button->onCommit();
+        }
+        require(notification->isRespondedTo(), "Actual script notification control did not respond");
+    }
+    report["connected_script_notification_controls"] = true;
+}
 void qualifyConnectedSkinGeometry(LLSD& report)
 {
     auto* root = gViewerWindow->getRootView();
@@ -423,6 +466,15 @@ struct Replay
         msg->getUUID("AgentData", "AgentID", agent); msg->getUUID("AgentData", "SessionID", session);
         msg->getUUID("Data", "ObjectID", object); msg->getS32("Data", "ChatChannel", channel);
         msg->getString("Data", "ButtonLabel", text);
+        if (object == LLUUID("92000000-0000-0000-0000-000000000001"))
+        {
+            S32 index; msg->getS32("Data", "ButtonIndex", index);
+            require(agent == gAgentID && session == gAgentSessionID && channel == -43 && index == 0,
+                    "Script notification reply lost connected identity/channel/index");
+            require(text == "Native reply" || text == "Native textbox reply", "Script notification reply changed text");
+            replay.imEvidence[text == "Native reply" ? "connected_script_dialog_encoded" : "connected_script_textbox_encoded"] = true;
+            return;
+        }
         require(agent == gAgentID && session == gAgentSessionID && object == gAgentID &&
             channel == -42 && text == "toolbar script dialog", "Actual chat bar changed negative-channel packet");
         replay.encodedNegativeChat = true;
@@ -605,6 +657,7 @@ struct Replay
                 LLLandmarkActions::getSLURLfromPosGlobal(favoritePosition, [&favoriteURL](std::string& url) { favoriteURL = url; });
                 require(!favoriteURL.empty() && !LLWorldMap::instanceExists(), "Current favorite SLURL helper created world map or lost location");
                 qualifyConnectedSkinGeometry(imEvidence);
+                qualifyScriptNotifications(imEvidence, owner.host());
                 const std::string path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));
                 std::filesystem::create_directories(path);
                 vs_native_replay_capture(*gViewerWindow->nativeContext(), path, readback);

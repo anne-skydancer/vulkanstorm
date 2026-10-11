@@ -333,3 +333,21 @@ Unknown capacity remains unknown rather than borrowing OpenGL state.
 Compiler fixtures cover selected-device identity, multiple local heaps,
 host-only exclusion, zero capacity and sizes beyond 32-bit bytes. Physical
 GPU display evidence remains separate.
+
+### Connected script notifications (11 October 2026)
+
+A live post-login crash exposed inconsistent admission: `script_floater` was
+an allowed registration name, but its `LLScriptFloater` widget class was
+rejected. The active shared `show()` implementation dereferenced the failed
+construction result. Native admission now includes that real floater and its
+`LLToastScriptTextbox` form. Shared XUI, skinning, docking, dialog stacking,
+notification responses and inventory-offer handling remain in use. Failed
+construction and failed stack lookup are checked before dereferencing.
+
+Console compiler fixtures exercise the actual widget policy and construction
+failure branch. The connected replay additionally opens real ScriptDialog and
+ScriptDialogGroup/textbox notifications, submits their actual controls, and
+requires decoded ScriptDialogReply packets with the connected identities,
+object, channel, button index and text. Missing control or packet evidence
+fails qualification. This extends CI coverage; passing console/build checks
+does not establish live-account or isolated UI runtime acceptance.
