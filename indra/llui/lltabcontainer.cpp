@@ -503,9 +503,11 @@ void LLTabContainer::draw()
     }
 
     {
+        // The tab buttons are hidden during the content draw. Clip the content
+        // to the container, rather than the tab-label inset: child panels reach
+        // beyond that inset, and right-aligned controls draw focus borders
+        // outside their own rectangles. Keep the outer/ancestor clips intact.
         LLRect clip_rect = getLocalRect();
-        clip_rect.mLeft+=(LLPANEL_BORDER_WIDTH + 2);
-        clip_rect.mRight-=(LLPANEL_BORDER_WIDTH + 2);
         LLLocalClipRect clip(clip_rect);
         LLPanel::draw();
     }

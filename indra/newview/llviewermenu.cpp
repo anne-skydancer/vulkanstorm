@@ -569,6 +569,18 @@ void check_merchant_status(bool force)
        gSLMMenuUpdater->checkMerchantStatus(force);
 }
 
+namespace
+{
+void fit_native_menu_bar(LLMenuBarGL& menu, const LLView& holder)
+{
+    menu.setRect(LLRect(0, holder.getRect().getHeight(), menu.getRect().getWidth(), 0));
+    // setRect changes the owner only. Branch hover and highlight use child
+    // rectangles, so arrange again at the final row height before input arrives.
+    menu.needsArrange();
+    menu.arrangeAndClear();
+}
+}
+
 void init_native_connected_menus()
 {
     if (gMenuBarView) return;
@@ -609,7 +621,7 @@ void init_native_connected_menus()
     auto* holder = gViewerWindow->getRootView()->getChildView("menu_bar_holder");
     holder->addChild(gMenuBarView);
     gMenuBarView->arrangeAndClear();
-    gMenuBarView->setRect(LLRect(0, holder->getRect().getHeight(), gMenuBarView->getRect().getWidth(), 0));
+    fit_native_menu_bar(*gMenuBarView, *holder);
     gMenuBarView->createJumpKeys();
 }
 
