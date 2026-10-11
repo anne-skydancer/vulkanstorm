@@ -512,6 +512,8 @@ private:
     void reshapeNative(S32 width, S32 height, F32 system_scale = 0.f);
     bool nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type, bool down);
     void nativeHover(LLCoordGL pos, MASK mask);
+    void nativeHoverUpdate(MASK mask);
+    void updateMouseHoverViews(S32 x, S32 y, MASK mask, bool enabled);
     void nativeScroll(S32 clicks, bool horizontal = false);
     bool mNativeVulkan = false;
 #if VS_NATIVE_VULKAN

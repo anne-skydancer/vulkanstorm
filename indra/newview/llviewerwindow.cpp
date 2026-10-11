@@ -42,6 +42,7 @@ void LLViewerWindow::refreshNativeFonts() {}
 void LLViewerWindow::reshapeNative(S32, S32, F32) {}
 bool LLViewerWindow::nativeMouse(LLCoordGL, MASK, EMouseClickType, bool) { return false; }
 void LLViewerWindow::nativeHover(LLCoordGL, MASK) {}
+void LLViewerWindow::nativeHoverUpdate(MASK) {}
 void LLViewerWindow::nativeScroll(S32, bool) {}
 #endif
 
@@ -1587,7 +1588,13 @@ void LLViewerWindow::handleMouseDragged(LLWindow *window,  LLCoordGL pos, MASK m
 
 void LLViewerWindow::handleMouseLeave(LLWindow *window)
 {
-    if (mNativeVulkan) { mMouseInWindow = false; return; }
+    if (mNativeVulkan)
+    {
+        mMouseInWindow = false;
+        updateMouseHoverViews(mCurrentMousePoint.mX, mCurrentMousePoint.mY, MASK_NONE, false);
+        LLToolTipMgr::instance().blockToolTips();
+        return;
+    }
     // Note: we won't get this if we have captured the mouse.
     llassert( gFocusMgr.getMouseCapture() == NULL );
     mMouseInWindow = false;
@@ -3964,157 +3971,22 @@ void append_xui_tooltip(LLView* viewp, LLToolTip::Params& params)
     }
 }
 
-// Update UI based on stored mouse position from mouse-move
-// event processing.
-void LLViewerWindow::updateUI()
+// Renderer-independent hover ownership; no scene resources are consulted.
+void LLViewerWindow::updateMouseHoverViews(S32 x, S32 y, MASK mask, bool enabled)
 {
-    if (mNativeVulkan)
-    {
-        LLLayoutStack::updateClass();
-        updateKeyboardFocus();
-        return;
-    }
-    LL_PROFILE_ZONE_SCOPED_CATEGORY_UI;
-
-    static std::string last_handle_msg;
-
-    // <FS:Ansariel> We don't show the hints anyway, so needless to check here
-    //if (gLoggedInTime.getStarted())
-    //{
-    //    const F32 DESTINATION_GUIDE_HINT_TIMEOUT = 1200.f;
-    //    const F32 SIDE_PANEL_HINT_TIMEOUT = 300.f;
-    //  if (gLoggedInTime.getElapsedTimeF32() > DESTINATION_GUIDE_HINT_TIMEOUT)
-    //  {
-    //      LLFirstUse::notUsingDestinationGuide();
-    //  }
-    //  if (gLoggedInTime.getElapsedTimeF32() > SIDE_PANEL_HINT_TIMEOUT)
-    //  {
-    //      LLFirstUse::notUsingSidePanel();
-    //  }
-    //}
-    // </FS:Ansariel>
-
-    {
-        LL_PROFILE_ZONE_NAMED("UI updateClass");
-        LLConsole::updateClass();
-
-        // execute postponed arrange calls
-        LLAccordionCtrl::updateClass();
-        // animate layout stacks so we have up to date rect for world view
-        LLLayoutStack::updateClass();
-    }
-
-    // use full window for world view when not rendering UI
-    bool world_view_uses_full_window = gAgentCamera.cameraMouselook() || !gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI);
-    updateWorldViewRect(world_view_uses_full_window);
-
-    LLView::sMouseHandlerMessage.clear();
-
-    S32 x = mCurrentMousePoint.mX;
-    S32 y = mCurrentMousePoint.mY;
-
-    MASK    mask = gKeyboard->currentMask(true);
-
-    if (gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_RAYCAST))
-    {
-        gDebugRaycastFaceHit = gDebugRaycastGLTFNodeHit = gDebugRaycastGLTFPrimitiveHit = -1;
-        gDebugRaycastObject = cursorIntersect(-1, -1, 512.f, NULL, -1, false, false, true, false,
-                                              &gDebugRaycastFaceHit,
-                                              &gDebugRaycastGLTFNodeHit,
-                                              &gDebugRaycastGLTFPrimitiveHit,
-                                              &gDebugRaycastIntersection,
-                                              &gDebugRaycastTexCoord,
-                                              &gDebugRaycastNormal,
-                                              &gDebugRaycastTangent,
-                                              &gDebugRaycastStart,
-                                              &gDebugRaycastEnd);
-        gDebugRaycastParticle = gPipeline.lineSegmentIntersectParticle(gDebugRaycastStart, gDebugRaycastEnd, &gDebugRaycastParticleIntersection, NULL);
-    }
-
-    updateMouseDelta();
-    updateKeyboardFocus();
-
-    bool handled = false;
-
     LLUICtrl* top_ctrl = gFocusMgr.getTopCtrl();
-    LLMouseHandler* mouse_captor = gFocusMgr.getMouseCapture();
-    LLView* captor_view = dynamic_cast<LLView*>(mouse_captor);
-
-    //FIXME: only include captor and captor's ancestors if mouse is truly over them --RN
-
-    //build set of views containing mouse cursor by traversing UI hierarchy and testing
-    //screen rect against mouse cursor
+    LLView* captor_view = dynamic_cast<LLView*>(gFocusMgr.getMouseCapture());
+    LLView* root_view = captor_view ? captor_view : mRootView;
     view_handle_set_t mouse_hover_set;
-
-    // constraint mouse enter events to children of mouse captor
-    LLView* root_view = captor_view;
-
-    // if mouse captor doesn't exist or isn't a LLView
-    // then allow mouse enter events on entire UI hierarchy
-    if (!root_view)
-    {
-        root_view = mRootView;
-    }
-
-    static LLCachedControl<bool> dump_menu_holder(gSavedSettings, "DumpMenuHolderSize", false);
-    if (dump_menu_holder)
-    {
-        static bool init = false;
-        static LLFrameTimer child_count_timer;
-        static std::vector <std::string> child_vec;
-        if (!init)
-        {
-            child_count_timer.resetWithExpiry(5.f);
-            init = true;
-        }
-        if (child_count_timer.hasExpired())
-        {
-            LL_INFOS() << "gMenuHolder child count: " << gMenuHolder->getChildCount() << LL_ENDL;
-            std::vector<std::string> local_child_vec;
-            LLView::child_list_t child_list = *gMenuHolder->getChildList();
-            for (auto child : child_list)
-            {
-                local_child_vec.emplace_back(child->getName());
-            }
-            if (!local_child_vec.empty() && local_child_vec != child_vec)
-            {
-                std::vector<std::string> out_vec;
-                std::sort(local_child_vec.begin(), local_child_vec.end());
-                std::sort(child_vec.begin(), child_vec.end());
-                std::set_difference(child_vec.begin(), child_vec.end(), local_child_vec.begin(), local_child_vec.end(), std::inserter(out_vec, out_vec.begin()));
-                if (!out_vec.empty())
-                {
-                    LL_INFOS() << "gMenuHolder removal diff size: '"<<out_vec.size() <<"' begin_child_diff";
-                    for (auto str : out_vec)
-                    {
-                        LL_CONT << " : " << str;
-                    }
-                    LL_CONT << " : end_child_diff" << LL_ENDL;
-                }
-
-                out_vec.clear();
-                std::set_difference(local_child_vec.begin(), local_child_vec.end(), child_vec.begin(), child_vec.end(), std::inserter(out_vec, out_vec.begin()));
-                if (!out_vec.empty())
-                {
-                    LL_INFOS() << "gMenuHolder addition diff size: '" << out_vec.size() << "' begin_child_diff";
-                    for (auto str : out_vec)
-                    {
-                        LL_CONT << " : " << str;
-                    }
-                    LL_CONT << " : end_child_diff" << LL_ENDL;
-                }
-                child_vec.swap(local_child_vec);
-            }
-            child_count_timer.resetWithExpiry(5.f);
-        }
-    }
-
     // only update mouse hover set when UI is visible (since we shouldn't send hover events to invisible UI
-    if (gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
+    if (enabled && root_view)
     {
         // include all ancestors of captor_view as automatically having mouse
         if (captor_view)
         {
+            // A captured control can highlight while dragging outside its rect.
+            // Track it until release so the next ordinary hover sends Leave.
+            mouse_hover_set.insert(captor_view->getHandle());
             LLView* captor_parent_view = captor_view->getParent();
             while(captor_parent_view)
             {
@@ -4124,7 +3996,7 @@ void LLViewerWindow::updateUI()
         }
 
         // aggregate visible views that contain mouse cursor in display order
-        LLPopupView::popup_list_t popups = mPopupView->getCurrentPopups();
+        LLPopupView::popup_list_t popups = mPopupView ? mPopupView->getCurrentPopups() : LLPopupView::popup_list_t{};
 
         for(LLPopupView::popup_list_t::iterator popup_it = popups.begin(); popup_it != popups.end(); ++popup_it)
         {
@@ -4244,6 +4116,138 @@ void LLViewerWindow::updateUI()
 
     // store resulting hover set for next frame
     swap(mMouseHoverViews, mouse_hover_set);
+}
+
+// Update UI based on stored mouse position from mouse-move
+// event processing.
+void LLViewerWindow::updateUI()
+{
+    if (mNativeVulkan)
+    {
+        LLLayoutStack::updateClass();
+        updateKeyboardFocus();
+        nativeHoverUpdate(gKeyboard ? gKeyboard->currentMask(true) : MASK_NONE);
+        return;
+    }
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_UI;
+
+    static std::string last_handle_msg;
+
+    // <FS:Ansariel> We don't show the hints anyway, so needless to check here
+    //if (gLoggedInTime.getStarted())
+    //{
+    //    const F32 DESTINATION_GUIDE_HINT_TIMEOUT = 1200.f;
+    //    const F32 SIDE_PANEL_HINT_TIMEOUT = 300.f;
+    //  if (gLoggedInTime.getElapsedTimeF32() > DESTINATION_GUIDE_HINT_TIMEOUT)
+    //  {
+    //      LLFirstUse::notUsingDestinationGuide();
+    //  }
+    //  if (gLoggedInTime.getElapsedTimeF32() > SIDE_PANEL_HINT_TIMEOUT)
+    //  {
+    //      LLFirstUse::notUsingSidePanel();
+    //  }
+    //}
+    // </FS:Ansariel>
+
+    {
+        LL_PROFILE_ZONE_NAMED("UI updateClass");
+        LLConsole::updateClass();
+
+        // execute postponed arrange calls
+        LLAccordionCtrl::updateClass();
+        // animate layout stacks so we have up to date rect for world view
+        LLLayoutStack::updateClass();
+    }
+
+    // use full window for world view when not rendering UI
+    bool world_view_uses_full_window = gAgentCamera.cameraMouselook() || !gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI);
+    updateWorldViewRect(world_view_uses_full_window);
+
+    LLView::sMouseHandlerMessage.clear();
+
+    S32 x = mCurrentMousePoint.mX;
+    S32 y = mCurrentMousePoint.mY;
+
+    MASK    mask = gKeyboard->currentMask(true);
+
+    if (gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_RAYCAST))
+    {
+        gDebugRaycastFaceHit = gDebugRaycastGLTFNodeHit = gDebugRaycastGLTFPrimitiveHit = -1;
+        gDebugRaycastObject = cursorIntersect(-1, -1, 512.f, NULL, -1, false, false, true, false,
+                                              &gDebugRaycastFaceHit,
+                                              &gDebugRaycastGLTFNodeHit,
+                                              &gDebugRaycastGLTFPrimitiveHit,
+                                              &gDebugRaycastIntersection,
+                                              &gDebugRaycastTexCoord,
+                                              &gDebugRaycastNormal,
+                                              &gDebugRaycastTangent,
+                                              &gDebugRaycastStart,
+                                              &gDebugRaycastEnd);
+        gDebugRaycastParticle = gPipeline.lineSegmentIntersectParticle(gDebugRaycastStart, gDebugRaycastEnd, &gDebugRaycastParticleIntersection, NULL);
+    }
+
+    updateMouseDelta();
+    updateKeyboardFocus();
+
+    bool handled = false;
+
+    LLUICtrl* top_ctrl = gFocusMgr.getTopCtrl();
+    LLMouseHandler* mouse_captor = gFocusMgr.getMouseCapture();
+    static LLCachedControl<bool> dump_menu_holder(gSavedSettings, "DumpMenuHolderSize", false);
+    if (dump_menu_holder)
+    {
+        static bool init = false;
+        static LLFrameTimer child_count_timer;
+        static std::vector <std::string> child_vec;
+        if (!init)
+        {
+            child_count_timer.resetWithExpiry(5.f);
+            init = true;
+        }
+        if (child_count_timer.hasExpired())
+        {
+            LL_INFOS() << "gMenuHolder child count: " << gMenuHolder->getChildCount() << LL_ENDL;
+            std::vector<std::string> local_child_vec;
+            LLView::child_list_t child_list = *gMenuHolder->getChildList();
+            for (auto child : child_list)
+            {
+                local_child_vec.emplace_back(child->getName());
+            }
+            if (!local_child_vec.empty() && local_child_vec != child_vec)
+            {
+                std::vector<std::string> out_vec;
+                std::sort(local_child_vec.begin(), local_child_vec.end());
+                std::sort(child_vec.begin(), child_vec.end());
+                std::set_difference(child_vec.begin(), child_vec.end(), local_child_vec.begin(), local_child_vec.end(), std::inserter(out_vec, out_vec.begin()));
+                if (!out_vec.empty())
+                {
+                    LL_INFOS() << "gMenuHolder removal diff size: '"<<out_vec.size() <<"' begin_child_diff";
+                    for (auto str : out_vec)
+                    {
+                        LL_CONT << " : " << str;
+                    }
+                    LL_CONT << " : end_child_diff" << LL_ENDL;
+                }
+
+                out_vec.clear();
+                std::set_difference(local_child_vec.begin(), local_child_vec.end(), child_vec.begin(), child_vec.end(), std::inserter(out_vec, out_vec.begin()));
+                if (!out_vec.empty())
+                {
+                    LL_INFOS() << "gMenuHolder addition diff size: '" << out_vec.size() << "' begin_child_diff";
+                    for (auto str : out_vec)
+                    {
+                        LL_CONT << " : " << str;
+                    }
+                    LL_CONT << " : end_child_diff" << LL_ENDL;
+                }
+                child_vec.swap(local_child_vec);
+            }
+            child_count_timer.resetWithExpiry(5.f);
+        }
+    }
+
+    updateMouseHoverViews(x, y, mask,
+        gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI));
 
     // only handle hover events when UI is enabled
     if (gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))

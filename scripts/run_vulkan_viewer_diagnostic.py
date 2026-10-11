@@ -41,7 +41,7 @@ def assess_startup(record, code, log, case):
                 and record.get('login_submit_actions') == 2
                 and record.get('readbacks') == 24 and record.get('modal_alert_verified') is True
                 and record.get('critical_dialog_verified') is True
-                and all(record.get(key) is True for key in ('plain_chat_controls_verified',
+                and all(record.get(key) is True for key in ('native_hover_lifecycle_verified', 'plain_chat_controls_verified',
                     'required_dialog_actions_verified', 'mfa_actions_verified', 'login_menus_verified',
                     'unsupported_ui_status_verified'))
                 and record.get('native_dpi_event_verified' if platform.system() == 'Windows' else 'ime_event_route_verified') is True)

@@ -353,12 +353,29 @@ void LLViewerWindow::nativeHover(LLCoordGL pos, MASK mask)
     pos.mY             = ll_round(pos.mY / mDisplayScale.mV[VY]);
     mCurrentMousePoint = pos;
     mMouseInWindow     = true;
-    auto* target       = gFocusMgr.getMouseCapture();
-    if (!target)
-        target = mRootView;
-    S32 x, y;
-    target->screenPointToLocal(pos.mX, pos.mY, &x, &y);
-    target->handleHover(x, y, mask);
+    nativeHoverUpdate(mask);
+}
+void LLViewerWindow::nativeHoverUpdate(MASK mask)
+{
+    if (!mRootView) return;
+    const S32 x = mCurrentMousePoint.mX, y = mCurrentMousePoint.mY;
+    updateMouseHoverViews(x, y, mask, mMouseInWindow);
+    if (!mMouseInWindow) return;
+    mWindow->setCursor(UI_CURSOR_ARROW);
+    if (auto* captor = gFocusMgr.getMouseCapture())
+    {
+        S32 local_x, local_y;
+        captor->screenPointToLocal(x, y, &local_x, &local_y);
+        captor->handleHover(local_x, local_y, mask);
+        return;
+    }
+    if (auto* top = gFocusMgr.getTopCtrl())
+    {
+        S32 local_x, local_y;
+        top->screenPointToLocal(x, y, &local_x, &local_y);
+        if (top->pointInView(local_x, local_y) && top->handleHover(local_x, local_y, mask)) return;
+    }
+    mRootView->handleHover(x, y, mask);
 }
 void LLViewerWindow::nativeScroll(S32 clicks, bool horizontal)
 {

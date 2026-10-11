@@ -219,6 +219,7 @@ public:
     void            setToggleState(bool b);
 
     void            setHighlight(bool b);
+    bool            getHighlight() const { return mNeedsHighlight; }
     // <FS:Ansariel> [FS communication UI]
     //void            setFlashing( bool b, bool force_flashing = false );
     void            setFlashing(bool b, bool force_flashing = false, bool alternate_color = false);
