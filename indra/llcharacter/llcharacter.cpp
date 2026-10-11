@@ -38,6 +38,15 @@
 
 LLStringTable LLCharacter::sVisualParamNames(1024);
 
+namespace
+{
+U64 nextCharacterInstance=1;
+std::map<const LLCharacter*,U64> characterInstances;
+}
+U64 LLCharacter::getAnimationInstanceId() const
+{
+    const auto i=characterInstances.find(this);return i==characterInstances.end()?0:i->second;
+}
 std::list< LLCharacter* > LLCharacter::sInstances;
 bool LLCharacter::sAllowInstancesChange = true ;
 
@@ -54,6 +63,7 @@ LLCharacter::LLCharacter()
 {
     llassert_always(sAllowInstancesChange) ;
 
+    characterInstances[this]=nextCharacterInstance++;
     mMotionController.setCharacter( this );
     mPauseRequest = new LLPauseRequestHandle();
 }
@@ -65,6 +75,7 @@ LLCharacter::LLCharacter()
 //-----------------------------------------------------------------------------
 LLCharacter::~LLCharacter()
 {
+    characterInstances.erase(this);
     for (const auto& it : mVisualParamIndexMap)
     {
         delete it.second;

@@ -29,12 +29,19 @@ public:
         std::array<float,4> sun{0,0,1,0};
         std::array<float,4> ambient{.25f,.25f,.25f,0};
     };
+    struct Statistics
+    {
+        std::uint64_t draws=0,constantBuffersCreated=0,bindingsCreated=0;
+        std::uint64_t meshUploads=0,meshUploadBytes=0;
+        double cpuMilliseconds=0;
+    };
     VSWorldRenderer(Diligent::IRenderDevice*, Diligent::IDeviceContext*);
     ~VSWorldRenderer();
     Mesh upload(const std::vector<Vertex>&, const std::vector<unsigned>&);
     void draw(Diligent::ITextureView*, unsigned width, unsigned height,
               const View&, const std::vector<Packet>&);
     void retire();
+    Statistics statistics() const;
 private:
     struct Impl;
     std::unique_ptr<Impl> mImpl;

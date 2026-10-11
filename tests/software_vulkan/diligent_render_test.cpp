@@ -541,6 +541,30 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     });
     renderer.draw(rtv,8,8,view,{nearPacket,alpha,sky});
     capture("water-depth.ppm",[](unsigned,unsigned){return Pixel{127,128,0,255};});
+    // Completed submissions must recycle their per-draw resources, while new
+    // constants still reach the GPU. This exercises actual fence retirement,
+    // opaque/alpha/background pools and mutable-descriptor replacement.
+    nearPacket.color={0,0,1,1};
+    renderer.draw(rtv,8,8,view,{nearPacket,alpha,sky});
+    const auto reused=renderer.statistics();
+    require(reused.draws==3 && !reused.constantBuffersCreated && !reused.bindingsCreated,
+            "Completed world draw resources were not reused");
+    capture("resource-reuse.ppm",[](unsigned,unsigned){return Pixel{0,128,127,255};});
+    std::cout<<"WORLD_REUSE_DRAWS="<<reused.draws<<"\nWORLD_REUSE_CONSTANT_ALLOCATIONS="<<reused.constantBuffersCreated
+             <<"\nWORLD_REUSE_BINDING_ALLOCATIONS="<<reused.bindingsCreated<<"\nWORLD_SUBMISSION_CPU_MS="<<reused.cpuMilliseconds<<'\n';
+    auto white=images.upload(1,1,{255,255,255,255});
+    VSUIRenderer::Packet a;a.image=white;a.bounds={0,0,4,8};a.clip={0,0,8,8};a.color={1,0,0,1};
+    auto b=a;b.bounds={4,0,8,8};
+    auto overlay=a;overlay.bounds={0,0,8,8};overlay.clip={2,0,6,8};overlay.color={0,1,0,128.f/255};
+    auto blue=overlay;blue.image=images.replace(white,0,0,1,1,{0,0,255,255});
+    blue.clip={4,2,8,6};blue.color={1,1,1,1};blue.blend=VSUIRenderer::Blend::Replace;
+    images.draw(rtv,8,8,1,{a,b,overlay,blue});
+    require(images.statistics().packets==4 && images.statistics().draws==3,"UI adjacency batching broke resource/scissor boundaries");
+    capture("ui-batch.ppm",[](unsigned x,unsigned y){
+        if (x>=4 && y>=2 && y<6) return Pixel{0,0,255,255};
+        return x>=2 && x<6 ? Pixel{127,128,0,255} : Pixel{255,0,0,255};
+    });
+    std::cout<<"UI_BATCH_PACKETS="<<images.statistics().packets<<"\nUI_BATCH_DRAWS="<<images.statistics().draws<<'\n';
     context->WaitForIdle();renderer.retire();images.retire();
 }
 

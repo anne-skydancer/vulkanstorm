@@ -33,6 +33,7 @@
 #include "lldonotdisturbnotificationstorage.h"
 #include "llworld.h"
 #include "vsvulkancontext.h"
+#include "vsworldscene.h"
 #include "llsdserialize.h"
 #include "llsdutil_math.h"
 #include "llchat.h"
@@ -64,6 +65,8 @@
 #include "llxfer.h"
 #include "workqueue.h"
 #include "message.h"
+#include "llprimitive.h"
+#include "llvolumemessage.h"
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -380,6 +383,32 @@ void http(const std::string& name, const LLSD& body, const LLHost& host)
     LLSD message; message["sender"] = host.getIPandPort(); message["body"] = body;
     LLMessageSystem::dispatch(name, message);
 }
+// Use the template UDP reader, whose Fast APIs require interned block names.
+// Two blocks also exercise nonzero block indices, unlike the LLSD HTTP reader.
+void udpWorldObjects(const LLHost& host)
+{
+    LLMessageSystem* msg=gMessageSystem;
+    msg->newMessage("ObjectUpdate");msg->nextBlock("RegionData");
+    msg->addU64("RegionHandle",to_region_handle(256,512));msg->addU16("TimeDilation",65535);
+    for (unsigned i=0;i<2;++i)
+    {
+        msg->nextBlock("ObjectData");msg->addU32("ID",900+i);msg->addU8("State",0);
+        msg->addUUID("FullID",LLUUID(i?"90000000-0000-0000-0000-000000000002":"90000000-0000-0000-0000-000000000001"));
+        msg->addU32("CRC",0);msg->addU8("PCode",LL_PCODE_VOLUME);msg->addU8("Material",0);msg->addU8("ClickAction",0);
+        msg->addVector3("Scale",LLVector3(1,1,1));
+        const F32 pose[15]={15.f+float(i)*2,20,30,0,0,0,0,0,0,0,0,0,0,0,0};
+        msg->addBinaryData("ObjectData",pose,sizeof(pose));msg->addU32("ParentID",0);msg->addU32("UpdateFlags",0);
+        LLVolumeParams params;LLVolumeMessage::packVolumeParams(&params,msg);
+        LLPrimitive material;material.setNumTEs(6);material.packTEMessage(msg);
+        for (const char* field:{"TextureAnim","NameValue","Data","Text","MediaURL","PSBlock","ExtraParams"})
+            msg->addBinaryData(field,nullptr,0);
+        const U8 color[4]={255,255,255,255};msg->addBinaryData("TextColor",color,4);
+        msg->addUUID("Sound",LLUUID::null);msg->addUUID("OwnerID",LLUUID::null);
+        msg->addF32("Gain",0);msg->addU8("Flags",0);msg->addF32("Radius",0);msg->addU8("JointType",0);
+        msg->addVector3("JointPivot",LLVector3::zero);msg->addVector3("JointAxisOrAnchor",LLVector3::zero);
+    }
+    msg->sendReliable(host);
+}
 void handshake(const LLHost& host)
 {
     LLSD body;
@@ -632,6 +661,7 @@ struct Replay
             require(!owner.admit("NewUnknownMessage", owner.host()), "Unknown message admitted");
             require(!owner.admit("ChatFromSimulator", LLHost("127.0.0.2", owner.host().getPort())), "Wrong simulator admitted");
             http("ObjectUpdate", LLSD::emptyMap(), owner.host()); // Malformed scene payload cannot create a primitive.
+            udpWorldObjects(owner.host());
             LLMessageSystem* msg = gMessageSystem;
             msg->newMessage("EnableSimulator"); msg->nextBlock("SimulatorInfo");
             msg->addU64("Handle", 1); msg->addIPAddr("IP", owner.host().getAddress()); msg->addIPPort("Port", owner.host().getPort());
@@ -640,6 +670,7 @@ struct Replay
         }
         else if (step == 2)
         {
+            if (gViewerWindow->nativeContext()->world().evidence()["objects"].asInteger()<2) return;
             auto* chat = gViewerWindow->nativeChat();
             auto* nearby = FSFloaterNearbyChat::findInstance();
             require(chat && (chat->usesSharedFrontend()

@@ -182,7 +182,7 @@ def main():
         selected_device = None
         for mode in modes:
             directory = evidence / mode; directory.mkdir(exist_ok=True)
-            for name in ('first.ppm', 'replacement.ppm', 'presentation.json', 'near-clip.ppm', 'sky.ppm', 'water-depth.ppm', *(f'texture-{i}.ppm' for i in range(4))):
+            for name in ('first.ppm', 'replacement.ppm', 'presentation.json', 'near-clip.ppm', 'sky.ppm', 'water-depth.ppm', 'resource-reuse.ppm', 'ui-batch.ppm', *(f'texture-{i}.ppm' for i in range(4))):
                 (directory / name).unlink(missing_ok=True)
             mapped_libraries = {}
             native_presentation = None; process = None
@@ -218,7 +218,7 @@ def main():
             if mode in ('offscreen', 'world', 'present'):
                 passed &= all((directory / name).is_file() for name in ('first.ppm', 'replacement.ppm'))
             if mode == 'world':
-                passed &= all((directory / name).is_file() for name in ('near-clip.ppm', 'sky.ppm', 'water-depth.ppm', *(f'texture-{i}.ppm' for i in range(4))))
+                passed &= all((directory / name).is_file() for name in ('near-clip.ppm', 'sky.ppm', 'water-depth.ppm', 'resource-reuse.ppm', 'ui-batch.ppm', *(f'texture-{i}.ppm' for i in range(4))))
             result['tests'].append({'mode': mode, 'passed': passed, 'exit_code': code,
                                     'loaded_library_sha256': mapped_libraries,
                                     'presentation': native_presentation, 'process_isolation': process_isolation_evidence(process)})

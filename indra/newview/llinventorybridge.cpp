@@ -7199,12 +7199,6 @@ static LLNotificationFunctorRegistration open_landmark_callback_reg("TeleportFro
 
 void LLLandmarkBridge::openItem()
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
     LLViewerInventoryItem* item = getItem();
 
     if (item)

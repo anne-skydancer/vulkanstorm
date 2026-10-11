@@ -1,0 +1,101 @@
+// Native CPU camera and simulator movement intent. LGPL-2.1.
+#pragma once
+#include "v3math.h"
+#include "llquaternion.h"
+#include "indra_constants.h"
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <string>
+
+class VSNativeCamera
+{
+public:
+    struct State
+    {
+        LLVector3 center, at, left, up;
+        LLQuaternion bodyRotation, headRotation;
+        bool firstPerson = false;
+    };
+    void reset() { mHeld.clear(); mYaw = mBodyYaw = mRoll = 0; mPitch = -.15f; mDistance = 3.f; mPan.clear(); mFlying = false; }
+    void release() { mHeld.clear(); }
+    void face(const LLVector3& direction)
+    { if (direction.isFinite() && direction.magVecSquared() > .001f) mYaw = mBodyYaw = std::atan2(direction.mV[VY], direction.mV[VX]); }
+    bool action(U32 token, const std::string& name, bool down, bool repeated)
+    {
+        if (!down) return mHeld.erase(token) != 0;
+        if (!supported(name)) return false;
+        if (name == "toggle_fly") { if (!repeated && !mHeld.count(token)) mFlying = !mFlying; }
+        mHeld[token] = name; return true;
+    }
+    bool firstPerson() const { return mDistance <= .05f; }
+    void orbit(F32 yaw, F32 pitch)
+    {
+        if (std::isfinite(yaw) && std::isfinite(pitch))
+        { mYaw = wrap(mYaw + yaw); mPitch = std::clamp(mPitch + pitch, -1.45f, 1.45f); if (firstPerson()) mBodyYaw = mYaw; }
+    }
+    void zoom(S32 clicks)
+    {
+        mDistance = std::clamp(mDistance + F32(clicks) * std::max(.2f, mDistance * .15f), 0.f, 128.f);
+        if (firstPerson()) { mPan.clear(); mBodyYaw = mYaw; }
+    }
+    void step(F32 dt)
+    {
+        if (!std::isfinite(dt) || dt <= 0) return;
+        dt = std::min(dt, .1f); // A stalled frame cannot produce an unbounded turn.
+        const F32 turn = axis("turn_left", "turn_right") * dt * 1.5f;
+        mBodyYaw = wrap(mBodyYaw + turn); orbit(turn + axis("spin_around_cw", "spin_around_ccw") * dt * 1.5f,
+            axis("spin_over", "spin_under") * dt);
+        mRoll = wrap(mRoll + axis("roll_left", "roll_right") * dt);
+        const F32 zoomDelta = axis("move_backward", "move_forward") * dt * std::max(1.f, mDistance);
+        mDistance = std::clamp(mDistance + zoomDelta, 0.f, 128.f);
+        if (firstPerson()) { mPan.clear(); mBodyYaw = mYaw; return; }
+        auto view = state(LLVector3::zero);
+        mPan += (view.left * axis("pan_left", "pan_right") + view.up * axis("pan_up", "pan_down")) * dt * std::max(1.f, mDistance);
+        if (mPan.magVecSquared() > 128.f * 128.f) { mPan.normalize(); mPan *= 128.f; }
+    }
+    U32 controls() const
+    {
+        U32 value = mFlying ? AGENT_CONTROL_FLY : 0;
+        if (held("stop_moving")) return value | AGENT_CONTROL_STOP;
+        if (held("push_forward")) value |= AGENT_CONTROL_AT_POS;
+        if (held("push_backward")) value |= AGENT_CONTROL_AT_NEG;
+        if (held("slide_left")) value |= AGENT_CONTROL_LEFT_POS;
+        if (held("slide_right")) value |= AGENT_CONTROL_LEFT_NEG;
+        if (held("jump")) value |= AGENT_CONTROL_UP_POS;
+        if (held("push_down")) value |= AGENT_CONTROL_UP_NEG;
+        if (held("turn_left")) value |= AGENT_CONTROL_YAW_POS | AGENT_CONTROL_TURN_LEFT;
+        if (held("turn_right")) value |= AGENT_CONTROL_YAW_NEG | AGENT_CONTROL_TURN_RIGHT;
+        if (firstPerson()) value |= AGENT_CONTROL_MOUSELOOK;
+        return value;
+    }
+    State state(const LLVector3& agent) const
+    {
+        const F32 c = std::cos(mPitch), s = std::sin(mPitch), cy = std::cos(mYaw), sy = std::sin(mYaw);
+        State result;
+        result.at = LLVector3(c * cy, c * sy, s);
+        LLVector3 left(-sy, cy, 0), up(-s * cy, -s * sy, c);
+        result.left = left * std::cos(mRoll) + up * std::sin(mRoll);
+        result.up = up * std::cos(mRoll) - left * std::sin(mRoll);
+        result.center = agent + LLVector3(0, 0, 1.5f) + mPan - result.at * mDistance;
+        result.bodyRotation = LLQuaternion(mBodyYaw, LLVector3::z_axis);
+        result.headRotation = LLQuaternion(-mPitch, LLVector3::y_axis) * LLQuaternion(mYaw, LLVector3::z_axis);
+        result.firstPerson = firstPerson(); return result;
+    }
+private:
+    static bool supported(const std::string& name)
+    {
+        return name == "push_forward" || name == "push_backward" || name == "slide_left" || name == "slide_right" ||
+            name == "jump" || name == "push_down" || name == "turn_left" || name == "turn_right" || name == "toggle_fly" ||
+            name == "stop_moving" || name == "spin_around_cw" || name == "spin_around_ccw" || name == "spin_over" ||
+            name == "spin_under" || name == "move_forward" || name == "move_backward" || name == "pan_left" ||
+            name == "pan_right" || name == "pan_up" || name == "pan_down" || name == "roll_left" || name == "roll_right";
+    }
+    bool held(const char* action) const { for (const auto& entry : mHeld) if (entry.second == action) return true; return false; }
+    F32 axis(const char* positive, const char* negative) const { return F32(held(positive)) - F32(held(negative)); }
+    static F32 wrap(F32 angle) { return std::remainder(angle, 6.28318530718f); }
+    std::map<U32, std::string> mHeld;
+    F32 mYaw = 0, mBodyYaw = 0, mPitch = -.15f, mRoll = 0, mDistance = 3.f;
+    LLVector3 mPan;
+    bool mFlying = false;
+};

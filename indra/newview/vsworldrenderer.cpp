@@ -21,6 +21,8 @@
 #include <deque>
 #include <cstddef>
 #include <cstring>
+#include <chrono>
+#include <map>
 #include <stdexcept>
 using namespace Diligent;
 namespace
@@ -69,12 +71,21 @@ struct VSWorldRenderer::Impl
     RefCntAutoPtr<ITexture> depth, white;
     RefCntAutoPtr<IFence> fence;
     Uint64 next = 1;
+    struct DrawResources
+    {
+        RefCntAutoPtr<IBuffer> constants;
+        RefCntAutoPtr<IShaderResourceBinding> binding;
+        IPipelineState* pipeline=nullptr; // Owned by this renderer's pipeline table.
+    };
+    std::map<IPipelineState*,std::vector<DrawResources>> available;
+    std::size_t availableCount=0;
+    Statistics statistics;
+    Uint64 pendingMeshUploads=0,pendingMeshBytes=0;
     struct Submission
     {
         Uint64 completion = 0;
         std::vector<Packet> packets;
-        std::vector<RefCntAutoPtr<IBuffer>> constants;
-        std::vector<RefCntAutoPtr<IShaderResourceBinding>> bindings;
+        std::vector<DrawResources> draws;
         RefCntAutoPtr<ITexture> depth;
     };
     std::deque<Submission> submitted;
@@ -174,15 +185,30 @@ VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertice
     BufferData data{vertices.data(),bd.Size};mImpl->device->CreateBuffer(bd,&data,&mesh->vertices);
     bd.Name="Native world index generation";bd.Size=indices.size()*sizeof(unsigned);bd.BindFlags=BIND_INDEX_BUFFER;
     data.pData=indices.data();data.DataSize=bd.Size;mImpl->device->CreateBuffer(bd,&data,&mesh->indices);
-    requireWorld(mesh->vertices && mesh->indices,"World geometry upload failed");return mesh;
+    requireWorld(mesh->vertices && mesh->indices,"World geometry upload failed");
+    ++mImpl->pendingMeshUploads;mImpl->pendingMeshBytes+=vertices.size()*sizeof(Vertex)+indices.size()*sizeof(unsigned);
+    return mesh;
 }
 void VSWorldRenderer::retire()
 {
     const auto complete=mImpl->fence->GetCompletedValue();
-    while (!mImpl->submitted.empty() && mImpl->submitted.front().completion<=complete) mImpl->submitted.pop_front();
+    while (!mImpl->submitted.empty() && mImpl->submitted.front().completion && mImpl->submitted.front().completion<=complete)
+    {
+        // Reuse only resources whose GPU submission has completed. Keep a
+        // bounded cache; packets/images/geometry retire with the submission.
+        for (auto& draw:mImpl->submitted.front().draws)
+            if (mImpl->availableCount<16384)
+            {mImpl->available[draw.pipeline].push_back(std::move(draw));++mImpl->availableCount;}
+        mImpl->submitted.pop_front();
+    }
 }
+VSWorldRenderer::Statistics VSWorldRenderer::statistics() const { return mImpl->statistics; }
 void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,const View& view,const std::vector<Packet>& packets)
 {
+    const auto started=std::chrono::steady_clock::now();
+    mImpl->statistics={};mImpl->statistics.meshUploads=mImpl->pendingMeshUploads;
+    mImpl->statistics.meshUploadBytes=mImpl->pendingMeshBytes;
+    mImpl->pendingMeshUploads=mImpl->pendingMeshBytes=0;
     requireWorld(target && width && height,"Invalid world target");
     requireWorld(target->GetTexture()->GetDesc().Width==width && target->GetTexture()->GetDesc().Height==height,"World extent mismatch");
     for (float f:view.projection) requireWorld(std::isfinite(f),"Non-finite world camera");
@@ -210,27 +236,40 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         auto* pipeline=mImpl->pipeline(target->GetTexture()->GetDesc().Format,p.alpha,p.background);
         Constants constants{view.projection,view.sun,view.ambient,p.color,{p.fullbright?1.f:0.f,p.masked?1.f:0.f,.5f,p.background?1.f:0.f}};
         BufferDesc bd{};bd.Name="Native world draw constants";bd.Size=sizeof(constants);
-        bd.Usage=USAGE_IMMUTABLE;bd.BindFlags=BIND_UNIFORM_BUFFER;
-        BufferData data{&constants,sizeof(constants)};RefCntAutoPtr<IBuffer> buffer;
-        mImpl->device->CreateBuffer(bd,&data,&buffer);requireWorld(buffer!=nullptr,"World constants upload failed");
-        RefCntAutoPtr<IShaderResourceBinding> binding;pipeline->CreateShaderResourceBinding(&binding,true);
-        requireWorld(binding!=nullptr,"World binding creation failed");
-        for (auto stage:{SHADER_TYPE_VERTEX,SHADER_TYPE_PIXEL})
+        Impl::DrawResources resources;
+        auto& available=mImpl->available[pipeline];
+        if (!available.empty()) {resources=std::move(available.back());available.pop_back();--mImpl->availableCount;}
+        bd.Usage=USAGE_DEFAULT;bd.BindFlags=BIND_UNIFORM_BUFFER;
+        if (!resources.constants)
         {
-            auto* variable=binding->GetVariableByName(stage,"WorldView");
-            requireWorld(variable!=nullptr,"World constants binding missing");variable->Set(buffer);
+            mImpl->device->CreateBuffer(bd,nullptr,&resources.constants);
+            requireWorld(resources.constants!=nullptr,"World constants allocation failed");++mImpl->statistics.constantBuffersCreated;
         }
-        auto* texture=binding->GetVariableByName(SHADER_TYPE_PIXEL,"g_Texture");
+        context->UpdateBuffer(resources.constants,0,sizeof(constants),&constants,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        if (resources.pipeline!=pipeline || !resources.binding)
+        {
+            resources.binding.Release();pipeline->CreateShaderResourceBinding(&resources.binding,true);
+            requireWorld(resources.binding!=nullptr,"World binding creation failed");
+            resources.pipeline=pipeline;++mImpl->statistics.bindingsCreated;
+            for (auto stage:{SHADER_TYPE_VERTEX,SHADER_TYPE_PIXEL})
+            {
+                auto* variable=resources.binding->GetVariableByName(stage,"WorldView");
+                requireWorld(variable!=nullptr,"World constants binding missing");variable->Set(resources.constants);
+            }
+        }
+        auto* texture=resources.binding->GetVariableByName(SHADER_TYPE_PIXEL,"g_Texture");
         requireWorld(texture!=nullptr,"World texture binding missing");
-        texture->Set(p.image ? VSUIRenderer::imageView(p.image) : mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+        texture->Set(p.image ? VSUIRenderer::imageView(p.image) : mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
+                     SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
         context->SetPipelineState(pipeline);
         IBuffer* vertex=p.mesh->vertices.RawPtr();Uint64 offset=0;
         context->SetVertexBuffers(0,1,&vertex,&offset,RESOURCE_STATE_TRANSITION_MODE_TRANSITION,SET_VERTEX_BUFFERS_FLAG_RESET);
         context->SetIndexBuffer(p.mesh->indices,0,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        context->CommitShaderResources(binding,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        context->CommitShaderResources(resources.binding,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         DrawIndexedAttribs draw{};draw.NumIndices=p.mesh->count;draw.IndexType=VT_UINT32;draw.Flags=DRAW_FLAG_VERIFY_ALL;
-        context->DrawIndexed(draw);submitted.constants.push_back(buffer);submitted.bindings.push_back(binding);
+        context->DrawIndexed(draw);submitted.draws.push_back(std::move(resources));++mImpl->statistics.draws;
     }
     submitted.completion=mImpl->next++;context->EnqueueSignal(mImpl->fence,submitted.completion);
     context->SetRenderTargets(1,&target,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    mImpl->statistics.cpuMilliseconds=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
 }

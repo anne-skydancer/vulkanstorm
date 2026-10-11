@@ -109,6 +109,7 @@ public:
  **                    STATE
  **/
 public:
+    virtual bool usesGraphicsContext() const { return true; }
     virtual bool    isSelf() const { return false; } // True if this avatar is for this viewer's agent
     virtual bool    isValid() const;
     virtual bool    isUsingLocalAppearance() const = 0;

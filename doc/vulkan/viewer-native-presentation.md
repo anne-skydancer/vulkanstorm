@@ -433,11 +433,18 @@ transactions still require runtime qualification with an appropriate account.
 The Firestorm bridge is a real scripted attachment. Its controller requires
 self-avatar attachment-point ownership, object UUID/local ID and inventory-item
 mapping, task-inventory transfer, actual script upload and authenticated
-attachment handshake. The native text session has no such avatar/attachment
-object-update transport. Full bridge operation therefore remains an
+attachment handshake. The world progress branch now admits avatar, animation
+and object updates and constructs native CPU avatar owners. It still lacks the
+shared COF/wearable, attachment queue and task-inventory/script ownership needed
+by the bridge. Full bridge operation therefore remains an
 implementation gap. A CPU transport adapter must establish those owners before
 bridge callbacks can be enabled; arbitrary chat/HTTP cannot qualify a bridge.
 
 This survey and console qualification do not establish full connected UI
 parity. Runtime evidence and remaining bridge, appearance/world and voice
 service integrations must be recorded separately.
+
+The expanded world requirement and reference pass/ownership survey are tracked
+in [full-render-chain-survey.md](full-render-chain-survey.md). Text-stage exclusions
+above are historical qualification limits; they are required integration work
+under full OpenGL parity, not permanent feature exclusions.

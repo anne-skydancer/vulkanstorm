@@ -516,6 +516,7 @@ private:
     void updateMouseHoverViews(S32 x, S32 y, MASK mask, bool enabled);
     void nativeScroll(S32 clicks, bool horizontal = false);
     bool mNativeVulkan = false;
+    bool mNativeCameraDrag = false;
 #if VS_NATIVE_VULKAN
     std::unique_ptr<VSVulkanContext> mVulkanContext;
     std::unique_ptr<VSUIAdmission> mNativeAdmission;

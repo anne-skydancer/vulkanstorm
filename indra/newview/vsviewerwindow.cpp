@@ -358,12 +358,22 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
         mRightMouseDown = down;
     if (type == CLICK_MIDDLE)
         mMiddleMouseDown = down;
+    if (down)
+        if (auto owner = VSNativeSession::active()) owner->releaseMovement();
+    if (mNativeCameraDrag && !down) { mNativeCameraDrag = false; return true; }
     auto* target = gFocusMgr.getMouseCapture();
-    if (!target)
-        target = mRootView;
+    if (!target) target = mRootView;
     S32 x, y;
     target->screenPointToLocal(pos.mX, pos.mY, &x, &y);
-    return target->handleAnyMouseClick(x, y, mask, type, down);
+    if (target->handleAnyMouseClick(x, y, mask, type, down)) return true;
+    if (auto owner = VSNativeSession::active(); owner && owner->phase() == VSNativeSession::Phase::Connected)
+    {
+        gFocusMgr.setKeyboardFocus(nullptr);
+        owner->releaseMovement();
+        if (down && ((type == CLICK_LEFT && (mask & MASK_ALT)) || type == CLICK_RIGHT))
+        { mNativeCameraDrag = true; return true; }
+    }
+    return false;
 }
 void LLViewerWindow::nativeHover(LLCoordGL pos, MASK mask)
 {
@@ -376,8 +386,12 @@ void LLViewerWindow::nativeHover(LLCoordGL pos, MASK mask)
     mWindow->setCursor(UI_CURSOR_ARROW);
     pos.mX             = ll_round(pos.mX / mDisplayScale.mV[VX]);
     pos.mY             = ll_round(pos.mY / mDisplayScale.mV[VY]);
+    const LLCoordGL previous = mCurrentMousePoint;
     mCurrentMousePoint = pos;
     mMouseInWindow     = true;
+    if (mNativeCameraDrag)
+        if (auto owner = VSNativeSession::active())
+            owner->cameraOrbit(F32(previous.mX - pos.mX) * .005f, F32(pos.mY - previous.mY) * .005f);
     nativeHoverUpdate(mask);
 }
 void LLViewerWindow::nativeHoverUpdate(MASK mask)
@@ -413,8 +427,9 @@ void LLViewerWindow::nativeScroll(S32 clicks, bool horizontal)
     target->screenPointToLocal(mCurrentMousePoint.mX, mCurrentMousePoint.mY, &x, &y);
     if (horizontal)
         target->handleScrollHWheel(x, y, clicks);
-    else
-        target->handleScrollWheel(x, y, clicks);
+    else if (!target->handleScrollWheel(x, y, clicks))
+        if (!gFocusMgr.getTopCtrl())
+            if (auto owner = VSNativeSession::active()) owner->cameraZoom(clicks);
 }
 
 void LLViewerWindow::setNativeConnected(bool connected)

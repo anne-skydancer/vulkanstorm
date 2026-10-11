@@ -52,6 +52,7 @@ struct VSUIRenderer::Impl
     RefCntAutoPtr<IFence> fence;
     Uint64 next_completion = 1;
     std::deque<Submission> submitted;
+    Statistics statistics;
     Impl(IRenderDevice* d, IDeviceContext* c) : device(d), context(c)
     {
         check(d && c, "UI renderer requires a native device and context");
@@ -181,6 +182,7 @@ VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y
 }
 void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, float dpi, const std::vector<Packet>& packets)
 {
+    mImpl->statistics={};mImpl->statistics.packets=packets.size();
     check(target && width && height && std::isfinite(dpi) && dpi > 0, "Invalid native UI target or DPI");
     const auto& desc = target->GetTexture()->GetDesc();
     check(desc.Width == width && desc.Height == height, "Native UI target extent differs");
@@ -249,6 +251,7 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
         vertices.insert(vertices.end(),{corners[0],corners[1],corners[2],corners[2],corners[1],corners[3]});
     }
     if (draws.empty()) return;
+    mImpl->statistics.vertices=vertices.size();
     // One vertex upload per ordered packet list; no per-glyph vertex allocation.
     mImpl->submitted.emplace_back(); auto& submission=mImpl->submitted.back();
     BufferDesc bd{}; bd.Name="Native UI packet vertices"; bd.Size=vertices.size()*sizeof(Vertex);
@@ -260,9 +263,24 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
     Viewport viewport{0.f,0.f,float(width),float(height)}; context->SetViewports(1,&viewport,width,height);
     IBuffer* buffers[]{submission.vertices.RawPtr()}; const Uint64 offsets[]{0};
     context->SetVertexBuffers(0,1,buffers,offsets,RESOURCE_STATE_TRANSITION_MODE_TRANSITION,SET_VERTEX_BUFFERS_FLAG_RESET);
-    for (const auto& draw : draws)
+    for (std::size_t index=0;index<draws.size();)
     {
+        const auto& draw=draws[index];
         const auto& p=*draw.packet;
+        Uint32 count=6;
+        std::size_t next=index+1;
+        // Vertices already contain each packet's transform and color. Merge
+        // only adjacent compatible draws: never reorder painter operations,
+        // cross a scissor boundary or combine distinct image generations.
+        while (next<draws.size())
+        {
+            const auto& candidate=draws[next];const auto& q=*candidate.packet;
+            if (q.image!=p.image || q.blend!=p.blend || q.sampling!=p.sampling || q.alpha_mask!=p.alpha_mask ||
+                candidate.clip.left!=draw.clip.left || candidate.clip.right!=draw.clip.right ||
+                candidate.clip.top!=draw.clip.top || candidate.clip.bottom!=draw.clip.bottom ||
+                candidate.first!=draw.first+count) break;
+            count+=6;++next;
+        }
         auto* pipeline=mImpl->pipeline(desc.Format,p.blend,p.sampling,p.alpha_mask);
         RefCntAutoPtr<IShaderResourceBinding> binding; pipeline->CreateShaderResourceBinding(&binding,true);
         check(binding != nullptr,"Native UI resource binding creation failed");
@@ -271,12 +289,15 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
         variable->Set(p.image->resource->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
         context->SetPipelineState(pipeline); context->SetScissorRects(1,&draw.clip,width,height);
         context->CommitShaderResources(binding,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        context->Draw(DrawAttribs{6,DRAW_FLAG_VERIFY_ALL,1,draw.first});
+        context->Draw(DrawAttribs{count,DRAW_FLAG_VERIFY_ALL,1,draw.first});
+        ++mImpl->statistics.draws;
         submission.images.push_back(p.image); submission.bindings.push_back(binding);
+        index=next;
     }
     submission.completion=mImpl->next_completion++;
     context->EnqueueSignal(mImpl->fence,submission.completion);
 }
+VSUIRenderer::Statistics VSUIRenderer::statistics() const { return mImpl->statistics; }
 void VSUIRenderer::retire()
 {
     const auto completed=mImpl->fence->GetCompletedValue();

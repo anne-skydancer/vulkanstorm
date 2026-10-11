@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "llviewerwindow.h"
 #if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
 #include "vsvulkancontext.h"
 #include "llchannelmanager.h"
 #include "vsuicontext.h"
@@ -1591,6 +1592,7 @@ void LLViewerWindow::handleMouseLeave(LLWindow *window)
     if (mNativeVulkan)
     {
         mMouseInWindow = false;
+        mNativeCameraDrag = false;
         updateMouseHoverViews(mCurrentMousePoint.mX, mCurrentMousePoint.mY, MASK_NONE, false);
         LLToolTipMgr::instance().blockToolTips();
         return;
@@ -1691,6 +1693,10 @@ void LLViewerWindow::handleFocusLost(LLWindow *window)
     if (mNativeVulkan)
     {
         gFocusMgr.setAppHasFocus(false);
+        mNativeCameraDrag = false;
+#if VS_NATIVE_VULKAN
+        if (auto owner = VSNativeSession::active()) owner->releaseMovement();
+#endif
         gFocusMgr.setMouseCapture(nullptr);
         showCursor();
         getWindow()->setMouseClipping(false);
@@ -1739,9 +1745,19 @@ bool LLViewerWindow::handleTranslatedKeyDown(KEY key,  MASK mask, bool repeated)
             if (focus && !focus->wantsReturnKey()) return false;
         }
         auto* focus = gFocusMgr.getKeyboardFocus();
+#if VS_NATIVE_VULKAN
+        if (focus)
+            if (auto owner = VSNativeSession::active()) owner->releaseMovement();
+#endif
         if (focus && focus->handleKey(key, mask, false)) return true;
         if (gLoginMenuBarView && gLoginMenuBarView->handleAcceleratorKey(key, mask)) return true;
-        return mRootView && mRootView->handleKey(key, mask, true);
+        if (mRootView && mRootView->handleKey(key, mask, true)) return true;
+#if VS_NATIVE_VULKAN
+        if (!focus && !gFocusMgr.getKeystrokesOnly())
+            if (auto owner = VSNativeSession::active())
+                return owner->movementAction(key, gViewerInput.nativeBindingAction(key, mask, owner->cameraState().firstPerson), true, repeated);
+#endif
+        return false;
     }
     // Handle non-consuming global keybindings, like voice
     // Never affects event processing.
@@ -3331,6 +3347,11 @@ void LLViewerWindow::setTitle(const std::string& win_title)
 // Takes a single keyup event, usually when UI is visible
 bool LLViewerWindow::handleKeyUp(KEY key, MASK mask)
 {
+#if VS_NATIVE_VULKAN
+    if (mNativeVulkan)
+        if (auto owner = VSNativeSession::active(); owner && owner->movementAction(key, {}, false)) return true;
+#endif
+
     if (LLSetKeyBindDialog::recordKey(key, mask, false))
     {
         LL_DEBUGS() << "KeyUp handled by LLSetKeyBindDialog" << LL_ENDL;

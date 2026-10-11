@@ -100,7 +100,7 @@ namespace
 std::weak_ptr<VSNativeSession> sOwner;
 double now() { return LLFrameTimer::getTotalSeconds(); }
 const std::set<std::string> transport = {"StartPingCheck", "CompletePingCheck", "PacketAck"};
-const std::set<std::string> worldMessages = {"ObjectUpdate", "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject", "LayerData"};
+const std::set<std::string> worldMessages = {"ObjectUpdate", "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject", "LayerData", "AvatarAppearance", "AvatarAnimation"};
 const std::set<std::string> session = {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator",
     "LogoutReply", "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "TeleportStart", "TeleportFinish",
     "TeleportLocal", "TeleportProgress", "TeleportFailed", "ViewerFrozenMessage", "FeatureDisabled", "CrossedRegion", "CloseCircuit", "DisableSimulator", "UUIDNameReply", "UUIDGroupNameReply",
@@ -708,6 +708,25 @@ void VSNativeSession::parcelMediaCommand(U32 flags, U32 command, F32 time)
     }
 }
 
+bool VSNativeSession::movementAction(U32 key, const std::string& action, bool down, bool repeated)
+{
+    if (!down) { const bool handled = mCamera.action(key, action, false, repeated); if (handled) mAgentUpdateTime = 0; return handled; }
+    if (mPhase != Phase::Connected || mChangingRegion || mFrozen) return false;
+    const bool handled = mCamera.action(key, action, true, repeated);
+    if (handled) mAgentUpdateTime = 0;
+    return handled;
+}
+void VSNativeSession::releaseMovement() { mCamera.release(); mAgentUpdateTime = 0; }
+void VSNativeSession::cameraOrbit(F32 yaw, F32 pitch)
+{ if (mPhase == Phase::Connected && !mChangingRegion) { mCamera.orbit(yaw, pitch); mAgentUpdateTime = 0; } }
+void VSNativeSession::cameraZoom(S32 clicks)
+{ if (mPhase == Phase::Connected && !mChangingRegion) { mCamera.zoom(clicks); mAgentUpdateTime = 0; } }
+bool VSNativeSession::updateAgentPosition(const LLVector3& position, const LLHost& sender, U64 generation, U64 epoch)
+{
+    if (mPhase != Phase::Connected || mChangingRegion || sender != mHost || generation != mGeneration || epoch != mRegionEpoch || !position.isFinite()) return false;
+    mPosition = position; gAgent.setPositionAgent(position); return true;
+}
+
 std::string VSNativeSession::locationURL() const
 {
     return mName.empty() ? std::string() : LLSLURL(mName, mPosition).getSLURLString();
@@ -793,6 +812,7 @@ bool VSNativeSession::changeRegion(const LLSD& body)
     // Only an authenticated current simulator can grant the next host. Inbound
     // packets and capability/circuit completions from the retired region expire.
     mLocationRequests.clear();
+    releaseMovement(); mCameraTime = 0;
     clearParcelPlayback();
     if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().reset();
     if (FSLSLBridge::instanceExists()) FSLSLBridge::instance().resetNativeAccount();
@@ -835,7 +855,12 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         // Apply the same admission at the consumer boundary, including direct
         // callers; stale/foreign simulator traffic cannot mutate this scene.
         if (admit(name,msg->getSender()) && gViewerWindow && gViewerWindow->nativeContext())
-            gViewerWindow->nativeContext()->world().receive(*msg,mHandle);
+        {
+            auto& world = gViewerWindow->nativeContext()->world();
+            world.receive(*msg,mHandle,mAgent);
+            LLVector3 position;
+            if (world.agentPosition(position)) updateAgentPosition(position, msg->getSender(), mGeneration, mRegionEpoch);
+        }
         return;
     }
     LLSD body = LLSD::emptyMap();
@@ -939,6 +964,7 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         msg->getUUID("AgentData", "AgentID", agent); msg->getUUID("AgentData", "SessionID", identity);
         msg->getU64("Data", "RegionHandle", handle); msg->getVector3("Data", "Position", pos);
         body["agent"] = agent; body["session"] = identity; body["handle"] = ll_sd_from_U64(handle); body["position"] = ll_sd_from_vector3(pos);
+        LLVector3 look; msg->getVector3("Data", "LookAt", look); body["look_at"] = ll_sd_from_vector3(look);
     }
     else if (name == "MoneyBalanceReply")
     {
@@ -1056,7 +1082,9 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         if (ll_U64_from_sd(body["handle"]) != mHandle) return false;
         if (!body["position"].isArray() || body["position"].size() != 3) return false;
         LLVector3 pos = ll_vector3_from_sd(body["position"]); if (!pos.isFinite()) return false;
-        mPosition = pos; gAgent.setPositionAgent(pos); mMovement = true; connected();
+        mPosition = pos; gAgent.setPositionAgent(pos); releaseMovement();
+        if (body.has("look_at")) mCamera.face(ll_vector3_from_sd(body["look_at"]));
+        mMovement = true; connected();
     }
     else if (name == "MoneyBalanceReply" && mPhase == Phase::Connected)
     {
@@ -1072,7 +1100,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
     else if (name == "ViewerFrozenMessage")
     {
         if (!body["frozen"].isBoolean()) return false;
-        mFrozen = body["frozen"].asBoolean(); gViewerWindow->getWindow()->resetBusyCount();
+        mFrozen = body["frozen"].asBoolean(); if (mFrozen) releaseMovement(); gViewerWindow->getWindow()->resetBusyCount();
     }
     else if (name == "FeatureDisabled")
     {
@@ -1126,7 +1154,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
     {
         if (body["agent"].asUUID() != mAgent || !body["position"].isArray() || body["position"].size() != 3) return false;
         const auto pos = ll_vector3_from_sd(body["position"]); if (!pos.isFinite()) return false;
-        mPosition = pos; gAgent.setPositionAgent(pos); mNavigationDeadline = 0;
+        mPosition = pos; gAgent.setPositionAgent(pos); releaseMovement(); mNavigationDeadline = 0;
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
         requestParcel();
     }
@@ -1320,16 +1348,20 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
     }
     else if (name == "AgentUpdate")
     {
-        msg->addQuat("BodyRotation", LLQuaternion()); msg->addQuat("HeadRotation", LLQuaternion()); msg->addU8("State", 0);
-        msg->addVector3("CameraCenter", mPosition); msg->addVector3("CameraAtAxis", LLVector3::x_axis);
-        msg->addVector3("CameraLeftAxis", LLVector3::y_axis); msg->addVector3("CameraUpAxis", LLVector3::z_axis);
-        msg->addF32("Far", llclamp(gSavedSettings.getF32("RenderFarClip"),16.f,1024.f)); msg->addU32("ControlFlags", 0); msg->addU8("Flags", 0);
+        const auto camera = cameraState();
+        msg->addQuat("BodyRotation", camera.bodyRotation); msg->addQuat("HeadRotation", camera.headRotation); msg->addU8("State", 0);
+        msg->addVector3("CameraCenter", camera.center); msg->addVector3("CameraAtAxis", camera.at);
+        msg->addVector3("CameraLeftAxis", camera.left); msg->addVector3("CameraUpAxis", camera.up);
+        msg->addF32("Far", llclamp(gSavedSettings.getF32("RenderFarClip"),16.f,1024.f)); msg->addU32("ControlFlags", mFrozen ? 0 : mCamera.controls()); msg->addU8("Flags", 0);
     }
-    if (msg->sendReliable(mHost) <= 0) return false;
+    // Periodic movement/camera snapshots supersede older state. Reliable retries
+    // would replay stale input and accumulate under packet loss.
+    if ((name == "AgentUpdate" ? msg->sendMessage(mHost) : msg->sendReliable(mHost)) <= 0) return false;
     ++mSent; return true;
 }
 void VSNativeSession::tick()
 {
+
     if (mPhase==Phase::Connected && !mChangingRegion && gMessageSystem && gViewerWindow && gViewerWindow->nativeContext())
         gViewerWindow->nativeContext()->world().requestUpdates(*static_cast<LLMessageSystem*>(gMessageSystem),mHost,mAgent,mSession);
     // Do not let late packets revive a retired connected circuit before the
@@ -1347,8 +1379,15 @@ void VSNativeSession::tick()
     else if (mPhase == Phase::Logout && now() > mDeadline) finishLogout();
     else if (mPhase == Phase::Connected && gMessageSystem && !gMessageSystem->checkCircuitAlive(mHost))
         disconnect(LLTrans::getString("NativeSessionConnectionTimeout"));
-    else if (mPhase == Phase::Connected && !mChangingRegion && now() > mDeadline)
-    { send("AgentUpdate", LLSD()); mDeadline = now() + 1; }
+
+    const double cameraTime = now();
+    if (mPhase == Phase::Connected && !mChangingRegion)
+    {
+        if (mCameraTime > 0) mCamera.step(F32(cameraTime - mCameraTime));
+        if (cameraTime >= mAgentUpdateTime)
+        { send("AgentUpdate", LLSD()); mAgentUpdateTime = cameraTime + .1; }
+    }
+    mCameraTime = cameraTime;
     if (mNavigationDeadline && now() > mNavigationDeadline)
     {
         mNavigationDeadline = 0; mRequestedRegion.clear();
@@ -1391,6 +1430,7 @@ void VSNativeSession::requestLogout(bool quit)
     if (mPhase == Phase::Connected || mPhase == Phase::Connecting)
     {
         typing(false);
+        releaseMovement(); send("AgentUpdate", LLSD());
         clearParcelPlayback();
         unbind(); mPoll.reset(); send("LogoutRequest", LLSD()); mPhase = Phase::Logout; mDeadline = now() + 5;
         gViewerWindow->setShowProgress(true, !gSavedSettings.getBOOL("FSDisableLogoutScreens"));
@@ -1418,6 +1458,7 @@ void VSNativeSession::disconnect(const std::string& reason)
 void VSNativeSession::reset()
 {
     if (mShutdown) return;
+    mCamera.reset(); mCameraTime = mAgentUpdateTime = 0;
     if (mAgent.notNull() && (mPhase == Phase::Connected || mPhase == Phase::Logout || mPhase == Phase::Disconnected))
     {
         if (LLPersistentNotificationStorage::instanceExists()) LLPersistentNotificationStorage::getInstance()->saveNotifications();
