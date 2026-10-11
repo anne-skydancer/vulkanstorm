@@ -3087,21 +3087,15 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
             }
             return 0;
         }
-        /*
-        // TODO: add this after resolving _WIN32_WINNT issue
         case WM_MOUSELEAVE:
         {
-        window_imp->mCallbacks->handleMouseLeave(window_imp);
-
-        //              TRACKMOUSEEVENT track_mouse_event;
-        //              track_mouse_event.cbSize = sizeof( TRACKMOUSEEVENT );
-        //              track_mouse_event.dwFlags = TME_LEAVE;
-        //              track_mouse_event.hwndTrack = h_wnd;
-        //              track_mouse_event.dwHoverTime = HOVER_DEFAULT;
-        //              TrackMouseEvent( &track_mouse_event );
-        return 0;
+            // Native UI hover belongs to the main thread, like mouse motion.
+            if (!window_imp->mUseGL)
+            {
+                WINDOW_IMP_POST(window_imp->mCallbacks->handleMouseLeave(window_imp));
+            }
+            return 0;
         }
-        */
         case WM_MOUSEHWHEEL:
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_WIN32("mwp - WM_MOUSEHWHEEL");
@@ -3142,6 +3136,15 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
         case WM_MOUSEMOVE:
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_WIN32("mwp - WM_MOUSEMOVE");
+            if (!window_imp->mUseGL)
+            {
+                // Windows sends WM_MOUSELEAVE only after tracking is requested.
+                TRACKMOUSEEVENT tracking = {};
+                tracking.cbSize = sizeof(tracking);
+                tracking.dwFlags = TME_LEAVE;
+                tracking.hwndTrack = h_wnd;
+                TrackMouseEvent(&tracking);
+            }
             // DO NOT use mouse event queue for move events to ensure cursor position is updated
             // when button events are handled
             WINDOW_IMP_POST(
