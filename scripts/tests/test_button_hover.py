@@ -13,11 +13,15 @@ class ButtonHoverTest(unittest.TestCase):
         source = source[begin:]
         setup = source[source.index('    LLView* captor_view ='):source.index('    static LLCachedControl<bool> dump_menu_holder')]
         block = source[source.index('    // only update mouse hover set when UI is visible'):source.index('    // only handle hover events when UI is enabled')]
+        dispatch_start = source.index('    // only handle hover events when UI is enabled')
+        dispatch_end = source.index('            if (LLView::sDebugMouseHandling)', dispatch_start)
+        dispatch = source[dispatch_start:dispatch_end] + '        }\n    }\n'
         method = """void LLViewerWindow::updateMouseHoverViews(S32 x,S32 y,MASK mask,bool enabled) {
  gPipeline.enabled=enabled;
+ bool handled=false;
  LLUICtrl* top_ctrl=gFocusMgr.getTopCtrl();
  LLMouseHandler* mouse_captor=gFocusMgr.getMouseCapture();
-""" + setup + block + '}\n'
+""" + setup + block + dispatch + '}\n'
         fixture = (root/'scripts/tests/fixtures/button_hover.cpp').read_text(encoding='utf-8').replace('PRODUCTION_HOVER',method)
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler,'C++ compiler required')

@@ -111,4 +111,7 @@ int main() {
  viewer.mMouseInWindow=false;viewer.updateMouseHoverViews(10,10,0,true);
  assert(!button.highlight && viewer.mMouseHoverViews.empty());
  viewer.mMouseInWindow=true;viewer.updateMouseHoverViews(10,10,0,true);assert(button.highlight);
+ gFocusMgr.capture=&button;viewer.updateMouseHoverViews(10,10,0,true);
+ viewer.mMouseInWindow=false;viewer.updateMouseHoverViews(10,10,0,true);
+ assert(!button.highlight && viewer.mMouseHoverViews.empty());
 }
