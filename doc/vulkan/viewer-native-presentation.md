@@ -389,3 +389,15 @@ describes native UI frame time instead of blaming disabled world settings.
 Console fixtures and decisive connected replay assertions cover these paths;
 the rebuilt executable still requires isolated CI and live playback/UI
 qualification. This does not establish complete connected UI parity.
+
+### Tab-content button edges (11 October 2026)
+
+The tab container applied a three-pixel tab-label inset while drawing its
+entire content panel. Child panels reach closer to the container boundary,
+so a right-aligned button's expanded focus border could be cut off while
+its inward corner pixels remained visible. Content now uses the container
+bounds and retains ancestor clipping. This shared fix applies to both
+renderers and every skin; it does not enlarge button hit targets or alter
+skin assets. The extracted production clip fixture covers several panel
+widths and UI scales, retains ancestor restrictions and fails against the
+previous implementation. Graphical confirmation remains separate.

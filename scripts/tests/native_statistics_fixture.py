@@ -139,3 +139,42 @@ int main(){LLControlVariable safe{"PlainTextChatHistory"},scene{"RenderDeferred"
         reset=(ROOT/'indra/newview/vsnativeim.cpp').read_text()
         for name in ['settings_debug','guidebook','help_browser']:
             self.assertIn('"'+name+'"',reset)
+
+    def test_actual_connected_menu_final_height_updates_hover_and_highlight(self):
+        source=(ROOT/'indra/newview/llviewermenu.cpp').read_text()
+        helper=function(source,'void fit_native_menu_bar(')
+        arrange=function((ROOT/'indra/llui/llmenugl.cpp').read_text(),'void LLMenuBarGL::arrange( void )')
+        fixture=r'''#include <cassert>
+#include <vector>
+using U32=unsigned;using S32=int;
+struct LLRect{int mLeft,mTop,mRight,mBottom;LLRect(int l=0,int t=0,int r=0,int b=0):mLeft(l),mTop(t),mRight(r),mBottom(b){}
+ int getWidth()const{return mRight-mLeft;}int getHeight()const{return mTop-mBottom;}
+ bool contains(int x,int y)const{return x>=mLeft&&x<mRight&&y>=mBottom&&y<mTop;}};
+struct LLView{LLRect rect;const LLRect& getRect()const{return rect;}};
+struct LLMenuItemGL:LLView{bool visible=true;int width=40;int labels=0;
+ bool getVisible()const{return visible;}int getNominalWidth()const{return width;}
+ void setRect(LLRect r){rect=r;}void buildDrawLabel(){++labels;}};
+struct LLMenuBarGL:LLView{using item_list_t=std::vector<LLMenuItemGL*>;item_list_t mItems;bool needs=true;
+ void setRect(LLRect r){rect=r;}void needsArrange(){needs=true;}
+ void arrangeAndClear(){if(needs){arrange();needs=false;}}
+ void reshape(int w,int h){rect.mRight=rect.mLeft+w;rect.mBottom=rect.mTop-h;}
+ void arrange();};
+ARRANGE
+HELPER
+int main(){LLMenuItemGL avatar,help,hidden;hidden.visible=false;
+ LLMenuBarGL menu;menu.rect=LLRect(0,9,80,0);menu.mItems={&avatar,&help,&hidden};menu.arrangeAndClear();
+ menu.setRect(LLRect(0,18,80,0));assert(!avatar.getRect().contains(20,14)); // reproduces stale upper half
+ for(int height:{18,19,27}){LLView holder;holder.rect=LLRect(0,500,1000,500-height);fit_native_menu_bar(menu,holder);
+  assert(menu.getRect().getHeight()==height);assert(menu.getRect().getWidth()==80);
+  for(auto* item:{&avatar,&help}){assert(item->getRect().getHeight()==height);
+   assert(item->getRect().contains(item->getRect().mLeft+2,1));
+   assert(item->getRect().contains(item->getRect().mLeft+2,height-1));}
+  assert(hidden.labels==0);assert(!menu.needs);}
+}
+'''.replace('HELPER',helper).replace('ARRANGE',arrange)
+        self.compile(fixture)
+        native=function(source,'void init_native_connected_menus()')
+        self.assertIn('fit_native_menu_bar(*gMenuBarView, *holder)',native)
+        menu=(ROOT/'indra/llui/llmenugl.cpp').read_text()
+        self.assertIn('viewp->pointInView(local_x, local_y)',function(menu,'bool LLMenuBarGL::handleHover('))
+        self.assertIn('getRect().getHeight()',function(menu,'void LLMenuItemBranchDownGL::draw('))

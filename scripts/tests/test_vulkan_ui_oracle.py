@@ -7,6 +7,70 @@ import unittest
 import xml.etree.ElementTree as ET
 
 class OracleTest(unittest.TestCase):
+    def test_tab_content_clip_keeps_edge_button_focus_borders(self):
+        root = Path(__file__).resolve().parents[2]
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        source = (root / 'indra/llui/lltabcontainer.cpp').read_text()
+        start = source.index('        LLRect clip_rect = getLocalRect();', source.index('void LLTabContainer::draw()'))
+        end = source.index('        LLPanel::draw();', start) + len('        LLPanel::draw();')
+        fixture = r'''
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+struct LLRect { int mLeft,mTop,mRight,mBottom; };
+constexpr int LLPANEL_BORDER_WIDTH=1;
+LLRect active_clip{};
+struct LLLocalClipRect {
+    LLRect old;
+    explicit LLLocalClipRect(LLRect r):old(active_clip) {
+        active_clip={std::max(r.mLeft,old.mLeft),std::min(r.mTop,old.mTop),
+                     std::min(r.mRight,old.mRight),std::max(r.mBottom,old.mBottom)};
+    }
+    ~LLLocalClipRect(){active_clip=old;}
+};
+struct LLPanel {
+    LLRect rendered_clip{};
+    void draw(){rendered_clip=active_clip;}
+};
+struct Container:LLPanel {
+    int width;
+    LLRect getLocalRect(){return {0,100,width,0};}
+    void draw_content(){
+PRODUCTION_CONTENT_CLIP
+    }
+};
+int main(){
+    for(int width:{260,355,396,567}) {
+        Container c;c.width=width;
+        active_clip={-10,120,width+10,-10};c.draw_content();
+        // The real tab child has a one-pixel panel inset; the Contacts
+        // button has another pixel of right padding. A focus border extends
+        // past its body. The tab-label inset previously cut that border off.
+        const int body_right=width-2;
+        for(float dpi:{.75f,1.f,1.25f,1.5f,2.f}) {
+            const int scissor_right=int(std::floor(c.rendered_clip.mLeft*dpi)+
+                std::ceil((c.rendered_clip.mRight-c.rendered_clip.mLeft)*dpi)+1);
+            const int focus_pixel=int(std::floor(body_right*dpi));
+            assert(focus_pixel<scissor_right);
+            assert(c.rendered_clip.mLeft<=0 && c.rendered_clip.mRight>=body_right+1);
+        }
+        // Content still cannot escape either its container or an ancestor.
+        active_clip={8,90,width-8,10};c.draw_content();
+        assert(c.rendered_clip.mLeft==8 && c.rendered_clip.mRight==width-8);
+        assert(active_clip.mLeft==8 && active_clip.mRight==width-8);
+    }
+}
+'''.replace('PRODUCTION_CONTENT_CLIP', source[start:end])
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'tab_content_clip.cpp'
+            path.write_text(fixture)
+            exe = Path(temp) / 'tab_content_clip.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_vintage_nearby_send_states_resolve_packaged_assets(self):
         skins = Path(__file__).resolve().parents[2] / 'indra/newview/skins'
         declarations = {}
