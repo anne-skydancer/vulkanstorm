@@ -669,6 +669,64 @@ int main(){
             run = subprocess.run([str(executable)], capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
+    def test_about_vulkan_memory_counts_selected_device_heaps_once(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/newview/vsvulkancontext.cpp').read_text()
+        start = source.index('double deviceLocalMemoryMegabytes(')
+        helper = source[start:source.index('} // namespace', start)]
+        start = source.index('            VkPhysicalDeviceMemoryProperties memory{};')
+        report = source[start:source.index('            LL_INFOS("NativeVulkan")', start)]
+        fixture = r'''
+#include <cassert>
+#include <cstdint>
+#include <map>
+#include <string>
+constexpr uint32_t VK_MEMORY_HEAP_DEVICE_LOCAL_BIT=1;
+struct Heap {uint64_t size=0;uint32_t flags=0;};
+struct VkPhysicalDeviceMemoryProperties {uint32_t memoryHeapCount=0;Heap memoryHeaps[16];};
+VkPhysicalDeviceMemoryProperties driver_memory;
+struct Device {int GetVkPhysicalDevice(){return 73;}} selected;
+Device* native_device=&selected;
+int queries=0;
+void vkGetPhysicalDeviceMemoryProperties(int device,VkPhysicalDeviceMemoryProperties* memory)
+{assert(device==73);++queries;*memory=driver_memory;}
+''' + helper + r'''
+std::map<std::string,double> collect(){std::map<std::string,double> renderer_info;
+''' + report + r'''
+return renderer_info;}
+int main(){
+    constexpr uint64_t MiB=1024ULL*1024;
+    // A device-local heap remains GPU memory even when host-visible types
+    // alias it; independent host system memory is never added to the total.
+    driver_memory.memoryHeapCount=2;
+    driver_memory.memoryHeaps[0]={8192*MiB,1};
+    driver_memory.memoryHeaps[1]={32768*MiB,0};
+    auto info=collect();assert(info.at("GRAPHICS_CARD_MEMORY")==8192);
+    assert(info.at("GRAPHICS_CARD_MEMORY_DETECTED")==8192);
+    // UMA/Resizable BAR local heaps and multiple distinct local heaps.
+    driver_memory.memoryHeaps[0]={16384*MiB,1};
+    driver_memory.memoryHeaps[1]={8192*MiB,1};
+    info=collect();assert(info.at("GRAPHICS_CARD_MEMORY")==24576);
+    driver_memory.memoryHeapCount=1;
+    driver_memory.memoryHeaps[0]={8192ULL*1024*MiB,1};
+    info=collect();assert(info.at("GRAPHICS_CARD_MEMORY")==8192ULL*1024);
+    driver_memory.memoryHeaps[0]={0,1};assert(collect().empty());
+    driver_memory.memoryHeaps[0]={8192*MiB,0};assert(collect().empty());
+    assert(queries==5);
+}
+'''
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'about_vulkan_memory.cpp'
+            path.write_text(fixture)
+            executable = path.with_suffix('.exe')
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(executable)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(executable)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_about_uses_running_backend_and_never_queries_gl_for_vulkan(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / 'indra/newview/llappviewer.cpp').read_text(encoding='utf-8')
