@@ -382,3 +382,18 @@ gaps, not evidence that their entire CPU functionality is inherently world-only.
 Voice call setup remains a non-world integration gap outside the accepted
 text-only call lifecycle. No full connected-UI parity claim follows from this
 survey or admission policy.
+
+## Local qualification for the 11 October survey
+
+Source revision `db15b81419a06b8547e72b3a4509892d98e7051f` was rebuilt in the
+canonical `build-vc170-64` directory as RelWithDebInfo, without an installer.
+`scripts/check_vulkan_ci_staging.py build-vc170-64` passed complete runtime,
+plugin and asset staging. Fifty diagnostic/controller compiler tests, the
+focused account/emoji/profile/media/app-link regressions, twenty-one session
+replay tests and twenty-two documentation tests passed. The insertion catalog
+accepts source coverage and explicitly keeps runtime parity unqualified.
+
+No foreground UI was launched. This batch has no new live-account, graphics
+readback, all-skin screenshot, external media or vendor-driver runtime evidence.
+The staged executable is available for user qualification; pending runtime
+checks and the concrete residual services above remain open.
