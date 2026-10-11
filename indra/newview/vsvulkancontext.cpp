@@ -35,6 +35,16 @@ void require(bool value, const char* message)
     if (!value)
         throw std::runtime_error(message);
 }
+// Count heaps, not memory types: several types can alias the same heap.
+// CPU-visible device-local heaps (Resizable BAR/UMA) still belong here.
+double deviceLocalMemoryMegabytes(const VkPhysicalDeviceMemoryProperties& memory)
+{
+    double bytes = 0;
+    for (uint32_t i = 0; i < memory.memoryHeapCount; ++i)
+        if (memory.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+            bytes += static_cast<double>(memory.memoryHeaps[i].size);
+    return bytes / (1024.0 * 1024.0);
+}
 } // namespace
 struct VSVulkanContext::Impl
 {
@@ -92,9 +102,11 @@ struct VSVulkanContext::Impl
                 VK_VERSION_PATCH(properties.apiVersion));
             // Vulkan driverVersion is vendor-specific, not an API version.
             renderer_info["GRAPHICS_DRIVER_VERSION"] = llformat("0x%08x (raw Vulkan value)", properties.driverVersion);
-            if (actual.Memory.LocalMemory)
+            VkPhysicalDeviceMemoryProperties memory{};
+            vkGetPhysicalDeviceMemoryProperties(native_device->GetVkPhysicalDevice(), &memory);
+            const double megabytes = deviceLocalMemoryMegabytes(memory);
+            if (megabytes > 0)
             {
-                const double megabytes = double(actual.Memory.LocalMemory) / (1024 * 1024);
                 renderer_info["GRAPHICS_CARD_MEMORY"] = megabytes;
                 renderer_info["GRAPHICS_CARD_MEMORY_DETECTED"] = megabytes;
             }
