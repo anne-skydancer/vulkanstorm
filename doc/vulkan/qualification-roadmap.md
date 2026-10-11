@@ -1,5 +1,10 @@
 # Qualification and implementation roadmap
 
+The current source-survey-based world and connected-viewer execution plan is
+[full-parity-roadmap.md](full-parity-roadmap.md). Its full-scope acceptance
+criteria govern the expanded deliverable; the historical checkpoints below
+remain scoped evidence rather than completion of that deliverable.
+
 Current mandate: DiligentCore is the user-selected GHI, with pinned dependency
 preparation on `vkstorm-vulkan`. Library-selection comparisons below describe the
 historical audit, not a requirement to choose again. These responsibility-level

@@ -30,6 +30,7 @@ public:
         bool alpha_mask = false; // image alpha with tint RGB, like LLUIImage::drawSolid
         std::optional<std::array<Vertex,6>> triangles; // native font geometry, same logical coordinate space
     };
+    struct Statistics { std::uint64_t packets=0,draws=0,vertices=0; };
     VSUIRenderer(Diligent::IRenderDevice*, Diligent::IDeviceContext*);
     ~VSUIRenderer();
     VSUIRenderer(const VSUIRenderer&) = delete;
@@ -44,6 +45,7 @@ public:
     // Nonblocking: release only submissions whose GPU fence has completed.
     // The owner waits for idle before destroying this renderer.
     void retire();
+    Statistics statistics() const;
     static std::uint64_t generation(const Image&);
     // CPU publication snapshots for an independent diagnostic raster oracle.
     static const std::vector<std::uint8_t>& imagePixels(const Image&);

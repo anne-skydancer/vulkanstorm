@@ -284,6 +284,8 @@ public:
     U32             getSkeletonSerialNum() const        { return mSkeletonSerialNum; }
     void            setSkeletonSerialNum( U32 num ) { mSkeletonSerialNum = num; }
 
+    // Distinguishes an asynchronous request from a retired same-UUID avatar.
+    U64 getAnimationInstanceId() const;
     static std::list< LLCharacter* > sInstances;
     static bool sAllowInstancesChange ; //debug use
 

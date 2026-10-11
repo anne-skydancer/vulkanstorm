@@ -120,6 +120,7 @@ public:
 
     S32             loadBindingsXML(const std::string& filename);                                       // returns number bound, 0 on error
     EKeyboardMode   getMode() const;
+    std::string nativeBindingAction(KEY key, MASK mask, bool first_person) const;
 
     static bool     modeFromString(const std::string& string, S32 *mode);           // False on failure
     static bool     mouseFromString(const std::string& string, EMouseClickType *mode);// False on failure

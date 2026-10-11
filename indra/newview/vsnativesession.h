@@ -1,6 +1,7 @@
 // CPU-only native session ownership. LGPL-2.1, like the viewer.
 #pragma once
 #include "llhost.h"
+#include "vsnativecamera.h"
 #include "llsd.h"
 #include "lluuid.h"
 #include "llhandle.h"
@@ -55,6 +56,14 @@ public:
     bool applySimulatorFeatures(const LLSD&, U64 generation, U64 regionEpoch);
     const std::string& regionName() const { return mName; }
     const LLVector3& position() const { return mPosition; }
+    U64 regionEpoch() const { return mRegionEpoch; }
+    VSNativeCamera::State cameraState() const { return mCamera.state(mPosition); }
+    bool movementAction(U32 key, const std::string& action, bool down, bool repeated = false);
+    void releaseMovement();
+    void cameraOrbit(F32 yaw, F32 pitch);
+    void cameraZoom(S32 clicks);
+    bool updateAgentPosition(const LLVector3&, const LLHost&, U64 generation, U64 regionEpoch);
+
     U64 handle() const { return mHandle; }
     U8 access() const { return mAccess; }
     std::string locationURL() const;
@@ -142,6 +151,8 @@ private:
     S32 mLastChannel = 0;
     U32 mWidth = 256, mHeight = 256;
     LLVector3 mPosition;
+    VSNativeCamera mCamera;
+    double mCameraTime = 0, mAgentUpdateTime = 0;
     std::string mSeed, mName;
     LLSD mCapabilities;
     std::function<void()> mCancelSeed;

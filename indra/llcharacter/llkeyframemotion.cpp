@@ -45,6 +45,9 @@
 
 #include "nd/ndexceptions.h" // <FS:ND/> For nd::exceptions::xran
 
+namespace { struct CharacterAssetRequest { LLUUID id; U64 instance; }; }
+
+
 //-----------------------------------------------------------------------------
 // Static Definitions
 //-----------------------------------------------------------------------------
@@ -491,7 +494,7 @@ LLMotion::LLMotionInitStatus LLKeyframeMotion::onInitialize(LLCharacter *charact
 {
     mCharacter = character;
 
-    LLUUID* character_id;
+    CharacterAssetRequest* character_id;
 
     // asset already loaded?
     switch(mAssetStatus)
@@ -503,7 +506,7 @@ LLMotion::LLMotionInitStatus LLKeyframeMotion::onInitialize(LLCharacter *charact
         if (mID.notNull())
         {
             LL_DEBUGS("Animation") << "Requesting data fetch for: " << mID << LL_ENDL;
-            character_id = new LLUUID(mCharacter->getID());
+            character_id = new CharacterAssetRequest{mCharacter->getID(),mCharacter->getAnimationInstanceId()};
             gAssetStorage->getAssetData(mID,
                                         LLAssetType::AT_ANIMATION,
                                         onLoadComplete,
@@ -2412,11 +2415,11 @@ void LLKeyframeMotion::onLoadComplete(const LLUUID& asset_uuid,
                                       LLAssetType::EType type,
                                       void* user_data, S32 status, LLExtStat ext_status)
 {
-    LLUUID* id = (LLUUID*)user_data;
+    CharacterAssetRequest* id = static_cast<CharacterAssetRequest*>(user_data);
 
     auto char_iter = std::find_if(LLCharacter::sInstances.begin(), LLCharacter::sInstances.end(), [&](LLCharacter* c)
         {
-            return c->getID() == *id;
+            return c->getID() == id->id && c->getAnimationInstanceId() == id->instance;
         });
 
     delete id;

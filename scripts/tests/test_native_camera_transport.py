@@ -1,0 +1,184 @@
+"""Compile the real native camera and authenticated AgentUpdate producer headlessly."""
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def method(source, signature):
+    start = source.index(signature)
+    opening = source.index('{', start)
+    end, depth = opening + 1, 1
+    while depth:
+        depth += (source[end] == '{') - (source[end] == '}')
+        end += 1
+    return source[start:end]
+
+
+STUBS = r'''
+#include <cassert>
+#include <cmath>
+#include <algorithm>
+#include <map>
+#include <string>
+#include <vector>
+#include <limits>
+using F32=float;using U32=unsigned;using S32=int;using U8=unsigned char;using U64=unsigned long long;
+enum{VX=0,VY=1,VZ=2};
+struct LLVector3{
+ float mV[3]{};LLVector3()=default;LLVector3(float x,float y,float z):mV{x,y,z}{}
+ void clear(){*this={};}bool isFinite()const{return std::isfinite(mV[0])&&std::isfinite(mV[1])&&std::isfinite(mV[2]);}
+ float magVecSquared()const{return mV[0]*mV[0]+mV[1]*mV[1]+mV[2]*mV[2];}
+ void normalize(){*this*=1/std::sqrt(magVecSquared());}
+ LLVector3 operator+(LLVector3 v)const{return {mV[0]+v.mV[0],mV[1]+v.mV[1],mV[2]+v.mV[2]};}
+ LLVector3 operator-(LLVector3 v)const{return {mV[0]-v.mV[0],mV[1]-v.mV[1],mV[2]-v.mV[2]};}
+ LLVector3 operator*(float s)const{return {mV[0]*s,mV[1]*s,mV[2]*s};}
+ LLVector3& operator+=(LLVector3 v){*this=*this+v;return *this;}LLVector3& operator*=(float s){*this=*this*s;return *this;}
+ static const LLVector3 zero,x_axis,y_axis,z_axis;
+};const LLVector3 LLVector3::zero{},LLVector3::x_axis{1,0,0},LLVector3::y_axis{0,1,0},LLVector3::z_axis{0,0,1};
+struct LLQuaternion{float angle=0;LLVector3 axis;LLQuaternion()=default;LLQuaternion(float a,LLVector3 v):angle(a),axis(v){}LLQuaternion operator*(LLQuaternion v)const{return {angle+v.angle,axis};}};
+struct LLUUID{int id=1;static const LLUUID null;};const LLUUID LLUUID::null{0};
+struct LLHost{int id=1;bool isOk()const{return id!=0;}bool operator!=(LLHost other)const{return id!=other.id;}};
+struct LLSD{const LLSD& operator[](const char*)const{return *this;}std::string asString()const{return {};}int asInteger()const{return 0;}};
+struct Agent{LLVector3 position;void setPositionAgent(LLVector3 p){position=p;}}gAgent;
+struct Settings{float getF32(const char*){return 128;}}gSavedSettings;
+template<class T>T llclamp(T v,T a,T b){return std::clamp(v,a,b);}
+struct LLMessageSystem{
+ std::string message;LLHost host;std::map<std::string,LLVector3> vectors;std::map<std::string,U32> ints;
+ std::map<std::string,LLQuaternion> quaternions;int sends=0;bool reliable=false;
+ void newMessage(const char* s){message=s;}void nextBlock(const char*){}void addUUID(const char*,LLUUID){}
+ void addU32(const char* s,U32 value){ints[s]=value;}void addU8(const char* s,U8 value){ints[s]=value;}
+ void addS32(const char* s,S32 value){ints[s]=value;}void addString(const char*,const std::string&){}
+ void addF32(const char*,float){}void addQuat(const char* s,LLQuaternion q){quaternions[s]=q;}
+ void addVector3(const char* s,LLVector3 v){vectors[s]=v;}int sendReliable(LLHost h){reliable=true;host=h;++sends;return 1;}
+ int sendMessage(LLHost h){reliable=false;host=h;++sends;return 1;}
+} messages,*gMessageSystem=&messages;
+'''
+
+
+class NativeCameraTransportTests(unittest.TestCase):
+    def test_actual_configured_binding_lookup_without_legacy_callbacks(self):
+        source = (ROOT / 'indra/newview/llviewerinput.cpp').read_text()
+        lookup = method(source, 'std::string LLViewerInput::nativeBindingAction(')
+        fixture = r'''
+#include <cassert>
+#include <map>
+#include <vector>
+#include <string>
+using KEY=unsigned;using MASK=unsigned;
+enum{MODE_FIRST_PERSON,MODE_THIRD_PERSON,MODE_COUNT};
+struct Binding{KEY mKey;MASK mMask;std::string mFunctionName;};
+struct LLViewerInput{
+ std::map<unsigned,unsigned> mRemapKeys[MODE_COUNT];std::vector<Binding> mKeyBindings[MODE_COUNT];
+ std::string nativeBindingAction(KEY,MASK,bool)const;
+};
+LOOKUP
+int main(){
+ LLViewerInput input;
+ input.mKeyBindings[MODE_THIRD_PERSON]={{'A',0,"turn_left"},{'A',1,"slide_left"},{'A',2,"spin_around_cw"}};
+ input.mKeyBindings[MODE_FIRST_PERSON]={{'A',0,"slide_left"}};
+ assert(input.nativeBindingAction('A',0,false)=="turn_left");
+ assert(input.nativeBindingAction('A',1,false)=="slide_left");
+ assert(input.nativeBindingAction('A',2,false)=="spin_around_cw");
+ assert(input.nativeBindingAction('A',3,false).empty());
+ assert(input.nativeBindingAction('A',0,true)=="slide_left");
+ input.mRemapKeys[MODE_THIRD_PERSON][(4<<16)|'Z']=(1<<16)|'A';
+ assert(input.nativeBindingAction('Z',4,false)=="slide_left");
+ assert(input.nativeBindingAction('Z',4,true).empty());
+ // Settings updates must take effect rather than using a hard-coded key table.
+ input.mKeyBindings[MODE_THIRD_PERSON][0].mFunctionName="push_forward";
+ assert(input.nativeBindingAction('A',0,false)=="push_forward");
+}
+'''.replace('LOOKUP', lookup)
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / 'configured_input.cpp'
+            exe = cpp.with_suffix('.exe')
+            cpp.write_text(fixture)
+            built = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            ran = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+
+    def test_actual_camera_controls_and_wire_producer(self):
+        header = (ROOT / 'indra/newview/vsnativecamera.h').read_text()
+        header = re.sub(r'^#(?:include|pragma).*$', '', header, flags=re.M)
+        constants = (ROOT / 'indra/llcommon/indra_constants.h').read_text()
+        constants = '\n'.join(line for line in constants.splitlines() if line.startswith('constexpr U32 CONTROL_') or line.startswith('constexpr U32 AGENT_CONTROL_'))
+        session = (ROOT / 'indra/newview/vsnativesession.cpp').read_text()
+        functions = '\n'.join(method(session, declaration) for declaration in (
+            'bool VSNativeSession::movementAction(', 'void VSNativeSession::releaseMovement()',
+            'void VSNativeSession::cameraOrbit(', 'void VSNativeSession::cameraZoom(',
+            'bool VSNativeSession::updateAgentPosition(', 'bool VSNativeSession::send('))
+        fixture = STUBS + constants + header + r'''
+struct VSNativeSession{
+ enum class Phase{Login,Connected,Disconnected};Phase mPhase=Phase::Connected;bool mChangingRegion=false,mFrozen=false;
+ LLHost mHost;LLUUID mAgent,mSession;U32 mCircuit=99;U64 mGeneration=3,mRegionEpoch=7,mSent=0;
+ VSNativeCamera mCamera;LLVector3 mPosition{100,100,20};double mAgentUpdateTime=1;
+ VSNativeCamera::State cameraState()const{return mCamera.state(mPosition);}
+ bool movementAction(U32,const std::string&,bool,bool=false);void releaseMovement();void cameraOrbit(F32,F32);void cameraZoom(S32);
+ bool updateAgentPosition(const LLVector3&,const LLHost&,U64,U64);bool send(const std::string&,const LLSD&);
+};
+FUNCTIONS
+float dot(LLVector3 a,LLVector3 b){return a.mV[0]*b.mV[0]+a.mV[1]*b.mV[1]+a.mV[2]*b.mV[2];}
+bool close(float a,float b){return std::abs(a-b)<.001;}
+int main(){
+ VSNativeSession owner;auto initial=owner.cameraState();
+ assert(initial.center.mV[0]<100&&initial.center.mV[2]>21.5f);
+ assert(owner.movementAction(1,"push_forward",true));assert(owner.mCamera.controls()&AGENT_CONTROL_AT_POS);
+ assert(owner.movementAction(2,"push_forward",true));owner.movementAction(1,"",false);assert(owner.mCamera.controls()&AGENT_CONTROL_AT_POS);
+ assert(owner.send("AgentUpdate",{}));assert(!messages.reliable&&messages.message=="AgentUpdate"&&messages.host.id==1&&messages.ints["ControlFlags"]&AGENT_CONTROL_AT_POS);
+ assert(close(messages.vectors["CameraCenter"].mV[0],initial.center.mV[0]));
+ owner.movementAction(2,"",false);assert(!(owner.mCamera.controls()&AGENT_CONTROL_AT_POS));
+ owner.movementAction(3,"toggle_fly",true);owner.movementAction(3,"toggle_fly",true,true);assert(owner.mCamera.controls()&AGENT_CONTROL_FLY);
+ owner.movementAction(3,"",false);owner.movementAction(3,"toggle_fly",true);assert(!(owner.mCamera.controls()&AGENT_CONTROL_FLY));
+ owner.movementAction(4,"turn_left",true);owner.mCamera.step(.1f);auto turned=owner.cameraState();assert(turned.at.mV[1]>initial.at.mV[1]);
+ owner.releaseMovement();assert(owner.mCamera.controls()==0);
+ owner.cameraOrbit(1.f,.3f);auto orbital=owner.cameraState();
+ assert(close(orbital.at.magVecSquared(),1)&&close(orbital.left.magVecSquared(),1)&&close(orbital.up.magVecSquared(),1));
+ assert(close(dot(orbital.at,orbital.left),0)&&close(dot(orbital.at,orbital.up),0)&&close(dot(orbital.left,orbital.up),0));
+ owner.cameraZoom(-10000);assert(owner.cameraState().firstPerson&&owner.mCamera.controls()&AGENT_CONTROL_MOUSELOOK);
+ owner.cameraZoom(10000);assert(!owner.cameraState().firstPerson);
+ auto before=owner.cameraState();owner.cameraOrbit(std::numeric_limits<float>::infinity(),0);assert(close(owner.cameraState().at.mV[0],before.at.mV[0]));
+ owner.mCamera.step(std::numeric_limits<float>::quiet_NaN());assert(owner.cameraState().center.isFinite());
+ assert(!owner.updateAgentPosition({1,2,3},LLHost{2},3,7));assert(!owner.updateAgentPosition({1,2,3},LLHost{1},2,7));
+ assert(!owner.updateAgentPosition({1,2,3},LLHost{1},3,6));assert(!owner.updateAgentPosition({NAN,2,3},LLHost{1},3,7));
+ assert(owner.updateAgentPosition({102,103,20},LLHost{1},3,7));assert(gAgent.position.mV[0]==102);
+ owner.mChangingRegion=true;assert(!owner.movementAction(5,"push_forward",true));assert(!owner.updateAgentPosition({9,9,9},LLHost{1},3,7));
+ owner.mChangingRegion=false;owner.mFrozen=true;assert(!owner.movementAction(5,"push_forward",true));
+ owner.send("AgentUpdate",{});assert(messages.ints["ControlFlags"]==0);
+ owner.mCamera.reset();assert(owner.mCamera.controls()==0&&!owner.cameraState().firstPerson);
+ owner.mPhase=VSNativeSession::Phase::Login;assert(!owner.movementAction(6,"push_forward",true));
+}
+'''.replace('FUNCTIONS', functions)
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / 'camera_transport.cpp'
+            exe = cpp.with_suffix('.exe')
+            cpp.write_text(fixture)
+            built = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            ran = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+
+    def test_production_input_prioritizes_ui_and_resets_lifetime(self):
+        viewer = (ROOT / 'indra/newview/llviewerwindow.cpp').read_text()
+        key = method(viewer, 'bool LLViewerWindow::handleTranslatedKeyDown(').split('// Handle non-consuming', 1)[0]
+        self.assertLess(key.index('focus->handleKey'), key.index('owner->movementAction'))
+        self.assertIn('if (!focus && !gFocusMgr.getKeystrokesOnly())', key)
+        self.assertIn('releaseMovement()', method(viewer, 'void LLViewerWindow::handleFocusLost('))
+        session = (ROOT / 'indra/newview/vsnativesession.cpp').read_text()
+        self.assertIn('mCamera.reset()', method(session, 'void VSNativeSession::reset()'))
+        self.assertIn('releaseMovement()', method(session, 'bool VSNativeSession::changeRegion('))
+        receive = method(session, 'void VSNativeSession::receive(')
+        self.assertLess(receive.index('admit(name,msg->getSender())'), receive.index('world.agentPosition(position)'))
+
+
+if __name__ == '__main__':
+    unittest.main()

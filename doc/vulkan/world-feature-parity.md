@@ -1,17 +1,34 @@
 # World rendering and service parity progress
 
-Work branch: `codex/vulkan-world-parity`, based on `vkstorm-vulkan` at
-`54e765952e`. This is an experimental progress branch. Full supported rendering
+Execution order and phase acceptance are defined in
+[full-parity-roadmap.md](full-parity-roadmap.md). The progress observations below
+do not establish acceptance of those phases.
+
+The full source-backed inventory, pass order, resource/ownership dependencies
+and qualification oracles are in
+[full-render-chain-survey.md](full-render-chain-survey.md). That inventory includes
+geometry/rigging, materials, EEP/day cycles, lighting/dependent views, HDR,
+transparency, postprocessing, auxiliary rendering, UI interactions and services.
+The user has observed first authenticated native frames at approximately 14 FPS.
+This is first live rendering evidence, not parity or performance acceptance.
+
+Development branch: `vkstorm-vulkan`. Initial progress originated on the
+user-requested `codex/vulkan-world-parity`, based on `vkstorm-vulkan` at
+`54e765952e`, and is integrated into the development branch. Full supported rendering
 and feature parity remains the acceptance target, and is **not achieved** by this
 first geometry increment. OpenGL remains the behavioral reference; no GL/Zink
 fallback is introduced.
 
 The existing checkout and canonical RelWithDebInfo build remain at
 `C:\Dev\vulkanstorm\worktrees\vkstorm-vulkan\build-vc170-64`. The checkout is
-currently on the progress branch. Its staged executable is an experimental
+on `vkstorm-vulkan`. Its staged executable is an experimental
 build, not a qualified replacement for the previous connected UI build.
 
 ## Survey of production ownership
+
+The table below records the first primitive increment. The later mesh/avatar,
+camera and resource-reuse increments are described at the end of this document;
+use the full survey and roadmap for current acceptance requirements.
 
 The native frame loop bypasses the normal startup/idle scene pipeline. Before
 this increment, `VSNativeSession` admitted account/chat traffic but rejected all
@@ -152,3 +169,30 @@ camera/movement, avatars/animation/attachments, terrain/environment parity,
 lighting/shadows/dependent views, water/post-processing, and every auxiliary pass
 and connected UI consumer. The native path remains incomplete until those owners
 and routes are working in the viewer.
+
+## Current integration under qualification
+
+The native session now sends configured movement intent and camera/body/head
+basis through ordinary AgentUpdate snapshots. Actual self-avatar updates feed
+the authoritative position; the camera controller does not fabricate movement.
+Orbit/pan/roll/zoom and first-person projection feed the native frame. Focus,
+freeze, region/account changes and logout retire held intent. Camera collision,
+picking targets, smoothing, joystick and cursor-locked mouselook remain required.
+
+Native CPU avatar owners reuse skeleton/morph/motion and body mesh data for self
+and others, retain real attachment bone transforms, and decode five-channel bake
+masks through the CPU image service. Region time dilation and actual viewport
+projection inform animation/LOD. Mesh assets now use shared binary-header,
+compressed face and skin-metadata decoders behind account/region epochs and
+bounded requests/cache. Native attachment skinning consumes actual weights and
+inverse-bind/joint matrices. This does not complete joint override/scale policy,
+animesh, HUD attachments, COF/wearable/local compositor or bridge ownership.
+Real mesh runtime and avatar parity still require qualification.
+
+Completed world draws recycle uniform buffers and descriptor bindings only
+after fence completion. Adjacent compatible UI draws batch without reordering
+paint operations or crossing image-generation, scissor or pipeline boundaries.
+The production headless renderer verifies changed constants after reuse and UI
+overlap/clipping/generation pixels. Counters distinguish draw, binding/uniform
+allocation and upload cost. They do not establish an FPS improvement on the
+user's live scene, or fill missing rendering passes.

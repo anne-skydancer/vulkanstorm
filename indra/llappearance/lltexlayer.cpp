@@ -320,7 +320,7 @@ bool LLTexLayerSet::setInfo(const LLTexLayerSetInfo *info)
 
     requestUpdate();
 
-    stop_glerror();
+    if (getAvatarAppearance()->usesGraphicsContext()) stop_glerror();
 
     return true;
 }

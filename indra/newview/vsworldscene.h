@@ -15,10 +15,13 @@ public:
     ~VSWorldScene();
     void reset();
     void configureRegion(const LLSD& handshake);
-    bool receive(LLMessageSystem&, U64 regionHandle);
+    bool receive(LLMessageSystem&, U64 regionHandle, const LLUUID& agent);
     void requestUpdates(LLMessageSystem&, const LLHost&, const LLUUID&, const LLUUID&);
-    std::vector<VSWorldRenderer::Packet> packets(const LLVector3& eye, float farClip);
+    std::vector<VSWorldRenderer::Packet> packets(const LLVector3& eye, float farClip,unsigned viewportHeight=0);
     static VSWorldRenderer::View view(const LLVector3& eye, unsigned width, unsigned height, float farClip);
+    static VSWorldRenderer::View cameraView(const LLVector3& eye,const LLVector3& at,const LLVector3& up,
+                                            unsigned width,unsigned height,float farClip);
+    bool agentPosition(LLVector3&) const;
     LLSD evidence() const;
 private:
     struct Impl;

@@ -1656,6 +1656,17 @@ S32 LLViewerInput::loadBindingMode(const LLViewerInput::KeyMode& keymode, S32 mo
     return binding_count;
 }
 
+std::string LLViewerInput::nativeBindingAction(KEY key, MASK mask, bool first_person) const
+{
+    const auto mode = first_person ? MODE_FIRST_PERSON : MODE_THIRD_PERSON;
+    const auto remap = mRemapKeys[mode].find((mask << 16) | key);
+    if (remap != mRemapKeys[mode].end()) { key = remap->second & 0xff; mask = remap->second >> 16; }
+    // Read configured binding names; never invoke the legacy agent/camera callbacks.
+    for (const auto& binding : mKeyBindings[mode])
+        if (binding.mKey == key && binding.mMask == mask) return binding.mFunctionName;
+    return {};
+}
+
 EKeyboardMode LLViewerInput::getMode() const
 {
     if ( gAgentCamera.cameraMouselook() )
@@ -1746,6 +1757,9 @@ bool LLViewerInput::handleMouse(LLWindow *window_impl, LLCoordGL pos, MASK mask,
 {
     bool is_toolmgr_action = false;
     bool handled = gViewerWindow->handleAnyMouseClick(window_impl, pos, mask, clicktype, down, is_toolmgr_action);
+    // Native input is owned directly by the shared UI and CPU camera controller.
+    // Do not enqueue legacy mouse binding callbacks against scene/tool owners.
+    if (gViewerWindow->isNativeVulkan()) return handled;
 
     if (clicktype != CLICK_NONE)
     {

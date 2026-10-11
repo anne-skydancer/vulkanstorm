@@ -9,6 +9,7 @@ void vs_refresh_ui_image(const LLUUID&);
 LLPointer<LLUIImage> vs_publish_ui_image(const std::string&, const LLImageRaw&);
 void vs_erase_ui_image(const std::string&);
 LLPointer<LLImageRaw> vs_ui_image_raw(const LLUUID&);
+LLPointer<LLImageRaw> vs_ui_image_aux(const LLUUID&);
 bool vs_ui_image_ready(const LLUUID&);
 bool vs_ui_image_failed(const LLUUID&);
 class VSUIImageProvider : public LLImageProviderInterface
@@ -25,6 +26,7 @@ class VSUIImageProvider : public LLImageProviderInterface
     LLPointer<LLUIImage> publishImage(const std::string&, const LLImageRaw&);
     void eraseImage(const std::string&);
     LLPointer<LLImageRaw> rawImage(const LLUUID&) const;
+    LLPointer<LLImageRaw> auxiliaryImage(const LLUUID&) const;
     bool imageReady(const LLUUID&) const;
     bool imageFailed(const LLUUID&) const;
 

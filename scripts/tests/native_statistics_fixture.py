@@ -349,14 +349,15 @@ struct Viewer{int shown=0;bool full=false;float percent=0;std::string text;
 struct LLAppViewer{bool quit=false;static LLAppViewer*instance(){static LLAppViewer a;return &a;}void forceQuit(){quit=true;}};
 double now(){return 10;}
 struct VSNativeSession{enum class Phase{Connected,Connecting,Logout,Login};Phase mPhase=Phase::Connected;
- bool mQuit=false;double mDeadline=0;int sent=0;
+ bool mQuit=false;double mDeadline=0;int sent=0,released=0;
  struct Poll{void reset(){}}mPoll;
- void typing(bool){}void clearParcelPlayback(){}void unbind(){}void send(const char*,LLSD){++sent;}
+ void typing(bool){}void releaseMovement(){++released;}void clearParcelPlayback(){}void unbind(){}
+ void send(const char* name,LLSD){assert(released>0);if(sent==0)assert(std::string(name)=="AgentUpdate");++sent;}
  void requestLogout(bool);};
 BODY
 int main(){VSNativeSession s;s.requestLogout(false);assert(s.mPhase==VSNativeSession::Phase::Logout);
- assert(s.sent==1 && s.mDeadline==15 && viewer.shown==1 && viewer.full && viewer.percent==100 && viewer.text=="LoggingOut");
- s.requestLogout(true);assert(s.mQuit && s.sent==1 && viewer.shown==1);
+ assert(s.sent==2 && s.released==1 && s.mDeadline==15 && viewer.shown==1 && viewer.full && viewer.percent==100 && viewer.text=="LoggingOut");
+ s.requestLogout(true);assert(s.mQuit && s.sent==2 && s.released==1 && viewer.shown==1);
  s.mPhase=VSNativeSession::Phase::Connected;gSavedSettings.disable=true;s.requestLogout(false);assert(!viewer.full && viewer.shown==2);
  s.mPhase=VSNativeSession::Phase::Login;s.requestLogout(true);assert(LLAppViewer::instance()->quit);}
 '''.replace('BODY',body)

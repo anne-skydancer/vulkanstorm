@@ -289,10 +289,10 @@ struct VSVulkanContext::Impl
         context->ClearRenderTarget(target, color, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         if (const auto session=VSNativeSession::active(); session && session->phase()==VSNativeSession::Phase::Connected)
         {
-            const LLVector3 eye=session->position()+LLVector3(0,0,1.5f);
+            const auto camera=session->cameraState();const LLVector3 eye=camera.center;
             const float distance=gSavedSettings.getF32("RenderFarClip");
             worldRenderer->draw(target,size.mX,size.mY,
-                VSWorldScene::view(eye,size.mX,size.mY,distance),worldScene->packets(eye,distance));
+                VSWorldScene::cameraView(eye,camera.at,camera.up,size.mX,size.mY,distance),worldScene->packets(eye,distance,size.mY));
         }
         resources->begin(size.mX, size.mY, dpi);
         draw();

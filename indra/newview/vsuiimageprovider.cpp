@@ -4,6 +4,7 @@
 #include "vsuiimageprovider.h"
 #include "lldir.h"
 #include "llimage.h"
+#include "llimagej2c.h"
 #include "llxmlnode.h"
 #include "llxuiparser.h"
 #include "vsuiresources.h"
@@ -45,7 +46,7 @@ struct VSUIImageProvider::Impl
     VSUIResources &resources;
     std::map<std::string, Image> declarations;
     std::map<std::string, LLUIImagePtr> cache;
-    struct Remote { LLUIImagePtr facade, pixels; U64 generation = 0, readyGeneration = 0, failedGeneration = 0; unsigned attempts = 0; double retryAt = 0; };
+    struct Remote { LLUIImagePtr facade, pixels; LLPointer<LLImageRaw> auxiliary; U64 generation = 0, readyGeneration = 0, failedGeneration = 0; unsigned attempts = 0; double retryAt = 0; };
     std::map<LLUUID, Remote> remote;
     std::map<LLUUID, std::shared_ptr<LLCoreHttpUtil::HttpCoroutineAdapter>> requests;
     bool retired = false;
@@ -114,6 +115,13 @@ LLPointer<LLUIImage> VSUIImageProvider::publishImage(const std::string& key, con
 void VSUIImageProvider::eraseImage(const std::string& key) { mImpl->resources.erase("control:" + key); }
 LLPointer<LLImageRaw> vs_ui_image_raw(const LLUUID& id)
 { return sActiveProvider ? sActiveProvider->rawImage(id) : nullptr; }
+LLPointer<LLImageRaw> vs_ui_image_aux(const LLUUID& id)
+{ return sActiveProvider ? sActiveProvider->auxiliaryImage(id) : nullptr; }
+LLPointer<LLImageRaw> VSUIImageProvider::auxiliaryImage(const LLUUID& id) const
+{
+    const auto found=mImpl->remote.find(id);
+    return found!=mImpl->remote.end() && imageReady(id) ? found->second.auxiliary : nullptr;
+}
 LLPointer<LLImageRaw> VSUIImageProvider::rawImage(const LLUUID& id) const
 { return imageReady(id) ? mImpl->resources.rawImage("remote:" + id.asString()) : nullptr; }
 bool vs_ui_image_ready(const LLUUID& id) { return sActiveProvider && sActiveProvider->imageReady(id); }
@@ -154,6 +162,7 @@ void VSUIImageProvider::resetAccount()
     {
         mImpl->resources.erase("remote:" + entry.first.asString());
         entry.second.pixels = fallback;
+        entry.second.auxiliary=nullptr;
         entry.second.facade->setNativeExtent(fallback->getWidth(), fallback->getHeight());
         entry.second.generation = entry.second.readyGeneration = entry.second.failedGeneration = 0;
         entry.second.attempts = 0; entry.second.retryAt = 0;
@@ -238,6 +247,15 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32)
         if (!formatted->updateData() || formatted->getWidth() > 4096 || formatted->getHeight() > 4096) return;
         LLPointer<LLImageRaw> raw = new LLImageRaw;
         if (!formatted->decode(raw, 0)) return;
+        LLPointer<LLImageRaw> auxiliary;
+        if (formatted->getComponents()==5)
+        {
+            auxiliary=new LLImageRaw;
+            auto* j2c=dynamic_cast<LLImageJ2C*>(formatted.get());
+            if (!j2c || !j2c->decodeChannels(auxiliary,0,4,1) || auxiliary->getComponents()!=1 ||
+                auxiliary->getWidth()!=raw->getWidth() || auxiliary->getHeight()!=raw->getHeight()) return;
+        }
+        found->second.auxiliary=auxiliary;
         found->second.pixels = images->resources.publish("remote:" + id.asString(), *raw);
         found->second.facade->setNativeExtent(raw->getWidth(), raw->getHeight());
         found->second.readyGeneration = generation;
