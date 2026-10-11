@@ -37,16 +37,22 @@ struct Keyboard { int currentMask(bool value) { assert(value); return 7; } } key
 Keyboard* gKeyboard=&keyboard;
 struct Window;
 struct Callbacks {
- int leaves=0; Window* owner=nullptr;
+ int leaves=0,moves=0; Window* owner=nullptr;
  void handleMouseLeave(Window* window) { ++leaves; owner=window; }
+ void handleMouseMove(Window* window,int,int) { ++moves; owner=window; }
 };
 struct Window {
- bool mUseGL=false; int mMouseMask=0,mCursorPosition=0;
+ bool mUseGL=false; int mMouseMask=0,mCursorPosition=0,mLastCursorPosition=0;
  Callbacks callbacks; Callbacks* mCallbacks=&callbacks;
  std::vector<std::function<void()>> queue;
- void drain() { auto pending=std::move(queue);queue.clear();for(auto& callback:pending)callback(); }
- int dispatch(int message,HWND h_wnd) {
-  auto* window_imp=this; const int window_coord=37;
+ void drain() {
+  auto pending=std::move(queue);queue.clear();for(auto& callback:pending)callback();
+  // Match gatherInput: queued callbacks precede the coalesced motion delivery.
+  if(mLastCursorPosition!=mCursorPosition) mCallbacks->handleMouseMove(this,mCursorPosition,mMouseMask);
+  mLastCursorPosition=mCursorPosition;
+ }
+ int dispatch(int message,HWND h_wnd,int window_coord=37) {
+  auto* window_imp=this;
   #define WINDOW_IMP_POST(expression) queue.emplace_back([=] { expression; })
   switch(message) {
    MOVE_BRANCH
@@ -68,15 +74,21 @@ int main() {
  native.drain();
  assert(native.mMouseMask==7 && native.mCursorPosition==37);
  assert(native.callbacks.leaves==1 && native.callbacks.owner==&native);
+ assert(native.callbacks.moves==0 && native.mLastCursorPosition==37);
+ // A new move after Leave must still be coalesced and delivered on reentry.
+ native.dispatch(WM_MOUSELEAVE,hwnd);
+ native.dispatch(WM_MOUSEMOVE,hwnd,38);native.drain();
+ assert(native.callbacks.leaves==2 && native.callbacks.moves==1 && native.mCursorPosition==38);
  // Tracking rearms on a later native entry/movement, retaining the correct HWND.
- native.dispatch(WM_MOUSEMOVE,hwnd); assert(trackingCalls.size()==2);native.drain();
+ native.dispatch(WM_MOUSEMOVE,hwnd); assert(trackingCalls.size()==3);native.drain();
  Window legacy; legacy.mUseGL=true;
  legacy.dispatch(WM_MOUSEMOVE,hwnd);
- assert(trackingCalls.size()==2 && legacy.queue.size()==1);
+ assert(trackingCalls.size()==3 && legacy.queue.size()==1);
  legacy.dispatch(WM_MOUSELEAVE,hwnd);
  assert(legacy.queue.size()==1 && legacy.callbacks.leaves==0);
  legacy.drain();
  assert(legacy.mMouseMask==7 && legacy.mCursorPosition==37 && legacy.callbacks.leaves==0);
+ assert(legacy.callbacks.moves==1);
 }
 '''.replace('MOVE_BRANCH', branch('WM_MOUSEMOVE')).replace('LEAVE_BRANCH', branch('WM_MOUSELEAVE'))
         compiler = shutil.which('clang++') or shutil.which('g++')

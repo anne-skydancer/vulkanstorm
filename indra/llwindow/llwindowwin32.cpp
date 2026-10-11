@@ -3092,7 +3092,13 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
             // Native UI hover belongs to the main thread, like mouse motion.
             if (!window_imp->mUseGL)
             {
-                WINDOW_IMP_POST(window_imp->mCallbacks->handleMouseLeave(window_imp));
+                WINDOW_IMP_POST(
+                    {
+                        // Retire motion already queued before this departure. Otherwise
+                        // gatherInput's coalesced move would reenter the departed UI.
+                        window_imp->mLastCursorPosition = window_imp->mCursorPosition;
+                        window_imp->mCallbacks->handleMouseLeave(window_imp);
+                    });
             }
             return 0;
         }
