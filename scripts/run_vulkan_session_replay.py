@@ -20,6 +20,7 @@ from urllib.parse import urlsplit, parse_qs
 
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
 from run_vulkan_viewer_diagnostic import runtime_libraries, skin_cases
+from vulkan_viewer_process import run_viewer_process, process_isolation_evidence
 
 # Vintage's full 396-frame Preferences traversal takes about 200 seconds on
 # the pinned software device; all connected actions took over 314 seconds.
@@ -144,8 +145,7 @@ def favorites_fetch_observed(requests):
 
 def run_staged_viewer(command, stage, env):
     """A finite process deadline kills a stalled viewer and preserves its output."""
-    return subprocess.run(command, cwd=stage, env=env, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, timeout=PROCESS_REPLAY_SECONDS)
+    return run_viewer_process(command, cwd=stage, env=env, timeout=PROCESS_REPLAY_SECONDS)
 
 
 def conference_start_observed(requests):
@@ -673,6 +673,7 @@ def main():
                 process = run_staged_viewer(command, stage, env)
             code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
             report = read_llsd(ET.parse(directory / 'session-replay.xml').getroot())
+            report['process_isolation'] = process_isolation_evidence(process)
             passed = assess(report, code, log)
             report['conference_start_request'] = conference_start_observed(server.requests)
             if not report['conference_start_request']:

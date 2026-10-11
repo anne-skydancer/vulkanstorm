@@ -3095,8 +3095,13 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
             {
                 WINDOW_IMP_POST(
                     {
-                        // Retire motion already queued before this departure. Otherwise
-                        // gatherInput's coalesced move would reenter the departed UI.
+                        // Preserve motion ordering across the leave boundary. Deliver
+                        // the coalesced move first, then retire it before leaving.
+                        if (window_imp->mNativeMouseMovePending)
+                        {
+                            window_imp->mCallbacks->handleMouseMove(window_imp,
+                                window_imp->mCursorPosition.convert(), window_imp->mMouseMask);
+                        }
                         window_imp->mLastCursorPosition = window_imp->mCursorPosition;
                         window_imp->mNativeMouseMovePending = false;
                         window_imp->mCallbacks->handleMouseLeave(window_imp);

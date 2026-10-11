@@ -7,69 +7,11 @@ import unittest
 
 
 class HoverLifecycleTest(unittest.TestCase):
-    def test_actual_diagnostic_pointer_placement_restores_on_exception(self):
+    def test_diagnostics_never_mutate_the_input_desktop_pointer(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / 'indra/newview/vsvkdiag.cpp').read_text()
-        start = source.index('struct DiagnosticPointerPlacement')
-        end = source.index('#endif', start)
-        fixture = r'''
-#include <cassert>
-#include <iostream>
-#include <stdexcept>
-using HWND=void*; constexpr int FALSE=0;
-struct POINT { int x=0,y=0; } position{800,900};
-bool captureFail=false,convertFail=false,occluded=false;unsigned sets=0,raised=0;
-HWND convertedWindow=nullptr,raisedWindow=nullptr;
-constexpr unsigned SWP_NOMOVE=1,SWP_NOSIZE=2,SWP_SHOWWINDOW=4,SWP_NOACTIVATE=8;
-HWND HWND_TOP=nullptr;
-int SetWindowPos(HWND hwnd,HWND top,int x,int y,int w,int h,unsigned flags){
- assert(top==HWND_TOP&&x==0&&y==0&&w==0&&h==0);
- assert(flags==(SWP_NOMOVE|SWP_NOSIZE|SWP_SHOWWINDOW|SWP_NOACTIVATE));
- ++raised;raisedWindow=hwnd;return 1;
-}
-HWND WindowFromPoint(POINT){return occluded?nullptr:raisedWindow;}
-int IsChild(HWND,HWND){return 0;}
-HWND GetForegroundWindow(){return nullptr;}
-int GetCursorPos(POINT* out){if(captureFail)return 0;*out=position;return 1;}
-int SetCursorPos(int x,int y){++sets;position={x,y};return 1;}
-int ClientToScreen(HWND hwnd,POINT* point){convertedWindow=hwnd;if(convertFail)return 0;point->x+=100;point->y+=200;return 1;}
-unsigned GetLastError(){return 5;}
-void require(bool value,const char* message){if(!value)throw std::runtime_error(message);}
-''' + source[start:end] + r'''
-int main(){
- int window=0;
- { DiagnosticPointerPlacement guard;
-   guard.place(&window,{25,65});assert(position.x==125&&position.y==265&&convertedWindow==&window);
-   guard.place(&window,{30,150});assert(position.x==130&&position.y==350);
- }
- assert(position.x==800&&position.y==900&&sets==3&&raised==2);
- occluded=true;
- try {DiagnosticPointerPlacement guard;guard.place(&window,{25,65});assert(false);}
- catch(const std::runtime_error&){}
- assert(position.x==800&&position.y==900&&sets==5);occluded=false;
- try {DiagnosticPointerPlacement guard;guard.place(&window,{25,65});throw std::runtime_error("input failure");}
- catch(const std::runtime_error&){}
- assert(position.x==800&&position.y==900&&sets==7);
- convertFail=true;
- try {DiagnosticPointerPlacement guard;guard.place(&window,{25,65});assert(false);}
- catch(const std::runtime_error&){}
- assert(position.x==800&&position.y==900&&sets==8);
- captureFail=true;
- try {DiagnosticPointerPlacement guard;assert(false);}
- catch(const std::runtime_error&){}
- assert(sets==8); // failed snapshot cannot move or restore an unknown cursor
-}
-'''
-        compiler = shutil.which('clang++') or shutil.which('g++')
-        self.assertIsNotNone(compiler)
-        with tempfile.TemporaryDirectory() as directory:
-            cpp = Path(directory) / 'pointer_placement.cpp'
-            executable = cpp.with_suffix('.exe')
-            cpp.write_text(fixture)
-            built = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(executable)], capture_output=True, text=True)
-            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
-            ran = subprocess.run([str(executable)], capture_output=True, text=True)
-            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+        for forbidden in ('SetCursorPos(', 'GetCursorPos(', 'WindowFromPoint(', 'DiagnosticPointerPlacement'):
+            self.assertNotIn(forbidden, source)
 
     def test_actual_controller(self):
         root = Path(__file__).resolve().parents[2]

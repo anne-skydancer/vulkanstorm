@@ -246,7 +246,7 @@ shutdown, with a required CI launch outside diagnostic dispatch. Connected
 region/chat admission remains gated at the V4 boundary. Neither startup result
 establishes full V3 or connected-session acceptance.
 
-## Renderer-aware Help / About — 10 October 2026
+## Renderer-aware Help / About â€” 10 October 2026
 
 The shared About report follows the archived `H:\vulkanstorm` floater's
 backend-neutral **Rendering API** / **Version** wording. It identifies the
@@ -290,3 +290,31 @@ implementation is committed as `163ee9e2e8`. Its executable SHA-256 is
 These results qualify local Windows software rendering; Linux CI and physical
 vendor-driver execution remain separate evidence. This About update makes no
 new claim of world-rendering parity or live-server authentication acceptance.
+
+
+### Background UI qualification (11 October 2026)
+
+All Windows Vulkan test executables are now launched by
+`scripts/vulkan_viewer_process.py` on a unique private window station and
+never-activated desktop. This isolates windows, focus and clipboard from the
+working desktop. A kill-on-close Job Object contains descendants; bounded
+execution captures combined output and kills the process tree on timeout.
+Setup failure is decisive: there is no visible-desktop fallback. Test result
+JSON records the window station and desktop identifiers. Diagnostics no longer
+move or query the physical pointer to qualify injected input.
+
+Linux CI continues to launch UI cases under Xvfb. The dedicated Windows CI
+job first verifies actual isolation, unchanged active desktop/focus/clipboard,
+output capture and timeout cleanup. The local Windows account cannot create a
+private window station (WinError 5), so local UI execution stops before creating
+a viewer; the final isolated runtime matrix requires CI evidence.
+
+The native hover fix shares OpenGL's hover-enter/leave controller, including
+capture and stationary-pointer layout changes, and delivers pending Win32
+motion before window leave without replaying it afterward. Skin assets and
+button colors remain unchanged. Earlier source `5edef0916ac20ca6f7bb3191eb72abd340e05f47`
+proved the hover-lifecycle assertion for all 24 startup skin selections. That
+run did not pass its entire diagnostic matrix; it is not qualification of the
+final isolated executable. Previous connected-session evidence is retained
+with its original source/image identity. Final runtime and live-account
+acceptance must remain separate from source and build checks.

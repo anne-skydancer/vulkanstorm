@@ -23,13 +23,15 @@ class SessionEvidenceTests(unittest.TestCase):
         self.assertGreater(session_runner.VIEWER_REPLAY_SECONDS, 0)
         self.assertLess(session_runner.VIEWER_REPLAY_SECONDS, session_runner.PROCESS_REPLAY_SECONDS)
         self.assertLess(session_runner.PROCESS_REPLAY_SECONDS, session_runner.CASE_REPLAY_SECONDS)
-        with tempfile.TemporaryDirectory() as directory, patch.object(session_runner, 'PROCESS_REPLAY_SECONDS', .5):
-            started = time.monotonic()
+        command = ['viewer', '--replay']
+        environment = {'MODE': 'test'}
+        failure = subprocess.TimeoutExpired(command, .5, output=b'viewer-started')
+        with patch.object(session_runner, 'PROCESS_REPLAY_SECONDS', .5), patch.object(
+                session_runner, 'run_viewer_process', side_effect=failure) as execute:
             with self.assertRaises(subprocess.TimeoutExpired) as timeout:
-                session_runner.run_staged_viewer([sys.executable, '-c',
-                    "import time; print('viewer-started', flush=True); time.sleep(20)"], Path(directory), dict(os.environ))
+                session_runner.run_staged_viewer(command, Path('stage'), environment)
+            execute.assert_called_once_with(command, cwd=Path('stage'), env=environment, timeout=.5)
             self.assertIn(b'viewer-started', timeout.exception.stdout)
-            self.assertLess(time.monotonic() - started, 5)
         self.assertFalse(assess(self.record(), 124, 'VIEWER TIMEOUT'))
         self.assertFalse(assess({}, 0, 'VIEWER TIMEOUT'))
 
