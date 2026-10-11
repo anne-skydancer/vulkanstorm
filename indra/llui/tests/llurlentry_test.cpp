@@ -288,6 +288,13 @@ namespace tut
         testRegex("SL http URL with label", url,
                   "[http://www.secondlife.com/?test=Hi%20There Second Life]",
                   "http://www.secondlife.com/?test=Hi%20There");
+
+        testLabel("render custom link label", url,
+                  "[https://example.com/real-destination Link text]",
+                  "Link text");
+        ensure_equals("labeled link tooltip uses actual destination URL",
+                      url.getTooltip("[https://example.com/real-destination Link text]"),
+                      "https://example.com/real-destination");
     }
 
     template<> template<>
