@@ -19,3 +19,13 @@ jobs:
             if (description.trim().length < 20) {
               core.setFailed("❌ PR description is too short. Please provide at least 20 characters.");
             }
+
+  chat-ui-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: python3 scripts/tests/test_button_hover.py
+      - run: python3 scripts/tests/check_release_hooks.py
