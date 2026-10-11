@@ -1,8 +1,8 @@
 {
-  "source_commit": "172665b48660d9bd2cf0773a0c1f1d5d85d85fd0",
-  "tracked_source_paths_scanned": 27815,
+  "source_commit": "5a2f11b7849f05bccd09379e24a1f78f299a524f",
+  "tracked_source_paths_scanned": 27816,
   "candidate_files": 1762,
-  "candidate_sites": 28703,
+  "candidate_sites": 28705,
   "original_GL_candidate_files": 223,
   "additional_candidate_files": 1539,
   "shader_registration_rows_verified": 690,
@@ -14,7 +14,7 @@
     "cpu-only": 4,
     "conditional": 4,
     "mapped-module": 225,
-    "test-only": 31
+    "test-only": 33
   },
   "source_coverage_accepted": true,
   "runtime_parity_qualified": false
