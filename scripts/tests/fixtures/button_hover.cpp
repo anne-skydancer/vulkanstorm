@@ -27,7 +27,7 @@ struct LLMouseHandler {
 };
 struct LLView:LLMouseHandler {
  LLView* parent=nullptr; std::vector<LLView*> children; LLRect rect;
- bool visible=true,opaque=false,highlight=false; unsigned entered=0,left=0;
+ bool visible=true,opaque=false,highlight=false; unsigned entered=0,left=0,hovered=0;
  std::shared_ptr<bool> alive=std::make_shared<bool>(true);
  LLHandle<LLView> getHandle() { return {this,alive}; }
  LLView* getParent() { return parent; }
@@ -35,6 +35,7 @@ struct LLView:LLMouseHandler {
  bool pointInView(int x,int y) const { return x>=0 && y>=0 && x<rect.mRight-rect.mLeft && y<rect.mTop-rect.mBottom; }
  void screenPointToLocal(int x,int y,int* ox,int* oy) override { *ox=x-rect.mLeft;*oy=y-rect.mBottom; }
  bool handleHover(int x,int y,MASK mask) override {
+  ++hovered;
   for(auto* child:children) { int cx=x+rect.mLeft-child->rect.mLeft,cy=y+rect.mBottom-child->rect.mBottom;
    if(child->visible && child->pointInView(cx,cy) && child->handleHover(cx,cy,mask)) return true;
   }
@@ -108,7 +109,12 @@ int main() {
  assert(viewer.mMouseHoverViews.empty());
  LLView freshRoot, button;freshRoot.add(button);button.rect={0,0,40,40};
  viewer.mRootView=&freshRoot;viewer.updateMouseHoverViews(10,10,0,true);assert(button.highlight);
+ gFocusMgr.capture=&button;
+ unsigned captured_hovers=button.hovered;
  viewer.mMouseInWindow=false;viewer.updateMouseHoverViews(10,10,0,true);
- assert(!button.highlight && viewer.mMouseHoverViews.empty());
- viewer.mMouseInWindow=true;viewer.updateMouseHoverViews(10,10,0,true);assert(button.highlight);
+ assert(gFocusMgr.capture==&button && !button.highlight && viewer.mMouseHoverViews.empty());
+ assert(button.hovered==captured_hovers);
+ viewer.mMouseInWindow=true;viewer.updateMouseHoverViews(10,10,0,true);
+ assert(gFocusMgr.capture==&button && button.highlight && button.hovered==captured_hovers+1);
+ gFocusMgr.capture=nullptr;
 }
