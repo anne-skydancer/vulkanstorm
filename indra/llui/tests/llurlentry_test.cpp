@@ -288,6 +288,15 @@ namespace tut
         testRegex("SL http URL with label", url,
                   "[http://www.secondlife.com/?test=Hi%20There Second Life]",
                   "http://www.secondlife.com/?test=Hi%20There");
+
+        testLabel("bracketed HTTPS link retains supplied text", url,
+                  "[https://example.com Link text]", "Link text");
+        ensure_equals("bracketed HTTPS tooltip shows destination",
+                      url.getTooltip("[https://example.com Link text]"),
+                      "https://example.com");
+        ensure_equals("misleading label is not the tooltip",
+                      url.getTooltip("[https://example.com/?q=one%20two Trusted site]"),
+                      "https://example.com/?q=one%20two");
     }
 
     template<> template<>

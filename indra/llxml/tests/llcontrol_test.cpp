@@ -151,4 +151,32 @@ namespace tut
         ensure("listener fired on changed setting", mListenerFired);
     }
 
+    template<> template<>
+    void control_group_t::test<5>()
+    {
+        for (const std::string name : {"FSDisableLabeledChatLinks", "FSDisableLabeledChatLinksNearbyChat"})
+        {
+            LLControlGroup defaults("defaults");
+            LLSD config;
+            config[name]["Comment"] = "Preview the real URL without replacing the label";
+            config[name]["Persist"] = 1;
+            config[name]["Type"] = "Boolean";
+            config[name]["Value"] = 1;
+            writeSettingsFile(config);
+            ensure_equals("load protection default", defaults.loadFromFile(mTestConfigFile, true), 1U);
+            ensure("new profile enables protection", defaults.getBOOL(name));
+
+            defaults.setBOOL(name, false);
+            ensure("explicit opt-out", !defaults.getBOOL(name));
+            defaults.saveToFile(mTestConfigFile, true);
+
+            LLControlGroup restored("restored");
+            restored.declareBOOL(name, true, "Preview real URL", LLControlVariable::PERSIST_NONDFT);
+            ensure_equals("load saved opt-out", restored.loadFromFile(mTestConfigFile), 1U);
+            ensure("saved false overrides enabled default", !restored.getBOOL(name));
+            ensure("default remains enabled", restored.getControl(name)->getDefault().asBoolean());
+            ensure("false remains saveable", !restored.getControl(name)->getSaveValue().asBoolean());
+        }
+    }
+
 }

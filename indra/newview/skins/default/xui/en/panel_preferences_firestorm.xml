@@ -334,7 +334,7 @@
          height="16"
          name="FSDisableLabeledChatLinksNearbyChat"
          width="520"
-         tool_tip="When enabled, square-bracket (labeled) links in nearby (local) chat and object text keep their text, but hovering instantly shows the real destination URL in a large hint. Disabled by default."/>
+         tool_tip="When enabled, square-bracket (labeled) links in nearby (local) chat and object text keep their text, but hovering instantly shows the real destination URL in a large hint."/>
 
         <check_box
          left="10"
