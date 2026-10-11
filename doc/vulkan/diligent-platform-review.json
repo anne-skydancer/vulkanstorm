@@ -1,5 +1,5 @@
 {
-  "source_commit": "bc55578992409e29e6ae9c78986af38bbd2473bc",
+  "source_commit": "d58f68604c571aa4b3ff8c95d37f907ef25642ce",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -1225,7 +1225,7 @@
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared About and tab container retain existing skin classes. The private custom tab button is admitted by exact type identity; native floater focus highlight publishes explicit-color UI rectangles while OpenGL retains its physical-offset helper. No world or general floater admission.",
-      "sha256": "93d17ff55d9e727c6c912b386d829aaa8bdd447a1c407267c747839e0cad1c3e"
+      "sha256": "8682057d182b876d2cb1a0f96b349639975d7279fd961b328f6b612196dcd39b"
     },
     {
       "path": "indra/llui/lltabcontainer.h",
@@ -1571,9 +1571,9 @@
     },
     {
       "path": "indra/llui/lltabcontainer.cpp",
-      "start": 1906,
-      "end": 1906,
-      "sha256": "93d17ff55d9e727c6c912b386d829aaa8bdd447a1c407267c747839e0cad1c3e",
+      "start": 1908,
+      "end": 1908,
+      "sha256": "8682057d182b876d2cb1a0f96b349639975d7279fd961b328f6b612196dcd39b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared widget draws preserve explicit native primitives, image dimensions, blend semantics and parent transforms; exact internal factory identities prevent missing connected controls. OpenGL retains its original rendering path. Runtime/pixel qualification remains separate."
@@ -14596,7 +14596,7 @@
       "path": "indra/newview/llviewermenu.cpp",
       "start": 36,
       "end": 41,
-      "sha256": "d615b0c9690c2c700032429fde23574ef7a8e137be8c066df425cac6dc01921f",
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure."
@@ -14604,62 +14604,80 @@
     {
       "path": "indra/newview/llviewermenu.cpp",
       "start": 570,
-      "end": 613,
-      "sha256": "d615b0c9690c2c700032429fde23574ef7a8e137be8c066df425cac6dc01921f",
+      "end": 571,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure."
     },
     {
       "path": "indra/newview/llviewermenu.cpp",
-      "start": 5343,
-      "end": 5345,
-      "sha256": "d615b0c9690c2c700032429fde23574ef7a8e137be8c066df425cac6dc01921f",
+      "start": 584,
+      "end": 623,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure."
     },
     {
       "path": "indra/newview/llviewermenu.cpp",
-      "start": 5361,
-      "end": 5367,
-      "sha256": "d615b0c9690c2c700032429fde23574ef7a8e137be8c066df425cac6dc01921f",
+      "start": 625,
+      "end": 625,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure."
     },
     {
       "path": "indra/newview/llviewermenu.cpp",
-      "start": 7428,
-      "end": 7428,
-      "sha256": "d615b0c9690c2c700032429fde23574ef7a8e137be8c066df425cac6dc01921f",
+      "start": 5355,
+      "end": 5357,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure."
     },
     {
       "path": "indra/newview/llviewermenu.cpp",
-      "start": 7432,
-      "end": 7432,
-      "sha256": "d615b0c9690c2c700032429fde23574ef7a8e137be8c066df425cac6dc01921f",
+      "start": 5373,
+      "end": 5379,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure."
     },
     {
       "path": "indra/newview/llviewermenu.cpp",
-      "start": 8342,
-      "end": 8343,
-      "sha256": "d615b0c9690c2c700032429fde23574ef7a8e137be8c066df425cac6dc01921f",
+      "start": 7440,
+      "end": 7440,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure."
     },
     {
       "path": "indra/newview/llviewermenu.cpp",
-      "start": 8372,
-      "end": 8373,
-      "sha256": "d615b0c9690c2c700032429fde23574ef7a8e137be8c066df425cac6dc01921f",
+      "start": 7444,
+      "end": 7444,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure."
+    },
+    {
+      "path": "indra/newview/llviewermenu.cpp",
+      "start": 8354,
+      "end": 8355,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure."
+    },
+    {
+      "path": "indra/newview/llviewermenu.cpp",
+      "start": 8384,
+      "end": 8385,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure."
@@ -17687,10 +17705,37 @@
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance. Named floater and injected-panel admission is cross-checked against exact reviewed CPU owner registrations: partial inventory, inventory properties/item metadata, thumbnail editor, sound/script previews and script preferences, image/sound upload, resident payment and display-name editing. Same-class task_properties and generic unreviewed scene/test floater names remain excluded. Callback-map panel factories are separately audited: FSFloaterIM panel_im_control_panel selects admitted direct/group/ad-hoc shared control panels; LLPreviewLSL script panel selects admitted LLScriptEdCore. Non-admitted task editor script ed panel and world/map/land/build/area-search callback maps remain excluded. Named callback-map gate is independent of registry/injector/type admission; runtime failure evidence rejects invalid-child/widget construction warnings. Exact native widget, command and callback admission preserves real shared menus/toolbars and their saved layout, while preventing scene callback registration/evaluation. Factory omission is limited to the scene-only nearby subtree of the existing People panel. Shared configuration, drag/drop and CPU context callbacks are reviewed; legacy admission remains unrestricted. Runtime chrome/menu/cursor evidence is separate. Exact LLConsole type admission enables the real CPU shared console owner only, without broad superclass or fake registry admission. Profile.Commit/EnableItem now admit exact reviewed CPU account/image/clipboard/text action payloads including real change/upload/remove photo, display-name/account edit, IM/history/friendship/group invitations/share/pay/block/permissions/contact sets and description preview; Profile.CheckItem only block toggle. Shared controller retains capability/load/identity gates. Map/voice/scene moderation remain excluded; real photo Save protocol qualification remains required. Exact public LLDragAndDropButton (lldndbutton.h) is admitted after constructor/draw/input review: inherits reviewed LLButton and forwards DAD to owning inventory controller; real trash handler uses current selected account inventory deletion/permission gates. No scene drag/drop owner is constructed or admitted. Profile menu XML variants use only reviewed Profile.Commit/EnableItem/CheckItem names; FirstLife image controls bind actual programmatic native-safe picker/save handlers. Exact public marketplace inbox inventory panel and both inbox folder/item subclasses are admitted: constructors share reviewed inventory/folder/badge resources, freshness tracking uses account inventory IDs/settings, draws use native folder and badge producers. No new scene owner. Account freshness storage retirement must accompany inventory owner destruction; runtime inbox construction remains separately required. Native child construction gate now omits only nearby_voice_output_monitor under exact panel_toolbar_view.xml, including Vintage/localized skin layers, before factory invocation. Reviewed NearbyVoiceMonitor constructor creates LLLocalSpeakerMgr and draw updates scene avatars through LLWorld; no shared viewer name lookup requires that leaf. Other toolbar/text/skin controls remain constructed; OpenGL has no active gate and remains unchanged. Existing People nearby-panel scene omission now uses exact basename rather than suffix. Exact shared script floater and textbox widget identities now match the already admitted script_floater registration; reviewed forms and docking use shared native-capable UI primitives. Construction failure regression and runtime reply qualification are separate. Native CPU frame-period/jitter sampling and current-circuit ping/loss/bandwidth are generation and host scoped, reset on account change, and never construct scene owners. Actual shared Statistics/Lag Meter/FPS controllers are admitted and retired; empty recordings remain unavailable, native history triangles retain shared geometry, and trusted SimStats uses the existing CPU decoder. Real floater, sample and shrink/restore replay is added; runtime qualification remains pending. Actual CPU Debug Settings, Guidebook and Help Browser exact owners plus browser/default-chat toolbar callbacks are admitted through existing XUI/controllers and retired on account reset. Debug settings retain full inspection, restricting mutations/default/sanity resets to existing reviewed native CPU observers before scene services exist; selected-control/filter signals are scoped. Embedded help honors original external-browser preference, no native-only force-external workaround. Legacy setting writes remain unchanged. Compiler predicate qualification is separate from pending browser/controller runtime evidence."
+    },
+    {
+      "path": "indra/llui/lltabcontainer.cpp",
+      "start": 506,
+      "end": 509,
+      "sha256": "8682057d182b876d2cb1a0f96b349639975d7279fd961b328f6b612196dcd39b",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared tab content drawing uses full container bounds instead of the three-pixel tab-label inset while labels are hidden, preserving expanded edge-control focus borders across backends and skins. LLScreenClipRect ancestor intersection remains enforced. Extracted production clip regression covers panel widths and fractional DPI and fails against the prior inset. This does not confer runtime parity."
+    },
+    {
+      "path": "indra/newview/llviewermenu.cpp",
+      "start": 572,
+      "end": 583,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure. Native connected menu-bar final owner placement now explicitly requests and completes shared branch arrangement, so highlight and hover geometry use the actual menu row height rather than stale pre-placement child heights. Width, skin, labels and legacy menu behavior retained; extracted actual arrangement/placement regression covers lower/upper hit coverage, hidden items and multiple heights. Runtime menu qualification remains separate."
+    },
+    {
+      "path": "indra/newview/llviewermenu.cpp",
+      "start": 624,
+      "end": 624,
+      "sha256": "80820f411db7f0ef024543b8527b65d1dd5fe0c1fd494012ee2ccb07251c305d",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Shared account UI owners, navigation/favorites/status/menu chrome and full inventory/People frontends retain selected skin controls and actual callback behavior. Native ownership avoids scene dependencies, retires account caches/configuration and updates CPU location/balance; ordinary window cursor and usable toolbar geometry are preserved. Runtime skin/lifecycle evidence is separate. Shared Edit.Delete retains real editor dispatch and closes existing menus, but scene object menu and global menu holder are optional; native text delete needs no world owner. Surveyed admitted Edit enable/undo/redo/cut/copy/paste/select/deselect and spellcheck callbacks: others use focused editor/spawning widget with null checks, no unconditional scene singleton. Extracted production-handler compiler regression covers native null scene menus and legacy existing-menu closure. Native connected menu-bar final owner placement now explicitly requests and completes shared branch arrangement, so highlight and hover geometry use the actual menu row height rather than stale pre-placement child heights. Width, skin, labels and legacy menu behavior retained; extracted actual arrangement/placement regression covers lower/upper hit coverage, hidden items and multiple heights. Runtime menu qualification remains separate."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "32eec0ef454c83f3822b25155d2c8f8ab52988af",
+    "previous_source_commit": "bc55578992409e29e6ae9c78986af38bbd2473bc",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Only hash-verified existing insertion-review witnesses replace invalid platform rows; reasons/range extents retained and unchanged text mapped. Changed blocks have explicit source dispositions. No platform/runtime certification."
   }
