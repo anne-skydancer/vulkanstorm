@@ -154,6 +154,7 @@ protected:
      * Invokes callbacks set with setHistoryChangedCallback().
      */
     history_signal_t        mHistoryChangedSignal;
+    boost::signals2::scoped_connection mSessionHistoryConnection;
 };
 
 #endif //LL_LLTELEPORTHISTORYSTORAGE_H

@@ -752,6 +752,12 @@ void LLPanelProfileClassified::onOpen(const LLSD& key)
             region_name = region->getName();
         }
 
+#if VS_NATIVE_VULKAN
+        if (const auto owner = VSNativeSession::active())
+        {
+            region_name = owner->regionName(); desc.clear(); snapshot_id.setNull();
+        }
+#endif
         setClassifiedName(makeClassifiedName());
         setDescription(desc);
         setSnapshotId(snapshot_id);
@@ -1467,6 +1473,10 @@ std::string LLPanelProfileClassified::makeClassifiedName()
         name = region->getName();
     }
 
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+        name = owner->parcelName().empty() ? owner->regionName() : owner->parcelName();
+#endif
     return name;
 }
 
@@ -1482,6 +1492,9 @@ void LLPanelProfileClassified::onSetLocationClick()
         region_name = region->getName();
     }
 
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active()) region_name = owner->regionName();
+#endif
     setClassifiedLocation(createLocationText(getLocationNotice(), region_name, getPosGlobal()));
 
     // mark classified as dirty

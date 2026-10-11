@@ -26,6 +26,8 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#include "llrender2dutils.h"
 #include "llpanelexperiencelog.h"
 
 #include "llexperiencelog.h"
@@ -62,7 +64,7 @@ bool LLPanelExperienceLog::postBuild()
     mEventList->setDoubleClickCallback( boost::bind(&LLPanelExperienceLog::onProfileExperience, this));
 
     getChild<LLButton>("btn_clear")->setCommitCallback(boost::bind(&LLExperienceLog::clear, log));
-    getChild<LLButton>("btn_clear")->setCommitCallback(boost::bind(&LLPanelExperienceLog::refresh, this));
+    getChild<LLButton>("btn_clear")->setCommitCallback(vs_native_im_account_callback([weak = getDerivedHandle<LLPanelExperienceLog>()](auto&&...) { if (auto* owner = weak.get()) owner->refresh(); }));
 
     getChild<LLButton>(BTN_PROFILE_XP)->setCommitCallback(boost::bind(&LLPanelExperienceLog::onProfileExperience, this));
     getChild<LLButton>(BTN_REPORT_XP )->setCommitCallback(boost::bind(&LLPanelExperienceLog::onReportExperience, this));
@@ -81,7 +83,7 @@ bool LLPanelExperienceLog::postBuild()
 
     mPageSize = log->getPageSize();
     refresh();
-    mNewEvent = LLExperienceLog::instance().addUpdateSignal(boost::bind(&LLPanelExperienceLog::refresh, this));
+    mNewEvent = LLExperienceLog::instance().addUpdateSignal(vs_native_im_account_callback([weak = getDerivedHandle<LLPanelExperienceLog>()](auto&&...) { if (auto* owner = weak.get()) owner->refresh(); }));
     return true;
 }
 
@@ -175,7 +177,7 @@ void LLPanelExperienceLog::refresh()
     {
         mEventList->deleteAllItems();
         mEventList->setCommentText(getString("loading"));
-        LLExperienceCache::instance().get(waiting_id, boost::bind(&LLPanelExperienceLog::refresh, this));
+        LLExperienceCache::instance().get(waiting_id, vs_native_im_account_callback([weak = getDerivedHandle<LLPanelExperienceLog>()](auto&&...) { if (auto* owner = weak.get()) owner->refresh(); }));
     }
     else
     {
@@ -205,6 +207,7 @@ void LLPanelExperienceLog::onProfileExperience()
 
 void LLPanelExperienceLog::onReportExperience()
 {
+    if (LLRender2D::isNativeUI()) return;
     LLSD event = getSelectedEvent();
     if(event.isDefined())
     {
@@ -251,7 +254,7 @@ void LLPanelExperienceLog::logSizeChanged()
 void LLPanelExperienceLog::onSelectionChanged()
 {
     bool enabled = (1 == mEventList->getNumSelected());
-    getChild<LLButton>(BTN_REPORT_XP)->setEnabled(enabled);
+    getChild<LLButton>(BTN_REPORT_XP)->setEnabled(enabled && !LLRender2D::isNativeUI());
     getChild<LLButton>(BTN_PROFILE_XP)->setEnabled(enabled);
     getChild<LLButton>("btn_notify")->setEnabled(enabled);
 }

@@ -26,6 +26,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "vsnativeim.h"
+#include "fspanelblocklist.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #endif
@@ -6478,6 +6479,19 @@ bool handle_teleport_access_blocked(LLSD& llsdBlock, const std::string & notific
     return returnValue;
 }
 
+namespace
+{
+bool native_simulator_notification_current(const LLSD& payload)
+{
+    if (!vs_native_im_notification_current(payload)) return false;
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active(); owner && payload.has("vs_simulator_host"))
+        return owner->host() == LLHost(payload["vs_simulator_host"].asString());
+#endif
+    return true;
+}
+}
+
 bool attempt_standard_notification(LLMessageSystem* msgsystem)
 {
     // if we have additional alert data
@@ -6564,7 +6578,8 @@ bool attempt_standard_notification(LLMessageSystem* msgsystem)
 
             -----------------------------------------------------------------------*/
             static LLCachedControl<S32> ban_lines_mode(gSavedSettings , "ShowBanLines" , LLViewerParcelMgr::PARCEL_BAN_LINES_ON_COLLISION);
-            if (ban_lines_mode == LLViewerParcelMgr::PARCEL_BAN_LINES_ON_COLLISION)
+            if (ban_lines_mode == LLViewerParcelMgr::PARCEL_BAN_LINES_ON_COLLISION
+                && !gViewerWindow->isNativeVulkan())
             {
                 LLViewerParcelMgr::getInstance()->resetCollisionTimer();
             }
@@ -6574,7 +6589,7 @@ bool attempt_standard_notification(LLMessageSystem* msgsystem)
             }
         }
         // HACK -- handle callbacks for specific alerts.
-        if( notificationID == "HomePositionSet" )
+        if( notificationID == "HomePositionSet" && !gViewerWindow->isNativeVulkan() )
         {
             // save the home location image to disk
             std::string snap_filename = gDirUtilp->getLindenUserDir();
@@ -6605,7 +6620,7 @@ bool attempt_standard_notification(LLMessageSystem* msgsystem)
             }
 
             // <FS:Ansariel> Optional new region restart notification
-            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification"))
+            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification") || gViewerWindow->isNativeVulkan())
             {
                 notificationID += "Toast";
             }
@@ -6685,7 +6700,9 @@ bool attempt_standard_notification(LLMessageSystem* msgsystem)
             }
         }
 
-        LLNotificationsUtil::add(notificationID, llsdBlock);
+        LLSD payload;
+        vs_native_im_stamp_notification(payload);
+        LLNotificationsUtil::add(notificationID, llsdBlock, payload);
         return true;
     }
     return false;
@@ -6700,7 +6717,7 @@ static void process_special_alert_messages(const std::string & message)
     {
         add(LLStatViewer::KILLED, 1);
     }
-    else if( message == "Home position set." )
+    else if( message == "Home position set." && !gViewerWindow->isNativeVulkan() )
     {
         // save the home location image to disk
         std::string snap_filename = gDirUtilp->getLindenUserDir();
@@ -6761,6 +6778,7 @@ void process_alert_message(LLMessageSystem *msgsystem, void **user_data)
 
         static LLCachedControl<S32> ban_lines_mode(gSavedSettings , "ShowBanLines" , LLViewerParcelMgr::PARCEL_BAN_LINES_ON_COLLISION);
         if (ban_lines_mode == LLViewerParcelMgr::PARCEL_BAN_LINES_ON_COLLISION
+            && !gViewerWindow->isNativeVulkan()
             && message.find("Cannot enter parcel") != std::string::npos)
         {
             LLViewerParcelMgr::getInstance()->resetCollisionTimer();
@@ -6812,7 +6830,7 @@ void process_alert_core(const std::string& message, bool modal)
         std::string notify_name(message.substr(NOTIFY_PREFIX.length()));
         LLNotificationsUtil::add(notify_name);
     }
-    else if (message[0] == '/')
+    else if (!message.empty() && message[0] == '/')
     {
         // System message is important, show in upper-right box not tip
         std::string text(message.substr(1));
@@ -6828,7 +6846,7 @@ void process_alert_core(const std::string& message, bool modal)
             seconds = mins * 60;
             is_region_restart = true;
 
-            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification"))
+            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification") || gViewerWindow->isNativeVulkan())
             {
                 LLSD args;
                 args["MINUTES"] = llformat("%d", mins);
@@ -6840,7 +6858,7 @@ void process_alert_core(const std::string& message, bool modal)
             LLStringUtil::convertToS32(text.substr(18), seconds);
             is_region_restart = true;
 
-            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification"))
+            if (!gSavedSettings.getBOOL("FSUseNewRegionRestartNotification") || gViewerWindow->isNativeVulkan())
             {
                 LLSD args;
                 args["SECONDS"] = llformat("%d", seconds);
@@ -6849,7 +6867,7 @@ void process_alert_core(const std::string& message, bool modal)
         }
         if (is_region_restart)
         {
-            if (gSavedSettings.getBOOL("FSUseNewRegionRestartNotification"))
+            if (gSavedSettings.getBOOL("FSUseNewRegionRestartNotification") && !gViewerWindow->isNativeVulkan())
             {
                 LLFloaterRegionRestarting* floaterp = LLFloaterReg::findTypedInstance<LLFloaterRegionRestarting>("region_restarting");
 
@@ -7292,6 +7310,7 @@ void experiencePermissionBlock(LLUUID experience, LLSD result)
 
 bool script_question_cb(const LLSD& notification, const LLSD& response)
 {
+    if (!native_simulator_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     LLMessageSystem *msg = gMessageSystem;
     S32 orig = notification["payload"]["questions"].asInteger();
@@ -7372,11 +7391,12 @@ bool script_question_cb(const LLSD& notification, const LLSD& response)
     {
         if(experience.notNull())
         {
-            LLViewerRegion* region = gAgent.getRegion();
-            if (!region)
-                return false;
+            if (gAgent.getRegionCapability("ExperiencePreferences").empty()) return false;
 
-            LLExperienceCache::instance().setExperiencePermission(experience, std::string("Block"), boost::bind(&experiencePermissionBlock, experience, _1));
+            const auto current = vs_native_im_guard();
+            LLExperienceCache::instance().setExperiencePermission(experience, std::string("Block"),
+                [current, experience](const LLSD& result)
+                { if (current()) experiencePermissionBlock(experience, result); });
 
         }
 }
@@ -7416,6 +7436,7 @@ static LLNotificationFunctorRegistration script_question_cb_reg_3("ScriptQuestio
 
 void process_script_experience_details(const LLSD& experience_details, LLSD args, LLSD payload)
 {
+    if (!native_simulator_notification_current(payload)) return;
     if(experience_details[LLExperienceCache::PROPERTIES].asInteger() & LLExperienceCache::PROPERTY_GRID)
     {
         args["GRID_WIDE"] = LLTrans::getString("Grid-Scope");
@@ -7547,6 +7568,10 @@ void process_script_question(LLMessageSystem *msg, void **user_data)
             payload["questions"] = known_questions;
             payload["object_name"] = object_name;
             payload["owner_name"] = owner_name;
+            vs_native_im_stamp_notification(payload);
+#if VS_NATIVE_VULKAN
+            if (VSNativeSession::active()) payload["vs_simulator_host"] = msg->getSender().getIPandPort();
+#endif
 
 // [RLVa:KB] - Checked: 2012-07-28 (RLVa-1.4.7)
             if (rlv_handler_t::isEnabled())
@@ -8323,6 +8348,7 @@ const char* SCRIPT_DIALOG_HEADER = "Script Dialog:\n";
 
 bool callback_script_dialog(const LLSD& notification, const LLSD& response)
 {
+    if (!native_simulator_notification_current(notification["payload"])) return false;
     LLNotificationForm form(notification["form"]);
 
     std::string rtn_text;
@@ -8353,6 +8379,10 @@ bool callback_script_dialog(const LLSD& notification, const LLSD& response)
         {
             // This call opens the sidebar, displays the block list, and highlights the newly blocked
             // object in the list so the user can see that their block click has taken effect.
+#if VS_NATIVE_VULKAN
+            if (VSNativeSession::active()) FSPanelBlockList::showPanelAndSelect(object_id);
+            else
+#endif
             LLPanelBlockedList::showPanelAndSelect(object_id);
         }
     }
@@ -8435,6 +8465,10 @@ void process_script_dialog(LLMessageSystem* msg, void**)
     msg->getUUID("Data", "ImageID", image_id);
 
     payload["sender"] = msg->getSender().getIPandPort();
+    vs_native_im_stamp_notification(payload);
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) payload["vs_simulator_host"] = msg->getSender().getIPandPort();
+#endif
     payload["object_id"] = object_id;
     payload["chat_channel"] = chat_channel;
     payload["object_name"] = object_name;
@@ -8492,6 +8526,7 @@ std::vector<LLSD> gLoadUrlList;
 
 bool callback_load_url(const LLSD& notification, const LLSD& response)
 {
+    if (!native_simulator_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
 
     if (0 == option)
@@ -8514,6 +8549,7 @@ void callback_load_url_name(const LLUUID& id, const std::string& full_name, bool
         if (load_url_info["owner_id"].asUUID() == id)
         {
             it = gLoadUrlList.erase(it);
+            if (!native_simulator_notification_current(load_url_info)) continue;
 
             std::string owner_name;
             if (is_group)
@@ -8581,6 +8617,10 @@ void process_load_url(LLMessageSystem* msg, void**)
     payload["object_name"] = object_name;
     payload["message"] = message;
     payload["url"] = url;
+    vs_native_im_stamp_notification(payload);
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) payload["vs_simulator_host"] = msg->getSender().getIPandPort();
+#endif
 
     // URL is safety checked in load_url above
 
@@ -8597,11 +8637,15 @@ void process_load_url(LLMessageSystem* msg, void**)
 
     if (owner_is_group)
     {
-        gCacheName->getGroup(owner_id, boost::bind(&callback_load_url_name, _1, _2, _3));
+        const auto current = vs_native_im_guard();
+        gCacheName->getGroup(owner_id, [current](const LLUUID& id, const std::string& name, bool group)
+        { if (current()) callback_load_url_name(id, name, group); });
     }
     else
     {
-        LLAvatarNameCache::get(owner_id, boost::bind(&callback_load_url_avatar_name, _1, _2));
+        const auto current = vs_native_im_guard();
+        LLAvatarNameCache::get(owner_id, [current](const LLUUID& id, const LLAvatarName& name)
+        { if (current()) callback_load_url_avatar_name(id, name); });
     }
 }
 

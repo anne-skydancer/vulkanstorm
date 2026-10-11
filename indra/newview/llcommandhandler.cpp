@@ -34,6 +34,7 @@
 
 #include "llcommandhandler.h"
 #include "lluuid.h"
+#include "indra_constants.h"
 #include "llnotificationsutil.h"
 #include "lltrans.h"
 #include "llcommanddispatcherlistener.h"
@@ -228,11 +229,34 @@ LLCommandHandler::~LLCommandHandler()
 // static
 bool LLCommandDispatcher::isNativeConnectedCommand(const std::string& cmd, const LLSD& params)
 {
-    if (cmd == "teleport") return true; // Ordinary handler validates positions/grid and asks for confirmation.
+    // This is a service-ownership gate, not a replacement for handler validation
+    // or the registry's trusted-browser, click-only and throttling policies.
+    if (cmd == "teleport") return true;
+    if (cmd == "help") return params.size() <= 1;
+    if (cmd == "search") return params.size() <= 2;
+    if (cmd == "keybinding") return params.size() == 1 && !params[0].asString().empty();
+    if (cmd == "profile") return params.size() == 1 && !params[0].asString().empty();
+    if (cmd == "fshelp") return params.size() == 2 && params[0].asString() == "showdebug" && !params[1].asString().empty();
+    if (cmd == "balance") return params.size() == 1 && params[0].asString() == "request";
+    if (cmd == "chat") return params.size() == 2 && params[0].asInteger() > 0 && params[0].asInteger() < CHAT_CHANNEL_DEBUG;
+    if (cmd == "event")
+    {
+        if (params.size() < 2 || params[0].asInteger() <= 0) return false;
+        const auto verb = params[1].asString();
+        return (params.size() == 2 && verb == "details") ||
+            (params.size() == 3 && verb == "notify" &&
+             (params[2].asString() == "enable" || params[2].asString() == "disable"));
+    }
+    if (cmd == "inventory" && params.size() == 1) return params[0].asString() == "show" || params[0].asString() == "filters";
     if (cmd == "group" && params.size() == 1) return params[0].asString() == "create" || params[0].asString() == "list" || params[0].asString() == "show";
-    if (params.size() < 2 || !LLUUID::validate(params[0].asString()) || LLUUID(params[0].asString()).isNull()) return false;
+    if (params.size() < 1 || !LLUUID::validate(params[0].asString()) || LLUUID(params[0].asString()).isNull()) return false;
+    if (cmd == "objectim" || cmd == "sharewithavatar") return params.size() == 1;
+    if (params.size() != 2) return false;
     const std::string verb = params[1].asString();
-    if (cmd == "agent") return verb == "about" || verb == "mention" || verb == "inspect" || verb == "im" || verb == "pay" || verb == "requestfriend" || verb == "removefriend" || verb == "mute" || verb == "unmute" || verb == "block" || verb == "unblock";
+    if (cmd == "inventory") return verb == "select";
+    if (cmd == "pick") return verb == "edit";
+    if (cmd == "experience") return verb == "profile";
+    if (cmd == "agent" || cmd == "agentself") return verb == "about" || verb == "mention" || verb == "inspect" || verb == "im" || verb == "pay" || verb == "requestfriend" || verb == "removefriend" || verb == "mute" || verb == "unmute" || verb == "block" || verb == "unblock" || verb == "offerteleport";
     if (cmd == "group") return verb == "about" || verb == "inspect";
     if (cmd == "firestorm") return verb == "addtocontactset" || verb == "blockavatar" || verb == "viewlog" || verb == "groupjoin" || verb == "groupleave" || verb == "groupactivate";
     return false;

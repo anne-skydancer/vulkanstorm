@@ -26,6 +26,9 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llrender2dutils.h"
 
 #include "llpanelprofilepicks.h"
@@ -645,6 +648,15 @@ void LLPanelProfilePick::setAvatarId(const LLUUID& avatar_id)
             region_name = region->getName();
         }
 
+#if VS_NATIVE_VULKAN
+        if (const auto owner = VSNativeSession::active())
+        {
+            region_name = owner->regionName();
+            pick_name = owner->parcelName();
+            // Native location ownership has no legacy scene parcel/thumbnail.
+            parcel_id.setNull(); snapshot_id.setNull(); pick_desc.clear();
+        }
+#endif
         setParcelID(parcel_id);
         setPickName(pick_name.empty() ? region_name : pick_name);
         setPickDesc(pick_desc);
@@ -942,6 +954,13 @@ void LLPanelProfilePick::onClickSetLocation()
         region_name = region->getName();
     }
 
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        region_name = owner->regionName(); parcel_name = owner->parcelName();
+        setParcelID(LLUUID::null);
+    }
+#endif
     setPickLocation(createLocationText(getLocationNotice(), parcel_name, region_name, getPosGlobal()));
 
     mLocationChanged = true;

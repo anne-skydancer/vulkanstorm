@@ -50,6 +50,9 @@ public:
     typedef std::function<void(const LLSD &)> ExperienceGetFn_t;
 
     void setCapabilityQuery(CapabilityQuery_t queryfn);
+    // Optional viewer account lifetime policy; llmessage has no viewer dependency.
+    using AccountGuardQuery_t = std::function<std::function<bool()>()>;
+    void setAccountGuardQuery(AccountGuardQuery_t queryfn) { mAccountGuardQuery = std::move(queryfn); }
     void cleanup();
 
     static void setCurrentGrid(std::string_view gridId, bool isInOpenSim); // <FS:Ansariel> Log getting spammed with experience requests from other grids
@@ -143,6 +146,10 @@ private:
 
     LLFrameTimer    mEraseExpiredTimer;    // Periodically clean out expired entries from the cache
     CapabilityQuery_t mCapability;
+    AccountGuardQuery_t mAccountGuardQuery;
+    ExperienceGetFn_t guardAccountCallback(ExperienceGetFn_t callback);
+    void enqueueAccountCoprocedure(const std::string& pool, const std::string& name,
+        std::function<void(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t&, const LLUUID&)> procedure);
     std::string     mCacheFileName;
     static bool     sShutdown; // control for coroutines, they exist out of LLExperienceCache's scope, so they need a static control
 

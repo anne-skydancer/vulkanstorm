@@ -193,6 +193,7 @@ public:
     // Public SLM API : Initialization and status
     typedef boost::signals2::signal<void ()> status_updated_signal_t;
     void initializeSLM(const status_updated_signal_t::slot_type& cb);
+    void resetNativeAccount();
     U32  getSLMStatus() const { return mMarketPlaceStatus; }
     std::string getSLMConnectionfailureReason() { return mMarketPlaceFailureReason; }
     void setSLMStatus(U32 status);

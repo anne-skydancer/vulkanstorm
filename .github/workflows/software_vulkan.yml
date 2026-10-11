@@ -39,6 +39,14 @@ jobs:
       - run: python scripts/tests/test_vulkan_session_replay.py
       - run: python scripts/tests/test_chat_keyboard_routing.py
       - run: python scripts/tests/test_native_parcel_playback.py
+      - run: python scripts/tests/test_native_app_url_routing.py
+      - run: python scripts/tests/test_inventory_settings_controller.py
+      - run: python scripts/tests/test_profile_native_location.py
+      - run: python scripts/tests/test_emoji_connected_controller.py
+      - run: python scripts/tests/test_native_marketplace_account.py
+      - run: python scripts/tests/test_native_bridge_retirement.py
+      - run: python scripts/tests/test_experience_account_lifetime.py
+      - run: python scripts/tests/test_event_notifier_account.py
       - run: python scripts/tests/test_vulkan_viewer_diagnostic.py
       - run: python scripts/tests/test_windows_clipboard.py
       - run: python scripts/tests/test_native_pointer_leave.py

@@ -1023,7 +1023,7 @@ void LLViewerMedia::setAllMediaPaused(bool val)
 {
 #if VS_NATIVE_VULKAN
     if (auto owner = VSNativeSession::active())
-    { gSavedSettings.setBOOL("MediaTentativeAutoPlay", !val); owner->setMediaEnabled(!val); return; }
+    { gSavedSettings.setBOOL("MediaTentativeAutoPlay", !val); owner->setMediaPaused(val); return; }
 #endif
     // Set "tentative" autoplay first.  We need to do this here or else
     // re-enabling won't start up the media below.

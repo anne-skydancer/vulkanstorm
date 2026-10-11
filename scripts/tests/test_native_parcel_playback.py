@@ -34,9 +34,12 @@ class NativeParcelPlaybackTests(unittest.TestCase):
             'bool VSNativeSession::admit(', 'void VSNativeSession::requestParcel()',
             'void VSNativeSession::clearParcelPlayback()', 'void VSNativeSession::updateParcelPlayback()', 'bool VSNativeSession::mediaEnabled()',
             'bool VSNativeSession::playbackCurrent(', 'bool VSNativeSession::setMusicEnabled(',
-            'bool VSNativeSession::setMediaEnabled(', 'void VSNativeSession::rejectParcelPlayback('))
+            'bool VSNativeSession::setMediaEnabled(', 'void VSNativeSession::rejectParcelPlayback(',
+            'void VSNativeSession::setMediaPaused(', 'bool VSNativeSession::updateParcelMediaMetadata(',
+            'void VSNativeSession::applyParcelMediaState(', 'void VSNativeSession::parcelMediaCommand('))
         deliver = source[source.index('bool VSNativeSession::deliver('):]
         parcel = balanced(deliver, deliver.index('if (name == "ParcelProperties"'))
+        parcel += '\n' + balanced(deliver, deliver.index('else if (name == "ParcelMediaUpdate"'))
         prelude = deliver[deliver.index('    if (generation !='):deliver.index('    if (name == "ParcelProperties"')]
         definitions += '\nbool VSNativeSession::deliver(const std::string& name,const LLSD& body,const LLHost& sender,U64 generation){\n' + prelude + parcel + '\nreturn true;}'
         fixture = STUBS + definitions + CHECKS
@@ -89,6 +92,25 @@ class NativeParcelPlaybackTests(unittest.TestCase):
         change = method(source, 'bool VSNativeSession::changeRegion(')
         self.assertLess(change.index('clearParcelPlayback();'), change.index('++mRegionEpoch;'))
 
+    def test_actual_nearby_panel_stays_with_current_cpu_parcel(self):
+        panel = (ROOT / 'indra/newview/llpanelnearbymedia.cpp').read_text()
+        for declaration in ('void LLPanelNearByMedia::refreshList()', 'void LLPanelNearByMedia::updateControls()',
+                            'void LLPanelNearByMedia::onClickSelectedMediaPlay()', 'void LLPanelNearByMedia::onClickSelectedMediaPause()',
+                            'void LLPanelNearByMedia::onClickSelectedMediaMute()', 'void LLPanelNearByMedia::onCommitSelectedMediaVolume()',
+                            'bool LLPanelNearByMedia::setDisabled(', 'std::string LLPanelNearByMedia::getSelectedUrl()'):
+            native = method(panel, declaration).split('#if VS_NATIVE_VULKAN', 1)[1].split('#endif', 1)[0]
+            self.assertIn('VSNativeSession::active()', native)
+            self.assertIn('return', native)
+            for forbidden in ('LLViewerParcelMgr', 'LLViewerMediaFocus', 'getPriorityList', 'getProximity', 'getSomeObject'):
+                self.assertNotIn(forbidden, native)
+        refresh = method(panel, 'void LLPanelNearByMedia::refreshList()').split('#endif', 1)[0]
+        self.assertIn('PARCEL_MEDIA_LIST_ITEM_UUID', refresh)
+        self.assertIn('owner->mediaURL()', refresh)
+        self.assertIn('owner->parcelName()', refresh)
+        pause = method((ROOT / 'indra/newview/llviewermedia.cpp').read_text(), 'void LLViewerMedia::setAllMediaPaused(')
+        self.assertIn('owner->setMediaPaused(val)', pause)
+        self.assertNotIn('owner->setMediaEnabled(!val)', pause)
+
 
 STUBS = r"""
 #include <cassert>
@@ -123,7 +145,16 @@ struct Settings {std::map<std::string,int> values;bool getBOOL(const char* key)c
 struct Vector {F32 mV[3]={128,64,20};bool isFinite()const{return std::isfinite(mV[0])&&std::isfinite(mV[1])&&std::isfinite(mV[2]);}};
 template<class T>T llclamp(T v,T low,T high){return std::clamp(v,low,high);}template<class T>T llmin(T a,T b){return std::min(a,b);}
 struct LLViewerAudio {static inline int stops=0;static bool instanceExists(){return true;}static LLViewerAudio& instance(){static LLViewerAudio a;return a;}void stopInternetStreamWithAutoFade(){++stops;}};
-struct Window {int closes=0;void closeFloater(){++closes;}};
+struct LLPluginClassMediaOwner {static constexpr int MEDIA_LOADING=1;};
+struct Plugin {bool running=false,timeBased=true,loop=false;int status=1,starts=0,pauses=0,seeks=0;float lastSeek=0;
+ bool isPluginRunning(){return running;}bool pluginSupportsMediaTime(){return timeBased;}int getStatus(){return status;}
+ void setLoop(bool v){loop=v;}void start(){++starts;}void pause(){++pauses;}void seek(float v){++seeks;lastSeek=v;}
+};
+struct LLMediaCtrl {Plugin* plugin=nullptr;bool decoupled=false;int width=0,height=0;
+ Plugin* getMediaPlugin(){return plugin;}void setDecoupleTextureSize(bool v){decoupled=v;}void setTextureSize(int w,int h){width=w;height=h;}
+};
+struct Window {int closes=0;LLMediaCtrl browser;void closeFloater(){++closes;}template<class T>T* findChild(const char*,bool){return &browser;}};
+constexpr int PARCEL_MEDIA_COMMAND_STOP=0,PARCEL_MEDIA_COMMAND_UNLOAD=1,PARCEL_MEDIA_COMMAND_PAUSE=2,PARCEL_MEDIA_COMMAND_TIME=3,PARCEL_MEDIA_COMMAND_PLAY=4,PARCEL_MEDIA_COMMAND_LOOP=5;
 struct Handle {Window* pointer=nullptr;Window* get()const{return pointer;}bool isDead()const{return !pointer;}void markDead(){pointer=nullptr;}};
 struct LLMessageSystem {std::string name,block;std::map<std::string,F32> floats;std::map<std::string,S32> ints;int agent=0,session=0,sends=0;LLHost destination;
  void newMessage(const char* v){name=v;}void nextBlock(const char* v){block=v;}
@@ -138,11 +169,13 @@ struct VSNativeSession {
  U64 mGeneration=7,mRegionEpoch=3,mParcelRevision=1,mMusicRequest=1,mMediaRequest=1,mSent=0,mRejected=0,mExpired=0;
  S32 mParcelSequence=11,mParcelID=-1;int mAgent=23,mSession=24;
  bool mMusicRequested=false,mMediaRequested=false,mMusicUserStopped=false,mMediaUserStopped=false,mMediaPresented=false;
+ bool mMediaLoop=false,mMediaAutoScale=true,mMediaPaused=false,mMediaStateDirty=false;S32 mMediaWidth=0,mMediaHeight=0;F32 mMediaPendingSeek=-1.f;
  std::string mMusicURL,mMediaURL,mParcelName,mMediaType;Handle mParcelMediaWindow;
  int musicRequests=0,mediaRequests=0;
  bool admit(const std::string&,const LLHost&);void requestParcel();void clearParcelPlayback();void updateParcelPlayback();bool mediaEnabled()const;
  bool playbackCurrent(bool,U64,U64,U64,U64,const std::string&)const;
  bool setMusicEnabled(bool);bool setMediaEnabled(bool);void rejectParcelPlayback(bool);
+ void setMediaPaused(bool);bool updateParcelMediaMetadata(const LLSD&);void applyParcelMediaState();void parcelMediaCommand(U32,U32,F32);
  bool requestParcelPlayback(bool music){if(music)++musicRequests;else++mediaRequests;return mPhase==Phase::Connected&&!mChangingRegion;}
  bool deliver(const std::string&,const LLSD&,const LLHost&,U64);
 };
@@ -189,6 +222,39 @@ int main(){
  owner.requestParcel();assert(message.name=="ParcelPropertiesRequest");assert(message.agent==23&&message.session==24);
  assert(message.ints["SequenceID"]==12&&!message.ints["SnapSelection"]);assert(message.destination.id==1);
  assert(message.floats["West"]==128&&message.floats["East"]>128&&message.floats["South"]==64);
+ // Metadata is bounded and commands remain pending until the actual plugin is ready.
+ owner.mParcelMediaWindow.pointer=&window;owner.mMediaRequested=true;owner.mMediaUserStopped=false;
+ Plugin plugin;window.browser.plugin=&plugin;LLSD metadata;metadata["loop"]=1;metadata["autoscale"]=0;metadata["width"]=640;metadata["height"]=360;
+ assert(owner.updateParcelMediaMetadata(metadata));owner.applyParcelMediaState();assert(plugin.starts==0&&owner.mMediaStateDirty);
+ auto invalid=metadata;invalid["width"]=4097;assert(!owner.updateParcelMediaMetadata(invalid));assert(owner.mMediaWidth==640);
+ gSavedSettings.values["PermAllowScriptedMedia"]=1;
+ owner.parcelMediaCommand(1u<<PARCEL_MEDIA_COMMAND_TIME,PARCEL_MEDIA_COMMAND_TIME,12.5f);assert(owner.mMediaPendingSeek==12.5f&&plugin.seeks==0);
+ plugin.running=true;owner.applyParcelMediaState();assert(plugin.loop&&window.browser.decoupled&&window.browser.width==640&&plugin.starts==1);
+ assert(plugin.seeks==0&&owner.mMediaPendingSeek==12.5f);plugin.status=2;owner.applyParcelMediaState();assert(plugin.seeks==1&&plugin.lastSeek==12.5f);
+ owner.setMediaPaused(true);assert(owner.mMediaPaused&&!owner.mediaEnabled()&&plugin.pauses==1&&window.closes==2);
+ owner.setMediaPaused(false);assert(owner.mediaEnabled()&&plugin.starts==2&&window.closes==2);
+ auto starts=plugin.starts;assert(owner.updateParcelMediaMetadata(metadata));owner.applyParcelMediaState();assert(plugin.starts==starts);
+ owner.parcelMediaCommand(1u<<PARCEL_MEDIA_COMMAND_TIME,PARCEL_MEDIA_COMMAND_TIME,std::numeric_limits<float>::infinity());assert(owner.mMediaPendingSeek<0);
+ plugin.loop=false;owner.mMediaLoop=false;owner.parcelMediaCommand(1u<<PARCEL_MEDIA_COMMAND_LOOP,PARCEL_MEDIA_COMMAND_LOOP,0);assert(plugin.loop);
+ owner.parcelMediaCommand(0,PARCEL_MEDIA_COMMAND_TIME,80);assert(plugin.lastSeek==12.5f);
+ owner.setMediaEnabled(false);assert(owner.mMediaPendingSeek<0&&!owner.mMediaPaused);
+ auto music=owner.musicRequests;owner.parcelMediaCommand(1u<<PARCEL_MEDIA_COMMAND_PLAY,PARCEL_MEDIA_COMMAND_PLAY,0);assert(!owner.mMediaRequested&&owner.musicRequests==music);
+ owner.mMediaUserStopped=false;owner.mMediaRequested=true;owner.mParcelMediaWindow.pointer=&window;
+ gSavedSettings.values["PermAllowScriptedMedia"]=0;owner.parcelMediaCommand(1u<<PARCEL_MEDIA_COMMAND_TIME,PARCEL_MEDIA_COMMAND_TIME,99);assert(plugin.lastSeek==12.5f);
+ owner.clearParcelPlayback();assert(owner.mMediaPendingSeek<0&&!owner.mMediaLoop&&!owner.mMediaPaused&&owner.mMediaWidth==0);
+ // Identical source updates must preserve pause without restart or repeated consent.
+ p["sequence"]=owner.mParcelSequence;assert(owner.deliver("ParcelProperties",p,LLHost{1},7));
+ assert(owner.setMediaEnabled(true));owner.mParcelMediaWindow.pointer=&window;owner.setMediaPaused(true);
+ LLSD update;update["media"]=owner.mMediaURL;update["type"]=owner.mMediaType;
+ starts=plugin.starts;auto requests=owner.mediaRequests;
+ assert(owner.deliver("ParcelMediaUpdate",update,LLHost{1},7));assert(owner.mMediaPaused&&owner.mMediaRequested);
+ assert(plugin.starts==starts&&owner.mediaRequests==requests);
+ update["media"]="http://127.0.0.1/replaced";assert(owner.deliver("ParcelMediaUpdate",update,LLHost{1},7));
+ assert(owner.mMediaRequested&&owner.mMediaPaused&&!owner.mMediaUserStopped);
+ owner.mParcelMediaWindow.pointer=&window;p["id"]=99;
+ assert(owner.deliver("ParcelProperties",p,LLHost{1},7));assert(owner.mMediaRequested&&owner.mMediaPaused&&!owner.mMediaUserStopped);
+ owner.setMediaEnabled(false);update["media"]="http://127.0.0.1/explicit-stop";
+ assert(owner.deliver("ParcelMediaUpdate",update,LLHost{1},7));assert(owner.mMediaUserStopped&&!owner.mMediaRequested);
  owner.mChangingRegion=true;int sends=message.sends;owner.requestParcel();assert(message.sends==sends);
  assert(!owner.playbackCurrent(true,7,3,owner.mParcelRevision,owner.mMusicRequest,owner.mMusicURL));
 }

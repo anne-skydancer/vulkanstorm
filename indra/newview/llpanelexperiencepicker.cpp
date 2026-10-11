@@ -26,6 +26,7 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llpanelexperiencepicker.h"
 
@@ -74,7 +75,7 @@ bool LLPanelExperiencePicker::postBuild()
 {
     getChild<LLLineEditor>(TEXT_EDIT)->setKeystrokeCallback( boost::bind(&LLPanelExperiencePicker::editKeystroke, this, _1, _2),NULL);
 
-    childSetAction(BTN_FIND, boost::bind(&LLPanelExperiencePicker::onBtnFind, this));
+    childSetAction(BTN_FIND, vs_native_im_account_callback([weak = getDerivedHandle<LLPanelExperiencePicker>()](auto&&...) { if (auto* owner = weak.get()) owner->onBtnFind(); }));
     getChildView(BTN_FIND)->setEnabled(true);
 
     LLScrollListCtrl* searchresults = getChild<LLScrollListCtrl>(LIST_RESULTS);
@@ -145,7 +146,7 @@ void LLPanelExperiencePicker::onBtnFind()
 
                     getChildView(BTN_RIGHT)->setEnabled(false);
                     getChildView(BTN_LEFT)->setEnabled(false);
-                    LLExperienceCache::instance().get(experience_id, boost::bind(&LLPanelExperiencePicker::onBtnFind, this));
+                    LLExperienceCache::instance().get(experience_id, vs_native_im_account_callback([weak = getDerivedHandle<LLPanelExperiencePicker>()](auto&&...) { if (auto* owner = weak.get()) owner->onBtnFind(); }));
                     return;
                 }
             }
@@ -171,7 +172,7 @@ void LLPanelExperiencePicker::find()
     mQueryID.generate();
 
     LLExperienceCache::instance().findExperienceByName(text, mCurrentPage,
-        boost::bind(&LLPanelExperiencePicker::findResults, getDerivedHandle<LLPanelExperiencePicker>(), mQueryID, _1));
+        vs_native_im_account_callback(boost::bind(&LLPanelExperiencePicker::findResults, getDerivedHandle<LLPanelExperiencePicker>(), mQueryID, _1)));
 
     getChild<LLScrollListCtrl>(LIST_RESULTS)->deleteAllItems();
     getChild<LLScrollListCtrl>(LIST_RESULTS)->setCommentText(getString("searching"));
@@ -344,7 +345,7 @@ void LLPanelExperiencePicker::filterContent()
         columns[2]["column"] = "owner";
         columns[2]["value"] = columnSpace+getString("loading");
         search_results->addElement(item);
-        LLAvatarNameCache::get(experience[LLExperienceCache::AGENT_ID], boost::bind(name_callback, getDerivedHandle<LLPanelExperiencePicker>(), experience[LLExperienceCache::EXPERIENCE_ID], _1, _2));
+        LLAvatarNameCache::get(experience[LLExperienceCache::AGENT_ID], vs_native_im_account_callback(boost::bind(name_callback, getDerivedHandle<LLPanelExperiencePicker>(), experience[LLExperienceCache::EXPERIENCE_ID], _1, _2)));
     }
 
     if (search_results->isEmpty())

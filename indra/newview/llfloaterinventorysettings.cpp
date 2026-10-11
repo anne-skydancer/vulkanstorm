@@ -43,7 +43,10 @@ LLFloaterInventorySettings::~LLFloaterInventorySettings()
 
 bool LLFloaterInventorySettings::postBuild()
 {
-    getChild<LLButton>("ok_btn")->setCommitCallback(boost::bind(&LLFloater::closeFloater, this, false));
+    // The default skin closes through the floater title bar. Some skins may
+    // supply a separate OK button; do not create a dummy when it is absent.
+    if (auto* ok = findChild<LLButton>("ok_btn"))
+        ok->setCommitCallback(boost::bind(&LLFloater::closeFloater, this, false));
 
     getChild<LLUICtrl>("favorites_color")->setCommitCallback(boost::bind(&LLFloaterInventorySettings::updateColorSwatch, this));
 

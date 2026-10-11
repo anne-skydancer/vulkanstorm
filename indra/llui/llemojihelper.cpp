@@ -113,7 +113,11 @@ void LLEmojiHelper::showHelper(LLUICtrl* hostctrl_p, S32 local_x, S32 local_y, c
         }
         // </FS:Beq>
         mHelperHandle = pHelperFloater->getHandle();
-        mHelperCommitConn = pHelperFloater->setCommitCallback(std::bind([&](const LLSD& sdValue) { onCommitEmoji(utf8str_to_wstring(sdValue.asStringRef())[0]); }, std::placeholders::_2));
+        mHelperCommitConn = pHelperFloater->setCommitCallback(std::bind([this](const LLSD& sdValue)
+        {
+            const LLWString value = utf8str_to_wstring(sdValue.asStringRef());
+            if (!value.empty()) onCommitEmoji(value.front());
+        }, std::placeholders::_2));
         mHelperCloseConn = pHelperFloater->setCloseCallback([this](LLUICtrl* ctrl, const LLSD& param) { onCloseHelper(ctrl, param); });
     }
     setHostCtrl(hostctrl_p);
@@ -179,6 +183,18 @@ void LLEmojiHelper::onCommitEmoji(llwchar emoji)
     {
         mEmojiCommitCb(emoji);
     }
+}
+
+void LLEmojiHelper::resetAccount()
+{
+    hideHelper(nullptr, true);
+    mHostCtrlFocusLostConn.disconnect();
+    mHelperCommitConn.disconnect();
+    mHelperCloseConn.disconnect();
+    mHostHandle.markDead();
+    mHelperHandle.markDead();
+    mEmojiCommitCb = {};
+    mIsHideDisabled = false;
 }
 
 void LLEmojiHelper::onCloseHelper(LLUICtrl* ctrl, const LLSD& param)

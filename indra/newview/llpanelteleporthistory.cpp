@@ -25,6 +25,11 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
+
 
 #include "llfloaterreg.h"
 #include "llmenubutton.h"
@@ -46,6 +51,7 @@
 #include "llviewermenu.h"
 #include "lllandmarkactions.h"
 #include "llclipboard.h"
+#include "llsdutil.h"
 #include "lltrans.h"
 //<FS:Beq [timezone support for teleport history]>
 #include <boost/algorithm/string/replace.hpp>
@@ -55,6 +61,26 @@
 #include "rlvhandler.h"
 
 #include "fsfloaterplacedetails.h"
+
+namespace
+{
+bool native_history_scene_unavailable()
+{
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return true;
+    }
+#endif
+    return false;
+}
+bool history_index_valid(S32 index, size_t size)
+{
+    return index >= 0 && static_cast<size_t>(index) < size;
+}
+}
+
 
 // Maximum number of items that can be added to a list in one pass.
 // Used to limit time spent for items list update per frame.
@@ -187,6 +213,9 @@ bool LLTeleportHistoryFlatItem::postBuild()
     mProfileBtn = getChild<LLButton>("profile_btn");
 
     mProfileBtn->setClickedCallback(boost::bind(&LLTeleportHistoryFlatItem::onProfileBtnClick, this));
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) mProfileBtn->setEnabled(false);
+#endif
 
     updateTitle();
     updateTimestamp();
@@ -343,6 +372,7 @@ bool LLTeleportHistoryFlatItem::handleRightMouseDown(S32 x, S32 y, MASK mask)
 
 void LLTeleportHistoryFlatItem::showPlaceInfoPanel(S32 index)
 {
+    if (native_history_scene_unavailable()) return;
     LLSD params;
     params["id"] = index;
     params["type"] = "teleport_history";
@@ -489,6 +519,11 @@ LLTeleportHistoryPanel::~LLTeleportHistoryPanel()
 {
     LLTeleportHistoryFlatItemStorage::instance().purge();
     mTeleportHistoryChangedConnection.disconnect();
+    // These menus are parented to the global menu holder but their callbacks
+    // belong to this account panel. Retire them with their controller.
+    delete mGearItemMenu;
+    delete mSortingMenu;
+    delete mAccordionTabMenu;
 }
 
 bool LLTeleportHistoryPanel::postBuild()
@@ -590,6 +625,7 @@ bool LLTeleportHistoryPanel::isSingleItemSelected()
 // virtual
 void LLTeleportHistoryPanel::onShowOnMap()
 {
+    if (native_history_scene_unavailable()) return;
     if (!mLastSelectedFlatlList)
         return;
 
@@ -610,6 +646,7 @@ void LLTeleportHistoryPanel::onShowOnMap()
 //virtual
 void LLTeleportHistoryPanel::onShowProfile()
 {
+    if (native_history_scene_unavailable()) return;
     if (!mLastSelectedFlatlList)
         return;
 
@@ -638,7 +675,11 @@ void LLTeleportHistoryPanel::onTeleport()
 // virtual
 void LLTeleportHistoryPanel::onRemoveSelected()
 {
-    LLNotificationsUtil::add("ConfirmClearTeleportHistory", LLSD(), LLSD(), boost::bind(&LLTeleportHistoryPanel::onClearTeleportHistoryDialog, this, _1, _2));
+    LLSD payload;
+    vs_native_im_stamp_notification(payload);
+    LLNotificationsUtil::add("ConfirmClearTeleportHistory", LLSD(), payload,
+        vs_native_im_ui_callback(this, [this](const LLSD& notification, const LLSD& response)
+        { return onClearTeleportHistoryDialog(notification, response); }));
 }
 
 /*
@@ -690,6 +731,13 @@ void LLTeleportHistoryPanel::updateVerbs()
     mTeleportBtn->setEnabled(NULL != itemp && RlvActions::canTeleportToLocation());
     mShowProfile->setEnabled(NULL != itemp);
     mShowOnMapBtn->setEnabled(NULL != itemp && !gRlvHandler.hasBehaviour(RLV_BHVR_SHOWWORLDMAP));
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        mShowProfile->setEnabled(false);
+        mShowOnMapBtn->setEnabled(false);
+    }
+#endif
     // </FS:Ansariel>
 }
 
@@ -1168,6 +1216,7 @@ bool LLTeleportHistoryPanel::isTimeZoneChecked(const LLSD& userdata)
 
 bool LLTeleportHistoryPanel::onClearTeleportHistoryDialog(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
 
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
 
@@ -1218,6 +1267,12 @@ void LLTeleportHistoryPanel::gotSLURLCallback(const std::string& slurl)
 void LLTeleportHistoryPanel::onGearMenuAction(const LLSD& userdata)
 {
     std::string command_name = userdata.asString();
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && (command_name == "view" || command_name == "show_on_map"))
+    {
+        return;
+    }
+#endif
 
     if ("expand_all" == command_name)
     {
@@ -1255,6 +1310,9 @@ void LLTeleportHistoryPanel::onGearMenuAction(const LLSD& userdata)
         }
     }
 
+    if (command_name != "clear_history" && command_name != "expand_all" && command_name != "collapse_all" &&
+        !history_index_valid(index, LLTeleportHistoryStorage::getInstance()->getItems().size())) return;
+
     if ("teleport" == command_name)
     {
         confirmTeleport(index);
@@ -1269,9 +1327,18 @@ void LLTeleportHistoryPanel::onGearMenuAction(const LLSD& userdata)
     }
     else if ("copy_slurl" == command_name)
     {
-        LLVector3d globalPos = LLTeleportHistoryStorage::getInstance()->getItems()[index].mGlobalPos;
+        const auto& entry = LLTeleportHistoryStorage::getInstance()->getItems()[index];
+        if (entry.mSLURL.isValid())
+        {
+            gotSLURLCallback(entry.mSLURL.getSLURLString());
+            return;
+        }
+        LLVector3d globalPos = entry.mGlobalPos;
+        const auto current = vs_native_im_guard();
+        const auto weak = getHandle();
         LLLandmarkActions::getSLURLfromPosGlobal(globalPos,
-            boost::bind(&LLTeleportHistoryPanel::gotSLURLCallback, _1));
+            [current, weak](const std::string& slurl)
+            { if (current() && weak.get()) gotSLURLCallback(slurl); });
     }
     else if ("remove" == command_name)
     {
@@ -1290,6 +1357,12 @@ void LLTeleportHistoryPanel::onGearMenuAction(const LLSD& userdata)
 bool LLTeleportHistoryPanel::isActionEnabled(const LLSD& userdata) const
 {
     std::string command_name = userdata.asString();
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && (command_name == "view" || command_name == "show_on_map"))
+    {
+        return false;
+    }
+#endif
 
     if (command_name == "collapse_all"
         || command_name == "expand_all")
@@ -1398,9 +1471,14 @@ void LLTeleportHistoryPanel::onAccordionExpand(LLUICtrl* ctrl, const LLSD& param
 // static
 void LLTeleportHistoryPanel::confirmTeleport(S32 hist_idx)
 {
+    const auto& items = LLTeleportHistoryStorage::getInstance()->getItems();
+    if (!history_index_valid(hist_idx, items.size())) return;
     LLSD args;
-    args["HISTORY_ENTRY"] = LLTeleportHistoryStorage::getInstance()->getItems()[hist_idx].mTitle;
-    LLNotificationsUtil::add("TeleportToHistoryEntry", args, LLSD(),
+    args["HISTORY_ENTRY"] = items[hist_idx].mTitle;
+    LLSD payload;
+    payload["history_entry"] = items[hist_idx].toLLSD();
+    vs_native_im_stamp_notification(payload);
+    LLNotificationsUtil::add("TeleportToHistoryEntry", args, payload,
         boost::bind(&LLTeleportHistoryPanel::onTeleportConfirmation, _1, _2, hist_idx));
 }
 
@@ -1408,6 +1486,10 @@ void LLTeleportHistoryPanel::confirmTeleport(S32 hist_idx)
 // static
 bool LLTeleportHistoryPanel::onTeleportConfirmation(const LLSD& notification, const LLSD& response, S32 hist_idx)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
+    const auto& items = LLTeleportHistoryStorage::getInstance()->getItems();
+    if (!history_index_valid(hist_idx, items.size()) ||
+        !llsd_equals(items[hist_idx].toLLSD(), notification["payload"]["history_entry"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
 
     if (0 == option)

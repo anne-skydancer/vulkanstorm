@@ -51,6 +51,12 @@
 #include "llnotifications.h"
 #include "llfloaterreporter.h"
 
+#include "vsnativeim.h"
+#include "llrender2dutils.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
+
 #define XML_PANEL_EXPERIENCE_PROFILE "floater_experienceprofile.xml"
 #define TF_NAME "experience_title"
 #define TF_DESC "experience_description"
@@ -100,7 +106,7 @@ public:
         if(params.size() != 2 || params[1].asString() != "profile")
             return false;
 
-        LLExperienceCache::instance().get(params[0].asUUID(), boost::bind(&LLExperienceHandler::experienceCallback, this, _1));
+        LLExperienceCache::instance().get(params[0].asUUID(), vs_native_im_account_callback(boost::bind(&LLExperienceHandler::experienceCallback, this, _1)));
         return true;
     }
 
@@ -137,7 +143,7 @@ LLFloaterExperienceProfile::LLFloaterExperienceProfile(const LLSD& data)
 
 LLFloaterExperienceProfile::~LLFloaterExperienceProfile()
 {
-
+    LLEventPumps::instance().obtain("experience_permission").stopListening(mExperienceId.asString()+"-profile");
 }
 
 bool LLFloaterExperienceProfile::postBuild()
@@ -146,14 +152,13 @@ bool LLFloaterExperienceProfile::postBuild()
     if (mExperienceId.notNull())
     {
         LLExperienceCache::instance().fetch(mExperienceId, true);
-        LLExperienceCache::instance().get(mExperienceId, boost::bind(&LLFloaterExperienceProfile::experienceCallback,
-            getDerivedHandle<LLFloaterExperienceProfile>(), _1));
+        LLExperienceCache::instance().get(mExperienceId, vs_native_im_account_callback(boost::bind(&LLFloaterExperienceProfile::experienceCallback,
+            getDerivedHandle<LLFloaterExperienceProfile>(), _1)));
 
-        LLViewerRegion* region = gAgent.getRegion();
-        if (region)
+        if (!gAgent.getRegionCapability("IsExperienceAdmin").empty())
         {
-            LLExperienceCache::instance().getExperienceAdmin(mExperienceId, boost::bind(
-                &LLFloaterExperienceProfile::experienceIsAdmin, getDerivedHandle<LLFloaterExperienceProfile>(), _1));
+            LLExperienceCache::instance().getExperienceAdmin(mExperienceId, vs_native_im_account_callback(boost::bind(
+                &LLFloaterExperienceProfile::experienceIsAdmin, getDerivedHandle<LLFloaterExperienceProfile>(), _1)));
         }
     }
 
@@ -167,6 +172,7 @@ bool LLFloaterExperienceProfile::postBuild()
     childSetAction(BTN_CLEAR_LOCATION, boost::bind(&LLFloaterExperienceProfile::onClickClear, this));
     childSetAction(BTN_SET_GROUP, boost::bind(&LLFloaterExperienceProfile::onPickGroup, this));
     childSetAction(BTN_REPORT, boost::bind(&LLFloaterExperienceProfile::onReportExperience, this));
+    if (LLRender2D::isNativeUI()) getChild<LLButton>(BTN_REPORT)->setEnabled(false);
 
     getChild<LLTextEditor>(EDIT TF_DESC)->setKeystrokeCallback(boost::bind(&LLFloaterExperienceProfile::onFieldChanged, this));
     getChild<LLUICtrl>(EDIT TF_MATURITY)->setCommitCallback(boost::bind(&LLFloaterExperienceProfile::onFieldChanged, this));
@@ -182,7 +188,7 @@ bool LLFloaterExperienceProfile::postBuild()
 
 
     LLEventPumps::instance().obtain("experience_permission").listen(mExperienceId.asString()+"-profile",
-        boost::bind(&LLFloaterExperienceProfile::experiencePermission, getDerivedHandle<LLFloaterExperienceProfile>(this), _1));
+        vs_native_im_account_callback(boost::bind(&LLFloaterExperienceProfile::experiencePermission, getDerivedHandle<LLFloaterExperienceProfile>(this), _1)));
 
     if (mPostEdit && mExperienceId.notNull())
     {
@@ -246,22 +252,18 @@ void LLFloaterExperienceProfile::onClickSave()
 
 void LLFloaterExperienceProfile::onClickPermission(const char* perm)
 {
-    LLViewerRegion* region = gAgent.getRegion();
-    if (!region)
-        return;
-    LLExperienceCache::instance().setExperiencePermission(mExperienceId, perm, boost::bind(
-        &LLFloaterExperienceProfile::experiencePermissionResults, mExperienceId, _1));
+    if (gAgent.getRegionCapability("ExperiencePreferences").empty()) return;
+    LLExperienceCache::instance().setExperiencePermission(mExperienceId, perm, vs_native_im_account_callback(boost::bind(
+        &LLFloaterExperienceProfile::experiencePermissionResults, mExperienceId, _1)));
 }
 
 
 void LLFloaterExperienceProfile::onClickForget()
 {
-    LLViewerRegion* region = gAgent.getRegion();
-    if (!region)
-        return;
+    if (gAgent.getRegionCapability("ExperiencePreferences").empty()) return;
 
-    LLExperienceCache::instance().forgetExperiencePermission(mExperienceId, boost::bind(
-        &LLFloaterExperienceProfile::experiencePermissionResults, mExperienceId, _1));
+    LLExperienceCache::instance().forgetExperiencePermission(mExperienceId, vs_native_im_account_callback(boost::bind(
+        &LLFloaterExperienceProfile::experiencePermissionResults, mExperienceId, _1)));
 }
 
 bool LLFloaterExperienceProfile::setMaturityString( U8 maturity, LLTextBox* child, LLComboBox* combo )
@@ -408,11 +410,10 @@ void LLFloaterExperienceProfile::refreshExperience( const LLSD& experience )
     }
     else
     {
-        LLViewerRegion* region = gAgent.getRegion();
-        if (region)
+        if (!gAgent.getRegionCapability("ExperiencePreferences").empty())
         {
-            LLExperienceCache::instance().getExperiencePermission(mExperienceId, boost::bind(
-                &LLFloaterExperienceProfile::experiencePermissionResults, mExperienceId, _1));
+            LLExperienceCache::instance().getExperiencePermission(mExperienceId, vs_native_im_account_callback(boost::bind(
+                &LLFloaterExperienceProfile::experiencePermissionResults, mExperienceId, _1)));
         }
     }
 
@@ -545,7 +546,7 @@ bool LLFloaterExperienceProfile::canClose()
     else
     {
         // Bring up view-modal dialog: Save changes? Yes, No, Cancel
-        LLNotificationsUtil::add("SaveChanges", LLSD(), LLSD(), boost::bind(&LLFloaterExperienceProfile::handleSaveChangesDialog, this, _1, _2, CLOSE));
+        LLNotificationsUtil::add("SaveChanges", LLSD(), LLSD(), vs_native_im_ui_callback(this, boost::bind(&LLFloaterExperienceProfile::handleSaveChangesDialog, this, _1, _2, CLOSE)));
         return false;
     }
 }
@@ -588,13 +589,11 @@ void LLFloaterExperienceProfile::doSave( int success_action )
 {
     mSaveCompleteAction=success_action;
 
-    LLViewerRegion* region = gAgent.getRegion();
-    if (!region)
-        return;
+    if (gAgent.getRegionCapability("UpdateExperience").empty()) return;
 
-    LLExperienceCache::instance().updateExperience(mPackage, boost::bind(
+    LLExperienceCache::instance().updateExperience(mPackage, vs_native_im_account_callback(boost::bind(
             &LLFloaterExperienceProfile::experienceUpdateResult,
-            getDerivedHandle<LLFloaterExperienceProfile>(), _1));
+            getDerivedHandle<LLFloaterExperienceProfile>(), _1)));
 }
 
 void LLFloaterExperienceProfile::onSaveComplete( const LLSD& content )
@@ -678,7 +677,7 @@ void LLFloaterExperienceProfile::changeToView()
     else
     {
         // Bring up view-modal dialog: Save changes? Yes, No, Cancel
-        LLNotificationsUtil::add("SaveChanges", LLSD(), LLSD(), boost::bind(&LLFloaterExperienceProfile::handleSaveChangesDialog, this, _1, _2, VIEW));
+        LLNotificationsUtil::add("SaveChanges", LLSD(), LLSD(), vs_native_im_ui_callback(this, boost::bind(&LLFloaterExperienceProfile::handleSaveChangesDialog, this, _1, _2, VIEW)));
     }
 }
 
@@ -691,6 +690,16 @@ void LLFloaterExperienceProfile::changeToEdit()
 
 void LLFloaterExperienceProfile::onClickLocation()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (owner->phase() != VSNativeSession::Phase::Connected) return;
+        mLocationSLURL = LLSLURL(owner->regionName(), owner->position()).getSLURLString();
+        getChild<LLTextBox>(EDIT TF_SLURL)->setText(mLocationSLURL);
+        onFieldChanged();
+        return;
+    }
+#endif
     LLViewerRegion* region = gAgent.getRegion();
     if(region)
     {
@@ -842,7 +851,7 @@ void LLFloaterExperienceProfile::onPickGroup()
     LLFloaterGroupPicker* widget = LLFloaterReg::showTypedInstance<LLFloaterGroupPicker>("group_picker", LLSD(gAgent.getID()));
     if (widget)
     {
-        widget->setSelectGroupCallback(boost::bind(&LLFloaterExperienceProfile::setEditGroup, this, _1));
+        widget->setSelectGroupCallback(vs_native_im_account_callback([weak = getDerivedHandle<LLFloaterExperienceProfile>()](LLUUID id) { if (auto* owner = weak.get()) owner->setEditGroup(id); }));
         if (parent_floater)
         {
             LLRect new_rect = gFloaterView->findNeighboringPosition(parent_floater, widget);
@@ -863,6 +872,7 @@ void LLFloaterExperienceProfile::setEditGroup( LLUUID group_id )
 
 void LLFloaterExperienceProfile::onReportExperience()
 {
+    if (LLRender2D::isNativeUI()) return;
     LLFloaterReporter::showFromExperience(mExperienceId);
 }
 
@@ -910,18 +920,7 @@ void LLFloaterExperienceProfile::experienceIsAdmin(LLHandle<LLFloaterExperienceP
     if (!parent)
         return;
 
-    bool enabled = true;
-    LLViewerRegion* region = gAgent.getRegion();
-    if (!region)
-    {
-        enabled = false;
-    }
-    else
-    {
-        std::string url = region->getCapability("UpdateExperience");
-        if (url.empty())
-            enabled = false;
-    }
+    const bool enabled = !gAgent.getRegionCapability("UpdateExperience").empty();
     if (enabled && result["status"].asBoolean())
     {
         parent->getChild<LLLayoutPanel>(PNL_TOP)->setVisible(true);

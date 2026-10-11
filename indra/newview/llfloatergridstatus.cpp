@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llfloatergridstatus.h"
 
@@ -60,6 +63,15 @@ bool LLFloaterGridStatus::postBuild()
     return true;
 }
 
+std::string LLFloaterGridStatus::gridStatusURL()
+{
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && LLGridManager::getInstance()->isInSecondLife())
+        return DEFAULT_GRID_STATUS_URL;
+#endif
+    return LFSimFeatureHandler::instance().gridStatusURL();
+}
+
 void LLFloaterGridStatus::onOpen(const LLSD& key)
 {
     Params p(key);
@@ -75,7 +87,7 @@ void LLFloaterGridStatus::onOpen(const LLSD& key)
     {
         // <FS:Beq> [FIRE-30562] Support Grid Status on OpenSim
         // mWebBrowser->navigateTo(DEFAULT_GRID_STATUS_URL, HTTP_CONTENT_TEXT_HTML);
-        mWebBrowser->navigateTo(LFSimFeatureHandler::instance().gridStatusURL(), HTTP_CONTENT_TEXT_HTML);
+        mWebBrowser->navigateTo(gridStatusURL(), HTTP_CONTENT_TEXT_HTML);
         // </FS:Beq>
     }
 }

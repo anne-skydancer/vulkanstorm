@@ -26,6 +26,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llfloaterdestinations.h"
 #include "llmediactrl.h"
@@ -96,6 +99,11 @@ bool LLFloaterDestinations::postBuild()
 // <FS:Ansariel> FIRE-16833: Destination guide does not change between OpenSim grids
 void LLFloaterDestinations::onOpen(const LLSD& key)
 {
+#if VS_NATIVE_VULKAN
+    // postBuild already navigated the authenticated login/configured URL.
+    // No LLViewerRegion exists to populate the legacy feature-handler URL.
+    if (VSNativeSession::active()) return;
+#endif
     // Connect during onOpen instead of ctor because LLFloaterDestinations instance
     // gets created before we can safely create a LFSimFeatureHandler instance!
     // Assuming we receive the destination guide URL via login response and it

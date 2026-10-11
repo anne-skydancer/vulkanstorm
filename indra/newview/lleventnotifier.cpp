@@ -37,6 +37,10 @@
 #include "llagent.h"
 #include "llcommandhandler.h"   // secondlife:///app/... support
 #include "lltrans.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 class LLEventHandler : public LLCommandHandler
 {
@@ -101,16 +105,15 @@ LLEventNotifier::LLEventNotifier()
 
 LLEventNotifier::~LLEventNotifier()
 {
-    en_map::iterator iter;
-
-    for (iter = mEventNotifications.begin();
-         iter != mEventNotifications.end();
-         iter++)
-    {
-        delete iter->second;
-    }
+    clearAccount();
 }
 
+void LLEventNotifier::clearAccount()
+{
+    for (const auto& entry : mEventNotifications) delete entry.second;
+    mEventNotifications.clear();
+    mNotificationTimer.reset();
+}
 
 void LLEventNotifier::update()
 {
@@ -133,7 +136,9 @@ void LLEventNotifier::update()
                 args["NAME"] = np->getEventName();
 
                 args["DATE"] = np->getEventDateStr();
-                LLNotificationsUtil::add("EventNotification", args, LLSD(),
+                LLSD payload;
+                vs_native_im_stamp_notification(payload);
+                LLNotificationsUtil::add("EventNotification", args, payload,
                     boost::bind(&LLEventNotifier::handleResponse, this, np->getEventID(), _1, _2));
                 remove(np->getEventID());
 
@@ -147,6 +152,7 @@ void LLEventNotifier::update()
 
 bool LLEventNotifier::handleResponse(U32 eventId, const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
     switch (option)
     {
@@ -185,7 +191,11 @@ bool LLEventNotifier::add(U32 eventId, F64 eventEpoch, const std::string& eventD
         return false;
     }
 
-    mEventNotifications[new_enp->getEventID()] = new_enp;
+    // Refreshing a subscribed event can deliver its details more than once.
+    // Replace the owned reminder without leaking its previous record.
+    auto& slot = mEventNotifications[new_enp->getEventID()];
+    delete slot;
+    slot = new_enp;
     return true;
 }
 
@@ -204,6 +214,15 @@ void LLEventNotifier::add(U32 eventId)
 //static
 void LLEventNotifier::processEventInfoReply(LLMessageSystem *msg, void **)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        LLUUID recipient;
+        msg->getUUID("AgentData", "AgentID", recipient);
+        if (owner->phase() != VSNativeSession::Phase::Connected ||
+            owner->host() != msg->getSender() || recipient != gAgentID) return;
+    }
+#endif
     LLEventInfo info;
     info.unpack(msg);
     gEventNotifier.add(info);

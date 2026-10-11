@@ -254,8 +254,18 @@ running window's backend, rather than a preference awaiting restart. OpenGL
 (including Mesa/Zink) reports its initialized GL renderer and version. Native
 Vulkan reports cached properties of the Diligent-selected physical device,
 without calling GL or guessing a Windows adapter. Its API version is the
-physical device's supported Vulkan version; the vendor-specific driver value
-is explicitly labeled raw. Device-local GPU memory is reported when available;
+physical device's supported Vulkan version. Driver reporting now uses the
+installed Windows driver package version matched to that physical device's
+Vulkan LUID through DXGI. If that lookup is unavailable, and on Linux, it uses
+the driver's supplied release/build text, then the documented vendor-specific
+packed-version decoding. It never reports the Vulkan API version as the driver
+version. The DXGI lookup creates no graphics device or GL context.
+[Microsoft driver-version query](https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiadapter-checkinterfacesupport)
+and [Vulkan driver properties](https://docs.vulkan.org/refpages/latest/refpages/source/VkPhysicalDeviceDriverProperties.html)
+describe these sources. Extracted production fixtures cover exact adapter
+matching, resource retirement, missing metadata and version decoding on both
+platform paths; live driver output remains a separate runtime check.
+Device-local GPU memory is reported when available;
 separate host heaps are not presented as Vulkan VRAM. The VRAM budget row uses
 the shared saved-setting report on both backends: the configured MB limit, or
 localized Unlimited. That row describes the viewer setting, not driver-reported
@@ -401,3 +411,33 @@ renderers and every skin; it does not enlarge button hit targets or alter
 skin assets. The extracted production clip fixture covers several panel
 widths and UI scales, retains ancestor restrictions and fails against the
 previous implementation. Graphical confirmation remains separate.
+
+## Connected account UI survey — 11 October 2026
+
+The survey compares native admission with real menu/toolbar/app-link handlers,
+panel factories, capability consumers and account retirement. Controllers that
+require a world region must use the native account transport or remain
+explicitly unavailable; enabled-control counts do not establish integration.
+
+Marketplace seller services use the account's DirectDelivery capability and
+reject HTTP/retry replies from retired accounts. Dataset, pending work and
+signal slots reset together while the singleton remains alive for suspended
+coroutines. Listings callbacks retain weak view handles. Inventory link
+replacement admits ordinary inventory links with account-guarded confirmations
+and completions. Current-outfit and saved-outfit operations remain tied to
+appearance ownership and unavailable in the native text stage. Compiled
+production regressions verify capability resolution, reset, seven HTTP resume
+boundaries, retry suspension, dead views and retired callbacks. Seller-server
+transactions still require runtime qualification with an appropriate account.
+
+The Firestorm bridge is a real scripted attachment. Its controller requires
+self-avatar attachment-point ownership, object UUID/local ID and inventory-item
+mapping, task-inventory transfer, actual script upload and authenticated
+attachment handshake. The native text session has no such avatar/attachment
+object-update transport. Full bridge operation therefore remains an
+implementation gap. A CPU transport adapter must establish those owners before
+bridge callbacks can be enabled; arbitrary chat/HTTP cannot qualify a bridge.
+
+This survey and console qualification do not establish full connected UI
+parity. Runtime evidence and remaining bridge, appearance/world and voice
+service integrations must be recorded separately.
