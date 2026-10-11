@@ -1,5 +1,5 @@
 {
-  "source_commit": "3201a00c7a1cea238d621416b9ad20ea714490fc",
+  "source_commit": "172665b48660d9bd2cf0773a0c1f1d5d85d85fd0",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "85fd3138334ad344a58f6abf96d104268579a718f17bc97afeb11a571e8d3269",
+      "sha256": "7a031948f59e6cd1601d5dccad15d0bef1a8e692d9ad78f4dd8107eb0c456c4b",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -401,7 +401,7 @@
       ]
     },
     "indra/newview/vsuirenderer.cpp": {
-      "sha256": "1943c8cf13d75c26a6595c207c71ab36c8a8510c164a6ca5478b32d3d7da6ac2",
+      "sha256": "d8c4b476108a9288728970717c9303544d255450b6b11ffecce3ef37ff79b1d4",
       "anchors": [
         "VSUIRenderer::upload",
         "VSUIRenderer::draw",
@@ -410,7 +410,7 @@
       ]
     },
     "indra/newview/vsuirenderer.h": {
-      "sha256": "80ff71be9ff06078c0982a79fff018e0d422154e8f4c9abfca3f11de7a5577a3",
+      "sha256": "7ece598b97e10b708a5430228f4884244471ff797c607c677795c353fec34d90",
       "anchors": [
         "class VSUIRenderer",
         "struct Packet",
@@ -440,7 +440,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "7b8be8356291b952cb5fe35066b8359f331b653d2824a6a856cbeb7847324319",
+      "sha256": "b3c4d73e61a9e9f24d76a2763046f8f147fd99bdd951f6160615a363142915fb",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -448,7 +448,7 @@
       ]
     },
     "indra/newview/vsuiresources.h": {
-      "sha256": "f87a997a7bba7923164199a11369ed111ffac6df3fdb37f2b6677ca13c6ec34a",
+      "sha256": "d17d0ffabc10e7695bd4f288f58a2d538996774755574d8ec39d773d75d48b89",
       "anchors": [
         "class VSUIResources"
       ]
@@ -701,7 +701,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.cpp": {
-      "sha256": "7debea45749a1a092ec5b7976e38164d22d489ba8b08cec205d5b05910629df3",
+      "sha256": "f3e95b6ca05760454f13d895281cf22c8f64aa5185bad9bc32861f779238a92b",
       "anchors": [
         "VSVulkanContext::VSVulkanContext",
         "CreateDeviceAndContextsVk",
@@ -710,7 +710,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.h": {
-      "sha256": "86bfaf5d3f1a10f6d537b73c18a44755ae6a1f0d39d1101cd008404ea68dc00b",
+      "sha256": "8af0c65d87c5dea87009a8195b3e3491f742fe17ab83d61cb8f041cc9f9d1874",
       "anchors": [
         "class VSVulkanContext",
         "FrameObserver"
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "b6dddb9c13e7baab3e1a7110677ebb43d570305e4b13d63ba1e0fd25e4153917",
+      "sha256": "33e8134c59d4171e6ef4e9e9237f67e2f4dfaed26527dbcf43de7ff2f7c9768e",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
@@ -793,7 +793,7 @@
       ]
     },
     "indra/newview/vsnativereplay.cpp": {
-      "sha256": "7185d8cd9a56459b7185e886f40a7f1d021a4f8b39aee43297d0e9513b91dc8c",
+      "sha256": "09da0feb764aef1c617441634c70c1427e7172185160d315efdbd43d8f4bbed0",
       "anchors": [
         "vs_native_replay_tick()",
         "inspectOutgoing("
