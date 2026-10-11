@@ -217,6 +217,7 @@ protected:
     LLMutex mRawMouseMutex;
     RAWINPUTDEVICE mRawMouse;
     LLCoordWindow mLastCursorPosition; // mouse cursor position from previous frame
+    bool mNativeMouseMovePending = false; // main-thread native motion, including same-position reentry
     LLCoordCommon mRawMouseDelta; // raw mouse delta according to window thread
     LLCoordCommon mMouseFrameDelta; // how much the mouse moved between the last two calls to gatherInput
 

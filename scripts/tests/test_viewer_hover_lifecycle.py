@@ -7,6 +7,55 @@ import unittest
 
 
 class HoverLifecycleTest(unittest.TestCase):
+    def test_actual_diagnostic_pointer_placement_restores_on_exception(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/newview/vsvkdiag.cpp').read_text()
+        start = source.index('struct DiagnosticPointerPlacement')
+        end = source.index('#endif', start)
+        fixture = r'''
+#include <cassert>
+#include <iostream>
+#include <stdexcept>
+using HWND=void*; constexpr int FALSE=0;
+struct POINT { int x=0,y=0; } position{800,900};
+bool captureFail=false,convertFail=false;unsigned sets=0;HWND convertedWindow=nullptr;
+int GetCursorPos(POINT* out){if(captureFail)return 0;*out=position;return 1;}
+int SetCursorPos(int x,int y){++sets;position={x,y};return 1;}
+int ClientToScreen(HWND hwnd,POINT* point){convertedWindow=hwnd;if(convertFail)return 0;point->x+=100;point->y+=200;return 1;}
+unsigned GetLastError(){return 5;}
+void require(bool value,const char* message){if(!value)throw std::runtime_error(message);}
+''' + source[start:end] + r'''
+int main(){
+ int window=0;
+ { DiagnosticPointerPlacement guard;
+   guard.place(&window,{25,65});assert(position.x==125&&position.y==265&&convertedWindow==&window);
+   guard.place(&window,{30,150});assert(position.x==130&&position.y==350);
+ }
+ assert(position.x==800&&position.y==900&&sets==3);
+ try {DiagnosticPointerPlacement guard;guard.place(&window,{25,65});throw std::runtime_error("input failure");}
+ catch(const std::runtime_error&){}
+ assert(position.x==800&&position.y==900&&sets==5);
+ convertFail=true;
+ try {DiagnosticPointerPlacement guard;guard.place(&window,{25,65});assert(false);}
+ catch(const std::runtime_error&){}
+ assert(position.x==800&&position.y==900&&sets==6);
+ captureFail=true;
+ try {DiagnosticPointerPlacement guard;assert(false);}
+ catch(const std::runtime_error&){}
+ assert(sets==6); // failed snapshot cannot move or restore an unknown cursor
+}
+'''
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / 'pointer_placement.cpp'
+            executable = cpp.with_suffix('.exe')
+            cpp.write_text(fixture)
+            built = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(executable)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            ran = subprocess.run([str(executable)], capture_output=True, text=True)
+            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+
     def test_actual_controller(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / 'indra/newview/llviewerwindow.cpp').read_text()
