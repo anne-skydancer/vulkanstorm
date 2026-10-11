@@ -1,5 +1,5 @@
 {
-  "source_commit": "f9392331423caae151a06c4bef2bb318dff92639",
+  "source_commit": "28a66a55ae8cc68e3143bd05929b25e63558620d",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -1150,34 +1150,52 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 17,
       "end": 18,
-      "sha256": "0c16044b47f5acc5a1ebcf9f525266be894e3c6066240de807c3b44ab5183208",
+      "sha256": "a811e59d1f3f0f13e13ad5249141ff014e011053b75d4cdb849223e546bf2814",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 48,
-      "end": 48,
-      "sha256": "0c16044b47f5acc5a1ebcf9f525266be894e3c6066240de807c3b44ab5183208",
+      "start": 58,
+      "end": 58,
+      "sha256": "a811e59d1f3f0f13e13ad5249141ff014e011053b75d4cdb849223e546bf2814",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 84,
-      "end": 100,
-      "sha256": "0c16044b47f5acc5a1ebcf9f525266be894e3c6066240de807c3b44ab5183208",
+      "start": 94,
+      "end": 104,
+      "sha256": "a811e59d1f3f0f13e13ad5249141ff014e011053b75d4cdb849223e546bf2814",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 200,
-      "end": 201,
-      "sha256": "0c16044b47f5acc5a1ebcf9f525266be894e3c6066240de807c3b44ab5183208",
+      "start": 109,
+      "end": 109,
+      "sha256": "a811e59d1f3f0f13e13ad5249141ff014e011053b75d4cdb849223e546bf2814",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.cpp",
+      "start": 110,
+      "end": 112,
+      "sha256": "a811e59d1f3f0f13e13ad5249141ff014e011053b75d4cdb849223e546bf2814",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.cpp",
+      "start": 212,
+      "end": 213,
+      "sha256": "a811e59d1f3f0f13e13ad5249141ff014e011053b75d4cdb849223e546bf2814",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -16742,10 +16760,28 @@
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed isolated UI qualification: private Windows station and desktop, strict setup failure, bounded job-contained process capture and teardown, unchanged Linux Xvfb workflow. Shared native hover lifecycle retains pending motion before leave. Diagnostic injection never manipulates the physical pointer; runtime qualification remains separate."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.cpp",
+      "start": 37,
+      "end": 46,
+      "sha256": "a811e59d1f3f0f13e13ad5249141ff014e011053b75d4cdb849223e546bf2814",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.cpp",
+      "start": 105,
+      "end": 108,
+      "sha256": "a811e59d1f3f0f13e13ad5249141ff014e011053b75d4cdb849223e546bf2814",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "5edef0916ac20ca6f7bb3191eb72abd340e05f47",
+    "previous_source_commit": "f9392331423caae151a06c4bef2bb318dff92639",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Only hash-verified existing insertion-review witnesses replace invalid platform rows; reasons/range extents retained and unchanged text mapped. Changed blocks have explicit source dispositions. No platform/runtime certification."
   }
