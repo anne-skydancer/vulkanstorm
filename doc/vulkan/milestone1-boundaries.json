@@ -1,5 +1,5 @@
 {
-  "source_commit": "32eec0ef454c83f3822b25155d2c8f8ab52988af",
+  "source_commit": "bc55578992409e29e6ae9c78986af38bbd2473bc",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "e0a99c0318e430aed5c04db675d4e6c78fa374b0ccf0a4b2bffb4f10f74c2ef8",
+      "sha256": "85fd3138334ad344a58f6abf96d104268579a718f17bc97afeb11a571e8d3269",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -238,7 +238,7 @@
       ]
     },
     "indra/newview/llviewermedia.cpp": {
-      "sha256": "e928f8d384dc607aab2b30c0d6a5c9481b951fb6e65c880816ff88035e6740d5",
+      "sha256": "c85a9a49b6f8e86353d38768b70790d83a71977e7e8586a5b627cf4e0b3e7d5f",
       "anchors": [
         "LLViewerMedia"
       ]
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "b101f881c54256b571d4a77f39465f3987f083c22761593f549cd311f6e02bca",
+      "sha256": "53d040dcbe9f4d507c5fee5bbe2d461d7dd37612c4ec9ccf4d43d914273a53e2",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -777,14 +777,14 @@
       ]
     },
     "indra/newview/llfloaterwebcontent.cpp": {
-      "sha256": "9aa7a604435f0ddd95c6cd576d5f6139f5a92dbdc42bc2c4b99168dd545626f2",
+      "sha256": "cc738ca06bec45ef28defbff925fc57fb0ca41dca7dff0e34d38a9cf90d56dd4",
       "anchors": [
         "LLFloaterWebContent::create",
         "VSUIAdmission::floater"
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "0f7a5099aac63a07e04560729c7c8b10c0db4c2e3fbfe1e8bef88e15bd51dba9",
+      "sha256": "c33c46d8eef71e1024dda17297a9e7a654b0495030cf52fc4664615f5725833b",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
@@ -841,7 +841,7 @@
       ]
     },
     "indra/newview/vsnativeim.cpp": {
-      "sha256": "40bb106b0cf5769565621cfa6f71e4d5189462ad670d06f34ff8c679ad1c37a1",
+      "sha256": "bfb7444b6ba477c861425b8f72df8bac2f2c47006d0037a9ab9bfe44948b3181",
       "anchors": [
         "vs_native_im_receive",
         "vs_native_im_guard",
@@ -867,7 +867,7 @@
       ]
     },
     "indra/newview/vsnativeimreplay.cpp": {
-      "sha256": "6caf0738bd7b65975cce3be69ac73655c7dce7057fcb227a22effaef16f0762a",
+      "sha256": "50d67069f9cd9874458ac3639d20b08956a7a3a4b5e3080f4c7d6ec6f7483c76",
       "anchors": [
         "vs_native_im_replay_tick",
         "vs_native_im_replay_expired",
