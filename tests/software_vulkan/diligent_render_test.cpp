@@ -531,6 +531,16 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     auto clipped=quad(-2.f);farPacket.mesh=clipped;farPacket.color={0,0,1,1};
     renderer.draw(rtv,8,8,view,{nearPacket,farPacket});
     capture("near-clip.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
+    VSWorldRenderer::Packet sky;sky.background=true;sky.fullbright=true;
+    sky.mesh=renderer.upload({{-1,-1,0,0,0,1,0,0},{1,-1,0,0,0,1,1,0},
+        {1,1,0,0,0,1,1,1},{-1,1,0,0,0,1,0,1}},{0,1,2,0,2,3});
+    renderer.draw(rtv,8,8,view,{sky});
+    capture("sky.ppm",[](unsigned,unsigned y){
+        const float t=1-(float(y)+.5f)/8;
+        return Pixel{uint8_t(std::lround((.65f-.57f*t)*255)),uint8_t(std::lround((.8f-.58f*t)*255)),uint8_t(std::lround((.95f-.47f*t)*255)),255};
+    });
+    renderer.draw(rtv,8,8,view,{nearPacket,alpha,sky});
+    capture("water-depth.ppm",[](unsigned,unsigned){return Pixel{127,128,0,255};});
     context->WaitForIdle();renderer.retire();images.retire();
 }
 

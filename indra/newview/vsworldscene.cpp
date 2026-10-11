@@ -1,6 +1,9 @@
 // Native CPU primitive scene, independent of GL drawables. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsworldscene.h"
+#include "vsterrainpacket.h"
+#include "patch_dct.h"
+#include <limits>
 #include "vsuiresources.h"
 #include "llprimitive.h"
 #include "llvolumemessage.h"
@@ -53,8 +56,82 @@ struct VSWorldScene::Impl
     struct Request { double deadline=0; unsigned attempts=0; };
     std::map<U32,Object> objects;std::map<U32,Request> pending;
     double nextRequest=0;
+    struct Ground { unsigned size=0;VSWorldRenderer::Mesh mesh;bool dirty=true; };
+    std::map<unsigned,Ground> ground;
+    std::array<float,257*257> heights;
+    std::array<LLUUID,4> terrainTextures;
+    std::array<float,4> terrainStarts{},terrainRanges{};
+    VSWorldRenderer::Mesh water,sky;
+    float waterHeight=20;bool waterKnown=false;
+    float height(unsigned x,unsigned y,float fallback) const
+    { const float h=heights[y*257+x];return std::isfinite(h)?h:fallback; }
+    bool terrain(const std::vector<U8>& data,U8 type)
+    {
+        std::vector<VSTerrain::Patch> patches;
+        if (!VSTerrain::decode(data,type,patches)) return false;
+        // Reuse the viewer's established CPU inverse DCT, after bounded decoding.
+        // No legacy surface, drawable, texture or OpenGL owner is constructed.
+        struct Decoded {unsigned x,y,size;std::array<float,1024> h;};
+        std::vector<Decoded> decoded;
+        for (auto& p:patches)
+        {
+            LLGroupHeader group;group.stride=p.size;group.patch_size=U8(p.size);group.layer_type=type;
+            LLPatchHeader header;header.dc_offset=p.offset;header.range=U16(p.range);header.quant_wbits=U8(p.quant);header.patchids=0;
+            init_patch_decompressor(p.size);set_group_of_patch_header(&group);
+            Decoded d{p.x*p.size,p.y*p.size,p.size,{}};decompress_patch(d.h.data(),p.coefficients.data(),&header);
+            for (unsigned i=0;i<p.size*p.size;++i) if (!std::isfinite(d.h[i]) || std::abs(d.h[i])>65536) return false;
+            decoded.push_back(std::move(d));
+        }
+        for (const auto& d:decoded)
+        {
+            for (unsigned y=0;y<d.size;++y) for (unsigned x=0;x<d.size;++x) heights[(d.y+y)*257+d.x+x]=d.h[y*d.size+x];
+            ground[d.y*257+d.x]=Ground{d.size,{},true};
+        }
+        // Neighbor samples affect edge stitching and normals. Rebuild only the
+        // bounded set of received patches on the next rendering frame.
+        for (auto& [key,g]:ground) g.dirty=true;
+        return true;
+    }
+    void surfaces(std::vector<VSWorldRenderer::Packet>& packets,const LLVector3& eye)
+    {
+        if (!sky) sky=renderer.upload({{-1,-1,0,0,0,1,0,0},{1,-1,0,0,0,1,1,0},{1,1,0,0,0,1,1,1},{-1,1,0,0,0,1,0,1}},{0,1,2,0,2,3});
+        VSWorldRenderer::Packet background;background.mesh=sky;background.background=true;background.fullbright=true;packets.push_back(background);
+        for (auto& [key,g]:ground)
+        {
+            const unsigned x0=key%257,y0=key/257,n=g.size;
+            if (g.dirty)
+            {
+                std::vector<VSWorldRenderer::Vertex> vertices;std::vector<unsigned> indices;
+                for (unsigned y=0;y<=n;++y) for (unsigned x=0;x<=n;++x)
+                {
+                    const unsigned gx=x0+x,gy=y0+y;
+                    const float fallback=heights[(y0+std::min(y,n-1))*257+x0+std::min(x,n-1)];
+                    const float z=height(gx,gy,fallback);
+                    LLVector3 normal(height(gx?gx-1:gx,gy,z)-height(std::min(gx+1,256u),gy,z),
+                        height(gx,gy?gy-1:gy,z)-height(gx,std::min(gy+1,256u),z),2);normal.normalize();
+                    vertices.push_back({float(gx),float(gy),z,normal.mV[0],normal.mV[1],normal.mV[2],float(gx)/16,1-float(gy)/16});
+                    if (x<n && y<n) { const unsigned i=y*(n+1)+x;indices.insert(indices.end(),{i,i+1,i+n+2,i,i+n+2,i+n+1}); }
+                }
+                g.mesh=renderer.upload(vertices,indices);g.dirty=false;
+            }
+            // First surface pass uses a single height-selected simulator detail
+            // map per patch; four-way terrain splatting is a later material pass.
+            const float h=height(x0+n/2,y0+n/2,0),start=terrainStarts[0],range=std::max(terrainRanges[0],1.f);
+            const unsigned level=unsigned(std::clamp((h-start)/range*4.f,0.f,3.f));const auto& texture=terrainTextures[level];
+            if (texture.notNull()) LLUI::getUIImageByID(texture);
+            VSWorldRenderer::Packet p;p.mesh=g.mesh;p.image=resources.image("remote:"+texture.asString());
+            if (!p.image) p.color={.32f,.42f,.18f,1};packets.push_back(std::move(p));
+        }
+        if (waterKnown)
+        {
+            if (!water) water=renderer.upload({{0,0,waterHeight,0,0,1,0,0},{256,0,waterHeight,0,0,1,1,0},
+                {256,256,waterHeight,0,0,1,1,1},{0,256,waterHeight,0,0,1,0,1}},{0,1,2,0,2,3});
+            VSWorldRenderer::Packet p;p.mesh=water;p.color={.08f,.28f,.38f,.65f};p.alpha=true;
+            p.distanceSquared=(LLVector3(128,128,waterHeight)-eye).lengthSquared();packets.push_back(std::move(p));
+        }
+    }
     U64 accepted=0,rejected=0,unsupported=0;
-    Impl(VSWorldRenderer& r,VSUIResources& u):renderer(r),resources(u) {}
+    Impl(VSWorldRenderer& r,VSUIResources& u):renderer(r),resources(u) { heights.fill(std::numeric_limits<float>::quiet_NaN()); }
     void request(U32 id) { if (id && pending.size()<1024) pending.try_emplace(id); }
     bool compressed(std::vector<U8>& bytes)
     {
@@ -133,10 +210,33 @@ struct VSWorldScene::Impl
 };
 VSWorldScene::VSWorldScene(VSWorldRenderer& r,VSUIResources& u):mImpl(std::make_unique<Impl>(r,u)) {}
 VSWorldScene::~VSWorldScene()=default;
-void VSWorldScene::reset() { mImpl->objects.clear();mImpl->pending.clear();mImpl->nextRequest=0;mImpl->accepted=mImpl->rejected=mImpl->unsupported=0; }
+void VSWorldScene::reset() { mImpl->ground.clear();mImpl->heights.fill(std::numeric_limits<float>::quiet_NaN());mImpl->water.reset();mImpl->waterKnown=false;mImpl->terrainTextures={};mImpl->objects.clear();mImpl->pending.clear();mImpl->nextRequest=0;mImpl->accepted=mImpl->rejected=mImpl->unsupported=0; }
+void VSWorldScene::configureRegion(const LLSD& h)
+{
+    auto& state=*mImpl;
+    const float water=float(h["water_height"].asReal());
+    state.waterKnown=h["water_height"].isReal() && std::isfinite(water) && std::abs(water)<=65536;
+    state.waterHeight=water;state.water.reset();
+    for (unsigned i=0;i<4;++i)
+    {
+        state.terrainTextures[i]=h["terrain_textures"][i].asUUID();
+        const float start=float(h["terrain_starts"][i].asReal()),range=float(h["terrain_ranges"][i].asReal());
+        state.terrainStarts[i]=std::isfinite(start)?start:0;state.terrainRanges[i]=std::isfinite(range)?range:1;
+    }
+}
 bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle)
 {
     const std::string name=msg.getMessageName();auto& state=*mImpl;
+    if (name=="LayerData")
+    {
+        U8 type;msg.getU8("LayerID","Type",type);
+        if (type!='L' && type!='M') return true; // Wind/cloud layers are separate protocols.
+        const S32 length=msg.getSize("LayerData","Data");
+        if (length<5 || length>65535) {++state.rejected;return true;}
+        std::vector<U8> bytes(length);msg.getBinaryData("LayerData","Data",bytes.data(),length,0,length);
+        if (state.terrain(bytes,type)) ++state.accepted;else ++state.rejected;
+        return true;
+    }
     if (name=="KillObject")
     {
         for (S32 i=0;i<msg.getNumberOfBlocks("ObjectData");++i)
@@ -222,6 +322,7 @@ void VSWorldScene::requestUpdates(LLMessageSystem& msg,const LLHost& host,const 
 std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,float farClip)
 {
     std::vector<VSWorldRenderer::Packet> packets;
+    mImpl->surfaces(packets,eye);
     for (auto& [id,o]:mImpl->objects)
     {
         LLVector3 position;LLQuaternion rotation;std::set<U32> visited;
@@ -275,7 +376,7 @@ VSWorldRenderer::View VSWorldScene::view(const LLVector3& eye,unsigned width,uns
 }
 LLSD VSWorldScene::evidence() const
 {
-    LLSD result;result["objects"]=S32(mImpl->objects.size());result["pending_full_updates"]=S32(mImpl->pending.size());
+    LLSD result;result["terrain_patches"]=S32(mImpl->ground.size());result["water_height_known"]=mImpl->waterKnown;result["sky"]= "native_default_gradient";result["objects"]=S32(mImpl->objects.size());result["pending_full_updates"]=S32(mImpl->pending.size());
     result["accepted"]=ll_sd_from_U64(mImpl->accepted);result["rejected"]=ll_sd_from_U64(mImpl->rejected);
     result["unsupported"]=ll_sd_from_U64(mImpl->unsupported);return result;
 }

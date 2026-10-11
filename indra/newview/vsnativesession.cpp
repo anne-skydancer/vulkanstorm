@@ -100,7 +100,7 @@ namespace
 std::weak_ptr<VSNativeSession> sOwner;
 double now() { return LLFrameTimer::getTotalSeconds(); }
 const std::set<std::string> transport = {"StartPingCheck", "CompletePingCheck", "PacketAck"};
-const std::set<std::string> worldMessages = {"ObjectUpdate", "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject"};
+const std::set<std::string> worldMessages = {"ObjectUpdate", "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject", "LayerData"};
 const std::set<std::string> session = {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator",
     "LogoutReply", "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "TeleportStart", "TeleportFinish",
     "TeleportLocal", "TeleportProgress", "TeleportFailed", "ViewerFrozenMessage", "FeatureDisabled", "CrossedRegion", "CloseCircuit", "DisableSimulator", "UUIDNameReply", "UUIDGroupNameReply",
@@ -819,6 +819,7 @@ bool VSNativeSession::changeRegion(const LLSD& body)
 bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
 {
     if (transport.count(name)) return mHost.isOk() && sender == mHost && mPhase != Phase::Disconnected;
+    if (name=="LayerData") return mHost.isOk() && sender==mHost && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
     if (worldMessages.count(name)) return sender==mHost && !mChangingRegion && mPhase==Phase::Connected;
     if ((mPhase == Phase::Connecting || mPhase == Phase::Connected || mPhase == Phase::Logout)
         && sender == mHost && session.count(name)) return true;
@@ -920,6 +921,16 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         U64 extended = flags;
         if (msg->getNumberOfBlocks("RegionInfo4") > 0) msg->getU64("RegionInfo4", "RegionFlagsExtended", extended);
         body["flags64"] = ll_sd_from_U64(extended);
+        F32 water; msg->getF32("RegionInfo", "WaterHeight", water); body["water_height"] = water;
+        const char* details[]={"TerrainDetail0","TerrainDetail1","TerrainDetail2","TerrainDetail3"};
+        const char* starts[]={"TerrainStartHeight00","TerrainStartHeight01","TerrainStartHeight10","TerrainStartHeight11"};
+        const char* ranges[]={"TerrainHeightRange00","TerrainHeightRange01","TerrainHeightRange10","TerrainHeightRange11"};
+        for (unsigned i=0;i<4;++i)
+        {
+            LLUUID texture; F32 start,range; msg->getUUID("RegionInfo",details[i],texture);
+            msg->getF32("RegionInfo",starts[i],start);msg->getF32("RegionInfo",ranges[i],range);
+            body["terrain_textures"].append(texture);body["terrain_starts"].append(start);body["terrain_ranges"].append(range);
+        }
         body["name"] = region; body["id"] = id; body["owner"] = owner; body["flags"] = LLSD::Integer(flags); body["access"] = access;
     }
     else if (name == "AgentMovementComplete")
@@ -1036,6 +1047,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         mName = body["name"].asString().substr(0, 256); mRegionID = body["id"].asUUID(); mOwner = body["owner"].asUUID();
         mFlags = body.has("flags64") ? ll_U64_from_sd(body["flags64"]) : U32(body["flags"].asInteger()); mAccess = U8(body["access"].asInteger());
         LLLandmark::setRegionHandle(mRegionID, mHandle);
+        if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().configureRegion(body);
         mHandshake = true; send("RegionHandshakeReply", LLSD()); connected();
     }
     else if (name == "AgentMovementComplete" && (mPhase == Phase::Connecting || mPhase == Phase::Connected))

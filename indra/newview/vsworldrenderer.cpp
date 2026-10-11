@@ -65,7 +65,7 @@ struct VSWorldRenderer::Impl
     RefCntAutoPtr<IRenderDevice> device;
     RefCntAutoPtr<IDeviceContext> context;
     RefCntAutoPtr<IShader> vertex, fragment;
-    RefCntAutoPtr<IPipelineState> pipelines[2][2];
+    RefCntAutoPtr<IPipelineState> pipelines[2][3];
     RefCntAutoPtr<ITexture> depth, white;
     RefCntAutoPtr<IFence> fence;
     Uint64 next = 1;
@@ -90,10 +90,10 @@ struct VSWorldRenderer::Impl
         TextureSubResData sr{};sr.pData=&pixel;sr.Stride=4;TextureData data{&sr,1};
         device->CreateTexture(td,&data,&white);requireWorld(white!=nullptr,"World fallback texture failed");
     }
-    IPipelineState* pipeline(TEXTURE_FORMAT format,bool alpha)
+    IPipelineState* pipeline(TEXTURE_FORMAT format,bool alpha,bool background)
     {
         requireWorld(format==TEX_FORMAT_RGBA8_UNORM || format==TEX_FORMAT_BGRA8_UNORM,"Unsupported world target format");
-        auto& result=pipelines[format==TEX_FORMAT_BGRA8_UNORM][alpha];
+        auto& result=pipelines[format==TEX_FORMAT_BGRA8_UNORM][background ? 2 : unsigned(alpha)];
         if (result) return result;
         const char* vs=R"(
 layout(location=0) in vec3 position;
@@ -103,7 +103,7 @@ layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4
 layout(location=0) out vec2 texUV;
 layout(location=1) out vec3 light;
 void main() {
-    vec4 p=projection*vec4(position,1);
+    vec4 p=material.w>0.5 ? vec4(position,1) : projection*vec4(position,1);
     p.z=(p.z+p.w)*0.5;
     gl_Position=p; texUV=uv;
     light=material.x>0.5 ? vec3(1) : ambient.rgb+(vec3(1)-ambient.rgb)*max(dot(normalize(normal),normalize(sun.xyz)),0.0);
@@ -116,6 +116,10 @@ layout(location=0) out vec4 result;
 layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; };
 uniform sampler2D g_Texture;
 void main() {
+    if (material.w>0.5) {
+        result=vec4(mix(vec3(0.65,0.8,0.95),vec3(0.08,0.22,0.48),clamp(texUV.y,0.0,1.0)),1);
+        return;
+    }
     vec4 c=texture(g_Texture,texUV)*tint;
     if (material.y>0.5 && c.a<material.z) discard;
     result=vec4(c.rgb*light,c.a);
@@ -138,7 +142,7 @@ void main() {
         auto& gp=ci.GraphicsPipeline;gp.NumRenderTargets=1;gp.RTVFormats[0]=format;
         gp.DSVFormat=TEX_FORMAT_D32_FLOAT;gp.PrimitiveTopology=PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         gp.RasterizerDesc.CullMode=CULL_MODE_NONE;
-        gp.DepthStencilDesc.DepthEnable=true;gp.DepthStencilDesc.DepthWriteEnable=!alpha;
+        gp.DepthStencilDesc.DepthEnable=!background;gp.DepthStencilDesc.DepthWriteEnable=!alpha && !background;
         gp.DepthStencilDesc.DepthFunc=COMPARISON_FUNC_LESS_EQUAL;
         const LayoutElement layout[]={{0,0,3,VT_FLOAT32,false},{1,0,3,VT_FLOAT32,false},{2,0,2,VT_FLOAT32,false}};
         gp.InputLayout.LayoutElements=layout;gp.InputLayout.NumElements=3;
@@ -198,13 +202,13 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
     mImpl->submitted.emplace_back();auto& submitted=mImpl->submitted.back();
     submitted.depth=mImpl->depth;submitted.packets=packets;
     std::stable_sort(submitted.packets.begin(),submitted.packets.end(),[](const Packet& a,const Packet& b)
-    { if (a.alpha!=b.alpha) return !a.alpha;return a.alpha ? a.distanceSquared>b.distanceSquared : false; });
+    { if (a.background!=b.background) return a.background; if (a.alpha!=b.alpha) return !a.alpha;return a.alpha ? a.distanceSquared>b.distanceSquared : false; });
     for (const auto& p:submitted.packets)
     {
         requireWorld(p.mesh && p.mesh->owner.RawPtr()==mImpl->device.RawPtr(),"World mesh belongs to another device");
         for (float f:p.color) requireWorld(std::isfinite(f),"Non-finite world material");
-        auto* pipeline=mImpl->pipeline(target->GetTexture()->GetDesc().Format,p.alpha);
-        Constants constants{view.projection,view.sun,view.ambient,p.color,{p.fullbright?1.f:0.f,p.masked?1.f:0.f,.5f,0}};
+        auto* pipeline=mImpl->pipeline(target->GetTexture()->GetDesc().Format,p.alpha,p.background);
+        Constants constants{view.projection,view.sun,view.ambient,p.color,{p.fullbright?1.f:0.f,p.masked?1.f:0.f,.5f,p.background?1.f:0.f}};
         BufferDesc bd{};bd.Name="Native world draw constants";bd.Size=sizeof(constants);
         bd.Usage=USAGE_IMMUTABLE;bd.BindFlags=BIND_UNIFORM_BUFFER;
         BufferData data{&constants,sizeof(constants)};RefCntAutoPtr<IBuffer> buffer;
