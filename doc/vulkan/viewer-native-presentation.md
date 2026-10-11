@@ -318,3 +318,18 @@ run did not pass its entire diagnostic matrix; it is not qualification of the
 final isolated executable. Previous connected-session evidence is retained
 with its original source/image identity. Final runtime and live-account
 acceptance must remain separate from source and build checks.
+
+
+### Selected-device memory reporting (11 October 2026)
+
+About queries the selected physical device's Vulkan memory properties and
+reports the sum of device-local heap capacities in MiB. The previous
+Diligent `LocalMemory` field excludes CPU-visible local memory and could be
+zero when GPU memory was classified as unified. Counting heaps includes
+CPU-visible device-local memory (Resizable BAR/UMA), excludes separate host
+heaps, and avoids counting aliased memory types more than once. This is
+driver-reported capacity, not free memory or a viewer allocation budget.
+Unknown capacity remains unknown rather than borrowing OpenGL state.
+Compiler fixtures cover selected-device identity, multiple local heaps,
+host-only exclusion, zero capacity and sizes beyond 32-bit bytes. Physical
+GPU display evidence remains separate.
