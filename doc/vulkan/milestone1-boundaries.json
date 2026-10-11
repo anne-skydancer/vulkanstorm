@@ -1,5 +1,5 @@
 {
-  "source_commit": "fa6d71c213ebff00e3aad1640499d717ae2e231d",
+  "source_commit": "f9392331423caae151a06c4bef2bb318dff92639",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -33,7 +33,7 @@
       ]
     },
     "indra/newview/llviewerwindow.cpp": {
-      "sha256": "7462821fd978f389611ae4eae3303c68034bf631558f1244ec44c1efec482f86",
+      "sha256": "90ec6289721ee64f917c1e68bb13a03b9791578bde90c8a49ab8dcb98e61301b",
       "anchors": [
         "LLViewerWindow::LLViewerWindow",
         "LLViewerWindow::initBase",
@@ -54,7 +54,7 @@
       ]
     },
     "indra/llwindow/llwindowwin32.cpp": {
-      "sha256": "80e9c1d24c6148aa8f00b73fd67592540ffb49cd90a588479a71ed6857db6a47",
+      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
       "anchors": [
         "LLWindowWin32::LLWindowWin32",
         "opengl32.dll",
@@ -62,7 +62,7 @@
       ]
     },
     "indra/llwindow/llwindowsdl2.cpp": {
-      "sha256": "864ed54e49b568235639e65d153785de6841f423ccf1e6db66e96a900f2fa369",
+      "sha256": "0d31687fd3b4cf94395568ef18eda38c7452c713cf392aea42c61c6d0d69b718",
       "anchors": [
         "LLWindowSDL::LLWindowSDL",
         "SDL_WINDOW_OPENGL",
@@ -339,7 +339,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "8847c0758ae0d6671bdfc639722bbd32107a45d850f330076eda3fe210e1499a",
+      "sha256": "a521fa9e555f03e975da2831492137be5e7a811a37b45a6b4ea764877207df18",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -388,7 +388,7 @@
       ]
     },
     "indra/llwindow/llwindowwin32.h": {
-      "sha256": "f0dbc5bb27ce08a023da3a9c64da199e1d6d820991cae261205310d77f8388da",
+      "sha256": "48b9e4f1839cda7d57f8079ae3ea8a9f7c0bb8c04d58cfb1d3fe4cdd07440d27",
       "anchors": [
         "mUseGL"
       ]
@@ -717,7 +717,7 @@
       ]
     },
     "indra/newview/vsviewerwindow.cpp": {
-      "sha256": "c94f7bfb0edf99a8fea8492d7392b2e1e7c2b6a8d8fc06cf9dd24361d8f89285",
+      "sha256": "184196da70f89e2c754e82bbb71d2793a248320fdd704426a3f7c4397817eb1f",
       "anchors": [
         "initNativeWindow",
         "initNativeBase",
