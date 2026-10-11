@@ -3,6 +3,7 @@
 #include "llhost.h"
 #include "llsd.h"
 #include "lluuid.h"
+#include "llhandle.h"
 #include "v3math.h"
 #include "v3dmath.h"
 #include <memory>
@@ -16,8 +17,9 @@
 class LLMessageSystem;
 class LLEventPoll;
 class VSPlainChat;
+class LLFloater;
 
-// Deliberately does not own LLWorld, LLViewerRegion or scene/parcel resources.
+// Deliberately does not own LLWorld, LLViewerRegion or scene resources.
 // All asynchronous deliveries carry an owner and a session generation.
 class VSNativeSession : public std::enable_shared_from_this<VSNativeSession>
 {
@@ -60,6 +62,15 @@ public:
     bool teleportHome() { return teleportToLandmark(LLUUID::null); }
     bool teleportToLure(const LLUUID&, bool godlike);
 
+    // Current simulator's parcel metadata and ordinary 2D playback controls.
+    const std::string& musicURL() const { return mMusicURL; }
+    const std::string& mediaURL() const { return mMediaURL; }
+    const std::string& parcelName() const { return mParcelName; }
+    bool musicEnabled() const { return mMusicRequested; }
+    bool mediaEnabled() const;
+    bool setMusicEnabled(bool);
+    bool setMediaEnabled(bool);
+
     // Unknown balance stays unknown until an authenticated simulator reply.
     bool balanceKnown() const { return mBalanceKnown; }
     S32 balance() const { return mBalance; }
@@ -76,6 +87,14 @@ private:
     bool changeRegion(const LLSD&);
     bool teleportRequest(U64, const LLVector3&);
     void connected();
+    void requestParcel();
+    void clearParcelPlayback();
+    void updateParcelPlayback();
+    bool requestParcelPlayback(bool music);
+    bool playbackCurrent(bool music, U64 generation, U64 epoch, U64 revision, U64 request, const std::string& url) const;
+    void playParcelAllowed(bool music);
+    void rejectParcelPlayback(bool music);
+    void parcelMediaCommand(U32 flags, U32 command, F32 time);
     void appendChat(LLSD, U64);
     void publishChat(const LLSD&, const std::string&, U64);
     void finishLogout();
@@ -91,6 +110,14 @@ private:
     double mNavigationDeadline = 0;
     struct LocationRequest { LLVector3d position; LocationCallback callback; double deadline; };
     std::vector<LocationRequest> mLocationRequests;
+    S32 mParcelSequence = 0;
+    S32 mParcelID = -1;
+    U64 mParcelRevision = 1, mMusicRequest = 0, mMediaRequest = 0;
+    bool mMusicRequested = false, mMediaRequested = false;
+    bool mMusicUserStopped = false, mMediaUserStopped = false;
+    bool mMediaPresented = false;
+    std::string mParcelName, mMusicURL, mMediaURL, mMediaType;
+    LLHandle<LLFloater> mParcelMediaWindow;
     LLHost mHost;
     LLUUID mAgent, mSession, mRegionID, mOwner;
     U64 mHandle = 0, mFlags = 0;

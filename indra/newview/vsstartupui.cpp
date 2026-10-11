@@ -164,6 +164,13 @@
 #include "llhints.h"
 #include "llinspectremoteobject.h"
 #include "llstatgraph.h"
+#include "llstatbar.h"
+#include "llstatview.h"
+#include "llfloaterlagmeter.h"
+#include "llfloatersettingsdebug.h"
+#include "llfloaterhelpbrowser.h"
+#include "llfloaterhowto.h"
+#include "fsfloaterstatistics.h"
 #include "llpanelvolumepulldown.h"
 #include "llpanelpulldown.h"
 #include "lltoolbar.h"
@@ -195,7 +202,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(LLPanelMainInventory) || LLPanelMainInventory::isNativeInternalType(t) ||
                 t == typeid(LLPanelMarketplaceInbox) || t == typeid(LLInboxInventoryPanel) ||
                 t == typeid(LLInboxFolderViewFolder) || t == typeid(LLInboxFolderViewItem) || t == typeid(LLInventoryGallery) || t == typeid(LLInventoryGalleryItem) ||
-                LLInventoryPanel::isNativeInternalType(t) || LLInspectRemoteObjectUtil::isNativeInternalType(t) || LLHints::isNativeInternalType(t) || t == typeid(LLStatusBar) || t == typeid(LLStatGraph) ||
+                LLInventoryPanel::isNativeInternalType(t) || LLInspectRemoteObjectUtil::isNativeInternalType(t) || LLHints::isNativeInternalType(t) || t == typeid(LLStatusBar) || t == typeid(LLStatGraph) || t == typeid(LLFloaterSettingsDebug) || t == typeid(LLFloaterHelpBrowser) || t == typeid(LLFloaterHowTo) || t == typeid(LLStatBar) || t == typeid(LLStatView) || t == typeid(LLFloaterLagMeter) || t == typeid(FSFloaterStatistics) ||
                 t == typeid(LLPanelVolumePulldown) || t == typeid(LLPanelPulldown) || t == typeid(LLToolBarView) || t == typeid(LLToolBar) ||
                 t == typeid(LLToolBarVertical) || t == typeid(LLToolBarButton) || LLToolBar::isNativeInternalType(t) || LLNavigationBar::isNativeInternalType(t) || t == typeid(FSNearbyChatControl) || t == typeid(FSNearbyChatVoiceControl) || t == typeid(FSFloaterNearbyChat) || t == typeid(LLPanelPeople) || t == typeid(LLSideTrayPanelContainer) || t == typeid(LLFloaterSearchReplace) || t == typeid(LLFloaterSearch) || t == typeid(LLFloaterWebContent) || t == typeid(LLFloaterToybox) ||
                 t == typeid(LLPullButton) || t == typeid(LLLocationInputCtrl) || t == typeid(LLURLLineEditor) ||
@@ -291,7 +298,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             if (!admitted) LL_WARNS("NativeUI") << "Rejected native widget type: " << t.name() << LL_ENDL;
             return admitted;
         },
-        [](std::string_view name) { return name == "inspect_remote_object" || name == "web_content" || name == "search_replace" || name == "fs_nearby_chat" || name == "people" || name == "search" || name == "toybox" || name == "inventory" || name == "secondary_inventory" || name == "sl_about" || name == "message_critical" || name == "message_tos" ||
+        [](std::string_view name) { return name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "stats" || name == "lagmeter" || name == "inspect_remote_object" || name == "web_content" || name == "search_replace" || name == "fs_nearby_chat" || name == "people" || name == "search" || name == "toybox" || name == "inventory" || name == "secondary_inventory" || name == "sl_about" || name == "message_critical" || name == "message_tos" ||
             name == "fs_impanel" || name == "fs_im_container" || name == "imcontacts" || name == "avatar_picker" ||
             name == "fs_blocklist" || name == "fs_add_contact" || name == "fs_contact_set_config" ||
             name == "mute_object_by_name" || name == "group_picker" || name == "fs_group_titles" || name == "vs_group_search" || name == "fs_group" || name == "profile" || name == "publish_classified" || name == "preferences" || name == "prefs_proxy" || name == "prefs_translation" || name == "prefs_autoreplace" ||
@@ -324,7 +331,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view name)
         {
-            return name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
+            return name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
                    name == "preferences" || name == "profile" || name == "contact_sets" ||
                    name == "conversation_log" || name == "block_list" || name == "group_titles";
         },
@@ -394,7 +401,9 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 "IMSession.Menu.Action", "IMSession.Menu.Enable", "ChatOptions.Action", "ChatOptions.Check",
                 "ChatOptions.Visible", "ChatOptions.Enable", "IMWellChicletMenu.Action", "IMWellChicletMenu.EnableItem",
                 "NotificationWellChicletMenu.Action", "NotificationWellChicletMenu.EnableItem",
-                "InvOfferChiclet.Action", "Mention.CopyURI", "Mention.Chat",
+                "Advanced.ShowDebugSettings", "ToggleSettingsDebug", "ToggleWebBrowser", "Help.ToggleHowTo",
+                "SettingSelect", "CommitSettings", "ClickDefault", "UpdateFilter", "ClickCopy", "ClickSanityIcon",
+                "LagMeter.ClickShrink", "InvOfferChiclet.Action", "Mention.CopyURI", "Mention.Chat",
                 "Url.Open", "Url.OpenInternal", "Url.OpenExternal", "Url.Execute", "Url.Teleport", "Url.Block", "Url.Unblock",
                 "Url.CopyLabel", "Url.CopyUrl", "Url.ShowProfile", "Url.SendIM", "Url.AddFriend", "Url.RemoveFriend",
                 "Url.EnableShowProfile", "Url.EnableSendIM", "Url.EnableAddFriend", "Url.EnableRemoveFriend",

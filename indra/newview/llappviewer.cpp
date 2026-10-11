@@ -1649,6 +1649,9 @@ bool LLAppViewer::initNativeVulkanLogin()
 
 bool LLAppViewer::frameNativeVulkanLogin()
 {
+#if VS_NATIVE_VULKAN
+    update_native_statistics();
+#endif
     ++gFrameCount;
     gFrameTime = totalTime();
     gFrameTimeSeconds = LLFrameTimer::getElapsedSeconds();
@@ -4589,13 +4592,6 @@ LLSD LLAppViewer::getViewerInfo() const
         info["VRAM_BUDGET_ENGLISH"] = "Unlimited";
     }
     // </FS:Ansariel>
-    if (native_vulkan)
-    {
-        // The OpenGL texture budget does not govern native Vulkan allocations.
-        info["VRAM_BUDGET"] = LLSD();
-        info["VRAM_BUDGET_ENGLISH"] = LLSD();
-    }
-
     return info;
 }
 

@@ -184,13 +184,13 @@ void LLChatEntry::onFocusLost()
 
 bool LLChatEntry::handleSpecialKey(const KEY key, const MASK mask)
 {
-    bool handled = false;
-
-    LLTextEditor::handleSpecialKey(key, mask);
+    bool handled = LLTextEditor::handleSpecialKey(key, mask);
 
     switch(key)
     {
     case KEY_RETURN:
+        // Return must still reach the enclosing chat controller for submission.
+        handled = false;
         if (MASK_NONE == mask)
         {
             needsReflow();

@@ -44,6 +44,7 @@
 
 LLFloaterWebContent::_Params::_Params()
 :   url("url"),
+    mime_type("mime_type"),
     target("target"),
     id("id"),
     window_class("window_class", "web_content"),
@@ -246,9 +247,9 @@ void LLFloaterWebContent::preCreate(LLFloaterWebContent::Params& p)
 void LLFloaterWebContent::open_media(const Params& p)
 {
     LLViewerMedia::getInstance()->proxyWindowOpened(p.target(), p.id());
-    mWebBrowser->setHomePageUrl(p.url);
+    mWebBrowser->setHomePageUrl(p.url, p.mime_type);
     mWebBrowser->setTarget(p.target);
-    mWebBrowser->navigateTo(p.url);
+    mWebBrowser->navigateTo(p.url, p.mime_type);
 
     set_current_url(p.url);
 

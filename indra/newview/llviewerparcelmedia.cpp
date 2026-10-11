@@ -29,6 +29,9 @@
 
 #include "llagent.h"
 #include "llaudioengine.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 #include "llmimetypes.h"
 #include "llviewercontrol.h"
 #include "llviewermedia.h"
@@ -78,6 +81,10 @@ mMediaParcelLocalID(0)
     , mMediaCommandQueue(0)
     , mMediaCommandTime(0)
 {
+#if VS_NATIVE_VULKAN
+    if (!VSNativeSession::active())
+#endif
+    {
     LLMessageSystem* msg = gMessageSystem;
     msg->setHandlerFunc("ParcelMediaCommandMessage", parcelMediaCommandMessageHandler );
     msg->setHandlerFunc("ParcelMediaUpdate", parcelMediaUpdateHandler );
@@ -85,7 +92,7 @@ mMediaParcelLocalID(0)
     // LLViewerParcelMediaAutoPlay will regularly check and autoplay media,
     // might be good idea to just integrate it into LLViewerParcelMedia
     LLSingleton<LLViewerParcelMediaAutoPlay>::getInstance();
-
+    }
     loadDomainFilterList();
 }
 

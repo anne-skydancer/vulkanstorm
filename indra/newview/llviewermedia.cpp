@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 #if VS_NATIVE_VULKAN
 #include "vsuidrawbridge.h"
+#include "vsnativesession.h"
 #endif
 
 
@@ -957,6 +958,10 @@ bool LLViewerMedia::isAnyMediaPlaying()
 //////////////////////////////////////////////////////////////////////////////////////////
 void LLViewerMedia::setAllMediaEnabled(bool val)
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    { gSavedSettings.setBOOL("MediaTentativeAutoPlay", val); owner->setMediaEnabled(val); return; }
+#endif
     // Set "tentative" autoplay first.  We need to do this here or else
     // re-enabling won't start up the media below.
     gSavedSettings.setBOOL("MediaTentativeAutoPlay", val);
@@ -1016,6 +1021,10 @@ void LLViewerMedia::setAllMediaEnabled(bool val)
 //////////////////////////////////////////////////////////////////////////////////////////
 void LLViewerMedia::setAllMediaPaused(bool val)
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    { gSavedSettings.setBOOL("MediaTentativeAutoPlay", !val); owner->setMediaEnabled(!val); return; }
+#endif
     // Set "tentative" autoplay first.  We need to do this here or else
     // re-enabling won't start up the media below.
     gSavedSettings.setBOOL("MediaTentativeAutoPlay", !val);
@@ -1095,6 +1104,9 @@ void LLViewerMedia::setAllMediaPaused(bool val)
 //////////////////////////////////////////////////////////////////////////////////////////
 bool LLViewerMedia::isParcelMediaPlaying()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) return owner->mediaEnabled();
+#endif
     viewer_media_t media = LLViewerParcelMedia::getInstance()->getParcelMedia();
     return (LLViewerMedia::hasParcelMedia() && media && media->hasMedia());
 }
@@ -1587,6 +1599,9 @@ bool LLViewerMedia::hasInWorldMedia()
 //////////////////////////////////////////////////////////////////////////////////////////
 bool LLViewerMedia::hasParcelMedia()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) return !owner->mediaURL().empty();
+#endif
     return !LLViewerParcelMedia::getInstance()->getURL().empty();
 }
 
@@ -1599,6 +1614,9 @@ bool LLViewerMedia::hasParcelAudio()
 //////////////////////////////////////////////////////////////////////////////////////////
 std::string LLViewerMedia::getParcelAudioURL()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) return owner->musicURL();
+#endif
     return LLViewerParcelMgr::getInstance()->getAgentParcel()->getMusicURL();
 }
 

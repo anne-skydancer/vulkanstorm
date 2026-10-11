@@ -40,6 +40,14 @@
 #include "llfloateravatarpicker.h"
 #include "llremoteparcelrequest.h"
 #include "llvieweraudio.h"
+#include "llaudioengine.h"
+#include "llviewerparcelmedia.h"
+#include "llparcel.h"
+#include "indra_constants.h"
+#include "llfloaterwebcontent.h"
+#include "llfloaterreg.h"
+#include "llmediactrl.h"
+#include "llpluginclassmedia.h"
 #include "llviewermessage.h"
 #include "fspanellogin.h"
 #include "llprogressview.h"
@@ -85,7 +93,7 @@ namespace
 std::weak_ptr<VSNativeSession> sOwner;
 double now() { return LLFrameTimer::getTotalSeconds(); }
 const std::set<std::string> transport = {"StartPingCheck", "CompletePingCheck", "PacketAck"};
-const std::set<std::string> session = {"RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator",
+const std::set<std::string> session = {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator",
     "LogoutReply", "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "TeleportStart", "TeleportFinish",
     "TeleportLocal", "TeleportProgress", "TeleportFailed", "ViewerFrozenMessage", "FeatureDisabled", "CrossedRegion", "CloseCircuit", "DisableSimulator", "UUIDNameReply", "UUIDGroupNameReply",
     "MuteListUpdate", "UseCachedMuteList", "SendXferPacket", "ConfirmXferPacket", "AbortXfer", "TransferInfo", "TransferPacket", "TransferAbort",
@@ -156,11 +164,12 @@ void VSNativeSession::install(LLMessageSystem& msg)
         return locked && locked->admit(name, sender);
     });
     // Mixed viewer handlers are replaced before any session messages can execute.
-    for (const char* name : {"RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
+    for (const char* name : {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
          "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
     LLAvatarTracker::instance().registerCallbacks(&msg);
     LLInventoryModel::registerCallbacks(&msg);
+    msg.setHandlerFunc("SimStats", process_sim_stats);
     msg.setHandlerFunc("AgentDataUpdate", LLAgent::processAgentDataUpdate);
     msg.setHandlerFunc("AgentGroupDataUpdate", LLAgent::processAgentGroupDataUpdate);
     msg.setHandlerFunc("AgentDropGroup", LLAgent::processAgentDropGroup);
@@ -347,6 +356,224 @@ void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionE
     connected();
 }
 std::string VSNativeSession::capability(const std::string& name) const { return mCapabilities[name].asString(); }
+void VSNativeSession::requestParcel()
+{
+    if (mPhase != Phase::Connected || mChangingRegion || !gMessageSystem || !mPosition.isFinite()) return;
+    // Retain a monotonic location sequence across region changes and relogins.
+    mParcelSequence = mParcelSequence == std::numeric_limits<S32>::max() ? 1 : mParcelSequence + 1;
+    const F32 west = llclamp(mPosition.mV[VX], 0.f, F32(mWidth) - .01f);
+    const F32 south = llclamp(mPosition.mV[VY], 0.f, F32(mHeight) - .01f);
+    LLMessageSystem* msg = gMessageSystem;
+    msg->newMessage("ParcelPropertiesRequest"); msg->nextBlock("AgentData");
+    msg->addUUID("AgentID", mAgent); msg->addUUID("SessionID", mSession);
+    msg->nextBlock("ParcelData"); msg->addS32("SequenceID", mParcelSequence);
+    msg->addF32("West", west); msg->addF32("South", south);
+    msg->addF32("East", llmin(west + .01f, F32(mWidth))); msg->addF32("North", llmin(south + .01f, F32(mHeight)));
+    msg->addBOOL("SnapSelection", false);
+    if (msg->sendReliable(mHost) > 0) ++mSent;
+}
+void VSNativeSession::clearParcelPlayback()
+{
+    ++mParcelRevision; ++mMusicRequest; ++mMediaRequest;
+    mMusicRequested = mMediaRequested = false;
+    if (LLViewerAudio::instanceExists()) LLViewerAudio::instance().stopInternetStreamWithAutoFade();
+    if (auto window = mParcelMediaWindow.get()) window->closeFloater();
+    mParcelMediaWindow.markDead(); mMediaPresented = false;
+    mParcelID = -1; mParcelName.clear(); mMusicURL.clear(); mMediaURL.clear(); mMediaType.clear();
+}
+void VSNativeSession::updateParcelPlayback()
+{
+    if (mPhase != Phase::Connected) return;
+    if (mMusicRequested && !gSavedSettings.getBOOL("AudioStreamingMusic")) setMusicEnabled(false);
+    if (mMediaRequested && !gSavedSettings.getBOOL("AudioStreamingMedia")) setMediaEnabled(false);
+    // A pending consent prompt has no window yet. Closing an existing browser
+    // is an explicit stop; it must not cause autoplay on the next parcel update.
+    if (mMediaRequested && mMediaPresented && mParcelMediaWindow.isDead())
+    { mMediaRequested = false; mMediaUserStopped = true; ++mMediaRequest; }
+}
+bool VSNativeSession::mediaEnabled() const
+{
+    return mMediaRequested && !mParcelMediaWindow.isDead();
+}
+bool VSNativeSession::playbackCurrent(bool music, U64 generation, U64 epoch, U64 revision, U64 request, const std::string& url) const
+{
+    return mPhase == Phase::Connected && !mChangingRegion && mGeneration == generation && mRegionEpoch == epoch &&
+        mParcelRevision == revision && (music ? mMusicRequest : mMediaRequest) == request &&
+        (music ? mMusicRequested : mMediaRequested) && (music ? mMusicURL : mMediaURL) == url;
+}
+bool VSNativeSession::setMusicEnabled(bool enable)
+{
+    ++mMusicRequest; mMusicRequested = enable; mMusicUserStopped = !enable;
+    if (!enable)
+    {
+        if (LLViewerAudio::instanceExists()) LLViewerAudio::instance().stopInternetStreamWithAutoFade();
+        return true;
+    }
+    if (!gAudiop || mMusicURL.empty() || !gSavedSettings.getBOOL("AudioStreamingMusic") || !requestParcelPlayback(true))
+    { mMusicRequested = false; return false; }
+    return true;
+}
+bool VSNativeSession::setMediaEnabled(bool enable)
+{
+    ++mMediaRequest; mMediaRequested = enable; mMediaUserStopped = !enable;
+    if (!enable)
+    {
+        if (auto window = mParcelMediaWindow.get()) window->closeFloater();
+        mParcelMediaWindow.markDead(); mMediaPresented = false; return true;
+    }
+    if (mMediaURL.empty() || !gSavedSettings.getBOOL("AudioStreamingMedia") || !requestParcelPlayback(false))
+    { mMediaRequested = false; return false; }
+    return true;
+}
+void VSNativeSession::rejectParcelPlayback(bool music)
+{
+    // A filter denial concerns this source, not the user's global autoplay
+    // choice. Keep explicit toolbar stops distinct from consent rejection.
+    const bool stopped = music ? mMusicUserStopped : mMediaUserStopped;
+    if (music) { setMusicEnabled(false); mMusicUserStopped = stopped; }
+    else { setMediaEnabled(false); mMediaUserStopped = stopped; }
+}
+void VSNativeSession::playParcelAllowed(bool music)
+{
+    if (mPhase != Phase::Connected || mChangingRegion) return;
+    if (music)
+    {
+        if (gAudiop && mMusicRequested && gSavedSettings.getBOOL("AudioStreamingMusic"))
+            LLViewerAudio::instance().startInternetStreamWithAutoFade(mMusicURL);
+        return;
+    }
+    if (!mMediaRequested || !gSavedSettings.getBOOL("AudioStreamingMedia")) return;
+    // A parcel surface is represented by the existing 2D media browser. Its
+    // LLMediaCtrl copies plugin pixels into the native UI resource provider.
+    LLFloaterWebContent::Params params;
+    params.url = mMediaURL; params.mime_type = mMediaType; params.target = "native-parcel-media"; params.window_class = "web_content";
+    params.trusted_content = false; params.show_chrome = true;
+    if (auto window = LLFloaterReg::showInstance("web_content", params))
+    { mParcelMediaWindow = window->getHandle(); mMediaPresented = true; }
+}
+bool VSNativeSession::requestParcelPlayback(bool music)
+{
+    if (mPhase != Phase::Connected || mChangingRegion || mParcelID < 0) return false;
+    const auto url = music ? mMusicURL : mMediaURL;
+    if (!webURL(url)) return false;
+    const std::weak_ptr<VSNativeSession> weak = shared_from_this();
+    const U64 generation = mGeneration, epoch = mRegionEpoch, revision = mParcelRevision;
+    const U64 request = music ? mMusicRequest : mMediaRequest;
+    const auto current = [weak, music, generation, epoch, revision, request, url]()
+    {
+        auto owner = weak.lock();
+        return owner && owner->playbackCurrent(music, generation, epoch, revision, request, url) ? owner : nullptr;
+    };
+    LLSD payload; vs_native_im_stamp_notification(payload);
+    if (!music && gWarningSettings.getBOOL("FirstStreamingVideo"))
+    {
+        LLNotificationsUtil::add("ParcelCanPlayMedia", LLSD(), payload,
+            [current](const LLSD& notification, const LLSD& response)
+            {
+                if (auto owner = current())
+                {
+                    gWarningSettings.setBOOL("FirstStreamingVideo", false);
+                    const S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
+                    if (option == 0 || option == 1)
+                    {
+                        if (option == 1) gSavedSettings.setBOOL("AudioStreamingVideo", true);
+                        owner->requestParcelPlayback(false);
+                    }
+                    else { gSavedSettings.setBOOL("AudioStreamingVideo", false); owner->setMediaEnabled(false); }
+                }
+                return false;
+            });
+        return true;
+    }
+    if (!gSavedSettings.getBOOL("MediaEnableFilter")) { playParcelAllowed(music); return true; }
+    if (gWarningSettings.getBOOL("FirstMediaFilter"))
+    {
+        LLNotificationsUtil::add("EnableMediaFilter", LLSD(), payload,
+            [current, music](const LLSD& notification, const LLSD& response)
+            {
+                if (auto owner = current())
+                {
+                    gWarningSettings.setBOOL("FirstMediaFilter", false);
+                    if (LLNotificationsUtil::getSelectedOption(notification, response) != 0) gSavedSettings.setBOOL("MediaEnableFilter", false);
+                    owner->requestParcelPlayback(music);
+                }
+                return false;
+            });
+        return true;
+    }
+    auto& filter = LLViewerParcelMedia::instance();
+    const std::string domain = filter.extractDomain(url);
+    for (auto it = filter.mMediaFilterList.beginArray(); it != filter.mMediaFilterList.endArray(); ++it)
+    {
+        const auto& row = *it;
+        const std::string listed = row["domain"].asString();
+        const bool domainMatch = !listed.empty() && domain.size() >= listed.size() &&
+            domain.compare(domain.size() - listed.size(), listed.size(), listed) == 0 &&
+            (domain.size() == listed.size() || domain[domain.size() - listed.size() - 1] == '.');
+        if (listed == url || domainMatch)
+        {
+            if (row["action"].asString() == "allow") playParcelAllowed(music);
+            else rejectParcelPlayback(music);
+            return true;
+        }
+    }
+    LLSD args; args[music ? "AUDIOURL" : "MEDIAURL"] = url; args[music ? "AUDIODOMAIN" : "MEDIADOMAIN"] = domain;
+    const auto resolve = [current, music, domain, url](S32 option, bool rememberURL = false)
+    {
+        if (auto owner = current())
+        {
+            if (option == 3 || option == 4)
+            {
+                LLSD row; row["domain"] = rememberURL ? url : domain; row["action"] = option == 3 ? "allow" : "deny";
+                auto& filter = LLViewerParcelMedia::instance(); filter.mMediaFilterList.append(row); filter.saveDomainFilterList();
+            }
+            if (option == 0 || option == 3) owner->playParcelAllowed(music);
+            else owner->rejectParcelPlayback(music);
+        }
+    };
+    if (gSavedSettings.getBOOL("MediaFilterSinglePrompt"))
+        LLNotificationsUtil::add(music ? "AudioAlertSingle" : "MediaAlertSingle", args, payload,
+            [resolve](const LLSD& notification, const LLSD& response)
+            {
+                const S32 option = LLNotificationsUtil::getSelectedOption(notification, response);
+                resolve(option == 2 ? 4 : option); return false;
+            });
+    else
+        LLNotificationsUtil::add(music ? "AudioAlert" : "MediaAlert", args, payload,
+            [current, resolve, args, payload, music](const LLSD& notification, const LLSD& response)
+            {
+                if (!current()) return false;
+                const bool allow = LLNotificationsUtil::getSelectedOption(notification, response) == 0;
+                LLSD secondArgs = args;
+                secondArgs["ACTION"] = LLTrans::getString(allow ? "MediaFilterActionAllow" : "MediaFilterActionDeny");
+                secondArgs["CONDITION"] = LLTrans::getString(allow ? "MediaFilterConditionAlways" : "MediaFilterConditionNever");
+                secondArgs["LCONDITION"] = LLTrans::getString(allow ? "MediaFilterConditionAlwaysLower" : "MediaFilterConditionNeverLower");
+                LLNotificationsUtil::add(music ? "AudioAlert2" : "MediaAlert2", secondArgs, payload,
+                    [resolve, allow](const LLSD& n, const LLSD& r)
+                    {
+                        const S32 option = LLNotificationsUtil::getSelectedOption(n, r);
+                        resolve(option == 1 || option == 2 ? (allow ? 3 : 4) : (option == 0 && allow ? 0 : 1), option == 2); return false;
+                    });
+                return false;
+            });
+    return true;
+}
+void VSNativeSession::parcelMediaCommand(U32 flags, U32 command, F32 time)
+{
+    if (command >= 32 || !(flags & (U32(1) << command))) return;
+    if (command == PARCEL_MEDIA_COMMAND_STOP || command == PARCEL_MEDIA_COMMAND_UNLOAD) { setMediaEnabled(false); return; }
+    auto window = mParcelMediaWindow.get();
+    auto browser = window ? window->findChild<LLMediaCtrl>("webbrowser", true) : nullptr;
+    auto plugin = browser ? browser->getMediaPlugin() : nullptr;
+    if (command == PARCEL_MEDIA_COMMAND_PAUSE && plugin) plugin->pause();
+    else if (command == PARCEL_MEDIA_COMMAND_TIME && plugin && std::isfinite(time) && time >= 0) plugin->seek(time);
+    else if (command == PARCEL_MEDIA_COMMAND_PLAY || command == PARCEL_MEDIA_COMMAND_LOOP)
+    {
+        // Script commands never override the user's explicit stop or consent.
+        if (!mMediaUserStopped && gSavedSettings.getBOOL("PermAllowScriptedMedia")) setMediaEnabled(true);
+    }
+}
+
 std::string VSNativeSession::locationURL() const
 {
     return mName.empty() ? std::string() : LLSLURL(mName, mPosition).getSLURLString();
@@ -432,6 +659,7 @@ bool VSNativeSession::changeRegion(const LLSD& body)
     // Only an authenticated current simulator can grant the next host. Inbound
     // packets and capability/circuit completions from the retired region expire.
     mLocationRequests.clear();
+    clearParcelPlayback();
     ++mRegionEpoch; mPreviousHost = mHost; mHost = destination;
     mHandle = ll_U64_from_sd(body["handle"]); mSeed = seed; mName.clear();
     mWidth = body.has("width") ? U32(body["width"].asInteger()) : 256; mHeight = body.has("height") ? U32(body["height"].asInteger()) : 256;
@@ -465,7 +693,32 @@ void VSNativeSession::receive(LLMessageSystem* msg)
 {
     const std::string name = msg->getMessageName();
     LLSD body = LLSD::emptyMap();
-    if (name == "RegionIDAndHandleReply")
+    if (name == "ParcelProperties")
+    {
+        S32 result, sequence, id; std::string parcel, music, media;
+        msg->getS32("ParcelData", "RequestResult", result); msg->getS32("ParcelData", "SequenceID", sequence);
+        msg->getS32("ParcelData", "LocalID", id); msg->getString("ParcelData", "Name", parcel);
+        msg->getString("ParcelData", "MusicURL", music); msg->getString("ParcelData", "MediaURL", media);
+        body["result"] = result; body["sequence"] = sequence; body["id"] = id;
+        body["name"] = parcel; body["music"] = music; body["media"] = media;
+        if (msg->getNumberOfBlocks("MediaData"))
+        {
+            std::string type; msg->getString("MediaData", "MediaType", type); body["type"] = type;
+        }
+    }
+    else if (name == "ParcelMediaUpdate")
+    {
+        std::string media, type; msg->getString("DataBlock", "MediaURL", media);
+        if (msg->getNumberOfBlocks("DataBlockExtended")) msg->getString("DataBlockExtended", "MediaType", type);
+        body["media"] = media; body["type"] = type;
+    }
+    else if (name == "ParcelMediaCommandMessage")
+    {
+        U32 flags, command; F32 time; msg->getU32("CommandBlock", "Flags", flags);
+        msg->getU32("CommandBlock", "Command", command); msg->getF32("CommandBlock", "Time", time);
+        body["flags"] = LLSD::Integer(flags); body["command"] = LLSD::Integer(command); body["time"] = time;
+    }
+    else if (name == "RegionIDAndHandleReply")
     {
         LLUUID id; U64 handle; msg->getUUID("ReplyBlock", "RegionID", id); msg->getU64("ReplyBlock", "RegionHandle", handle);
         body["id"] = id; body["handle"] = ll_sd_from_U64(handle);
@@ -570,7 +823,44 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
 {
     if (generation != mGeneration) { ++mExpired; return false; }
     if (!body.isMap() || !admit(name, sender)) return false;
-    if (name == "RegionHandshake" && (mPhase == Phase::Connecting || mPhase == Phase::Connected))
+    if (name == "ParcelProperties" && mPhase == Phase::Connected && !mChangingRegion)
+    {
+        if (!body["result"].isInteger() || !body["sequence"].isInteger() || !body["id"].isInteger() ||
+            !body["name"].isString() || !body["music"].isString() || !body["media"].isString() ||
+            (body.has("type") && !body["type"].isString())) return false;
+        const S32 sequence = body["sequence"].asInteger();
+        // Negative sequences describe selection/hover/collision, not the
+        // agent parcel. Positive replies match the current location request.
+        if (body["result"].asInteger() != PARCEL_RESULT_SUCCESS || body["id"].asInteger() < 0 ||
+            (sequence != 0 && sequence != mParcelSequence)) return false;
+        std::string music = body["music"].asString(), media = body["media"].asString();
+        LLStringUtil::trim(music); LLStringUtil::trim(media);
+        if ((!music.empty() && !webURL(music)) || (!media.empty() && !webURL(media))) return false;
+        const bool changed = mParcelID != body["id"].asInteger() || mMusicURL != music || mMediaURL != media || mMediaType != body["type"].asString();
+        const bool resumeMusic = mMusicRequested;
+        const bool resumeMedia = mediaEnabled();
+        if (changed) clearParcelPlayback();
+        mParcelID = body["id"].asInteger(); mParcelName = body["name"].asString();
+        mMusicURL = music; mMediaURL = media; mMediaType = body["type"].asString();
+        if (changed && (resumeMusic || (!mMusicUserStopped && gSavedSettings.getBOOL("FSParcelMusicAutoPlay") && gSavedSettings.getBOOL("MediaTentativeAutoPlay")))) setMusicEnabled(true);
+        if (changed && (resumeMedia || (!mMediaUserStopped && gSavedSettings.getS32("ParcelMediaAutoPlayEnable") == 1 && gSavedSettings.getBOOL("MediaTentativeAutoPlay")))) setMediaEnabled(true);
+    }
+    else if (name == "ParcelMediaUpdate" && mPhase == Phase::Connected && !mChangingRegion)
+    {
+        if (!body["media"].isString() || !body["type"].isString()) return false;
+        std::string media = body["media"].asString(); LLStringUtil::trim(media);
+        if (mParcelID < 0 || (!media.empty() && !webURL(media))) return false;
+        const bool resume = mediaEnabled();
+        if (mMediaURL != media || mMediaType != body["type"].asString()) { setMediaEnabled(false); ++mParcelRevision; }
+        mMediaURL = media; mMediaType = body["type"].asString();
+        if (resume) setMediaEnabled(true);
+    }
+    else if (name == "ParcelMediaCommandMessage" && mPhase == Phase::Connected && !mChangingRegion)
+    {
+        if (!body["flags"].isInteger() || !body["command"].isInteger() || !body["time"].isReal()) return false;
+        parcelMediaCommand(U32(body["flags"].asInteger()), U32(body["command"].asInteger()), F32(body["time"].asReal()));
+    }
+    else if (name == "RegionHandshake" && (mPhase == Phase::Connecting || mPhase == Phase::Connected))
     {
         if (!body["name"].isString() || body["id"].asUUID().isNull()) return false;
         mName = body["name"].asString().substr(0, 256); mRegionID = body["id"].asUUID(); mOwner = body["owner"].asUUID();
@@ -656,6 +946,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         const auto pos = ll_vector3_from_sd(body["position"]); if (!pos.isFinite()) return false;
         mPosition = pos; gAgent.setPositionAgent(pos); mNavigationDeadline = 0;
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
+        requestParcel();
     }
     else if (name == "TeleportFailed" && mPhase == Phase::Connected)
     {
@@ -679,6 +970,7 @@ void VSNativeSession::connected()
         { gMessageSystem->disableCircuit(mPreviousHost); gMessageSystem->mCircuitInfo.removeCircuitData(mPreviousHost); }
         mPreviousHost = LLHost();
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
+        requestParcel();
         return;
     }
     mPhase = Phase::Connected; mDeadline = now() + 1;
@@ -690,6 +982,7 @@ void VSNativeSession::connected()
     gViewerWindow->setNativeConnected(true);
     gViewerWindow->getProgressView()->setVisible(false);
     init_audio();
+    requestParcel();
     if (!LLGridManager::instance().isInSecondLife())
     {
         gMessageSystem->newMessage("EconomyDataRequest");
@@ -878,6 +1171,7 @@ void VSNativeSession::tick()
         LLSD args; args["ERROR_MESSAGE"] = LLTrans::getString("NativeSessionConnectionTimeout"); LLNotificationsUtil::add("ErrorMessage", args);
     }
     if (mTyping && now() > mTypingDeadline) typing(false);
+    updateParcelPlayback();
     if (mPhase == Phase::Connecting || mPhase == Phase::Connected)
     {
         // Do not dispatch legacy/cache lookups before the seed grant. A failed
@@ -911,6 +1205,7 @@ void VSNativeSession::requestLogout(bool quit)
     if (mPhase == Phase::Connected || mPhase == Phase::Connecting)
     {
         typing(false);
+        clearParcelPlayback();
         unbind(); mPoll.reset(); send("LogoutRequest", LLSD()); mPhase = Phase::Logout; mDeadline = now() + 5;
     }
     else if (mQuit) LLAppViewer::instance()->forceQuit();
@@ -938,6 +1233,9 @@ void VSNativeSession::reset()
         if (LLPersistentNotificationStorage::instanceExists()) LLPersistentNotificationStorage::getInstance()->saveNotifications();
         if (LLDoNotDisturbNotificationStorage::instanceExists()) LLDoNotDisturbNotificationStorage::getInstance()->saveNotifications();
     }
+    clearParcelPlayback();
+    mMusicUserStopped = mMediaUserStopped = false;
+    if (LLViewerParcelMedia::instanceExists()) LLViewerParcelMedia::deleteSingleton();
     ++mGeneration; ++mRegionEpoch; mLocationRequests.clear(); mChangingRegion = false; mRequestedRegion.clear(); mNavigationDeadline = 0; unbind();
     if (LLNotifications::instanceExists())
     {

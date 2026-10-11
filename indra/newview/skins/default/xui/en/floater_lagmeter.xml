@@ -8,6 +8,9 @@
  save_rect="true"
  title="Lag Meter"
  width="350">
+  <floater.string name="native_stats_unavailable_msg">Waiting for measured statistics.</floater.string>
+  <floater.string name="native_client_cause_msg">The connected UI or presentation frame is taking longer than expected.</floater.string>
+
     <floater.string
      name="max_title_msg">
         Lag Meter

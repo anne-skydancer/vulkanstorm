@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from render_backend_selector_fixture import SelectorTests
 from test_vulkan_ui_oracle import OracleTest
+from native_statistics_fixture import NativeStatisticsTests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from run_vulkan_viewer_diagnostic import assess, assess_startup, STAGES, skin_cases
@@ -24,6 +25,38 @@ def record():
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_about_budget_uses_same_settings_for_both_renderers(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'indra/newview/llappviewer.cpp').read_text(encoding='utf-8')
+        block = source.split('// <FS:Ansariel> Include VRAM budget', 1)[1].split('    return info;', 1)[0]
+        fixture = r'''#include <cassert>
+#include <map>
+#include <string>
+struct Settings {bool limited=false;unsigned budget=2048;
+ bool getBOOL(const char*) const{return limited;}
+ unsigned getU32(const char*) const{return budget;}} gSavedSettings;
+struct LLTrans {static std::string getString(const char*){return "Localized unlimited";}};
+using LLSD=std::string;
+std::map<std::string,std::string> info;
+void report(bool native_vulkan){info.clear();
+''' + block + r'''}
+int main(){for(bool native:{false,true}){
+ gSavedSettings.limited=true;gSavedSettings.budget=2048;report(native);
+ assert(info["VRAM_BUDGET"]=="2048 MB" && info["VRAM_BUDGET_ENGLISH"]=="2048 MB");
+ gSavedSettings.budget=0;report(native);assert(info["VRAM_BUDGET"]=="0 MB");
+ gSavedSettings.limited=false;report(native);
+ assert(info["VRAM_BUDGET"]=="Localized unlimited" && info["VRAM_BUDGET_ENGLISH"]=="Unlimited");}}
+'''
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'about_budget.cpp'; path.write_text(fixture, encoding='utf-8')
+            executable = Path(directory) / 'about_budget.exe'
+            built = subprocess.run([compiler, '-std=c++17', str(path), '-o', str(executable)], capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            ran = subprocess.run([str(executable)], capture_output=True, text=True)
+            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+
     def test_inventory_optional_skin_controls_use_real_present_widgets(self):
         root=Path(__file__).resolve().parents[2]
         inbox=(root/'indra/newview/llpanelmarketplaceinbox.cpp').read_text()
@@ -231,7 +264,7 @@ int main(){
                     return source[start + 1:end]
             self.fail('Unclosed production condition')
         fps = condition((root / 'indra/newview/llstatusbar.cpp').read_text(),
-                        'if (fsStatusBarShowFPS && !native_status_bar()')
+                        'if (fsStatusBarShowFPS && mFPSUpdateTimer')
         stat = condition((root / 'indra/llui/llstatgraph.cpp').read_text(),
                          'if (mNewStatFloatp && LLTrace::')
         fixture = r'''#include <cassert>
@@ -244,10 +277,12 @@ int fpsReads=0,statReads=0;
 void fps(){ if (FPS_CONDITION) ++fpsReads; }
 void stat(){ if (STAT_CONDITION) ++statReads; }
 int main(){
- native=true;fps();assert(fpsReads==0 && LLTrace::recording.queries==0);
+ native=true;fps();assert(fpsReads==0 && LLTrace::recording.queries==1);
  native=false;fps();stat();assert(fpsReads==0 && statReads==0);
  LLTrace::recording.periods=4;fps();stat();assert(fpsReads==1 && statReads==1);
- native=true;fps();assert(fpsReads==1);
+ native=true;fps();assert(fpsReads==2);
+ mFPSUpdateTimer.elapsed=.5f;fps();assert(fpsReads==2);
+ fsStatusBarShowFPS=false;mFPSUpdateTimer.elapsed=2.f;fps();assert(fpsReads==2);
  mNewStatFloatp=false;stat();assert(statReads==1);
 }
 '''.replace('FPS_CONDITION', fps).replace('STAT_CONDITION', stat)

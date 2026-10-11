@@ -99,7 +99,7 @@ void LLViewerHelp::showTopic(const std::string& topic)
 {
     // <FS:Beq> allow external browser for help topics
     auto url = getURL(topic);
-    if ((gViewerWindow && gViewerWindow->isNativeVulkan()) || LLWeb::useExternalBrowser(url))
+    if (LLWeb::useExternalBrowser(url))
     {
         LLWeb::loadURLExternal(url);
     }

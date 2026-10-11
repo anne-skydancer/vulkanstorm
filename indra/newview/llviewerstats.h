@@ -246,6 +246,9 @@ class LLViewerStats : public LLSingleton<LLViewerStats>
 
 public:
     void resetStats();
+#if VS_NATIVE_VULKAN
+    void resetNativeFrameStats();
+#endif
 
     void updateFrameStats(const F64Seconds time_diff);
 
@@ -309,6 +312,9 @@ static const F32 SEND_STATS_PERIOD = 300.0f;
 
 // The following are from (older?) statistics code found in appviewer.
 void update_statistics();
+#if VS_NATIVE_VULKAN
+void update_native_statistics();
+#endif
 void send_viewer_stats(bool include_preferences);
 void update_texture_time();
 

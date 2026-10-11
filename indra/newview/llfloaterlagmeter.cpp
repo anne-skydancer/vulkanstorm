@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfloaterlagmeter.h"
+#include "llrender2dutils.h"
 
 #include "lluictrlfactory.h"
 #include "llviewerstats.h"
@@ -182,7 +183,11 @@ void LLFloaterLagMeter::determineClient()
 
     if(find_cause)
     {
-        if(gSavedSettings.getF32("RenderFarClip") > 128.f)
+        if (LLRender2D::isNativeUI())
+        {
+            mClientCause->setText(getString("native_client_cause_msg"));
+        }
+        else if(gSavedSettings.getF32("RenderFarClip") > 128.f)
         {
             mClientCause->setText( getString("client_draw_distance_cause_msg", mStringArgs) );
         }
@@ -199,6 +204,15 @@ void LLFloaterLagMeter::determineClient()
 
 void LLFloaterLagMeter::determineNetwork()
 {
+    if (LLRender2D::isNativeUI() &&
+        !LLViewerStats::instance().getRecording().getSampleCount(LLStatViewer::SIM_PING))
+    {
+        mNetworkButton->setImageUnselected(LLUI::getUIImage(LAG_WARNING_IMAGE_NAME));
+        mNetworkButton->setImagePressed(LLUI::getUIImage(LAG_WARNING_IMAGE_NAME));
+        mNetworkText->setText(getString("native_stats_unavailable_msg"));
+        mNetworkCause->setText(LLStringUtil::null);
+        return;
+    }
     LLTrace::PeriodicRecording& frame_recording = LLTrace::get_frame_recording();
     F32Percent packet_loss = frame_recording.getPeriodMean(LLStatViewer::PACKETS_LOST_PERCENT);
     F32Milliseconds ping_time = frame_recording.getPeriodMean(LLStatViewer::SIM_PING);
@@ -270,8 +284,20 @@ void LLFloaterLagMeter::determineNetwork()
 void LLFloaterLagMeter::determineServer()
 {
     // <FS:Ansariel> FIRE-16857: Lag-meter special adjustments for OpenSim
-    mServerFrameTimeWarning = F32Seconds(1.0f / LFSimFeatureHandler::instance().simulatorFPSWarn());
-    mServerFrameTimeCritical = F32Seconds(1.0f / LFSimFeatureHandler::instance().simulatorFPSCrit());
+    if (!LLRender2D::isNativeUI())
+    {
+        mServerFrameTimeWarning = F32Seconds(1.0f / LFSimFeatureHandler::instance().simulatorFPSWarn());
+        mServerFrameTimeCritical = F32Seconds(1.0f / LFSimFeatureHandler::instance().simulatorFPSCrit());
+    }
+    if (LLRender2D::isNativeUI() &&
+        !LLViewerStats::instance().getRecording().getSampleCount(LLStatViewer::SIM_FRAME_TIME))
+    {
+        mServerButton->setImageUnselected(LLUI::getUIImage(LAG_WARNING_IMAGE_NAME));
+        mServerButton->setImagePressed(LLUI::getUIImage(LAG_WARNING_IMAGE_NAME));
+        mServerText->setText(getString("native_stats_unavailable_msg"));
+        mServerCause->setText(LLStringUtil::null);
+        return;
+    }
     // </FS:Ansariel>
 
     F32Milliseconds sim_frame_time = LLTrace::get_frame_recording().getLastRecording().getLastValue(LLStatViewer::SIM_FRAME_TIME);
