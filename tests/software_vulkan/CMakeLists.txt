@@ -21,7 +21,13 @@ include(Linking)
 # tool must instead consume exactly the install directory supplied by its caller.
 set(AUTOBUILD_INSTALL_DIR "${TEST_PACKAGES}")
 include(DiligentCore)
-add_executable(diligent_render_test diligent_render_test.cpp)
+add_executable(diligent_render_test diligent_render_test.cpp
+  "${VIEWER_ROOT}/indra/newview/vsworldrenderer.cpp"
+  "${VIEWER_ROOT}/indra/newview/vsuirenderer.cpp")
+# These production renderer sources depend only on the GHI and standard library.
+# The viewer's precompiled header is unnecessary in this standalone contract test.
+target_compile_definitions(diligent_render_test PRIVATE LL_LLVIEWERPRECOMPILEDHEADERS_H=1)
+target_include_directories(diligent_render_test PRIVATE "${VIEWER_ROOT}/indra/newview")
 enable_testing()
 add_test(NAME device_selection COMMAND diligent_render_test --test-selection)
 target_link_libraries(diligent_render_test PRIVATE ll::diligentcore ll::vulkan)

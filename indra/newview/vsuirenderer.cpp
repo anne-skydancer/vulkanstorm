@@ -127,6 +127,8 @@ void main() { result=vec4(color.rgb,texture(g_Texture,texUV).a*color.a); }
 };
 VSUIRenderer::VSUIRenderer(IRenderDevice* d, IDeviceContext* c) : mImpl(std::make_unique<Impl>(d,c)) {}
 VSUIRenderer::~VSUIRenderer() = default;
+Diligent::ITextureView* VSUIRenderer::imageView(const Image& image)
+{ return image ? image->resource->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) : nullptr; }
 const std::vector<std::uint8_t>& VSUIRenderer::imagePixels(const Image& image) { return image->pixels; }
 std::array<unsigned,2> VSUIRenderer::imageExtent(const Image& image)
 { const auto& d=image->resource->GetDesc();return {d.Width,d.Height}; }

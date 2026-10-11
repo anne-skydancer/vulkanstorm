@@ -19,6 +19,7 @@
 #define LFSIMFEATUREHANDLER_H
 
 #include "llsingleton.h"
+#include "llsd.h"
 #include "llpermissions.h"  // ExportPolicy
 
 template<typename Type, typename Signal = boost::signals2::signal<void(Type)> >
@@ -64,6 +65,8 @@ public:
     void handleRegionChange();
     void onSimulatorFeaturesReceived(const LLUUID &region_id);
     void setSupportedFeatures();
+    // Shared server-advertised CPU features; scene limits require a world owner.
+    void setSupportedFeatures(const LLSD& info, bool update_scene_limits);
     // <COLOSI opensim multi-currency support>
     // public helper to manage all the manual updates in one place callable from other systems like llstartup.
     // Should be called whenever the sActiveCurrency in Tea is changed, but can't simply be called from Tea

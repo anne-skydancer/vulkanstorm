@@ -5,6 +5,9 @@
 #include "llviewercontrol.h"
 #include "vsuirenderer.h"
 #include "vsuiresources.h"
+#include "vsworldrenderer.h"
+#include "vsworldscene.h"
+#include "vsnativesession.h"
 #pragma push_macro("Bool")
 #pragma push_macro("False")
 #pragma push_macro("True")
@@ -139,6 +142,8 @@ struct VSVulkanContext::Impl
     Diligent::RefCntAutoPtr<Diligent::ISwapChain>     swapchain;
     std::unique_ptr<VSUIRenderer>                     renderer;
     std::unique_ptr<VSUIResources>                    resources;
+    std::unique_ptr<VSWorldRenderer>                  worldRenderer;
+    std::unique_ptr<VSWorldScene>                     worldScene;
     std::string                                       adapter;
     LLSD renderer_info;
     FrameObserver observer;
@@ -226,6 +231,8 @@ struct VSVulkanContext::Impl
             require(swapchain != nullptr, "Native viewer swapchain creation failed");
             renderer  = std::make_unique<VSUIRenderer>(device, context);
             resources = std::make_unique<VSUIResources>(*renderer);
+            worldRenderer = std::make_unique<VSWorldRenderer>(device, context);
+            worldScene = std::make_unique<VSWorldScene>(*worldRenderer, *resources);
         }
         catch (...)
         {
@@ -240,6 +247,8 @@ struct VSVulkanContext::Impl
             context->SetRenderTargets(0, nullptr, nullptr, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             context->WaitForIdle();
         }
+        worldScene.reset();
+        if (worldRenderer) { worldRenderer->retire(); worldRenderer.reset(); }
         resources.reset();
         if (renderer)
         {
@@ -278,6 +287,13 @@ struct VSVulkanContext::Impl
         context->SetRenderTargets(1, &target, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         const float color[]{ 16.f / 255, 32.f / 255, 48.f / 255, 1 };
         context->ClearRenderTarget(target, color, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        if (const auto session=VSNativeSession::active(); session && session->phase()==VSNativeSession::Phase::Connected)
+        {
+            const LLVector3 eye=session->position()+LLVector3(0,0,1.5f);
+            const float distance=gSavedSettings.getF32("RenderFarClip");
+            worldRenderer->draw(target,size.mX,size.mY,
+                VSWorldScene::view(eye,size.mX,size.mY,distance),worldScene->packets(eye,distance));
+        }
         resources->begin(size.mX, size.mY, dpi);
         draw();
         auto packets = resources->finish();
@@ -285,6 +301,7 @@ struct VSVulkanContext::Impl
         if (observer) observer(device, context, target, size.mX, size.mY, dpi, packets);
         swapchain->Present(gSavedSettings.getBOOL("RenderVSyncEnable") ? 1 : 0);
         renderer->retire();
+        worldRenderer->retire();
         return true;
     }
 };
@@ -294,6 +311,7 @@ VSVulkanContext::VSVulkanContext(LLWindow& w, bool validation) : mImpl(std::make
 VSVulkanContext::~VSVulkanContext() = default;
 VSUIResources& VSVulkanContext::resources()
 { return *mImpl->resources; }
+VSWorldScene& VSVulkanContext::world() { return *mImpl->worldScene; }
 bool VSVulkanContext::present(float dpi, const std::function<void()>& draw)
 { return mImpl->present(dpi, draw); }
 void VSVulkanContext::wait()

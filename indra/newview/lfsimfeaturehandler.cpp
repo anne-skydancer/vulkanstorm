@@ -90,155 +90,163 @@ void LFSimFeatureHandler::setSupportedFeatures()
     {
         LLSD info;
         region->getSimulatorFeatures(info);
-        if (!LLGridManager::getInstance()->isInSecondLife() && info.has("OpenSimExtras")) // OpenSim specific sim features
+        setSupportedFeatures(info, true);
+    }
+}
+
+void LFSimFeatureHandler::setSupportedFeatures(const LLSD& info, bool update_scene_limits)
+{
+    if (!LLGridManager::getInstance()->isInSecondLife() && info.has("OpenSimExtras")) // OpenSim specific sim features
+    {
+        LL_INFOS("SimFeatures") << "Setting OpenSimExtras..." << LL_ENDL;
+
+        // For definition of OpenSimExtras please see
+        // http://opensimulator.org/wiki/SimulatorFeatures_Extras
+        const LLSD& extras(info["OpenSimExtras"]);
+        LL_DEBUGS("SimFeatures") << "OpenSimExtras received: " << extras << LL_ENDL;
+
+        mSupportsExport = extras.has("ExportSupported") ? extras["ExportSupported"].asBoolean() : false;
+        mMapServerURL = extras.has("map-server-url") ? extras["map-server-url"].asString() : gSavedSettings.getString("CurrentMapServerURL");
+        mSayRange = extras.has("say-range") ? extras["say-range"].asInteger() : 20;
+        mShoutRange = extras.has("shout-range") ? extras["shout-range"].asInteger() : 100;
+        mWhisperRange = extras.has("whisper-range") ? extras["whisper-range"].asInteger() : 10;
+
+        if( extras.has("GridStatusRSS"))
         {
-            LL_INFOS("SimFeatures") << "Setting OpenSimExtras..." << LL_ENDL;
+            mGridStatusRSS = extras["GridStatusRSS"].asString();
+        }
+        else
+        {
+            mGridStatusRSS = "";
+        }
+        if( extras.has("GridStatus"))
+        {
+            mGridStatusURL = extras["GridStatus"].asString();
+        }
+        else
+        {
+            mGridStatusURL = "";
+        }
 
-            // For definition of OpenSimExtras please see
-            // http://opensimulator.org/wiki/SimulatorFeatures_Extras
-            const LLSD& extras(info["OpenSimExtras"]);
-            LL_DEBUGS("SimFeatures") << "OpenSimExtras received: " << extras << LL_ENDL;
-
-            mSupportsExport = extras.has("ExportSupported") ? extras["ExportSupported"].asBoolean() : false;
-            mMapServerURL = extras.has("map-server-url") ? extras["map-server-url"].asString() : gSavedSettings.getString("CurrentMapServerURL");
-            mSayRange = extras.has("say-range") ? extras["say-range"].asInteger() : 20;
-            mShoutRange = extras.has("shout-range") ? extras["shout-range"].asInteger() : 100;
-            mWhisperRange = extras.has("whisper-range") ? extras["whisper-range"].asInteger() : 10;
-
-            if( extras.has("GridStatusRSS"))
+        if(extras.has("GridURL"))
+        {
+            // If we have GridURL specified in the extras then we use this by default
+            mHyperGridPrefix =  extras["GridURL"].asString();
+            auto pos = mHyperGridPrefix.find("://");
+            if( pos != std::string::npos)
             {
-                mGridStatusRSS = extras["GridStatusRSS"].asString();
+                // We always strip off the protocol prefix if it exists
+                // Note: we do not attempt to clear trailing port numbers or / or even directories.
+                mHyperGridPrefix = mHyperGridPrefix.substr(pos+3,mHyperGridPrefix.size()-(pos+3));
             }
-            else
-            {
-                mGridStatusRSS = "";
-            }
-            if( extras.has("GridStatus"))
-            {
-                mGridStatusURL = extras["GridStatus"].asString();
-            }
-            else
-            {
-                mGridStatusURL = "";
-            }
-
-            if(extras.has("GridURL"))
-            {
-                // If we have GridURL specified in the extras then we use this by default
-                mHyperGridPrefix =  extras["GridURL"].asString();
-                auto pos = mHyperGridPrefix.find("://");
-                if( pos != std::string::npos)
-                {
-                    // We always strip off the protocol prefix if it exists
-                    // Note: we do not attempt to clear trailing port numbers or / or even directories.
-                    mHyperGridPrefix = mHyperGridPrefix.substr(pos+3,mHyperGridPrefix.size()-(pos+3));
-                }
-                LL_DEBUGS("SimFeatures") << "Setting HyperGrid URL to \"GridURL\" [" << mHyperGridPrefix << "]" << LL_ENDL;
-            }
+            LL_DEBUGS("SimFeatures") << "Setting HyperGrid URL to \"GridURL\" [" << mHyperGridPrefix << "]" << LL_ENDL;
+        }
 #ifdef OPENSIM
-            else if (LLGridManager::instance().getGatekeeper() != std::string{})
-            {
-                // Note: this is a tentative test pending further use of gatekeeper
-                // worst case this is checking the login grid and will simply be the same as the fallback
-                // If the GridURL is not available then we will try to use the Gatekeeper which is expected to be present.
-                mHyperGridPrefix = LLGridManager::instance().getGatekeeper();
-                LL_DEBUGS("SimFeatures") << "Setting HyperGrid URL to \"Gatekeeper\" [" << mHyperGridPrefix << "]" << LL_ENDL;
-            }
+        else if (LLGridManager::instance().getGatekeeper() != std::string{})
+        {
+            // Note: this is a tentative test pending further use of gatekeeper
+            // worst case this is checking the login grid and will simply be the same as the fallback
+            // If the GridURL is not available then we will try to use the Gatekeeper which is expected to be present.
+            mHyperGridPrefix = LLGridManager::instance().getGatekeeper();
+            LL_DEBUGS("SimFeatures") << "Setting HyperGrid URL to \"Gatekeeper\" [" << mHyperGridPrefix << "]" << LL_ENDL;
+        }
 #endif
-            else
-            {
-                // Just in case that fails we will default back to the current grid
-                mHyperGridPrefix = LLGridManager::instance().getGrid();
-                LL_DEBUGS("SimFeatures") << "Setting HyperGrid URL to fallback of current grid (target grid is misconfigured) [" << mHyperGridPrefix << "]" << LL_ENDL;
-            }
+        else
+        {
+            // Just in case that fails we will default back to the current grid
+            mHyperGridPrefix = LLGridManager::instance().getGrid();
+            LL_DEBUGS("SimFeatures") << "Setting HyperGrid URL to fallback of current grid (target grid is misconfigured) [" << mHyperGridPrefix << "]" << LL_ENDL;
+        }
 
-            if (extras.has("SimulatorFPS") && extras.has("SimulatorFPSFactor") &&
-                extras.has("SimulatorFPSWarnPercent") && extras.has("SimulatorFPSCritPercent"))
-            {
-                mSimulatorFPS = (F32)extras["SimulatorFPS"].asReal();
-                mSimulatorFPSFactor = (F32)extras["SimulatorFPSFactor"].asReal();
-                mSimulatorFPSWarn = (mSimulatorFPS * mSimulatorFPSFactor) * ((F32)extras["SimulatorFPSWarnPercent"].asReal() / 100.f);
-                mSimulatorFPSCrit = (mSimulatorFPS * mSimulatorFPSFactor) * ((F32)extras["SimulatorFPSCritPercent"].asReal() / 100.f);
-            }
-            else
-            {
-                mSimulatorFPS = 45.f;
-                mSimulatorFPSFactor = 1.f;
-                mSimulatorFPSWarn = 30.f;
-                mSimulatorFPSCrit = 20.f;
-            }
+        if (extras.has("SimulatorFPS") && extras.has("SimulatorFPSFactor") &&
+            extras.has("SimulatorFPSWarnPercent") && extras.has("SimulatorFPSCritPercent"))
+        {
+            mSimulatorFPS = (F32)extras["SimulatorFPS"].asReal();
+            mSimulatorFPSFactor = (F32)extras["SimulatorFPSFactor"].asReal();
+            mSimulatorFPSWarn = (mSimulatorFPS * mSimulatorFPSFactor) * ((F32)extras["SimulatorFPSWarnPercent"].asReal() / 100.f);
+            mSimulatorFPSCrit = (mSimulatorFPS * mSimulatorFPSFactor) * ((F32)extras["SimulatorFPSCritPercent"].asReal() / 100.f);
+        }
+        else
+        {
+            mSimulatorFPS = 45.f;
+            mSimulatorFPSFactor = 1.f;
+            mSimulatorFPSWarn = 30.f;
+            mSimulatorFPSCrit = 20.f;
+        }
 
-            if (extras.has("search-server-url"))
-            {
-                mSearchURL = extras["search-server-url"].asString();
-            }
-            else if (LLLoginInstance::getInstance()->hasResponse("search"))
-            {
-                mSearchURL = LLLoginInstance::getInstance()->getResponse("search").asString();
-            }
-            else
-            {
-                mSearchURL = LLGridManager::getInstance()->isInSecondLife() ? gSavedSettings.getString("SearchURL") : gSavedSettings.getString("SearchURLOpenSim");
-            }
+        if (extras.has("search-server-url"))
+        {
+            mSearchURL = extras["search-server-url"].asString();
+        }
+        else if (LLLoginInstance::getInstance()->hasResponse("search"))
+        {
+            mSearchURL = LLLoginInstance::getInstance()->getResponse("search").asString();
+        }
+        else
+        {
+            mSearchURL = LLGridManager::getInstance()->isInSecondLife() ? gSavedSettings.getString("SearchURL") : gSavedSettings.getString("SearchURLOpenSim");
+        }
 
-            if (extras.has("destination-guide-url"))
-            {
-                mDestinationGuideURL = extras["destination-guide-url"].asString();
-            }
-            else if (LLLoginInstance::getInstance()->hasResponse("destination_guide_url"))
-            {
-                mDestinationGuideURL = LLLoginInstance::getInstance()->getResponse("destination_guide_url").asString();
-            }
-            else if (LLGridManager::instance().isInSecondLife())
-            {
-                mDestinationGuideURL = gSavedSettings.getString("DestinationGuideURL");
-            }
-            else
-            {
-                mDestinationGuideURL = LLStringUtil::null;
-            }
+        if (extras.has("destination-guide-url"))
+        {
+            mDestinationGuideURL = extras["destination-guide-url"].asString();
+        }
+        else if (LLLoginInstance::getInstance()->hasResponse("destination_guide_url"))
+        {
+            mDestinationGuideURL = LLLoginInstance::getInstance()->getResponse("destination_guide_url").asString();
+        }
+        else if (LLGridManager::instance().isInSecondLife())
+        {
+            mDestinationGuideURL = gSavedSettings.getString("DestinationGuideURL");
+        }
+        else
+        {
+            mDestinationGuideURL = LLStringUtil::null;
+        }
 
-            if (extras.has("avatar-picker-url"))
-            {
-                mAvatarPickerURL = extras["avatar-picker-url"].asString();
-            }
-            else if (LLLoginInstance::getInstance()->hasResponse("avatar-picker-url"))
-            {
-                mAvatarPickerURL = LLLoginInstance::getInstance()->getResponse("avatar-picker-url").asString();
-            }
-            else if (LLGridManager::instance().isInSecondLife())
-            {
-                mAvatarPickerURL = gSavedSettings.getString("AvatarWelcomePack");
-            }
-            else
-            {
-                mAvatarPickerURL = LLStringUtil::null;
-            }
+        if (extras.has("avatar-picker-url"))
+        {
+            mAvatarPickerURL = extras["avatar-picker-url"].asString();
+        }
+        else if (LLLoginInstance::getInstance()->hasResponse("avatar-picker-url"))
+        {
+            mAvatarPickerURL = LLLoginInstance::getInstance()->getResponse("avatar-picker-url").asString();
+        }
+        else if (LLGridManager::instance().isInSecondLife())
+        {
+            mAvatarPickerURL = gSavedSettings.getString("AvatarWelcomePack");
+        }
+        else
+        {
+            mAvatarPickerURL = LLStringUtil::null;
+        }
 
-            // <COLOSI opensim multi-currency support>
-            if (extras.has("currency-base-uri"))
+        // <COLOSI opensim multi-currency support>
+        if (extras.has("currency-base-uri"))
+        {
+            if (mHelperUriOverride != extras["currency-base-uri"].asString())
             {
-                if (mHelperUriOverride != extras["currency-base-uri"].asString())
-                {
-                    LLNotificationsUtil::add("CurrencyURIOverrideReceived");
-                }
-                mHelperUriOverride = extras["currency-base-uri"].asString();
+                LLNotificationsUtil::add("CurrencyURIOverrideReceived");
             }
-            else
-            {
-                mHelperUriOverride = LLStringUtil::null;
-            }
+            mHelperUriOverride = extras["currency-base-uri"].asString();
+        }
+        else
+        {
+            mHelperUriOverride = LLStringUtil::null;
+        }
 
-            if (extras.has("currency"))
-            {
-                mCurrencySymbolOverride = extras["currency"].asString();
-            }
-            else
-            {
-                mCurrencySymbolOverride = LLStringUtil::null;
-            }
-            // </COLOSI opensim multi-currency support>
-            // Adding feature extensions adopted from Aurora to OpenSim
+        if (extras.has("currency"))
+        {
+            mCurrencySymbolOverride = extras["currency"].asString();
+        }
+        else
+        {
+            mCurrencySymbolOverride = LLStringUtil::null;
+        }
+        // </COLOSI opensim multi-currency support>
+        // Adding feature extensions adopted from Aurora to OpenSim
+        if (update_scene_limits)
+        {
             auto regionSettings=LLWorld::getInstance();
             if(extras.has("MinPrimScale"))
             {
@@ -253,80 +261,81 @@ void LFSimFeatureHandler::setSupportedFeatures()
             {
                 regionSettings->setMaxPhysPrimScale((F32)extras["MaxPhysPrimScale"].asReal());
             }
+
         }
-        else // OpenSim specifics are unsupported reset all to default
+    }
+    else // OpenSim specifics are unsupported reset all to default
+    {
+        LL_INFOS() << "Setting defaults..." << LL_ENDL;
+        mSupportsExport = false;
+        mMapServerURL = gSavedSettings.getString("CurrentMapServerURL");
+        mSayRange = 20;
+        mShoutRange = 100;
+        mWhisperRange = 10;
+        mSimulatorFPS = 45.f;
+        mSimulatorFPSFactor = 1.f;
+        mSimulatorFPSWarn = 30.f;
+        mSimulatorFPSCrit = 20.f;
+        if (update_scene_limits) LLWorld::getInstance()->refreshLimits();// reset  prim scales etc.
+
+        bool in_sl{LLGridManager::instance().isInSecondLife()};
+        mGridStatusRSS = (in_sl)? gSavedSettings.getString("GridStatusRSS"):"";
+        mGridStatusURL = (in_sl)? DEFAULT_GRID_STATUS_URL:"";
+
+        if (LLLoginInstance::getInstance()->hasResponse("search"))
         {
-            LL_INFOS() << "Setting defaults..." << LL_ENDL;
-            mSupportsExport = false;
-            mMapServerURL = gSavedSettings.getString("CurrentMapServerURL");
-            mSayRange = 20;
-            mShoutRange = 100;
-            mWhisperRange = 10;
-            mSimulatorFPS = 45.f;
-            mSimulatorFPSFactor = 1.f;
-            mSimulatorFPSWarn = 30.f;
-            mSimulatorFPSCrit = 20.f;
-            LLWorld::getInstance()->refreshLimits();// reset  prim scales etc.
-
-            bool in_sl{LLGridManager::instance().isInSecondLife()};
-            mGridStatusRSS = (in_sl)? gSavedSettings.getString("GridStatusRSS"):"";
-            mGridStatusURL = (in_sl)? DEFAULT_GRID_STATUS_URL:"";
-
-            if (LLLoginInstance::getInstance()->hasResponse("search"))
-            {
-                mSearchURL = LLLoginInstance::getInstance()->getResponse("search").asString();
-            }
-            else
-            {
-                mSearchURL = in_sl ? gSavedSettings.getString("SearchURL") : gSavedSettings.getString("SearchURLOpenSim");
-            }
-
-            if (LLLoginInstance::getInstance()->hasResponse("destination_guide_url"))
-            {
-                mDestinationGuideURL = LLLoginInstance::getInstance()->getResponse("destination_guide_url").asString();
-            }
-            else if (in_sl)
-            {
-                mDestinationGuideURL = gSavedSettings.getString("DestinationGuideURL");
-            }
-            else
-            {
-                mDestinationGuideURL = LLStringUtil::null;
-            }
-
-            if (LLLoginInstance::getInstance()->hasResponse("avatar-picker-url"))
-            {
-                mAvatarPickerURL = LLLoginInstance::getInstance()->getResponse("avatar-picker-url").asString();
-            }
-            else if (in_sl)
-            {
-                mAvatarPickerURL = gSavedSettings.getString("AvatarWelcomePack");
-            }
-            else
-            {
-                mAvatarPickerURL = LLStringUtil::null;
-            }
-
-            // <COLOSI opensim multi-currency support>
-            mHelperUriOverride = LLStringUtil::null;
-            mCurrencySymbolOverride = LLStringUtil::null;
-            // </COLOSI opensim multi-currency support>>
+            mSearchURL = LLLoginInstance::getInstance()->getResponse("search").asString();
+        }
+        else
+        {
+            mSearchURL = in_sl ? gSavedSettings.getString("SearchURL") : gSavedSettings.getString("SearchURLOpenSim");
         }
 
-        mHasAvatarPicker = !avatarPickerURL().empty();
-        mHasDestinationGuide = !destinationGuideURL().empty();
+        if (LLLoginInstance::getInstance()->hasResponse("destination_guide_url"))
+        {
+            mDestinationGuideURL = LLLoginInstance::getInstance()->getResponse("destination_guide_url").asString();
+        }
+        else if (in_sl)
+        {
+            mDestinationGuideURL = gSavedSettings.getString("DestinationGuideURL");
+        }
+        else
+        {
+            mDestinationGuideURL = LLStringUtil::null;
+        }
+
+        if (LLLoginInstance::getInstance()->hasResponse("avatar-picker-url"))
+        {
+            mAvatarPickerURL = LLLoginInstance::getInstance()->getResponse("avatar-picker-url").asString();
+        }
+        else if (in_sl)
+        {
+            mAvatarPickerURL = gSavedSettings.getString("AvatarWelcomePack");
+        }
+        else
+        {
+            mAvatarPickerURL = LLStringUtil::null;
+        }
 
         // <COLOSI opensim multi-currency support>
-        std::string prev_currency_symbol = Tea::getCurrency();
-        Tea::setRegionCurrency(mCurrencySymbolOverride);
-        std::string new_currency_symbol = Tea::getCurrency();
-        // If currency symbol has changed, then update things
-        if (new_currency_symbol != prev_currency_symbol)
-        {
-            LFSimFeatureHandler::updateCurrencySymbols();
-        }
-        // </COLOSI opensim multi-currency support>
+        mHelperUriOverride = LLStringUtil::null;
+        mCurrencySymbolOverride = LLStringUtil::null;
+        // </COLOSI opensim multi-currency support>>
     }
+
+    mHasAvatarPicker = !avatarPickerURL().empty();
+    mHasDestinationGuide = !destinationGuideURL().empty();
+
+    // <COLOSI opensim multi-currency support>
+    std::string prev_currency_symbol = Tea::getCurrency();
+    Tea::setRegionCurrency(mCurrencySymbolOverride);
+    std::string new_currency_symbol = Tea::getCurrency();
+    // If currency symbol has changed, then update things
+    if (new_currency_symbol != prev_currency_symbol)
+    {
+        LFSimFeatureHandler::updateCurrencySymbols();
+    }
+    // </COLOSI opensim multi-currency support>
 }
 
 // <COLOSI opensim multi-currency support>

@@ -48,6 +48,8 @@ public:
     // CPU publication snapshots for an independent diagnostic raster oracle.
     static const std::vector<std::uint8_t>& imagePixels(const Image&);
     static std::array<unsigned,2> imageExtent(const Image&);
+    // Borrowed view; callers retain the exact Image generation through completion.
+    static Diligent::ITextureView* imageView(const Image&);
 private:
     struct Impl;
     std::unique_ptr<Impl> mImpl;

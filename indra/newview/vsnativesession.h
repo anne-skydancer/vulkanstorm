@@ -50,6 +50,9 @@ public:
     const LLHost& host() const { return mHost; }
     std::string capability(const std::string&) const;
     LLSD evidence() const;
+    const LLSD& simulatorFeatures() const { return mSimulatorFeatures; }
+    bool simulatorFeaturesReceived() const { return mSimulatorFeaturesReceived; }
+    bool applySimulatorFeatures(const LLSD&, U64 generation, U64 regionEpoch);
     const std::string& regionName() const { return mName; }
     const LLVector3& position() const { return mPosition; }
     U64 handle() const { return mHandle; }
@@ -87,6 +90,8 @@ public:
 private:
     bool send(const std::string&, const LLSD&);
     void seedCoro(std::string, U64, U64);
+    static void simulatorFeaturesCoro(std::weak_ptr<VSNativeSession>, std::string, U64, U64);
+    void clearSimulatorFeatures();
     bool changeRegion(const LLSD&);
     bool teleportRequest(U64, const LLVector3&);
     void connected();
@@ -140,6 +145,9 @@ private:
     std::string mSeed, mName;
     LLSD mCapabilities;
     std::function<void()> mCancelSeed;
+    LLSD mSimulatorFeatures;
+    bool mSimulatorFeaturesReceived = false;
+    std::function<void()> mCancelSimulatorFeatures;
     std::unique_ptr<LLEventPoll> mPoll;
     VSPlainChat* mChat = nullptr; // Root owns the panel; detach before root teardown.
     double mDeadline = 0;

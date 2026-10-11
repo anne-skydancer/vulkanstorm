@@ -2291,7 +2291,8 @@ if(USE_DILIGENTCORE)
           vsuidrawbridge.cpp vsuidrawbridge.h vsuiimageprovider.cpp vsuiimageprovider.h
           vsuicontext.cpp vsuicontext.h vsvulkancontext.cpp vsvulkancontext.h vsstartupui.cpp vsstartupui.h vsviewerwindow.cpp
           vsplainchat.cpp vsplainchat.h vsnativesession.cpp vsnativesession.h vsnativeim.cpp vsnativeim.h
-          vsgroupsearch.cpp vsgroupsearch.h)
+          vsgroupsearch.cpp vsgroupsearch.h
+          vsworldrenderer.cpp vsworldrenderer.h vsworldscene.cpp vsworldscene.h)
 endif()
 if(VS_VULKAN_DIAGNOSTICS)
     list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h

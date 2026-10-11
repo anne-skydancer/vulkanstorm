@@ -254,6 +254,13 @@ cases, CI artifacts, passed/failed/untested outcomes and remaining limitations.
 
 ## Current implementation boundary
 
+The experimental `codex/vulkan-world-parity` branch now implements a first
+production native primitive geometry/submission slice and additional CPU
+account services. Its [world/service survey and qualification record](world-feature-parity.md)
+lists the remaining rendering and service owners. It does not establish V5
+completion or full supported feature parity. The existing Vulkan checkout and
+canonical build are reused for this separately testable branch.
+
 V1–V3 are implemented and software-qualified. V4 production session integration
 and the dedicated staged-viewer replay are implemented; consult the
 [connected-session record](viewer-connected-session.md) for current qualification.

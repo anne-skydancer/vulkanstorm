@@ -85,9 +85,11 @@ class RunnerFailureTests(unittest.TestCase):
                     self.assertNotIn(name, env)
                 mode = command[2]; seen.append(mode)
                 identity = 'ICD_DEVICE=SwiftShader API=4198400 DRIVER=1 VENDOR=0 DEVICE=0 TYPE=4\n'
-                if mode == 'offscreen':
+                if mode in ('offscreen', 'world'):
                     for name in ('first.ppm', 'replacement.ppm'): (cwd / name).write_bytes(b'readback')
-                    log = identity + 'DILIGENT_DEVICE=SwiftShader\n' + ''.join('LOADED='+str(root/name)+'\n' for name in libraries) + 'PASS offscreen'
+                    if mode == 'world':
+                        for name in ('near-clip.ppm', *(f'texture-{i}.ppm' for i in range(4))): (cwd / name).write_bytes(b'readback')
+                    log = identity + 'DILIGENT_DEVICE=SwiftShader\n' + ''.join('LOADED='+str(root/name)+'\n' for name in libraries) + 'PASS ' + mode
                     return SimpleNamespace(returncode=0, stdout=log.encode('utf-8'))
                 diagnostic = {'invalid': 'VUID-VkBufferCreateInfo-size-00912 Validation reported an error',
                               'invalid-sync': 'SYNC-HAZARD-WRITE-AFTER-WRITE Validation reported an error',
@@ -101,7 +103,7 @@ class RunnerFailureTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as result: main()
                 self.assertEqual(result.exception.code, 0)
             result = json.loads((root/'evidence/results.json').read_text())
-            self.assertEqual(len(seen), 5)
+            self.assertEqual(len(seen), 6)
             self.assertNotIn('present', seen)
             self.assertTrue(result['headless'] and result['passed'])
             self.assertFalse(result['presentation_qualified'])
