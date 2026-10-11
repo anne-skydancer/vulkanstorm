@@ -295,6 +295,14 @@ namespace tut
         ensure_equals("labeled link tooltip uses actual destination URL",
                       url.getTooltip("[https://example.com/real-destination Link text]"),
                       "https://example.com/real-destination");
+        testLabel("bracketed HTTPS link retains supplied text", url,
+                  "[https://example.com Link text]", "Link text");
+        ensure_equals("bracketed HTTPS tooltip shows destination",
+                      url.getTooltip("[https://example.com Link text]"),
+                      "https://example.com");
+        ensure_equals("misleading label is not the tooltip",
+                      url.getTooltip("[https://example.com/?q=one%20two Trusted site]"),
+                      "https://example.com/?q=one%20two");
     }
 
     template<> template<>
