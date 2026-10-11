@@ -37,6 +37,7 @@ class LLFloaterExperiences :
 {
 public:
     LLFloaterExperiences(const LLSD& data);
+    ~LLFloaterExperiences() override;
     virtual void onClose(bool app_quitting);
 
     virtual void onOpen(const LLSD& key);
@@ -69,7 +70,7 @@ private:
         const std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t) > invokationFn_t;
 
     static void retrieveExperienceListCoro(std::string url, LLHandle<LLFloaterExperiences> hparent,
-        NameMap_t tabMapping, std::string errorNotify, Callback_t cback, invokationFn_t invoker);
+        NameMap_t tabMapping, std::string errorNotify, Callback_t cback, invokationFn_t invoker, std::function<bool()> current);
     std::vector<LLUUID> mPrepurchaseIds;
     boost::signals2::scoped_connection mCapsReceivedConnection;
 };

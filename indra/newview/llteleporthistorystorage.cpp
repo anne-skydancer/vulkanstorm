@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llnotificationsutil.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llteleporthistorystorage.h"
 
@@ -90,7 +94,7 @@ LLTeleportHistoryStorage::LLTeleportHistoryStorage() :
     mItems.clear();
     LLTeleportHistory *th = LLTeleportHistory::getInstance();
     if (th)
-        th->setHistoryChangedCallback(boost::bind(&LLTeleportHistoryStorage::onTeleportHistoryChange, this));
+        mSessionHistoryConnection = th->setHistoryChangedCallback(boost::bind(&LLTeleportHistoryStorage::onTeleportHistoryChange, this));
 
     load();
 }
@@ -308,6 +312,26 @@ void LLTeleportHistoryStorage::goToItem(S32 idx)
         return;
     }
 
+#if VS_NATIVE_VULKAN
+    if (auto session = VSNativeSession::active())
+    {
+        const auto& slurl = mItems[idx].mSLURL;
+        // A confirmed current-grid entry goes through the native navigation
+        // service. Foreign-grid history requires an explicit grid login.
+        if (!slurl.isValid())
+            session->teleportToLocation(mItems[idx].mGlobalPos);
+        else if (slurl.getGrid().empty() || slurl.getGrid() == LLGridManager::instance().getGrid())
+            session->teleportToRegion(slurl.getRegion(), slurl.getPosition());
+        else
+        {
+            LLSD args;
+            args["MESSAGE"] = "This history entry belongs to another grid. Log in to that grid before teleporting.";
+            LLNotificationsUtil::add("GenericAlert", args);
+        }
+        return;
+    }
+#endif
+
     // <FS:TJ> Fix Teleport and Location History for OpenSim
 #ifdef OPENSIM
     if (LLGridManager::getInstance()->isInOpenSim())
@@ -344,6 +368,14 @@ void LLTeleportHistoryStorage::goToItem(S32 idx)
 
 void LLTeleportHistoryStorage::showItemOnMap(S32 idx)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        LLNotificationsUtil::add("NativeWorldUnavailable");
+        return;
+    }
+#endif
+
     // Validate specified index.
     if (idx < 0 || idx >= (S32)mItems.size())
     {

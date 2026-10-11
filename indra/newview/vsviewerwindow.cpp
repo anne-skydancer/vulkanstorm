@@ -55,6 +55,13 @@ void require(bool v, const char* m)
     if (!v)
         throw std::runtime_error(m);
 }
+LLRect nativeToolbarRect(const LLRect& status, const LLRect& window)
+{
+    // main_view.xml places toolbar_view_holder in world_panel immediately
+    // below the status row. Its own XUI already reserves navigation space.
+    return LLRect(0, status.mBottom, window.getWidth(), 0);
+}
+
 S32 nativeStatusRowHeight(LLXMLNodePtr node)
 {
     if (!node) return 0;
@@ -273,6 +280,20 @@ void LLViewerWindow::drawNativeUI()
         auto* location = mRootView->findChild<LLLocationInputCtrl>("location_combo");
         if (location && !location->hasFocus()) LLNavigationBar::instance().refreshLocationCtrl();
     }
+    if (mNativeConnectedUI && gToolBarView)
+    {
+        const bool top = gSavedSettings.getBOOL("InternalShowGroupNoticesTopRight");
+        auto* host = gToolBarView->getChild<LLPanel>(top ? "chiclet_container" : "chiclet_container_bottom");
+        if (mChicletContainer != host)
+        {
+            gToolBarView->getChildView(top ? "chiclet_container_bottom" : "chiclet_container")->setVisible(false);
+            host->setVisible(true);
+            auto* chiclets = LLChicletBar::getInstance();
+            chiclets->setShape(host->getLocalRect());
+            host->addChild(chiclets);
+            mChicletContainer = host;
+        }
+    }
     if (mNativeConnectedUI && mNativeChat && mFloaterSnapRegion)
     {
         // Keep the transcript in the shared usable floater area, above the
@@ -285,6 +306,10 @@ void LLViewerWindow::drawNativeUI()
             area.mBottom - root.mBottom + 10 + height, width, height);
         if (mNativeChat->getRect() != rect) mNativeChat->setShape(rect);
     }
+    // Progress is an input-covering transition surface, including logout.
+    // Later connected popups/chrome must not cover its skinned controls.
+    if (mProgressView && mProgressView->getVisible()) mRootView->sendChildToFront(mProgressView);
+    if (mProgressViewMini && mProgressViewMini->getVisible()) mRootView->sendChildToFront(mProgressViewMini);
     mVulkanContext->present(mDisplayScale.mV[VX], [&] { mRootView->draw(); });
 }
 void LLViewerWindow::refreshNativeFonts()
@@ -432,14 +457,17 @@ void LLViewerWindow::setNativeConnected(bool connected)
         gToolBarView = LLUICtrlFactory::createFromFile<LLToolBarView>("panel_toolbar_view.xml",
             mRootView, LLDefaultChildRegistry::instance());
         require(gToolBarView != nullptr, "Native toolbar XUI is missing");
-        gToolBarView->setShape(LLRect(0, navigation->getRect().mBottom, mWindowRectScaled.getWidth(), 0));
+        gToolBarView->setShape(nativeToolbarRect(mStatusBarContainer->getRect(), mWindowRectScaled));
         mFloaterSnapRegion = gToolBarView->getChild<LLView>("floater_snap_region");
         const bool top = gSavedSettings.getBOOL("InternalShowGroupNoticesTopRight");
         auto* chiclet_host = gToolBarView->getChild<LLPanel>(top ? "chiclet_container" : "chiclet_container_bottom");
         gToolBarView->getChildView(top ? "chiclet_container_bottom" : "chiclet_container")->setVisible(false);
         auto* chiclets = LLChicletBar::getInstance();
         chiclets->setShape(chiclet_host->getLocalRect());
+        chiclets->setFollowsAll();
+        chiclet_host->setVisible(true);
         chiclet_host->addChild(chiclets);
+        mChicletContainer = chiclet_host;
         auto* status_holder = mStatusBarContainer;
         gStatusBar = new LLStatusBar(status_holder->getLocalRect());
         gStatusBar->setFollowsAll();

@@ -27,6 +27,7 @@
 
 #ifndef LL_FLOATERLINKREPLACE_H
 #define LL_FLOATERLINKREPLACE_H
+#include <functional>
 
 #include "llfloater.h"
 #include "lleventtimer.h"
@@ -126,6 +127,7 @@ private:
     LLInventoryModel::item_array_t  mRemainingInventoryItems;
     bool mDeleteOnly;// <FS:Beq> FIRE-17695 - Delete links capability
     bool mStopRequested;
+    std::function<bool()> mAccountCurrent;
 };
 
 #endif // LL_FLOATERLINKREPLACE_H

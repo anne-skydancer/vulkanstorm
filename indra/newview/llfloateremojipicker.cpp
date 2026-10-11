@@ -306,6 +306,21 @@ private:
     size_t mEnd;
 };
 
+bool LLFloaterEmojiPicker::isNativeInternalType(const std::type_info& type)
+{
+    return type == typeid(LLEmojiGridRow) || type == typeid(LLEmojiGridDivider) ||
+        type == typeid(LLEmojiGridIcon) || type == typeid(LLEmojiPreviewPanel) ||
+        type == typeid(LLScrollingPanelList);
+}
+
+void LLFloaterEmojiPicker::resetAccount()
+{
+    saveState();
+    sStateFileName.clear();
+    sRecentlyUsed.clear();
+    sFrequentlyUsed.clear();
+}
+
 LLFloaterEmojiPicker::LLFloaterEmojiPicker(const LLSD& key)
 : super(key)
 {

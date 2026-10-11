@@ -11259,9 +11259,16 @@ bool isGridFeatureEnabled(const LLSD& userdata)
 // <FS:Ansariel> FIRE-21236 - Help Menu - Check Grid Status doesn't open using External Browser
 void openGridStatus()
 {
-    if (LLWeb::useExternalBrowser(LFSimFeatureHandler::instance().gridStatusURL()))
+    if (LLFloaterGridStatus::gridStatusURL().empty())
     {
-        LLWeb::loadURLExternal(LFSimFeatureHandler::instance().gridStatusURL());
+        LLSD args;
+        args["MESSAGE"] = "The current grid has not supplied a grid status URL.";
+        LLNotificationsUtil::add("GenericAlert", args);
+        return;
+    }
+    if (LLWeb::useExternalBrowser(LLFloaterGridStatus::gridStatusURL()))
+    {
+        LLWeb::loadURLExternal(LLFloaterGridStatus::gridStatusURL());
     }
     else
     {

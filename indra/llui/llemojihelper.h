@@ -40,6 +40,8 @@ class LLEmojiHelper : public LLSingleton<LLEmojiHelper>
     ~LLEmojiHelper() override {}
 
 public:
+    // Release editor/picker ownership when retiring a viewer account.
+    void resetAccount();
     // General
     std::string getToolTip(llwchar ch) const;
     bool        isActive(const LLUICtrl* ctrl_p) const;
@@ -69,5 +71,5 @@ private:
     boost::signals2::connection mHelperCommitConn;
     boost::signals2::connection mHelperCloseConn;
     std::function<void(llwchar)> mEmojiCommitCb;
-    bool mIsHideDisabled;
+    bool mIsHideDisabled { false };
 };

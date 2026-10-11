@@ -36,6 +36,8 @@
 #include "llnotifications.h"
 #include "lltextbox.h"
 #include "llviewercontrol.h"
+#include "vsnativeim.h"
+#include "llviewerwindow.h"
 
 LLFloaterLinkReplace::LLFloaterLinkReplace(const LLSD& key)
     : LLFloater(key),
@@ -48,6 +50,7 @@ LLFloaterLinkReplace::LLFloaterLinkReplace(const LLSD& key)
     mDeleteOnly(false) // <FS:Ansariel> FIRE-17695 - Delete links capability
 {
     mEventTimer.stop();
+    mAccountCurrent = vs_native_im_guard();
 
     LL_INFOS() << "Link replace settings: Batch size = " << mBatchSize << " - Pause time = " << mPeriod << LL_ENDL;
 }
@@ -91,7 +94,7 @@ void LLFloaterLinkReplace::onOpen(const LLSD& key)
         LLUUID item_id = key.asUUID();
         LLViewerInventoryItem* item = gInventory.getItem(item_id);
         mSourceEditor->setItem(item);
-        onSourceItemDrop(item->getLinkedUUID());
+        if (item) onSourceItemDrop(item->getLinkedUUID());
     }
     else
     {
@@ -168,6 +171,7 @@ void LLFloaterLinkReplace::checkEnableStart()
 
 void LLFloaterLinkReplace::onStartClicked()
 {
+    if (!mAccountCurrent()) return;
     LL_INFOS() << "Starting inventory link replace" << LL_ENDL;
     // <FS:Beq> FIRE-17695 - option to bulk delete links.
     // if (mSourceUUID.isNull() || mTargetUUID.isNull())
@@ -179,7 +183,7 @@ void LLFloaterLinkReplace::onStartClicked()
     }
 
     // <FS:Beq> FIRE-17695 - option to bulk delete links.
-    if (!mDeleteOnly && mSourceUUID.isNull())
+    if (mDeleteOnly && mSourceUUID.isNull())
     {
         LL_WARNS() << "Cannot delete links. Source UUID is null." << LL_ENDL;
         return;
@@ -199,7 +203,7 @@ void LLFloaterLinkReplace::onStartClicked()
 
 
     LLNotification::Params params("ConfirmReplaceLink");
-    params.functor.function(boost::bind(&LLFloaterLinkReplace::onStartClickedResponse, this, _1, _2));
+    params.functor.function(vs_native_im_ui_callback(this, boost::bind(&LLFloaterLinkReplace::onStartClickedResponse, this, _1, _2)));
     if (source_item && source_item->isWearableType() && source_item->getWearableType() <= LLWearableType::WT_EYES)
     {
         if(target_item && target_item->isWearableType() && source_item->getWearableType() == target_item->getWearableType())
@@ -276,6 +280,7 @@ void LLFloaterLinkReplace::onStopClicked()
 void LLFloaterLinkReplace::linkCreatedCallback(LLHandle<LLFloaterLinkReplace> floater_handle, const LLUUID& old_item_id, const LLUUID& target_item_id,
                                                 bool needs_wearable_ordering_update, bool needs_description_update, const LLUUID& outfit_folder_id)
 {
+    if (floater_handle.isDead() || !floater_handle.get()->mAccountCurrent()) return;
     LL_DEBUGS() << "Inventory link replace:" << LL_NEWLINE
         << " - old_item_id = " << old_item_id.asString() << LL_NEWLINE
         << " - target_item_id = " << target_item_id.asString() << LL_NEWLINE
@@ -358,6 +363,7 @@ void LLFloaterLinkReplace::linkCreatedCallback(LLHandle<LLFloaterLinkReplace> fl
 // static
 void LLFloaterLinkReplace::itemRemovedCallback(LLHandle<LLFloaterLinkReplace> floater_handle, const LLUUID& outfit_folder_id)
 {
+    if (floater_handle.isDead() || !floater_handle.get()->mAccountCurrent()) return;
     if (outfit_folder_id.notNull())
     {
         LLAppearanceMgr::getInstance()->updateClothingOrderingInfo(outfit_folder_id);
@@ -396,6 +402,7 @@ void LLFloaterLinkReplace::decreaseOpenItemCount()
 
 bool LLFloaterLinkReplace::tick()
 {
+    if (!mAccountCurrent()) { mEventTimer.stop(); return false; }
     LL_DEBUGS() << "Calling tick - remaining items = " << mRemainingInventoryItems.size() << LL_ENDL;
 
     LLInventoryModel::item_array_t current_batch;
@@ -418,7 +425,9 @@ bool LLFloaterLinkReplace::tick()
 
 void LLFloaterLinkReplace::processBatch(LLInventoryModel::item_array_t items)
 {
+    if (!mAccountCurrent()) return;
     const LLViewerInventoryItem* target_item = gInventory.getItem(mTargetUUID);
+    if (!mDeleteOnly && !target_item) { onStopClicked(); return; }
     const LLUUID cof_folder_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_CURRENT_OUTFIT);
     const LLUUID outfit_folder_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_MY_OUTFITS);
 
@@ -431,7 +440,8 @@ void LLFloaterLinkReplace::processBatch(LLInventoryModel::item_array_t items)
             decreaseOpenItemCount();
             break;
         }
-        else if (source_item->getParentUUID() != cof_folder_id)
+        else if (source_item->getParentUUID() != cof_folder_id &&
+            (!(gViewerWindow && gViewerWindow->isNativeVulkan()) || !gInventory.isObjectDescendentOf(source_item->getParentUUID(), outfit_folder_id)))
         {
             // <FS:Beq> FIRE-17695 bulk delete unwanted links
             //bool is_outfit_folder = gInventory.isObjectDescendentOf(source_item->getParentUUID(), outfit_folder_id);

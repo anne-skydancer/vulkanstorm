@@ -9,6 +9,7 @@ import unittest
 from render_backend_selector_fixture import SelectorTests
 from test_vulkan_ui_oracle import OracleTest
 from native_statistics_fixture import NativeStatisticsTests
+from native_driver_version_fixture import DriverVersionTests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from run_vulkan_viewer_diagnostic import assess, assess_startup, STAGES, skin_cases
@@ -708,7 +709,7 @@ int main(){
         root = Path(__file__).resolve().parents[2]
         source = (root / 'indra/newview/vsvulkancontext.cpp').read_text()
         start = source.index('double deviceLocalMemoryMegabytes(')
-        helper = source[start:source.index('} // namespace', start)]
+        helper = source[start:source.index('std::string graphicsDriverVersion(', start)]
         start = source.index('            VkPhysicalDeviceMemoryProperties memory{};')
         report = source[start:source.index('            LL_INFOS("NativeVulkan")', start)]
         fixture = r'''

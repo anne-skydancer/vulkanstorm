@@ -1,5 +1,21 @@
 // Required native login/progress/alert controls; optional viewer UI remains gated. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "llfloaterinventorysettings.h"
+#include "llfloatermarketplacelistings.h"
+#include "llfloaterlinkreplace.h"
+#include "llfloaterevent.h"
+#include "llfloateremojipicker.h"
+#include "llfloaterexperiences.h"
+#include "llfloaterexperienceprofile.h"
+#include "llfloaterexperiencepicker.h"
+#include "llpanelexperiences.h"
+#include "llpanelexperiencepicker.h"
+#include "llpanelexperiencelog.h"
+#include "llfloatermarketplace.h"
+#include "llfloatergridstatus.h"
+#include "llfloaterdestinations.h"
+#include "fsfloaterteleporthistory.h"
+#include "llpanelteleporthistory.h"
 #include "lltabcontainer.h"
 #include "fsfloaterim.h"
 #include "fsfloaterimcontainer.h"
@@ -202,7 +218,12 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(LLPanelMainInventory) || LLPanelMainInventory::isNativeInternalType(t) ||
                 t == typeid(LLPanelMarketplaceInbox) || t == typeid(LLInboxInventoryPanel) ||
                 t == typeid(LLInboxFolderViewFolder) || t == typeid(LLInboxFolderViewItem) || t == typeid(LLInventoryGallery) || t == typeid(LLInventoryGalleryItem) ||
-                LLInventoryPanel::isNativeInternalType(t) || LLInspectRemoteObjectUtil::isNativeInternalType(t) || LLHints::isNativeInternalType(t) || t == typeid(LLStatusBar) || t == typeid(LLStatGraph) || t == typeid(LLFloaterSettingsDebug) || t == typeid(LLFloaterHelpBrowser) || t == typeid(LLFloaterHowTo) || t == typeid(LLStatBar) || t == typeid(LLStatView) || t == typeid(LLFloaterLagMeter) || t == typeid(FSFloaterStatistics) ||
+                LLInventoryPanel::isNativeInternalType(t) || LLInspectRemoteObjectUtil::isNativeInternalType(t) || LLHints::isNativeInternalType(t) || t == typeid(LLStatusBar) || t == typeid(LLStatGraph) || t == typeid(LLFloaterSettingsDebug) || t == typeid(LLFloaterHelpBrowser) || t == typeid(LLFloaterHowTo) || t == typeid(LLFloaterInventorySettings) || t == typeid(LLFloaterMarketplaceListings) ||
+                t == typeid(LLPanelMarketplaceListings) || t == typeid(LLFloaterAssociateListing) ||
+                t == typeid(LLFloaterMarketplaceValidation) || t == typeid(LLFloaterLinkReplace) ||
+                t == typeid(LLInventoryLinkReplaceDropTarget) || t == typeid(LLFloaterEmojiPicker) || LLFloaterEmojiPicker::isNativeInternalType(t) || t == typeid(LLFloaterEvent) || t == typeid(LLFloaterExperiences) ||
+                t == typeid(LLFloaterExperienceProfile) || t == typeid(LLFloaterExperiencePicker) ||
+                t == typeid(LLPanelExperiences) || t == typeid(LLPanelExperiencePicker) || t == typeid(LLPanelExperienceLog) || t == typeid(LLFloaterMarketplace) || t == typeid(LLFloaterGridStatus) || t == typeid(LLFloaterDestinations) || t == typeid(FSFloaterTeleportHistory) || t == typeid(LLTeleportHistoryPanel) || t == typeid(LLStatBar) || t == typeid(LLStatView) || t == typeid(LLFloaterLagMeter) || t == typeid(FSFloaterStatistics) ||
                 t == typeid(LLPanelVolumePulldown) || t == typeid(LLPanelPulldown) || t == typeid(LLToolBarView) || t == typeid(LLToolBar) ||
                 t == typeid(LLToolBarVertical) || t == typeid(LLToolBarButton) || LLToolBar::isNativeInternalType(t) || LLNavigationBar::isNativeInternalType(t) || t == typeid(FSNearbyChatControl) || t == typeid(FSNearbyChatVoiceControl) || t == typeid(FSFloaterNearbyChat) || t == typeid(LLPanelPeople) || t == typeid(LLSideTrayPanelContainer) || t == typeid(LLFloaterSearchReplace) || t == typeid(LLFloaterSearch) || t == typeid(LLFloaterWebContent) || t == typeid(LLFloaterToybox) ||
                 t == typeid(LLPullButton) || t == typeid(LLLocationInputCtrl) || t == typeid(LLURLLineEditor) ||
@@ -298,7 +319,8 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             if (!admitted) LL_WARNS("NativeUI") << "Rejected native widget type: " << t.name() << LL_ENDL;
             return admitted;
         },
-        [](std::string_view name) { return name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "stats" || name == "lagmeter" || name == "inspect_remote_object" || name == "web_content" || name == "search_replace" || name == "fs_nearby_chat" || name == "people" || name == "search" || name == "toybox" || name == "inventory" || name == "secondary_inventory" || name == "sl_about" || name == "message_critical" || name == "message_tos" ||
+        [](std::string_view name) { return name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
+            name == "marketplace_validation" || name == "linkreplace" || name == "emoji_picker" || name == "event" || name == "experiences" || name == "experience_profile" || name == "experience_search" || name == "marketplace" || name == "grid_status" || name == "destinations" || name == "fs_teleporthistory" || name == "stats" || name == "lagmeter" || name == "inspect_remote_object" || name == "web_content" || name == "search_replace" || name == "fs_nearby_chat" || name == "people" || name == "search" || name == "toybox" || name == "inventory" || name == "secondary_inventory" || name == "sl_about" || name == "message_critical" || name == "message_tos" ||
             name == "fs_impanel" || name == "fs_im_container" || name == "imcontacts" || name == "avatar_picker" ||
             name == "fs_blocklist" || name == "fs_add_contact" || name == "fs_contact_set_config" ||
             name == "mute_object_by_name" || name == "group_picker" || name == "fs_group_titles" || name == "vs_group_search" || name == "fs_group" || name == "profile" || name == "publish_classified" || name == "preferences" || name == "prefs_proxy" || name == "prefs_translation" || name == "prefs_autoreplace" ||
@@ -309,7 +331,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "change_item_thumbnail" || name == "preview_sound" || name == "preview_script" ||
             name == "script_colors" || name == "upload_image" || name == "upload_sound" ||
             name == "pay_resident" || name == "display_name"; },
-        [](std::string_view name) { return name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
+        [](std::string_view name) { return name == "experiences_panel" || name == "llpanelexperiencepicker" || name == "experience_log" || name == "llpanelmarketplacelistings" || name == "marketplace_listings_panel" || name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
             name == "panel_marketplace_inbox" || name == "inventory_gallery" || name == "progress_view" || name == "progress_view_mini" || name == "popup_holder" ||
             name == "status" || name == "volumepulldown_floater" || name == "navigation_bar" || name == "toolbar_view" || name == "toolbar view" || name == "native_nearby_chat" || name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
             name == "panel_preference" || name == "panel_preference_graphics" || name == "panel_preference_privacy" ||
@@ -331,7 +353,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view name)
         {
-            return name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
+            return name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
                    name == "preferences" || name == "profile" || name == "contact_sets" ||
                    name == "conversation_log" || name == "block_list" || name == "group_titles";
         },
@@ -385,7 +407,16 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                        setting == "NavBarShowCoordinates" || setting == "NavBarShowParcelProperties" ||
                        setting == "MenuSearch" || setting == "ShowNetStats" || setting == "MuteAudio";
             }
+            if (name == "TeleportHistory.GearMenu.Action" || name == "TeleportHistory.GearMenu.Enable")
+            {
+                const std::string action = parameter.asString();
+                return action == "teleport" || action == "copy_slurl" || action == "remove" ||
+                       action == "clear_history" || action == "expand_all" || action == "collapse_all";
+            }
             static const std::string_view callbacks[] = {
+                "Marketplace.ViewSort.Action", "Marketplace.ViewSort.CheckItem", "Avatar.OpenMarketplace", "LoadSLMarketplace", "OpenGridStatus",
+                "TeleportHistory.TimeZone.Set", "TeleportHistory.TimeZone.Check",
+                "TeleportHistory.TabOpen", "TeleportHistory.TabClose",
                 "Toybox.RestoreDefaults", "Toybox.ClearAll", "Toolbars.RemoveSelectedCommand",
                 "File.Quit", "File.CloseWindow", "File.EnableCloseWindow", "File.CloseAllWindows",
                 "File.EnableCloseAllWindows", "File.CloseWindowGroup", "File.EnableCloseWindowGroup",

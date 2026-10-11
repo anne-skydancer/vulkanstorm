@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llmarketplacefunctions.h"
+#include "vsnativeim.h"
 
 #include "llagent.h"
 #include "llbufferstream.h"
@@ -782,6 +783,8 @@ void LLMarketplaceData::initializeSLM(const status_updated_signal_t::slot_type& 
 
 void LLMarketplaceData::getMerchantStatusCoro()
 {
+    const auto currentAccount = vs_native_im_guard();
+    if (!currentAccount()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("getMerchantStatusCoro", httpPolicy);
@@ -799,6 +802,7 @@ void LLMarketplaceData::getMerchantStatusCoro()
     }
 
     LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
+    if (!currentAccount()) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -860,6 +864,8 @@ void LLMarketplaceData::getSLMListings()
 
 void LLMarketplaceData::getSLMListingsCoro(LLUUID folderId)
 {
+    const auto currentAccount = vs_native_im_guard();
+    if (!currentAccount()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("getSLMListingsCoro", httpPolicy);
@@ -872,6 +878,7 @@ void LLMarketplaceData::getSLMListingsCoro(LLUUID folderId)
     std::string url = getSLMConnectURL("/listings");
 
     LLSD result = httpAdapter->getJsonAndSuspend(httpRequest, url, httpHeaders);
+    if (!currentAccount()) return;
 
     setUpdating(folderId, false);
 
@@ -925,6 +932,8 @@ void LLMarketplaceData::getSLMListing(S32 listingId)
 
 void LLMarketplaceData::getSingleListingCoro(S32 listingId, LLUUID folderId)
 {
+    const auto currentAccount = vs_native_im_guard();
+    if (!currentAccount()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("getSingleListingCoro", httpPolicy);
@@ -937,6 +946,7 @@ void LLMarketplaceData::getSingleListingCoro(S32 listingId, LLUUID folderId)
     std::string url = getSLMConnectURL("/listing/") + llformat("%d", listingId);
 
     LLSD result = httpAdapter->getJsonAndSuspend(httpRequest, url, httpHeaders);
+    if (!currentAccount()) return;
 
     setUpdating(folderId, false);
 
@@ -996,6 +1006,8 @@ void LLMarketplaceData::createSLMListing(const LLUUID& folder_id, const LLUUID& 
 
 void LLMarketplaceData::createSLMListingCoro(LLUUID folderId, LLUUID versionId, S32 count)
 {
+    const auto currentAccount = vs_native_im_guard();
+    if (!currentAccount()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("createSLMListingCoro", httpPolicy);
@@ -1006,6 +1018,7 @@ void LLMarketplaceData::createSLMListingCoro(LLUUID folderId, LLUUID versionId, 
     httpHeaders->append("Content-Type", "application/json");
 
     LLViewerInventoryCategory* category = gInventory.getCategory(folderId);
+    if (!category) { setUpdating(folderId, false); return; }
     LLSD invInfo;
     invInfo["listing_folder_id"] = folderId;
     invInfo["version_folder_id"] = versionId;
@@ -1019,6 +1032,7 @@ void LLMarketplaceData::createSLMListingCoro(LLUUID folderId, LLUUID versionId, 
     std::string url = getSLMConnectURL("/listings");
 
     LLSD result = httpAdapter->postJsonAndSuspend(httpRequest, url, postData, httpHeaders);
+    if (!currentAccount()) return;
 
     setUpdating(folderId, false);
 
@@ -1070,6 +1084,8 @@ void LLMarketplaceData::updateSLMListing(const LLUUID& folder_id, S32 listing_id
 
 void LLMarketplaceData::updateSLMListingCoro(LLUUID folderId, S32 listingId, LLUUID versionId, bool isListed, S32 count)
 {
+    const auto currentAccount = vs_native_im_guard();
+    if (!currentAccount()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("updateSLMListingCoro", httpPolicy);
@@ -1092,6 +1108,7 @@ void LLMarketplaceData::updateSLMListingCoro(LLUUID folderId, S32 listingId, LLU
 
     std::string url = getSLMConnectURL("/listing/") + llformat("%d", listingId);
     LLSD result = httpAdapter->putJsonAndSuspend(httpRequest, url, postData, httpHeaders);
+    if (!currentAccount()) return;
 
     setUpdating(folderId, false);
 
@@ -1114,6 +1131,7 @@ void LLMarketplaceData::updateSLMListingCoro(LLUUID folderId, S32 listingId, LLU
         // Try to get listing more directly after a delay
         const float FORCE_UPDATE_TIMEOUT = 5.0;
         llcoro::suspendUntilTimeout(FORCE_UPDATE_TIMEOUT);
+        if (!currentAccount()) return;
         if (!LLApp::isExiting() && LLMarketplaceData::instanceExists())
         {
             getSLMListing(listingId);
@@ -1165,6 +1183,8 @@ void LLMarketplaceData::associateSLMListing(const LLUUID& folder_id, S32 listing
 
 void LLMarketplaceData::associateSLMListingCoro(LLUUID folderId, S32 listingId, LLUUID versionId, LLUUID sourceFolderId)
 {
+    const auto currentAccount = vs_native_im_guard();
+    if (!currentAccount()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("associateSLMListingCoro", httpPolicy);
@@ -1187,6 +1207,7 @@ void LLMarketplaceData::associateSLMListingCoro(LLUUID folderId, S32 listingId, 
     std::string url = getSLMConnectURL("/associate_inventory/") + llformat("%d", listingId);
 
     LLSD result = httpAdapter->putJsonAndSuspend(httpRequest, url, postData, httpHeaders);
+    if (!currentAccount()) return;
 
     setUpdating(folderId, false);
     setUpdating(sourceFolderId, false);
@@ -1246,6 +1267,8 @@ void LLMarketplaceData::deleteSLMListing(S32 listingId)
 
 void LLMarketplaceData::deleteSLMListingCoro(S32 listingId)
 {
+    const auto currentAccount = vs_native_im_guard();
+    if (!currentAccount()) return;
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("deleteSLMListingCoro", httpPolicy);
@@ -1261,6 +1284,7 @@ void LLMarketplaceData::deleteSLMListingCoro(S32 listingId)
     setUpdating(folderId, true);
 
     LLSD result = httpAdapter->deleteJsonAndSuspend(httpRequest, url, httpHeaders);
+    if (!currentAccount()) return;
 
     setUpdating(folderId, false);
 
@@ -1289,19 +1313,25 @@ void LLMarketplaceData::deleteSLMListingCoro(S32 listingId)
 
 }
 
+void LLMarketplaceData::resetNativeAccount()
+{
+    mMarketplaceItems.clear();
+    mVersionFolders.clear();
+    mPendingUpdateSet.clear();
+    mValidationWaitingList.clear();
+    mMarketPlaceStatus = MarketplaceStatusCodes::MARKET_PLACE_NOT_INITIALIZED;
+    mMarketPlaceDataFetched = MarketplaceFetchCodes::MARKET_FETCH_NOT_DONE;
+    mMarketPlaceFailureReason.clear();
+    mDirtyCount = false;
+    if (mStatusUpdatedSignal) mStatusUpdatedSignal->disconnect_all_slots();
+    if (mDataFetchedSignal) mDataFetchedSignal->disconnect_all_slots();
+}
+
 std::string LLMarketplaceData::getSLMConnectURL(const std::string& route)
 {
-    std::string url;
-    LLViewerRegion *regionp = gAgent.getRegion();
-    if (regionp)
-    {
-        // Get DirectDelivery cap
-        url = regionp->getCapability("DirectDelivery");
-        if (!url.empty())
-        {
-            url += route;
-        }
-    }
+    // This accessor also resolves the current native account's capability.
+    std::string url = gAgent.getRegionCapability("DirectDelivery");
+    if (!url.empty()) url += route;
     return url;
 }
 

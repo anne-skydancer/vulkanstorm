@@ -22,7 +22,14 @@
 #pragma pop_macro("False")
 #pragma pop_macro("Bool")
 #include <stdexcept>
+#include <algorithm>
+#include <cstring>
+#include <iterator>
 #include <vector>
+#if LL_WINDOWS
+#include <dxgi1_2.h>
+#include <wrl/client.h>
+#endif
 #if !LL_WINDOWS
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_syswm.h>
@@ -45,6 +52,84 @@ double deviceLocalMemoryMegabytes(const VkPhysicalDeviceMemoryProperties& memory
             bytes += static_cast<double>(memory.memoryHeaps[i].size);
     return bytes / (1024.0 * 1024.0);
 }
+std::string graphicsDriverVersion(const VkPhysicalDeviceProperties& properties,
+                                  const VkPhysicalDeviceDriverProperties& driver)
+{
+    // Prefer the installed driver's own human-readable release/build string.
+    // apiVersion and conformanceVersion describe different things.
+    const auto end = std::find(std::begin(driver.driverInfo), std::end(driver.driverInfo), '\0');
+    if (end != std::begin(driver.driverInfo)) return std::string(std::begin(driver.driverInfo), end);
+    const uint32_t v = properties.driverVersion;
+    if (driver.driverID == VK_DRIVER_ID_NVIDIA_PROPRIETARY ||
+        (!driver.driverID && properties.vendorID == 0x10de))
+        return llformat("%u.%u.%u.%u", (v >> 22) & 0x3ff, (v >> 14) & 0xff,
+                        (v >> 6) & 0xff, v & 0x3f);
+    if (driver.driverID == VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS
+#if LL_WINDOWS
+        || (!driver.driverID && properties.vendorID == 0x8086)
+#endif
+       )
+        return llformat("%u.%u", v >> 14, v & 0x3fff);
+    return llformat("%u.%u.%u", VK_VERSION_MAJOR(v), VK_VERSION_MINOR(v), VK_VERSION_PATCH(v));
+}
+VkPhysicalDeviceDriverProperties queryDriverProperties(Diligent::IRenderDeviceVk& device)
+{
+    VkPhysicalDeviceDriverProperties driver{};
+    driver.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+    // The normal native device requires Vulkan 1.1. Do not invoke a core 1.1
+    // entry point on an older instance if that requirement changes.
+    if (device.GetVkVersion() < VK_API_VERSION_1_1) return driver;
+    const auto physical = device.GetVkPhysicalDevice();
+    uint32_t count = 0;
+    bool supported = device.GetVkVersion() >= VK_API_VERSION_1_2;
+    if (!supported && vkEnumerateDeviceExtensionProperties(physical, nullptr, &count, nullptr) == VK_SUCCESS)
+    {
+        std::vector<VkExtensionProperties> extensions(count);
+        const auto result = vkEnumerateDeviceExtensionProperties(physical, nullptr, &count, extensions.data());
+        if (result == VK_SUCCESS)
+            supported = std::any_of(extensions.begin(), extensions.begin() + count, [](const auto& extension)
+            { return std::strcmp(extension.extensionName, VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME) == 0; });
+    }
+    if (supported)
+    {
+        VkPhysicalDeviceProperties2 properties{};
+        properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        properties.pNext = &driver;
+        vkGetPhysicalDeviceProperties2(physical, &properties);
+    }
+    return driver;
+}
+#if LL_WINDOWS
+std::string windowsGraphicsDriverVersion(Diligent::IRenderDeviceVk& device)
+{
+    if (device.GetVkVersion() < VK_API_VERSION_1_1) return {};
+    VkPhysicalDeviceIDProperties identity{};
+    identity.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+    VkPhysicalDeviceProperties2 properties{};
+    properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    properties.pNext = &identity;
+    vkGetPhysicalDeviceProperties2(device.GetVkPhysicalDevice(), &properties);
+    if (!identity.deviceLUIDValid) return {};
+    // Match the selected Vulkan device exactly, not the first display or the
+    // first adapter of a vendor. No Direct3D device or GL context is created.
+    Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
+    if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(factory.GetAddressOf())))) return {};
+    for (UINT i = 0; ; ++i)
+    {
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        if (FAILED(factory->EnumAdapters1(i, adapter.GetAddressOf()))) return {};
+        DXGI_ADAPTER_DESC1 description{};
+        if (FAILED(adapter->GetDesc1(&description)) ||
+            std::memcmp(&description.AdapterLuid, identity.deviceLUID, VK_LUID_SIZE) != 0) continue;
+        LARGE_INTEGER version{};
+        if (FAILED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &version))) return {};
+        const auto value = static_cast<uint64_t>(version.QuadPart);
+        if (!value) return {};
+        return llformat("%u.%u.%u.%u", unsigned((value >> 48) & 0xffff),
+            unsigned((value >> 32) & 0xffff), unsigned((value >> 16) & 0xffff), unsigned(value & 0xffff));
+    }
+}
+#endif
 } // namespace
 struct VSVulkanContext::Impl
 {
@@ -100,8 +185,12 @@ struct VSVulkanContext::Impl
             renderer_info["RENDERING_API_VERSION"] = llformat("%u.%u.%u",
                 VK_VERSION_MAJOR(properties.apiVersion), VK_VERSION_MINOR(properties.apiVersion),
                 VK_VERSION_PATCH(properties.apiVersion));
-            // Vulkan driverVersion is vendor-specific, not an API version.
-            renderer_info["GRAPHICS_DRIVER_VERSION"] = llformat("0x%08x (raw Vulkan value)", properties.driverVersion);
+            std::string driver_version;
+#if LL_WINDOWS
+            driver_version = windowsGraphicsDriverVersion(*native_device);
+#endif
+            if (driver_version.empty()) driver_version = graphicsDriverVersion(properties, queryDriverProperties(*native_device));
+            renderer_info["GRAPHICS_DRIVER_VERSION"] = driver_version;
             VkPhysicalDeviceMemoryProperties memory{};
             vkGetPhysicalDeviceMemoryProperties(native_device->GetVkPhysicalDevice(), &memory);
             const double megabytes = deviceLocalMemoryMegabytes(memory);

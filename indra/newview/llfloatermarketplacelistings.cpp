@@ -38,6 +38,7 @@
 #include "llinventoryobserver.h"
 #include "llinventoryfunctions.h"
 #include "llmarketplacefunctions.h"
+#include "vsnativeim.h"
 #include "llnotificationhandler.h"
 #include "llnotificationmanager.h"
 #include "llnotificationsutil.h"
@@ -463,7 +464,8 @@ bool LLFloaterMarketplaceListings::fetchContents()
         (LLMarketplaceData::instance().getSLMDataFetched() != MarketplaceFetchCodes::MARKET_FETCH_LOADING) &&
         (LLMarketplaceData::instance().getSLMDataFetched() != MarketplaceFetchCodes::MARKET_FETCH_DONE))
     {
-        LLMarketplaceData::instance().setDataFetchedSignal(boost::bind(&LLFloaterMarketplaceListings::updateView, this));
+        LLMarketplaceData::instance().setDataFetchedSignal([weak = getDerivedHandle<LLFloaterMarketplaceListings>(), current = vs_native_im_guard()]()
+            { if (current() && !weak.isDead()) weak.get()->updateView(); });
         LLMarketplaceData::instance().setSLMDataFetched(MarketplaceFetchCodes::MARKET_FETCH_LOADING);
         LLInventoryModelBackgroundFetch::instance().start(mRootFolderId, true);
         LLMarketplaceData::instance().getSLMListings();
@@ -577,7 +579,8 @@ void LLFloaterMarketplaceListings::setPanels()
 void LLFloaterMarketplaceListings::initializeMarketPlace()
 {
     if (!mRootFolderCreating)
-        LLMarketplaceData::instance().initializeSLM(boost::bind(&LLFloaterMarketplaceListings::updateView, this));
+        LLMarketplaceData::instance().initializeSLM([weak = getDerivedHandle<LLFloaterMarketplaceListings>(), current = vs_native_im_guard()]()
+            { if (current() && !weak.isDead()) weak.get()->updateView(); });
 }
 
 S32 LLFloaterMarketplaceListings::getFolderCount()
@@ -868,7 +871,7 @@ void LLFloaterAssociateListing::apply(bool user_confirm)
             if (listing_uuid.notNull() && user_confirm && LLMarketplaceData::instance().getActivationState(listing_uuid) && !hasUniqueVersionFolder(mUUID))
             {
                 // Look for user confirmation before unlisting
-                LLNotificationsUtil::add("ConfirmMerchantUnlist", LLSD(), LLSD(), boost::bind(&LLFloaterAssociateListing::callback_apply, this, _1, _2));
+                LLNotificationsUtil::add("ConfirmMerchantUnlist", LLSD(), LLSD(), vs_native_im_ui_callback(this, boost::bind(&LLFloaterAssociateListing::callback_apply, this, _1, _2)));
                 return;
             }
             // Associate the id with the user chosen folder

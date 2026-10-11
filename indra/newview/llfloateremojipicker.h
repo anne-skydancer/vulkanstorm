@@ -28,6 +28,7 @@
 #define LLFLOATEREMOJIPICKER_H
 
 #include "llfloater.h"
+#include <typeinfo>
 
 class LLEmojiGridRow;
 class LLEmojiGridIcon;
@@ -44,6 +45,8 @@ public:
     typedef std::function<void ()> close_callback_t;
 
     LLFloaterEmojiPicker(const LLSD& key);
+    static bool isNativeInternalType(const std::type_info& type);
+    static void resetAccount();
 
     virtual bool postBuild() override;
     virtual void dirtyRect() override;

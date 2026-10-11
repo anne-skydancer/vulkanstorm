@@ -25,6 +25,12 @@
 #include "llsidepanelinventory.h"
 #include "llpanelmarketplaceinboxinventory.h"
 #include "llchannelmanager.h"
+#include "lleventnotifier.h"
+#include "llmarketplacefunctions.h"
+#include "llexperiencelog.h"
+#include "llexperiencecache.h"
+#include "llemojihelper.h"
+#include "llfloateremojipicker.h"
 
 namespace
 {
@@ -125,9 +131,13 @@ void vs_native_im_reset()
     LLFloaterPermsDefault::setCapSent(false);
     LLFloaterGroupInvite::destroyAccountFloaters();
     LLFloaterGroupBulkBan::destroyAccountFloaters();
+    gEventNotifier.clearAccount();
+    if (LLEmojiHelper::instanceExists()) LLEmojiHelper::instance().resetAccount();
+    extern std::vector<LLSD> gLoadUrlList;
+    gLoadUrlList.clear();
     // Panels retain pointers into shared group/profile account data. Destroy
     // them while those services still exist, before discarding the old login.
-    for (const char* name : { "settings_debug", "guidebook", "help_browser", "stats", "lagmeter", "web_content", "search", "inspect_remote_object", "search_replace", "fs_nearby_chat", "imcontacts", "toybox", "inventory", "secondary_inventory", "people", "avatar_picker", "group_picker", "pay_resident", "display_name", "pay_object", "upload_image", "upload_sound", "properties", "item_properties", "change_item_thumbnail", "preview_sound", "preview_script", "script_colors", "fs_partial_inventory", "preview_texture", "preview_notecard", "preview_conversation", "conversation", "fs_add_contact", "fs_contact_set_config", "fs_blocklist", "mute_object_by_name", "publish_classified", "fs_group_titles", "vs_group_search", "fs_group", "profile", "prefs_translation", "prefs_autoreplace", "prefs_spellchecker", "prefs_spellchecker_import", "perms_default", "preferences", "prefs_proxy", "keybind_dialog" })
+    for (const char* name : { "settings_debug", "guidebook", "marketplace", "grid_status", "destinations", "fs_teleporthistory", "help_browser", "stats", "lagmeter", "web_content", "search", "inspect_remote_object", "search_replace", "fs_nearby_chat", "imcontacts", "toybox", "inventory_settings", "emoji_picker", "event", "experiences", "experience_profile", "experience_search", "marketplace_listings", "associate_listing", "marketplace_validation", "linkreplace", "inventory", "secondary_inventory", "people", "avatar_picker", "group_picker", "pay_resident", "display_name", "pay_object", "upload_image", "upload_sound", "properties", "item_properties", "change_item_thumbnail", "preview_sound", "preview_script", "script_colors", "fs_partial_inventory", "preview_texture", "preview_notecard", "preview_conversation", "conversation", "fs_add_contact", "fs_contact_set_config", "fs_blocklist", "mute_object_by_name", "publish_classified", "fs_group_titles", "vs_group_search", "fs_group", "profile", "prefs_translation", "prefs_autoreplace", "prefs_spellchecker", "prefs_spellchecker_import", "perms_default", "preferences", "prefs_proxy", "keybind_dialog" })
     {
         const auto floaters = LLFloaterReg::getFloaterList(name);
         for (auto* floater : floaters)
@@ -156,6 +166,9 @@ void vs_native_im_reset()
         LLInboxNewItemsStorage::instance().saveNewItemsIds();
         LLInboxNewItemsStorage::deleteSingleton();
     }
+    LLFloaterEmojiPicker::resetAccount();
+    if (LLMarketplaceData::instanceExists()) LLMarketplaceData::instance().resetNativeAccount();
+    if (LLExperienceLog::instanceExists()) LLExperienceLog::deleteSingleton();
     LLSidepanelInventory::resetNativeAccountState();
     if (LGGContactSets::instanceExists()) LGGContactSets::instance().resetAccount();
     LLFloaterReg::destroyInstance("display_name");

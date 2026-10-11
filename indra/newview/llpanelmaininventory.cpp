@@ -3672,14 +3672,16 @@ bool LLPanelMainInventory::isNativeCallback(std::string_view name, const LLSD& p
             action == "open_selected_folder" || action == "open_in_new_window" || action == "protect_folder" ||
             action == "unprotect_folder" || action == "reload_folder" || action == "move_to_default_folder" ||
             action == "move_to_lost_and_found" || action == "new_folder_from_selected" || action == "ungroup_folder_items" ||
-            action == "add_to_favorites" || action == "remove_from_favorites" || action == "begin_im";
+            action == "add_to_favorites" || action == "remove_from_favorites" || action == "begin_im" ||
+            action == "replace_links" || action == "move_to_marketplace_listings" ||
+            action == "copy_to_marketplace_listings" || action == "copy_or_move_to_marketplace_listings";
     if (name == "Inventory.BeginIMSession") return action == "everyone" || action == "selected";
     if (name == "Inventory.CustomAction" || name == "Inventory.GearDefault.Custom.Action" ||
         name == "Inventory.GearDefault.Check" || name == "Inventory.GearDefault.Enable" || name == "Inventory.GearDefault.Visible")
     {
         for (const auto* safe : { "new_window", "sort_by_name", "sort_by_recent", "sort_folders_by_name", "sort_system_folders_to_top",
             "show_filters", "reset_filters", "close_folders", "empty_trash", "empty_lostnfound", "find_original", "find_links",
-            "regenerate_link", "share", "delete", "shop", "close_inv_windows", "toggle_search_library", "toggle_search_outfits",
+            "regenerate_link", "replace_links", "share", "delete", "shop", "close_inv_windows", "toggle_search_library", "toggle_search_outfits",
             "toggle_search_trash", "list_view", "gallery_view", "combination_view", "single_folder_view", "multi_folder_view",
             "coalesced_objects_only", "show_filters_modified" })
             if (action == safe) return true;

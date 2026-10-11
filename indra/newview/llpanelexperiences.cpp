@@ -26,6 +26,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 
 #include "llpanelprofile.h"
@@ -97,7 +98,7 @@ void LLPanelExperiences::setExperienceList( const LLSD& experiences )
         const LLSD& experience_details = LLExperienceCache::instance().get(public_key);
         if (experience_details.isUndefined())
         {
-            LLExperienceCache::instance().get(public_key, boost::bind(&LLPanelExperiences::sortExperiencesList, this));
+            LLExperienceCache::instance().get(public_key, vs_native_im_account_callback([weak = getDerivedHandle<LLPanelExperiences>()](const LLSD&) { if (auto* owner = weak.get()) owner->sortExperiencesList(); }));
         }
     }
 

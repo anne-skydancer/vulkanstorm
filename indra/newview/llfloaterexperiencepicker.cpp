@@ -26,6 +26,7 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llfloaterexperiencepicker.h"
 
@@ -56,7 +57,7 @@ LLFloaterExperiencePicker* LLFloaterExperiencePicker::show( select_callback_t ca
 
     if (floater->mSearchPanel)
     {
-        floater->mSearchPanel->mSelectionCallback = callback;
+        floater->mSearchPanel->mSelectionCallback = vs_native_im_account_callback(callback);
         floater->mSearchPanel->mCloseOnSelect = close_on_select;
         floater->mSearchPanel->setAllowMultiple(allow_multiple);
         floater->mSearchPanel->setDefaultFilters();

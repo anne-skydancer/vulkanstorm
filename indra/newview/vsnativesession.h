@@ -18,6 +18,7 @@ class LLMessageSystem;
 class LLEventPoll;
 class VSPlainChat;
 class LLFloater;
+class LLViewerMediaImpl;
 
 // Deliberately does not own LLWorld, LLViewerRegion or scene resources.
 // All asynchronous deliveries carry an owner and a session generation.
@@ -70,6 +71,8 @@ public:
     bool mediaEnabled() const;
     bool setMusicEnabled(bool);
     bool setMediaEnabled(bool);
+    void setMediaPaused(bool);
+    LLViewerMediaImpl* parcelMedia() const;
 
     // Unknown balance stays unknown until an authenticated simulator reply.
     bool balanceKnown() const { return mBalanceKnown; }
@@ -95,6 +98,8 @@ private:
     void playParcelAllowed(bool music);
     void rejectParcelPlayback(bool music);
     void parcelMediaCommand(U32 flags, U32 command, F32 time);
+    bool updateParcelMediaMetadata(const LLSD& body);
+    void applyParcelMediaState();
     void appendChat(LLSD, U64);
     void publishChat(const LLSD&, const std::string&, U64);
     void finishLogout();
@@ -116,6 +121,9 @@ private:
     bool mMusicRequested = false, mMediaRequested = false;
     bool mMusicUserStopped = false, mMediaUserStopped = false;
     bool mMediaPresented = false;
+    bool mMediaLoop = false, mMediaAutoScale = true, mMediaPaused = false, mMediaStateDirty = false;
+    S32 mMediaWidth = 0, mMediaHeight = 0;
+    F32 mMediaPendingSeek = -1.f;
     std::string mParcelName, mMusicURL, mMediaURL, mMediaType;
     LLHandle<LLFloater> mParcelMediaWindow;
     LLHost mHost;

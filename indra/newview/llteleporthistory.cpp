@@ -206,6 +206,8 @@ void LLTeleportHistory::updateCurrentLocation(const LLVector3d& new_pos)
             item.mFullTitle = session->regionName() + llformat(" (%d, %d, %d)", ll_round(session->position().mV[VX]), ll_round(session->position().mV[VY]), ll_round(session->position().mV[VZ]));
             mItems.push_back(item); mCurrentItem = (int)mItems.size() - 1;
         }
+        if (!mTeleportHistoryStorage)
+            mTeleportHistoryStorage = LLTeleportHistoryStorage::getInstance();
         mGotInitialUpdate = true; mHistoryChangedSignal(); return;
     }
 #endif
@@ -327,6 +329,13 @@ void LLTeleportHistory::onHistoryChanged()
 
 void LLTeleportHistory::resetNativeSession()
 {
+    // Retire the persistent observer before clearing the transient model and
+    // before the next login changes LL_PATH_PER_SL_ACCOUNT.
+    if (LLTeleportHistoryStorage::instanceExists())
+    {
+        LLTeleportHistoryStorage::instance().save();
+        LLTeleportHistoryStorage::deleteSingleton();
+    }
     mItems.clear(); mCurrentItem = -1; mRequestedItem = -1;
     mGotInitialUpdate = false; mTeleportHistoryStorage = nullptr;
     onHistoryChanged();

@@ -472,3 +472,26 @@ run did not pass its entire diagnostic matrix; it is not qualification of the
 final isolated executable. Previous connected-session evidence is retained
 with its original source/image identity. Final runtime and live-account
 acceptance must remain separate from source and build checks.
+
+### Shared account utilities and emoji integration
+
+Native connected sessions now initialize the ordinary Event notifier and
+Experience services. Event replies use the authenticated simulator/account
+route; reminder responses retain their originating login. Experience list,
+search, profile, permission and acquisition controllers use the account's
+granted capabilities, with guards on queued requests and results. Their UI and
+account log retire before changing the account directory. The inventory settings
+floater uses its real XUI without synthesizing the absent default-skin OK button.
+
+The shared emoji picker now participates in native widget/floater admission.
+Editor predictions, explicit picker selection and recent emoji controls reuse
+the existing helper and dictionary. Its editor handles and connections retire
+with the account, and cached recent/frequent state is saved and cleared before
+the next account. Native Pick/Classified location capture uses the current
+native region and parcel name, while scene parcel UUIDs remain unclaimed.
+
+Compiled production-method fixtures qualify these controller and lifecycle
+changes. Staged drawing, OS input, browser execution and authenticated account
+service tests for this batch are still required; earlier runtime evidence cannot
+qualify newly implemented controllers. The Experience abuse-report owner remains
+a scene prerequisite, as do the already documented world and voice features.

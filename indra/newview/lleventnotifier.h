@@ -65,6 +65,8 @@ public:
 
 
     void load(const LLSD& event_options);   // In the format that it comes in from login
+    // Retire local reminders without unsubscribing the old account on server.
+    void clearAccount();
     void remove(U32 event_id);
 
     bool hasNotification(const U32 event_id);

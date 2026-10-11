@@ -69,12 +69,23 @@ LLRect LLScreenChannelBase::getChannelRect()
     LLRect chiclet_rect;
 
     mFloaterSnapRegion->localRectToScreen(mFloaterSnapRegion->getLocalRect(), &channel_rect);
-    if (!mChicletRegion && gViewerWindow->isNativeVulkan())
+    // Native startup can create this channel before connected chrome exists,
+    // and the account chrome can subsequently switch top/bottom hosts. Always
+    // acquire the current owner before falling back to the startup rectangle.
+    if (gViewerWindow->isNativeVulkan()) mChicletRegion = gViewerWindow->getChicletContainer();
+    if (!mChicletRegion) return channel_rect;
+    mChicletRegion->localRectToScreen(mChicletRegion->getLocalRect(), &chiclet_rect);
+    if (gViewerWindow->isNativeVulkan())
     {
-        // Native startup owns alerts before any world/chiclet UI is admitted.
+        if (mChicletRegion->isInVisibleChain())
+        {
+            if (gSavedSettings.getBOOL("InternalShowGroupNoticesTopRight"))
+                channel_rect.mTop = llmin(channel_rect.mTop, chiclet_rect.mBottom);
+            else
+                channel_rect.mBottom = llmax(channel_rect.mBottom, chiclet_rect.mTop);
+        }
         return channel_rect;
     }
-    mChicletRegion->localRectToScreen(mChicletRegion->getLocalRect(), &chiclet_rect);
 
     // <FS:Ansariel> Group notices, IMs and chiclets position
     //channel_rect.mTop = chiclet_rect.mBottom;
@@ -634,6 +645,8 @@ void LLScreenChannel::showToastsBottom()
     std::vector<ToastElem>::reverse_iterator it;
 
     updateRect();
+    if (gViewerWindow->isNativeVulkan())
+        bottom = getRect().mBottom - gFloaterView->getRect().mBottom;
 
     LLDockableFloater* floater = dynamic_cast<LLDockableFloater*>(LLDockableFloater::getInstanceHandle().get());
 

@@ -3,6 +3,7 @@
 #define VS_NATIVE_IM_H
 #include <functional>
 #include <type_traits>
+#include <utility>
 class LLMessageSystem;
 class LLSD;
 // Capture before scheduling work; a reply from a retired login cannot mutate
@@ -20,6 +21,23 @@ inline std::function<bool()> vs_native_im_guard() { return [] { return true; }; 
 inline void vs_native_im_stamp_notification(LLSD&) {}
 inline bool vs_native_im_notification_current(const LLSD&) { return true; }
 #endif
+// Cache/name/event callbacks also belong to the login that scheduled them.
+// The wrapped callback retains its own weak-view ownership where necessary.
+template<class Callback>
+auto vs_native_im_account_callback(Callback callback)
+{
+    const auto current = vs_native_im_guard();
+    return [current, callback](auto&&... arguments) mutable
+    {
+        using Result = std::invoke_result_t<Callback, decltype(arguments)...>;
+        if (!current())
+        {
+            if constexpr (!std::is_void_v<Result>) return Result{};
+            else return;
+        }
+        return callback(std::forward<decltype(arguments)>(arguments)...);
+    };
+}
 // Notification responders can outlive the producing panel. Hold only its
 // handle and admit the response only in the login that created it.
 template<class View, class Callback>

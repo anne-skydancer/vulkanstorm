@@ -263,3 +263,122 @@ The command/controller census identified four CPU route omissions, now wired to 
 ## Connected top-menu row correction
 
 Native connected-menu startup previously arranged branch items before assigning the final menu-holder height. `setRect` changed the owner rectangle without rearranging its children, leaving hover tests and highlight fills bound to shorter rectangles. `fit_native_menu_bar` now requests and completes arrangement after the final owner placement, before input. The production-extracted compiler fixture reproduces the upper-half miss and checks upper/lower coverage, highlight-height geometry, nominal widths and hidden items across several row heights. Runtime OS hover/click qualification for this correction remains pending.
+
+## Account utility and emoji census closure
+
+The source survey found actual account UI omissions beyond the connected chat
+fixtures. Inventory Settings was excluded by native admission, and its shared
+controller requested an `ok_btn` absent from the default XUI. Its actual floater
+is now admitted; an optional skin OK button uses `findChild`, while the ordinary
+floater close control remains available. Account retirement destroys the owner
+and preserves its global inventory behavior settings and favorite color.
+
+Events now use the shared notifier and browser floater, authenticated
+`EventInfoReply`, login reminder loading and connected timer updates. Local
+account retirement clears reminders without sending unsubscribe requests for
+the retiring account. Duplicate details replace the owned reminder, and delayed
+notification responses cannot open a floater for a different login.
+
+Experiences now admit the existing list, search, profile, permission and log UI.
+Account capabilities replace null legacy-region checks. The native seed includes
+the search, admin, creator, acquisition, permission and update capabilities used
+by those controllers. An optional policy in the shared experience cache captures
+the originating account both before queued requests execute and before their
+results dispatch. Native profile/list callbacks also retain weak UI ownership;
+retirement removes permission listeners and persists/retires the account log.
+The legacy experience abuse reporter still requires its scene-dependent report
+owner and is disabled in this text-only stage; enabling the account graph does
+not qualify scene reporting.
+
+New Pick and Set Location routes use the current native region and parcel name,
+including Classified location metadata. They clear a legacy scene parcel UUID
+rather than borrowing stale scene ownership. Picks created through the ordinary
+URL controller no longer silently return because `gAgent.getRegion()` is null.
+
+Emoji prediction and explicit selection previously requested the unadmitted
+`emoji_picker`, so the shared helper returned without presenting a chooser. The
+actual picker and its exact CPU grid/divider/icon/preview/list types are now
+admitted. It uses the existing dictionary, fonts, keyboard/mouse selection,
+shortcode replacement and chat editor callbacks. Account retirement disconnects
+the helper from its editor, destroys the picker, saves the retiring account's
+recent/frequent emoji state and clears its cached filename and lists.
+
+Five compiler fixtures execute the production inventory-settings methods,
+notifier ownership/responder methods, experience request/result guards, emoji
+prediction/editor/picker commit and retirement methods, and native profile
+location controllers. These pass without a graphics or audio device. They do
+not substitute for staged native drawing, OS input, browser execution,
+authenticated live-service interoperability or cross-account runtime evidence
+for this new batch. The previously documented voice and scene prerequisites
+remain separate.
+
+## Additional connected CPU routes and reported UI corrections (11 October 2026)
+
+The survey found real routes omitted by native admission, rather than controls
+that correctly wait for world rendering. Marketplace storefront, Grid Status,
+Destination Guide and standalone Teleport History now use their existing
+controllers, selected-skin XUI and toolbar/menu commands. Destination Guide
+keeps its authenticated login/configured URL; native startup no longer replaces
+it with an empty region-feature URL. Grid Status uses the existing Second Life
+default and any available advertised grid URL. A grid without a supplied status
+URL receives an explicit unavailable-service message. OpenSim SimulatorFeatures
+status discovery and periodic RSS polling are not qualified by this browser
+route.
+
+Teleport History now records native locations in the ordinary persistent model
+before a floater is opened, and saves/retires that account's storage and scoped
+observer before relogin. List/filter, timezone, expansion, copy, remove and clear
+use the real frontend. Deferred confirmation checks account freshness and the
+exact originally selected entry, so removal/reindexing cannot teleport to a
+different item. Asynchronous SLURL copies retain only a weak panel and account
+guard. Confirmed current-grid navigation uses the native session service;
+foreign-grid entries require a login to that grid. Map and Place Details retain
+visible disabled actions plus guarded direct callbacks because those owners
+require the deferred scene. Globally parented menus retire with their account
+panel instead of retaining its callbacks.
+
+The native simulator path now installs the actual shared ScriptQuestion,
+ScriptDialog and LoadURL handlers. Replies and asynchronous experience/name
+resolution retain originating-account and simulator-host ownership. Ordinary
+AlertMessage and AgentAlertMessage use the existing named notification templates,
+substitutions and Modal flag instead of flattening all alerts into ErrorMessage.
+Native guards omit snapshot/parcel-collision and scene restart-floater side
+effects; existing restart toasts remain available. Events, Experiences, seller
+Marketplace and ordinary link replacement are integrated in the accompanying
+account-service changes, with exact frontend admission rather than a blanket
+floater allowlist. Emoji Picker and its reviewed internal font/panel widgets
+are also admitted; account ownership and selection callbacks are handled by the
+shared picker integration.
+
+Two independent chiclet problems were identified in production code. Native
+startup did not assign the actual chiclet container to the notification-channel
+owner, so toast bounds ignored the bar. The channel now follows the visible
+selected top/bottom host, including live placement changes. Native toolbar
+placement also subtracted the navigation height from its parent origin even
+though panel_toolbar_view already reserves navigation space. It now begins
+immediately below the selected-skin status row, matching the ordinary
+main_view.xml toolbar_view_holder. This removes the second navigation offset
+that lowered the chiclets. Logout uses the existing fullscreen/mini progress
+preference and localized LoggingOut text; the progress surface is drawn above
+connected popups and hides when logout completes.
+
+Production-extracted console regressions cover stale/reindexed history
+confirmation, account storage teardown ordering, grid-status URL selection,
+notification host/account rejection, actual toast bounds, logout progress policy
+and toolbar/chiclet parent coordinates. These establish the tested source
+contracts; they do not establish all-skin runtime, browser content, live-grid
+notifications or visual parity for this new batch. Staged viewer/runtime
+qualification remains pending the rebuilt image.
+
+Remaining concrete mixed-service utilities are distinguished from gray scene
+controls: Asset Blacklist's list/filter/persistence and sound audition are CPU
+operations, but its temporary-derender reset and removal interact with the scene
+object/derender list. Its frontend is not admitted by this batch. Sound Explorer
+contains sound-history browsing/local audition, while Look At moves the world
+camera and resolves LLViewerObjects. Its region sound-source feed is absent
+from the native text transport; admitting the floater alone would not supply
+those data or actions. These mixed utilities therefore remain separate porting
+gaps, not evidence that their entire CPU functionality is inherently world-only.
+Voice call setup remains a non-world integration gap outside the accepted
+text-only call lifecycle. No full connected-UI parity claim follows from this
+survey or admission policy.

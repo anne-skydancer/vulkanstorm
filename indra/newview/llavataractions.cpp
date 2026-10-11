@@ -27,6 +27,9 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llavataractions.h"
 
@@ -516,6 +519,18 @@ void LLAvatarActions::createPick()
     // </FS:Ansariel>
 
     LLFloaterProfile* profilefloater = dynamic_cast<LLFloaterProfile*>(LLFloaterReg::showInstance("profile", LLSD().with("id", gAgent.getID())));
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!profilefloater || owner->phase() != VSNativeSession::Phase::Connected) return;
+        LLPickData data;
+        data.pos_global = gAgent.getPositionGlobal();
+        data.sim_name = owner->regionName();
+        data.name = owner->parcelName().empty() ? data.sim_name : owner->parcelName();
+        profilefloater->createPick(data);
+        return;
+    }
+#endif
     LLViewerRegion* region = gAgent.getRegion();
     if (profilefloater && region)
     {

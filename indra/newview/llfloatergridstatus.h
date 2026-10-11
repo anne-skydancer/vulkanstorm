@@ -48,6 +48,7 @@ public:
     /*virtual*/ void onOpen(const LLSD& key);
     /*virtual*/ void handleReshape(const LLRect& new_rect, bool by_user = false);
 
+    static std::string gridStatusURL();
     static bool checkGridStatusRSS();
     static void getGridStatusRSSCoro();
 

@@ -32,8 +32,10 @@
 #include "llviewerinventory.h"
 #include "llinventoryobserver.h"
 #include "lleventtimer.h"
+#include "vsnativeim.h"
 
 class FSLSLBridgeRequestResponder;
+std::function<bool()> fs_bridge_account_guard();
 
 const std::string LIB_ROCK_NAME = "Rock - medium, round";
 const std::string FS_BRIDGE_NAME = "#Firestorm LSL Bridge v";
@@ -73,6 +75,8 @@ public:
     void updateIntegrations();
 
     void initBridge();
+    // Retire account/region-owned endpoint and inventory references without rezzing objects.
+    void resetNativeAccount();
     void recreateBridge();
     void processAttach(LLViewerObject* object, const LLViewerJointAttachment* attachment);
     void processDetach(LLViewerObject* object, const LLViewerJointAttachment* attachment);
@@ -147,6 +151,7 @@ protected:
 
 class FSLSLBridgeRezCallback : public LLInventoryCallback
 {
+    std::function<bool()> mAccountCurrent = fs_bridge_account_guard();
 public:
     FSLSLBridgeRezCallback() {}
     void fire(const LLUUID& inv_item);
@@ -157,6 +162,7 @@ protected:
 
 class FSLSLBridgeScriptCallback : public LLInventoryCallback
 {
+    std::function<bool()> mAccountCurrent = fs_bridge_account_guard();
 public:
     FSLSLBridgeScriptCallback() {}
     void fire(const LLUUID& inv_item);
@@ -168,10 +174,11 @@ protected:
 
 class FSLSLBridgeInventoryObserver : public LLInventoryFetchDescendentsObserver
 {
+    std::function<bool()> mAccountCurrent = fs_bridge_account_guard();
 public:
     FSLSLBridgeInventoryObserver(const LLUUID& cat_id = LLUUID::null):LLInventoryFetchDescendentsObserver(cat_id) {}
     FSLSLBridgeInventoryObserver(const uuid_vec_t& cat_ids):LLInventoryFetchDescendentsObserver(cat_ids) {}
-    /*virtual*/ void done() { gInventory.removeObserver(this); FSLSLBridge::instance().startCreation(); delete this; }
+    /*virtual*/ void done() { gInventory.removeObserver(this); if (mAccountCurrent()) FSLSLBridge::instance().startCreation(); delete this; }
 
 protected:
     ~FSLSLBridgeInventoryObserver() {}
@@ -179,9 +186,10 @@ protected:
 
 class FSLSLBridgeInventoryPreCreationCleanupObserver : public LLInventoryFetchDescendentsObserver
 {
+    std::function<bool()> mAccountCurrent = fs_bridge_account_guard();
 public:
     FSLSLBridgeInventoryPreCreationCleanupObserver(const LLUUID& cat_id = LLUUID::null):LLInventoryFetchDescendentsObserver(cat_id) {}
-    /*virtual*/ void done() { gInventory.removeObserver(this); FSLSLBridge::instance().cleanUpPreCreation(); delete this; }
+    /*virtual*/ void done() { gInventory.removeObserver(this); if (mAccountCurrent()) FSLSLBridge::instance().cleanUpPreCreation(); delete this; }
 
 protected:
     ~FSLSLBridgeInventoryPreCreationCleanupObserver() {}
@@ -189,6 +197,7 @@ protected:
 
 class FSLSLBridgeCleanupTimer : public LLEventTimer
 {
+    std::function<bool()> mAccountCurrent = fs_bridge_account_guard();
 public:
     FSLSLBridgeCleanupTimer() : LLEventTimer(12.f) {}
     bool tick();
@@ -196,6 +205,7 @@ public:
 
 class FSLSLBridgeReAttachTimer : public LLEventTimer
 {
+    std::function<bool()> mAccountCurrent = fs_bridge_account_guard();
 public:
     FSLSLBridgeReAttachTimer() : LLEventTimer(5.f) {}
     bool tick();
@@ -203,6 +213,7 @@ public:
 
 class FSLSLBridgeStartCreationTimer : public LLEventTimer
 {
+    std::function<bool()> mAccountCurrent = fs_bridge_account_guard();
 public:
     FSLSLBridgeStartCreationTimer() : LLEventTimer(5.f) {}
     bool tick();

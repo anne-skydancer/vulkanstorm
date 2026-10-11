@@ -39,12 +39,22 @@
 #include "lltabcontainer.h"
 #include "lltrans.h"
 #include "llviewerregion.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 
 #define SHOW_RECENT_TAB (0)
 LLFloaterExperiences::LLFloaterExperiences(const LLSD& data)
     :LLFloater(data)
 {
+}
+
+LLFloaterExperiences::~LLFloaterExperiences()
+{
+    mCapsReceivedConnection.disconnect();
+    LLEventPumps::instance().obtain("experience_permission").stopListening("LLFloaterExperiences");
 }
 
 LLPanelExperiences* LLFloaterExperiences::addTab(const std::string& name, bool select)
@@ -136,9 +146,8 @@ void LLFloaterExperiences::refreshContents()
 {
     setupRecentTabs();
 
-    LLViewerRegion* region = gAgent.getRegion();
-
-    if (region)
+    // Capability grants are independent: a missing allowed/blocked list must
+    // not suppress available owned/admin/creator account operations.
     {
         NameMap_t tabMap;
         LLHandle<LLFloaterExperiences> handle = getDerivedHandle<LLFloaterExperiences>();
@@ -147,13 +156,15 @@ void LLFloaterExperiences::refreshContents()
         tabMap["blocked"]="Blocked_Experiences_Tab";
         tabMap["experience_ids"]="Owned_Experiences_Tab";
 
-        retrieveExperienceList(region->getCapability("GetExperiences"), handle, tabMap);
+        if (!gAgent.getRegionCapability("GetExperiences").empty())
+            retrieveExperienceList(gAgent.getRegionCapability("GetExperiences"), handle, tabMap);
 
         updateInfo("GetAdminExperiences","Admin_Experiences_Tab");
         updateInfo("GetCreatorExperiences","Contrib_Experiences_Tab");
 
-        retrieveExperienceList(region->getCapability("AgentExperiences"), handle, tabMap,
-            "ExperienceAcquireFailed", boost::bind(&LLFloaterExperiences::checkPurchaseInfo, this, _1, _2));
+        if (!gAgent.getRegionCapability("AgentExperiences").empty())
+            retrieveExperienceList(gAgent.getRegionCapability("AgentExperiences"), handle, tabMap,
+                "ExperienceAcquireFailed", boost::bind(&LLFloaterExperiences::checkPurchaseInfo, this, _1, _2));
     }
 }
 
@@ -161,8 +172,12 @@ void LLFloaterExperiences::onOpen( const LLSD& key )
 {
     LLEventPumps::instance().obtain("experience_permission").stopListening("LLFloaterExperiences");
     LLEventPumps::instance().obtain("experience_permission").listen("LLFloaterExperiences",
-        boost::bind(&LLFloaterExperiences::updatePermissions, this, _1));
+        vs_native_im_account_callback([weak = getDerivedHandle<LLFloaterExperiences>()](const LLSD& value)
+        { if (auto* owner = weak.get()) return owner->updatePermissions(value); return false; }));
 
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { refreshContents(); return; }
+#endif
     LLViewerRegion* region = gAgent.getRegion();
     if(region)
     {
@@ -272,23 +287,20 @@ void LLFloaterExperiences::checkAndOpen(LLPanelExperiences* panel, const LLSD& c
 
 void LLFloaterExperiences::updateInfo(std::string experienceCap, std::string tab)
 {
-    LLViewerRegion* region = gAgent.getRegion();
-    if (region)
+    if (!gAgent.getRegionCapability(experienceCap).empty())
     {
         NameMap_t tabMap;
         LLHandle<LLFloaterExperiences> handle = getDerivedHandle<LLFloaterExperiences>();
 
         tabMap["experience_ids"] = tab;
 
-        retrieveExperienceList(region->getCapability(experienceCap), handle, tabMap);
+        retrieveExperienceList(gAgent.getRegionCapability(experienceCap), handle, tabMap);
     }
 }
 
 void LLFloaterExperiences::sendPurchaseRequest()
 {
-    LLViewerRegion* region = gAgent.getRegion();
-
-    if (region)
+    if (!gAgent.getRegionCapability("AgentExperiences").empty())
     {
         NameMap_t tabMap;
         const std::string tab_owned_name = "Owned_Experiences_Tab";
@@ -305,7 +317,7 @@ void LLFloaterExperiences::sendPurchaseRequest()
             tab_owned->getExperienceIdsList(mPrepurchaseIds);
         }
 
-        requestNewExperience(region->getCapability("AgentExperiences"), handle, tabMap, "ExperienceAcquireFailed",
+        requestNewExperience(gAgent.getRegionCapability("AgentExperiences"), handle, tabMap, "ExperienceAcquireFailed",
             boost::bind(&LLFloaterExperiences::checkAndOpen, this, _1, _2));
     }
 }
@@ -334,7 +346,7 @@ void LLFloaterExperiences::retrieveExperienceList(const std::string &url,
 
     LLCoros::instance().launch("LLFloaterExperiences::retrieveExperienceList",
         boost::bind(&LLFloaterExperiences::retrieveExperienceListCoro,
-        url, hparent, tabMapping, errorNotify, cback, getFn));
+        url, hparent, tabMapping, errorNotify, cback, getFn, vs_native_im_guard()));
 
 }
 
@@ -355,14 +367,14 @@ void LLFloaterExperiences::requestNewExperience(const std::string &url,
 
     LLCoros::instance().launch("LLFloaterExperiences::requestNewExperience",
         boost::bind(&LLFloaterExperiences::retrieveExperienceListCoro,
-        url, hparent, tabMapping, errorNotify, cback, postFn));
+        url, hparent, tabMapping, errorNotify, cback, postFn, vs_native_im_guard()));
 
 }
 
 
 void LLFloaterExperiences::retrieveExperienceListCoro(std::string url,
     LLHandle<LLFloaterExperiences> hparent, NameMap_t tabMapping,
-    std::string errorNotify, Callback_t cback, invokationFn_t invoker)
+    std::string errorNotify, Callback_t cback, invokationFn_t invoker, std::function<bool()> current)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -378,7 +390,9 @@ void LLFloaterExperiences::retrieveExperienceListCoro(std::string url,
         return;
     }
 
+    if (!current() || hparent.isDead()) return;
     LLSD result = invoker(httpAdapter, httpRequest, url, httpOptions, httpHeaders);
+    if (!current() || hparent.isDead()) return;
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

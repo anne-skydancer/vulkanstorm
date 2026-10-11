@@ -457,7 +457,6 @@ bool LLStatusBar::postBuild()
     mPanelVolumePulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
     mPanelVolumePulldown->setVisible(false);
 
-    if (!native_status_bar())
     {
         mPanelNearByMedia = new LLPanelNearByMedia();
         addChild(mPanelNearByMedia);
@@ -1139,7 +1138,7 @@ void LLStatusBar::onMouseEnterVolume()
 
 void LLStatusBar::onMouseEnterNearbyMedia()
 {
-    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
+    if (!mPanelNearByMedia) return;
     LLView* popup_holder = gViewerWindow->getRootView()->getChildView("popup_holder");
     LLRect nearby_media_rect = mPanelNearByMedia->getRect();
     LLButton* nearby_media_btn =  getChild<LLButton>( "media_toggle_btn" );

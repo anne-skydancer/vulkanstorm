@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpanelnearbymedia.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 // #include "llaudioengine.h"   // ## Zi: Media/Stream separation
 #include "llbase64.h"
@@ -250,6 +253,10 @@ void LLPanelNearByMedia::draw()
 /*virtual*/
 bool LLPanelNearByMedia::handleHover(S32 x, S32 y, MASK mask)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { LLPanelPulldown::handleHover(x, y, mask); return true; }
+#endif
+
     LLPanelPulldown::handleHover(x, y, mask);
 
     // If we are hovering over this panel, make sure to clear any hovered media
@@ -659,6 +666,28 @@ void LLPanelNearByMedia::refreshParcelItems()
 
 void LLPanelNearByMedia::refreshList()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (!mMediaList) return;
+        const auto choice = MediaClass(mShowCtrl->getSelectedValue().asInteger());
+        const bool include = (choice == MEDIA_CLASS_ALL || choice == MEDIA_CLASS_WITHIN_PARCEL) &&
+            !owner->mediaURL().empty() && gSavedSettings.getBOOL("AudioStreamingMedia");
+        if (include)
+        {
+            if (!mParcelMediaItem) mParcelMediaItem = addListItem(PARCEL_MEDIA_LIST_ITEM_UUID);
+            auto impl = owner->parcelMedia();
+            updateListItem(mParcelMediaItem, owner->parcelName().empty() ? owner->mediaURL() : owner->parcelName(),
+                owner->mediaURL(), 0, !owner->mediaEnabled(), impl && impl->hasMedia(),
+                impl && impl->isMediaTimeBased() && impl->isMediaPlaying(), MEDIA_CLASS_WITHIN_PARCEL, "");
+        }
+        else if (mParcelMediaItem) { removeListItem(PARCEL_MEDIA_LIST_ITEM_UUID); mParcelMediaItem = nullptr; }
+        mEnableAllCtrl->setEnabled(include && !owner->mediaEnabled());
+        mDisableAllCtrl->setEnabled(include && owner->mediaEnabled());
+        return; // No scene media scan, media-focus owner or proximity lookup.
+    }
+#endif
+
     bool all_items_deleted = false;
 
     if(!mMediaList)
@@ -815,6 +844,10 @@ void LLPanelNearByMedia::onClickDisableAll()
 
 void LLPanelNearByMedia::onClickEnableParcelMedia()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) { owner->setMediaEnabled(true); return; }
+#endif
+
     if ( ! LLViewerMedia::getInstance()->isParcelMediaPlaying() )
     {
         if (gSavedSettings.getBOOL("MediaEnableFilter"))
@@ -830,6 +863,10 @@ void LLPanelNearByMedia::onClickEnableParcelMedia()
 
 void LLPanelNearByMedia::onClickDisableParcelMedia()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) { owner->setMediaEnabled(false); return; }
+#endif
+
     // This actually unloads the impl, as opposed to "stop"ping the media
     LLViewerParcelMedia::getInstance()->stop();
 }
@@ -843,6 +880,10 @@ void LLPanelNearByMedia::onCheckItem(LLUICtrl* ctrl, const LLUUID &row_id)
 
 bool LLPanelNearByMedia::setDisabled(const LLUUID &row_id, bool disabled)
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) return row_id == PARCEL_MEDIA_LIST_ITEM_UUID && owner->setMediaEnabled(!disabled);
+#endif
+
     // if (row_id == PARCEL_AUDIO_LIST_ITEM_UUID)
     // {
     //  if (disabled)
@@ -1053,6 +1094,17 @@ void LLPanelNearByMedia::onMoreLess()
 
 void LLPanelNearByMedia::updateControls()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        auto impl = owner->parcelMedia();
+        if (!gSavedSettings.getBOOL("AudioStreamingMedia") || owner->mediaURL().empty()) showDisabledControls();
+        else if (impl && impl->isMediaTimeBased()) showTimeBasedControls(owner->mediaEnabled(), false, false, impl->getVolume() <= 0, impl->getVolume());
+        else showBasicControls(owner->mediaEnabled(), false, false, impl && impl->getVolume() <= 0, impl ? impl->getVolume() : 1.f);
+        return;
+    }
+#endif
+
     LLUUID selected_media_id = mMediaList->getValue().asUUID();
     LLViewerMedia* media_inst = LLViewerMedia::getInstance();
 
@@ -1184,6 +1236,10 @@ void LLPanelNearByMedia::onClickSelectedMediaStop()
 
 void LLPanelNearByMedia::onClickSelectedMediaPlay()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) { owner->setMediaEnabled(true); return; }
+#endif
+
     LLUUID selected_media_id = mMediaList->getValue().asUUID();
 
     // First enable it
@@ -1222,6 +1278,10 @@ void LLPanelNearByMedia::onClickSelectedMediaPlay()
 
 void LLPanelNearByMedia::onClickSelectedMediaPause()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) { owner->setMediaPaused(true); return; }
+#endif
+
     LLUUID selected_media_id = mMediaList->getValue().asUUID();
     /* <FS:Zi> Media/Stream separation
     if (selected_media_id == PARCEL_AUDIO_LIST_ITEM_UUID)
@@ -1245,6 +1305,10 @@ void LLPanelNearByMedia::onClickSelectedMediaPause()
 
 void LLPanelNearByMedia::onClickSelectedMediaMute()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) { if (auto impl = owner->parcelMedia()) impl->setMute(mMuteBtn->getValue().asBoolean()); return; }
+#endif
+
     LLUUID selected_media_id = mMediaList->getValue().asUUID();
     /* <FS:Zi> Media/Stream separation
     if (selected_media_id == PARCEL_AUDIO_LIST_ITEM_UUID)
@@ -1278,6 +1342,10 @@ void LLPanelNearByMedia::onClickSelectedMediaMute()
 
 void LLPanelNearByMedia::onCommitSelectedMediaVolume()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) { if (auto impl = owner->parcelMedia()) impl->setVolume(mVolumeSlider->getValueF32()); return; }
+#endif
+
     LLUUID selected_media_id = mMediaList->getValue().asUUID();
     /* <FS:Zi> Media/Stream separation
     if (selected_media_id == PARCEL_AUDIO_LIST_ITEM_UUID)
@@ -1299,6 +1367,10 @@ void LLPanelNearByMedia::onCommitSelectedMediaVolume()
 
 void LLPanelNearByMedia::onClickSelectedMediaZoom()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return;
+#endif
+
     LLUUID selected_media_id = mMediaList->getValue().asUUID();
     if (    // selected_media_id == PARCEL_AUDIO_LIST_ITEM_UUID ||  // <FS:Zi> Media/Stream separation
         selected_media_id == PARCEL_MEDIA_LIST_ITEM_UUID)
@@ -1308,6 +1380,10 @@ void LLPanelNearByMedia::onClickSelectedMediaZoom()
 
 void LLPanelNearByMedia::onClickSelectedMediaUnzoom()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return;
+#endif
+
     LLViewerMediaFocus::getInstance()->unZoom();
 }
 
@@ -1386,6 +1462,10 @@ void LLPanelNearByMedia::getNameAndUrlHelper(LLViewerMediaImpl* impl, std::strin
 
 std::string LLPanelNearByMedia::getSelectedUrl()
 {
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) return mMediaList->getValue().asUUID() == PARCEL_MEDIA_LIST_ITEM_UUID ? owner->mediaURL() : std::string();
+#endif
+
     std::string url;
     LLUUID selected_media_id = mMediaList->getValue().asUUID();
     // <FS> Media / Stream separation
