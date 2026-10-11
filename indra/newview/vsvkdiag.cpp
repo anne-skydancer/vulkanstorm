@@ -221,6 +221,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
     unsigned startup_login_actions=0;
     bool startup_about_verified=false;
     bool startup_chat_verified=false, startup_dpi_verified=false, startup_menu_verified=false;
+    bool startup_hover_verified=false;
     bool startup_ime_route_verified=false, startup_dialog_actions=false, startup_denial_verified=false;
     std::string startup_sent;
 
@@ -1033,6 +1034,61 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         stages.emplace_back("native-login-controller-created");
         window->show();
         startup_window->updateUI();
+        // Exercise real skinned shared-button lifecycle through viewer input,
+        // including stationary-pointer layout changes and OS window exit.
+        auto* button = holder->findChild<LLButton>("connect_btn");
+        const bool enabled = button->getEnabled();
+        button->setEnabled(true);
+        unsigned enters = 0, leaves = 0;
+        auto enterConnection = button->setMouseEnterCallback([&](LLUICtrl*, const LLSD&) { ++enters; });
+        auto leaveConnection = button->setMouseLeaveCallback([&](LLUICtrl*, const LLSD&) { ++leaves; });
+        const LLRect buttonRect = button->getRect();
+        const LLRect screen = button->calcScreenRect();
+        const auto hoverAt = [&](S32 x, S32 y)
+        {
+            LLCoordGL point;
+            LLUI::getInstance()->screenPointToGL(x, y, &point.mX, &point.mY);
+            startup_window->handleMouseMove(window, point, MASK_NONE);
+        };
+        hoverAt(screen.getCenterX(), screen.getCenterY());
+        require(button->getHighlight() && enters == 1, "Native shared button did not enter hover");
+        hoverAt(-10, -10);
+        require(!button->getHighlight() && leaves == 1, "Native shared button retained hover after moving away");
+        hoverAt(screen.getCenterX(), screen.getCenterY());
+#if LL_WINDOWS
+        require(PostMessageW(static_cast<HWND>(window->getPlatformWindow()), WM_MOUSELEAVE, 0, 0),
+            "Cannot queue native hover window leave");
+#else
+        SDL_Event leave{}; leave.type = SDL_WINDOWEVENT;
+        leave.window.windowID = SDL_GetWindowID(static_cast<SDL_Window*>(window->getPlatformWindow()));
+        leave.window.event = SDL_WINDOWEVENT_LEAVE;
+        require(SDL_PushEvent(&leave) == 1, "Cannot queue native hover window leave");
+#endif
+        for (unsigned attempt = 0; attempt < 100 && button->getHighlight(); ++attempt)
+        {
+            window->gatherInput();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        require(!button->getHighlight() && leaves == 2, "Native shared button retained hover after window leave");
+        startup_window->updateUI();
+        require(!button->getHighlight(), "Native stationary update reentered a departed window");
+        hoverAt(screen.getCenterX(), screen.getCenterY());
+        LLRect moved = buttonRect; moved.translate(0, -screen.getHeight() - 20);
+        button->setShape(moved);
+        startup_window->updateUI();
+        require(!button->getHighlight() && leaves == 3, "Native layout change retained stale button hover");
+        button->setShape(buttonRect);
+        startup_window->updateUI();
+        require(button->getHighlight() && enters == 4, "Native stationary pointer did not enter restored button");
+        gFocusMgr.setMouseCapture(button);
+        hoverAt(-10, -10);
+        require(button->getHighlight(), "Native captured button lost ordinary drag hover");
+        gFocusMgr.setMouseCapture(nullptr);
+        startup_window->updateUI();
+        require(!button->getHighlight() && leaves == 4, "Native released capture retained button hover");
+        enterConnection.disconnect(); leaveConnection.disconnect();
+        button->setEnabled(enabled);
+        startup_hover_verified = true;
         startup_window->handleFocusLost(window);
         require(!gFocusMgr.getAppHasFocus() && !gFocusMgr.getMouseCapture(), "Native viewer focus loss did not release capture");
         startup_window->handleFocus(window);
@@ -1437,7 +1493,7 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             {"subpixel_precision_bits",startup_subpixel_bits},
             {"ui_skin",startup_selection[0]},{"ui_theme",startup_selection[1]},{"ui_language",startup_selection[2]},
             {"plain_chat_controls_verified",startup_chat_verified},{"required_dialog_actions_verified",startup_dialog_actions},
-            {"mfa_actions_verified",startup_mfa_actions==2},{"login_menus_verified",startup_menu_verified},
+            {"mfa_actions_verified",startup_mfa_actions==2},{"login_menus_verified",startup_menu_verified},{"native_hover_lifecycle_verified",startup_hover_verified},
             {"unsupported_ui_status_verified",startup_denial_verified},{"native_dpi_event_verified",startup_dpi_verified},
             {"ime_event_route_verified",startup_ime_route_verified},{"os_ime_service_qualified",false},
             {"normal_session_admitted",false},{"live_browser_qualified",false},{"authentication_qualified",false},

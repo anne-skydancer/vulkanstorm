@@ -373,21 +373,30 @@ struct Window{bool hidden=true;int cursor=UI_CURSOR_IBEAM;int calls=0;
  void setCursor(int c){cursor=c;++calls;}};
 struct View{Window* window;bool editor=false;int x=-1,y=-1,mask=-1;
  void screenPointToLocal(int sx,int sy,int* x,int* y){*x=sx-3;*y=sy-4;}
- void handleHover(int sx,int sy,int m){x=sx;y=sy;mask=m;if(editor)window->setCursor(UI_CURSOR_IBEAM);}};
-struct Focus{View* capture=nullptr;View* getMouseCapture(){return capture;}}gFocusMgr;
+ bool pointInView(int x,int y){return x>=0&&y>=0;}
+ bool handleHover(int sx,int sy,int m){x=sx;y=sy;mask=m;if(editor)window->setCursor(UI_CURSOR_IBEAM);return true;}};
+struct Focus{View* capture=nullptr;View* top=nullptr;View* getMouseCapture(){return capture;} View* getTopCtrl(){return top;}}gFocusMgr;
 struct LLViewerWindow{Window* mWindow;View* mRootView;
  struct{float mV[2]={2,2};}mDisplayScale;
  LLCoordGL mCurrentMousePoint{0,0};bool mMouseInWindow=false;
- void nativeHover(LLCoordGL,MASK);};
+ int reconciles=0;bool hoverEnabled=false;int hoverX=-1,hoverY=-1;
+ void updateMouseHoverViews(int x,int y,MASK,bool enabled){++reconciles;hoverEnabled=enabled;hoverX=x;hoverY=y;}
+ void nativeHover(LLCoordGL,MASK);void nativeHoverUpdate(MASK);};
 """ + source[start:end] + r"""
 int main(){Window window;View root{&window},editor{&window,true};
  LLViewerWindow viewer{&window,&root};viewer.nativeHover({20,30},7);
  assert(!window.hidden&&window.cursor==UI_CURSOR_ARROW);
- assert(root.x==7&&root.y==11&&root.mask==7&&viewer.mMouseInWindow);
+ assert(root.x==10&&root.y==15&&root.mask==7&&viewer.mMouseInWindow);
+ assert(viewer.reconciles==1&&viewer.hoverEnabled&&viewer.hoverX==10&&viewer.hoverY==15);
  gFocusMgr.capture=&editor;viewer.nativeHover({24,34},1);
  assert(editor.x==9&&editor.y==13&&window.cursor==UI_CURSOR_IBEAM);
  gFocusMgr.capture=nullptr;viewer.nativeHover({20,30},0);
  assert(window.cursor==UI_CURSOR_ARROW);
+ gFocusMgr.top=&editor;viewer.nativeHover({24,34},2);
+ assert(editor.x==9&&editor.y==13&&editor.mask==2&&window.cursor==UI_CURSOR_IBEAM);
+ gFocusMgr.top=nullptr;viewer.mMouseInWindow=false;
+ int rootX=root.x;viewer.nativeHoverUpdate(0);
+ assert(!viewer.hoverEnabled&&root.x==rootX); // departed window only reconciles Leave
  viewer.mRootView=nullptr;int calls=window.calls;viewer.nativeHover({1,1},0);
  assert(window.calls==calls);
 }
@@ -740,11 +749,11 @@ int main(){
                           'native-startup-graphics-released','native-startup-window-released'],
                   modal_alert_verified=True,critical_dialog_verified=True,
                   plain_chat_controls_verified=True,required_dialog_actions_verified=True,
-                  mfa_actions_verified=True,login_menus_verified=True,unsupported_ui_status_verified=True,
+                  mfa_actions_verified=True,login_menus_verified=True,native_hover_lifecycle_verified=True,unsupported_ui_status_verified=True,
                   native_dpi_event_verified=True,ime_event_route_verified=True,
                   passed=True,presented_frames=17,readbacks=24,failure='')
         self.assertTrue(assess_startup(item,0,'','startup-positive'))
-        for key,value in [('modal_alert_verified',False),('critical_dialog_verified',False),('readbacks',17),('readbacks',18),('readbacks',23),('plain_chat_controls_verified',False),('required_dialog_actions_verified',False),('mfa_actions_verified',False),('login_menus_verified',False),('unsupported_ui_status_verified',False),('validation_errors',1),('shutdown_complete',False),
+        for key,value in [('native_hover_lifecycle_verified',False),('modal_alert_verified',False),('critical_dialog_verified',False),('readbacks',17),('readbacks',18),('readbacks',23),('plain_chat_controls_verified',False),('required_dialog_actions_verified',False),('mfa_actions_verified',False),('login_menus_verified',False),('unsupported_ui_status_verified',False),('validation_errors',1),('shutdown_complete',False),
                           ('login_controls_verified',False),('progress_owner_verified',False),('stages',[]),
                           ('about_renderer_verified',False),('login_os_input_verified',False),('login_submit_actions',0),('login_submit_actions',1),
                           ('stages',list(reversed(item['stages'])))]:

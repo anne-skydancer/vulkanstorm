@@ -2113,6 +2113,12 @@ void LLWindowSDL::gatherInput()
                     mCallbacks->handleDPIChanged(this, getSystemUISize(), width, height);
                 }
 #endif
+                else if (!mUseGL && event.window.event == SDL_WINDOWEVENT_LEAVE)
+                {
+                    // Native UI uses event coordinates; leaving the client area
+                    // must retire its hover state even without another motion.
+                    mCallbacks->handleMouseLeave(this);
+                }
                 else if( event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED ) // <FS:ND> What about SDL_WINDOWEVENT_ENTER (mouse focus)
                 {
                     // We have to do our own state massaging because SDL
