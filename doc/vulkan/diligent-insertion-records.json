@@ -1,5 +1,5 @@
 {
-  "source_commit": "db15b81419a06b8547e72b3a4509892d98e7051f",
+  "source_commit": "3201a00c7a1cea238d621416b9ad20ea714490fc",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -30887,6 +30887,15 @@
       "record": "I08",
       "disposition": "mapped",
       "reason": " Exact CPU emoji picker grid/divider/icon/preview/list admission reuses shared fonts, dictionary and editor prediction/commit. Account retirement releases weak host and callbacks, persists and clears recent/frequent cached state. Empty commit avoids indexing absent Unicode. Compiled real prediction/picker/editor and lifecycle methods pass; native runtime acceptance pending."
+    },
+    {
+      "path": "indra/newview/app_settings/settings.xml",
+      "start": 19669,
+      "end": 19669,
+      "sha256": "a80d3ca26be58a921e4a8b17350a0c74ff1c6da946bb2d697266484d6dcfb6ae",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": " Labelled chat hyperlink opt-out default is false as requested, restoring existing HTTP/SL wiki label rendering through the unchanged URL registry. Existing persistent user choices, Protection checkbox, trust checks and URL validation remain in place. No BBCode additions."
     }
   ]
 }
