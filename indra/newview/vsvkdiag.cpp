@@ -1042,7 +1042,6 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         unsigned enters = 0, leaves = 0;
         auto enterConnection = button->setMouseEnterCallback([&](LLUICtrl*, const LLSD&) { ++enters; });
         auto leaveConnection = button->setMouseLeaveCallback([&](LLUICtrl*, const LLSD&) { ++leaves; });
-        const LLRect buttonRect = button->getRect();
         const LLRect screen = button->calcScreenRect();
         const auto hoverAt = [&](S32 x, S32 y)
         {
@@ -1072,10 +1071,30 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
         require(!button->getHighlight() && leaves == 2, "Native shared button retained hover after window leave");
         startup_window->updateUI();
         require(!button->getHighlight(), "Native stationary update reentered a departed window");
-        hoverAt(screen.getCenterX(), screen.getCenterY());
-        LLRect moved = buttonRect; moved.translate(0, -screen.getHeight() - 20);
+        // OS input pumping also processes initial resize/layout events. Use the
+        // settled current geometry, not the snapshot from before that pump.
+        startup_window->updateUI();
+        const LLRect buttonRect = button->getRect();
+        const LLRect layoutScreen = button->calcScreenRect();
+        hoverAt(layoutScreen.getCenterX(), layoutScreen.getCenterY());
+        require(button->getHighlight() && enters == 3 && leaves == 2,
+            "Native layout probe did not begin over the current button");
+        LLRect moved = buttonRect; moved.translate(0, -layoutScreen.getHeight() - 20);
         button->setShape(moved);
         startup_window->updateUI();
+        const LLRect movedScreen = button->calcScreenRect();
+        const auto mouse = startup_window->getCurrentMouse();
+        if (button->getHighlight() || leaves != 3 || movedScreen.pointInRect(mouse.mX, mouse.mY))
+        {
+            std::cerr << "NATIVE_HOVER_LAYOUT_FAILURE: enters=" << enters << " leaves=" << leaves
+                << " highlight=" << button->getHighlight() << " mouse=" << mouse.mX << ',' << mouse.mY
+                << " original=" << layoutScreen.mLeft << ',' << layoutScreen.mBottom << ','
+                << layoutScreen.mRight << ',' << layoutScreen.mTop
+                << " actual_moved=" << movedScreen.mLeft << ',' << movedScreen.mBottom << ','
+                << movedScreen.mRight << ',' << movedScreen.mTop << '\n';
+        }
+        require(!movedScreen.pointInRect(mouse.mX, mouse.mY),
+            "Native layout probe did not displace the button beyond the stationary pointer");
         require(!button->getHighlight() && leaves == 3, "Native layout change retained stale button hover");
         button->setShape(buttonRect);
         startup_window->updateUI();
