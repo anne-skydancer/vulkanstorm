@@ -1,5 +1,5 @@
 {
-  "source_commit": "66962d3973f1a777aeb68a4def14c84cc4a22b24",
+  "source_commit": "746991a1d5fdf6fdf70df171f93261177b7def14",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -270,44 +270,44 @@
       "end": 1354,
       "record": "I01",
       "disposition": "mapped",
-      "reason": "init calls selectGLBackend before initWindow, then GL VRAM overrides/info/requirements/driver warnings and self-registered callbacks. Native capability/identity owner must precede callbacks and prevent GL probes; CPU SSE/RAM/input policies remain.",
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194"
+      "reason": "init calls selectGLBackend before initWindow, then GL VRAM overrides/info/requirements/driver warnings and self-registered callbacks. Native capability/identity owner must precede callbacks and prevent GL probes; CPU SSE/RAM/input policies remain. Reviewed native RLVa cleanup before account owner, UI and application fiber teardown, matching the reference subsystem cleanup and making the global destructor inert. The real enabled cleanup/destructor and native entry prefix are exercised together; no startup feature disabling or weakened exit acceptance.",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 2472,
-      "end": 2558,
+      "start": 2475,
+      "end": 2561,
       "record": "I02",
       "disposition": "mapped",
       "reason": "Shutdown stops fetch/cache/decode/thread pools before shutdownGL then viewer window deletion. Native path must cancel/retain producers and drain submitted work before resource/device/window destruction; keyboard remains until views destroyed.",
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194"
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 3782,
-      "end": 3920,
+      "start": 3785,
+      "end": 3923,
       "record": "I01",
       "disposition": "mapped",
       "reason": "initWindow currently coerces Vulkan to GL, creates LLViewerWindow then pipeline/initGLDefaults with persisted RenderInitError. Replace backend capability/error ownership; preserve startup diagnostics and reference route.",
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194"
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4104,
-      "end": 4198,
+      "start": 4107,
+      "end": 4201,
       "record": "I01",
       "disposition": "mapped",
       "reason": "getViewerInfo directly glGetString vendor/renderer/version plus GL VRAM/vendor-based WMI; replace with cached actual Vulkan adapter/driver/backend identity, safe during teardown. CPU/network/library diagnostics remain.",
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194"
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 6842,
-      "end": 6872,
+      "start": 6845,
+      "end": 6875,
       "record": "I01",
       "disposition": "mapped",
       "reason": "forceErrorDriverCrash calls glDeleteTextures(1,NULL). Legacy crash injection must be gated/disabled/adapted for native backend rather than executing GL with no context.",
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194"
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a"
     },
     {
       "path": "indra/newview/llviewerwindow.cpp",
@@ -979,70 +979,70 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 36,
       "end": 36,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4366,
-      "end": 4388,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
-      "record": "I01",
-      "disposition": "mapped-gate",
-      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
-    },
-    {
-      "path": "indra/newview/llappviewer.cpp",
-      "start": 4391,
+      "start": 4369,
       "end": 4391,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4393,
-      "end": 4426,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "start": 4394,
+      "end": 4394,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4559,
-      "end": 4559,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "start": 4396,
+      "end": 4429,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4561,
-      "end": 4561,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "start": 4562,
+      "end": 4562,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4676,
-      "end": 4676,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "start": 4564,
+      "end": 4564,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4678,
-      "end": 4678,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "start": 4679,
+      "end": 4679,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4681,
+      "end": 4681,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
@@ -2419,7 +2419,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 32,
       "end": 33,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -2428,7 +2428,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 257,
       "end": 258,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -2437,7 +2437,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1593,
       "end": 1593,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -2446,7 +2446,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1611,
       "end": 1613,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -2455,7 +2455,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1641,
       "end": 1646,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -2464,7 +2464,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1694,
       "end": 1700,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -2473,34 +2473,34 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1713,
       "end": 1717,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1736,
-      "end": 1743,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "start": 1739,
+      "end": 1746,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1747,
-      "end": 1747,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "start": 1750,
+      "end": 1750,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1752,
-      "end": 1752,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "start": 1755,
+      "end": 1755,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -17368,7 +17368,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1672,
       "end": 1674,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Native CPU frame-period/jitter sampling and current-circuit ping/loss/bandwidth are generation and host scoped, reset on account change, and never construct scene owners. Actual shared Statistics/Lag Meter/FPS controllers are admitted and retired; empty recordings remain unavailable, native history triangles retain shared geometry, and trusted SimStats uses the existing CPU decoder. Real floater, sample and shrink/restore replay is added; runtime qualification remains pending. About VRAM_BUDGET and VRAM_BUDGET_ENGLISH now retain the identical shared FSLimitTextureVRAMUsage/RenderMaxVRAMBudget formatting on OpenGL and Vulkan, including localized Unlimited. This reports the configured viewer limit, not Vulkan driver heap availability or newly qualified allocator enforcement; compiled production formatting is tested for both renderer selections."
@@ -21283,7 +21283,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1654,
       "end": 1669,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -21292,7 +21292,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1712,
       "end": 1712,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -23866,7 +23866,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 28,
       "end": 29,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -23875,16 +23875,16 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 31,
       "end": 31,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1796,
-      "end": 1796,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "start": 1799,
+      "end": 1799,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -24370,16 +24370,16 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 30,
       "end": 30,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1798,
-      "end": 1798,
-      "sha256": "8dcb9a8db63f1c25a8959c718489b2e16d2c0039c9c11ce4ee1a733d8d9fe194",
+      "start": 1801,
+      "end": 1801,
+      "sha256": "da0ee00b737f37fc73d3cf9f2d6e7c4ad456c06ed713066cd91c337f84fec96a",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
