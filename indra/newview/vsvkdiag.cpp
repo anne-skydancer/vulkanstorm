@@ -119,8 +119,46 @@ void loadedLibraries()
     while (std::getline(maps, line)) std::cout << "LOADED=" << line << '\n';
 #endif
 }
+std::vector<std::uint8_t> captureNativeScene(Diligent::IRenderDevice* device,
+    Diligent::IDeviceContext* context, Diligent::ITextureView* target,
+    unsigned width, unsigned height, const std::string& prefix)
+{
+    using namespace Diligent;
+    auto desc = target->GetTexture()->GetDesc();
+    require(desc.Format == TEX_FORMAT_RGBA8_UNORM || desc.Format == TEX_FORMAT_BGRA8_UNORM,
+        "Unsupported connected scene readback format");
+    const bool bgra = desc.Format == TEX_FORMAT_BGRA8_UNORM;
+    require(desc.Width == width && desc.Height == height, "Connected scene readback extent mismatch");
+    desc.Name = "Connected scene before UI composition";
+    desc.Usage = USAGE_STAGING; desc.BindFlags = BIND_NONE; desc.CPUAccessFlags = CPU_ACCESS_READ;
+    RefCntAutoPtr<ITexture> staging;
+    device->CreateTexture(desc, nullptr, &staging);
+    require(staging != nullptr, "Connected scene readback allocation failed");
+    context->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    CopyTextureAttribs copy{}; copy.pSrcTexture = target->GetTexture(); copy.pDstTexture = staging;
+    copy.SrcTextureTransitionMode = copy.DstTextureTransitionMode = RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    context->CopyTexture(copy); context->WaitForIdle();
+    MappedTextureSubresource mapped{};
+    context->MapTextureSubresource(staging, 0, 0, MAP_READ, MAP_FLAG_DO_NOT_WAIT, nullptr, mapped);
+    require(mapped.pData != nullptr, "Connected scene readback mapping failed");
+    std::vector<std::uint8_t> background(std::size_t(width) * height * 4);
+    std::ofstream image(std::filesystem::path(prefix + "-scene.ppm"), std::ios::binary);
+    image << "P6\n" << width << ' ' << height << "\n255\n";
+    for (unsigned y = 0; y < height; ++y) for (unsigned x = 0; x < width; ++x)
+    {
+        const auto* pixel = static_cast<const std::uint8_t*>(mapped.pData) + y * mapped.Stride + x * 4;
+        auto* rgba = background.data() + (std::size_t(y) * width + x) * 4;
+        rgba[0] = pixel[bgra ? 2 : 0]; rgba[1] = pixel[1];
+        rgba[2] = pixel[bgra ? 0 : 2]; rgba[3] = pixel[3];
+        image.write(reinterpret_cast<const char*>(rgba), 3);
+    }
+    context->UnmapTextureSubresource(staging, 0, 0);
+    require(image.good(), "Connected pre-UI scene artifact could not be saved");
+    return background;
+}
+
 unsigned captureNativeFrame(Diligent::IRenderDevice* dev, Diligent::IDeviceContext* ctx, Diligent::ITextureView* target,
-    unsigned width, unsigned height, float dpi, const std::vector<VSUIRenderer::Packet>& packets, const std::string& prefix)
+    unsigned width, unsigned height, float dpi, const std::vector<VSUIRenderer::Packet>& packets, const std::string& prefix, const std::vector<std::uint8_t>& background = {})
 {
     unsigned subpixel_bits = 0;
         using namespace Diligent;
@@ -146,7 +184,7 @@ unsigned captureNativeFrame(Diligent::IRenderDevice* dev, Diligent::IDeviceConte
         vkGetPhysicalDeviceProperties(native->GetVkPhysicalDevice(),&properties);
         subpixel_bits=properties.limits.subPixelPrecisionBits;
         require(subpixel_bits>=4 && subpixel_bits<=16,"Unsupported Vulkan subpixel precision");
-        const auto expected = vs_ui_expected_pixels(width, height, dpi, packets, subpixel_bits);
+        const auto expected = vs_ui_expected_pixels(width, height, dpi, packets, subpixel_bits, background);
         std::ofstream image(std::filesystem::path(prefix + ".ppm"), std::ios::binary);
         image << "P6\n" << width << ' ' << height << "\n255\n";
         std::ofstream reference(std::filesystem::path(prefix + "-expected.ppm"), std::ios::binary);
@@ -1606,10 +1644,19 @@ int VSVulkanDiagnostic::exitCode() const { return mImpl->failure.empty() && mImp
 void vs_native_replay_capture(VSVulkanContext& context, const std::string& path, std::shared_ptr<bool> done)
 {
     loadedLibraries();
-    context.setFrameObserver([path, done](auto* dev, auto* ctx, auto* target, auto width, auto height, auto dpi, const auto& packets)
+    const auto scene = std::make_shared<std::vector<std::uint8_t>>();
+    context.setSceneObserver([path, done, scene](auto* dev, auto* ctx, auto* target, auto width, auto height)
     {
         if (*done) return;
-        captureNativeFrame(dev, ctx, target, width, height, dpi, packets, path + "/session-chat");
+        *scene = captureNativeScene(dev, ctx, target, width, height, path + "/session-chat");
+    });
+    context.setFrameObserver([path, done, scene](auto* dev, auto* ctx, auto* target, auto width, auto height, auto dpi, const auto& packets)
+    {
+        if (*done) return;
+        require(scene->size() == std::size_t(width) * height * 4, "Connected UI oracle has no matching pre-UI scene");
+        // Only the pre-UI pass is an input. Independently rasterize every UI
+        // packet and compare the entire final RGBA frame, including blending.
+        captureNativeFrame(dev, ctx, target, width, height, dpi, packets, path + "/session-chat", *scene);
         *done = true;
     });
 }

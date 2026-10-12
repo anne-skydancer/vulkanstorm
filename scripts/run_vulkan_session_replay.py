@@ -631,8 +631,8 @@ def main():
     if not harness.get('passed') or not harness.get('presentation_qualified'):
         raise RuntimeError('Missing prerequisite native presentation evidence')
     directory = args.evidence.resolve(); directory.mkdir(parents=True, exist_ok=True)
-    for name in ('session-replay.xml', 'session-chat.ppm', 'session-chat-expected.ppm',
-                 'im/session-chat.ppm', 'im/session-chat-expected.ppm', 'results.json'):
+    for name in ('session-replay.xml', 'session-chat.ppm', 'session-chat-expected.ppm', 'session-chat-scene.ppm',
+                 'im/session-chat.ppm', 'im/session-chat-expected.ppm', 'im/session-chat-scene.ppm', 'results.json'):
         (directory / name).unlink(missing_ok=True)
     env = {key: value for key, value in os.environ.items() if not key.startswith('VS_VULKAN_DIAGNOSTIC')}
     env, isolated_profile = isolated_profile_environment(env, directory, windows)
@@ -683,7 +683,7 @@ def main():
             report['favorites_inventory_fetch'] = favorites_fetch_observed(server.requests)
             if not report['favorites_inventory_fetch']:
                 raise RuntimeError('Native favorites never fetched their real account descendants')
-            for suffix in ('', '-expected'):
+            for suffix in ('', '-expected', '-scene'):
                 if (directory / ('session-chat' + suffix + '.ppm')).stat().st_size < 640 * 480 * 3:
                     raise RuntimeError('Missing native chat readback')
                 if (directory / 'im' / ('session-chat' + suffix + '.ppm')).stat().st_size < 640 * 480 * 3:
@@ -699,6 +699,7 @@ def main():
                 if libraries.get(str(library.resolve())) != hashlib.sha256(library.read_bytes()).hexdigest():
                     raise RuntimeError('Viewer did not load the pinned ICD/validation library: ' + str(library))
             report['loaded_library_sha256'] = libraries
+            report['ui_oracle_background'] = 'Independent pre-UI scene readback; CPU UI composition, full RGBA comparison. World rendering parity is qualified separately.'
             profile_writes = [request.get('body', {}) for request in server.requests
                               if request.get('method') == 'PUT'
                               and request.get('path') == '/profile/10000000-0000-0000-0000-000000000001']

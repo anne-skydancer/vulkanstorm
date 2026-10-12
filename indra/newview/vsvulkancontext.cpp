@@ -152,6 +152,7 @@ struct VSVulkanContext::Impl
     std::string                                       adapter;
     LLSD renderer_info;
     FrameObserver observer;
+    SceneObserver sceneObserver;
 #if !LL_WINDOWS
     Display* display = nullptr; // Borrowed from the SDL window, including retirement.
 #endif
@@ -322,6 +323,7 @@ struct VSVulkanContext::Impl
             worldRenderer->draw(target,size.mX,size.mY,
                 VSWorldScene::cameraView(eye,camera.at,camera.up,size.mX,size.mY,distance),worldScene->packets(eye,distance,size.mY));
         }
+        if (sceneObserver) sceneObserver(device, context, target, size.mX, size.mY);
         resources->begin(size.mX, size.mY, dpi);
 #if VS_VULKAN_DIAGNOSTICS
         if (!vs_parity_scene_active())
@@ -362,6 +364,7 @@ const std::string& VSVulkanContext::adapter() const
 { return mImpl->adapter; }
 
 void VSVulkanContext::setFrameObserver(FrameObserver observer) { mImpl->observer = std::move(observer); }
+void VSVulkanContext::setSceneObserver(SceneObserver observer) { mImpl->sceneObserver = std::move(observer); }
 
 const Diligent::GraphicsAdapterInfo& VSVulkanContext::adapterInfo() const
 {

@@ -3,6 +3,7 @@
 #include "llviewerprecompiledheaders.h"
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 namespace
 {
 using Vertex = VSUIRenderer::Vertex;
@@ -16,7 +17,8 @@ bool top_left(const Vertex &a, const Vertex &b)
 }
 } // namespace
 std::vector<std::uint8_t> vs_ui_expected_pixels(unsigned width, unsigned height, float dpi,
-                                                const std::vector<VSUIRenderer::Packet> &packets, unsigned subpixel_bits)
+                                                const std::vector<VSUIRenderer::Packet> &packets, unsigned subpixel_bits,
+                                                const std::vector<std::uint8_t>& background)
 {
     std::vector<std::uint8_t> out(std::size_t(width) * height * 4);
     for (std::size_t i = 0; i < out.size(); i += 4)
@@ -25,6 +27,11 @@ std::vector<std::uint8_t> vs_ui_expected_pixels(unsigned width, unsigned height,
         out[i + 1] = 32;
         out[i + 2] = 48;
         out[i + 3] = 255;
+    }
+    if (!background.empty())
+    {
+        if (background.size() != out.size()) throw std::invalid_argument("UI oracle background extent mismatch");
+        out = background;
     }
     for (const auto &p : packets)
     {
