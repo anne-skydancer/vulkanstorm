@@ -10,6 +10,7 @@ from render_backend_selector_fixture import SelectorTests
 from test_vulkan_ui_oracle import OracleTest
 from native_statistics_fixture import NativeStatisticsTests
 from native_driver_version_fixture import DriverVersionTests
+from test_windows_dpi_client_extent import DpiClientExtentTest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from run_vulkan_viewer_diagnostic import assess, assess_startup, STAGES, skin_cases

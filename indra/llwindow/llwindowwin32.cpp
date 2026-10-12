@@ -3325,8 +3325,6 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
             lprc_new_scale = (LPRECT)l_param;
             S32 new_width = lprc_new_scale->right - lprc_new_scale->left;
             S32 new_height = lprc_new_scale->bottom - lprc_new_scale->top;
-            WINDOW_IMP_POST(window_imp->mCallbacks->handleDPIChanged(window_imp, new_scale, new_width, new_height));
-
             SetWindowPos(h_wnd,
                 HWND_TOP,
                 lprc_new_scale->left,
@@ -3334,6 +3332,18 @@ LRESULT CALLBACK LLWindowWin32::mainWindowProc(HWND h_wnd, UINT u_msg, WPARAM w_
                 new_width,
                 new_height,
                 SWP_NOZORDER | SWP_NOACTIVATE);
+
+            // The recommended rectangle includes the non-client borders. Input
+            // conversion and the Vulkan surface use the drawable client extent.
+            // Publish that extent after resizing so queued WM_SIZE/DPI callbacks
+            // agree even when their delivery order differs.
+            RECT client_rect;
+            if (GetClientRect(h_wnd, &client_rect))
+            {
+                const S32 client_width = client_rect.right - client_rect.left;
+                const S32 client_height = client_rect.bottom - client_rect.top;
+                WINDOW_IMP_POST(window_imp->mCallbacks->handleDPIChanged(window_imp, new_scale, client_width, client_height));
+            }
 
             return 0;
         }
