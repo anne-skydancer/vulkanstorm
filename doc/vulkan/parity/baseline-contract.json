@@ -2,7 +2,10 @@
   "schema": 1,
   "scene": "normal-startup-login-v1",
   "scope": "Initial normal viewer login frame; offline production world replay is a separate required R0 witness.",
-  "viewport": [1024, 768],
+  "viewport": [
+    1024,
+    768
+  ],
   "skin": "default",
   "theme": "",
   "language": "en",
@@ -44,5 +47,10 @@
     "repeated scene images and mismatch report",
     "fixed production-world assets/camera/settings/environment/clock/seed replay",
     "scene/service/packet/skinning/upload/draw/binding/presentation baseline metrics"
-  ]
+  ],
+  "world_fixture_oracle": {
+    "minimum_pixels_per_object": 32,
+    "projected_regions": "Red in right half, green in left half; middle vertical third.",
+    "tint_identity": "Dominant channel at least 40, greater than 1.25 times the other object color channel and more than 8 above blue. Allows reference color transforms; does not relax exact peer/repeatability comparisons."
+  }
 }

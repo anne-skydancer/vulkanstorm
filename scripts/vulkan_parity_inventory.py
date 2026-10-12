@@ -79,6 +79,42 @@ def inventory(root=ROOT):
             [control + ':' + handler], 'native settings/controller effect', 'R3',
             'Review reference callback ' + handler + '; saving a value is not applying its effect.')
 
+    # Resolve computed listener names as well as quoted registrations. Otherwise
+    # terrain asset/transform settings and the RLVa switch disappear from R0.
+    listener_body=code[code.index('void settings_setup_listeners()'):]
+    computed=[]
+    for call in re.findall(r'setting_setup_signal_listener\((.*?)\);',listener_body,re.S):
+        if re.match(r'\s*\w+,\s*"[^"]+"\s*,',call): continue
+        normalized=' '.join(call.split())
+        if normalized=='gSavedSettings, asset_setting_name, handleLocalTerrainChanged': computed.append('asset')
+        elif normalized=='gSavedSettings, transform_setting_name, handleLocalTerrainChanged': computed.append('transform')
+        elif normalized=='gSavedSettings, static_cast<std::string>(RlvSettingNames::Main), RlvSettings::onChangedSettingMain': computed.append('rlv')
+        else: raise ValueError('Unresolved settings listener: '+normalized)
+    settings={key.text for key in ET.parse(root/'indra/newview/app_settings/settings.xml').getroot().find('map').findall('key')}
+    if 'asset' in computed or 'transform' in computed:
+        terrain=(root/'indra/newview/llvlcomposition.h').read_text()
+        terrain=terrain[terrain.index('class LLTerrainMaterials'):]
+        count=int(re.search(r'ASSET_COUNT\s*=\s*(\d+)',terrain)[1])
+        suffixes=re.findall(r'"([^"]+)"',re.search(r'transform_suffixes\[\]\s*=\s*\{(.*?)\}',listener_body,re.S)[1])
+        names=[]
+        for index in range(1,count+1):
+            if 'asset' in computed: names.append('LocalTerrainAsset'+str(index))
+            if 'transform' in computed: names.extend('LocalTerrainTransform'+str(index)+suffix for suffix in suffixes)
+        for name in names:
+            if name not in settings: raise ValueError('Computed listener lacks its setting: '+name)
+            add('SETTING','gSavedSettings.'+name,name,[control+':handleLocalTerrainChanged',
+                'indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT'],
+                'native local terrain asset/transform controller','R3','Qualify the actual local terrain replacement/transform effect.')
+    if 'rlv' in computed:
+        definitions=(root/'indra/newview/rlvdefines.h').read_text()
+        names=set(re.findall(r'Main\s*(?:\[\])?\s*=\s*(?:make_string_view\()?"([^"]+)"',definitions))
+        if len(names)!=1: raise ValueError('Ambiguous RLVa main setting identity')
+        name=names.pop()
+        if name not in settings: raise ValueError('RLVa main setting is undeclared')
+        add('SETTING','gSavedSettings.'+name,name,[control+':RlvSettings::onChangedSettingMain',
+            'indra/newview/rlvdefines.h:RlvSettingNames::Main'],
+            'native shared RLVa service/settings controller','R9','Qualify restrictions, availability and native service effects.')
+
     # Ordinary XUI commit, enable, visible and validation callbacks across ALL skins.
     tracked = subprocess.check_output(['git', '-C', str(root), 'ls-files',
         'indra/newview/skins/**/*.xml'], text=True).splitlines()
