@@ -1,5 +1,5 @@
 {
-  "source_commit": "90072fa81d515d34fdf85fde09badde546a7c8cf",
+  "source_commit": "e538c000e2ae374204bdab83a037d372de90b778",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -28,7 +28,7 @@
       "record": "I02",
       "disposition": "mapped",
       "reason": "Constructor owns window thread, keyboard/dragdrop/icons and display policy; unconditional opengl32 load and switchContext require backend gate. OS input/affinity/display setup remains platform-owned. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa"
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
@@ -37,7 +37,7 @@
       "record": "I02",
       "disposition": "mapped",
       "reason": "close shuts GL and WGL before wakeAndDestroy of HWND thread, then resets gamma. Native path must release swapchain/submitted consumers before HWND destruction; ordinary size/visibility methods stay OS-owned. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa"
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
@@ -46,31 +46,31 @@
       "record": "I02",
       "disposition": "mapped",
       "reason": "switchContext creates dummy/WGL pixel-format/context, reprobes GL and recreates HWND on owned window thread. Replace native mode lifecycle while retaining fullscreen/input; recreateWindow waits promise before publishing handle. Shared contexts are GL-only upload infrastructure. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa"
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3959,
-      "end": 3980,
+      "start": 3969,
+      "end": 3990,
       "record": "I02",
       "disposition": "mapped",
       "reason": "SwapBuffers(mhDC) and Tracy GL collect are backend-specific presentation/profiling; Diligent Present plus backend-aware profiling replaces selected native path. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa"
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 4211,
-      "end": 4222,
+      "start": 4221,
+      "end": 4232,
       "record": "I02",
       "disposition": "mapped",
       "reason": "getPlatformWindow returns actual HWND, unlike SDL legacy handle; preserve owned lifetime and typed export. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate.",
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa"
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20"
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 2885,
       "end": 2887,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native UI lifecycle and skin review: VSUIContext owns the native image provider, UI root, widget defaults, colors, translations and CPU-backed fonts using borrowed viewer settings and LLDir skin/theme/language overlays. Reusable native UI sources build under USE_DILIGENTCORE independently of diagnostics. The staged runner requires every packaged skin/theme directory and checks selected skin/theme/language identity, XUI readback and input. LLFontVertexBuffer bypasses both GL display-list construction and replay while native publication owns text; ordinary GL caching is preserved. Win32 button-down uses its captured client coordinates rather than a later polled cursor. Windows RelWithDebInfo build/staging and 39 SwiftShader cases passed with zero validation errors. Earlier Linux XUI runs failed through the font GL display list; cross-platform runtime qualification of the correction remains pending. Normal native session wiring, required login/status/alerts/agreements and media dependencies, OS DPI/IME and full G-UI/G-RESOURCE closure remain open."
@@ -11975,36 +11975,36 @@
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3605,
-      "end": 3605,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "start": 3615,
+      "end": 3615,
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared Windows clipboard copy retries only transient ACCESS_DENIED/BUSY for at most8attempts/35ms, preserves other error results, logs exact Windows operation/error, encodes/allocates before replacing system contents and frees memory unless SetClipboardData transfers ownership. The actual inventory clipboard continues retaining identity only on successful system write. Compiled fault-injection exercises the actual source helper/body for transient and persistent contention, invalidhandle, allocation/lock/empty/set failures and exact successful Unicode data. Runtime Favorites context acceptance remains separate."
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3608,
-      "end": 3617,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "start": 3618,
+      "end": 3627,
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared Windows clipboard copy retries only transient ACCESS_DENIED/BUSY for at most8attempts/35ms, preserves other error results, logs exact Windows operation/error, encodes/allocates before replacing system contents and frees memory unless SetClipboardData transfers ownership. The actual inventory clipboard continues retaining identity only on successful system write. Compiled fault-injection exercises the actual source helper/body for transient and persistent contention, invalidhandle, allocation/lock/empty/set failures and exact successful Unicode data. Runtime Favorites context acceptance remains separate."
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3620,
-      "end": 3626,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "start": 3630,
+      "end": 3636,
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared Windows clipboard copy retries only transient ACCESS_DENIED/BUSY for at most8attempts/35ms, preserves other error results, logs exact Windows operation/error, encodes/allocates before replacing system contents and frees memory unless SetClipboardData transfers ownership. The actual inventory clipboard continues retaining identity only on successful system write. Compiled fault-injection exercises the actual source helper/body for transient and persistent contention, invalidhandle, allocation/lock/empty/set failures and exact successful Unicode data. Runtime Favorites context acceptance remains separate."
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3628,
-      "end": 3629,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "start": 3638,
+      "end": 3639,
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared Windows clipboard copy retries only transient ACCESS_DENIED/BUSY for at most8attempts/35ms, preserves other error results, logs exact Windows operation/error, encodes/allocates before replacing system contents and frees memory unless SetClipboardData transfers ownership. The actual inventory clipboard continues retaining identity only on successful system write. Compiled fault-injection exercises the actual source helper/body for transient and persistent contention, invalidhandle, allocation/lock/empty/set failures and exact successful Unicode data. Runtime Favorites context acceptance remains separate."
@@ -16430,36 +16430,36 @@
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3548,
-      "end": 3569,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "start": 3558,
+      "end": 3579,
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared Windows clipboard copy retries only transient ACCESS_DENIED/BUSY for at most8attempts/35ms, preserves other error results, logs exact Windows operation/error, encodes/allocates before replacing system contents and frees memory unless SetClipboardData transfers ownership. The actual inventory clipboard continues retaining identity only on successful system write. Compiled fault-injection exercises the actual source helper/body for transient and persistent contention, invalidhandle, allocation/lock/empty/set failures and exact successful Unicode data. Runtime Favorites context acceptance remains separate. Clipboard read and write now share the exact same bounded OpenClipboard retry policy (only ACCESS_DENIED/BUSY, eight attempts, seven 5ms delays). Failed reads preserve destination and OS ownership; GetClipboardData/GlobalLock errors are logged, and actual extracted read/write body fault injection verifies contention, fatal errors, missing formats, Unicode/CRLF, empty text and cleanup. This is source qualification and does not establish the precise cause of the earlier Context Paste runtime failure."
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3576,
-      "end": 3576,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "start": 3586,
+      "end": 3586,
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared Windows clipboard copy retries only transient ACCESS_DENIED/BUSY for at most8attempts/35ms, preserves other error results, logs exact Windows operation/error, encodes/allocates before replacing system contents and frees memory unless SetClipboardData transfers ownership. The actual inventory clipboard continues retaining identity only on successful system write. Compiled fault-injection exercises the actual source helper/body for transient and persistent contention, invalidhandle, allocation/lock/empty/set failures and exact successful Unicode data. Runtime Favorites context acceptance remains separate. Clipboard read and write now share the exact same bounded OpenClipboard retry policy (only ACCESS_DENIED/BUSY, eight attempts, seven 5ms delays). Failed reads preserve destination and OS ownership; GetClipboardData/GlobalLock errors are logged, and actual extracted read/write body fault injection verifies contention, fatal errors, missing formats, Unicode/CRLF, empty text and cleanup. This is source qualification and does not establish the precise cause of the earlier Context Paste runtime failure."
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3589,
-      "end": 3596,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "start": 3599,
+      "end": 3606,
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared Windows clipboard copy retries only transient ACCESS_DENIED/BUSY for at most8attempts/35ms, preserves other error results, logs exact Windows operation/error, encodes/allocates before replacing system contents and frees memory unless SetClipboardData transfers ownership. The actual inventory clipboard continues retaining identity only on successful system write. Compiled fault-injection exercises the actual source helper/body for transient and persistent contention, invalidhandle, allocation/lock/empty/set failures and exact successful Unicode data. Runtime Favorites context acceptance remains separate. Clipboard read and write now share the exact same bounded OpenClipboard retry policy (only ACCESS_DENIED/BUSY, eight attempts, seven 5ms delays). Failed reads preserve destination and OS ownership; GetClipboardData/GlobalLock errors are logged, and actual extracted read/write body fault injection verifies contention, fatal errors, missing formats, Unicode/CRLF, empty text and cleanup. This is source qualification and does not establish the precise cause of the earlier Context Paste runtime failure."
     },
     {
       "path": "indra/llwindow/llwindowwin32.cpp",
-      "start": 3618,
-      "end": 3618,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "start": 3628,
+      "end": 3628,
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared Windows clipboard copy retries only transient ACCESS_DENIED/BUSY for at most8attempts/35ms, preserves other error results, logs exact Windows operation/error, encodes/allocates before replacing system contents and frees memory unless SetClipboardData transfers ownership. The actual inventory clipboard continues retaining identity only on successful system write. Compiled fault-injection exercises the actual source helper/body for transient and persistent contention, invalidhandle, allocation/lock/empty/set failures and exact successful Unicode data. Runtime Favorites context acceptance remains separate. Clipboard read and write now share the exact same bounded OpenClipboard retry policy (only ACCESS_DENIED/BUSY, eight attempts, seven 5ms delays). Failed reads preserve destination and OS ownership; GetClipboardData/GlobalLock errors are logged, and actual extracted read/write body fault injection verifies contention, fatal errors, missing formats, Unicode/CRLF, empty text and cleanup. This is source qualification and does not establish the precise cause of the earlier Context Paste runtime failure."
@@ -16972,7 +16972,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 3093,
       "end": 3095,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native WM_MOUSEMOVE registers TME_LEAVE on the actual HWND; WM_MOUSELEAVE posts the owning viewer callback to the main thread. Native-only guards preserve legacy GL motion and focus behavior. Compiled real-branch tests require deferred delivery, correct tracking parameters and unchanged GL path; actual Win32 viewer OS-event qualification is separate."
@@ -16981,7 +16981,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 3109,
       "end": 3110,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native WM_MOUSEMOVE registers TME_LEAVE on the actual HWND; WM_MOUSELEAVE posts the owning viewer callback to the main thread. Native-only guards preserve legacy GL motion and focus behavior. Compiled real-branch tests require deferred delivery, correct tracking parameters and unchanged GL path; actual Win32 viewer OS-event qualification is separate."
@@ -16990,7 +16990,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 3152,
       "end": 3160,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native WM_MOUSEMOVE registers TME_LEAVE on the actual HWND; WM_MOUSELEAVE posts the owning viewer callback to the main thread. Native-only guards preserve legacy GL motion and focus behavior. Compiled real-branch tests require deferred delivery, correct tracking parameters and unchanged GL path; actual Win32 viewer OS-event qualification is separate."
@@ -16999,7 +16999,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 3096,
       "end": 3097,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native WM_MOUSEMOVE registers TME_LEAVE on the actual HWND; WM_MOUSELEAVE posts the owning viewer callback to the main thread. Native-only guards preserve legacy GL motion and focus behavior. Compiled real-branch tests require deferred delivery, correct tracking parameters and unchanged GL path; actual Win32 viewer OS-event qualification is separate. The posted departure retires cursor motion queued before it so gatherInput cannot reenter a departed UI; a later distinct move still reenters. The compiled regression exercises both orderings."
@@ -17008,7 +17008,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 3105,
       "end": 3105,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native WM_MOUSEMOVE registers TME_LEAVE on the actual HWND; WM_MOUSELEAVE posts the owning viewer callback to the main thread. Native-only guards preserve legacy GL motion and focus behavior. Compiled real-branch tests require deferred delivery, correct tracking parameters and unchanged GL path; actual Win32 viewer OS-event qualification is separate. The posted departure retires cursor motion queued before it so gatherInput cannot reenter a departed UI; a later distinct move still reenters. The compiled regression exercises both orderings."
@@ -17017,7 +17017,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 3107,
       "end": 3108,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native WM_MOUSEMOVE registers TME_LEAVE on the actual HWND; WM_MOUSELEAVE posts the owning viewer callback to the main thread. Native-only guards preserve legacy GL motion and focus behavior. Compiled real-branch tests require deferred delivery, correct tracking parameters and unchanged GL path; actual Win32 viewer OS-event qualification is separate. The posted departure retires cursor motion queued before it so gatherInput cannot reenter a departed UI; a later distinct move still reenters. The compiled regression exercises both orderings."
@@ -17044,7 +17044,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 2402,
       "end": 2402,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native WM_MOUSEMOVE registers TME_LEAVE on the actual HWND; WM_MOUSELEAVE posts the owning viewer callback to the main thread. Native-only guards preserve legacy GL motion and focus behavior. Compiled real-branch tests require deferred delivery, correct tracking parameters and unchanged GL path; actual Win32 viewer OS-event qualification is separate. The posted departure retires cursor motion queued before it so gatherInput cannot reenter a departed UI; a later distinct move still reenters. The compiled regression exercises both orderings. Native pending motion preserves same-coordinate reentry after leave while retaining one coalesced callback per frame and unchanged GL behavior."
@@ -17053,7 +17053,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 2409,
       "end": 2409,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native WM_MOUSEMOVE registers TME_LEAVE on the actual HWND; WM_MOUSELEAVE posts the owning viewer callback to the main thread. Native-only guards preserve legacy GL motion and focus behavior. Compiled real-branch tests require deferred delivery, correct tracking parameters and unchanged GL path; actual Win32 viewer OS-event qualification is separate. The posted departure retires cursor motion queued before it so gatherInput cannot reenter a departed UI; a later distinct move still reenters. The compiled regression exercises both orderings. Native pending motion preserves same-coordinate reentry after leave while retaining one coalesced callback per frame and unchanged GL behavior."
@@ -17062,7 +17062,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 3106,
       "end": 3106,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native WM_MOUSEMOVE registers TME_LEAVE on the actual HWND; WM_MOUSELEAVE posts the owning viewer callback to the main thread. Native-only guards preserve legacy GL motion and focus behavior. Compiled real-branch tests require deferred delivery, correct tracking parameters and unchanged GL path; actual Win32 viewer OS-event qualification is separate. The posted departure retires cursor motion queued before it so gatherInput cannot reenter a departed UI; a later distinct move still reenters. The compiled regression exercises both orderings. Native pending motion preserves same-coordinate reentry after leave while retaining one coalesced callback per frame and unchanged GL behavior."
@@ -17071,7 +17071,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 3170,
       "end": 3170,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Native WM_MOUSEMOVE registers TME_LEAVE on the actual HWND; WM_MOUSELEAVE posts the owning viewer callback to the main thread. Native-only guards preserve legacy GL motion and focus behavior. Compiled real-branch tests require deferred delivery, correct tracking parameters and unchanged GL path; actual Win32 viewer OS-event qualification is separate. The posted departure retires cursor motion queued before it so gatherInput cannot reenter a departed UI; a later distinct move still reenters. The compiled regression exercises both orderings. Native pending motion preserves same-coordinate reentry after leave while retaining one coalesced callback per frame and unchanged GL behavior."
@@ -17116,7 +17116,7 @@
       "path": "indra/llwindow/llwindowwin32.cpp",
       "start": 3098,
       "end": 3104,
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Reviewed isolated UI qualification: private Windows station and desktop, strict setup failure, bounded job-contained process capture and teardown, unchanged Linux Xvfb workflow. Shared native hover lifecycle retains pending motion before leave. Diagnostic injection never manipulates the physical pointer; runtime qualification remains separate."
@@ -24950,10 +24950,19 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Restore the deliberately injected 144-DPI system-scale fixture through the existing native DPI route before the full About floater controls test. UI preference reset alone left simulated system scale at 1.5 and clipped copy control in Windows CI. Preserves all control and pixel assertions; does not confer ordinary UI runtime acceptance before replay."
+    },
+    {
+      "path": "indra/llwindow/llwindowwin32.cpp",
+      "start": 3249,
+      "end": 3260,
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
+      "record": "I02",
+      "disposition": "mapped",
+      "reason": "Win32 WM_DPICHANGED publishes the drawable client extent only after applying the recommended outer-window rectangle. This keeps DPI and queued resize callbacks consistent with mouse coordinate conversion and Vulkan surface sizing. The extracted real handler fixture verifies border subtraction, asynchronous publication and no invented extent on GetClientRect failure. Runtime all-skin replay remains required; no full feature parity is conferred."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "c49e387fc71eb781423816a5727a3677461f0a11",
+    "previous_source_commit": "90072fa81d515d34fdf85fde09badde546a7c8cf",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Only hash-verified existing insertion-review witnesses replace invalid platform rows; reasons/range extents retained and unchanged text mapped. Changed blocks have explicit source dispositions. No platform/runtime certification."
   }
