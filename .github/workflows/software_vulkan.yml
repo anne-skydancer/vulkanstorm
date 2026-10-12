@@ -50,6 +50,8 @@ jobs:
       - run: python scripts/tests/test_world_scene_contracts.py
       - run: python scripts/tests/test_native_camera_transport.py
       - run: python scripts/tests/test_native_world_assets.py
+      - run: python scripts/vulkan_parity_inventory.py
+      - run: python scripts/tests/test_vulkan_parity_baseline.py
       - run: python scripts/tests/test_terrain_packet.py
       - run: python scripts/tests/test_experience_account_lifetime.py
       - run: python scripts/tests/test_event_notifier_account.py
@@ -261,6 +263,19 @@ jobs:
           grep -Fq 'vulkan_ci' .ci/audio/sinks.txt
           grep -Fq 'vulkan_ci.monitor' .ci/audio/sources.txt
           echo "PULSE_SERVER=$PULSE_SERVER" >> "$GITHUB_ENV"
+      - name: Build separate pinned software OpenGL reference
+        if: runner.os == 'Linux' && matrix.driver == 'lavapipe'
+        timeout-minutes: 30
+        shell: bash
+        run: python scripts/build_software_opengl.py --work-directory .ci/opengl-reference --jobs 3
+      - name: Record independent production viewer baselines
+        if: runner.os == 'Linux' && matrix.driver == 'lavapipe'
+        timeout-minutes: 8
+        shell: bash
+        run: |
+          xvfb-run -a -s '-screen 0 1024x768x24' python scripts/run_vulkan_parity_baseline.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --opengl-runtime .ci/opengl-reference/runtime.json --evidence .ci/parity-evidence
       - name: Native Vulkan presentation through the staged viewer
         shell: bash
         run: |
@@ -317,6 +332,9 @@ jobs:
             .ci/headless-evidence
             .ci/viewer-evidence
             .ci/session-evidence
+            .ci/parity-evidence
+            .ci/opengl-reference/runtime.json
+            .ci/opengl-reference/install/licenses
             .ci/audio/*.log
             .ci/audio/*.txt
             .ci/runtime/runtime.json

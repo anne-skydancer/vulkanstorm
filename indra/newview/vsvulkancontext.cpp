@@ -1,5 +1,8 @@
 // Native Vulkan ownership for the normal viewer window. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#if VS_VULKAN_DIAGNOSTICS
+#include "vsparitybaseline.h"
+#endif
 #include "vsvulkancontext.h"
 #include "llwindow.h"
 #include "llviewercontrol.h"
@@ -287,6 +290,9 @@ struct VSVulkanContext::Impl
         context->SetRenderTargets(1, &target, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         const float color[]{ 16.f / 255, 32.f / 255, 48.f / 255, 1 };
         context->ClearRenderTarget(target, color, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+#if VS_VULKAN_DIAGNOSTICS
+        vs_parity_baseline_before_render();
+#endif
         if (const auto session=VSNativeSession::active(); session && session->phase()==VSNativeSession::Phase::Connected)
         {
             const auto camera=session->cameraState();const LLVector3 eye=camera.center;
@@ -298,6 +304,9 @@ struct VSVulkanContext::Impl
         draw();
         auto packets = resources->finish();
         renderer->draw(target, size.mX, size.mY, dpi, packets);
+#if VS_VULKAN_DIAGNOSTICS
+        vs_parity_baseline_capture_vk(device,context,target,size.mX,size.mY);
+#endif
         if (observer) observer(device, context, target, size.mX, size.mY, dpi, packets);
         swapchain->Present(gSavedSettings.getBOOL("RenderVSyncEnable") ? 1 : 0);
         renderer->retire();

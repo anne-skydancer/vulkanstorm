@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_VULKAN_DIAGNOSTICS
+#include "vsparitybaseline.h"
+#endif
 #include "lldonotdisturbnotificationstorage.h"
 #include "llpersistentnotificationstorage.h"
 #if VS_NATIVE_VULKAN
@@ -1789,6 +1792,7 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
 bool LLAppViewer::frame()
 {
 #if VS_VULKAN_DIAGNOSTICS
+    vs_parity_baseline_frame_begin();
     if (mVulkanDiagnostic) return mVulkanDiagnostic->frame();
 #endif
     if (mNativeVulkanLogin) return frameNativeVulkanLogin();

@@ -61,6 +61,11 @@ remaining authorized work into permission handoffs.
 
 ## R0 — Acceptance inventory and baseline
 
+The [R0 inventory and evidence record](parity/README.md) links the generated
+acceptance ledger, baseline input/comparison contract, production capture path
+and current qualification limits. R0 remains open until its complete acceptance
+criteria below have evidence, regardless of individual tool/build successes.
+
 - Give every survey row, draw-pool/pass variant, rendering setting listener and
   ordinary UI/service route a stable acceptance ID. Record its reference symbol,
   native owner, dependencies, implementation state, evidence and remaining gap.

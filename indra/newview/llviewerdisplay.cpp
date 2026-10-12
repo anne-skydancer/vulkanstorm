@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_VULKAN_DIAGNOSTICS
+#include "vsparitybaseline.h"
+#endif
 
 #include "llviewerdisplay.h"
 
@@ -1597,6 +1600,9 @@ bool setup_hud_matrices(const LLRect& screen_region)
 
 void render_ui(F32 zoom_factor, int subfield)
 {
+#if VS_VULKAN_DIAGNOSTICS
+    if (!gSnapshot) vs_parity_baseline_before_render();
+#endif
     LLPerfStats::RecordSceneTime T ( LLPerfStats::StatType_t::RENDER_UI ); // render time capture - Primary UI stat can have HUD time overlap (TODO)
     LL_PROFILE_ZONE_SCOPED_CATEGORY_UI; //LL_RECORD_BLOCK_TIME(FTM_RENDER_UI);
     LL_PROFILE_GPU_ZONE("ui");
@@ -1700,6 +1706,9 @@ void swap()
     LL_PROFILE_GPU_ZONE("swap");
     if (gDisplaySwapBuffers)
     {
+#if VS_VULKAN_DIAGNOSTICS
+        vs_parity_baseline_capture_gl();
+#endif
         gViewerWindow->getWindow()->swapBuffers();
     }
     gDisplaySwapBuffers = true;
