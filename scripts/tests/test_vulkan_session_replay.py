@@ -19,6 +19,47 @@ import run_vulkan_session_replay as session_runner
 from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_linux_ci_debugger_preserves_exit_failure_and_process_deadline(self):
+        command = ['viewer', '--settings', 'ci.xml']
+        environment = {'GITHUB_ACTIONS': 'true'}
+        for code in (0, 139):
+            result = subprocess.CompletedProcess(command, code, stdout=b'native trace')
+            with patch.object(session_runner.platform, 'system', return_value='Linux'), \
+                    patch.object(session_runner.shutil, 'which', return_value='/usr/bin/gdb'), \
+                    patch.object(session_runner, 'run_viewer_process', return_value=result) as execute:
+                actual = session_runner.run_staged_viewer(command, Path('stage'), environment)
+                invocation = execute.call_args.args[0]
+                self.assertEqual(invocation[0], '/usr/bin/gdb')
+                self.assertIn('--return-child-result', invocation)
+                self.assertIn('thread apply all bt', invocation)
+                self.assertEqual(invocation[-len(command):], command)
+                self.assertEqual(execute.call_args.kwargs['timeout'], session_runner.PROCESS_REPLAY_SECONDS)
+                self.assertEqual(actual.returncode, code)
+                self.assertEqual(actual.native_debugger, 'gdb')
+        with patch.object(session_runner.platform, 'system', return_value='Linux'), \
+                patch.object(session_runner.shutil, 'which', return_value=None):
+            with self.assertRaisesRegex(RuntimeError, 'requires GDB'):
+                session_runner.run_staged_viewer(command, Path('stage'), environment)
+
+    def test_missing_ci_debugger_is_installed_once_before_skin_cases(self):
+        with patch.object(session_runner.platform, 'system', return_value='Linux'), \
+                patch.dict(session_runner.os.environ, {'GITHUB_ACTIONS': 'true'}), \
+                patch.object(session_runner.shutil, 'which', side_effect=[None, '/usr/bin/gdb']), \
+                patch.object(session_runner.subprocess, 'run') as install:
+            session_runner.prepare_native_debugger()
+            install.assert_called_once_with(
+                ['sudo', 'apt-get', '-o', 'Acquire::Retries=3', 'install', '-y', 'gdb'], check=True, timeout=120)
+
+    def test_first_skin_failure_and_incomplete_matrix_cannot_pass(self):
+        planned = {'default', 'firestorm'}
+        self.assertFalse(session_runner.skin_matrix_passed({'default': {'passed': True}}, planned))
+        self.assertFalse(session_runner.skin_matrix_passed(
+            {'default': {'passed': True}, 'firestorm': {'passed': False}}, planned))
+        self.assertFalse(session_runner.skin_matrix_passed(
+            {'default': {'passed': True}, 'unexpected': {'passed': True}}, planned))
+        self.assertTrue(session_runner.skin_matrix_passed(
+            {name: {'passed': True} for name in planned}, planned))
+
     def test_actual_script_notification_widget_admission(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / 'indra/newview/vsstartupui.cpp').read_text(encoding='utf-8')
