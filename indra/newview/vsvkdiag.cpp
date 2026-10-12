@@ -1438,7 +1438,17 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             // Restore space for the full shared floater after the small-window/DPI tests.
             gSavedSettings.setF32("UIScaleFactor", 1.f);
             require(window->setSize(LLCoordWindow(1280, 1024)), "Native About resize failed");
+            // The preceding DPI probe supplied 144 DPI. Restore its system-scale
+            // input too; resetting the UI preference alone retains that probe.
+#if LL_WINDOWS
+            const auto about_hwnd=static_cast<HWND>(window->getPlatformWindow());
+            RECT about_rect{100,100,1380,1124};
+            SendMessageW(about_hwnd,WM_DPICHANGED,MAKELONG(96,96),reinterpret_cast<LPARAM>(&about_rect));
+#else
+            require(startup_window->handleDPIChanged(window,1.f,1280,1024),"Native About DPI restoration failed");
+#endif
             window->gatherInput();
+            require(std::abs(startup_window->getDisplayScale().mV[VX]-1.f)<.01f,"Native About retained the diagnostic DPI scale");
             startup_window->drawNativeUI(); // Lay out the resized menu before its OS clicks.
             // Opening Viewer evaluates even hidden item enable callbacks. The native
             // text-only UI must support these without a scene snapshot container.
