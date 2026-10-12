@@ -77,6 +77,12 @@ class BaselineTest(unittest.TestCase):
         self.assertTrue(any('independent peer' in e for e in errors))
         self.assertTrue(any('source revisions' in e for e in errors))
 
+    def test_survey_reference_symbols_are_preserved(self):
+        ledger=json.loads((inventory.OUT/'acceptance-ledger.json').read_text())
+        row=next(r for r in ledger['entries'] if r['id']=='SURVEY.Standard-primitives-linksets')
+        self.assertIn('LLVolume::generate',row['reference_symbols'])
+        self.assertIn('LLVOVolume::updateGeometry',row['reference_seams'])
+
     def test_uniform_or_single_object_cannot_satisfy_world_oracle(self):
         with tempfile.TemporaryDirectory() as d:
             for color in ([100,100,100],[180,40,40],[40,180,40]):

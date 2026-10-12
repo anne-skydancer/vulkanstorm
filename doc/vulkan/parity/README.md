@@ -47,15 +47,19 @@ loopback UDP ObjectUpdate messages into the production native or OpenGL scene
 consumer and verifies both objects exist. The reference renders through
 `LLPipeline`/`display`; Vulkan renders through the existing world scene/context.
 This offline scheduler is not authenticated login or full connected UI evidence.
-Its frame clock, epoch clock, frame number and delta are fixed for rendering
+Its frame clock, epoch clock, frame number and delta are fixed through CPU object
+updates and rendering, with a separate bounded geometry creation budget,
 and restored before networking. Incoming pose/TE data and inputs are archived.
 
 `scripts/run_vulkan_parity_baseline.py` creates isolated profiles, rejects stale
 images, captures each peer backend independently, validates readback extents,
 checks repeatability, preserves mismatches and records staged asset/executable
-hashes and source/runtime metadata. No credential/token fields are exported.
+hashes and source/runtime metadata. A build-start/finish provenance record binds
+the executable hash to the committed source; the combined gate reopens readbacks,
+artifacts and staged assets and verifies their hashes. The world oracle requires
+both known tint regions, independently of draw counts or background variation. No credential/token fields are exported.
 Windows uses the existing private window-station launcher with no foreground
-fallback. Linux runs under Xvfb. Actual loaded Linux library paths are retained.
+fallback. Linux runs under Xvfb. Actual loaded module/library paths are retained on both platforms.
 
 The independent OpenGL reference uses llvmpipe built by
 `scripts/build_software_opengl.py` from the same checksum-pinned Mesa 25.2.4
