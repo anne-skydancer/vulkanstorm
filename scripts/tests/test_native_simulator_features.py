@@ -19,6 +19,79 @@ def method(source, signature):
 
 
 class NativeSimulatorFeaturesTest(unittest.TestCase):
+    def test_http_completions_execute_on_main_loop_and_reject_retired_owners(self):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        source = (ROOT / 'indra/newview/vsnativesession.cpp').read_text(encoding='utf-8')
+        queued = []
+        for signature in ('void VSNativeSession::seedCoro(',
+                          'void VSNativeSession::simulatorFeaturesCoro('):
+            definition = method(source, signature)
+            cursor = 0
+            while True:
+                start = definition.find('LL::WorkQueue::getInstance("mainloop")->post(', cursor)
+                if start < 0:
+                    break
+                end = definition.index('});', start) + 3
+                queued.append(definition[start:end])
+                cursor = end
+        self.assertEqual(len(queued), 3)
+        fixture = r'''
+#include <cassert>
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
+using U64=unsigned long long;
+struct LLSD{};
+namespace LLTrans { std::string getString(const char*) { return "timeout"; } }
+bool main_loop=false;
+namespace LL { struct WorkQueue {
+ std::vector<std::function<void()>> tasks;
+ static WorkQueue* getInstance(const char*) { static WorkQueue queue; return &queue; }
+ void post(std::function<void()> task) { tasks.push_back(task); }
+ void drain() { main_loop=true; auto work=std::move(tasks);tasks.clear();
+  for(auto& task:work) task(); main_loop=false; }
+}; }
+struct Session {
+ enum class Phase {Connecting,Connected,Logout};
+ bool mShutdown=false,mChangingRegion=false;
+ U64 mGeneration=1,mRegionEpoch=2;
+ Phase mPhase=Phase::Connecting;
+ std::function<void()> mCancelSeed,mCancelSimulatorFeatures;
+ int admitted=0,disconnected=0,features=0;
+ void capabilities(const LLSD&,U64,U64){assert(main_loop);++admitted;}
+ void disconnect(const std::string&){assert(main_loop);++disconnected;}
+ void applySimulatorFeatures(const LLSD&,U64,U64){assert(main_loop);++features;}
+};
+void enqueue(std::weak_ptr<Session> weak,U64 generation,U64 regionEpoch) {
+ LLSD result;
+COMPLETIONS
+}
+int main(){
+ auto queue=LL::WorkQueue::getInstance("mainloop");
+ auto owner=std::make_shared<Session>();
+ enqueue(owner,1,2);assert(owner->admitted==0&&owner->disconnected==0&&owner->features==0);
+ queue->drain();assert(owner->admitted==1&&owner->disconnected==1&&owner->features==1);
+ auto unchanged=[&]{assert(owner->admitted==1&&owner->disconnected==1&&owner->features==1);};
+ enqueue(owner,1,2);++owner->mGeneration;queue->drain();unchanged();
+ enqueue(owner,2,2);++owner->mRegionEpoch;queue->drain();unchanged();
+ enqueue(owner,2,3);owner->mShutdown=true;queue->drain();unchanged();
+ owner->mShutdown=false;owner->mPhase=Session::Phase::Logout;
+ enqueue(owner,2,3);queue->drain();unchanged();
+ enqueue(owner,2,3);owner.reset();queue->drain();
+}
+'''.replace('COMPLETIONS', '\n'.join(queued).replace('Phase::', 'Session::Phase::'))
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / 'capability_main_loop.cpp'
+            exe = cpp.with_suffix('.exe')
+            cpp.write_text(fixture, encoding='utf-8')
+            built = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(exe)],
+                                   capture_output=True, text=True, timeout=60)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            ran = subprocess.run([str(exe)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+
     def test_actual_shared_parser_has_no_native_scene_side_effects(self):
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)
