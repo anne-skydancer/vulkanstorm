@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_VULKAN_DIAGNOSTICS
+#include "vsparitybaseline.h"
+#endif
 
 #include "pipeline.h"
 
@@ -3021,6 +3024,9 @@ void LLPipeline::rebuildPriorityGroups()
 
 void LLPipeline::updateGeom(F32 max_dtime)
 {
+#if VS_VULKAN_DIAGNOSTICS
+    VSParityBaselineTimer parityTimer("geometry_update_cpu_ms");
+#endif
     LLTimer update_timer;
     LLPointer<LLDrawable> drawablep;
 
@@ -3308,6 +3314,9 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
 
 void LLPipeline::stateSort(LLCamera& camera, LLCullResult &result)
 {
+#if VS_VULKAN_DIAGNOSTICS
+    VSParityBaselineTimer parityTimer("packet_build_cpu_ms");
+#endif
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     LL_PROFILE_GPU_ZONE("stateSort");
 
@@ -3770,6 +3779,9 @@ void renderSoundHighlights(LLDrawable *drawablep)
 
 void LLPipeline::postSort(LLCamera &camera)
 {
+#if VS_VULKAN_DIAGNOSTICS
+    VSParityBaselineTimer parityTimer("packet_build_cpu_ms");
+#endif
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
 
     assertInitialized();

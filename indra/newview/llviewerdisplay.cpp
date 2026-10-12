@@ -163,14 +163,23 @@ std::string getProfileStatsFilename();
 
 void display_startup()
 {
+#if VS_VULKAN_DIAGNOSTICS
+    const bool parityCapture=std::getenv("VS_PARITY_BASELINE_DIRECTORY")!=nullptr;
+#else
+    const bool parityCapture=false;
+#endif
     if (   !gViewerWindow
-        || !gViewerWindow->getActive()
+        || (!gViewerWindow->getActive() && !parityCapture)
         || !gViewerWindow->getWindow()->getVisible()
         || gViewerWindow->getWindow()->getMinimized()
         || gNonInteractive)
     {
         return;
     }
+
+#if VS_VULKAN_DIAGNOSTICS
+    vs_parity_baseline_before_render();
+#endif
 
     gPipeline.updateGL();
 
@@ -215,7 +224,16 @@ void display_startup()
     LLGLState::checkStates();
 
     if (gViewerWindow && gViewerWindow->getWindow())
-    gViewerWindow->getWindow()->swapBuffers();
+    {
+#if VS_VULKAN_DIAGNOSTICS
+        vs_parity_baseline_capture_gl();
+        const auto start=std::chrono::steady_clock::now();
+#endif
+        gViewerWindow->getWindow()->swapBuffers();
+#if VS_VULKAN_DIAGNOSTICS
+        vs_parity_baseline_after_present(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count());
+#endif
+    }
 
     glClear(GL_DEPTH_BUFFER_BIT);
 }
@@ -533,7 +551,12 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
     // Don't draw if the window is hidden or minimized.
     // In fact, must explicitly check the minimized state before drawing.
     // Attempting to draw into a minimized window causes a GL error. JC
-    if (   !gViewerWindow->getActive()
+#if VS_VULKAN_DIAGNOSTICS
+    const bool parityBackground=std::getenv("VS_PARITY_BASELINE_DIRECTORY")!=nullptr;
+#else
+    const bool parityBackground=false;
+#endif
+    if (   (!gViewerWindow->getActive() && !parityBackground)
         || !gViewerWindow->getWindow()->getVisible()
         || gViewerWindow->getWindow()->getMinimized()
         || gNonInteractive)
@@ -1724,8 +1747,12 @@ void swap()
     {
 #if VS_VULKAN_DIAGNOSTICS
         vs_parity_baseline_capture_gl();
+        const auto parityPresentStart=std::chrono::steady_clock::now();
 #endif
         gViewerWindow->getWindow()->swapBuffers();
+#if VS_VULKAN_DIAGNOSTICS
+        vs_parity_baseline_after_present(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-parityPresentStart).count());
+#endif
     }
     gDisplaySwapBuffers = true;
 }

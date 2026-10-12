@@ -219,7 +219,8 @@ bool VSWorldAvatar::appearance(LLMessageSystem& msg)
     for (S32 i=0;i<count;++i)
     {
         while (param && param->getGroup()!=VISUAL_PARAM_GROUP_TWEAKABLE && param->getGroup()!=VISUAL_PARAM_GROUP_TRANSMIT_NOT_TWEAKABLE) param=a.getNextVisualParam();
-        if (!param) break;U8 value;msg.getU8("VisualParam","ParamValue",value,i);
+        if (!param) break;
+        U8 value;msg.getU8("VisualParam","ParamValue",value,i);
         params.emplace_back(param,U8_to_F32(value,param->getMinWeight(),param->getMaxWeight()));param=a.getNextVisualParam();
     }
     LLVector3 hover;

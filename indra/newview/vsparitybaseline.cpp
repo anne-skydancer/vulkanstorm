@@ -1,6 +1,7 @@
 // Capture normal startup frames independently on each peer backend. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsparitybaseline.h"
+#include "vsparityscene.h"
 #include "llappviewer.h"
 #include "llstartup.h"
 #include "llviewerwindow.h"
@@ -11,6 +12,7 @@
 #include "vsvulkancontext.h"
 #include "llframetimer.h"
 #include "llfocusmgr.h"
+#include "llvertexbuffer.h"
 #pragma push_macro("Bool")
 #pragma push_macro("False")
 #pragma push_macro("True")
@@ -27,6 +29,9 @@
 #pragma pop_macro("True")
 #pragma pop_macro("False")
 #pragma pop_macro("Bool")
+#if LL_WINDOWS
+#include <tlhelp32.h>
+#endif
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -40,16 +45,48 @@ const char* directory() { return std::getenv("VS_PARITY_BASELINE_DIRECTORY"); }
 unsigned frame=0;
 Clock::time_point begin,render;
 LLSD samples=LLSD::emptyArray();
+LLSD currentReport;
+bool capturedThisFrame=false;
+LLSD stageMetrics=LLSD::emptyMap();
+LLSD initializationMetrics=LLSD::emptyMap();
+std::array<U64,3> glCounters{};
+void observe(LLVertexBuffer::DiagnosticEvent event,U64 value)
+{ glCounters[static_cast<unsigned>(event)]+=value; }
 // Freeze only UI drawing. Network/initialization deadlines keep the live clock.
 // This does not claim fixed-clock world simulation or a global RNG override.
 struct UIClock : LLFrameTimer
 {
+    struct Snapshot { F64 elapsed,totalSeconds;U64 totalTime,delta;S32 count; };
     static double value() { return sFrameTime; }
     static void set(double value) { sFrameTime=value; }
+    static Snapshot freezeWorld()
+    {
+        Snapshot prior{sFrameTime,sTotalSeconds,sTotalTime,sFrameDeltaTime,sFrameCount};
+        sFrameTime=1000;sTotalSeconds=1700000000;sTotalTime=1700000000000000ULL;
+        sFrameDeltaTime=0;sFrameCount=60;return prior;
+    }
+    static void restoreWorld(const Snapshot& prior)
+    {
+        sFrameTime=prior.elapsed;sTotalSeconds=prior.totalSeconds;sTotalTime=prior.totalTime;
+        sFrameDeltaTime=prior.delta;sFrameCount=prior.count;
+    }
 };
+UIClock::Snapshot savedWorldClock{};
+U32 savedViewerCount=0;
+F32SecondsImplicit savedViewerTime,savedViewerInterval;
 double savedClock=0;
-bool frozen=false;
-void restoreClock() { if (frozen) { UIClock::set(savedClock);frozen=false; } }
+bool frozen=false,worldClock=false;
+bool marked=false;
+void restoreClock()
+{
+    if (frozen)
+    {
+        if (worldClock)
+        { UIClock::restoreWorld(savedWorldClock);gFrameCount=savedViewerCount;gFrameTimeSeconds=savedViewerTime;gFrameIntervalSeconds=savedViewerInterval; }
+        else UIClock::set(savedClock);
+        frozen=false;worldClock=false;
+    }
+}
 double milliseconds(Clock::time_point a,Clock::time_point b)
 { return std::chrono::duration<double,std::milli>(b-a).count(); }
 void save(const std::vector<U8>& rgb,unsigned width,unsigned height,const std::string& backend,Clock::time_point drawn)
@@ -67,13 +104,25 @@ void save(const std::vector<U8>& rgb,unsigned width,unsigned height,const std::s
     row["pre_render_cpu_ms"]=milliseconds(begin,render);
     row["render_submit_cpu_ms"]=milliseconds(render,drawn);
     row["capture_wait_and_io_ms"]=milliseconds(drawn,Clock::now());
+    row["stages"]=stageMetrics;
+    if (backend=="OpenGL")
+    {
+        row["counters"]["draw_calls"]=F64(glCounters[0]);
+        row["counters"]["vertex_index_upload_bytes"]=F64(glCounters[1]);
+        row["counters"]["vertex_buffer_bind_calls"]=F64(glCounters[2]);
+    }
     row["image"]=llformat("frame-%02d.ppm",index);
     samples.append(row);
+    capturedThisFrame=true;
     LLSD report;
-    report["scene"]="normal-startup-login-v1";
+    report["scene"]=vs_parity_scene_active()?"static-world-primitives-v1":"normal-startup-login-v1";
     report["backend"]=backend;report["frames"]=samples;
-    report["world_replay_qualified"]=false;
-    report["fixed_clock_qualified"]=false;
+    report["initialization_metrics"]=initializationMetrics;
+    report["world_replay_qualified"]=false; // Acceptance belongs to the independent runner.
+    report["fixed_clock_qualified"]=false; // Runner must verify identical scene inputs and repeated output.
+    report["fixed_world_clock_applied"]=vs_parity_scene_active();
+    report["static_world_fixture_active"]=vs_parity_scene_active();
+    if (vs_parity_scene_active()) report["effective_scene_inputs"]=vs_parity_scene_inputs();
     report["fixed_ui_draw_clock_seconds"]=1000.;
     report["gpu_timing_available"]=false;
     if (backend=="OpenGL")
@@ -83,9 +132,19 @@ void save(const std::vector<U8>& rgb,unsigned width,unsigned height,const std::s
         report["device"]["version"]=reinterpret_cast<const char*>(glGetString(GL_VERSION));
     }
     else report["device"]=gViewerWindow->nativeContext()->rendererInfo();
-    for (const char* name:{"SkinCurrent","SkinCurrentTheme","Language","UIScaleFactor","RenderBackend","RenderVSyncEnable"})
+    for (const char* name:{"SkinCurrent","SkinCurrentTheme","Language","UIScaleFactor","RenderBackend","RenderVSyncEnable","RenderDebugGLSession"})
         report["settings"][name]=gSavedSettings.getLLSD(name);
-#if !LL_WINDOWS
+#if LL_WINDOWS
+    std::ofstream libraryPaths(out/"loaded-library-paths.txt");
+    HANDLE snapshot=CreateToolhelp32Snapshot(TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32,GetCurrentProcessId());
+    if (snapshot==INVALID_HANDLE_VALUE) throw std::runtime_error("Cannot enumerate parity libraries");
+    MODULEENTRY32W module{};module.dwSize=sizeof(module);
+    if (!Module32FirstW(snapshot,&module))
+    { CloseHandle(snapshot);throw std::runtime_error("Cannot read parity libraries"); }
+    do { libraryPaths<<std::filesystem::path(module.szExePath).string()<<"\n"; } while (Module32NextW(snapshot,&module));
+    CloseHandle(snapshot);
+    if (!libraryPaths.good()) throw std::runtime_error("Cannot record parity libraries");
+#else
     std::ifstream maps("/proc/self/maps");
     std::ofstream libraryPaths(out/"loaded-library-paths.txt");
     libraryPaths<<maps.rdbuf();
@@ -94,20 +153,61 @@ void save(const std::vector<U8>& rgb,unsigned width,unsigned height,const std::s
     std::ofstream meta(out/"viewer.xml");
     LLSDSerialize::toPrettyXML(report,meta);
     if (!meta.good()) throw std::runtime_error("Cannot write production parity timings");
+    currentReport=report;
     if (samples.size()==5) LLAppViewer::instance()->forceQuit();
 }
 bool capture() { return directory() && frame>=180 && samples.size()<5; }
 }
 void vs_parity_baseline_frame_begin()
-{ if (directory()) { restoreClock();begin=Clock::now(); } }
+{
+    if (directory())
+    {
+        restoreClock();marked=false;capturedThisFrame=false;begin=Clock::now();glCounters={};stageMetrics=LLSD::emptyMap();
+        LLVertexBuffer::setDiagnosticObserver(observe);
+    }
+}
+void vs_parity_baseline_metrics(const LLSD& metrics)
+{
+    if (directory()) for (auto i=metrics.beginMap();i!=metrics.endMap();++i)
+    {
+        if (i->first.rfind("initial_",0)==0) initializationMetrics[i->first]=i->second;
+        else stageMetrics[i->first]=i->second;
+    }
+}
+VSParityBaselineTimer::VSParityBaselineTimer(const char* name):mName(directory()?name:nullptr)
+{ if (mName) mStart=Clock::now(); }
+VSParityBaselineTimer::~VSParityBaselineTimer()
+{ if (mName) stageMetrics[mName]=stageMetrics[mName].asReal()+milliseconds(mStart,Clock::now()); }
+void vs_parity_baseline_after_present(double duration)
+{
+    if (!directory() || !capturedThisFrame) return;
+    samples[samples.size()-1]["presentation_cpu_ms"]=duration;
+    samples[samples.size()-1]["observed_total_frame_cpu_ms"]=milliseconds(begin,Clock::now());
+    currentReport["frames"]=samples;
+    std::ofstream output(std::filesystem::path(directory())/"viewer.xml");
+    LLSDSerialize::toPrettyXML(currentReport,output);
+    if (!output.good()) throw std::runtime_error("Cannot preserve presentation timings");
+}
 void vs_parity_baseline_before_render()
 {
     if (!directory()) return;
-    render=Clock::now();
-    if (LLStartUp::getStartupState()==STATE_LOGIN_WAIT) ++frame;
-    if (frame>=180 && !frozen)
+    if (!marked)
     {
-        savedClock=UIClock::value();UIClock::set(1000.);frozen=true;
+        render=Clock::now();
+        if (vs_parity_scene_active() || LLStartUp::getStartupState()==STATE_LOGIN_WAIT) ++frame;
+        marked=true;
+    }
+    if ((vs_parity_scene_active() || frame>=180) && !frozen)
+    {
+        worldClock=vs_parity_scene_active();
+        if (worldClock)
+        {
+            savedWorldClock=UIClock::freezeWorld();savedViewerCount=gFrameCount;
+            savedViewerTime=gFrameTimeSeconds;savedViewerInterval=gFrameIntervalSeconds;
+            gFrameCount=60;gFrameTimeSeconds=1000;gFrameIntervalSeconds=0;
+        }
+        else { savedClock=UIClock::value();UIClock::set(1000.); }
+        frozen=true;
         gFocusMgr.setKeyboardFocus(nullptr); // Fixture camera/input state: no caret.
     }
 }

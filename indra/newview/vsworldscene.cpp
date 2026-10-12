@@ -169,7 +169,8 @@ struct VSWorldScene::Impl
             const unsigned level=unsigned(std::clamp((h-start)/range*4.f,0.f,3.f));const auto& texture=terrainTextures[level];
             if (texture.notNull()) LLUI::getUIImageByID(texture);
             VSWorldRenderer::Packet p;p.mesh=g.mesh;p.image=resources.image("remote:"+texture.asString());
-            if (!p.image) p.color={.32f,.42f,.18f,1};packets.push_back(std::move(p));
+            if (!p.image) p.color={.32f,.42f,.18f,1};
+            packets.push_back(std::move(p));
         }
         if (waterKnown)
         {

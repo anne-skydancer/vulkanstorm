@@ -7,6 +7,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import run_vulkan_parity_baseline as baseline
 import vulkan_parity_inventory as inventory
+import check_vulkan_parity_r0 as acceptance
 
 
 class BaselineTest(unittest.TestCase):
@@ -61,6 +62,42 @@ class BaselineTest(unittest.TestCase):
         self.assertEqual(contract['comparison']['masked_regions'],[])
         self.assertIn('not a sustained',contract['metrics']['statistics'])
         self.assertIn('fixed connected-world',contract['required_r0_witnesses'][3])
+
+    def test_discovery_cannot_accept_features_without_evidence(self):
+        ledger={'entries':[dict(id='UI.Sample',reference_sources=['sample.cpp'],native_owner='owner',
+            phase='R9',dependencies=['R1'],implementation='partial',remaining_gap='finish owner',
+            source_qualified=True,software_runtime_qualified=False,authenticated_runtime_qualified=False,evidence=[])]}
+        errors=acceptance.validate(ledger,{}, {})
+        self.assertIn('Feature accepted without evidence: UI.Sample',errors)
+        self.assertIn('No production world replay witness',errors)
+
+    def test_empty_or_failed_runtime_evidence_never_closes_r0(self):
+        errors=acceptance.validate({'entries':[]},{'cases':[{'backend':'OpenGL','passed':False}]},{})
+        self.assertTrue(errors)
+        self.assertTrue(any('independent peer' in e for e in errors))
+        self.assertTrue(any('source revisions' in e for e in errors))
+
+    def test_uniform_or_single_object_cannot_satisfy_world_oracle(self):
+        with tempfile.TemporaryDirectory() as d:
+            for color in ([100,100,100],[180,40,40],[40,180,40]):
+                path=self.image(d,'empty',color*1024,32,32)
+                with self.assertRaisesRegex(ValueError,'Missing visible'):
+                    baseline.fixture_pixels(path)
+            pixels=[]
+            for y in range(32):
+                for x in range(32): pixels.extend([40,180,40] if x<16 else [180,40,40])
+            self.assertGreater(min(baseline.fixture_pixels(self.image(d,'both',pixels,32,32)).values()),32)
+
+    def test_stale_claimed_artifact_fails_verification(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/'baseline-results.json'
+            errors=acceptance.verify_files({'artifact_sha256':{'missing.ppm':'claimed'}},path,'source')
+            self.assertTrue(any('Changed or missing' in e for e in errors))
+            self.assertTrue(any('Build/inventory' in e for e in errors))
+
+    def test_zero_or_negative_timing_is_not_gpu_measurement(self):
+        frame={n:0 for n in ('pre_render_cpu_ms','render_submit_cpu_ms','capture_wait_and_io_ms')}
+        self.assertIsNone(baseline.metrics([frame])['gpu_ms'])
 
 
 if __name__ == '__main__': unittest.main()

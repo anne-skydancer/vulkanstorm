@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "scene": "static-world-primitives-v1",
+  "seed": 1729,
+  "seed_scope": "Seeded arrival order of two actual ObjectUpdate blocks; no global RNG override.",
+  "camera": {"eye": [10, 20, 30], "at": [1, 0, 0], "up": [0, 0, 1], "fov_degrees": 60, "near": 0.1, "far": 32},
+  "environment": {"animated_environment_enabled": false, "fullbright_objects": true, "sky_water_passes_enabled": false},
+  "assets": {"geometry": "LLVolumeParams defaults through actual simulator message producer/consumer", "texture": "null/default TE", "materials": "fullbright red/green tint"},
+  "simulation": {"object_count": 2, "motion": "stationary", "avatars": 0, "physics_step_seconds": 0},
+  "qualification_scope": "Initial static primitive baseline on actual peer viewer renderers; does not establish authenticated login or full world feature parity."
+}

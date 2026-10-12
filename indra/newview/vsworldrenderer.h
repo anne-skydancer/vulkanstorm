@@ -33,6 +33,7 @@ public:
     {
         std::uint64_t draws=0,constantBuffersCreated=0,bindingsCreated=0;
         std::uint64_t meshUploads=0,meshUploadBytes=0;
+        std::uint64_t constantUploadBytes=0,resourceCommits=0;
         double cpuMilliseconds=0;
     };
     VSWorldRenderer(Diligent::IRenderDevice*, Diligent::IDeviceContext*);

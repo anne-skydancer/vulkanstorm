@@ -118,6 +118,7 @@ jobs:
             libsdl2-dev libx11-dev libx11-xcb-dev libxcb1-dev libxshmfence-dev xvfb xauth \
             libxcb-dri3-dev libxcb-present-dev libxcb-randr0-dev libxcb-sync-dev \
             libxcb-xfixes0-dev libxcb-shm0-dev \
+            libxcb-glx0-dev libxcb-shape0-dev libxdamage-dev libxxf86vm-dev \
             llvm-18-dev libclang-cpp18-dev libdrm-dev libelf-dev libexpat1-dev \
             libzstd-dev zlib1g-dev flex bison glslang-tools
           echo 'CC=gcc-14' >> "$GITHUB_ENV"
@@ -238,7 +239,9 @@ jobs:
             -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
             -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
             -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
+          python scripts/vulkan_parity_provenance.py begin '${{ matrix.viewer_directory }}'
           cmake --build '${{ matrix.viewer_directory }}' --config RelWithDebInfo --parallel 3
+          python scripts/vulkan_parity_provenance.py finish '${{ matrix.viewer_directory }}'
           python scripts/check_vulkan_ci_staging.py '${{ matrix.viewer_directory }}'
       - name: Provision headless audio for normal viewer startup
         if: runner.os == 'Linux'
@@ -270,12 +273,18 @@ jobs:
         run: python scripts/build_software_opengl.py --work-directory .ci/opengl-reference --jobs 3
       - name: Record independent production viewer baselines
         if: runner.os == 'Linux' && matrix.driver == 'lavapipe'
-        timeout-minutes: 8
+        timeout-minutes: 15
         shell: bash
         run: |
           xvfb-run -a -s '-screen 0 1024x768x24' python scripts/run_vulkan_parity_baseline.py \
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --opengl-runtime .ci/opengl-reference/runtime.json --evidence .ci/parity-evidence
+          xvfb-run -a -s '-screen 0 1024x768x24' python scripts/run_vulkan_parity_baseline.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --opengl-runtime .ci/opengl-reference/runtime.json --evidence .ci/world-parity-evidence --scene world
+          python scripts/check_vulkan_parity_r0.py \
+            --startup .ci/parity-evidence/baseline-results.json \
+            --world .ci/world-parity-evidence/baseline-results.json --output .ci/parity-evidence/r0-acceptance.json
       - name: Native Vulkan presentation through the staged viewer
         shell: bash
         run: |
@@ -333,6 +342,7 @@ jobs:
             .ci/viewer-evidence
             .ci/session-evidence
             .ci/parity-evidence
+            .ci/world-parity-evidence
             .ci/opengl-reference/runtime.json
             .ci/opengl-reference/install/licenses
             .ci/audio/*.log
