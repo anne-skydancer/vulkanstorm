@@ -1,5 +1,5 @@
 {
-  "source_commit": "90072fa81d515d34fdf85fde09badde546a7c8cf",
+  "source_commit": "e538c000e2ae374204bdab83a037d372de90b778",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -54,7 +54,7 @@
       ]
     },
     "indra/llwindow/llwindowwin32.cpp": {
-      "sha256": "52f6196379791612d6ae2997eec40ddc7f6a24f81e91c75dbeffc8604df078aa",
+      "sha256": "d1c996fc8d5b097885100f952da8941a404372385b66297ac1b9bce1f23a0a20",
       "anchors": [
         "LLWindowWin32::LLWindowWin32",
         "opengl32.dll",
