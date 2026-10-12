@@ -53,6 +53,23 @@ def fixture_pixels(path):
     return counts
 
 
+def verify_vulkan_driver(runtime, loaded_paths):
+    """Require this viewer to load the checksum-pinned ICD, not just a matching name."""
+    icd=Path(runtime['icd']).resolve()
+    library=Path(json.loads(icd.read_text())['ICD']['library_path'])
+    if not library.is_absolute(): library=icd.parent/library
+    library=library.resolve()
+    root=icd.parents[2]
+    if not library.is_relative_to(root): raise RuntimeError('Selected ICD is outside the staged runtime')
+    expected=runtime['staged_sha256'].get(library.relative_to(root).as_posix())
+    if not expected or hashlib.sha256(library.read_bytes()).hexdigest()!=expected:
+        raise RuntimeError('Selected Vulkan driver differs from its immutable runtime identity')
+    selected=str(library).casefold()
+    if not any(line.casefold()==selected or line.casefold().endswith(' '+selected)
+               for line in loaded_paths.splitlines()):
+        raise RuntimeError('Viewer did not load the selected pinned Vulkan driver')
+
+
 def metrics(frames):
     result = {}
     for name in ('pre_render_cpu_ms', 'render_submit_cpu_ms', 'capture_wait_and_io_ms'):
@@ -174,6 +191,7 @@ def main():
                 if expected not in card: raise RuntimeError('Unexpected software Vulkan device')
                 if re.search(r'Validation Error|SYNC-HAZARD|VUID-',log): raise RuntimeError('Vulkan validation failure')
                 paths=(directory/'loaded-library-paths.txt').read_text()
+                verify_vulkan_driver(runtime,paths)
                 if 'VkLayer_khronos_validation' not in paths or not viewer['device'].get('VALIDATION_ENABLED'):
                     raise RuntimeError('Required validation layer/configuration witness missing')
                 if 'VK_LAYER_KHRONOS_validation' not in log:
