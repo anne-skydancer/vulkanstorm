@@ -1,5 +1,5 @@
 {
-  "source_commit": "42ec604d46dae65854c27d87521cf44454b3e655",
+  "source_commit": "4737cb2705da118c15e5cdd5475b5bce0c693001",
   "tracked_source_paths_scanned": 27825,
   "candidate_files": 1766,
   "candidate_sites": 28759,
@@ -8,9 +8,9 @@
   "shader_registration_rows_verified": 690,
   "dispositions": {
     "mapped-gate": 498,
-    "mapped": 1297,
+    "mapped": 1298,
     "interface-only": 4272,
-    "mapped-boundary": 22391,
+    "mapped-boundary": 22390,
     "cpu-only": 4,
     "conditional": 4,
     "mapped-module": 225,
