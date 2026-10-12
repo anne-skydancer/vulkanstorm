@@ -10,6 +10,7 @@
 #include "llviewerobjectlist.h"
 #include "llviewercamera.h"
 #include "llviewerregion.h"
+#include "llregionhandle.h"
 #include "llworld.h"
 #include "llagent.h"
 #include "llagentcamera.h"
