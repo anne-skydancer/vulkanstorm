@@ -694,6 +694,11 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 // <FS:CR> Aurora sim
 
     gPipeline.mBackfaceCull = true;
+#if VS_VULKAN_DIAGNOSTICS
+    // The controlled replay owns the frame number for simulation and drawing.
+    // Ordinary display accounting must not advance its fixed render clock.
+    if (!vs_parity_scene_active())
+#endif
     gFrameCount++;
     gRecentFrameCount++;
     if (gFocusMgr.getAppHasFocus())
