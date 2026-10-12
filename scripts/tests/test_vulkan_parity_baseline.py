@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import run_vulkan_parity_baseline as baseline
 import vulkan_parity_inventory as inventory
@@ -11,6 +12,11 @@ import check_vulkan_parity_r0 as acceptance
 
 
 class BaselineTest(unittest.TestCase):
+    def test_actual_llsd_render_clock_real_values_are_numeric(self):
+        clock=baseline.read_llsd(ET.fromstring('<llsd><map><key>elapsed_seconds</key><real>1000</real><key>epoch_seconds</key><real>1700000000</real><key>frame</key><integer>60</integer><key>motion_delta_seconds</key><real>0</real></map></llsd>'))
+        self.assertEqual(clock,dict(elapsed_seconds=1000,epoch_seconds=1700000000,frame=60,motion_delta_seconds=0))
+        self.assertIsInstance(clock['motion_delta_seconds'],float)
+
     def image(self, directory, name, pixels, width=2, height=1):
         path = Path(directory)/name
         path.write_bytes(f'P6\n{width} {height}\n255\n'.encode()+bytes(pixels))
