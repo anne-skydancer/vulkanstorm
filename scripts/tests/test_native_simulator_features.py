@@ -19,6 +19,55 @@ def method(source, signature):
 
 
 class NativeSimulatorFeaturesTest(unittest.TestCase):
+    def test_inventory_fetch_starts_before_connected_ui_and_not_on_region_change(self):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        source = (ROOT / 'indra/newview/vsnativesession.cpp').read_text(encoding='utf-8')
+        connected = method(source, 'void VSNativeSession::connected()')
+        prefix = connected.split('LLStartUp::initExperiences();', 1)[0] + '}'
+        fixture = r'''
+#include <cassert>
+struct Host {int id=0;bool isOk()const{return id!=0;}
+ bool operator!=(const Host& h)const{return id!=h.id;}};
+using LLHost=Host;
+struct Message {struct Circuit {void removeCircuitData(Host){}} mCircuitInfo;
+ void disableCircuit(Host){}};
+Message* gMessageSystem=nullptr;
+struct Agent {int getPositionGlobal(){return 0;}} gAgent;
+struct LLTeleportHistory {static LLTeleportHistory& instance(){static LLTeleportHistory h;return h;}
+ void updateNativeLocation(int){}};
+double now(){return 5;}
+struct LLInventoryModelBackgroundFetch {
+ int starts=0;static LLInventoryModelBackgroundFetch& instance(){static LLInventoryModelBackgroundFetch f;return f;}
+ void start(){++starts;}
+};
+struct VSNativeSession {
+ enum class Phase {Connecting,Connected,Logout};Phase mPhase=Phase::Connecting;
+ bool mChangingRegion=false,mHandshake=false,mMovement=false,mSeedReady=false,mCircuitAck=false;
+ double mNavigationDeadline=0,mDeadline=0;Host mPreviousHost,mHost;
+ void requestParcel(){}void connected();
+};
+CONNECTED
+int main(){
+ auto& fetch=LLInventoryModelBackgroundFetch::instance();VSNativeSession s;
+ s.connected();assert(fetch.starts==0);
+ s.mHandshake=s.mMovement=s.mCircuitAck=true;s.connected();assert(fetch.starts==0);
+ s.mSeedReady=true;s.connected();assert(fetch.starts==1&&s.mPhase==VSNativeSession::Phase::Connected);
+ s.connected();assert(fetch.starts==1);
+ s.mChangingRegion=true;s.connected();assert(fetch.starts==1&&!s.mChangingRegion);
+ s.mPhase=VSNativeSession::Phase::Logout;s.connected();assert(fetch.starts==1);
+}
+'''.replace('CONNECTED', prefix)
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / 'inventory_start.cpp'
+            exe = Path(directory) / 'inventory_start.exe'
+            cpp.write_text(fixture, encoding='utf-8')
+            built = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(exe)],
+                                   capture_output=True, text=True, timeout=60)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            ran = subprocess.run([str(exe)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+
     def test_http_completions_execute_on_main_loop_and_reject_retired_owners(self):
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)

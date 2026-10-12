@@ -1216,6 +1216,9 @@ void VSNativeSession::connected()
         return;
     }
     mPhase = Phase::Connected; mDeadline = now() + 1;
+    // Filtered inventory tabs require the initial recursive account fetch,
+    // just as they do after the ordinary inventory startup stages.
+    LLInventoryModelBackgroundFetch::instance().start();
     LLStartUp::initExperiences();
     gAgentMovementCompleted = true;
     LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
