@@ -23,6 +23,8 @@ public:
     bool               present(float dpi, const std::function<void()>& draw);
     using FrameObserver = std::function<void(Diligent::IRenderDevice*, Diligent::IDeviceContext*, Diligent::ITextureView*, unsigned, unsigned, float, const std::vector<VSUIRenderer::Packet>&)>;
     void setFrameObserver(FrameObserver);
+    using SceneObserver = std::function<void(Diligent::IRenderDevice*, Diligent::IDeviceContext*, Diligent::ITextureView*, unsigned, unsigned)>;
+    void setSceneObserver(SceneObserver);
     void               wait();
     // Cached facts from the selected device; safe for About/crash reports.
     LLSD rendererInfo() const;

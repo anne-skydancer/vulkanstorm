@@ -410,6 +410,22 @@ int main() {
     pixels=vs_ui_expected_pixels(4,4,1,{packet});assert(pixel(0,0,0)==16);
     packet.bounds={0,-.5f,1,.500001f};
     pixels=vs_ui_expected_pixels(4,4,1,{packet},8);assert(pixel(0,0,0)==16);
+    // A nonuniform world pass is an input to the UI oracle, never its final output.
+    std::vector<std::uint8_t> scene(4*4*4);
+    for(unsigned y=0;y<4;++y) for(unsigned x=0;x<4;++x) {
+        const auto offset=(y*4+x)*4;
+        scene[offset]=40+x;scene[offset+1]=100+y;scene[offset+2]=160;scene[offset+3]=200;
+    }
+    assert(vs_ui_expected_pixels(4,4,1,{},8,scene)==scene);
+    packet.bounds={0,0,4,4};packet.clip={1,1,3,3};
+    pixels=vs_ui_expected_pixels(4,4,1,{packet},8,scene);
+    assert(pixel(0,0,0)==40 && pixel(3,3,1)==103 && pixel(0,3,3)==200);
+    assert(pixel(1,1,0)==148 && pixel(1,1,1)==50 && pixel(1,1,2)==80 && pixel(1,1,3)==228);
+    assert(scene[(1*4+1)*4]==41); // The captured input remains immutable.
+    bool rejected=false;
+    try { vs_ui_expected_pixels(4,4,1,{packet},8,{1,2,3,4}); }
+    catch(const std::invalid_argument&) { rejected=true; }
+    assert(rejected);
 }
 '''
         with tempfile.TemporaryDirectory() as temp:
