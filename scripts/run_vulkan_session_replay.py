@@ -149,7 +149,7 @@ def favorites_fetch_observed(requests):
 def run_staged_viewer(command, stage, env):
     """A finite process deadline kills a stalled viewer and preserves its output."""
     debugger = None
-    if platform.system() == 'Linux' and env.get('GITHUB_ACTIONS') == 'true':
+    if platform.system() == 'Linux' and env.get('VS_VULKAN_REPLAY_GDB') == '1':
         debugger = shutil.which('gdb')
         if not debugger:
             raise RuntimeError('Linux connected CI requires GDB for native crash backtraces')
@@ -164,7 +164,9 @@ def run_staged_viewer(command, stage, env):
 
 def prepare_native_debugger():
     """Install the CI-only debugger once, before spawning the skin cases."""
-    if platform.system() == 'Linux' and os.environ.get('GITHUB_ACTIONS') == 'true' and not shutil.which('gdb'):
+    if platform.system() == 'Linux' and os.environ.get('VS_VULKAN_REPLAY_GDB') == '1' and not shutil.which('gdb'):
+        if os.environ.get('GITHUB_ACTIONS') != 'true':
+            raise RuntimeError('Install GDB before requesting a local native backtrace')
         subprocess.run(['sudo', 'apt-get', '-o', 'Acquire::Retries=3', 'install', '-y', 'gdb'],
                        check=True, timeout=120)
         if not shutil.which('gdb'):
@@ -604,10 +606,15 @@ def main():
     parser.add_argument('--ui-scale', type=float, default=1.0,
                         help='Viewer UI scale used for connected skin/readback qualification')
     parser.add_argument('--all-skins', action='store_true', help='Run the complete connected replay for every packaged skin/theme and German overlay')
+    parser.add_argument('--native-backtrace', action='store_true', help='Run Linux replay under GDB; ordinary qualification runs directly')
     args = parser.parse_args()
     if not .75 <= args.ui_scale <= 4:
         parser.error('--ui-scale must be between 0.75 and 4')
     windows = platform.system() == 'Windows'
+    if args.native_backtrace:
+        if platform.system() != 'Linux':
+            parser.error('--native-backtrace is supported on Linux only')
+        os.environ['VS_VULKAN_REPLAY_GDB'] = '1'
     prepare_native_debugger()
     build = args.build_directory.resolve()
     stage = build / 'newview' / ('RelWithDebInfo' if windows else 'packaged')
@@ -627,6 +634,8 @@ def main():
                        '--ui-scale', str(ui_scale)]
             if args.register_windows_manifests:
                 command.append('--register-windows-manifests')
+            if args.native_backtrace:
+                command.append('--native-backtrace')
             try:
                 code = subprocess.run(command, timeout=CASE_REPLAY_SECONDS).returncode
                 record = json.loads((child / 'results.json').read_text())

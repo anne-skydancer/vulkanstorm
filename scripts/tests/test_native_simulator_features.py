@@ -19,6 +19,78 @@ def method(source, signature):
 
 
 class NativeSimulatorFeaturesTest(unittest.TestCase):
+    def test_native_rlva_cleanup_precedes_account_and_fiber_teardown(self):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        rlv = (ROOT / 'indra/newview/rlvhandler.cpp').read_text(encoding='utf-8')
+        app = (ROOT / 'indra/newview/llappviewer.cpp').read_text(encoding='utf-8')
+        prefix = method(app, 'bool LLAppViewer::cleanupNativeVulkanLogin()').split(
+            'LLStartUp::cleanupNameCache();', 1)[0] + 'return true;}'
+        fixture = r'''
+#include <algorithm>
+#include <cassert>
+#include <functional>
+#include <map>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+#define VS_NATIVE_VULKAN 1
+#define RLV_ASSERT(value) assert(value)
+#define SUBSYSTEM_CLEANUP(type) type::cleanupClass()
+bool fibers_alive=true,account_alive=true,gDoDisconnect=false;
+int status_queries=0,handler_deletes=0,listener_removals=0,observer_removals=0;
+struct LLApp {static bool isExiting(){assert(fibers_alive);++status_queries;return true;}};
+struct LLUUID {int id=0;bool notNull()const{return id!=0;}
+ bool operator<(const LLUUID& other)const{return id<other.id;}static const LLUUID null;};
+const LLUUID LLUUID::null{};
+namespace LLStringUtil {const std::string null;}
+using uuid_vec_t=std::vector<LLUUID>;
+struct Agent {void removeListener(void*){assert(account_alive);++listener_removals;}} gAgent;
+struct LLGroupMgr {static bool instanceExists(){return true;}
+ static LLGroupMgr& instance(){static LLGroupMgr mgr;return mgr;}
+ void removeObserver(LLUUID,void*){assert(account_alive);++observer_removals;}};
+struct RlvExtCommandHandler {~RlvExtCommandHandler(){assert(account_alive);++handler_deletes;}};
+using S16=short;constexpr int RLV_BHVR_COUNT=1;
+struct RlvHandler {
+ bool m_fEnabled=true;std::map<LLUUID,int> m_Objects{{LLUUID{1},1}};
+ S16 m_Behaviours[RLV_BHVR_COUNT]{1};
+ std::vector<int> m_Exceptions{1},m_CurCommandStack,m_CurObjectStack,m_Retained{1};
+ std::pair<LLUUID,std::string> m_PendingGroupChange{LLUUID{1},"group"};
+ std::vector<RlvExtCommandHandler*> m_CommandHandlers{new RlvExtCommandHandler};
+ using rlv_object_map_t=decltype(m_Objects);
+ void processCommand(LLUUID id,const char*,bool){assert(account_alive);m_Objects.erase(id);
+  m_Exceptions.clear();m_Behaviours[0]=0;}
+ void cleanup();~RlvHandler();static void cleanupClass();
+} gRlvHandler;
+RLV_DEFINITIONS
+struct Session {void shutdown(){assert(!gRlvHandler.m_fEnabled&&handler_deletes==1);
+ account_alive=false;}};
+struct Message {void setMessageAdmission(std::function<void()>){}};
+Message* gMessageSystem=nullptr;
+struct LLAppViewer {std::shared_ptr<Session> mNativeSession=std::make_shared<Session>();
+ bool cleanupNativeVulkanLogin();};
+NATIVE_PREFIX
+int main(){
+ LLAppViewer app;assert(app.cleanupNativeVulkanLogin());
+ assert(!gRlvHandler.m_fEnabled&&listener_removals==1&&observer_removals==1&&status_queries==1);
+ fibers_alive=false;
+ gRlvHandler.cleanup();assert(status_queries==1&&handler_deletes==1);
+ // The actual global destructor below must also leave the retired fiber mutex alone.
+}
+'''.replace('RLV_DEFINITIONS', '\n'.join(method(rlv, signature) for signature in (
+            'void RlvHandler::cleanup()', 'RlvHandler::~RlvHandler()', 'void RlvHandler::cleanupClass()'))).replace(
+                'NATIVE_PREFIX', prefix)
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / 'native_rlva_teardown.cpp'
+            exe = Path(directory) / 'native_rlva_teardown.exe'
+            cpp.write_text(fixture, encoding='utf-8')
+            built = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(exe)],
+                                   capture_output=True, text=True, timeout=60)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            ran = subprocess.run([str(exe)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+
     def test_inventory_fetch_starts_before_connected_ui_and_not_on_region_change(self):
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)

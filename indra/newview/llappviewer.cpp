@@ -1725,6 +1725,9 @@ bool LLAppViewer::frameNativeVulkanLogin()
 
 bool LLAppViewer::cleanupNativeVulkanLogin()
 {
+    // Retire RLVa while account services and the application fiber runtime are
+    // alive. Its global destructor must not query LLApp during static teardown.
+    SUBSYSTEM_CLEANUP(RlvHandler);
 #if VS_NATIVE_VULKAN
     if (mNativeSession) mNativeSession->shutdown();
     if (gMessageSystem) gMessageSystem->setMessageAdmission({});
