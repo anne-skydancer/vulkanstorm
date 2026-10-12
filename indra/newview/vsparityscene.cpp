@@ -19,6 +19,8 @@
 #include "llavatarappearance.h"
 #include "llviewerobject.h"
 #include "llpostprocess.h"
+#include "lltoolmgr.h"
+#include "llenvironment.h"
 #include "pipeline.h"
 #include "fspanellogin.h"
 #include "llprogressview.h"
@@ -113,10 +115,16 @@ void seed()
         LLPostProcess::initClass();
         LLAvatarAppearance::initClass("avatar_lad.xml","avatar_skeleton.xml");
         LLViewerObject::initVOClasses();
+        // Region-change observers own world controls and the active toolset.
+        // Follow ordinary WORLD_INIT ordering before publishing the first region.
+        LLToolMgr::getInstance()->initTools();
+        gViewerWindow->initWorldUI();
         if (!LLWorld::instanceExists()) LLWorld::createInstance();
+        gAgent.initOriginGlobal(from_region_handle(handle));
         auto* region=LLWorld::getInstance()->addRegion(handle,fixtureHost,256,256);
         if (!region) throw std::runtime_error("Cannot create reference fixture region");
         gAgent.setRegion(region);gAgent.setPositionAgent(eye);
+        LLEnvironment::getInstance()->initSingleton();
         gSky.init();
         gPipeline.clearAllRenderTypes();
         gPipeline.setRenderTypeMask(LLPipeline::RENDER_TYPE_VOLUME,LLPipeline::RENDER_TYPE_SIMPLE,LLPipeline::RENDER_TYPE_FULLBRIGHT,

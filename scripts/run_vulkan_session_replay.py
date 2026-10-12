@@ -97,6 +97,8 @@ def read_llsd(element):
         return element.text in ('true', '1')
     if element.tag == 'integer':
         return int(element.text or '0')
+    if element.tag == 'real':
+        return float(element.text or '0')
     return element.text or ''
 
 
