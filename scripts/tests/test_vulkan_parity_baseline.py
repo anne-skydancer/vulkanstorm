@@ -83,6 +83,17 @@ class BaselineTest(unittest.TestCase):
         self.assertIn('LLVolume::generate',row['reference_symbols'])
         self.assertIn('LLVOVolume::updateGeometry',row['reference_seams'])
 
+    def test_app_routes_and_direct_ui_observers_are_inventoried(self):
+        rows=json.loads((inventory.OUT/'acceptance-ledger.json').read_text())['entries']
+        ids={r['id'] for r in rows}
+        for route in ('chat','objectim','appearance','wear_folder','experience','gridmanager','keybinding'):
+            self.assertIn('APP_COMMAND.'+route,ids)
+        self.assertNotIn('APP_COMMAND.foo',ids) # Header comment, not a registration.
+        observers=[r for r in rows if r['category']=='SETTING' and any('fsfloatercontacts.cpp' in ref for ref in r['reference_sources'])]
+        self.assertGreater(len(observers),2)
+        self.assertTrue(any(r['category']=='UI_SETTING' for r in rows))
+        self.assertEqual(inventory.without_comments('"https://example.com" // omitted'), '"https://example.com" ')
+
     def test_computed_setting_registrations_are_not_omitted(self):
         rows=json.loads((inventory.OUT/'acceptance-ledger.json').read_text())['entries']
         ids={r['id'] for r in rows}
