@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
+from test_gl_probe_binding import ProbeBindingTest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import run_vulkan_parity_baseline as baseline
 import vulkan_parity_inventory as inventory
