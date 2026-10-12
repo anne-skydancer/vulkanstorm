@@ -101,9 +101,10 @@ int main(int argc,char** argv) {
     }
     int count=0;std::ifstream(counter)>>count;std::ofstream(counter)<<++count;
     const std::string mode=std::getenv("PREBUILT_TEST_MODE");
-    if(mode=="success" || (mode=="transient" && count==2)) return 0;
+    if(mode=="success" || ((mode=="transient" || mode=="xxhash") && count==2)) return 0;
     if(mode=="auth") std::cerr<<"error: HTTP Error 401: Unauthorized\n";
     else std::cerr<<"error: HTTP Error 503: Service unavailable\n";
+    if(mode=="xxhash") std::cerr<<"ERROR: Failed to download package xxhash from https://github.com/secondlife/3p-xxhash/xxhash.tar.zst\n";
     if(mode=="checksum") std::cerr<<"ERROR: checksum mismatch\n";
     if(mode=="unpack") std::cerr<<"ERROR: failed to unpack package\n";
     return 1;
@@ -120,6 +121,7 @@ int main(int argc,char** argv) {
             cases = [('success', True, True, True, 1, []),
                      ('transient', True, True, True, 2, ['10']),
                      ('persistent', True, True, False, 3, ['10', '20']),
+                     ('xxhash', True, True, True, 2, ['10']),
                      ('auth', True, True, False, 1, []),
                      ('checksum', True, True, False, 1, []),
                      ('unpack', True, True, False, 1, []),
