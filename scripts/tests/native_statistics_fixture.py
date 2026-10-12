@@ -1,6 +1,7 @@
 """Compiled native CPU statistics and chart geometry ownership regressions."""
 from pathlib import Path
 import shutil
+import re
 import subprocess
 import tempfile
 import unittest
@@ -22,6 +23,57 @@ class NativeStatisticsTests(unittest.TestCase):
             self.assertEqual(built.returncode,0,built.stdout+built.stderr)
             run=subprocess.run([str(exe)],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+
+    def test_statistics_container_admission_and_native_draw(self):
+        source=(ROOT/'indra/newview/vsstartupui.cpp').read_text(encoding='utf-8')
+        start=source.index('const bool admitted =')
+        predicate=source[start:source.index(';',start)+1]
+        names=set(re.findall(r'typeid\((\w+(?:::\w+)*)\)',predicate))
+        helpers=re.findall(r'(\w+)::(\w+)\(t\)',predicate)
+        definitions=[]
+        for name in sorted(names | {owner for owner,_ in helpers} | {'LLRadioGroup'}):
+            methods=''.join('static bool '+method+'(const std::type_info&){return false;}'
+                            for owner,method in helpers if owner==name)
+            if name=='LLRadioGroup':
+                methods+='static const std::type_info& itemType(){return typeid(Rejected);}'
+            if '::' in name:
+                namespace,child=name.split('::')
+                definitions.append('namespace '+namespace+' { struct '+child+' {}; }')
+            else:
+                definitions.append('struct '+name+' {'+methods+'};')
+        self.compile('#include <typeinfo>\n#include <cassert>\nstruct Rejected {};\n'+
+            '\n'.join(definitions)+'\nbool admitted(const std::type_info& t){'+predicate+
+            'return admitted;}\nint main(){assert(admitted(typeid(LLContainerView)));'
+            'assert(admitted(typeid(LLStatView)));assert(admitted(typeid(LLStatBar)));'
+            'struct Unreviewed:LLContainerView{};assert(!admitted(typeid(Unreviewed)));}')
+        draw=function((ROOT/'indra/llui/llcontainerview.cpp').read_text(), 'void LLContainerView::draw()')
+        self.compile(r"""
+#include <cassert>
+#include <string>
+using F32=float;
+struct LLColor4 { LLColor4(float=0,float=0,float=0,float=1){} };
+struct LLRect { int getHeight()const{return 100;} int getWidth()const{return 200;} };
+struct LLRender2D { static inline bool native=true;static bool isNativeUI(){return native;} };
+int rectangles=0,texts=0,children=0,gl_calls=0;
+struct LLTexUnit { enum{TT_TEXTURE};void unbind(int){assert(!LLRender2D::native);++gl_calls;} } unit;
+struct GL { LLTexUnit* getTexUnit(int){return &unit;} } gGL;
+void gl_rect_2d(int,int,int,int,LLColor4){++rectangles;}
+struct LLFontGL { enum{LEFT,TOP};static LLFontGL* getFontMonospace(){static LLFontGL f;return &f;}
+ template<class... Args>void render(Args...){++texts;} };
+struct LLView { void draw(){++children;} };
+struct LLContainerView:LLView {
+ bool mBackgroundVisible=true,mShowLabel=true;LLColor4 mBackgroundColor;std::wstring mLabel=L"Statistics";
+ LLRect getRect(){return {};}void draw();
+};
+DRAW
+int main(){
+ LLContainerView view;view.draw();assert(rectangles==1&&texts==1&&children==1&&gl_calls==0);
+ view.mBackgroundVisible=false;view.mShowLabel=false;view.draw();
+ assert(rectangles==1&&texts==1&&children==2&&gl_calls==0);
+ LLRender2D::native=false;view.mBackgroundVisible=view.mShowLabel=true;view.draw();
+ assert(rectangles==2&&texts==2&&children==3&&gl_calls==1);
+}
+""".replace('DRAW',draw))
 
     def test_actual_sampler_uses_frames_and_current_native_circuit(self):
         source=(ROOT/'indra/newview/llviewerstats.cpp').read_text()
