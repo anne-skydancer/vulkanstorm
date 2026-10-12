@@ -1,5 +1,5 @@
 {
-  "source_commit": "52a918d34f89ed56579744c3622f9828820fe2b0",
+  "source_commit": "42ec604d46dae65854c27d87521cf44454b3e655",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -206,7 +206,7 @@
       ]
     },
     "indra/newview/llviewerdisplay.cpp": {
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "anchors": [
         "display_startup",
         "display",

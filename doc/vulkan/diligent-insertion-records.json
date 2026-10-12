@@ -1,5 +1,5 @@
 {
-  "source_commit": "52a918d34f89ed56579744c3622f9828820fe2b0",
+  "source_commit": "42ec604d46dae65854c27d87521cf44454b3e655",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -34582,7 +34582,7 @@
       "path": "indra/newview/llviewerdisplay.cpp",
       "start": 28,
       "end": 29,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -34591,34 +34591,34 @@
       "path": "indra/newview/llviewerdisplay.cpp",
       "start": 31,
       "end": 31,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
     },
     {
       "path": "indra/newview/llviewerdisplay.cpp",
-      "start": 1635,
-      "end": 1637,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "start": 1639,
+      "end": 1641,
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
     },
     {
       "path": "indra/newview/llviewerdisplay.cpp",
-      "start": 1741,
-      "end": 1742,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "start": 1745,
+      "end": 1746,
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
     },
     {
       "path": "indra/newview/llviewerdisplay.cpp",
-      "start": 1744,
-      "end": 1744,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "start": 1748,
+      "end": 1748,
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -35077,7 +35077,7 @@
       "path": "indra/newview/llviewerdisplay.cpp",
       "start": 167,
       "end": 171,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35086,7 +35086,7 @@
       "path": "indra/newview/llviewerdisplay.cpp",
       "start": 173,
       "end": 173,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35095,7 +35095,7 @@
       "path": "indra/newview/llviewerdisplay.cpp",
       "start": 180,
       "end": 183,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35104,7 +35104,7 @@
       "path": "indra/newview/llviewerdisplay.cpp",
       "start": 228,
       "end": 237,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35113,25 +35113,25 @@
       "path": "indra/newview/llviewerdisplay.cpp",
       "start": 539,
       "end": 544,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
     },
     {
       "path": "indra/newview/llviewerdisplay.cpp",
-      "start": 1743,
-      "end": 1743,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "start": 1747,
+      "end": 1747,
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
     },
     {
       "path": "indra/newview/llviewerdisplay.cpp",
-      "start": 1746,
-      "end": 1748,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "start": 1750,
+      "end": 1752,
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35572,16 +35572,16 @@
       "path": "indra/newview/llviewerdisplay.cpp",
       "start": 30,
       "end": 30,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
     },
     {
       "path": "indra/newview/llviewerdisplay.cpp",
-      "start": 899,
-      "end": 902,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "start": 903,
+      "end": 906,
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35742,8 +35742,26 @@
     {
       "path": "indra/newview/llviewerdisplay.cpp",
       "start": 681,
-      "end": 685,
-      "sha256": "54585ec9f985b97b6eeadf736839e9cf12ef15fe2141cc360e9da3816c8ef7b2",
+      "end": 684,
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
+      "record": "I12",
+      "disposition": "mapped",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. Ordinary OpenGL display frame accounting is suppressed only while the controlled replay owns frame 60, preserving observed clock identity with Vulkan; actual capture verification remains required."
+    },
+    {
+      "path": "indra/newview/llviewerdisplay.cpp",
+      "start": 690,
+      "end": 690,
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
+      "record": "I12",
+      "disposition": "mapped",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. Ordinary OpenGL display frame accounting is suppressed only while the controlled replay owns frame 60, preserving observed clock identity with Vulkan; actual capture verification remains required."
+    },
+    {
+      "path": "indra/newview/llviewerdisplay.cpp",
+      "start": 685,
+      "end": 689,
+      "sha256": "1da83ce09447fbd3c5a35b24b80a4a508e4e9a444525428199687987180f4a46",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. Ordinary OpenGL display frame accounting is suppressed only while the controlled replay owns frame 60, preserving observed clock identity with Vulkan; actual capture verification remains required."
