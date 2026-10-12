@@ -63,8 +63,11 @@ remaining authorized work into permission handoffs.
 
 The [R0 inventory and evidence record](parity/README.md) links the generated
 acceptance ledger, baseline input/comparison contract, production capture path
-and current qualification limits. R0 remains open until its complete acceptance
-criteria below have evidence, regardless of individual tool/build successes.
+and current qualification limits. R0 is complete for the source requirement
+accounting and initial startup/static-primitive production baseline: the
+combined software acceptance gate passed on 2026-10-12. Its retained evidence
+and limits are recorded there; this does not accept later rendering or service
+features, or whole-viewer parity.
 
 - Give every survey row, draw-pool/pass variant, rendering setting listener and
   ordinary UI/service route a stable acceptance ID. Record its reference symbol,

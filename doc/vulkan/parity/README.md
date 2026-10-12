@@ -75,14 +75,16 @@ the evidence, and fails missing/unstable/incorrect-device captures.
 
 ## Current qualification
 
-The capture and static scene code compile in the canonical Windows RelWithDebInfo viewer
-and its complete staging check passes. Local process attempts for both backends
-failed with `WinError 5: CreateWindowStationW`; no foreground windows were opened.
-These failures are recorded in `.tmp/r0-parity-evidence/baseline-results.json`.
-They supply no runtime acceptance. The new Linux recipe and captures require
-CI execution and retained artifacts before being accepted.
+R0's combined software gate passed on 2026-10-12 in the Linux Lavapipe job of
+[run 38211516817](https://github.com/anne-skydancer/vulkanstorm/actions/runs/38211516817),
+at source `ae7b0433c5b9f5458afc51c1186cc9c5845f267f`. The accepted scope is source
+requirement accounting and the initial production startup/static-primitive
+baseline. The [acceptance summary](evidence/r0-summary.json) and
+[retained capture archive](evidence/r0-software-baseline.zip) preserve the gate,
+both independent peer reports, actual readbacks, comparisons, counters, timing,
+scene messages, source/runtime identities and logs.
 
-R0 remains open until all of the following exist:
+The completed R0 evidence covers:
 
 1. Current source accounting and implementation dispositions for every inventory
    entry, including explicit unknown effects and assigned later-phase work.
@@ -104,3 +106,17 @@ The initial scene has no avatars: skinning workload is zero and its performance
 is not exercised. GPU time remains unavailable; five synchronized readbacks are
 not a sustained or physical-GPU FPS benchmark. Full rendering parity remains
 R10 acceptance and missing features stay visible throughout development.
+
+The canonical Windows RelWithDebInfo viewer compiles and passes complete staging;
+Windows startup/presentation and skin diagnostics also pass in CI. Local private
+window-station creation remains denied (`WinError 5: CreateWindowStationW`), so no
+foreground fallback was used. The production runtime evidence above comes from
+Linux under Xvfb, using separate checksum-pinned llvmpipe and Lavapipe libraries.
+
+The overall qualification workflow is not clean: connected-session replay fails
+before producing its expected session report. Linux evidence identifies an
+`LLMutex::lock` main-coroutine assertion; Windows reports a fatal process exit.
+This failure is retained against `SURVEY.Remaining-connected-UI-services` (R9),
+with the callback/resource ownership contracts in R1 as a prerequisite. It does
+not qualify authenticated services or connected UI, and is not waived by R0's
+initial controlled baseline. Later stages must close and rerun that evidence.
