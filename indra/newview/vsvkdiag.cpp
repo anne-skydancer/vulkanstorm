@@ -188,10 +188,14 @@ unsigned captureNativeFrame(Diligent::IRenderDevice* dev, Diligent::IDeviceConte
         subpixel_bits=properties.limits.subPixelPrecisionBits;
         require(subpixel_bits>=4 && subpixel_bits<=16,"Unsupported Vulkan subpixel precision");
         const auto expected = vs_ui_expected_pixels(width, height, dpi, packets, subpixel_bits, background);
+        const auto destinationExpected = vs_ui_expected_pixels(width, height, dpi, packets, subpixel_bits,
+            background, VSUIBlendPrecision::DestinationProducts);
         std::ofstream image(std::filesystem::path(prefix + ".ppm"), std::ios::binary);
         image << "P6\n" << width << ' ' << height << "\n255\n";
         std::ofstream reference(std::filesystem::path(prefix + "-expected.ppm"), std::ios::binary);
         reference << "P6\n" << width << ' ' << height << "\n255\n";
+        std::ofstream destinationReference(std::filesystem::path(prefix + "-expected-products.ppm"), std::ios::binary);
+        destinationReference << "P6\n" << width << ' ' << height << "\n255\n";
 
         unsigned mismatch = 0;
         for (unsigned y=0; y<height; ++y) for (unsigned x=0; x<width; ++x)
@@ -199,12 +203,15 @@ unsigned captureNativeFrame(Diligent::IRenderDevice* dev, Diligent::IDeviceConte
             const auto* p = static_cast<const std::uint8_t*>(mapped.pData) + y*mapped.Stride + x*4;
             const std::uint8_t rgba[]{p[bgra?2:0],p[1],p[bgra?0:2],p[3]};
             image.write(reinterpret_cast<const char*>(rgba),3);
-            reference.write(reinterpret_cast<const char*>(expected.data()+(std::size_t(y)*width+x)*4),3);
-            for (unsigned c=0; c<4; ++c)
-                if (std::abs(int(rgba[c])-int(expected[(std::size_t(y)*width+x)*4+c])) > 3) { ++mismatch; break; }
+            const auto offset = (std::size_t(y)*width+x)*4;
+            reference.write(reinterpret_cast<const char*>(expected.data()+offset),3);
+            destinationReference.write(reinterpret_cast<const char*>(destinationExpected.data()+offset),3);
+            if (!vs_ui_pixel_matches(rgba, expected.data()+offset, destinationExpected.data()+offset, 3)) ++mismatch;
         }
         ctx->UnmapTextureSubresource(readback,0,0);
-        require(image.good() && reference.good(), "Native startup readback artifact could not be saved");
+        // A fatal oracle failure must not leave buffered, truncated failure images.
+        image.close(); reference.close(); destinationReference.close();
+        require(image.good() && reference.good() && destinationReference.good(), "Native startup readback artifact could not be saved");
         std::cerr << "NATIVE_STARTUP_PIXELS=" << mismatch << " packets=" << packets.size() << " dpi=" << dpi << '\n';
         if (mismatch)
         {
@@ -217,6 +224,8 @@ unsigned captureNativeFrame(Diligent::IRenderDevice* dev, Diligent::IDeviceConte
                 state << " uv";for (auto v:p.uv) state << ' ' << v;
                 state << " clip";for (auto v:p.clip) state << ' ' << v;
                 state << " color";for (auto v:p.color) state << ' ' << v;
+                state << " transform";for (auto v:p.transform) state << ' ' << v;
+                state << " blend=" << int(p.blend) << " sampling=" << int(p.sampling) << " mask=" << p.alpha_mask;
                 state << " triangles=" << bool(p.triangles) << '\n';
             }
         }

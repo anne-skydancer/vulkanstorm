@@ -351,6 +351,7 @@ int main() {
     resources.impl.active=false;
     bool rejected=false;try { resources.screenClip(nullptr); } catch(const std::logic_error&) { rejected=true; }
     assert(rejected);
+
 }
 '''
         with tempfile.TemporaryDirectory() as temp:
@@ -426,6 +427,32 @@ int main() {
     try { vs_ui_expected_pixels(4,4,1,{packet},8,{1,2,3,4}); }
     catch(const std::invalid_argument&) { rejected=true; }
     assert(rejected);
+    // Six overlapping window-border texels (RGB 141, alpha 1) on gray 31.
+    // Floating sums stay at 31; destination-precision products reach 37.
+    // This is per-operation quantization, not a wider final-pixel tolerance.
+    auto border=std::make_shared<VSUIRenderer::Texture>();
+    border->width=border->height=1;border->pixels={141,141,141,1};
+    VSUIRenderer::Packet layer;layer.image=border;layer.bounds={0,0,2,2};layer.clip={0,0,2,2};
+    std::vector<VSUIRenderer::Packet> layers(6,layer);
+    for(unsigned i=1;i<layers.size();++i) layers[i].color[3]=242.f/255;
+    std::vector<std::uint8_t> gray(4*4*4,31);
+    for(unsigned i=3;i<gray.size();i+=4)gray[i]=255;
+    auto floating=vs_ui_expected_pixels(4,4,1.04205f,layers,8,gray);
+    auto products=vs_ui_expected_pixels(4,4,1.04205f,layers,8,gray,VSUIBlendPrecision::DestinationProducts);
+    assert(floating[0]==31 && products[0]==37 && floating[3]==255 && products[3]==255);
+    const std::uint8_t observed[]{37,37,37,255},wrong[]{80,80,80,255},mixed[]{31,37,31,255};
+    assert(vs_ui_pixel_matches(observed,floating.data(),products.data(),3));
+    assert(!vs_ui_pixel_matches(wrong,floating.data(),products.data(),3));
+    assert(!vs_ui_pixel_matches(mixed,floating.data(),products.data(),3));
+    const std::uint8_t wrongAlpha[]{37,37,37,128};
+    assert(!vs_ui_pixel_matches(wrongAlpha,floating.data(),products.data(),3));
+    const auto outside=(3*4+3)*4;
+    assert(!vs_ui_pixel_matches(observed,floating.data()+outside,products.data()+outside,3));
+    layer.color[3]=0; // Fully transparent draws cannot widen the reference.
+    assert(vs_ui_expected_pixels(4,4,1,{layer},8,gray,VSUIBlendPrecision::DestinationProducts)==gray);
+    layer.blend=VSUIRenderer::Blend::Replace;
+    assert(vs_ui_expected_pixels(4,4,1,{layer},8,gray)==
+           vs_ui_expected_pixels(4,4,1,{layer},8,gray,VSUIBlendPrecision::DestinationProducts));
 }
 '''
         with tempfile.TemporaryDirectory() as temp:
