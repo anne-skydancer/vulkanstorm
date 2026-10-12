@@ -61,7 +61,7 @@ class BaselineTest(unittest.TestCase):
         contract = json.loads((inventory.OUT/'baseline-contract.json').read_text())
         self.assertEqual(contract['comparison']['masked_regions'],[])
         self.assertIn('not a sustained',contract['metrics']['statistics'])
-        self.assertIn('fixed connected-world',contract['required_r0_witnesses'][3])
+        self.assertIn('fixed production-world',contract['required_r0_witnesses'][3])
 
     def test_discovery_cannot_accept_features_without_evidence(self):
         ledger={'entries':[dict(id='UI.Sample',reference_sources=['sample.cpp'],native_owner='owner',
