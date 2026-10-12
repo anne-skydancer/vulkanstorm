@@ -154,6 +154,9 @@ std::vector<std::uint8_t> captureNativeScene(Diligent::IRenderDevice* device,
     }
     context->UnmapTextureSubresource(staging, 0, 0);
     require(image.good(), "Connected pre-UI scene artifact could not be saved");
+    std::ofstream rgba(std::filesystem::path(prefix + "-scene.rgba"), std::ios::binary);
+    rgba.write(reinterpret_cast<const char*>(background.data()), background.size());
+    require(rgba.good(), "Connected scene RGBA input could not be saved");
     return background;
 }
 
