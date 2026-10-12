@@ -115,7 +115,7 @@ def main():
         contract_sha256=hashlib.sha256(contract_path.read_bytes()).hexdigest(),
         executable_sha256=hashlib.sha256(executables[0].read_bytes()).hexdigest(),
         runtime=runtime, opengl_runtime=gl_runtime, cases=[], r0_complete=False,
-        qualification_limits=['Connected-world fixed-clock replay and isolated world stage metrics remain required.'])
+        qualification_limits=['Combined startup and offline-world evidence must pass the separate R0 gate; neither runner alone closes R0.'])
     assets={str(f.relative_to(stage)):hashlib.sha256(f.read_bytes()).hexdigest()
             for folder in ('skins','fonts','app_settings','lib','llplugin','bin/llplugin')
             for f in (stage/folder).rglob('*') if f.is_file()}
@@ -192,6 +192,10 @@ def main():
             if scene_path:
                 if viewer['scene']!='static-world-primitives-v1' or not viewer['fixed_world_clock_applied']:
                     raise RuntimeError('World fixture or fixed clock missing')
+                if viewer['render_clock']!={'elapsed_seconds':1000,'motion_delta_seconds':0,'frame':60,'epoch_seconds':1700000000}:
+                    raise RuntimeError('Observed render clock differs from fixed replay clock')
+                if len(viewer['world_projection'])!=16 or not all(math.isfinite(v) for v in viewer['world_projection']):
+                    raise RuntimeError('Missing observed world projection')
                 applied=viewer['effective_scene_inputs']
                 requested=json.loads(scene_path.read_text())
                 if applied['camera']!=requested['camera'] or applied['object_count']!=requested['simulation']['object_count'] or applied['motion_delta_seconds']!=0:

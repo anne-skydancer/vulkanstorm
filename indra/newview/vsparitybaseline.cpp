@@ -58,6 +58,7 @@ struct UIClock : LLFrameTimer
 {
     struct Snapshot { F64 elapsed,totalSeconds;U64 totalTime,delta;S32 count; };
     static double value() { return sFrameTime; }
+    static double epoch() { return sTotalSeconds; }
     static void set(double value) { sFrameTime=value; }
     static Snapshot freezeWorld()
     {
@@ -73,6 +74,7 @@ struct UIClock : LLFrameTimer
 };
 UIClock::Snapshot savedWorldClock{};
 U32 savedViewerCount=0;
+U64MicrosecondsImplicit savedViewerStart,savedViewerTimestamp;
 F32SecondsImplicit savedViewerTime,savedViewerInterval;
 double savedClock=0;
 bool frozen=false,worldClock=false;
@@ -82,7 +84,7 @@ void restoreClock()
     if (frozen)
     {
         if (worldClock)
-        { UIClock::restoreWorld(savedWorldClock);gFrameCount=savedViewerCount;gFrameTimeSeconds=savedViewerTime;gFrameIntervalSeconds=savedViewerInterval; }
+        { UIClock::restoreWorld(savedWorldClock);gStartTime=savedViewerStart;gFrameTime=savedViewerTimestamp;gFrameCount=savedViewerCount;gFrameTimeSeconds=savedViewerTime;gFrameIntervalSeconds=savedViewerInterval; }
         else UIClock::set(savedClock);
         frozen=false;worldClock=false;
     }
@@ -120,7 +122,16 @@ void save(const std::vector<U8>& rgb,unsigned width,unsigned height,const std::s
     report["initialization_metrics"]=initializationMetrics;
     report["world_replay_qualified"]=false; // Acceptance belongs to the independent runner.
     report["fixed_clock_qualified"]=false; // Runner must verify identical scene inputs and repeated output.
-    report["fixed_world_clock_applied"]=vs_parity_scene_active();
+    report["fixed_world_clock_applied"]=vs_parity_scene_active() && gFrameTimeSeconds.value()==1000 && gFrameIntervalSeconds.value()==0 && gFrameCount==60 && UIClock::epoch()==1700000000.;
+    report["render_clock"]["elapsed_seconds"]=F64(gFrameTimeSeconds.value());
+    report["render_clock"]["motion_delta_seconds"]=F64(gFrameIntervalSeconds.value());
+    report["render_clock"]["frame"]=S32(gFrameCount);
+    report["render_clock"]["epoch_seconds"]=UIClock::epoch();
+    if (vs_parity_scene_active())
+    {
+        const auto projection=vs_parity_scene_view(width,height).projection;
+        for (unsigned i=0;i<16;++i) report["world_projection"].append(F64(backend=="OpenGL"?gGLProjection[i]:projection[i]));
+    }
     report["static_world_fixture_active"]=vs_parity_scene_active();
     if (vs_parity_scene_active()) report["effective_scene_inputs"]=vs_parity_scene_inputs();
     report["fixed_ui_draw_clock_seconds"]=1000.;
@@ -203,6 +214,8 @@ void vs_parity_baseline_before_render()
         if (worldClock)
         {
             savedWorldClock=UIClock::freezeWorld();savedViewerCount=gFrameCount;
+            savedViewerStart=gStartTime;savedViewerTimestamp=gFrameTime;
+            gStartTime=1700000000000000ULL-1000000000ULL;gFrameTime=1700000000000000ULL;
             savedViewerTime=gFrameTimeSeconds;savedViewerInterval=gFrameIntervalSeconds;
             gFrameCount=60;gFrameTimeSeconds=1000;gFrameIntervalSeconds=0;
         }

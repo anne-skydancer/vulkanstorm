@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_VULKAN_DIAGNOSTICS
+#include "vsparityscene.h"
+#endif
 
 #include "llviewerobjectlist.h"
 
@@ -1057,7 +1060,11 @@ void LLViewerObjectList::update(LLAgent &agent)
 
     // update global timer
     F32 last_time = gFrameTimeSeconds;
-    U64Microseconds time = totalTime();              // this will become the new gFrameTime when the update is done
+    U64Microseconds time = totalTime();
+#if VS_VULKAN_DIAGNOSTICS
+    // The offline replay owns this render clock; preserve it through CPU updates.
+    if (vs_parity_scene_active()) time = gFrameTime;
+#endif              // this will become the new gFrameTime when the update is done
     // Time _can_ go backwards, for example if the user changes the system clock.
     // It doesn't cause any fatal problems (just some oddness with stats), so we shouldn't assert here.
 //  llassert(time > gFrameTime);

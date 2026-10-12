@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "scene": "normal-startup-login-v1",
-  "scope": "Initial normal viewer login frame; connected world replay is a separate required R0 witness.",
+  "scope": "Initial normal viewer login frame; offline production world replay is a separate required R0 witness.",
   "viewport": [1024, 768],
   "skin": "default",
   "theme": "",
@@ -13,8 +13,8 @@
   "capture_frames": 5,
   "timeout_seconds": 180,
   "random_seed": 1729,
-  "random_seed_scope": "Reserved for fixture-owned scene producers; no claim of global viewer RNG override.",
-  "clock_scope": "Live startup service clock; fixed connected-scene clock witness remains required.",
+  "random_seed_scope": "Seeded ObjectUpdate block arrival order in the separate production-world fixture; no global RNG override.",
+  "clock_scope": "Live startup/service clock; the offline world fixture fixes render epoch, elapsed time, frame and zero motion delta, restoring them before service work.",
   "comparison": {
     "same_backend_max_channel_error": 1,
     "cross_backend_max_channel_error": 1,
@@ -42,7 +42,7 @@
     "source inventory with explicit feature dispositions",
     "two independent software OpenGL/Vulkan production viewer runs",
     "repeated scene images and mismatch report",
-    "fixed connected-world assets/camera/settings/environment/clock/seed replay",
+    "fixed production-world assets/camera/settings/environment/clock/seed replay",
     "scene/service/packet/skinning/upload/draw/binding/presentation baseline metrics"
   ]
 }

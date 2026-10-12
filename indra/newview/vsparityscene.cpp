@@ -169,7 +169,7 @@ LLSD vs_parity_scene_inputs()
     result["camera"]["near"]=.1;result["camera"]["far"]=gSavedSettings.getF32("RenderFarClip");
     result["camera"]["fov_degrees"]=60;
     result["fullbright_objects"]=true;result["sky_water_passes_enabled"]=false;
-    result["motion_delta_seconds"]=0;result["epoch_seconds"]=1700000000.;
+    result["motion_delta_seconds"]=F64(gFrameIntervalSeconds.value());result["epoch_seconds"]=1700000000.;
     result["frame"]=60;result["object_count"]=2;
     return result;
 }
