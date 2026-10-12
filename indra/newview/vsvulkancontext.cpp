@@ -191,6 +191,7 @@ struct VSVulkanContext::Impl
             VkPhysicalDeviceProperties properties{};
             vkGetPhysicalDeviceProperties(native_device->GetVkPhysicalDevice(), &properties);
             renderer_info["GRAPHICS_CARD"] = adapter;
+            renderer_info["VALIDATION_ENABLED"] = validation;
             renderer_info["RENDERING_API"] = "Vulkan";
             renderer_info["RENDERING_API_VERSION"] = llformat("%u.%u.%u",
                 VK_VERSION_MAJOR(properties.apiVersion), VK_VERSION_MINOR(properties.apiVersion),
