@@ -1,6 +1,7 @@
 """Independent failures for capture evidence, image comparisons and timing data."""
 from pathlib import Path
 import json
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,19 @@ import check_vulkan_parity_r0 as acceptance
 
 
 class BaselineTest(unittest.TestCase):
+    def test_device_name_cannot_substitute_for_the_pinned_loaded_icd(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); folder=root/'staged/icd'; folder.mkdir(parents=True)
+            library=folder/'driver.bin'; library.write_bytes(b'locked driver')
+            icd=folder/'driver.json'; icd.write_text(json.dumps({'ICD':{'library_path':'driver.bin'}}))
+            runtime={'icd':str(icd),'staged_sha256':{'staged/icd/driver.bin':hashlib.sha256(library.read_bytes()).hexdigest()}}
+            baseline.verify_vulkan_driver(runtime,str(library.resolve()))
+            with self.assertRaisesRegex(RuntimeError,'did not load'):
+                baseline.verify_vulkan_driver(runtime,'llvmpipe from another runtime')
+            library.write_bytes(b'changed driver')
+            with self.assertRaisesRegex(RuntimeError,'immutable runtime'):
+                baseline.verify_vulkan_driver(runtime,str(library.resolve()))
+
     def test_actual_llsd_render_clock_real_values_are_numeric(self):
         clock=baseline.read_llsd(ET.fromstring('<llsd><map><key>elapsed_seconds</key><real>1000</real><key>epoch_seconds</key><real>1700000000</real><key>frame</key><integer>60</integer><key>motion_delta_seconds</key><real>0</real></map></llsd>'))
         self.assertEqual(clock,dict(elapsed_seconds=1000,epoch_seconds=1700000000,frame=60,motion_delta_seconds=0))
