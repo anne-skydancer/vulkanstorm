@@ -670,8 +670,8 @@ def main():
     if not harness.get('passed') or not harness.get('presentation_qualified'):
         raise RuntimeError('Missing prerequisite native presentation evidence')
     directory = args.evidence.resolve(); directory.mkdir(parents=True, exist_ok=True)
-    for name in ('session-replay.xml', 'session-chat.ppm', 'session-chat-expected.ppm', 'session-chat-scene.ppm', 'session-chat-scene.rgba',
-                 'im/session-chat.ppm', 'im/session-chat-expected.ppm', 'im/session-chat-scene.ppm', 'im/session-chat-scene.rgba', 'results.json'):
+    for name in ('session-replay.xml', 'session-chat.ppm', 'session-chat-expected.ppm', 'session-chat-expected-products.ppm', 'session-chat-packets.txt', 'session-chat-scene.ppm', 'session-chat-scene.rgba',
+                 'im/session-chat.ppm', 'im/session-chat-expected.ppm', 'im/session-chat-expected-products.ppm', 'im/session-chat-packets.txt', 'im/session-chat-scene.ppm', 'im/session-chat-scene.rgba', 'results.json'):
         (directory / name).unlink(missing_ok=True)
     env = {key: value for key, value in os.environ.items() if not key.startswith('VS_VULKAN_DIAGNOSTIC')}
     env, isolated_profile = isolated_profile_environment(env, directory, windows)
@@ -723,7 +723,7 @@ def main():
             report['favorites_inventory_fetch'] = favorites_fetch_observed(server.requests)
             if not report['favorites_inventory_fetch']:
                 raise RuntimeError('Native favorites never fetched their real account descendants')
-            for suffix in ('', '-expected', '-scene'):
+            for suffix in ('', '-expected', '-expected-products', '-scene'):
                 if (directory / ('session-chat' + suffix + '.ppm')).stat().st_size < 640 * 480 * 3:
                     raise RuntimeError('Missing native chat readback')
                 if (directory / 'im' / ('session-chat' + suffix + '.ppm')).stat().st_size < 640 * 480 * 3:
@@ -736,7 +736,7 @@ def main():
                     scene_width, scene_height = map(int, scene.readline().split())
                 if (folder / 'session-chat-scene.rgba').stat().st_size != scene_width * scene_height * 4:
                     raise RuntimeError('Missing or truncated pre-UI RGBA input')
-                for suffix in ('.ppm', '-expected.ppm', '-scene.ppm', '-scene.rgba'):
+                for suffix in ('.ppm', '-expected.ppm', '-expected-products.ppm', '-scene.ppm', '-scene.rgba'):
                     image = folder / ('session-chat' + suffix)
                     report['readback_sha256'][str(image.relative_to(directory))] = hashlib.sha256(image.read_bytes()).hexdigest()
             if 'Machine Vulkan adapter: ' + harness['device']['name'] not in log:
@@ -751,6 +751,8 @@ def main():
                     raise RuntimeError('Viewer did not load the pinned ICD/validation library: ' + str(library))
             report['loaded_library_sha256'] = libraries
             report['ui_oracle_background'] = 'Independent pre-UI scene readback; CPU UI composition, full RGBA comparison. World rendering parity is qualified separately.'
+            report['ui_blend_references'] = ['float-sum', 'destination-precision-products']
+            report['ui_pixel_tolerance'] = 3
             profile_writes = [request.get('body', {}) for request in server.requests
                               if request.get('method') == 'PUT'
                               and request.get('path') == '/profile/10000000-0000-0000-0000-000000000001']

@@ -18,7 +18,7 @@ bool top_left(const Vertex &a, const Vertex &b)
 } // namespace
 std::vector<std::uint8_t> vs_ui_expected_pixels(unsigned width, unsigned height, float dpi,
                                                 const std::vector<VSUIRenderer::Packet> &packets, unsigned subpixel_bits,
-                                                const std::vector<std::uint8_t>& background)
+                                                const std::vector<std::uint8_t>& background, VSUIBlendPrecision precision)
 {
     std::vector<std::uint8_t> out(std::size_t(width) * height * 4);
     for (std::size_t i = 0; i < out.size(); i += 4)
@@ -126,14 +126,38 @@ std::vector<std::uint8_t> vs_ui_expected_pixels(unsigned width, unsigned height,
                             p.blend == VSUIRenderer::Blend::Additive || p.blend == VSUIRenderer::Blend::AdditiveAlpha;
                         const bool unmodulated = p.blend == VSUIRenderer::Blend::PremultipliedAlpha ||
                                                  p.blend == VSUIRenderer::Blend::Additive || p.blend == VSUIRenderer::Blend::Replace;
-                        const double value =
-                            src * (unmodulated ? 1 : alpha) + dst[channel] / 255. * (p.blend == VSUIRenderer::Blend::Replace ? 0 : additive ? 1 : 1 - alpha);
-                        dst[channel] = std::uint8_t(std::clamp(std::lround(value * 255), 0l, 255l));
+                        const double source = src * (unmodulated ? 1 : alpha) * 255;
+                        const double destination = dst[channel] * (p.blend == VSUIRenderer::Blend::Replace ? 0 : additive ? 1 : 1 - alpha);
+                        // Vulkan basic blend precision need not exceed the destination
+                        // format (framebuffer.html#framebuffer-blending). Keep both
+                        // independent arithmetic paths: rounding only the sum, or
+                        // each product in RGBA8 destination units before addition.
+                        const long value = precision == VSUIBlendPrecision::DestinationProducts
+                            ? std::lround(source) + std::lround(destination)
+                            : std::lround(source + destination);
+                        dst[channel] = std::uint8_t(std::clamp(value, 0l, 255l));
                     }
-                    const double outputAlpha = alpha + (p.blend == VSUIRenderer::Blend::Replace ? 0 : dst[3] / 255. * (1 - alpha));
-                    dst[3] = std::uint8_t(std::clamp(std::lround(outputAlpha * 255), 0l, 255l));
+                    const double sourceAlpha = alpha * 255;
+                    const double destinationAlpha = p.blend == VSUIRenderer::Blend::Replace ? 0 : dst[3] * (1 - alpha);
+                    const long outputAlpha = precision == VSUIBlendPrecision::DestinationProducts
+                        ? std::lround(sourceAlpha) + std::lround(destinationAlpha)
+                        : std::lround(sourceAlpha + destinationAlpha);
+                    dst[3] = std::uint8_t(std::clamp(outputAlpha, 0l, 255l));
                 }
         }
     }
     return out;
+}
+
+bool vs_ui_pixel_matches(const std::uint8_t* actual, const std::uint8_t* floating,
+                         const std::uint8_t* destination, unsigned tolerance)
+{
+    unsigned floatingError = 0, destinationError = 0;
+    for (unsigned c = 0; c < 4; ++c)
+    {
+        floatingError = std::max(floatingError, unsigned(std::abs(int(actual[c]) - int(floating[c]))));
+        destinationError = std::max(destinationError, unsigned(std::abs(int(actual[c]) - int(destination[c]))));
+    }
+    // All RGBA components must match one complete reference, never a mixture.
+    return std::min(floatingError, destinationError) <= tolerance;
 }
