@@ -2275,6 +2275,7 @@ endif()
 if(VS_VULKAN_DIAGNOSTICS)
     list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h
          vsparitybaseline.cpp vsparitybaseline.h
+         vsparityscene.cpp vsparityscene.h
          vsuifixture.cpp vsuifixture.h vsuipixeloracle.cpp vsuipixeloracle.h
          vsnativereplay.cpp vsnativereplay.h vsnativeimreplay.cpp vsnativeimreplay.h)
 endif()

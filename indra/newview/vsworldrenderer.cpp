@@ -246,6 +246,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
             requireWorld(resources.constants!=nullptr,"World constants allocation failed");++mImpl->statistics.constantBuffersCreated;
         }
         context->UpdateBuffer(resources.constants,0,sizeof(constants),&constants,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        mImpl->statistics.constantUploadBytes+=sizeof(constants);
         if (resources.pipeline!=pipeline || !resources.binding)
         {
             resources.binding.Release();pipeline->CreateShaderResourceBinding(&resources.binding,true);
@@ -266,6 +267,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         context->SetVertexBuffers(0,1,&vertex,&offset,RESOURCE_STATE_TRANSITION_MODE_TRANSITION,SET_VERTEX_BUFFERS_FLAG_RESET);
         context->SetIndexBuffer(p.mesh->indices,0,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         context->CommitShaderResources(resources.binding,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        ++mImpl->statistics.resourceCommits;
         DrawIndexedAttribs draw{};draw.NumIndices=p.mesh->count;draw.IndexType=VT_UINT32;draw.Flags=DRAW_FLAG_VERIFY_ALL;
         context->DrawIndexed(draw);submitted.draws.push_back(std::move(resources));++mImpl->statistics.draws;
     }

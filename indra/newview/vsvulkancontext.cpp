@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #if VS_VULKAN_DIAGNOSTICS
 #include "vsparitybaseline.h"
+#include "vsparityscene.h"
 #endif
 #include "vsvulkancontext.h"
 #include "llwindow.h"
@@ -30,6 +31,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cstring>
+#include <chrono>
 #include <iterator>
 #include <vector>
 #if LL_WINDOWS
@@ -293,6 +295,25 @@ struct VSVulkanContext::Impl
 #if VS_VULKAN_DIAGNOSTICS
         vs_parity_baseline_before_render();
 #endif
+#if VS_VULKAN_DIAGNOSTICS
+        if (vs_parity_scene_active())
+        {
+            const auto start=std::chrono::steady_clock::now();
+            const auto packetStart=std::chrono::steady_clock::now();
+            auto packets=worldScene->packets(vs_parity_scene_eye(),32,size.mY);
+            packets.erase(std::remove_if(packets.begin(),packets.end(),[](const auto& p)
+                { return p.background || p.alpha; }),packets.end());
+            LLSD timing;timing["packet_build_cpu_ms"]=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-packetStart).count();
+            worldRenderer->draw(target,size.mX,size.mY,vs_parity_scene_view(size.mX,size.mY),packets);
+            timing["scene_and_packet_submit_cpu_ms"]=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+            const auto stats=worldRenderer->statistics();
+            timing["draw_calls"]=F64(stats.draws);timing["mesh_upload_bytes"]=F64(stats.meshUploadBytes);
+            timing["uniform_buffer_allocations"]=F64(stats.constantBuffersCreated);timing["binding_allocations"]=F64(stats.bindingsCreated);
+            timing["constant_upload_bytes"]=F64(stats.constantUploadBytes);timing["resource_commits"]=F64(stats.resourceCommits);
+            timing["skinning_workload_avatars"]=0;vs_parity_baseline_metrics(timing);
+        }
+        else
+#endif
         if (const auto session=VSNativeSession::active(); session && session->phase()==VSNativeSession::Phase::Connected)
         {
             const auto camera=session->cameraState();const LLVector3 eye=camera.center;
@@ -301,6 +322,9 @@ struct VSVulkanContext::Impl
                 VSWorldScene::cameraView(eye,camera.at,camera.up,size.mX,size.mY,distance),worldScene->packets(eye,distance,size.mY));
         }
         resources->begin(size.mX, size.mY, dpi);
+#if VS_VULKAN_DIAGNOSTICS
+        if (!vs_parity_scene_active())
+#endif
         draw();
         auto packets = resources->finish();
         renderer->draw(target, size.mX, size.mY, dpi, packets);
@@ -308,7 +332,13 @@ struct VSVulkanContext::Impl
         vs_parity_baseline_capture_vk(device,context,target,size.mX,size.mY);
 #endif
         if (observer) observer(device, context, target, size.mX, size.mY, dpi, packets);
+#if VS_VULKAN_DIAGNOSTICS
+        const auto parityPresentStart=std::chrono::steady_clock::now();
+#endif
         swapchain->Present(gSavedSettings.getBOOL("RenderVSyncEnable") ? 1 : 0);
+#if VS_VULKAN_DIAGNOSTICS
+        vs_parity_baseline_after_present(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-parityPresentStart).count());
+#endif
         renderer->retire();
         worldRenderer->retire();
         return true;

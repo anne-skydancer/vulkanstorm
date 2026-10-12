@@ -33,7 +33,17 @@ def main():
     source=work/'source/mesa-25.2.4'
     if not source.exists():
         with tarfile.open(archive) as package: package.extractall(work/'source',filter='data')
+    source_hashes={str(f.relative_to(source)):hashlib.sha256(f.read_bytes()).hexdigest()
+                   for f in source.rglob('*') if f.is_file()}
+    source_manifest=work/'source-sha256.json'
+    if source_manifest.exists() and json.loads(source_manifest.read_text())!=source_hashes:
+        raise RuntimeError('Reference source tree changed since verified archive extraction')
+    source_manifest.write_text(json.dumps(source_hashes,sort_keys=True)+'\n')
     build=work/'build';install=work/'install'
+    option_manifest=work/'build-options.json'
+    if option_manifest.exists() and json.loads(option_manifest.read_text())!=OPTIONS:
+        raise RuntimeError('Reference build options changed; use a fresh dependency build directory')
+    option_manifest.write_text(json.dumps(OPTIONS)+'\n')
     if not (build/'build.ninja').is_file():
         subprocess.run(['meson','setup',str(build),str(source),f'--prefix={install}',*OPTIONS],check=True)
     subprocess.run(['meson','compile','-C',str(build),'-j',str(args.jobs)],check=True)

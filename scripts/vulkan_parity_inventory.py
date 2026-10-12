@@ -136,7 +136,8 @@ def inventory(root=ROOT):
             'indra/**/*.cpp','indra/**/*.h'],text=True).splitlines():
         literals=set(re.findall(r'"([^"\n]+)"',(root/relative).read_text(encoding='utf-8',errors='replace')))
         for name in literals & ui_names: source_index.setdefault(name,[]).append(relative)
-        if relative.startswith('indra/newview/vs') and 'baseline' not in relative:
+        if relative.startswith('indra/newview/vs') and not any(tag in relative for tag in
+                ('vsparity','vsnativereplay','vsnativeimreplay','vsvkdiag','vsuifixture','vsuipixeloracle')):
             for name in literals: native_settings.setdefault(name,[]).append(relative)
     for row in rows.values():
         if row['category']=='UI':
@@ -159,6 +160,23 @@ def inventory(root=ROOT):
         if identity not in rows: raise ValueError('Stale semantic source disposition: '+identity)
         rows[identity].update(review)
         rows[identity]['review_reference']='doc/vulkan/parity/source-dispositions.json'
+    dependencies={'R1':['R0'],'R2':['R0','R1'],'R3':['R0','R1'],
+        'R4':['R0','R1','R3'],'R5':['R0','R3','R4'],'R6':['R0','R2','R4','R5'],
+        'R7':['R0','R2','R3','R4','R5','R6'],'R8':['R0','R4','R5','R6','R7'],
+        'R9':['R0','R1','R2','R4']}
+    hosts={'R1':['vsnativesession.cpp','vsworldscene.cpp'],
+        'R2':['vsworldscene.cpp','vsworldavatar.cpp','vsworldassets.cpp'],
+        'R3':['vsuiimageprovider.cpp','vsuiresources.cpp','vsworldrenderer.cpp'],
+        'R4':['vsvulkancontext.cpp','vsworldrenderer.cpp'],
+        'R5':['vsvulkancontext.cpp','vsworldscene.cpp'],
+        'R6':['vsvulkancontext.cpp','vsworldrenderer.cpp'],
+        'R7':['vsworldscene.cpp','vsworldrenderer.cpp','vsnativesession.cpp'],
+        'R8':['vsvulkancontext.cpp','vsworldrenderer.cpp'],
+        'R9':['vsstartupui.cpp','vsnativesession.cpp','llviewerwindow.cpp']}
+    for row in rows.values():
+        row['dependencies']=dependencies[row['phase']]
+        row['native_integration_hosts']=['indra/newview/'+p for p in hosts[row['phase']]]
+        row['owner_scope']='Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation.'
 
     return [rows[k] for k in sorted(rows)]
 

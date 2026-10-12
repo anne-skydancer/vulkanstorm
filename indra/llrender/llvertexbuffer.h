@@ -92,6 +92,11 @@ typedef std::list<LLVertexBufferData> buffer_data_list_t;
 class LLVertexBuffer final : public LLRefCount
 {
 public:
+    // Optional render-thread diagnostics. Unset in ordinary viewer execution.
+    enum class DiagnosticEvent { Draw, UploadBytes, BufferBind };
+    using DiagnosticObserver = void (*)(DiagnosticEvent,U64);
+    static void setDiagnosticObserver(DiagnosticObserver);
+    static void diagnosticEvent(DiagnosticEvent,U64);
     struct MappedRegion
     {
         U32 mStart;

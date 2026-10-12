@@ -38,6 +38,11 @@
 #include "llmemory.h"
 #include <glm/gtc/type_ptr.hpp>
 
+namespace { thread_local LLVertexBuffer::DiagnosticObserver vertexDiagnosticObserver=nullptr; }
+void LLVertexBuffer::setDiagnosticObserver(DiagnosticObserver observer) { vertexDiagnosticObserver=observer; }
+void LLVertexBuffer::diagnosticEvent(DiagnosticEvent event,U64 value)
+{ if (vertexDiagnosticObserver) vertexDiagnosticObserver(event,value); }
+
 //Next Highest Power Of Two
 //helper function, returns first number > v that is a power of 2, or v if v is already a power of 2
 U32 nhpo2(U32 v)
@@ -453,6 +458,7 @@ public:
             mMisses++;
             name = gen_buffer();
             glBindBuffer(type, name);
+            LLVertexBuffer::diagnosticEvent(LLVertexBuffer::DiagnosticEvent::BufferBind,1);
             glBufferData(type, size, nullptr, GL_DYNAMIC_DRAW);
             if (type == GL_ELEMENT_ARRAY_BUFFER)
             {
@@ -923,6 +929,7 @@ void LLVertexBuffer::drawRange(U32 mode, U32 start, U32 end, U32 count, U32 indi
     STOP_GLERROR;
     glDrawRangeElements(sGLMode[mode], start, end, count, mIndicesType,
         (GLvoid*) (indices_offset * (size_t) mIndicesStride));
+    diagnosticEvent(DiagnosticEvent::Draw,1);
     STOP_GLERROR;
 }
 
@@ -930,6 +937,7 @@ void LLVertexBuffer::drawRangeFast(U32 mode, U32 start, U32 end, U32 count, U32 
 {
     glDrawRangeElements(sGLMode[mode], start, end, count, mIndicesType,
         (GLvoid*)(indices_offset * (size_t)mIndicesStride));
+    diagnosticEvent(DiagnosticEvent::Draw,1);
 }
 
 
@@ -948,6 +956,7 @@ void LLVertexBuffer::drawArrays(U32 mode, U32 first, U32 count) const
     gGL.syncMatrices();
     STOP_GLERROR;
     glDrawArrays(sGLMode[mode], first, count);
+    diagnosticEvent(DiagnosticEvent::Draw,1);
     STOP_GLERROR;
 }
 
@@ -983,7 +992,9 @@ void LLVertexBuffer::unbind()
 {
     STOP_GLERROR;
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    LLVertexBuffer::diagnosticEvent(LLVertexBuffer::DiagnosticEvent::BufferBind,1);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    LLVertexBuffer::diagnosticEvent(LLVertexBuffer::DiagnosticEvent::BufferBind,1);
     STOP_GLERROR;
     sGLRenderBuffer = 0;
     sGLRenderIndices = 0;
@@ -1402,6 +1413,7 @@ void LLVertexBuffer::flush_vbo(GLenum target, U32 start, U32 end, void* data, U8
                 U32 tend = llmin(i + block_size, end);
                 U32 size = tend - i + 1;
                 glBufferSubData(target, i, size, (U8*) data + (i-start));
+                diagnosticEvent(DiagnosticEvent::UploadBytes,size);
             }
         }
     }
@@ -1448,12 +1460,15 @@ void LLVertexBuffer::_unmapBuffer()
             }
             mGLBuffer = gen_buffer();
             glBindBuffer(GL_ARRAY_BUFFER, mGLBuffer);
+            LLVertexBuffer::diagnosticEvent(LLVertexBuffer::DiagnosticEvent::BufferBind,1);
             sGLRenderBuffer = mGLBuffer;
             glBufferData(GL_ARRAY_BUFFER, mSize, mMappedData, GL_STATIC_DRAW);
+            diagnosticEvent(DiagnosticEvent::UploadBytes,mSize);
         }
         else if (mGLBuffer != sGLRenderBuffer)
         {
             glBindBuffer(GL_ARRAY_BUFFER, mGLBuffer);
+            LLVertexBuffer::diagnosticEvent(LLVertexBuffer::DiagnosticEvent::BufferBind,1);
             sGLRenderBuffer = mGLBuffer;
         }
         STOP_GLERROR;
@@ -1467,13 +1482,16 @@ void LLVertexBuffer::_unmapBuffer()
 
             mGLIndices = gen_buffer();
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mGLIndices);
+            LLVertexBuffer::diagnosticEvent(LLVertexBuffer::DiagnosticEvent::BufferBind,1);
             sGLRenderIndices = mGLIndices;
 
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, mIndicesSize, mMappedIndexData, GL_STATIC_DRAW);
+            diagnosticEvent(DiagnosticEvent::UploadBytes,mIndicesSize);
         }
         else if (mGLIndices != sGLRenderIndices)
         {
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mGLIndices);
+            LLVertexBuffer::diagnosticEvent(LLVertexBuffer::DiagnosticEvent::BufferBind,1);
             sGLRenderIndices = mGLIndices;
         }
         STOP_GLERROR;
@@ -1487,6 +1505,7 @@ void LLVertexBuffer::_unmapBuffer()
             if (sGLRenderBuffer != mGLBuffer)
             {
                 glBindBuffer(GL_ARRAY_BUFFER, mGLBuffer);
+                LLVertexBuffer::diagnosticEvent(LLVertexBuffer::DiagnosticEvent::BufferBind,1);
                 sGLRenderBuffer = mGLBuffer;
             }
 
@@ -1521,6 +1540,7 @@ void LLVertexBuffer::_unmapBuffer()
             if (mGLIndices != sGLRenderIndices)
             {
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mGLIndices);
+                LLVertexBuffer::diagnosticEvent(LLVertexBuffer::DiagnosticEvent::BufferBind,1);
                 sGLRenderIndices = mGLIndices;
             }
             U32 start = 0;
@@ -1703,6 +1723,7 @@ void LLVertexBuffer::setBuffer()
     if (sGLRenderBuffer != mGLBuffer)
     {
         glBindBuffer(GL_ARRAY_BUFFER, mGLBuffer);
+        diagnosticEvent(DiagnosticEvent::BufferBind,1);
         sGLRenderBuffer = mGLBuffer;
 
         setupVertexBuffer();
@@ -1716,6 +1737,7 @@ void LLVertexBuffer::setBuffer()
     if (mGLIndices != sGLRenderIndices)
     {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mGLIndices);
+        diagnosticEvent(DiagnosticEvent::BufferBind,1);
         sGLRenderIndices = mGLIndices;
     }
 

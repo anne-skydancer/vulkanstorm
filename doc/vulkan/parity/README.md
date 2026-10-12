@@ -16,8 +16,10 @@ not claims that existing connected UI features are absent. Literal callback
 references are navigation witnesses rather than proof of registration or native
 effects; unresolved registrations remain visible. Explicit partial source
 dispositions are retained in `source-dispositions.json`. Requirements must
-be reviewed and their exact implemented subset recorded before R0 inventory
-closure; historical minimal-UI acceptance cannot be applied to full world scope.
+be reviewed and their exact implemented subset recorded before feature closure;
+historical minimal-UI acceptance cannot be applied to full world scope. R0
+accounts for unknown effects explicitly with allocated work and gaps; it does
+not grant acceptance to those effects.
 
 ## Production capture path
 
@@ -31,14 +33,22 @@ with actual backend identity, viewport, safe settings and CPU timings.
 The UI drawing clock is fixed to 1000 seconds during captures and restored
 before normal service work continues. Keyboard focus is cleared as a declared
 fixture input. This is not a fixed clock for connected scene simulation or a
-global RNG override. Those remain separate required witnesses. Capture overhead
+global RNG override. The static world fixture has its own fixed render clock
+and seeded message arrival order. Capture overhead
 and synchronization are measured separately from submission; GPU duration is
 reported unavailable, not synthesized from CPU time.
 
 The [baseline contract](baseline-contract.json) defines inputs, seed/clock
 scope, warmup/capture policy, tolerances and metric interpretation. Its initial
-scene is normal startup/login, not full-world qualification. Required geometry,
-camera, environment and simulator replay evidence cannot be inferred from it.
+scene is normal startup/login, not full-world qualification. A second scene,
+`static-world-scene.json`, defines stationary primitive geometry, camera,
+environment/pass restrictions and seed. `vsparityscene.cpp` sends actual
+loopback UDP ObjectUpdate messages into the production native or OpenGL scene
+consumer and verifies both objects exist. The reference renders through
+`LLPipeline`/`display`; Vulkan renders through the existing world scene/context.
+This offline scheduler is not authenticated login or full connected UI evidence.
+Its frame clock, epoch clock, frame number and delta are fixed for rendering
+and restored before networking. Incoming pose/TE data and inputs are archived.
 
 `scripts/run_vulkan_parity_baseline.py` creates isolated profiles, rejects stale
 images, captures each peer backend independently, validates readback extents,
@@ -57,7 +67,7 @@ the evidence, and fails missing/unstable/incorrect-device captures.
 
 ## Current qualification
 
-The new capture code compiles in the canonical Windows RelWithDebInfo viewer
+The capture and static scene code compile in the canonical Windows RelWithDebInfo viewer
 and its complete staging check passes. Local process attempts for both backends
 failed with `WinError 5: CreateWindowStationW`; no foreground windows were opened.
 These failures are recorded in `.tmp/r0-parity-evidence/baseline-results.json`.
@@ -66,16 +76,23 @@ CI execution and retained artifacts before being accepted.
 
 R0 remains open until all of the following exist:
 
-1. Reviewed implementation dispositions and evidence for every inventory entry,
-   not only generated discovery and allocated future work.
+1. Current source accounting and implementation dispositions for every inventory
+   entry, including explicit unknown effects and assigned later-phase work.
 2. Repeatable independent software OpenGL/Vulkan production viewer captures with
    recorded comparisons; an unexecuted recipe is not evidence.
-3. Connected-scene assets, camera/settings/environment snapshots, fixed
-   clock/seed and simulator replay consumed by production viewer owners.
+3. Static world assets, camera/settings/environment snapshots, fixed
+   clock/seed and actual simulator replay consumed by production viewer owners.
 4. Baseline measurements separating scene/service update, packet building,
    skinning, uploads/draws/bindings, CPU frame and presentation, with unavailable
    GPU timing explicitly recorded.
 
-The runner therefore reports `r0_complete: false`; successful startup captures
-alone must not change that field. Full rendering parity remains R10 acceptance,
-and missing current features stay visible in the ledger throughout development.
+Each capture runner reports `r0_complete: false`; neither single-scene result
+can close the stage. `check_vulkan_parity_r0.py` requires both independent peer
+results, identical source/binary and world-message inputs, repeatability,
+retained comparisons, actual counters and timing evidence. It writes the scoped
+R0 acceptance artifact only after those checks pass. Cross-backend differences
+remain later-phase rendering gaps rather than being masked or treated as parity.
+The initial scene has no avatars: skinning workload is zero and its performance
+is not exercised. GPU time remains unavailable; five synchronized readbacks are
+not a sustained or physical-GPU FPS benchmark. Full rendering parity remains
+R10 acceptance and missing features stay visible throughout development.
