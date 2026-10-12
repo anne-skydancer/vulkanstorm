@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -147,7 +148,31 @@ def favorites_fetch_observed(requests):
 
 def run_staged_viewer(command, stage, env):
     """A finite process deadline kills a stalled viewer and preserves its output."""
-    return run_viewer_process(command, cwd=stage, env=env, timeout=PROCESS_REPLAY_SECONDS)
+    debugger = None
+    if platform.system() == 'Linux' and env.get('GITHUB_ACTIONS') == 'true':
+        debugger = shutil.which('gdb')
+        if not debugger:
+            raise RuntimeError('Linux connected CI requires GDB for native crash backtraces')
+        command = [debugger, '--batch', '--nx', '--return-child-result',
+                   '-ex', 'set pagination off', '-ex', 'set print thread-events off',
+                   '-ex', 'handle SIGPIPE SIGUSR2 SIG64 nostop noprint pass',
+                   '-ex', 'run', '-ex', 'thread apply all bt', '--args', *command]
+    result = run_viewer_process(command, cwd=stage, env=env, timeout=PROCESS_REPLAY_SECONDS)
+    result.native_debugger = 'gdb' if debugger else None
+    return result
+
+
+def prepare_native_debugger():
+    """Install the CI-only debugger once, before spawning the skin cases."""
+    if platform.system() == 'Linux' and os.environ.get('GITHUB_ACTIONS') == 'true' and not shutil.which('gdb'):
+        subprocess.run(['sudo', 'apt-get', '-o', 'Acquire::Retries=3', 'install', '-y', 'gdb'],
+                       check=True, timeout=120)
+        if not shutil.which('gdb'):
+            raise RuntimeError('GDB installation did not supply the Linux native debugger')
+
+
+def skin_matrix_passed(results, planned):
+    return bool(planned) and set(results) == set(planned) and all(record['passed'] for record in results.values())
 
 
 def conference_start_observed(requests):
@@ -583,6 +608,7 @@ def main():
     if not .75 <= args.ui_scale <= 4:
         parser.error('--ui-scale must be between 0.75 and 4')
     windows = platform.system() == 'Windows'
+    prepare_native_debugger()
     build = args.build_directory.resolve()
     stage = build / 'newview' / ('RelWithDebInfo' if windows else 'packaged')
     if args.all_skins:
@@ -608,8 +634,12 @@ def main():
                                      exit_code=code, evidence=str(child))
             except (subprocess.TimeoutExpired, OSError, ValueError) as error:
                 results[name] = dict(passed=False, error=str(error), evidence=str(child))
-        passed = bool(results) and all(record['passed'] for record in results.values())
+            if not results[name]['passed']:
+                break  # Preserve the first actionable failure instead of repeating it across all skins.
+        complete = len(results) == len(cases)
+        passed = skin_matrix_passed(results, cases)
         (directory / 'results.json').write_text(json.dumps(dict(passed=passed, cases=results,
+                                                               planned_cases=list(cases), complete=complete,
                                                                live_server_qualified=False), indent=2) + '\n')
         print(('PASS' if passed else 'FAIL') + ': connected UI skin matrix')
         return 0 if passed else 1
@@ -676,6 +706,7 @@ def main():
             code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
             report = read_llsd(ET.parse(directory / 'session-replay.xml').getroot())
             report['process_isolation'] = process_isolation_evidence(process)
+            report['native_debugger'] = getattr(process, 'native_debugger', None)
             passed = assess(report, code, log)
             report['conference_start_request'] = conference_start_observed(server.requests)
             if not report['conference_start_request']:
