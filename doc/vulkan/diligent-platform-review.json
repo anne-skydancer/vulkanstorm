@@ -1,5 +1,5 @@
 {
-  "source_commit": "42ec604d46dae65854c27d87521cf44454b3e655",
+  "source_commit": "4737cb2705da118c15e5cdd5475b5bce0c693001",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -24451,7 +24451,7 @@
       "path": "indra/newview/pipeline.cpp",
       "start": 28,
       "end": 30,
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -24460,7 +24460,7 @@
       "path": "indra/newview/pipeline.cpp",
       "start": 2999,
       "end": 3001,
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -24469,7 +24469,7 @@
       "path": "indra/newview/pipeline.cpp",
       "start": 3289,
       "end": 3291,
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -24478,7 +24478,7 @@
       "path": "indra/newview/pipeline.cpp",
       "start": 3754,
       "end": 3756,
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -25076,10 +25076,19 @@
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. Ordinary OpenGL display frame accounting is suppressed only while the controlled replay owns frame 60, preserving observed clock identity with Vulkan; actual capture verification remains required."
+    },
+    {
+      "path": "indra/newview/pipeline.cpp",
+      "start": 10629,
+      "end": 10629,
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
+      "record": "I12",
+      "disposition": "mapped",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. Real Linux OpenGL world capture caught the existing reflection-probe retirement target mismatch: binding uses LLCubeMapArray/TT_CUBE_MAP_ARRAY but retirement requested TT_CUBE_MAP. Corrected target preserves GL debug checks. The regression executes actual array binding and pipeline retirement bodies with strict target tracking; new real baseline remains required."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "52a918d34f89ed56579744c3622f9828820fe2b0",
+    "previous_source_commit": "42ec604d46dae65854c27d87521cf44454b3e655",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Only hash-verified existing insertion-review witnesses replace invalid platform rows; reasons/range extents retained and unchanged text mapped. Changed blocks have explicit source dispositions. No platform/runtime certification."
   }

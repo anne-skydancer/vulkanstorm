@@ -16,6 +16,7 @@ class ProbeBindingTest(unittest.TestCase):
         retire=source[source.index('void LLPipeline::unbindReflectionProbes('):source.index('inline float sgn(')]
         fixture=r'''
 #include <cassert>
+#include <initializer_list>
 #include <stdexcept>
 using S32=int;
 struct LLTexUnit {

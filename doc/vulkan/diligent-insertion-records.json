@@ -1,5 +1,5 @@
 {
-  "source_commit": "42ec604d46dae65854c27d87521cf44454b3e655",
+  "source_commit": "4737cb2705da118c15e5cdd5475b5bce0c693001",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -4443,7 +4443,7 @@
       "end": 2799,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4452,7 +4452,7 @@
       "end": 2820,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4461,7 +4461,7 @@
       "end": 2847,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4470,7 +4470,7 @@
       "end": 5446,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4479,7 +4479,7 @@
       "end": 5451,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4488,7 +4488,7 @@
       "end": 7696,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4497,7 +4497,7 @@
       "end": 7697,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4506,7 +4506,7 @@
       "end": 7739,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4515,7 +4515,7 @@
       "end": 7740,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4524,7 +4524,7 @@
       "end": 7761,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4533,7 +4533,7 @@
       "end": 7762,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4542,7 +4542,7 @@
       "end": 7850,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4551,7 +4551,7 @@
       "end": 7851,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4560,7 +4560,7 @@
       "end": 7924,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4569,7 +4569,7 @@
       "end": 7925,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4578,7 +4578,7 @@
       "end": 7953,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4587,7 +4587,7 @@
       "end": 7954,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4596,7 +4596,7 @@
       "end": 7981,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4605,7 +4605,7 @@
       "end": 7982,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4614,7 +4614,7 @@
       "end": 8234,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4623,7 +4623,7 @@
       "end": 8235,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4632,7 +4632,7 @@
       "end": 8309,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4641,7 +4641,7 @@
       "end": 8310,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4650,7 +4650,7 @@
       "end": 8357,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4659,7 +4659,7 @@
       "end": 8358,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4668,7 +4668,7 @@
       "end": 8420,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4677,7 +4677,7 @@
       "end": 8421,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4686,7 +4686,7 @@
       "end": 8457,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4695,7 +4695,7 @@
       "end": 8458,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4704,7 +4704,7 @@
       "end": 8501,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4713,7 +4713,7 @@
       "end": 8502,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4722,7 +4722,7 @@
       "end": 8569,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4731,7 +4731,7 @@
       "end": 8570,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4740,7 +4740,7 @@
       "end": 8617,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4749,7 +4749,7 @@
       "end": 8618,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4758,7 +4758,7 @@
       "end": 8680,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4767,7 +4767,7 @@
       "end": 8681,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4776,7 +4776,7 @@
       "end": 8707,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4785,7 +4785,7 @@
       "end": 8708,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4794,7 +4794,7 @@
       "end": 8730,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4803,7 +4803,7 @@
       "end": 8731,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4812,7 +4812,7 @@
       "end": 8768,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4821,7 +4821,7 @@
       "end": 8769,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4830,7 +4830,7 @@
       "end": 8953,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4839,7 +4839,7 @@
       "end": 8954,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4848,7 +4848,7 @@
       "end": 9136,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4857,7 +4857,7 @@
       "end": 9137,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4866,7 +4866,7 @@
       "end": 9161,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4875,7 +4875,7 @@
       "end": 9162,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4884,7 +4884,7 @@
       "end": 9188,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4893,7 +4893,7 @@
       "end": 9189,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4902,7 +4902,7 @@
       "end": 9359,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4911,7 +4911,7 @@
       "end": 9360,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4920,7 +4920,7 @@
       "end": 9745,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4929,7 +4929,7 @@
       "end": 9757,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4938,7 +4938,7 @@
       "end": 9804,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4947,7 +4947,7 @@
       "end": 9805,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4956,7 +4956,7 @@
       "end": 9820,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4965,7 +4965,7 @@
       "end": 9821,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4974,7 +4974,7 @@
       "end": 9860,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4983,7 +4983,7 @@
       "end": 9861,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -4992,7 +4992,7 @@
       "end": 9900,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5001,7 +5001,7 @@
       "end": 9982,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5010,7 +5010,7 @@
       "end": 10014,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5019,7 +5019,7 @@
       "end": 10044,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5028,7 +5028,7 @@
       "end": 10083,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5037,7 +5037,7 @@
       "end": 10084,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5046,7 +5046,7 @@
       "end": 10093,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5055,7 +5055,7 @@
       "end": 10119,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5064,7 +5064,7 @@
       "end": 10214,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5073,7 +5073,7 @@
       "end": 10215,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5082,7 +5082,7 @@
       "end": 10240,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5091,7 +5091,7 @@
       "end": 10241,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5100,7 +5100,7 @@
       "end": 10278,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5109,7 +5109,7 @@
       "end": 10279,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5118,7 +5118,7 @@
       "end": 10308,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -5127,7 +5127,7 @@
       "end": 10309,
       "record": "I04",
       "disposition": "mapped",
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "reason": "Reviewed receiver: LLPipeline members mScreenTriangleVB/mCubeVB declared LLPointer<LLVertexBuffer> pipeline.h817/820; frame/composition/query emission. This expression binds/emits geometry via I04 (CreateBuffer, SetVertexBuffers/SetIndexBuffer, Draw/DrawIndexed); preserve the surrounding pass owner and state/target records, not arbitrary method-name inference."
     },
     {
@@ -35140,7 +35140,7 @@
       "path": "indra/newview/pipeline.cpp",
       "start": 28,
       "end": 30,
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35149,7 +35149,7 @@
       "path": "indra/newview/pipeline.cpp",
       "start": 2999,
       "end": 3001,
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35158,7 +35158,7 @@
       "path": "indra/newview/pipeline.cpp",
       "start": 3289,
       "end": 3291,
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35167,7 +35167,7 @@
       "path": "indra/newview/pipeline.cpp",
       "start": 3754,
       "end": 3756,
-      "sha256": "969fb9b49577548ebc650c2dbc1172ca87bf31c818af013333442fdebff52fd3",
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35765,6 +35765,15 @@
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. Ordinary OpenGL display frame accounting is suppressed only while the controlled replay owns frame 60, preserving observed clock identity with Vulkan; actual capture verification remains required."
+    },
+    {
+      "path": "indra/newview/pipeline.cpp",
+      "start": 10629,
+      "end": 10629,
+      "sha256": "fe5f99ac02bd10dfff383e103a70ba2e33fc21d0a11baba393b56654c1743b5b",
+      "record": "I12",
+      "disposition": "mapped",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. Real Linux OpenGL world capture caught the existing reflection-probe retirement target mismatch: binding uses LLCubeMapArray/TT_CUBE_MAP_ARRAY but retirement requested TT_CUBE_MAP. Corrected target preserves GL debug checks. The regression executes actual array binding and pipeline retirement bodies with strict target tracking; new real baseline remains required."
     }
   ]
 }
