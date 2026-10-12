@@ -15,6 +15,12 @@ def stable_id(kind, value):
     return kind + '.' + value
 
 
+def without_comments(text):
+    # Preserve string literals, including URLs, while rejecting commented examples.
+    return re.sub(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|//[^\n]*|/\*.*?\*/',
+        lambda m: m[0] if m[0].startswith(('"', "'")) else '\n'*m[0].count('\n'), text, flags=re.S)
+
+
 def inventory(root=ROOT):
     rows = {}
     def add(kind, key, title, reference, owner, phase, gap, variants=()):
@@ -115,6 +121,51 @@ def inventory(root=ROOT):
             'indra/newview/rlvdefines.h:RlvSettingNames::Main'],
             'native shared RLVa service/settings controller','R9','Qualify restrictions, availability and native service effects.')
 
+    # Direct production signal observers and app/SLURL routes do not necessarily
+    # have an XUI function attribute or a toolbar command declaration.
+    sources = subprocess.check_output(['git','-C',str(root),'ls-files',
+        'indra/**/*.cpp','indra/**/*.h'],text=True).splitlines()
+    source_texts={relative:without_comments((root/relative).read_text(encoding='utf-8',errors='replace')) for relative in sources}
+    constants={}
+    for text in source_texts.values():
+        for name,value in re.findall(r'\b(\w+)\s*(?:\[\])?\s*=\s*(?:make_string_view\(\s*)?"([^"\n]+)"',text):
+            constants.setdefault(name,set()).add(value)
+        for name,value in re.findall(r'#define\s+(\w+)\s+"([^"\n]+)"',text):
+            constants.setdefault(name,set()).add(value)
+    for relative in sources:
+        text=without_comments((root/relative).read_text(encoding='utf-8',errors='replace'))
+        for match in re.finditer(r'LLCommandHandler\s*\(\s*"([^"\n]+)"\s*,\s*([^,)\n]+)',text):
+            name,policy=match.groups()
+            add('APP_COMMAND',name,name,[relative+':LLCommandHandler('+name+')'],
+                'native app-command admission and shared service/feature owner','R9',
+                'Qualify argument decoding, trust/throttle policy, actual owner effect and unavailable/error cases.')
+            row=rows[stable_id('APP_COMMAND',name)]
+            row['reference_trust_policies']=sorted(set(row.get('reference_trust_policies',[])+[policy.strip()]))
+        for match in re.finditer(r'getControl\(\s*([^\n]*?)\s*\)\s*->\s*getSignal\(\)',text):
+            expression=match[1].strip()
+            prefix=text[max(0,match.start()-80):match.start()]
+            group_match=re.search(r'(gSaved(?:PerAccount)?Settings)\s*\.\s*$',prefix)
+            group=group_match[1] if group_match else 'control-group-unresolved'
+            literal=re.fullmatch(r'"([^"\n]+)"',expression)
+            resolved=constants.get(expression.rsplit('::',1)[-1],set())
+            if literal or len(resolved)==1:
+                name=literal[1] if literal else next(iter(resolved))
+                add('SETTING',group+'.'+name,name,[relative+':getControl('+expression+')->getSignal'],
+                    'native settings observer and ordinary UI/service effect','R3' if name.startswith('Render') else 'R9',
+                    'Qualify this direct observer and its actual owner effect, not just persisted settings.')
+            else:
+                add('SETTING_FAMILY',relative+':'+expression,expression,
+                    [relative+':getControl('+expression+')->getSignal'],
+                    'native dynamic settings observer/controller','R3',
+                    'Resolve every runtime control identity and qualify all ordinary observer effects.')
+        # Named local/member control aliases are also used for signal connections.
+        for match in re.finditer(r'(\w+)\s*=\s*(gSaved(?:PerAccount)?Settings)\.getControl\(\s*"([^"\n]+)"\s*\)',text):
+            variable,group,name=match.groups()
+            if not re.search(r'\b'+re.escape(variable)+r'\s*->\s*getSignal\(',text[match.end():match.end()+1200]): continue
+            add('SETTING',group+'.'+name,name,[relative+':'+variable+'->getSignal'],
+                'native settings observer and ordinary UI/service effect','R3' if name.startswith('Render') else 'R9',
+                'Qualify the aliased signal observer and actual owner effect.')
+
     # Ordinary XUI commit, enable, visible and validation callbacks across ALL skins.
     tracked = subprocess.check_output(['git', '-C', str(root), 'ls-files',
         'indra/newview/skins/**/*.xml'], text=True).splitlines()
@@ -123,6 +174,11 @@ def inventory(root=ROOT):
         try: tree = ET.parse(path)
         except ET.ParseError as exc: raise ValueError(f'Malformed XUI: {relative}: {exc}') from exc
         for element in tree.iter():
+            binding=element.get('control_name')
+            if binding:
+                add('UI_SETTING',binding,binding,[relative+':'+element.tag+'.control_name'],
+                    'shared LLUICtrl settings binding and native effect controller','R9',
+                    'Resolve the declared control group; qualify native two-way binding and actual setting effects.')
             function = element.get('function')
             if not function: continue
             add('UI', function, function, [relative + ':' + element.tag],

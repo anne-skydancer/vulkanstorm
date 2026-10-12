@@ -6,7 +6,10 @@ the tool without `--write` rejects drift. IDs derive from semantic names, not
 line numbers. Shared XUI callbacks retain references from all skins; draw
 variants, setting listeners (including computed terrain names and the RLVa
 setting constant), floater registrations and toolbar commands have
-their own entries. Startup, real login/logout progress, disk texture cache,
+their own entries. Direct settings signal observers, XUI `control_name` bindings
+and app/SLURL command handlers also have IDs; app routes preserve their reference
+trust policies. Truly dynamic control families retain an explicit identity-resolution
+gap instead of disappearing from discovery. Startup, real login/logout progress, disk texture cache,
 built-in AO, underwater and HUD requirements are explicit entries.
 
 Every entry has an allocated owner, phase/dependencies, reference sources,
