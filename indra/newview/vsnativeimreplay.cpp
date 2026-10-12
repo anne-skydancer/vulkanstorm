@@ -1,5 +1,6 @@
 // Real skinned contacts/IM controls and encoded loopback messages. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "llinventorymodelbackgroundfetch.h"
 #include "vsnativeimreplay.h"
 #include "vsnativeim.h"
 #include "vsnativesession.h"
@@ -1400,6 +1401,8 @@ struct Replay : public LLAvatarPropertiesObserver
         }
         if (step == 31)
         {
+            require(LLInventoryModelBackgroundFetch::instance().inventoryFetchStarted(),
+                    "Connected inventory background fetch was not started before tab selection");
             auto* panel = LLInventoryPanel::getActiveInventoryPanel(false, true);
             require(panel && shareInventory.get(), "Share inventory browser retired before selection");
             auto* inventory = dynamic_cast<LLFloaterSidePanelContainer*>(shareInventory.get());
