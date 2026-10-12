@@ -338,8 +338,8 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
 {
     if (generation != mGeneration || regionEpoch != mRegionEpoch || (mPhase != Phase::Connecting && !mChangingRegion)) return;
     auto adapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("nativeSeedCapabilities", LLCore::HttpRequest::DEFAULT_POLICY_ID);
-    const std::weak_ptr<LLCoreHttpUtil::HttpCoroutineAdapter> weak = adapter;
-    mCancelSeed = [weak]() { if (auto request = weak.lock()) request->cancelSuspendedOperation(); };
+    const std::weak_ptr<LLCoreHttpUtil::HttpCoroutineAdapter> requestOwner = adapter;
+    mCancelSeed = [requestOwner]() { if (auto request = requestOwner.lock()) request->cancelSuspendedOperation(); };
     auto request = std::make_shared<LLCore::HttpRequest>();
     auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(15); options->setRetries(0);
     LLSD wanted = LLSD::emptyArray();
