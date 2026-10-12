@@ -682,8 +682,12 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
     // The controlled replay owns the frame number for simulation and drawing.
     // Ordinary display accounting must not advance its fixed render clock.
     if (!vs_parity_scene_active())
-#endif
+    {
+        gFrameCount++;
+    }
+#else
     gFrameCount++;
+#endif
     gRecentFrameCount++;
     if (gFocusMgr.getAppHasFocus())
     {
