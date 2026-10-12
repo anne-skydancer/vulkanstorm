@@ -182,6 +182,7 @@
 #include "llstatgraph.h"
 #include "llstatbar.h"
 #include "llstatview.h"
+#include "llcontainerview.h"
 #include "llfloaterlagmeter.h"
 #include "llfloatersettingsdebug.h"
 #include "llfloaterhelpbrowser.h"
@@ -223,7 +224,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 t == typeid(LLFloaterMarketplaceValidation) || t == typeid(LLFloaterLinkReplace) ||
                 t == typeid(LLInventoryLinkReplaceDropTarget) || t == typeid(LLFloaterEmojiPicker) || LLFloaterEmojiPicker::isNativeInternalType(t) || t == typeid(LLFloaterEvent) || t == typeid(LLFloaterExperiences) ||
                 t == typeid(LLFloaterExperienceProfile) || t == typeid(LLFloaterExperiencePicker) ||
-                t == typeid(LLPanelExperiences) || t == typeid(LLPanelExperiencePicker) || t == typeid(LLPanelExperienceLog) || t == typeid(LLFloaterMarketplace) || t == typeid(LLFloaterGridStatus) || t == typeid(LLFloaterDestinations) || t == typeid(FSFloaterTeleportHistory) || t == typeid(LLTeleportHistoryPanel) || t == typeid(LLStatBar) || t == typeid(LLStatView) || t == typeid(LLFloaterLagMeter) || t == typeid(FSFloaterStatistics) ||
+                t == typeid(LLPanelExperiences) || t == typeid(LLPanelExperiencePicker) || t == typeid(LLPanelExperienceLog) || t == typeid(LLFloaterMarketplace) || t == typeid(LLFloaterGridStatus) || t == typeid(LLFloaterDestinations) || t == typeid(FSFloaterTeleportHistory) || t == typeid(LLTeleportHistoryPanel) || t == typeid(LLStatBar) || t == typeid(LLStatView) || t == typeid(LLContainerView) || t == typeid(LLFloaterLagMeter) || t == typeid(FSFloaterStatistics) ||
                 t == typeid(LLPanelVolumePulldown) || t == typeid(LLPanelPulldown) || t == typeid(LLToolBarView) || t == typeid(LLToolBar) ||
                 t == typeid(LLToolBarVertical) || t == typeid(LLToolBarButton) || LLToolBar::isNativeInternalType(t) || LLNavigationBar::isNativeInternalType(t) || t == typeid(FSNearbyChatControl) || t == typeid(FSNearbyChatVoiceControl) || t == typeid(FSFloaterNearbyChat) || t == typeid(LLPanelPeople) || t == typeid(LLSideTrayPanelContainer) || t == typeid(LLFloaterSearchReplace) || t == typeid(LLFloaterSearch) || t == typeid(LLFloaterWebContent) || t == typeid(LLFloaterToybox) ||
                 t == typeid(LLPullButton) || t == typeid(LLLocationInputCtrl) || t == typeid(LLURLLineEditor) ||
