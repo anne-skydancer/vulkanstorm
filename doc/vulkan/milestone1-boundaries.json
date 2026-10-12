@@ -1,5 +1,5 @@
 {
-  "source_commit": "746991a1d5fdf6fdf70df171f93261177b7def14",
+  "source_commit": "d4643fbfb3edf77b92414d8618aef42158e1b8fa",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -339,7 +339,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "27c83bdbe4d80d59df9fdfe036f1fae70ea4f70c74107175e02436d4a8eee149",
+      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
@@ -659,14 +659,14 @@
       ]
     },
     "indra/newview/vsuipixeloracle.cpp": {
-      "sha256": "4e0856d5de3785b8ee8250b1ad11fed966bad0a5f57520bbb42c6dfd7bc3aa82",
+      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
       "anchors": [
         "vs_ui_expected_pixels",
         "top_left"
       ]
     },
     "indra/newview/vsuipixeloracle.h": {
-      "sha256": "4ec2adf43d25d7060acb42226dc53096357796ca0cef3abaf0bac830bc706ef9",
+      "sha256": "e70f369b134e8bd04c80bb552e03cecdbe5507d52070cf7df2b98cab4b27b2cc",
       "anchors": [
         "vs_ui_expected_pixels"
       ]
