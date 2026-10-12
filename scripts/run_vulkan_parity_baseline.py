@@ -174,7 +174,7 @@ def main():
                 if expected not in card: raise RuntimeError('Unexpected software Vulkan device')
                 if re.search(r'Validation Error|SYNC-HAZARD|VUID-',log): raise RuntimeError('Vulkan validation failure')
                 paths=(directory/'loaded-library-paths.txt').read_text()
-                if 'VkLayer_khronos_validation' not in paths or not viewer['settings']['RenderDebugGLSession']:
+                if 'VkLayer_khronos_validation' not in paths or not viewer['device'].get('VALIDATION_ENABLED'):
                     raise RuntimeError('Required validation layer/configuration witness missing')
                 if 'VK_LAYER_KHRONOS_validation' not in log:
                     raise RuntimeError('Missing loader validation-layer diagnostics')
