@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "scene": "normal-startup-login-v1",
+  "scope": "Initial normal viewer login frame; connected world replay is a separate required R0 witness.",
+  "viewport": [1024, 768],
+  "skin": "default",
+  "theme": "",
+  "language": "en",
+  "ui_scale": 1.0,
+  "fixed_ui_draw_clock_seconds": 1000.0,
+  "keyboard_focus": "none",
+  "warmup_login_frames": 180,
+  "capture_frames": 5,
+  "timeout_seconds": 180,
+  "random_seed": 1729,
+  "random_seed_scope": "Reserved for fixture-owned scene producers; no claim of global viewer RNG override.",
+  "clock_scope": "Live startup service clock; fixed connected-scene clock witness remains required.",
+  "comparison": {
+    "same_backend_max_channel_error": 1,
+    "cross_backend_max_channel_error": 1,
+    "orientation": "top-left",
+    "masked_regions": [],
+    "policy": "Preserve every mismatch; cross-backend failure is a tracked parity gap, not permission to update goldens. Unstable repeated captures fail baseline repeatability."
+  },
+  "metrics": {
+    "pre_render_cpu_ms": "Main frame entry to UI render entry; includes services, idle and prior world GL work, so it is not a comparable isolated service metric.",
+    "render_submit_cpu_ms": "UI/native render entry to readback entry; excludes capture wait/I/O. OpenGL and Vulkan stage contents differ and must not be compared as identical GPU workloads.",
+    "capture_wait_and_io_ms": "Synchronization/readback/write overhead, excluded from renderer FPS claims.",
+    "gpu_ms": "Unavailable until production timestamp queries are implemented; never substitute zero or CPU duration.",
+    "statistics": "Five samples are a capture sanity baseline, not a sustained performance benchmark. Report count, median, p95 and maximum; no physical-GPU FPS claim."
+  },
+  "required_r0_witnesses": [
+    "source inventory with explicit feature dispositions",
+    "two independent software OpenGL/Vulkan production viewer runs",
+    "repeated scene images and mismatch report",
+    "fixed connected-world assets/camera/settings/environment/clock/seed replay",
+    "scene/service/packet/skinning/upload/draw/binding/presentation baseline metrics"
+  ]
+}
