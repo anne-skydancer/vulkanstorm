@@ -21,7 +21,7 @@ from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP
 class SessionEvidenceTests(unittest.TestCase):
     def test_linux_ci_debugger_preserves_exit_failure_and_process_deadline(self):
         command = ['viewer', '--settings', 'ci.xml']
-        environment = {'GITHUB_ACTIONS': 'true'}
+        environment = {'GITHUB_ACTIONS': 'true', 'VS_VULKAN_REPLAY_GDB': '1'}
         for code in (0, 139):
             result = subprocess.CompletedProcess(command, code, stdout=b'native trace')
             with patch.object(session_runner.platform, 'system', return_value='Linux'), \
@@ -43,12 +43,22 @@ class SessionEvidenceTests(unittest.TestCase):
 
     def test_missing_ci_debugger_is_installed_once_before_skin_cases(self):
         with patch.object(session_runner.platform, 'system', return_value='Linux'), \
-                patch.dict(session_runner.os.environ, {'GITHUB_ACTIONS': 'true'}), \
+                patch.dict(session_runner.os.environ, {'GITHUB_ACTIONS': 'true', 'VS_VULKAN_REPLAY_GDB': '1'}), \
                 patch.object(session_runner.shutil, 'which', side_effect=[None, '/usr/bin/gdb']), \
                 patch.object(session_runner.subprocess, 'run') as install:
             session_runner.prepare_native_debugger()
             install.assert_called_once_with(
                 ['sudo', 'apt-get', '-o', 'Acquire::Retries=3', 'install', '-y', 'gdb'], check=True, timeout=120)
+
+    def test_ordinary_linux_ci_qualification_runs_without_debugger(self):
+        command = ['viewer'];environment = {'GITHUB_ACTIONS': 'true'}
+        result = subprocess.CompletedProcess(command, 0, stdout=b'clean exit')
+        with patch.object(session_runner.platform, 'system', return_value='Linux'), \
+                patch.object(session_runner, 'run_viewer_process', return_value=result) as execute:
+            actual = session_runner.run_staged_viewer(command, Path('stage'), environment)
+            execute.assert_called_once_with(command, cwd=Path('stage'), env=environment,
+                                           timeout=session_runner.PROCESS_REPLAY_SECONDS)
+            self.assertIsNone(actual.native_debugger)
 
     def test_first_skin_failure_and_incomplete_matrix_cannot_pass(self):
         planned = {'default', 'firestorm'}
