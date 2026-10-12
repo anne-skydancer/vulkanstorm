@@ -54,6 +54,9 @@ def inventory(root=ROOT):
             re.sub(r'[^a-z0-9 -]', '', section.lower()).replace(' ', '-')],
             owner, phase, 'Implement and qualify every behavior in this survey row. ' +
             ' | '.join(cells[1:]))
+        row=rows[stable_id('SURVEY',key)]
+        row['reference_seams']=cells[0]
+        row['reference_symbols']=sorted(set(re.findall(r'`([^`]+)`',cells[0])))
 
     pool_path = 'indra/newview/lldrawpool.h'
     code = (root / pool_path).read_text(encoding='utf-8')

@@ -16,6 +16,8 @@ def validate(ledger, startup, world):
     for entry in ledger['entries']:
         for key in ('reference_sources','native_owner','phase','dependencies','implementation','remaining_gap'):
             if not entry.get(key): errors.append(f"Unassigned {entry['id']}: {key}")
+        if entry.get('category')=='SURVEY' and not entry.get('reference_seams'):
+            errors.append('Missing exact survey reference seams: '+entry['id'])
         for key in ('source_qualified','software_runtime_qualified','authenticated_runtime_qualified'):
             if type(entry.get(key)) is not bool: errors.append(f"Missing scoped qualification flag: {entry['id']}.{key}")
         if any(entry.get(k) for k in ('source_qualified','software_runtime_qualified','authenticated_runtime_qualified')) and not entry.get('evidence'):
@@ -73,6 +75,11 @@ def verify_files(report, report_path, source_commit):
     executable=Path(provenance.get('executable',''))
     if not executable.is_file() or hashlib.sha256(executable.read_bytes()).hexdigest()!=report.get('executable_sha256') or provenance.get('executable_sha256')!=report.get('executable_sha256'):
         errors.append('Staged executable differs from qualified build: '+str(report_path))
+    stage=Path(report.get('stage','')).resolve()
+    for relative,expected in report.get('asset_sha256',{}).items():
+        asset=(stage/relative).resolve()
+        if not asset.is_relative_to(stage) or not asset.is_file() or hashlib.sha256(asset.read_bytes()).hexdigest()!=expected:
+            errors.append('Changed or missing staged asset: '+relative)
     artifacts=report.get('artifact_sha256',{})
     if not artifacts: errors.append('No verifiable artifact manifest: '+str(report_path))
     for relative,expected in artifacts.items():

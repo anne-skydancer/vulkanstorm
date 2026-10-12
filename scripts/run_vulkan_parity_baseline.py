@@ -110,7 +110,7 @@ def main():
     if not provenance.get('complete') or provenance.get('source_commit')!=parent or source_hashes or provenance.get('executable_sha256')!=executable_hash:
         raise RuntimeError('Staged executable is not bound to this committed source build')
     shutil.copy2(provenance_path,evidence/'build-provenance.json')
-    output = dict(schema=1, build_provenance=provenance, source_commit=None if source_hashes else parent,
+    output = dict(schema=1, stage=str(stage), build_provenance=provenance, source_commit=None if source_hashes else parent,
         working_tree_parent=parent, working_tree_source_sha256=source_hashes,
         contract_sha256=hashlib.sha256(contract_path.read_bytes()).hexdigest(),
         executable_sha256=hashlib.sha256(executables[0].read_bytes()).hexdigest(),
@@ -217,7 +217,7 @@ def main():
             case.update(viewer=viewer, metrics=metrics(frames), repeatability=comparisons,
                 image_sha256={f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in images},
                 passed=all(c['matched'] for c in comparisons))
-        except (OSError, RuntimeError, ValueError, KeyError, subprocess.TimeoutExpired) as exc:
+        except (OSError, RuntimeError, ValueError, KeyError, ET.ParseError, subprocess.TimeoutExpired) as exc:
             case['failure'] = str(exc)
         output['cases'].append(case)
         print(('PASS' if case['passed'] else 'FAIL') + ': actual viewer ' + backend, flush=True)
@@ -236,4 +236,14 @@ def main():
     return 0 if output['startup_baseline_measured'] else 1
 
 
-if __name__ == '__main__': sys.exit(main())
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (OSError,RuntimeError,ValueError,KeyError,ET.ParseError) as exc:
+        # Initialization failures must leave decisive structured evidence too.
+        if '--evidence' in sys.argv:
+            target=Path(sys.argv[sys.argv.index('--evidence')+1]);target.mkdir(parents=True,exist_ok=True)
+            (target/'baseline-results.json').write_text(json.dumps(dict(schema=1,r0_complete=False,
+                startup_baseline_measured=False,world_baseline_measured=False,cases=[],initialization_failure=str(exc)),indent=2)+'\n')
+        print('FAIL: production baseline initialization: '+str(exc),file=sys.stderr)
+        sys.exit(1)
