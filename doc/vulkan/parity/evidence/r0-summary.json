@@ -1,0 +1,922 @@
+{
+  "schema": 1,
+  "date": "2026-10-12",
+  "gate": {
+    "schema": 1,
+    "r0_complete": true,
+    "errors": [],
+    "inventory_sha256": "9a03ec7e7bbf8424bf1b04d80d3a106ae2d66c65f2e2a246258417fbf2915cf4",
+    "source_commit": "ae7b0433c5b9f5458afc51c1186cc9c5845f267f",
+    "full_feature_parity": false,
+    "acceptance_scope": "Source requirement accounting and initial startup/static-primitive production baseline.",
+    "qualification_limits": [
+      "Static scene has no avatars; skinning performance is not exercised.",
+      "GPU timing unavailable; captured frames include separately measured readback overhead.",
+      "Cross-backend image differences remain rendering acceptance gaps for later phases.",
+      "No real-account or physical-vendor-driver qualification."
+    ]
+  },
+  "inventory_entries": 3131,
+  "workflow_run": "https://github.com/anne-skydancer/vulkanstorm/actions/runs/38211516817",
+  "qualification_job_id": 114687179840,
+  "original_artifact": "https://github.com/anne-skydancer/vulkanstorm/actions/runs/38211516817/artifacts/11733940257",
+  "archive": "r0-software-baseline.zip",
+  "archive_sha256": "cd8c3a80b51bf258c704724db500afe314b01906f57790725190cf2b63cb03d5",
+  "report_scopes": {
+    "startup": {
+      "executable_sha256": "5053e921f3c207a9d1148a53dd96743cf3e3f34a19580737b22a48d2724ca902",
+      "contract_sha256": "b9f7ca6beccb5ae7ada47a912a3b6803cfd694dd241493d10ec34d16528a3f8d",
+      "reference_comparison": {
+        "width": 1024,
+        "height": 768,
+        "maximum_channel_error": 255,
+        "mean_absolute_error": 180.75348960028754,
+        "channels_over_tolerance": 1798039,
+        "matched": false
+      },
+      "cases": [
+        {
+          "backend": "OpenGL",
+          "passed": true,
+          "metrics": {
+            "pre_render_cpu_ms": {
+              "count": 5,
+              "median": 1.403713,
+              "p95": 1.548708,
+              "maximum": 1.548708
+            },
+            "render_submit_cpu_ms": {
+              "count": 5,
+              "median": 2.730831,
+              "p95": 4.605282,
+              "maximum": 4.605282
+            },
+            "capture_wait_and_io_ms": {
+              "count": 5,
+              "median": 18.661955,
+              "p95": 19.880183,
+              "maximum": 19.880183
+            },
+            "gpu_ms": null,
+            "presentation_cpu_ms": {
+              "count": 5,
+              "median": 0.35723,
+              "maximum": 0.629334
+            },
+            "observed_total_frame_cpu_ms": {
+              "count": 5,
+              "median": 24.459587,
+              "maximum": 30.778617
+            }
+          },
+          "repeatability": [
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            }
+          ],
+          "image_sha256": {
+            "frame-00.ppm": "2e6156e9ac1dea97aa332f4fa2a1eb7cc51d405151bbcb795570f6f3e59c7a69",
+            "frame-01.ppm": "2e6156e9ac1dea97aa332f4fa2a1eb7cc51d405151bbcb795570f6f3e59c7a69",
+            "frame-02.ppm": "2e6156e9ac1dea97aa332f4fa2a1eb7cc51d405151bbcb795570f6f3e59c7a69",
+            "frame-03.ppm": "2e6156e9ac1dea97aa332f4fa2a1eb7cc51d405151bbcb795570f6f3e59c7a69",
+            "frame-04.ppm": "2e6156e9ac1dea97aa332f4fa2a1eb7cc51d405151bbcb795570f6f3e59c7a69"
+          },
+          "device": {
+            "renderer": "llvmpipe (LLVM 18.1.3, 256 bits)",
+            "vendor": "Mesa",
+            "version": "4.5 (Compatibility Profile) Mesa 25.2.4"
+          },
+          "world_projection": null,
+          "frames": [
+            {
+              "backend": "OpenGL",
+              "capture_wait_and_io_ms": 18.661955,
+              "counters": {
+                "draw_calls": 34.0,
+                "vertex_buffer_bind_calls": 49.0,
+                "vertex_index_upload_bytes": 0.0
+              },
+              "frame": 180,
+              "height": 768,
+              "image": "frame-00.ppm",
+              "observed_total_frame_cpu_ms": 24.459587,
+              "pre_render_cpu_ms": 1.403713,
+              "presentation_cpu_ms": 0.356529,
+              "render_submit_cpu_ms": 3.252305,
+              "stages": {},
+              "startup_state": 5,
+              "width": 1024
+            },
+            {
+              "backend": "OpenGL",
+              "capture_wait_and_io_ms": 19.717837,
+              "counters": {
+                "draw_calls": 34.0,
+                "vertex_buffer_bind_calls": 49.0,
+                "vertex_index_upload_bytes": 0.0
+              },
+              "frame": 181,
+              "height": 768,
+              "image": "frame-01.ppm",
+              "observed_total_frame_cpu_ms": 23.415603,
+              "pre_render_cpu_ms": 1.383913,
+              "presentation_cpu_ms": 0.35723,
+              "render_submit_cpu_ms": 0.872655,
+              "stages": {},
+              "startup_state": 5,
+              "width": 1024
+            },
+            {
+              "backend": "OpenGL",
+              "capture_wait_and_io_ms": 17.930125,
+              "counters": {
+                "draw_calls": 34.0,
+                "vertex_buffer_bind_calls": 49.0,
+                "vertex_index_upload_bytes": 0.0
+              },
+              "frame": 182,
+              "height": 768,
+              "image": "frame-02.ppm",
+              "observed_total_frame_cpu_ms": 23.867614,
+              "pre_render_cpu_ms": 1.3814,
+              "presentation_cpu_ms": 0.629334,
+              "render_submit_cpu_ms": 2.730831,
+              "stages": {},
+              "startup_state": 5,
+              "width": 1024
+            },
+            {
+              "backend": "OpenGL",
+              "capture_wait_and_io_ms": 19.880183,
+              "counters": {
+                "draw_calls": 34.0,
+                "vertex_buffer_bind_calls": 49.0,
+                "vertex_index_upload_bytes": 0.0
+              },
+              "frame": 183,
+              "height": 768,
+              "image": "frame-03.ppm",
+              "observed_total_frame_cpu_ms": 30.778617,
+              "pre_render_cpu_ms": 1.438344,
+              "presentation_cpu_ms": 0.473743,
+              "render_submit_cpu_ms": 0.848759,
+              "stages": {},
+              "startup_state": 5,
+              "width": 1024
+            },
+            {
+              "backend": "OpenGL",
+              "capture_wait_and_io_ms": 16.665584,
+              "counters": {
+                "draw_calls": 34.0,
+                "vertex_buffer_bind_calls": 49.0,
+                "vertex_index_upload_bytes": 0.0
+              },
+              "frame": 184,
+              "height": 768,
+              "image": "frame-04.ppm",
+              "observed_total_frame_cpu_ms": 29.738523,
+              "pre_render_cpu_ms": 1.548708,
+              "presentation_cpu_ms": 0.331738,
+              "render_submit_cpu_ms": 4.605282,
+              "stages": {},
+              "startup_state": 5,
+              "width": 1024
+            }
+          ],
+          "fixture_pixel_witnesses": null
+        },
+        {
+          "backend": "Vulkan",
+          "passed": true,
+          "metrics": {
+            "pre_render_cpu_ms": {
+              "count": 5,
+              "median": 1.37512,
+              "p95": 1.670388,
+              "maximum": 1.670388
+            },
+            "render_submit_cpu_ms": {
+              "count": 5,
+              "median": 1.349011,
+              "p95": 1.436772,
+              "maximum": 1.436772
+            },
+            "capture_wait_and_io_ms": {
+              "count": 5,
+              "median": 14.063734,
+              "p95": 17.816512,
+              "maximum": 17.816512
+            },
+            "gpu_ms": null,
+            "presentation_cpu_ms": {
+              "count": 5,
+              "median": 0.524408,
+              "maximum": 1.053643
+            },
+            "observed_total_frame_cpu_ms": {
+              "count": 5,
+              "median": 19.475793,
+              "maximum": 22.026768
+            }
+          },
+          "repeatability": [
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            }
+          ],
+          "image_sha256": {
+            "frame-00.ppm": "d858c3d9db3b47cdc3d41208caed8d8984968d16a65712e8ff0cffc3b3aab62b",
+            "frame-01.ppm": "d858c3d9db3b47cdc3d41208caed8d8984968d16a65712e8ff0cffc3b3aab62b",
+            "frame-02.ppm": "d858c3d9db3b47cdc3d41208caed8d8984968d16a65712e8ff0cffc3b3aab62b",
+            "frame-03.ppm": "d858c3d9db3b47cdc3d41208caed8d8984968d16a65712e8ff0cffc3b3aab62b",
+            "frame-04.ppm": "d858c3d9db3b47cdc3d41208caed8d8984968d16a65712e8ff0cffc3b3aab62b"
+          },
+          "device": {
+            "GRAPHICS_CARD": "llvmpipe (LLVM 18.1.3, 256 bits)",
+            "GRAPHICS_CARD_MEMORY": 15989.69921875,
+            "GRAPHICS_CARD_MEMORY_DETECTED": 15989.69921875,
+            "GRAPHICS_DRIVER_VERSION": "Mesa 25.2.4 (LLVM 18.1.3)",
+            "RENDERING_API": "Vulkan",
+            "RENDERING_API_VERSION": "1.4.318",
+            "VALIDATION_ENABLED": true
+          },
+          "world_projection": null,
+          "frames": [
+            {
+              "backend": "Vulkan",
+              "capture_wait_and_io_ms": 17.816512,
+              "frame": 180,
+              "height": 768,
+              "image": "frame-00.ppm",
+              "observed_total_frame_cpu_ms": 22.026768,
+              "pre_render_cpu_ms": 1.552904,
+              "presentation_cpu_ms": 0.42465,
+              "render_submit_cpu_ms": 1.263404,
+              "stages": {},
+              "startup_state": 5,
+              "width": 1024
+            },
+            {
+              "backend": "Vulkan",
+              "capture_wait_and_io_ms": 14.063734,
+              "frame": 181,
+              "height": 768,
+              "image": "frame-01.ppm",
+              "observed_total_frame_cpu_ms": 19.475793,
+              "pre_render_cpu_ms": 1.670388,
+              "presentation_cpu_ms": 1.053643,
+              "render_submit_cpu_ms": 1.436772,
+              "stages": {},
+              "startup_state": 5,
+              "width": 1024
+            },
+            {
+              "backend": "Vulkan",
+              "capture_wait_and_io_ms": 15.174001,
+              "frame": 182,
+              "height": 768,
+              "image": "frame-02.ppm",
+              "observed_total_frame_cpu_ms": 20.296421,
+              "pre_render_cpu_ms": 1.37512,
+              "presentation_cpu_ms": 0.924181,
+              "render_submit_cpu_ms": 1.406016,
+              "stages": {},
+              "startup_state": 5,
+              "width": 1024
+            },
+            {
+              "backend": "Vulkan",
+              "capture_wait_and_io_ms": 13.752001,
+              "frame": 183,
+              "height": 768,
+              "image": "frame-03.ppm",
+              "observed_total_frame_cpu_ms": 18.343453,
+              "pre_render_cpu_ms": 1.36783,
+              "presentation_cpu_ms": 0.524408,
+              "render_submit_cpu_ms": 1.349011,
+              "stages": {},
+              "startup_state": 5,
+              "width": 1024
+            },
+            {
+              "backend": "Vulkan",
+              "capture_wait_and_io_ms": 13.910126,
+              "frame": 184,
+              "height": 768,
+              "image": "frame-04.ppm",
+              "observed_total_frame_cpu_ms": 18.713182,
+              "pre_render_cpu_ms": 1.362641,
+              "presentation_cpu_ms": 0.43158,
+              "render_submit_cpu_ms": 1.326458,
+              "stages": {},
+              "startup_state": 5,
+              "width": 1024
+            }
+          ],
+          "fixture_pixel_witnesses": null
+        }
+      ]
+    },
+    "world": {
+      "executable_sha256": "5053e921f3c207a9d1148a53dd96743cf3e3f34a19580737b22a48d2724ca902",
+      "contract_sha256": "b9f7ca6beccb5ae7ada47a912a3b6803cfd694dd241493d10ec34d16528a3f8d",
+      "reference_comparison": {
+        "width": 1024,
+        "height": 768,
+        "maximum_channel_error": 239,
+        "mean_absolute_error": 148.76288435194226,
+        "channels_over_tolerance": 2357456,
+        "matched": false
+      },
+      "cases": [
+        {
+          "backend": "OpenGL",
+          "passed": true,
+          "metrics": {
+            "pre_render_cpu_ms": {
+              "count": 5,
+              "median": 0.133248,
+              "p95": 0.259215,
+              "maximum": 0.259215
+            },
+            "render_submit_cpu_ms": {
+              "count": 5,
+              "median": 122.97375,
+              "p95": 123.935071,
+              "maximum": 123.935071
+            },
+            "capture_wait_and_io_ms": {
+              "count": 5,
+              "median": 9.505072,
+              "p95": 10.113784,
+              "maximum": 10.113784
+            },
+            "gpu_ms": null,
+            "presentation_cpu_ms": {
+              "count": 5,
+              "median": 0.301598,
+              "maximum": 0.312363
+            },
+            "observed_total_frame_cpu_ms": {
+              "count": 5,
+              "median": 134.867766,
+              "maximum": 135.22827
+            }
+          },
+          "repeatability": [
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            }
+          ],
+          "image_sha256": {
+            "frame-00.ppm": "5625e4786e25d689eae6142c64b75f344ba2c38ae4d42e562b60a02229296015",
+            "frame-01.ppm": "5625e4786e25d689eae6142c64b75f344ba2c38ae4d42e562b60a02229296015",
+            "frame-02.ppm": "5625e4786e25d689eae6142c64b75f344ba2c38ae4d42e562b60a02229296015",
+            "frame-03.ppm": "5625e4786e25d689eae6142c64b75f344ba2c38ae4d42e562b60a02229296015",
+            "frame-04.ppm": "5625e4786e25d689eae6142c64b75f344ba2c38ae4d42e562b60a02229296015"
+          },
+          "device": {
+            "renderer": "llvmpipe (LLVM 18.1.3, 256 bits)",
+            "vendor": "Mesa",
+            "version": "4.5 (Compatibility Profile) Mesa 25.2.4"
+          },
+          "world_projection": [
+            1.299038052558899,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.7320506572723389,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            -1.0001952648162842,
+            -1.0,
+            0.0,
+            0.0,
+            -0.20001953840255737,
+            0.0
+          ],
+          "frames": [
+            {
+              "backend": "OpenGL",
+              "capture_wait_and_io_ms": 10.113784,
+              "counters": {
+                "draw_calls": 32.0,
+                "vertex_buffer_bind_calls": 266.0,
+                "vertex_index_upload_bytes": 0.0
+              },
+              "frame": 180,
+              "height": 768,
+              "image": "frame-00.ppm",
+              "observed_total_frame_cpu_ms": 134.360559,
+              "pre_render_cpu_ms": 0.259215,
+              "presentation_cpu_ms": 0.29658,
+              "render_submit_cpu_ms": 122.791735,
+              "stages": {
+                "fixture_service_poll_cpu_ms": 0.12074,
+                "geometry_update_cpu_ms": 0.002573,
+                "packet_build_cpu_ms": 0.12676700000000002,
+                "scene_update_cpu_ms": 0.004096,
+                "skinning_workload_avatars": 0
+              },
+              "startup_state": 28,
+              "width": 1024
+            },
+            {
+              "backend": "OpenGL",
+              "capture_wait_and_io_ms": 9.505072,
+              "counters": {
+                "draw_calls": 32.0,
+                "vertex_buffer_bind_calls": 266.0,
+                "vertex_index_upload_bytes": 0.0
+              },
+              "frame": 181,
+              "height": 768,
+              "image": "frame-01.ppm",
+              "observed_total_frame_cpu_ms": 134.091985,
+              "pre_render_cpu_ms": 0.124395,
+              "presentation_cpu_ms": 0.301598,
+              "render_submit_cpu_ms": 122.97375,
+              "stages": {
+                "fixture_service_poll_cpu_ms": 0.086408,
+                "geometry_update_cpu_ms": 0.000951,
+                "packet_build_cpu_ms": 0.133858,
+                "scene_update_cpu_ms": 0.004186,
+                "skinning_workload_avatars": 0
+              },
+              "startup_state": 28,
+              "width": 1024
+            },
+            {
+              "backend": "OpenGL",
+              "capture_wait_and_io_ms": 9.509543,
+              "counters": {
+                "draw_calls": 32.0,
+                "vertex_buffer_bind_calls": 266.0,
+                "vertex_index_upload_bytes": 0.0
+              },
+              "frame": 182,
+              "height": 768,
+              "image": "frame-02.ppm",
+              "observed_total_frame_cpu_ms": 135.22827,
+              "pre_render_cpu_ms": 0.126888,
+              "presentation_cpu_ms": 0.303661,
+              "render_submit_cpu_ms": 123.935071,
+              "stages": {
+                "fixture_service_poll_cpu_ms": 0.077065,
+                "geometry_update_cpu_ms": 0.001453,
+                "packet_build_cpu_ms": 0.127779,
+                "scene_update_cpu_ms": 0.003976,
+                "skinning_workload_avatars": 0
+              },
+              "startup_state": 28,
+              "width": 1024
+            },
+            {
+              "backend": "OpenGL",
+              "capture_wait_and_io_ms": 9.495377,
+              "counters": {
+                "draw_calls": 32.0,
+                "vertex_buffer_bind_calls": 266.0,
+                "vertex_index_upload_bytes": 0.0
+              },
+              "frame": 183,
+              "height": 768,
+              "image": "frame-03.ppm",
+              "observed_total_frame_cpu_ms": 134.867766,
+              "pre_render_cpu_ms": 0.133248,
+              "presentation_cpu_ms": 0.312363,
+              "render_submit_cpu_ms": 123.636333,
+              "stages": {
+                "fixture_service_poll_cpu_ms": 0.071857,
+                "geometry_update_cpu_ms": 0.001332,
+                "packet_build_cpu_ms": 0.21531,
+                "scene_update_cpu_ms": 0.004607,
+                "skinning_workload_avatars": 0
+              },
+              "startup_state": 28,
+              "width": 1024
+            },
+            {
+              "backend": "OpenGL",
+              "capture_wait_and_io_ms": 9.409961,
+              "counters": {
+                "draw_calls": 32.0,
+                "vertex_buffer_bind_calls": 266.0,
+                "vertex_index_upload_bytes": 0.0
+              },
+              "frame": 184,
+              "height": 768,
+              "image": "frame-04.ppm",
+              "observed_total_frame_cpu_ms": 135.111558,
+              "pre_render_cpu_ms": 0.133819,
+              "presentation_cpu_ms": 0.273265,
+              "render_submit_cpu_ms": 121.78068,
+              "stages": {
+                "fixture_service_poll_cpu_ms": 0.070915,
+                "geometry_update_cpu_ms": 0.000951,
+                "packet_build_cpu_ms": 0.139077,
+                "scene_update_cpu_ms": 0.004156,
+                "skinning_workload_avatars": 0
+              },
+              "startup_state": 28,
+              "width": 1024
+            }
+          ],
+          "fixture_pixel_witnesses": {
+            "frame-00.ppm": {
+              "red_right": 26860,
+              "green_left": 26779
+            },
+            "frame-01.ppm": {
+              "red_right": 26860,
+              "green_left": 26779
+            },
+            "frame-02.ppm": {
+              "red_right": 26860,
+              "green_left": 26779
+            },
+            "frame-03.ppm": {
+              "red_right": 26860,
+              "green_left": 26779
+            },
+            "frame-04.ppm": {
+              "red_right": 26860,
+              "green_left": 26779
+            }
+          }
+        },
+        {
+          "backend": "Vulkan",
+          "passed": true,
+          "metrics": {
+            "pre_render_cpu_ms": {
+              "count": 5,
+              "median": 0.293635,
+              "p95": 0.304722,
+              "maximum": 0.304722
+            },
+            "render_submit_cpu_ms": {
+              "count": 5,
+              "median": 0.501444,
+              "p95": 0.575314,
+              "maximum": 0.575314
+            },
+            "capture_wait_and_io_ms": {
+              "count": 5,
+              "median": 4.985206,
+              "p95": 6.615754,
+              "maximum": 6.615754
+            },
+            "gpu_ms": null,
+            "presentation_cpu_ms": {
+              "count": 5,
+              "median": 0.377961,
+              "maximum": 0.41154
+            },
+            "observed_total_frame_cpu_ms": {
+              "count": 5,
+              "median": 7.42124,
+              "maximum": 8.401374
+            }
+          },
+          "repeatability": [
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "maximum_channel_error": 0,
+              "mean_absolute_error": 0.0,
+              "channels_over_tolerance": 0,
+              "matched": true
+            }
+          ],
+          "image_sha256": {
+            "frame-00.ppm": "04fbe0abb0eb9ac1eb4d44b76af05b3434aa890ac7b608b2b1abc83788628866",
+            "frame-01.ppm": "04fbe0abb0eb9ac1eb4d44b76af05b3434aa890ac7b608b2b1abc83788628866",
+            "frame-02.ppm": "04fbe0abb0eb9ac1eb4d44b76af05b3434aa890ac7b608b2b1abc83788628866",
+            "frame-03.ppm": "04fbe0abb0eb9ac1eb4d44b76af05b3434aa890ac7b608b2b1abc83788628866",
+            "frame-04.ppm": "04fbe0abb0eb9ac1eb4d44b76af05b3434aa890ac7b608b2b1abc83788628866"
+          },
+          "device": {
+            "GRAPHICS_CARD": "llvmpipe (LLVM 18.1.3, 256 bits)",
+            "GRAPHICS_CARD_MEMORY": 15989.69921875,
+            "GRAPHICS_CARD_MEMORY_DETECTED": 15989.69921875,
+            "GRAPHICS_DRIVER_VERSION": "Mesa 25.2.4 (LLVM 18.1.3)",
+            "RENDERING_API": "Vulkan",
+            "RENDERING_API_VERSION": "1.4.318",
+            "VALIDATION_ENABLED": true
+          },
+          "world_projection": [
+            -0.0,
+            0.0,
+            1.0062695741653442,
+            1.0,
+            -1.2990381717681885,
+            0.0,
+            0.0,
+            0.0,
+            -0.0,
+            1.732050895690918,
+            0.0,
+            0.0,
+            25.980762481689453,
+            -51.961524963378906,
+            -10.263322830200195,
+            -10.0
+          ],
+          "frames": [
+            {
+              "backend": "Vulkan",
+              "capture_wait_and_io_ms": 6.615754,
+              "frame": 180,
+              "height": 768,
+              "image": "frame-00.ppm",
+              "observed_total_frame_cpu_ms": 8.401374,
+              "pre_render_cpu_ms": 0.243791,
+              "presentation_cpu_ms": 0.36367,
+              "render_submit_cpu_ms": 0.443679,
+              "stages": {
+                "binding_allocations": 0.0,
+                "constant_upload_bytes": 1536.0,
+                "draw_calls": 12.0,
+                "fixture_service_poll_cpu_ms": 0.031407,
+                "mesh_upload_bytes": 0.0,
+                "packet_build_cpu_ms": 0.013129,
+                "resource_commits": 12.0,
+                "scene_and_packet_submit_cpu_ms": 0.436878,
+                "skinning_workload_avatars": 0,
+                "uniform_buffer_allocations": 0.0
+              },
+              "startup_state": 28,
+              "width": 1024
+            },
+            {
+              "backend": "Vulkan",
+              "capture_wait_and_io_ms": 5.037303,
+              "frame": 181,
+              "height": 768,
+              "image": "frame-01.ppm",
+              "observed_total_frame_cpu_ms": 7.243156,
+              "pre_render_cpu_ms": 0.300656,
+              "presentation_cpu_ms": 0.366163,
+              "render_submit_cpu_ms": 0.501444,
+              "stages": {
+                "binding_allocations": 0.0,
+                "constant_upload_bytes": 1536.0,
+                "draw_calls": 12.0,
+                "fixture_service_poll_cpu_ms": 0.0536,
+                "mesh_upload_bytes": 0.0,
+                "packet_build_cpu_ms": 0.015613,
+                "resource_commits": 12.0,
+                "scene_and_packet_submit_cpu_ms": 0.494253,
+                "skinning_workload_avatars": 0,
+                "uniform_buffer_allocations": 0.0
+              },
+              "startup_state": 28,
+              "width": 1024
+            },
+            {
+              "backend": "Vulkan",
+              "capture_wait_and_io_ms": 4.880561,
+              "frame": 182,
+              "height": 768,
+              "image": "frame-02.ppm",
+              "observed_total_frame_cpu_ms": 7.270566,
+              "pre_render_cpu_ms": 0.287256,
+              "presentation_cpu_ms": 0.390269,
+              "render_submit_cpu_ms": 0.500943,
+              "stages": {
+                "binding_allocations": 0.0,
+                "constant_upload_bytes": 1536.0,
+                "draw_calls": 12.0,
+                "fixture_service_poll_cpu_ms": 0.059338,
+                "mesh_upload_bytes": 0.0,
+                "packet_build_cpu_ms": 0.014331,
+                "resource_commits": 12.0,
+                "scene_and_packet_submit_cpu_ms": 0.493963,
+                "skinning_workload_avatars": 0,
+                "uniform_buffer_allocations": 0.0
+              },
+              "startup_state": 28,
+              "width": 1024
+            },
+            {
+              "backend": "Vulkan",
+              "capture_wait_and_io_ms": 4.985206,
+              "frame": 183,
+              "height": 768,
+              "image": "frame-03.ppm",
+              "observed_total_frame_cpu_ms": 7.42124,
+              "pre_render_cpu_ms": 0.304722,
+              "presentation_cpu_ms": 0.41154,
+              "render_submit_cpu_ms": 0.504008,
+              "stages": {
+                "binding_allocations": 0.0,
+                "constant_upload_bytes": 1536.0,
+                "draw_calls": 12.0,
+                "fixture_service_poll_cpu_ms": 0.062042,
+                "mesh_upload_bytes": 0.0,
+                "packet_build_cpu_ms": 0.013991,
+                "resource_commits": 12.0,
+                "scene_and_packet_submit_cpu_ms": 0.496797,
+                "skinning_workload_avatars": 0,
+                "uniform_buffer_allocations": 0.0
+              },
+              "startup_state": 28,
+              "width": 1024
+            },
+            {
+              "backend": "Vulkan",
+              "capture_wait_and_io_ms": 4.96151,
+              "frame": 184,
+              "height": 768,
+              "image": "frame-04.ppm",
+              "observed_total_frame_cpu_ms": 7.580265,
+              "pre_render_cpu_ms": 0.293635,
+              "presentation_cpu_ms": 0.377961,
+              "render_submit_cpu_ms": 0.575314,
+              "stages": {
+                "binding_allocations": 0.0,
+                "constant_upload_bytes": 1536.0,
+                "draw_calls": 12.0,
+                "fixture_service_poll_cpu_ms": 0.062132,
+                "mesh_upload_bytes": 0.0,
+                "packet_build_cpu_ms": 0.01396,
+                "resource_commits": 12.0,
+                "scene_and_packet_submit_cpu_ms": 0.567802,
+                "skinning_workload_avatars": 0,
+                "uniform_buffer_allocations": 0.0
+              },
+              "startup_state": 28,
+              "width": 1024
+            }
+          ],
+          "fixture_pixel_witnesses": {
+            "frame-00.ppm": {
+              "red_right": 27426,
+              "green_left": 27426
+            },
+            "frame-01.ppm": {
+              "red_right": 27426,
+              "green_left": 27426
+            },
+            "frame-02.ppm": {
+              "red_right": 27426,
+              "green_left": 27426
+            },
+            "frame-03.ppm": {
+              "red_right": 27426,
+              "green_left": 27426
+            },
+            "frame-04.ppm": {
+              "red_right": 27426,
+              "green_left": 27426
+            }
+          }
+        }
+      ]
+    }
+  },
+  "readbacks": 20,
+  "presentation_and_startup_diagnostics_passed": true,
+  "overall_workflow_qualified": false,
+  "remaining_connected_gap": {
+    "acceptance_id": "SURVEY.Remaining-connected-UI-services",
+    "phase": "R9",
+    "prerequisite": "R1",
+    "source": "indra/llcommon/llmutex.cpp:58",
+    "evidence": "session-evidence/skin-default-base/viewer.log",
+    "failure": "LLMutex::lock asserts LLCoros::on_main_coro() during connected replay; expected session XML is never produced.",
+    "required_followup": "Establish callback/resource mutation ownership on the main coroutine and rerun connected replay; no test waiver."
+  },
+  "observed_image_gaps": [
+    {
+      "phases": [
+        "R4",
+        "R8"
+      ],
+      "gap": "Background and fullbright color/post-processing differ. OpenGL retains the ordinary deferred magenta clear when the fixture disables sky/water; Vulkan has its own dark clear. No pixels are masked or normalized."
+    },
+    {
+      "phases": [
+        "R4",
+        "R9"
+      ],
+      "gap": "The OpenGL reference retains its login menu strip/world viewport reservation; the Vulkan world fixture fills the framebuffer. Recorded projection snapshots and visible object placement differ and remain unaccepted as parity."
+    }
+  ]
+}
