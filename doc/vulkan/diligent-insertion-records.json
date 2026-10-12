@@ -1,5 +1,5 @@
 {
-  "source_commit": "e538c000e2ae374204bdab83a037d372de90b778",
+  "source_commit": "55a901e830458c2378b8483121518351b19ee238",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -35400,17 +35400,62 @@
     {
       "path": "indra/newview/vsparityscene.cpp",
       "start": 1,
-      "end": 171,
-      "sha256": "244c530e3fd0828220b6638c24edd32787fb1de866d4298b80a1e1b38b3942e3",
+      "end": 12,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
     },
     {
       "path": "indra/newview/vsparityscene.cpp",
-      "start": 173,
-      "end": 208,
-      "sha256": "244c530e3fd0828220b6638c24edd32787fb1de866d4298b80a1e1b38b3942e3",
+      "start": 14,
+      "end": 22,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
+    },
+    {
+      "path": "indra/newview/vsparityscene.cpp",
+      "start": 25,
+      "end": 118,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
+    },
+    {
+      "path": "indra/newview/vsparityscene.cpp",
+      "start": 123,
+      "end": 123,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
+    },
+    {
+      "path": "indra/newview/vsparityscene.cpp",
+      "start": 125,
+      "end": 127,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
+    },
+    {
+      "path": "indra/newview/vsparityscene.cpp",
+      "start": 129,
+      "end": 180,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
+    },
+    {
+      "path": "indra/newview/vsparityscene.cpp",
+      "start": 182,
+      "end": 217,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35606,9 +35651,9 @@
     },
     {
       "path": "indra/newview/vsparityscene.cpp",
-      "start": 172,
-      "end": 172,
-      "sha256": "244c530e3fd0828220b6638c24edd32787fb1de866d4298b80a1e1b38b3942e3",
+      "start": 181,
+      "end": 181,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35648,6 +35693,51 @@
       "record": "I02",
       "disposition": "mapped",
       "reason": "Win32 WM_DPICHANGED publishes the drawable client extent only after applying the recommended outer-window rectangle. This keeps DPI and queued resize callbacks consistent with mouse coordinate conversion and Vulkan surface sizing. The extracted real handler fixture verifies border subtraction, asynchronous publication and no invented extent on GetClientRect failure. Runtime all-skin replay remains required; no full feature parity is conferred."
+    },
+    {
+      "path": "indra/newview/vsparityscene.cpp",
+      "start": 13,
+      "end": 13,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. First real Linux replay exposed missing world startup UI/tool owners; bootstrap now initializes tools, world UI and the agent global origin before first-region callbacks, then environment before sky. New runtime evidence is required before qualification."
+    },
+    {
+      "path": "indra/newview/vsparityscene.cpp",
+      "start": 23,
+      "end": 24,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. First real Linux replay exposed missing world startup UI/tool owners; bootstrap now initializes tools, world UI and the agent global origin before first-region callbacks, then environment before sky. New runtime evidence is required before qualification."
+    },
+    {
+      "path": "indra/newview/vsparityscene.cpp",
+      "start": 119,
+      "end": 122,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. First real Linux replay exposed missing world startup UI/tool owners; bootstrap now initializes tools, world UI and the agent global origin before first-region callbacks, then environment before sky. New runtime evidence is required before qualification."
+    },
+    {
+      "path": "indra/newview/vsparityscene.cpp",
+      "start": 124,
+      "end": 124,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. First real Linux replay exposed missing world startup UI/tool owners; bootstrap now initializes tools, world UI and the agent global origin before first-region callbacks, then environment before sky. New runtime evidence is required before qualification."
+    },
+    {
+      "path": "indra/newview/vsparityscene.cpp",
+      "start": 128,
+      "end": 128,
+      "sha256": "2db0a5417537f10263c11d269b7620796c6c40e877d69b574f4310070024dc1a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred. First real Linux replay exposed missing world startup UI/tool owners; bootstrap now initializes tools, world UI and the agent global origin before first-region callbacks, then environment before sky. New runtime evidence is required before qualification."
     }
   ]
 }
