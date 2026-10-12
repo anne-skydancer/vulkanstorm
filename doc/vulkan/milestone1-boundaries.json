@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "6799924b162b4a470a99a853c69485ea1c52fe4c2919fc28afc14ef8ceead8b6",
+      "sha256": "6c761ceda73767e336a34b3dddba0bc23ef3bb8a74755f0912e518ea4f8231cb",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
