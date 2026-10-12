@@ -355,9 +355,32 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
         LLSD result = adapter->postAndSuspend(request, url, wanted, options);
         if (generation != mGeneration || (regionEpoch && regionEpoch != mRegionEpoch) || (mPhase != Phase::Connecting && !mChangingRegion)) { ++mExpired; return; }
         if (LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]))
-        { mCancelSeed = {}; result.erase("http_result"); capabilities(result, generation, regionEpoch); return; }
+        {
+            result.erase("http_result");
+            // Capability admission can finish login and construct ordinary UI.
+            // HTTP continuations run in a coroutine, not the main-loop owner.
+            const auto weak = weak_from_this();
+            LL::WorkQueue::getInstance("mainloop")->post([weak, result, generation, regionEpoch]()
+            {
+                auto owner = weak.lock();
+                if (!owner || owner->mShutdown || generation != owner->mGeneration ||
+                    regionEpoch != owner->mRegionEpoch ||
+                    (owner->mPhase != Phase::Connecting && !owner->mChangingRegion)) return;
+                owner->mCancelSeed = {};
+                owner->capabilities(result, generation, regionEpoch);
+            });
+            return;
+        }
     }
-    disconnect(LLTrans::getString("NativeSessionConnectionTimeout"));
+    const auto weak = weak_from_this();
+    LL::WorkQueue::getInstance("mainloop")->post([weak, generation, regionEpoch]()
+    {
+        auto owner = weak.lock();
+        if (!owner || owner->mShutdown || generation != owner->mGeneration ||
+            regionEpoch != owner->mRegionEpoch ||
+            (owner->mPhase != Phase::Connecting && !owner->mChangingRegion)) return;
+        owner->disconnect(LLTrans::getString("NativeSessionConnectionTimeout"));
+    });
 }
 void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionEpoch)
 {
@@ -425,8 +448,17 @@ void VSNativeSession::simulatorFeaturesCoro(std::weak_ptr<VSNativeSession> weak,
             (owner->mPhase != Phase::Connecting && owner->mPhase != Phase::Connected)) return;
         if (result.isMap() && LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]))
         {
-            result.erase("http_result"); owner->mCancelSimulatorFeatures = {};
-            owner->applySimulatorFeatures(result, generation, regionEpoch); return;
+            result.erase("http_result");
+            LL::WorkQueue::getInstance("mainloop")->post([weak, result, generation, regionEpoch]()
+            {
+                auto current = weak.lock();
+                if (!current || current->mShutdown || generation != current->mGeneration ||
+                    regionEpoch != current->mRegionEpoch ||
+                    (current->mPhase != Phase::Connecting && current->mPhase != Phase::Connected)) return;
+                current->mCancelSimulatorFeatures = {};
+                current->applySimulatorFeatures(result, generation, regionEpoch);
+            });
+            return;
         }
     }
     if (auto owner = weak.lock(); owner && generation == owner->mGeneration && regionEpoch == owner->mRegionEpoch)
