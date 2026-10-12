@@ -83,6 +83,15 @@ class BaselineTest(unittest.TestCase):
         self.assertIn('LLVolume::generate',row['reference_symbols'])
         self.assertIn('LLVOVolume::updateGeometry',row['reference_seams'])
 
+    def test_computed_setting_registrations_are_not_omitted(self):
+        rows=json.loads((inventory.OUT/'acceptance-ledger.json').read_text())['entries']
+        ids={r['id'] for r in rows}
+        for index in range(1,5):
+            self.assertIn('SETTING.gSavedSettings.LocalTerrainAsset'+str(index),ids)
+            for suffix in ('ScaleU','ScaleV','Rotation','OffsetU','OffsetV'):
+                self.assertIn('SETTING.gSavedSettings.LocalTerrainTransform'+str(index)+suffix,ids)
+        self.assertIn('SETTING.gSavedSettings.RestrainedLove',ids)
+
     def test_uniform_or_single_object_cannot_satisfy_world_oracle(self):
         with tempfile.TemporaryDirectory() as d:
             for color in ([100,100,100],[180,40,40],[40,180,40]):
@@ -93,6 +102,10 @@ class BaselineTest(unittest.TestCase):
             for y in range(32):
                 for x in range(32): pixels.extend([40,180,40] if x<16 else [180,40,40])
             self.assertGreater(min(baseline.fixture_pixels(self.image(d,'both',pixels,32,32)).values()),32)
+            # Object identity survives reference gamma/tone mapping; exact peer
+            # color differences still belong to the unmasked pixel comparison.
+            mapped=[channel for y in range(32) for x in range(32) for channel in ([109,198,133] if x<16 else [198,109,133])]
+            self.assertGreater(min(baseline.fixture_pixels(self.image(d,'mapped',mapped,32,32)).values()),32)
 
     def test_stale_claimed_artifact_fails_verification(self):
         with tempfile.TemporaryDirectory() as d:

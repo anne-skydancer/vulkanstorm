@@ -14654,6 +14654,122 @@
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
     {
+      "id": "SETTING.gSavedSettings.LocalTerrainAsset1",
+      "category": "SETTING",
+      "title": "LocalTerrainAsset1",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainAsset2",
+      "category": "SETTING",
+      "title": "LocalTerrainAsset2",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainAsset3",
+      "category": "SETTING",
+      "title": "LocalTerrainAsset3",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainAsset4",
+      "category": "SETTING",
+      "title": "LocalTerrainAsset4",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
       "id": "SETTING.gSavedSettings.LocalTerrainPaintEnabled",
       "category": "SETTING",
       "title": "LocalTerrainPaintEnabled",
@@ -14673,6 +14789,586 @@
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleLocalTerrainChanged; saving a value is not applying its effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform1OffsetU",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform1OffsetU",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform1OffsetV",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform1OffsetV",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform1Rotation",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform1Rotation",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform1ScaleU",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform1ScaleU",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform1ScaleV",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform1ScaleV",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform2OffsetU",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform2OffsetU",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform2OffsetV",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform2OffsetV",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform2Rotation",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform2Rotation",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform2ScaleU",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform2ScaleU",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform2ScaleV",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform2ScaleV",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform3OffsetU",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform3OffsetU",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform3OffsetV",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform3OffsetV",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform3Rotation",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform3Rotation",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform3ScaleU",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform3ScaleU",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform3ScaleV",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform3ScaleV",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform4OffsetU",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform4OffsetU",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform4OffsetV",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform4OffsetV",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform4Rotation",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform4Rotation",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform4ScaleU",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform4ScaleU",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsuiimageprovider.cpp",
+        "indra/newview/vsuiresources.cpp",
+        "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.LocalTerrainTransform4ScaleV",
+      "category": "SETTING",
+      "title": "LocalTerrainTransform4ScaleV",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:handleLocalTerrainChanged",
+        "indra/newview/llvlcomposition.h:LLTerrainMaterials::ASSET_COUNT"
+      ],
+      "native_owner": "native local terrain asset/transform controller",
+      "phase": "R3",
+      "dependencies": [
+        "R0",
+        "R1"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
       "native_source_references": [],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
@@ -16708,6 +17404,37 @@
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
         "indra/newview/vsworldrenderer.cpp"
+      ],
+      "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
+    },
+    {
+      "id": "SETTING.gSavedSettings.RestrainedLove",
+      "category": "SETTING",
+      "title": "RestrainedLove",
+      "reference_sources": [
+        "indra/newview/llviewercontrol.cpp:RlvSettings::onChangedSettingMain",
+        "indra/newview/rlvdefines.h:RlvSettingNames::Main"
+      ],
+      "native_owner": "native shared RLVa service/settings controller",
+      "phase": "R9",
+      "dependencies": [
+        "R0",
+        "R1",
+        "R2",
+        "R4"
+      ],
+      "variants": [],
+      "implementation": "native-controller-pending",
+      "source_qualified": false,
+      "software_runtime_qualified": false,
+      "authenticated_runtime_qualified": false,
+      "evidence": [],
+      "remaining_gap": "Qualify restrictions, availability and native service effects.",
+      "native_source_references": [],
+      "native_integration_hosts": [
+        "indra/newview/vsstartupui.cpp",
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/llviewerwindow.cpp"
       ],
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },

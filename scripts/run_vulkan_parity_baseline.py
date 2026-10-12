@@ -47,8 +47,8 @@ def fixture_pixels(path):
     for y in range(height//3,2*height//3):
         for x in range(width):
             i=(y*width+x)*3;r,g,b=pixels[i:i+3]
-            if x>width//2 and r>=40 and r>2*g and r>b: counts['red_right']+=1
-            if x<width//2 and g>=40 and g>2*r and g>b: counts['green_left']+=1
+            if x>width//2 and r>=40 and r>1.25*g and r>b+8: counts['red_right']+=1
+            if x<width//2 and g>=40 and g>1.25*r and g>b+8: counts['green_left']+=1
     if min(counts.values())<32: raise ValueError('Missing visible projected red/green fixture objects: '+str(counts))
     return counts
 
