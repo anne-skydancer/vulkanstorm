@@ -1709,7 +1709,11 @@ void VSNativeSession::reset()
     auto circuits=std::exchange(mCircuits,{});
     for (auto& [host,region]:circuits)
     {
-        if (region.cancel) region.cancel();region.poll.reset();
+        if (region.cancel)
+        {
+            region.cancel();
+        }
+        region.poll.reset();
         if (gMessageSystem && host!=mHost)
         {
             gMessageSystem->newMessage("AgentQuitCopy");gMessageSystem->nextBlock("AgentData");

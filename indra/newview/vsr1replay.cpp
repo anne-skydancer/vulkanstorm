@@ -342,7 +342,11 @@ void vs_r1_replay_pump(){if(replay)replay->pump();}
 bool vs_r1_replay_tick(VSNativeSession& owner,LLSD& report)
 {
     if(!std::getenv("VS_VULKAN_REPLAY_R1"))return true;
-    if(!replay)replay=std::make_unique<Replay>();return replay->tick(owner,report);
+    if (!replay)
+    {
+        replay = std::make_unique<Replay>();
+    }
+    return replay->tick(owner, report);
 }
 void vs_r1_replay_cleanup(){replay.reset();}
 void vs_r1_replay_retired(VSNativeSession& owner,LLSD& report){if(replay)replay->retired(owner,report);}
