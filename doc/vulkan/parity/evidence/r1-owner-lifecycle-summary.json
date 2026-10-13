@@ -2336,13 +2336,21 @@
     }
   ],
   "source_catalog": {
-    "pin": "f3c1223638b96879dbebc44a642fc0c46c37f99e",
-    "runtime_parity_qualified": false
+    "pin": "b8e1c55fa9e2df0bf4d045957a676e13424ac657",
+    "runtime_parity_qualified": false,
+    "equivalence": "Viewer sources are unchanged from compiled source_commit; subsequent source commit changes only CI timeout and fixture include."
   },
   "platform_ci": {
     "baseline_run": 38335464451,
     "baseline_source": "98a81b8f31c0b07e8bb6265ee4fa46c7eb705d2d",
-    "r1_run": "Queued after documentation/evidence commit; no Linux R1 runtime claim."
+    "r1_run": "Supersedes 38350223183, whose Linux fixture missed an explicit chrono include; corrected source pending new push",
+    "baseline_run_conclusion": "cancelled at 180-minute cleanup boundary after all graphics steps and artifact upload passed",
+    "baseline_connected_skin_cases": {
+      "Windows SwiftShader": 26,
+      "Linux Lavapipe": 26,
+      "Linux SwiftShader": 26
+    },
+    "baseline_swiftshader_matrix_sha256": "979dfbd4cd13d3cb7f47481200a101b7dd4b6460d58f43cce363129a8df5a2f5"
   },
   "qualification_limits": [
     "No public-grid authentication evidence for these R1 changes",
