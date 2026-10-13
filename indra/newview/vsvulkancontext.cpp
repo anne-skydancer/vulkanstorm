@@ -365,7 +365,13 @@ struct VSVulkanContext::Impl
         const auto parityPresentStart=std::chrono::steady_clock::now();
 #endif
         if (swapchain) swapchain->Present(gSavedSettings.getBOOL("RenderVSyncEnable") ? 1 : 0);
-        else context->Flush();
+        else
+        {
+            context->Flush();
+            // Present normally retires Diligent's completed device resources.
+            // Offscreen replay must also drain that queue each frame.
+            device->ReleaseStaleResources(false);
+        }
 #if VS_VULKAN_DIAGNOSTICS
         vs_parity_baseline_after_present(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-parityPresentStart).count());
 #endif
