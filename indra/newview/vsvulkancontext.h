@@ -15,6 +15,8 @@ public:
     // The borrowed native window outlives this owner. Normal execution uses
     // loader discovery; ICD selection belongs to the process/test environment.
     VSVulkanContext(LLWindow&, bool validation);
+    // Explicit diagnostic replay only; this never qualifies presentation.
+    static bool headlessReplay();
     ~VSVulkanContext();
     VSVulkanContext(const VSVulkanContext&)              = delete;
     VSVulkanContext&   operator=(const VSVulkanContext&) = delete;

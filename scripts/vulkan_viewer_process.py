@@ -6,6 +6,7 @@ import os
 import subprocess
 import threading
 import uuid
+from pathlib import Path
 
 _window_station_lock = threading.Lock()
 
@@ -30,7 +31,42 @@ def process_isolation_evidence(result):
         'desktop_isolated': bool(getattr(result, 'desktop_isolated', False)),
         'desktop_identifier': getattr(result, 'desktop_identifier', None),
         'window_station_identifier': getattr(result, 'window_station_identifier', None),
+        'headless_replay': bool(getattr(result, 'headless_replay', False)),
+        'headless_graphics': bool(getattr(result, 'headless_graphics', False)),
     }
+
+
+def run_headless_viewer_process(command, cwd, env, timeout):
+    """Explicit native offscreen replay, never an isolation-error fallback."""
+    if env.get('VS_VULKAN_DIAGNOSTIC_HEADLESS') != '1' or not env.get('VS_VULKAN_DIAGNOSTIC_REPLAY'):
+        raise ValueError('Headless viewer launch requires the explicit diagnostic replay flags')
+    if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError('Viewer process requires a finite positive timeout')
+    executable=command[command.index('--args')+1] if '--args' in command else command[0]
+    if b'Headless native viewer replay target' not in Path(executable).read_bytes():
+        raise RuntimeError('Executable does not contain the native headless replay path; GUI fallback is forbidden')
+    result = subprocess.run(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, timeout=timeout,
+                            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    result.headless_replay = True
+    result.desktop_isolated = False
+    result.desktop_identifier = result.window_station_identifier = None
+    return result
+
+
+def run_headless_graphics_process(command,cwd,env,timeout):
+    """Dedicated standalone graphics modes that cannot create a window."""
+    if len(command) not in (3,4) or command[2] not in ('offscreen','world','invalid','invalid-sync','bad-pixels','bad-orientation'):
+        raise ValueError('Headless graphics launch refuses presentation or unknown modes')
+    if Path(command[0]).name.lower() not in ('diligent_render_test','diligent_render_test.exe'):
+        raise ValueError('Headless graphics launch requires the dedicated test executable')
+    if not isinstance(timeout,(int,float)) or not math.isfinite(timeout) or timeout<=0:
+        raise ValueError('Graphics process requires a finite positive timeout')
+    result=subprocess.run(command,cwd=cwd,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                          timeout=timeout,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+    result.headless_graphics=True;result.desktop_isolated=False
+    result.desktop_identifier=result.window_station_identifier=None
+    return result
 
 
 def _run_windows(command, cwd, env, timeout):

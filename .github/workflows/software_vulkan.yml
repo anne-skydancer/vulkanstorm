@@ -49,6 +49,7 @@ jobs:
       - run: python scripts/tests/test_native_simulator_features.py
       - run: python scripts/tests/test_native_account_service_pump.py
       - run: python scripts/tests/test_world_scene_contracts.py
+      - run: python scripts/tests/test_world_motion_contracts.py
       - run: python scripts/tests/test_native_camera_transport.py
       - run: python scripts/tests/test_native_world_assets.py
       - run: python scripts/vulkan_parity_inventory.py
@@ -315,6 +316,15 @@ jobs:
               --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
               --harness-evidence .ci/evidence/results.json --evidence .ci/session-evidence --all-skins
           fi
+      - name: Production R1 ownership and lifecycle replay
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/run_vulkan_session_replay.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r1-session-evidence \
+            --skin ansastorm_modern --ui-scale 1.5 --headless --r1-contracts
       - name: Record source and build environment
         if: always()
         shell: bash
@@ -342,6 +352,7 @@ jobs:
             .ci/headless-evidence
             .ci/viewer-evidence
             .ci/session-evidence
+            .ci/r1-session-evidence
             .ci/parity-evidence
             .ci/world-parity-evidence
             .ci/opengl-reference/runtime.json

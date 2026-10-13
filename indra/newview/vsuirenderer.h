@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 #include <optional>
+#include "vsworldcontracts.h"
 
 namespace Diligent { struct IRenderDevice; struct IDeviceContext; struct ITextureView; }
 
@@ -30,12 +31,13 @@ public:
         bool alpha_mask = false; // image alpha with tint RGB, like LLUIImage::drawSolid
         std::optional<std::array<Vertex,6>> triangles; // native font geometry, same logical coordinate space
     };
-    struct Statistics { std::uint64_t packets=0,draws=0,vertices=0; };
+    struct Statistics { std::uint64_t packets=0,draws=0,vertices=0,residentImageBytes=0,imageBudgetBytes=0,imageAllocationRefusals=0; };
     VSUIRenderer(Diligent::IRenderDevice*, Diligent::IDeviceContext*);
     ~VSUIRenderer();
     VSUIRenderer(const VSUIRenderer&) = delete;
     VSUIRenderer& operator=(const VSUIRenderer&) = delete;
-    Image upload(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba);
+    Image upload(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba,
+                 VSWorldContracts::ImageRole role=VSWorldContracts::ImageRole::CoreUI);
     Image replace(const Image& old,unsigned x,unsigned y,unsigned width,unsigned height,
                   const std::vector<std::uint8_t>& rgba);
     // Submission order is paint order. Positive DPI scales logical coordinates.
@@ -52,6 +54,9 @@ public:
     static std::array<unsigned,2> imageExtent(const Image&);
     // Borrowed view; callers retain the exact Image generation through completion.
     static Diligent::ITextureView* imageView(const Image&);
+    static VSWorldContracts::Image imageDescription(const Image&);
+    static bool imageOwnedBy(const Image&, const Diligent::IRenderDevice*);
+    VSWorldContracts::Capabilities capabilities() const;
 private:
     struct Impl;
     std::unique_ptr<Impl> mImpl;

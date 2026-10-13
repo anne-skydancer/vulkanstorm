@@ -6,6 +6,8 @@
 #include "llvector4a.h"
 #include "v2math.h"
 #include "v4coloru.h"
+#include "llsd.h"
+#include "llsdutil.h"
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -37,7 +39,6 @@ struct VSUIResources::Impl
     struct Asset
     {
         unsigned width,height;
-        std::vector<std::uint8_t> bytes;
         VSUIRenderer::Image image;
     };
     struct Entry { std::shared_ptr<Asset> asset; LLUIImagePtr facade; };
@@ -152,15 +153,17 @@ LLUIImagePtr VSUIResources::publish(const std::string& key,const LLImageRaw& raw
     check(!key.empty() && width>0 && height>0 && width<=16384 && height<=16384 &&
           components>=1 && components<=4 && raw.getData(),"Invalid native UI CPU image");
     auto asset=std::make_shared<Impl::Asset>(); asset->width=width; asset->height=height;
-    asset->bytes.resize(std::size_t(width)*height*4);
+    std::vector<std::uint8_t> bytes(std::size_t(width)*height*4);
     for (unsigned y=0;y<asset->height;++y) for (unsigned x=0;x<asset->width;++x)
     {
         const auto* s=raw.getData()+((std::size_t(height)-1-y)*width+x)*components;
-        auto* d=asset->bytes.data()+(std::size_t(y)*width+x)*4;
+        auto* d=bytes.data()+(std::size_t(y)*width+x)*4;
         d[0]=s[0]; d[1]=components<3?s[0]:s[1]; d[2]=components<3?s[0]:s[2];
         d[3]=components==2?s[1]:components==4?s[3]:255;
     }
-    asset->image=mImpl->renderer.upload(width,height,asset->bytes);
+    asset->image=mImpl->renderer.upload(width,height,bytes,key.compare(0,7,"remote:")==0?
+        VSWorldContracts::ImageRole::RemoteAsset:VSWorldContracts::ImageRole::CoreUI);
+    if (!asset->image) return nullptr;
     std::weak_ptr<Impl> owner=mImpl;
     LLUIImagePtr facade=new LLUIImage(key,width,height,
         [owner,asset](S32 x,S32 y,S32 w,S32 h,const LLColor4& color,bool solid,
@@ -206,19 +209,18 @@ LLUIImagePtr VSUIResources::region(const std::string& key,const std::string& nam
     facade->setClipRegion(uv);
     return facade;
 }
-void VSUIResources::patch(const std::string& key,unsigned x,unsigned y,unsigned width,unsigned height,
+bool VSUIResources::patch(const std::string& key,unsigned x,unsigned y,unsigned width,unsigned height,
                          const std::vector<std::uint8_t>& rgba)
 {
     auto found=mImpl->assets.find(key); check(found!=mImpl->assets.end(),"Unknown native UI image patch");
     auto& a=*found->second.asset;
     check(width && height && x<=a.width && y<=a.height && width<=a.width-x && height<=a.height-y &&
           rgba.size()==std::size_t(width)*height*4,"Invalid native UI image patch");
-    auto bytes=a.bytes;
-    for (unsigned row=0;row<height;++row)
-        std::copy_n(rgba.data()+std::size_t(row)*width*4,width*4,bytes.data()+((std::size_t(y)+row)*a.width+x)*4);
     auto image=mImpl->renderer.replace(a.image,x,y,width,height,rgba);
-    a.bytes=std::move(bytes); a.image=std::move(image);
+    if (!image) return false;
+    a.image=std::move(image);
     found->second.facade->onImageLoaded();
+    return true;
 }
 void VSUIResources::begin(unsigned width,unsigned height,float dpi)
 {
@@ -281,7 +283,7 @@ void VSUIResources::fontBatch(LLImageRaw* raw,S32 generation,const LLVector4a* p
             for (unsigned y=0;y<asset.height;++y) for (unsigned x=0;x<asset.width;++x)
             {
                 const auto p=pixel(x,y);
-                if (!std::equal(p.begin(),p.end(),asset.bytes.begin()+(std::size_t(y)*asset.width+x)*4))
+                if (!std::equal(p.begin(),p.end(),VSUIRenderer::imagePixels(asset.image).begin()+(std::size_t(y)*asset.width+x)*4))
                 { left=std::min(left,x);top=std::min(top,y);right=std::max(right,x+1);bottom=std::max(bottom,y+1); }
             }
             if (right>left && bottom>top)
@@ -292,7 +294,8 @@ void VSUIResources::fontBatch(LLImageRaw* raw,S32 generation,const LLVector4a* p
                     const auto p=pixel(x,y);
                     std::copy(p.begin(),p.end(),bytes.begin()+(std::size_t(y-top)*(right-left)+x-left)*4);
                 }
-                patch(page.key,left,top,right-left,bottom-top,bytes);
+                if (!patch(page.key,left,top,right-left,bottom-top,bytes))
+                { page.generation=-1;return; } // Retry this generation when residency becomes available.
             }
         }
         page.generation=generation;
@@ -373,6 +376,17 @@ LLPointer<LLImageRaw> VSUIResources::rawImage(const std::string& key) const
     LLPointer<LLImageRaw> raw = new LLImageRaw(asset.width, asset.height, 4);
     const auto stride = asset.width * 4;
     for (unsigned y = 0; y < asset.height; ++y)
-        std::copy_n(asset.bytes.data() + y * stride, stride, raw->getData() + (asset.height - 1 - y) * stride);
+        std::copy_n(VSUIRenderer::imagePixels(asset.image).data() + y * stride, stride, raw->getData() + (asset.height - 1 - y) * stride);
     return raw;
+}
+LLSD VSUIResources::evidence() const
+{
+    const auto stats=mImpl->renderer.statistics();const auto caps=mImpl->renderer.capabilities();
+    LLSD result;result["image_generations"]=S32(mImpl->assets.size());
+    result["resident_image_payload_bytes"]=ll_sd_from_U64(stats.residentImageBytes);
+    result["image_payload_budget_bytes"]=ll_sd_from_U64(stats.imageBudgetBytes);
+    result["image_allocation_refusals"]=ll_sd_from_U64(stats.imageAllocationRefusals);
+    result["maximum_image_dimension"]=S32(caps.maximumImageDimension);
+    result["rgba8"]=caps.rgba8;result["bgra8"]=caps.bgra8;result["depth32"]=caps.depth32;
+    return result;
 }

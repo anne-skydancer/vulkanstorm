@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsnativeim.h"
 #include "vsnativesession.h"
+#include "workqueue.h"
+#include <utility>
 
 #include "llviewerassetstorage.h"
 
@@ -48,6 +50,16 @@
 #include "llworld.h"
 
 #include "llviewernetwork.h" // <FS:Ansariel> [UDP Assets]
+namespace
+{
+std::function<bool()> assetAccountGuard()
+{
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()) return owner->accountGuard(true);
+#endif
+    return vs_native_im_guard();
+}
+}
 
 ///----------------------------------------------------------------------------
 /// LLViewerAssetRequest
@@ -134,6 +146,8 @@ LLViewerAssetStorage::LLViewerAssetStorage(LLMessageSystem *msg, LLXferManager *
 
 LLViewerAssetStorage::~LLViewerAssetStorage()
 {
+    auto requests=std::exchange(mNativeRequests,{});
+    for(auto& [id,cancel]:requests) cancel();
     if (!LLCoprocedureManager::wasDeleted())
     {
         // This class has dedicated coroutine pool, clean it up, otherwise coroutines will crash later.
@@ -370,6 +384,10 @@ void LLViewerAssetStorage::_queueDataRequest(
     bool duplicate,
     bool is_priority)
 {
+    #if VS_NATIVE_VULKAN
+    if(VSNativeSession::active() && mPendingDownloads.size()>=4096)
+    { if(callback)callback(uuid,atype,user_data,LL_ERR_ASSET_REQUEST_FAILED,LLExtStat::NONE);return; }
+    #endif
     mCountRequests++;
     queueRequestHttp(uuid, atype, callback, user_data, duplicate, is_priority);
 }
@@ -412,7 +430,7 @@ void LLViewerAssetStorage::queueRequestHttp(
             "LLViewerAssetStorage::assetRequestCoro",
             // <FS:Ansariel> [UDP Assets] Need request for UDP assets
             //[this, uuid, atype, callback, user_data]
-            [this, req, uuid, atype, callback, user_data, current = vs_native_im_guard()]
+            [this, req, uuid, atype, callback, user_data, current = assetAccountGuard()]
             (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t&, const LLUUID&)
             {
                 // <FS:Ansariel> [UDP Assets] Need request for UDP assets
@@ -453,6 +471,8 @@ struct LLScopedIncrement
 
 void LLViewerAssetStorage::resetAccountRequests()
 {
+    auto requests=std::exchange(mNativeRequests,{});
+    for(auto& [id,cancel]:requests) cancel();
     _cleanupRequests(true, LL_ERR_CIRCUIT_GONE);
     mViewerAssetUrl.clear();
     setUpstream(LLHost());
@@ -465,15 +485,37 @@ void LLViewerAssetStorage::assetRequestCoro(
     LLGetAssetCallback callback,
     void *user_data)
 {
-    const auto current = vs_native_im_guard();
+    const auto current = assetAccountGuard();
     bool nativeConnected = false;
 #if VS_NATIVE_VULKAN
-    if (auto owner = VSNativeSession::active()) nativeConnected = owner->phase() == VSNativeSession::Phase::Connected;
+    if (auto owner = VSNativeSession::active()) nativeConnected = owner->phase() == VSNativeSession::Phase::Connected || owner->phase() == VSNativeSession::Phase::Connecting;
 #endif
     LLScopedIncrement coro_count_boost(sAssetCoroCount); // static counter since corotine can outlive LLViewerAssetStorage
 
     S32 result_code = LL_ERR_NOERR;
     LLExtStat ext_status = LLExtStat::NONE;
+    const auto complete=[this,current,nativeConnected,uuid,atype](S32 code,LLExtStat extended,S32 bytes)
+    {
+        if(nativeConnected)
+            LL::WorkQueue::getInstance("mainloop")->post([this,current,uuid,atype,code,extended,bytes]
+            {if(current() && gAssetStorage==this)removeAndCallbackPendingDownloads(uuid,atype,uuid,atype,code,extended,bytes);});
+        else removeAndCallbackPendingDownloads(uuid,atype,uuid,atype,code,extended,bytes);
+    };
+#if VS_NATIVE_VULKAN
+    if(nativeConnected)
+    {
+        LLEventStream ready("nativeAssetCapabilities",true);
+        LLTempBoundListener changed=LLEventPumps::instance().obtain("native_session_progress").listen(ready.getName(),
+            [pump=ready.getName()](const LLSD& event){LLEventPumps::instance().obtain(pump).post(event);return false;});
+        const double deadline=LLFrameTimer::getTotalSeconds()+60;
+        while(current() && VSNativeSession::active()->capability("ViewerAsset").empty())
+        {
+            const double remaining=deadline-LLFrameTimer::getTotalSeconds();if(remaining<=0)break;
+            llcoro::suspendUntilEventOnWithTimeout(ready,F32Seconds(F32(remaining)),LLSDMap("timeout",true));
+        }
+        if(!current() || gAssetStorage!=this || LLApp::isExiting())return;
+    }
+#endif
 
     if (!gAssetStorage)
     {
@@ -514,7 +556,7 @@ void LLViewerAssetStorage::assetRequestCoro(
                 LL_WARNS_ONCE("ViewerAsset") << "Asset request fails: timeout reached while waiting for region" << LL_ENDL;
                 result_code = LL_ERR_NO_CAP;
                 ext_status = LLExtStat::NONE;
-                removeAndCallbackPendingDownloads(uuid, atype, uuid, atype, result_code, ext_status, 0);
+                complete(result_code, ext_status, 0);
                 return;
             }
         }
@@ -523,7 +565,7 @@ void LLViewerAssetStorage::assetRequestCoro(
             LL_WARNS_ONCE("ViewerAsset") << "Asset request fails: no region set" << LL_ENDL;
             result_code = LL_ERR_NO_CAP;
             ext_status = LLExtStat::NONE;
-            removeAndCallbackPendingDownloads(uuid, atype, uuid, atype, result_code, ext_status, 0);
+            complete(result_code, ext_status, 0);
             return;
         }
     }
@@ -553,7 +595,7 @@ void LLViewerAssetStorage::assetRequestCoro(
             LL_WARNS_ONCE("ViewerAsset") << "Asset " << uuid << " request fails : capabilities took too long to arrive" << LL_ENDL;
             result_code = LL_ERR_NO_CAP;
             ext_status = LLExtStat::NONE;
-            removeAndCallbackPendingDownloads(uuid, atype, uuid, atype, result_code, ext_status, 0);
+            complete(result_code, ext_status, 0);
             return;
         }
 
@@ -599,7 +641,7 @@ void LLViewerAssetStorage::assetRequestCoro(
         LL_WARNS_ONCE("ViewerAsset") << "asset request fails: caps received but no viewer asset cap found" << LL_ENDL;
         result_code = LL_ERR_NO_CAP;
         ext_status = LLExtStat::NONE;
-        removeAndCallbackPendingDownloads(uuid, atype, uuid, atype, result_code, ext_status, 0);
+        complete(result_code, ext_status, 0);
         // <FS:Ansariel> [UDP Assets]
         }
         // </FS:Ansariel> [UDP Assets]
@@ -623,6 +665,14 @@ void LLViewerAssetStorage::assetRequestCoro(
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
     LLCore::HttpOptions::ptr_t httpOpts  = std::make_shared<LLCore::HttpOptions>();
 
+    U64 nativeRequest=0;
+    if(nativeConnected)
+    {
+        httpOpts->setTransferTimeout(20);httpOpts->setRetries(2);
+        nativeRequest=mNextNativeRequest++;
+        mNativeRequests[nativeRequest]=[weak=std::weak_ptr<LLCoreHttpUtil::HttpCoroutineAdapter>(httpAdapter)]
+        {if(auto adapter=weak.lock())adapter->cancelSuspendedOperation();};
+    }
     LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts);
 
     if (LLApp::isExiting() || gAssetStorage != this || !current())
@@ -632,6 +682,7 @@ void LLViewerAssetStorage::assetRequestCoro(
     }
 
     mCountCompleted++;
+    if(nativeRequest)mNativeRequests.erase(nativeRequest);
 
     S32 bytes_fetched = 0;
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
@@ -660,7 +711,7 @@ void LLViewerAssetStorage::assetRequestCoro(
 
         const LLSD::Binary &raw = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary();
 
-        S32 size = static_cast<S32>(raw.size());
+        S32 size = nativeConnected && raw.size()>64*1024*1024 ? 0 : static_cast<S32>(raw.size());
         if (size > 0)
         {
             mTotalBytesFetched += size;
@@ -700,7 +751,7 @@ void LLViewerAssetStorage::assetRequestCoro(
     }
 
     // Clean up pending downloads and trigger callbacks
-    removeAndCallbackPendingDownloads(uuid, atype, uuid, atype, result_code, ext_status, bytes_fetched);
+    complete(result_code,ext_status,bytes_fetched);
 }
 
 std::string LLViewerAssetStorage::getAssetURL(const std::string& cap_url, const LLUUID& uuid, LLAssetType::EType atype)

@@ -97,7 +97,7 @@ class RunnerFailureTests(unittest.TestCase):
                 return SimpleNamespace(returncode=1, stdout=(identity+diagnostic).replace('\n', '\r\n').encode('utf-8'))
 
             with patch('run_software_vulkan_tests.platform.system', return_value='Linux'), \
-                 patch('run_software_vulkan_tests.run_viewer_process', side_effect=execute), \
+                 patch('run_software_vulkan_tests.run_headless_graphics_process', side_effect=execute), \
                  patch.dict(os.environ, {'DISPLAY': ':99', 'WAYLAND_DISPLAY': 'wayland-0', 'VK_DRIVER_FILES': 'decoy'}), \
                  patch.object(sys, 'argv', ['runner', '--executable', str(executable), '--runtime', str(runtime), '--evidence', str(root/'evidence'), '--headless']):
                 with self.assertRaises(SystemExit) as result: main()

@@ -16,8 +16,10 @@ public:
     using GroundQuery = std::function<bool(const LLVector3&, LLVector3&, LLVector3&)>;
     static void initializeClass();
     static void cleanupClass();
-    VSWorldAvatar(const LLUUID&, bool self, U64 regionHandle, VSWorldRenderer&, VSUIResources&, GroundQuery);
+    VSWorldAvatar(const LLUUID&, bool self, U64 regionHandle, VSWorldRenderer&, VSUIResources&, GroundQuery,
+                  std::shared_ptr<const void> ownerReservation = {});
     ~VSWorldAvatar();
+    void rebase(U64 regionHandle, GroundQuery);
     bool appearance(LLMessageSystem&);
     bool animations(LLMessageSystem&);
     void transform(const LLVector3&, const LLQuaternion&, const LLVector3& velocity, const LLVector3& angularVelocity);
@@ -26,6 +28,7 @@ public:
     bool skinRiggedFace(const LLVolumeFace&,const LLSD&,std::vector<VSWorldRenderer::Vertex>&);
     LLSD evidence() const;
 private:
+    std::shared_ptr<const void> mOwnerReservation;
     struct Impl;
     std::unique_ptr<Impl> mImpl;
 };

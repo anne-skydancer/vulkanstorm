@@ -638,6 +638,8 @@ public:
     void addChangedMask(U32 mask, const LLUUID& referent);
 
     const changed_items_t& getChangedIDs() const { return mChangedItemIDs; }
+    U64 objectRevision(const LLUUID& id) const
+    {const auto found=mObjectRevisions.find(id);return found==mObjectRevisions.end()?0:found->second;}
     const changed_items_t& getAddedIDs() const { return mAddedItemIDs; }
 // [SL:KB] - Patch: UI-Notifications | Checked: Catznip-6.5
     const LLUUID& getTransactionId() const { return mTransactionId; }
@@ -791,6 +793,9 @@ public:
 /**                    Miscellaneous
  **                                                                            **
  *******************************************************************************/
+private:
+    U64 mNextObjectRevision=1;
+    std::map<LLUUID,U64> mObjectRevisions;
 };
 
 // a special inventory model for the agent

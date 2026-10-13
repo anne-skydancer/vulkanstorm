@@ -31,6 +31,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cstring>
+#include <cstdlib>
 #include <chrono>
 #include <iterator>
 #include <vector>
@@ -145,6 +146,7 @@ struct VSVulkanContext::Impl
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice>  device;
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context;
     Diligent::RefCntAutoPtr<Diligent::ISwapChain>     swapchain;
+    Diligent::RefCntAutoPtr<Diligent::ITexture>       replayTarget;
     std::unique_ptr<VSUIRenderer>                     renderer;
     std::unique_ptr<VSUIResources>                    resources;
     std::unique_ptr<VSWorldRenderer>                  worldRenderer;
@@ -212,6 +214,15 @@ struct VSVulkanContext::Impl
                 renderer_info["GRAPHICS_CARD_MEMORY_DETECTED"] = megabytes;
             }
             LL_INFOS("NativeVulkan") << "Machine Vulkan adapter: " << adapter << LL_ENDL;
+            renderer_info["HEADLESS_REPLAY"] = VSVulkanContext::headlessReplay();
+            if (VSVulkanContext::headlessReplay())
+            {
+                LLCoordWindow size;
+                require(window.getSize(&size) && size.mX>0 && size.mY>0,"Headless replay extent is invalid");
+                resizeReplayTarget(size.mX,size.mY);
+            }
+            else
+            {
             NativeWindow native{};
 #if LL_WINDOWS
             native.hWnd = window.getPlatformWindow();
@@ -236,6 +247,7 @@ struct VSVulkanContext::Impl
             desc.Usage             = SWAP_CHAIN_USAGE_RENDER_TARGET | SWAP_CHAIN_USAGE_COPY_SOURCE;
             factory->CreateSwapChainVk(device, context, desc, native, &swapchain);
             require(swapchain != nullptr, "Native viewer swapchain creation failed");
+            }
             renderer  = std::make_unique<VSUIRenderer>(device, context);
             resources = std::make_unique<VSUIResources>(*renderer);
             worldRenderer = std::make_unique<VSWorldRenderer>(device, context);
@@ -266,7 +278,7 @@ struct VSVulkanContext::Impl
         if (display)
             XSync(display, False);
 #endif
-        swapchain.Release();
+        swapchain.Release();replayTarget.Release();
 #if !LL_WINDOWS
         if (display)
             XSync(display, False);
@@ -275,6 +287,15 @@ struct VSVulkanContext::Impl
         device.Release();
     }
     ~Impl() { cleanup(); }
+    void resizeReplayTarget(unsigned width,unsigned height)
+    {
+        using namespace Diligent;
+        TextureDesc desc{};desc.Name="Headless native viewer replay target";
+        desc.Type=RESOURCE_DIM_TEX_2D;desc.Width=width;desc.Height=height;
+        desc.Format=TEX_FORMAT_RGBA8_UNORM;desc.BindFlags=BIND_RENDER_TARGET;
+        device->CreateTexture(desc,nullptr,&replayTarget);
+        require(replayTarget!=nullptr,"Headless native replay target allocation failed");
+    }
     bool present(float dpi, const std::function<void()>& draw)
     {
         using namespace Diligent;
@@ -282,14 +303,19 @@ struct VSVulkanContext::Impl
         require(window.getSize(&size), "Cannot query native viewer extent");
         if (size.mX <= 0 || size.mY <= 0 || window.getMinimized())
             return false;
-        if (swapchain->GetDesc().Width != unsigned(size.mX) || swapchain->GetDesc().Height != unsigned(size.mY))
+        if (replayTarget && (replayTarget->GetDesc().Width!=unsigned(size.mX) || replayTarget->GetDesc().Height!=unsigned(size.mY)))
+        {
+            context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            context->WaitForIdle();resizeReplayTarget(size.mX,size.mY);
+        }
+        if (swapchain && (swapchain->GetDesc().Width != unsigned(size.mX) || swapchain->GetDesc().Height != unsigned(size.mY)))
         {
             context->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             swapchain->Resize(size.mX, size.mY);
         }
-        require(swapchain->GetDesc().Width == unsigned(size.mX) && swapchain->GetDesc().Height == unsigned(size.mY),
+        require(!swapchain || (swapchain->GetDesc().Width == unsigned(size.mX) && swapchain->GetDesc().Height == unsigned(size.mY)),
                 "Native swapchain resize did not publish the client extent");
-        auto* target = swapchain->GetCurrentBackBufferRTV();
+        auto* target = swapchain?swapchain->GetCurrentBackBufferRTV():replayTarget->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
         require(target != nullptr, "Native viewer backbuffer is unavailable");
         context->SetRenderTargets(1, &target, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         const float color[]{ 16.f / 255, 32.f / 255, 48.f / 255, 1 };
@@ -338,7 +364,8 @@ struct VSVulkanContext::Impl
 #if VS_VULKAN_DIAGNOSTICS
         const auto parityPresentStart=std::chrono::steady_clock::now();
 #endif
-        swapchain->Present(gSavedSettings.getBOOL("RenderVSyncEnable") ? 1 : 0);
+        if (swapchain) swapchain->Present(gSavedSettings.getBOOL("RenderVSyncEnable") ? 1 : 0);
+        else context->Flush();
 #if VS_VULKAN_DIAGNOSTICS
         vs_parity_baseline_after_present(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-parityPresentStart).count());
 #endif
@@ -351,6 +378,15 @@ VSVulkanContext::VSVulkanContext(LLWindow& w, bool validation) : mImpl(std::make
 {
 }
 VSVulkanContext::~VSVulkanContext() = default;
+bool VSVulkanContext::headlessReplay()
+{
+#if VS_VULKAN_DIAGNOSTICS
+    const char* flag=std::getenv("VS_VULKAN_DIAGNOSTIC_HEADLESS");
+    return flag && std::string(flag)=="1" && std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY");
+#else
+    return false;
+#endif
+}
 VSUIResources& VSVulkanContext::resources()
 { return *mImpl->resources; }
 VSWorldScene& VSVulkanContext::world() { return *mImpl->worldScene; }

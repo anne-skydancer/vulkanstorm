@@ -68,6 +68,7 @@ namespace Details
 
         bool                            mDone;
         U64                             mNativeGeneration = 0;
+        U64                             mNativeCircuitGeneration = 0;
         LLCore::HttpRequest::ptr_t      mHttpRequest;
         LLCore::HttpRequest::policy_t   mHttpPolicy;
         std::string                     mSenderIp;
@@ -103,7 +104,8 @@ namespace Details
         mHttpPolicy = app_core_http.getPolicy(LLAppCoreHttp::AP_LONG_POLL);
         mSenderIp = sender.getIPandPort();
 #if VS_NATIVE_VULKAN
-        if (auto owner = VSNativeSession::active()) mNativeGeneration = owner->generation();
+        if (auto owner = VSNativeSession::active())
+        { mNativeGeneration = owner->generation();mNativeCircuitGeneration=owner->circuitGeneration(sender); }
 #endif
     }
 
@@ -115,7 +117,10 @@ namespace Details
         if (mNativeGeneration)
         {
             auto owner = VSNativeSession::active();
-            if (!owner || owner->generation() != mNativeGeneration) return;
+            if (!owner || owner->generation() != mNativeGeneration ||
+                !mNativeCircuitGeneration || owner->circuitGeneration(LLHost(mSenderIp))!=mNativeCircuitGeneration) return;
+            if (msg_name=="EnableSimulator" || msg_name=="EstablishAgentCommunication")
+            { owner->regionEvent(msg_name,body,LLHost(mSenderIp),mNativeGeneration,mNativeCircuitGeneration);return; }
         }
 #endif
         LLSD message;

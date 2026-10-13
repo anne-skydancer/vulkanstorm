@@ -5,16 +5,45 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from vulkan_viewer_process import run_viewer_process, process_isolation_evidence
+from vulkan_viewer_process import run_viewer_process, process_isolation_evidence, run_headless_viewer_process, run_headless_graphics_process
 
 
 class ViewerProcessTests(unittest.TestCase):
+    def test_headless_refuses_unsupported_executable_before_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            executable=Path(directory)/'viewer.exe';executable.write_bytes(b'old viewer')
+            with patch('vulkan_viewer_process.subprocess.run') as execute:
+                with self.assertRaises(RuntimeError):
+                    run_headless_viewer_process([str(executable)],directory,
+                        {'VS_VULKAN_DIAGNOSTIC_HEADLESS':'1','VS_VULKAN_DIAGNOSTIC_REPLAY':directory},5)
+                execute.assert_not_called()
+
+    def test_headless_requires_flags_and_forbids_presentation(self):
+        with patch('vulkan_viewer_process.subprocess.run') as execute:
+            with self.assertRaises(ValueError):
+                run_headless_viewer_process(['unused'],'.',{},5)
+            for mode in ('present','present-resize','unknown'):
+                with self.assertRaises(ValueError):
+                    run_headless_graphics_process(['diligent_render_test.exe','evidence',mode],'.',{},5)
+            execute.assert_not_called()
+
+    def test_headless_records_capture_without_desktop_claim(self):
+        with tempfile.TemporaryDirectory() as directory:
+            executable=Path(directory)/'viewer.exe';executable.write_bytes(b'Headless native viewer replay target')
+            expected=subprocess.CompletedProcess([],0,b'captured',None)
+            with patch('vulkan_viewer_process.subprocess.run',return_value=expected) as execute:
+                result=run_headless_viewer_process([str(executable)],directory,
+                    {'VS_VULKAN_DIAGNOSTIC_HEADLESS':'1','VS_VULKAN_DIAGNOSTIC_REPLAY':directory},5)
+            self.assertTrue(process_isolation_evidence(result)['headless_replay'])
+            self.assertFalse(process_isolation_evidence(result)['desktop_isolated'])
+            self.assertEqual(execute.call_args.kwargs['stdout'],subprocess.PIPE)
     def test_requires_bounded_timeout(self):
         for timeout in (None, 0, -1, float('inf'), float('nan')):
             with self.assertRaises(ValueError):
@@ -32,7 +61,8 @@ class ViewerProcessTests(unittest.TestCase):
 
     def test_setup_failure_evidence_is_json_safe(self):
         self.assertEqual(json.loads(json.dumps(process_isolation_evidence(None))), {
-            'desktop_isolated': False, 'desktop_identifier': None, 'window_station_identifier': None})
+            'desktop_isolated': False, 'desktop_identifier': None, 'window_station_identifier': None,
+            'headless_replay': False, 'headless_graphics': False})
 
     @unittest.skipUnless(os.name == 'nt', 'Windows private desktop qualification')
     def test_real_private_desktop_capture_and_unchanged_input_desktop(self):

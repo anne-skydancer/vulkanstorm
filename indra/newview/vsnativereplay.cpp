@@ -1,5 +1,6 @@
 // Replay ordinary login and native session dispatch against a loopback fixture. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "vsr1replay.h"
 #include "vsnativereplay.h"
 #include "vsnativeimreplay.h"
 #include "vsnativesession.h"
@@ -448,6 +449,7 @@ struct Replay
     bool queuedExpired = false;
     std::shared_ptr<bool> readback = std::make_shared<bool>(false);
     bool captureRequested = false;
+    bool r1Started = false;
     bool imCaptureRequested = false;
     std::shared_ptr<bool> imReadback = std::make_shared<bool>(false);
     bool submitted = false;
@@ -670,6 +672,9 @@ struct Replay
         }
         else if (step == 2)
         {
+            // Crossing deliberately changes the current scene. Continue the
+            // owner replay before the initial-region chat/scene prerequisites.
+            if(r1Started && !vs_r1_replay_tick(owner,imEvidence))return;
             if (gViewerWindow->nativeContext()->world().evidence()["objects"].asInteger()<2) return;
             auto* chat = gViewerWindow->nativeChat();
             auto* nearby = FSFloaterNearbyChat::findInstance();
@@ -687,6 +692,8 @@ struct Replay
                 std::string favoriteURL;
                 LLLandmarkActions::getSLURLfromPosGlobal(favoritePosition, [&favoriteURL](std::string& url) { favoriteURL = url; });
                 require(!favoriteURL.empty() && !LLWorldMap::instanceExists(), "Current favorite SLURL helper created world map or lost location");
+                r1Started=true;
+                if(!vs_r1_replay_tick(owner,imEvidence))return;
                 qualifyConnectedSkinGeometry(imEvidence);
                 qualifyScriptNotifications(imEvidence, owner.host());
                 const std::string path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));
@@ -738,6 +745,7 @@ struct Replay
                     (!FSFloaterNearbyChat::findInstance() || !FSFloaterNearbyChat::findInstance()->isInVisibleChain()),
                 "Logout did not detach both shared and diagnostic nearby frontends");
             require(vs_native_im_replay_expired(), "Logout retained a live IM callback generation");
+            vs_r1_replay_retired(owner,imEvidence);
             imEvidence["im_callback_expired"] = true;
             chat->input()->handleKeyHere(KEY_UP, MASK_CONTROL);
             require(chat->input()->getText().empty(), "Logout retained input history from the previous identity");
@@ -1009,6 +1017,7 @@ struct Replay
 bool vs_native_replay_tick()
 {
     if (!std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY")) return false;
+    vs_r1_replay_pump();
     static Replay replay;
     if (auto owner = VSNativeSession::active()) replay.tick(*owner);
     return true;

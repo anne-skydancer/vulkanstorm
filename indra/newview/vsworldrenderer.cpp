@@ -32,9 +32,9 @@ void requireWorld(bool v,const char* message) { if (!v) throw std::runtime_error
 struct alignas(16) Constants
 {
     std::array<float,16> projection;
-    std::array<float,4> sun,ambient,color,material;
+    std::array<float,4> sun,ambient,color,material,regionOffset;
 };
-static_assert(sizeof(Constants)==128);
+static_assert(sizeof(Constants)==144);
 static_assert(sizeof(VSWorldRenderer::Vertex)==32);
 void checkWorldABI(IShader& shader)
 {
@@ -44,10 +44,10 @@ void checkWorldABI(IShader& shader)
         ShaderResourceDesc resource{};shader.GetResourceDesc(i,resource);
         if (!resource.Name || std::strcmp(resource.Name,"WorldView")) continue;
         const auto* buffer=shader.GetConstantBufferDesc(i);
-        requireWorld(buffer && buffer->Size==sizeof(Constants) && buffer->NumVariables==5,"World uniform block ABI mismatch");
-        const char* names[]{"projection","sun","ambient","tint","material"};
-        const std::size_t offsets[]{offsetof(Constants,projection),offsetof(Constants,sun),offsetof(Constants,ambient),offsetof(Constants,color),offsetof(Constants,material)};
-        for (unsigned v=0;v<5;++v)
+        requireWorld(buffer && buffer->Size==sizeof(Constants) && buffer->NumVariables==6,"World uniform block ABI mismatch");
+        const char* names[]{"projection","sun","ambient","tint","material","regionOffset"};
+        const std::size_t offsets[]{offsetof(Constants,projection),offsetof(Constants,sun),offsetof(Constants,ambient),offsetof(Constants,color),offsetof(Constants,material),offsetof(Constants,regionOffset)};
+        for (unsigned v=0;v<6;++v)
         {
             const auto& variable=buffer->pVariables[v];
             requireWorld(variable.Name && !std::strcmp(variable.Name,names[v]) && variable.Offset==offsets[v],"World uniform member ABI mismatch");
@@ -63,6 +63,7 @@ struct VSWorldRenderer::Geometry
     RefCntAutoPtr<IRenderDevice> owner;
     unsigned count = 0;
     std::shared_ptr<const VSResourceBudget::Reservation> residency;
+    VSWorldContracts::Geometry description;
 };
 struct VSWorldRenderer::Impl
 {
@@ -72,7 +73,7 @@ struct VSWorldRenderer::Impl
     RefCntAutoPtr<IPipelineState> pipelines[2][3];
     RefCntAutoPtr<ITexture> depth, white;
     RefCntAutoPtr<IFence> fence;
-    Uint64 next = 1;
+    Uint64 next = 1,nextGeometryGeneration=1;
     struct DrawResources
     {
         RefCntAutoPtr<IBuffer> constants;
@@ -113,11 +114,11 @@ struct VSWorldRenderer::Impl
 layout(location=0) in vec3 position;
 layout(location=1) in vec3 normal;
 layout(location=2) in vec2 uv;
-layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; };
+layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; };
 layout(location=0) out vec2 texUV;
 layout(location=1) out vec3 light;
 void main() {
-    vec4 p=material.w>0.5 ? vec4(position,1) : projection*vec4(position,1);
+    vec4 p=material.w>0.5 ? vec4(position,1) : projection*vec4(position+regionOffset.xyz,1);
     p.z=(p.z+p.w)*0.5;
     gl_Position=p; texUV=uv;
     light=material.x>0.5 ? vec3(1) : ambient.rgb+(vec3(1)-ambient.rgb)*max(dot(normalize(normal),normalize(sun.xyz)),0.0);
@@ -127,7 +128,7 @@ void main() {
 layout(location=0) in vec2 texUV;
 layout(location=1) in vec3 light;
 layout(location=0) out vec4 result;
-layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; };
+layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; };
 uniform sampler2D g_Texture;
 void main() {
     if (material.w>0.5) {
@@ -185,6 +186,8 @@ VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertice
     auto residency=mImpl->meshBudget.reserve(vertices.size()*sizeof(Vertex)+indices.size()*sizeof(unsigned));
     if (!residency) { ++mImpl->meshAllocationRefusals;return {}; }
     auto mesh=std::make_shared<Geometry>();mesh->owner=mImpl->device;mesh->count=unsigned(indices.size());
+    mesh->description.vertices=vertices.size();mesh->description.indices=indices.size();
+    mesh->description.generation=mImpl->nextGeometryGeneration++;
     mesh->residency=std::move(residency);
     BufferDesc bd{};bd.Name="Native world vertex generation";bd.Size=vertices.size()*sizeof(Vertex);
     bd.Usage=USAGE_IMMUTABLE;bd.BindFlags=BIND_VERTEX_BUFFER;
@@ -215,6 +218,8 @@ VSWorldRenderer::Statistics VSWorldRenderer::statistics() const
     result.meshAllocationRefusals=mImpl->meshAllocationRefusals;
     return result;
 }
+VSWorldContracts::Geometry VSWorldRenderer::geometryDescription(const Mesh& mesh)
+{ return mesh?mesh->description:VSWorldContracts::Geometry{}; }
 void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,const View& view,const std::vector<Packet>& packets)
 {
     const auto started=std::chrono::steady_clock::now();
@@ -244,9 +249,11 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
     for (const auto& p:submitted.packets)
     {
         requireWorld(p.mesh && p.mesh->owner.RawPtr()==mImpl->device.RawPtr(),"World mesh belongs to another device");
+        requireWorld(!p.image || VSUIRenderer::imageOwnedBy(p.image,mImpl->device),"World image belongs to another device");
         for (float f:p.color) requireWorld(std::isfinite(f),"Non-finite world material");
         auto* pipeline=mImpl->pipeline(target->GetTexture()->GetDesc().Format,p.alpha,p.background);
-        Constants constants{view.projection,view.sun,view.ambient,p.color,{p.fullbright?1.f:0.f,p.masked?1.f:0.f,.5f,p.background?1.f:0.f}};
+        for (float f:p.regionOffset) requireWorld(std::isfinite(f),"Non-finite world region translation");
+        Constants constants{view.projection,view.sun,view.ambient,p.color,{p.fullbright?1.f:0.f,p.masked?1.f:0.f,.5f,p.background?1.f:0.f},p.regionOffset};
         BufferDesc bd{};bd.Name="Native world draw constants";bd.Size=sizeof(constants);
         Impl::DrawResources resources;
         auto& available=mImpl->available[pipeline];

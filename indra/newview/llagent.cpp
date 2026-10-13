@@ -5322,6 +5322,9 @@ void LLAgent::doTeleportViaLure(const LLUUID& lure_id, bool godlike)
 // James Cook, July 28, 2005
 void LLAgent::teleportCancel()
 {
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active()){owner->cancelTeleport();return;}
+#endif
     if (!hasPendingTeleportRequest())
     {
         LLViewerRegion* regionp = getRegion();

@@ -84,7 +84,8 @@ void LLViewerWindow::initNativeWindow(const Params& p)
     {
         mWindow = LLWindowManager::createWindow(this, p.title, p.name, p.x, p.y, p.width, p.height, 0, false, false,
                                                 gSavedSettings.getBOOL("RenderVSyncEnable"), false, false, 0, 0, 4.6f,
-                                                gSavedSettings.getBOOL("FSUseLegacyCursors"), LLWindowManager::GraphicsAPI::Vulkan);
+                                                gSavedSettings.getBOOL("FSUseLegacyCursors"), LLWindowManager::GraphicsAPI::Vulkan,
+                                                VSVulkanContext::headlessReplay());
         require(mWindow != nullptr, "Native viewer window creation failed");
         mWindow->setMinSize(p.min_width, p.min_height, false);
         LLCoordWindow size;

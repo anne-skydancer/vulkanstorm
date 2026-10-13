@@ -1,8 +1,10 @@
 """Replay the native CPU session through the fully staged viewer, without grid credentials."""
 import argparse
+import base64
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -21,13 +23,58 @@ from urllib.parse import urlsplit, parse_qs
 
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
 from run_vulkan_viewer_diagnostic import runtime_libraries, skin_cases
-from vulkan_viewer_process import run_viewer_process, process_isolation_evidence
+from vulkan_viewer_process import run_viewer_process, run_headless_viewer_process, process_isolation_evidence
 
 # Vintage's full 396-frame Preferences traversal takes about 200 seconds on
 # the pinned software device; all connected actions took over 314 seconds.
 VIEWER_REPLAY_SECONDS = 480
 PROCESS_REPLAY_SECONDS = 500
 CASE_REPLAY_SECONDS = 530
+
+
+def harness_prerequisite_passed(harness, headless=False):
+    if not harness.get('passed'):
+        return False
+    if not headless:
+        return harness.get('presentation_qualified') is True
+    # A no-window contract replay has its own prerequisite; it never supplies
+    # evidence for WSI or relaxes the ordinary presentation qualification.
+    modes = {record.get('mode') for record in harness.get('tests', [])
+             if record.get('passed') is True}
+    return {'offscreen', 'world'}.issubset(modes)
+
+
+def r1_contracts_passed(record, requests):
+    contracts=record.get('r1_contracts', {})
+    if not all(contracts.get(key) is True for key in (
+            'host_ids','object_face_retirement','variable_terrain','asset_replacement',
+            'crossing_continuity','circuit_retirement','inventory_scope','inventory_revision','scene_owner_kinds','self_continuity')):
+        return False
+    if not all(key in contracts for key in ('motion_selection','task_inventory','appearance_startup','logout_retirement')):
+        return False
+    try:
+        def u64(value):
+            data=base64.b64decode(value,validate=True)
+            if len(data)!=8:raise ValueError('Invalid LLSD U64')
+            return int.from_bytes(data,'big')
+        motion=contracts['motion_selection'];task=contracts['task_inventory'];retired=contracts['logout_retirement']
+        if motion['authoritative_position']!=[15,20,30] or motion['selected'] is not False or motion['predicted_position']==[15,20,30]:
+            return False
+        if not all(math.isfinite(value) for value in motion['predicted_position']+motion['predicted_rotation']):return False
+        if not task['known'] or task['pending'] or task['serial']!=42 or task['filename']!='r1-task.txt':return False
+        if not contracts['appearance_startup']:return False
+        if retired['owners'] or retired['neighbours'] or retired['owned_object_slots'] or retired['owned_avatar_slots']:
+            return False
+        if retired['assets']['requests'] or u64(retired['assets']['resident_bytes']):return False
+        before=contracts['mesh_before'];after=contracts['mesh_after']
+        if u64(after['asset_generation'])<=u64(before['asset_generation']):return False
+        if abs(before['asset_third_vertex'][0]-(32768/65535-.5))>1e-4 or abs(after['asset_third_vertex'][0]-(45000/65535-.5))>1e-4:
+            return False
+        if not any(region['width']==1024 and region['height']==512 and region['terrain_patches']==1
+                   for region in contracts['initial_scene']['neighbours']):return False
+    except (KeyError,TypeError,ValueError):
+        return False
+    return {1,2}.issubset({request.get('revision') for request in requests if request.get('path')=='/r1-mesh'})
 
 INVENTORY_ROOT = '70000000-0000-0000-0000-000000000001'
 LIBRARY_ROOT = '72000000-0000-0000-0000-000000000001'
@@ -157,7 +204,8 @@ def run_staged_viewer(command, stage, env):
                    '-ex', 'set pagination off', '-ex', 'set print thread-events off',
                    '-ex', 'handle SIGPIPE SIGUSR2 SIG64 nostop noprint pass',
                    '-ex', 'run', '-ex', 'thread apply all bt', '--args', *command]
-    result = run_viewer_process(command, cwd=stage, env=env, timeout=PROCESS_REPLAY_SECONDS)
+    launch = run_headless_viewer_process if env.get('VS_VULKAN_DIAGNOSTIC_HEADLESS') == '1' else run_viewer_process
+    result = launch(command, cwd=stage, env=env, timeout=PROCESS_REPLAY_SECONDS)
     result.native_debugger = 'gdb' if debugger else None
     return result
 
@@ -232,6 +280,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path == '/r1-mesh' and getattr(self.server,'r1_directory',None):
+            if parse_qs(urlsplit(self.path).query).get('mesh_id') != ['a1000000-0000-0000-0000-000000000001']:
+                self.send_error(404); return
+            directory=self.server.r1_directory
+            marker=directory/'mesh-generation.txt'
+            revision=2 if marker.exists() and marker.read_text().strip()=='2' else 1
+            data=(directory/f'mesh-{revision}.bin').read_bytes()
+            self.server.requests.append({'path':path,'revision':revision,'bytes':len(data)})
+            self.send_response(200);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data);return
         if path.rstrip('/') == '/asset':
             query = parse_qs(urlsplit(self.path).query)
             if query.get('texture_id'):
@@ -469,6 +526,9 @@ class Handler(BaseHTTPRequestHandler):
                                 ('GetMetadata', '/metadata')]:
                 ET.SubElement(mapping, 'key').text = name
                 ET.SubElement(mapping, 'string').text = self.server.url + route
+            if getattr(self.server,'r1_directory',None):
+                ET.SubElement(mapping,'key').text='GetMesh2'
+                ET.SubElement(mapping,'string').text=self.server.url+'/r1-mesh'
             ET.SubElement(mapping, 'key').text = 'EventQueueGet'
             ET.SubElement(mapping, 'string').text = self.server.url + '/events'
             ET.SubElement(mapping, 'key').text = 'FetchInventory2'
@@ -606,6 +666,8 @@ def main():
     parser.add_argument('--ui-scale', type=float, default=1.0,
                         help='Viewer UI scale used for connected skin/readback qualification')
     parser.add_argument('--all-skins', action='store_true', help='Run the complete connected replay for every packaged skin/theme and German overlay')
+    parser.add_argument('--headless', action='store_true', help='Replay production viewer integration offscreen without a native window; does not qualify presentation')
+    parser.add_argument('--r1-contracts', action='store_true', help='Replay R1 owner, region, resource and lifecycle contracts through production viewer code')
     parser.add_argument('--native-backtrace', action='store_true', help='Run Linux replay under GDB; ordinary qualification runs directly')
     args = parser.parse_args()
     if not .75 <= args.ui_scale <= 4:
@@ -636,6 +698,10 @@ def main():
                 command.append('--register-windows-manifests')
             if args.native_backtrace:
                 command.append('--native-backtrace')
+            if args.headless:
+                command.append('--headless')
+            if args.r1_contracts:
+                command.append('--r1-contracts')
             try:
                 code = subprocess.run(command, timeout=CASE_REPLAY_SECONDS).returncode
                 record = json.loads((child / 'results.json').read_text())
@@ -668,8 +734,8 @@ def main():
         if hashlib.sha256((args.runtime.resolve().parent / name).read_bytes()).hexdigest() != digest:
             raise RuntimeError('Runtime checksum mismatch: ' + name)
     harness = json.loads(args.harness_evidence.read_text())
-    if not harness.get('passed') or not harness.get('presentation_qualified'):
-        raise RuntimeError('Missing prerequisite native presentation evidence')
+    if not harness_prerequisite_passed(harness, args.headless):
+        raise RuntimeError('Missing prerequisite native graphics evidence for the selected replay mode')
     directory = args.evidence.resolve(); directory.mkdir(parents=True, exist_ok=True)
     for name in ('session-replay.xml', 'session-chat.ppm', 'session-chat-expected.ppm', 'session-chat-expected-products.ppm', 'session-chat-packets.txt', 'session-chat-scene.ppm', 'session-chat-scene.rgba',
                  'im/session-chat.ppm', 'im/session-chat-expected.ppm', 'im/session-chat-expected-products.ppm', 'im/session-chat-packets.txt', 'im/session-chat-scene.ppm', 'im/session-chat-scene.rgba', 'results.json'):
@@ -687,6 +753,13 @@ def main():
     env.update(VK_DRIVER_FILES=runtime['icd'], VK_LAYER_PATH=runtime['layer_path'],
                VK_LOADER_LAYERS_DISABLE='~implicit~', VK_LOADER_DEBUG='error,warn,driver,layer',
                VS_VULKAN_DIAGNOSTIC_REPLAY=str(directory))
+    if args.headless:
+        env['VS_VULKAN_DIAGNOSTIC_HEADLESS'] = '1'
+        env.pop('DISPLAY', None); env.pop('WAYLAND_DISPLAY', None)
+    else:
+        env.pop('VS_VULKAN_DIAGNOSTIC_HEADLESS', None)
+    if args.r1_contracts:env['VS_VULKAN_REPLAY_R1']='1'
+    else:env.pop('VS_VULKAN_REPLAY_R1',None)
     layer = directory / 'vk_layer_settings.txt'; layer.write_text('khronos_validation.validate_sync = true\n')
     env['VK_LAYER_SETTINGS_PATH'] = str(layer)
     command = [str(executable), '--settings', 'vs_native_session_ci.xml', '--set', 'ClientSettingsFile',
@@ -706,6 +779,7 @@ def main():
                     '--set', 'FSUseNearbyChatConsole', 'true'])
     report = {}; log = ''; code = None; passed = False
     with SimulatorHTTP() as server:
+        server.r1_directory=directory/'r1' if args.r1_contracts else None
         server.upload_directory = directory / 'upload-bodies'
         worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
         env['VS_VULKAN_REPLAY_SEED'] = server.url + '/seed'
@@ -718,6 +792,8 @@ def main():
             report['process_isolation'] = process_isolation_evidence(process)
             report['native_debugger'] = getattr(process, 'native_debugger', None)
             passed = assess(report, code, log)
+            if args.r1_contracts and not r1_contracts_passed(report,server.requests):
+                raise RuntimeError('Missing production R1 ownership/lifecycle or actual mesh replacement evidence')
             report['conference_start_request'] = conference_start_observed(server.requests)
             if not report['conference_start_request']:
                 raise RuntimeError('Missing or incorrect actual authenticated conference start request')
@@ -788,6 +864,7 @@ def main():
         (directory / 'http-replay.json').write_text(json.dumps(server.requests, indent=2) + '\n')
     (directory / 'viewer.log').write_text(log, encoding='utf-8')
     report.update(passed=passed, exit_code=code, live_server_qualified=False,
+                  presentation_qualified=False if args.headless else bool(harness.get('presentation_qualified')),
                   execution_budget=dict(viewer=VIEWER_REPLAY_SECONDS, process=PROCESS_REPLAY_SECONDS,
                                         matrix_case=CASE_REPLAY_SECONDS))
     (directory / 'results.json').write_text(json.dumps(report, indent=2) + '\n')

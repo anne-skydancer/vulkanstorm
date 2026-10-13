@@ -392,6 +392,8 @@ int main(){window.top.rect={0,500,800,468};window.bottom.rect={0,64,800,32};LLSc
         body=function(source,'void VSNativeSession::requestLogout(')
         fixture=r'''#include <cassert>
 #include <string>
+#include <map>
+#include <functional>
 struct LLSD{};
 struct Settings{bool disable=false;bool getBOOL(const char*){return disable;}}gSavedSettings;
 namespace LLTrans{std::string getString(const char*s){return s;}}
@@ -403,6 +405,7 @@ double now(){return 10;}
 struct VSNativeSession{enum class Phase{Connected,Connecting,Logout,Login};Phase mPhase=Phase::Connected;
  bool mQuit=false;double mDeadline=0;int sent=0,released=0;
  struct Poll{void reset(){}}mPoll;
+ struct Circuit {std::function<void()> cancel;Poll poll;};std::map<int,Circuit> mCircuits;
  void typing(bool){}void releaseMovement(){++released;}void clearParcelPlayback(){}void unbind(){}
  void send(const char* name,LLSD){assert(released>0);if(sent==0)assert(std::string(name)=="AgentUpdate");++sent;}
  void requestLogout(bool);};

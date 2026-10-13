@@ -22,6 +22,11 @@ public:
         bool masked = false;
         bool background = false; // Clip-space sky, drawn before depth-tested geometry.
         float distanceSquared = 0;
+        // Region-local vertices never contain large grid coordinates. Apply the
+        // current floating-origin translation at submission, without reupload.
+        std::array<float,4> regionOffset{};
+        std::array<std::uint8_t,16> objectIdentity{};
+        std::uint64_t objectGeneration=0,faceGeneration=0;
     };
     struct View
     {
@@ -45,6 +50,7 @@ public:
               const View&, const std::vector<Packet>&);
     void retire();
     Statistics statistics() const;
+    static VSWorldContracts::Geometry geometryDescription(const Mesh&);
 private:
     struct Impl;
     std::unique_ptr<Impl> mImpl;

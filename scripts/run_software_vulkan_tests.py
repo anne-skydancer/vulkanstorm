@@ -9,7 +9,7 @@ import platform
 import re
 import subprocess
 
-from vulkan_viewer_process import run_viewer_process, process_isolation_evidence
+from vulkan_viewer_process import run_viewer_process, run_headless_graphics_process, process_isolation_evidence
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -190,7 +190,8 @@ def main():
                 command = [str(executable), expected, mode]
                 if system_driver and runtime.get('device_name'):
                     command.append(runtime['device_name'])
-                process = run_viewer_process(command, cwd=directory, env=env, timeout=180)
+                launch=run_headless_graphics_process if args.headless else run_viewer_process
+                process = launch(command, cwd=directory, env=env, timeout=180)
                 log = process.stdout.decode('utf-8', errors='replace')
                 passed = assess(mode, process.returncode, log)
                 code = process.returncode

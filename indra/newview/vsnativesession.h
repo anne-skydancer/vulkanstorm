@@ -2,6 +2,7 @@
 #pragma once
 #include "llhost.h"
 #include "vsnativecamera.h"
+#include "vsworldscene.h"
 #include "llsd.h"
 #include "lluuid.h"
 #include "llhandle.h"
@@ -48,12 +49,23 @@ public:
     void circuitResult(U64 generation, S32 result, U64 regionEpoch = 0);
     U64 generation() const { return mGeneration; }
     Phase phase() const { return mPhase; }
+    std::function<bool()> accountGuard(bool allowConnecting = false) const;
+    struct AccountHandle {LLUUID agent,session;U64 generation=0;};
+    struct InventoryHandle {AccountHandle account;LLUUID item,asset;U64 revision=0;};
+    AccountHandle account() const {return {mAgent,mSession,mGeneration};}
+    bool current(const AccountHandle&) const;
+    std::optional<InventoryHandle> inventory(const LLUUID&) const;
+    bool current(const InventoryHandle&) const;
+    std::function<bool()> interactionGuard(const VSWorldScene::FaceHandle&) const;
+    bool requestTaskInventory(const VSWorldScene::ObjectHandle&);
     const LLHost& host() const { return mHost; }
     std::string capability(const std::string&) const;
     LLSD evidence() const;
     const LLSD& simulatorFeatures() const { return mSimulatorFeatures; }
     bool simulatorFeaturesReceived() const { return mSimulatorFeaturesReceived; }
     bool applySimulatorFeatures(const LLSD&, U64 generation, U64 regionEpoch);
+    U64 circuitGeneration(const LLHost&) const;
+    bool regionEvent(const std::string&, const LLSD&, const LLHost&, U64 account, U64 circuit);
     const std::string& regionName() const { return mName; }
     const LLVector3& position() const { return mPosition; }
     U64 regionEpoch() const { return mRegionEpoch; }
@@ -75,6 +87,7 @@ public:
     bool teleportToLandmark(const LLUUID&);
     bool teleportHome() { return teleportToLandmark(LLUUID::null); }
     bool teleportToLure(const LLUUID&, bool godlike);
+    bool cancelTeleport();
 
     // Current simulator's parcel metadata and ordinary 2D playback controls.
     const std::string& musicURL() const { return mMusicURL; }
@@ -103,8 +116,13 @@ private:
     static void simulatorFeaturesCoro(std::weak_ptr<VSNativeSession>, std::string, U64, U64);
     void clearSimulatorFeatures();
     bool changeRegion(const LLSD&);
+    bool enableNeighbour(const LLHost&, U64 handle, U32 width, U32 height);
+    void retireNeighbour(const LLHost&);
+    void neighbourCircuitResult(const LLHost&, U64 account, U64 circuit, S32 result);
+    void neighbourSeedCoro(LLHost, std::string, U64 account, U64 circuit);
     bool teleportRequest(U64, const LLVector3&);
     void connected();
+    void publishProgress();
     void requestParcel();
     void clearParcelPlayback();
     void updateParcelPlayback();
@@ -124,7 +142,22 @@ private:
     U64 mGeneration = 1;
     U64 mRegionEpoch = 1;
     bool mChangingRegion = false;
+    bool mAppearanceOwnerInitialized=false,mWearablesKnown=false;
+    U32 mWearablesSerial=0;
+    LLSD mWearablesMetadata;
     LLHost mPreviousHost;
+    struct RegionCircuit
+    {
+        U64 handle=0, incarnation=0, requestRevision=0;
+        U32 width=256,height=256;
+        bool acknowledged=false,handshake=false,seedFailed=false;
+        double deadline=0;
+        LLSD capabilities;
+        std::function<void()> cancel;
+        std::unique_ptr<LLEventPoll> poll;
+    };
+    std::map<LLHost,RegionCircuit> mCircuits;
+    U64 mNextCircuitGeneration=1;
     std::string mRequestedRegion;
     LLVector3 mRequestedPosition;
     double mNavigationDeadline = 0;
