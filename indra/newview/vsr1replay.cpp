@@ -54,8 +54,6 @@ public:
         }
     }
 };
-void dispatch(const std::string& name,const LLSD& body,const LLHost& host)
-{LLSD envelope;envelope["sender"]=host.getIPandPort();envelope["body"]=body;LLMessageSystem::dispatch(name,envelope);}
 const LLUUID meshID("a1000000-0000-0000-0000-000000000001");
 const LLUUID objectID("a2000000-0000-0000-0000-000000000001");
 const LLUUID replacementID("a2000000-0000-0000-0000-000000000002");
