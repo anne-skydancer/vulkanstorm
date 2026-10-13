@@ -116,12 +116,21 @@ std::vector<std::uint8_t> vs_ui_expected_pixels(unsigned width, unsigned height,
                         return float((w0 * (original_a.*m) + w1 * (original_b.*m) + w2 * (original_c.*m)) / original_area);
                     };
                     const auto u = interpolate(&Vertex::u), v = interpolate(&Vertex::v);
-                    const double alpha = sample(u, v, 3) * interpolate(&Vertex::a);
+                    // Destination-width blending converts the fragment output,
+                    // including alpha, before evaluating either blend factor.
+                    // Mesa 25.2.4 lp_state_fs.c converts src to row_type before
+                    // lp_build_blend_aos; rounding the products alone misses this.
+                    const auto fragment = [&](double value) {
+                        value = std::clamp(value, 0.0, 1.0);
+                        return precision == VSUIBlendPrecision::DestinationProducts
+                            ? std::round(value * 255) / 255 : value;
+                    };
+                    const double alpha = fragment(sample(u, v, 3) * interpolate(&Vertex::a));
                     auto *dst = out.data() + (std::size_t(y) * width + x) * 4;
                     const float colors[]{interpolate(&Vertex::r), interpolate(&Vertex::g), interpolate(&Vertex::b)};
                     for (unsigned channel = 0; channel < 3; ++channel)
                     {
-                        const double src = (p.alpha_mask ? 1 : sample(u, v, channel)) * colors[channel];
+                        const double src = fragment((p.alpha_mask ? 1 : sample(u, v, channel)) * colors[channel]);
                         const bool additive =
                             p.blend == VSUIRenderer::Blend::Additive || p.blend == VSUIRenderer::Blend::AdditiveAlpha;
                         const bool unmodulated = p.blend == VSUIRenderer::Blend::PremultipliedAlpha ||

@@ -13,6 +13,7 @@
 #include <vector>
 #include <functional>
 #include "vsworldrenderer.h"
+#include "vsuipixeloracle.h"
 #if PLATFORM_WIN32
 #include <windows.h>
 #include <tlhelp32.h>
@@ -589,6 +590,49 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     capture("budget-replacement.ppm",[](unsigned,unsigned){return Pixel{0,255,0,255};});
     limited.retire();require(limited.statistics().residentMeshBytes==0,"Replacement submission did not release its bytes");
     std::cout<<"WORLD_BUDGET_BYTES="<<meshBytes<<"\nWORLD_BUDGET_REFUSALS=1\nWORLD_BUDGET_RETIRED=1\n";
+    // Quantize source RGBA before blend factors at destination precision.
+    // Exercise this through the real renderer without opening a window.
+    const float grayClear[]{31.f/255,31.f/255,31.f/255,1};
+    context->SetRenderTargets(1,&rtv,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    context->ClearRenderTarget(rtv,grayClear,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    auto border=images.upload(1,1,{141,141,141,1});
+    std::vector<VSUIRenderer::Packet> borders;
+    for (unsigned column=0;column<3;++column) for(unsigned layer=0;layer<6;++layer)
+    {
+        VSUIRenderer::Packet packet;packet.image=border;
+        packet.bounds={float(column*2),0,float(column*2+2),8};packet.clip={0,0,8,8};
+        packet.color={1,1,1,column==0?.4f:column==1?.6f:.95f};borders.push_back(packet);
+    }
+    std::vector<std::uint8_t> background(8*8*4,31);
+    for (unsigned i=3;i<background.size();i+=4) background[i]=255;
+    const auto floating=vs_ui_expected_pixels(8,8,1,borders,8,background);
+    const auto products=vs_ui_expected_pixels(8,8,1,borders,8,background,VSUIBlendPrecision::DestinationProducts);
+    images.draw(rtv,8,8,1,borders);
+    context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    CopyTextureAttribs copy{};copy.pSrcTexture=target;copy.pDstTexture=readback;
+    copy.SrcTextureTransitionMode=copy.DstTextureTransitionMode=RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    context->CopyTexture(copy);context->Flush();context->WaitForIdle();
+    MappedTextureSubresource mapped{};context->MapTextureSubresource(readback,0,0,MAP_READ,MAP_FLAG_NONE,nullptr,mapped);
+    require(mapped.pData!=nullptr,"UI blend precision readback failed");
+    unsigned mismatch=0;
+    std::ofstream actualFile("ui-blend-precision.ppm",std::ios::binary);
+    std::ofstream floatFile("ui-blend-precision-expected.ppm",std::ios::binary);
+    std::ofstream productFile("ui-blend-precision-expected-products.ppm",std::ios::binary);
+    for(auto* file:{&actualFile,&floatFile,&productFile}) *file<<"P6\n8 8\n255\n";
+    for(unsigned y=0;y<8;++y) for(unsigned x=0;x<8;++x)
+    {
+        const auto* actual=static_cast<const std::uint8_t*>(mapped.pData)+y*mapped.Stride+x*4;
+        const auto offset=(y*8+x)*4;
+        actualFile.write(reinterpret_cast<const char*>(actual),3);
+        floatFile.write(reinterpret_cast<const char*>(floating.data()+offset),3);
+        productFile.write(reinterpret_cast<const char*>(products.data()+offset),3);
+        if(!vs_ui_pixel_matches(actual,floating.data()+offset,products.data()+offset,3)) ++mismatch;
+    }
+    context->UnmapTextureSubresource(readback,0,0);
+    actualFile.close();floatFile.close();productFile.close();
+    require(actualFile.good()&&floatFile.good()&&productFile.good(),"UI blend precision evidence write failed");
+    require(!mismatch,"UI blend precision pixel oracle mismatch");
+    images.retire();std::cout<<"UI_BLEND_PRECISION_PIXELS=0\n";
 }
 
 static void loadedLibraries()

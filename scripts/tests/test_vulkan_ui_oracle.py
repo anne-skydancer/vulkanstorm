@@ -448,6 +448,17 @@ int main() {
     assert(!vs_ui_pixel_matches(wrongAlpha,floating.data(),products.data(),3));
     const auto outside=(3*4+3)*4;
     assert(!vs_ui_pixel_matches(observed,floating.data()+outside,products.data()+outside,3));
+    // A filtered/modulated alpha can be below one destination unit. Source
+    // conversion precedes factor evaluation, not only product rounding.
+    for(auto& draw:layers) draw.color[3]=.6f;
+    floating=vs_ui_expected_pixels(4,4,1,layers,8,gray);
+    products=vs_ui_expected_pixels(4,4,1,layers,8,gray,VSUIBlendPrecision::DestinationProducts);
+    assert(floating[0]==31 && products[0]==37 && products[3]==255);
+    assert(vs_ui_pixel_matches(observed,floating.data(),products.data(),3));
+    // Below half a destination unit the quantized alpha is zero: neither
+    // source conversion nor product rounding may manufacture coverage.
+    for(auto& draw:layers) draw.color[3]=.4f;
+    assert(vs_ui_expected_pixels(4,4,1,layers,8,gray,VSUIBlendPrecision::DestinationProducts)==gray);
     layer.color[3]=0; // Fully transparent draws cannot widen the reference.
     assert(vs_ui_expected_pixels(4,4,1,{layer},8,gray,VSUIBlendPrecision::DestinationProducts)==gray);
     layer.blend=VSUIRenderer::Blend::Replace;
