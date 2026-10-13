@@ -88,6 +88,11 @@ Record tolerances and performance methodology before accepting results.
 
 ## R1 — Ownership, lifecycle and shared contracts
 
+The first local production resource integration and its qualification limits are
+recorded in [R1 native resource ownership](r1-resource-contracts.md). R1 is not yet
+accepted; that record covers mesh publication, generation retirement, bounded
+requests and CPU/GPU mesh accounting.
+
 - Establish explicit account, region, object, face, asset, material, avatar,
   control-avatar, attachment, inventory/task and interaction identities.
   Separate reusable CPU algorithms/services from GL resource ownership.

@@ -2293,7 +2293,7 @@ if(USE_DILIGENTCORE)
           vsplainchat.cpp vsplainchat.h vsnativesession.cpp vsnativesession.h vsnativeim.cpp vsnativeim.h
           vsgroupsearch.cpp vsgroupsearch.h
           vsworldrenderer.cpp vsworldrenderer.h vsworldscene.cpp vsworldscene.h vsterrainpacket.h vsworldavatar.cpp vsworldavatar.h
-          vsworldassets.cpp vsworldassets.h vsnativecamera.h)
+          vsworldassets.cpp vsworldassets.h vsresourcebudget.h vsnativecamera.h)
 endif()
 if(VS_VULKAN_DIAGNOSTICS)
     list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h

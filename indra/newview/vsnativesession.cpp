@@ -846,7 +846,7 @@ bool VSNativeSession::changeRegion(const LLSD& body)
     mLocationRequests.clear();
     releaseMovement(); mCameraTime = 0;
     clearParcelPlayback();
-    if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().reset();
+    if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().reset(true);
     if (FSLSLBridge::instanceExists()) FSLSLBridge::instance().resetNativeAccount();
     ++mRegionEpoch; clearSimulatorFeatures(); mPreviousHost = mHost; mHost = destination;
     mHandle = ll_U64_from_sd(body["handle"]); mSeed = seed; mName.clear();

@@ -6,6 +6,9 @@
 #include "llcoros.h"
 #include "llsdserialize.h"
 #include "llvolumemgr.h"
+#include "llframetimer.h"
+#include "llsdutil.h"
+#include "workqueue.h"
 #include <zlib.h>
 #include <array>
 #include <sstream>
@@ -131,35 +134,94 @@ std::shared_ptr<const VSWorldAssets::Geometry> VSWorldAssets::decode(
 }
 struct VSWorldAssets::Impl
 {
-    struct Entry { LLVolumeParams params; State state = State::Pending; std::string error; std::shared_ptr<const Geometry> geometry; };
+    struct Entry
+    {
+        LLVolumeParams params;
+        State state = State::Pending;
+        std::string error;
+        std::shared_ptr<const Geometry> geometry;
+        U64 revision = 0, touched = 0;
+        unsigned attempts = 0;
+        double retryAt = 0;
+    };
     std::map<Key, Entry> entries;
     std::map<Key, LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t> requests;
     std::weak_ptr<VSNativeSession> owner;
     U64 generation = 0, epoch = 0;
-    size_t retained = 0;
+    VSResourceBudget budget{cacheLimit};
+    U64 nextRevision = 1, clock = 0, evictions = 0, replacements = 0;
     bool retired = false;
+    bool evict(const Key* preserve = nullptr)
+    {
+        auto victim = entries.end();
+        for (auto it = entries.begin(); it != entries.end(); ++it)
+        {
+            if ((preserve && it->first == *preserve) || requests.count(it->first) ||
+                it->second.state == State::Pending ||
+                (it->second.geometry && it->second.geometry.use_count() != 1)) continue;
+            if (victim == entries.end() || it->second.touched < victim->second.touched) victim = it;
+        }
+        if (victim == entries.end()) return false;
+        entries.erase(victim); ++evictions; return true;
+    }
 };
 VSWorldAssets::VSWorldAssets() : mImpl(std::make_shared<Impl>()) {}
 VSWorldAssets::~VSWorldAssets() { reset(); mImpl->retired = true; }
 void VSWorldAssets::reset()
 {
     auto requests = std::exchange(mImpl->requests, {});
-    mImpl->entries.clear(); mImpl->retained = 0; mImpl->owner.reset();
+    mImpl->entries.clear(); mImpl->owner.reset();
+    for (auto& request : requests) request.second->cancelSuspendedOperation();
+}
+void VSWorldAssets::replace(const LLUUID& id)
+{
+    for (auto& [key, entry] : mImpl->entries)
+    {
+        if (key.first != id) continue;
+        auto request = mImpl->requests.find(key);
+        LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter;
+        if (request != mImpl->requests.end()) { adapter = request->second; mImpl->requests.erase(request); }
+        entry.geometry.reset(); entry.error.clear(); entry.state = State::Pending;
+        entry.revision = mImpl->nextRevision++; entry.attempts = 0; entry.retryAt = 0;
+        ++mImpl->replacements;
+        if (adapter) adapter->cancelSuspendedOperation();
+    }
+}
+void VSWorldAssets::synchronizeOwner(const std::shared_ptr<VSNativeSession>& owner)
+{
+    if (mImpl->owner.lock() != owner || mImpl->generation != owner->generation())
+    {
+        reset(); mImpl->owner = owner; mImpl->generation = owner->generation();
+        mImpl->epoch = owner->regionEpoch(); return;
+    }
+    if (mImpl->epoch == owner->regionEpoch()) return;
+    // UUID-addressed decoded mesh data remains immutable within an account.
+    // Crossing changes the authorized HTTP endpoint, not the asset identity.
+    // Cancel/reissue unfinished deliveries while retaining completed assets.
+    auto requests = std::exchange(mImpl->requests, {});
+    mImpl->epoch = owner->regionEpoch();
+    for (auto& [key, entry] : mImpl->entries)
+    {
+        if (entry.state == State::Ready) continue;
+        entry.revision = mImpl->nextRevision++; entry.state = State::Pending;
+        entry.attempts = 0; entry.retryAt = 0; entry.error.clear();
+    }
     for (auto& request : requests) request.second->cancelSuspendedOperation();
 }
 VSWorldAssets::State VSWorldAssets::request(const LLVolumeParams& params, S32 lod)
 {
     const auto owner = VSNativeSession::active();
     if (!owner || owner->phase() != VSNativeSession::Phase::Connected) { reset(); return State::Unavailable; }
-    if (mImpl->owner.lock() != owner || mImpl->generation != owner->generation() || mImpl->epoch != owner->regionEpoch())
-    { reset(); mImpl->owner = owner; mImpl->generation = owner->generation(); mImpl->epoch = owner->regionEpoch(); }
+    synchronizeOwner(owner);
+    if (!owner->regionReady()) return State::Pending;
     if (lod < 0 || lod > 3 || params.getSculptID().isNull() || (params.getSculptType() & LL_SCULPT_TYPE_MASK) != LL_SCULPT_TYPE_MESH)
         return State::Unavailable;
     const Key key{params.getSculptID(), lod};
     auto found = mImpl->entries.find(key);
-    if (found != mImpl->entries.end()) return found->second.state;
-    if (mImpl->entries.size() >= 1024) return State::Unavailable;
-    Impl::Entry entry; entry.params = params; mImpl->entries.emplace(key, std::move(entry));
+    if (found != mImpl->entries.end()) { found->second.touched = ++mImpl->clock; return found->second.state; }
+    if (mImpl->entries.size() >= 1024 && !mImpl->evict()) return State::Unavailable;
+    Impl::Entry entry; entry.params = params; entry.revision = mImpl->nextRevision++;
+    entry.touched = ++mImpl->clock; mImpl->entries.emplace(key, std::move(entry));
     return State::Pending;
 }
 std::shared_ptr<const VSWorldAssets::Geometry> VSWorldAssets::geometry(const LLUUID& id, S32 lod) const
@@ -177,23 +239,29 @@ void VSWorldAssets::pump()
 {
     auto owner = VSNativeSession::active();
     if (!owner || owner->phase() != VSNativeSession::Phase::Connected) { reset(); return; }
-    if (mImpl->owner.lock() != owner || mImpl->generation != owner->generation() || mImpl->epoch != owner->regionEpoch())
-    { reset(); mImpl->owner = owner; mImpl->generation = owner->generation(); mImpl->epoch = owner->regionEpoch(); }
+    synchronizeOwner(owner);
+    if (!owner->regionReady()) return;
     std::string cap = owner->capability("GetMesh2");
     if (cap.empty()) cap = owner->capability("GetMesh");
     if (cap.empty()) cap = owner->capability("ViewerAsset");
     for (auto& item : mImpl->entries)
     {
+        // A transport error may be retried, but malformed assets and exhausted
+        // residency are terminal until replacement or ordinary cache eviction.
+        if (item.second.state == State::Error && item.second.retryAt > 0 &&
+            LLFrameTimer::getTotalSeconds() >= item.second.retryAt)
+        { item.second.state = State::Pending; item.second.retryAt = 0; }
         if (item.second.state != State::Pending || mImpl->requests.count(item.first)) continue;
         if (cap.empty()) { item.second.state = State::Unavailable; item.second.error = "No authenticated mesh capability"; continue; }
         if (mImpl->requests.size() >= 4) break;
         const auto key = item.first; const auto params = item.second.params;
         auto adapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("nativeWorldMesh", LLCore::HttpRequest::DEFAULT_POLICY_ID);
         mImpl->requests.emplace(key, adapter);
+        ++item.second.attempts;
         const std::weak_ptr<Impl> weak = mImpl; const std::weak_ptr<VSNativeSession> session = owner;
-        const U64 generation = mImpl->generation, epoch = mImpl->epoch;
+        const U64 generation = mImpl->generation, epoch = mImpl->epoch, revision = item.second.revision;
         const std::string url = cap + (cap.find('?') == std::string::npos ? "?" : "&") + "mesh_id=" + key.first.asString();
-        LLCoros::instance().launch("nativeWorldMesh", [weak, session, adapter, key, params, url, generation, epoch]()
+        LLCoros::instance().launch("nativeWorldMesh", [weak, session, adapter, key, params, url, generation, epoch, revision]()
         {
             auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(20); options->setRetries(0);
             auto headers = std::make_shared<LLCore::HttpHeaders>(); headers->append("Range", "bytes=0-16777215");
@@ -202,20 +270,52 @@ void VSWorldAssets::pump()
             // Physics sections are intentionally not decoded here.
             auto request = std::make_shared<LLCore::HttpRequest>();
             const LLSD response = adapter->getRawAndSuspend(request, url, options, headers);
-            auto state = weak.lock(); const auto owner = session.lock();
-            if (!state || state->retired || !owner || VSNativeSession::active() != owner || owner->generation() != generation || owner->regionEpoch() != epoch || owner->phase() != VSNativeSession::Phase::Connected) return;
-            auto pending = state->requests.find(key);
-            if (pending == state->requests.end() || pending->second != adapter) return;
-            state->requests.erase(pending); auto found = state->entries.find(key); if (found == state->entries.end()) return;
-            auto& entry = found->second; entry.state = State::Error;
-            if (!LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(response["http_result"])) { entry.error = "Mesh HTTP request failed"; return; }
-            try { entry.geometry = decode(params, key.second, response[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary(), entry.error); }
-            catch (const std::exception& e) { entry.error = e.what(); entry.geometry.reset(); }
-            if (!entry.geometry) return;
-            if (entry.geometry->bytes > cacheLimit - state->retained) { entry.geometry.reset(); entry.error = "Mesh CPU cache budget exhausted"; return; }
-            state->retained += entry.geometry->bytes; entry.state = State::Ready;
+            // Coroutine completion runs outside the viewer's main coroutine.
+            // Decode and publish only when the mainloop executes this delivery,
+            // after checking account, region, request and asset generation again.
+            LL::WorkQueue::getInstance("mainloop")->post(
+                [weak, session, adapter, key, params, generation, epoch, revision, response]()
+                {
+                    auto state = weak.lock(); const auto owner = session.lock();
+                    if (!state || state->retired || !owner || VSNativeSession::active() != owner ||
+                        owner->generation() != generation || owner->regionEpoch() != epoch ||
+                        owner->phase() != VSNativeSession::Phase::Connected) return;
+                    auto pending = state->requests.find(key);
+                    if (pending == state->requests.end() || pending->second != adapter) return;
+                    auto found = state->entries.find(key);
+                    if (found == state->entries.end() || found->second.revision != revision) return;
+                    state->requests.erase(pending);
+                    auto& entry = found->second; entry.state = State::Error;
+                    const auto status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(response["http_result"]);
+                    if (!status)
+                    {
+                        entry.error = "Mesh HTTP request failed";
+                        if (status.isRetryable() && entry.attempts < 3) entry.retryAt = LLFrameTimer::getTotalSeconds() + 2 * entry.attempts;
+                        return;
+                    }
+                    std::shared_ptr<const Geometry> decoded;
+                    try { decoded = decode(params, key.second, response[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary(), entry.error); }
+                    catch (const std::exception& e) { entry.error = e.what(); }
+                    if (!decoded) return;
+                    auto reservation = state->budget.reserve(decoded->bytes);
+                    while (!reservation && state->evict(&key)) reservation = state->budget.reserve(decoded->bytes);
+                    if (!reservation) { entry.error = "Mesh CPU cache budget exhausted"; return; }
+                    auto admitted = std::make_shared<Geometry>(*decoded);
+                    admitted->generation = revision; admitted->residency = std::move(reservation);
+                    entry.geometry = std::move(admitted); entry.state = State::Ready; entry.error.clear();
+                });
         });
     }
+}
+LLSD VSWorldAssets::evidence() const
+{
+    LLSD result;
+    result["entries"] = S32(mImpl->entries.size()); result["requests"] = S32(mImpl->requests.size());
+    result["resident_bytes"] = ll_sd_from_U64(mImpl->budget.used());
+    result["budget_bytes"] = ll_sd_from_U64(mImpl->budget.limit());
+    result["evictions"] = ll_sd_from_U64(mImpl->evictions);
+    result["replacements"] = ll_sd_from_U64(mImpl->replacements);
+    return result;
 }
 
 

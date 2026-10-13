@@ -13,7 +13,7 @@ class VSWorldScene
 public:
     VSWorldScene(VSWorldRenderer&, VSUIResources&);
     ~VSWorldScene();
-    void reset();
+    void reset(bool preserveAssets = false);
     void configureRegion(const LLSD& handshake);
     bool receive(LLMessageSystem&, U64 regionHandle, const LLUUID& agent);
     void requestUpdates(LLMessageSystem&, const LLHost&, const LLUUID&, const LLUUID&);

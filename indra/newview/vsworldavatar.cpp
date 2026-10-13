@@ -270,6 +270,7 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets,const L
         std::vector<VSWorldRenderer::Vertex> vertices;std::vector<unsigned> indices;
         if (!a.skin(*part,vertices,indices)) continue;
         auto mesh=a.renderer.upload(vertices,indices);a.meshes[index]=mesh;
+        if (!mesh) continue;
         VSWorldRenderer::Packet p;p.mesh=std::move(mesh);p.image=std::move(image);p.masked=true;
         p.alpha=part->isTransparent();p.distanceSquared=distance;packets.push_back(std::move(p));
     }
