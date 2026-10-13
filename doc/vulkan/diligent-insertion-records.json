@@ -1,5 +1,5 @@
 {
-  "source_commit": "0c93b18b8d5fd3cb3f7128a805cdf62bc28cfc2a",
+  "source_commit": "cc705fae1cf48400e040fc1b3381c663f2a7a86b",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -5224,16 +5224,16 @@
       "path": "tests/software_vulkan/CMakeLists.txt",
       "start": 1,
       "end": 23,
-      "sha256": "4616592aa480800c3857df18192da98743c514530898d5c624f1ea4c2c65c820",
+      "sha256": "f0d7aff1cfb445590967021c8983572fc07b155aa41e6ba213610da8ed2787ed",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Its raw Vulkan calls are device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls belong only to this test. Uses viewer-pinned Autobuild packages, automatic or explicit adapter selection, headless readback and separate native HWND/SDL2-X11 presentation. Synthetic selection-policy checks do not claim vendor execution. This exclusion does not qualify viewer runtime. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate."
+      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Its raw Vulkan calls are device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls belong only to this test. Uses viewer-pinned Autobuild packages, automatic or explicit adapter selection, headless readback and separate native HWND/SDL2-X11 presentation. Synthetic selection-policy checks do not claim vendor execution. This exclusion does not qualify viewer runtime. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate. Reviewed pinned Mesa 25.2.4 source conversion before blend factors, including destination-unit fragment alpha and colour. Independent float-sum and RGBA8 source/product references retain the same three-unit whole-RGBA acceptance; no device or skin branch and no observed-pixel input. Fractional-alpha negative controls and headless production renderer readbacks pass locally on SwiftShader. Full Lavapipe skin replay remains pending."
     },
     {
       "path": "tests/software_vulkan/CMakeLists.txt",
-      "start": 31,
-      "end": 47,
-      "sha256": "4616592aa480800c3857df18192da98743c514530898d5c624f1ea4c2c65c820",
+      "start": 32,
+      "end": 48,
+      "sha256": "f0d7aff1cfb445590967021c8983572fc07b155aa41e6ba213610da8ed2787ed",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Its raw Vulkan calls are device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls belong only to this test. Uses viewer-pinned Autobuild packages, automatic or explicit adapter selection, headless readback and separate native HWND/SDL2-X11 presentation. Synthetic selection-policy checks do not claim vendor execution. This exclusion does not qualify viewer runtime. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate."
@@ -5242,52 +5242,52 @@
       "path": "tests/software_vulkan/diligent_render_test.cpp",
       "start": 1,
       "end": 13,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
-      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate. Headless production renderer one-quad budget checks retained submission, allocation refusal, deterministic readbacks and fence retirement; not whole-viewer acceptance."
+      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate. Headless production renderer one-quad budget checks retained submission, allocation refusal, deterministic readbacks and fence retirement; not whole-viewer acceptance. Reviewed pinned Mesa 25.2.4 source conversion before blend factors, including destination-unit fragment alpha and colour. Independent float-sum and RGBA8 source/product references retain the same three-unit whole-RGBA acceptance; no device or skin branch and no observed-pixel input. Fractional-alpha negative controls and headless production renderer readbacks pass locally on SwiftShader. Full Lavapipe skin replay remains pending."
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 16,
-      "end": 475,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate."
-    },
-    {
-      "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 594,
-      "end": 628,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 17,
+      "end": 476,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate."
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 630,
-      "end": 661,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 638,
+      "end": 672,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate."
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 665,
-      "end": 668,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 674,
+      "end": 705,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate."
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 670,
-      "end": 680,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 709,
+      "end": 712,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate."
+    },
+    {
+      "path": "tests/software_vulkan/diligent_render_test.cpp",
+      "start": 714,
+      "end": 724,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone Vulkan CI executable outside viewer runtime targets. Raw Vulkan is device/layer discovery and isolated negative probes; Diligent draw/lifecycle calls, native HWND/SDL2-X11 presentation with verified extents, explicit zero/minimized suspension and shutdown evidence belong only to this test. Uses viewer-pinned Autobuild packages, generic adapter selection and headless readback. This exclusion does not qualify viewer runtime or vendor-specific execution. Reviewed native viewer diagnostic delta: explicit Vulkan window admission bypasses GL bootstrap; GL reference route and later UI/chat/world obligations remain separate."
@@ -7176,35 +7176,35 @@
     {
       "path": "indra/newview/vsuipixeloracle.cpp",
       "start": 1,
-      "end": 127,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "end": 136,
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
-      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed. Connected UI qualification review: capture the production scene before UI submission, preserve its RGBA bytes, independently rasterize all UI packets over that input, and compare every final pixel with unchanged tolerance. Missing or wrong-sized scene readbacks fail. Scene images are evidence inputs, not a world parity oracle; R0 independent peer world baselines and standalone world contracts retain their own checks. No production renderer policy changes. Reviewed independent floating-sum and destination-unit blend-product CPU references, with unchanged three-unit full-RGBA criterion requiring a complete reference per pixel, no hardware identity branch or geometry masks. Six alpha-one border draws reproduce31/37 without observed-GPU input; wrong colour, alpha, clipping and mixed references fail. Both expected images are retained; streams close before fatal oracle failure. Production rendering is unchanged."
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed. Connected UI qualification review: capture the production scene before UI submission, preserve its RGBA bytes, independently rasterize all UI packets over that input, and compare every final pixel with unchanged tolerance. Missing or wrong-sized scene readbacks fail. Scene images are evidence inputs, not a world parity oracle; R0 independent peer world baselines and standalone world contracts retain their own checks. No production renderer policy changes. Reviewed independent floating-sum and destination-unit blend-product CPU references, with unchanged three-unit full-RGBA criterion requiring a complete reference per pixel, no hardware identity branch or geometry masks. Six alpha-one border draws reproduce31/37 without observed-GPU input; wrong colour, alpha, clipping and mixed references fail. Both expected images are retained; streams close before fatal oracle failure. Production rendering is unchanged. Reviewed pinned Mesa 25.2.4 source conversion before blend factors, including destination-unit fragment alpha and colour. Independent float-sum and RGBA8 source/product references retain the same three-unit whole-RGBA acceptance; no device or skin branch and no observed-pixel input. Fractional-alpha negative controls and headless production renderer readbacks pass locally on SwiftShader. Full Lavapipe skin replay remains pending."
     },
     {
       "path": "indra/newview/vsuipixeloracle.cpp",
-      "start": 129,
-      "end": 129,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
-      "record": "I08",
-      "disposition": "mapped",
-      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
-    },
-    {
-      "path": "indra/newview/vsuipixeloracle.cpp",
-      "start": 131,
-      "end": 139,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "start": 138,
+      "end": 138,
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuipixeloracle.cpp",
-      "start": 146,
-      "end": 150,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "start": 140,
+      "end": 148,
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuipixeloracle.cpp",
+      "start": 155,
+      "end": 159,
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -7212,11 +7212,11 @@
     {
       "path": "indra/newview/vsuipixeloracle.h",
       "start": 1,
-      "end": 6,
-      "sha256": "e70f369b134e8bd04c80bb552e03cecdbe5507d52070cf7df2b98cab4b27b2cc",
+      "end": 7,
+      "sha256": "fa01d26c0dc49f4700b71c9f7e7bef56dc16b419f9b557b277f26a7ea4d2151e",
       "record": "I08",
       "disposition": "mapped",
-      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed. Connected UI qualification review: capture the production scene before UI submission, preserve its RGBA bytes, independently rasterize all UI packets over that input, and compare every final pixel with unchanged tolerance. Missing or wrong-sized scene readbacks fail. Scene images are evidence inputs, not a world parity oracle; R0 independent peer world baselines and standalone world contracts retain their own checks. No production renderer policy changes. Reviewed independent floating-sum and destination-unit blend-product CPU references, with unchanged three-unit full-RGBA criterion requiring a complete reference per pixel, no hardware identity branch or geometry masks. Six alpha-one border draws reproduce31/37 without observed-GPU input; wrong colour, alpha, clipping and mixed references fail. Both expected images are retained; streams close before fatal oracle failure. Production rendering is unchanged."
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed. Connected UI qualification review: capture the production scene before UI submission, preserve its RGBA bytes, independently rasterize all UI packets over that input, and compare every final pixel with unchanged tolerance. Missing or wrong-sized scene readbacks fail. Scene images are evidence inputs, not a world parity oracle; R0 independent peer world baselines and standalone world contracts retain their own checks. No production renderer policy changes. Reviewed independent floating-sum and destination-unit blend-product CPU references, with unchanged three-unit full-RGBA criterion requiring a complete reference per pixel, no hardware identity branch or geometry masks. Six alpha-one border draws reproduce31/37 without observed-GPU input; wrong colour, alpha, clipping and mixed references fail. Both expected images are retained; streams close before fatal oracle failure. Production rendering is unchanged. Reviewed pinned Mesa 25.2.4 source conversion before blend factors, including destination-unit fragment alpha and colour. Independent float-sum and RGBA8 source/product references retain the same three-unit whole-RGBA acceptance; no device or skin branch and no observed-pixel input. Fractional-alpha negative controls and headless production renderer readbacks pass locally on SwiftShader. Full Lavapipe skin replay remains pending."
     },
     {
       "path": "indra/newview/vsuirenderer.cpp",
@@ -11056,7 +11056,7 @@
       "path": "indra/newview/vsuipixeloracle.cpp",
       "start": 20,
       "end": 20,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
@@ -11065,7 +11065,7 @@
       "path": "indra/newview/vsuipixeloracle.cpp",
       "start": 75,
       "end": 87,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
@@ -11074,7 +11074,7 @@
       "path": "indra/newview/vsuipixeloracle.cpp",
       "start": 94,
       "end": 94,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
@@ -11083,7 +11083,7 @@
       "path": "indra/newview/vsuipixeloracle.cpp",
       "start": 111,
       "end": 114,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
@@ -11092,16 +11092,16 @@
       "path": "indra/newview/vsuipixeloracle.cpp",
       "start": 116,
       "end": 116,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
     },
     {
       "path": "indra/newview/vsuipixeloracle.h",
-      "start": 6,
-      "end": 6,
-      "sha256": "e70f369b134e8bd04c80bb552e03cecdbe5507d52070cf7df2b98cab4b27b2cc",
+      "start": 7,
+      "end": 7,
+      "sha256": "fa01d26c0dc49f4700b71c9f7e7bef56dc16b419f9b557b277f26a7ea4d2151e",
       "record": "I08",
       "disposition": "mapped",
       "reason": "V3 completion review: normal native LLAppViewer login lifecycle, skin-aware required login/progress/dialog controls and production plain nearby-chat owner use native UI packets and CPU-only resources. Closed widget/panel/floater admission includes direct browser factories and visible unsupported-action feedback. Native system DPI and SDL composition routes preserve CPU controls; dialogs remain reachable at reduced viewport sizes. General-fence delayed GPU completion verifies exact resource generations survive producer replacement until retirement. Independent actual/expected readbacks use advertised Vulkan subpixel precision with strict color comparison. The expanded matrix covers 68 viewer cases, including required dialog actions and all 24 packaged skin/theme/language selections. Connected transport/region/chat remains V4 work; world parity, real OS IME services and physical multi-monitor DPI are unqualified."
@@ -21143,27 +21143,27 @@
     },
     {
       "path": "indra/newview/vsuipixeloracle.cpp",
-      "start": 128,
-      "end": 128,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "start": 137,
+      "end": 137,
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native replace blending disables pipeline blending and preserves RGB/alpha replacement in the CPU/readback oracle. These rendering changes need staged software-device evidence."
     },
     {
       "path": "indra/newview/vsuipixeloracle.cpp",
-      "start": 130,
-      "end": 130,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "start": 139,
+      "end": 139,
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native replace blending disables pipeline blending and preserves RGB/alpha replacement in the CPU/readback oracle. These rendering changes need staged software-device evidence."
     },
     {
       "path": "indra/newview/vsuipixeloracle.cpp",
-      "start": 140,
-      "end": 141,
-      "sha256": "8a8acd30aeb945cc545be7f13d739ce80ef5a4224cede031fbdb89da0aa4cd3f",
+      "start": 149,
+      "end": 150,
+      "sha256": "d17ca1dadfb4cc07c6f988ebeaf2ca1f15bdf17f84abacaa8f9c668c5b7e0248",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native replace blending disables pipeline blending and preserves RGB/alpha replacement in the CPU/readback oracle. These rendering changes need staged software-device evidence."
@@ -32997,8 +32997,8 @@
     {
       "path": "tests/software_vulkan/CMakeLists.txt",
       "start": 24,
-      "end": 30,
-      "sha256": "4616592aa480800c3857df18192da98743c514530898d5c624f1ea4c2c65c820",
+      "end": 31,
+      "sha256": "f0d7aff1cfb445590967021c8983572fc07b155aa41e6ba213610da8ed2787ed",
       "record": "I23",
       "disposition": "test-only",
       "reason": "Standalone software world contract compiles the unchanged production renderer sources, validates shader reflection and deterministic depth/blending/texture/near-plane pixels, captures readbacks and retains the existing device/validation/teardown controls. It creates no viewer window and does not qualify streamed-world or full rendering/service parity."
@@ -33007,52 +33007,52 @@
       "path": "tests/software_vulkan/diligent_render_test.cpp",
       "start": 14,
       "end": 15,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone software world contract compiles the unchanged production renderer sources, validates shader reflection and deterministic depth/blending/texture/near-plane pixels, captures readbacks and retains the existing device/validation/teardown controls. It creates no viewer window and does not qualify streamed-world or full rendering/service parity."
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 476,
-      "end": 533,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 477,
+      "end": 534,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone software world contract compiles the unchanged production renderer sources, validates shader reflection and deterministic depth/blending/texture/near-plane pixels, captures readbacks and retains the existing device/validation/teardown controls. It creates no viewer window and does not qualify streamed-world or full rendering/service parity."
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 568,
-      "end": 593,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 569,
+      "end": 637,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone software world contract compiles the unchanged production renderer sources, validates shader reflection and deterministic depth/blending/texture/near-plane pixels, captures readbacks and retains the existing device/validation/teardown controls. It creates no viewer window and does not qualify streamed-world or full rendering/service parity."
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 629,
-      "end": 629,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 673,
+      "end": 673,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone software world contract compiles the unchanged production renderer sources, validates shader reflection and deterministic depth/blending/texture/near-plane pixels, captures readbacks and retains the existing device/validation/teardown controls. It creates no viewer window and does not qualify streamed-world or full rendering/service parity."
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 662,
-      "end": 664,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 706,
+      "end": 708,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone software world contract compiles the unchanged production renderer sources, validates shader reflection and deterministic depth/blending/texture/near-plane pixels, captures readbacks and retains the existing device/validation/teardown controls. It creates no viewer window and does not qualify streamed-world or full rendering/service parity."
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 669,
-      "end": 669,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 713,
+      "end": 713,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Standalone software world contract compiles the unchanged production renderer sources, validates shader reflection and deterministic depth/blending/texture/near-plane pixels, captures readbacks and retains the existing device/validation/teardown controls. It creates no viewer window and does not qualify streamed-world or full rendering/service parity."
@@ -33257,9 +33257,9 @@
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 534,
-      "end": 543,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 535,
+      "end": 544,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Native surfaces progress: bounded current-host terrain LayerData parsing before established CPU inverse DCT; actual region water height and terrain detail metadata; native indexed terrain, gradient background without depth writes and depth-tested alpha water. Immutable generations retain fence ownership and scene resets retire region data. Windows SwiftShader production renderer passed sky orientation and background/depth/alpha pixel oracles with validation; known-height CPU IDCT, bounds and admission fixtures pass. Standard 256m terrain, single texture per patch and procedural sky/flat water remain progress limits; EEP, four-way splatting, water reflection/refraction, full render chain, UI and bridge acceptance remain open. See doc/vulkan/world-feature-parity.md."
@@ -34535,9 +34535,9 @@
     },
     {
       "path": "tests/software_vulkan/diligent_render_test.cpp",
-      "start": 544,
-      "end": 567,
-      "sha256": "17c4982fc42d24824fc290962fef2b58c662547914dbd35b64e9afea53ff52f7",
+      "start": 545,
+      "end": 568,
+      "sha256": "0832b0d38b24e8a7ff49c610c4b1fc53a28bb8bfd5a205ca05e5231d993f3e19",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Reviewed production renderer changed-uniform/binding reuse and adjacent UI batch independent pixel oracles, eleven required readbacks and explicit allocation/draw counters on pinned software Vulkan with validation. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
