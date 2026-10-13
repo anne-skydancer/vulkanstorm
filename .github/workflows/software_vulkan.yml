@@ -50,6 +50,7 @@ jobs:
       - run: python scripts/tests/test_native_simulator_features.py
       - run: python scripts/tests/test_native_account_service_pump.py
       - run: python scripts/tests/test_world_scene_contracts.py
+      - run: python scripts/tests/test_world_scene_replacement.py
       - run: python scripts/tests/test_world_motion_contracts.py
       - run: python scripts/tests/test_native_camera_transport.py
       - run: python scripts/tests/test_native_world_assets.py

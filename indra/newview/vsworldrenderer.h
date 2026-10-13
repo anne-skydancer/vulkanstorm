@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <memory>
 #include <vector>
-namespace Diligent { struct IRenderDevice; struct IDeviceContext; struct ITextureView; }
+namespace Diligent { struct IRenderDevice; struct IDeviceContext; struct ITextureView; struct IBuffer; }
 class VSWorldRenderer
 {
 public:
@@ -53,6 +53,8 @@ public:
     void retire();
     Statistics statistics() const;
     static VSWorldContracts::Geometry geometryDescription(const Mesh&);
+    // Borrowed buffers; callers retain the exact Mesh generation.
+    static std::array<Diligent::IBuffer*, 2> geometryBuffers(const Mesh&);
 private:
     struct Impl;
     std::unique_ptr<Impl> mImpl;

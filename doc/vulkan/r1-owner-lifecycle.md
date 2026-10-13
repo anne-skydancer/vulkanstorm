@@ -4,7 +4,7 @@ R1 is implemented in the production native viewer. Its complete local software
 replay passes on pinned Windows SwiftShader, including ordinary authentication,
 connected UI, resource replacement, neighbours, crossing, teleport,
 logout/relogin and shutdown. This is an ownership/lifecycle acceptance; rendering
-and service parity assigned to R2â€“R9 remain separate requirements. Cross-platform
+and service parity assigned to R2Ã¢â‚¬â€œR9 remain separate requirements. Cross-platform
 CI repeats the replay and preserves its evidence.
 
 ## Implemented contracts
@@ -15,7 +15,7 @@ CI repeats the replay and preserves its evidence.
 | Object, face, material and interaction identities | Host-qualified local IDs, UUIDs, owner generations and face/material revisions. Replacement expires old interactions immediately; reused parent IDs retire linked interactions. | Real UDP ObjectUpdate/local-ID reuse; live face/linkset guards and decoded mesh replacement. |
 | Avatar, control-avatar, attachment and inventory/task identities | Typed scene owners; early self-avatar CPU initialization and wearable-metadata request. The self owner moves across regions with a new weak terrain query. Control-avatar metadata never creates a human-body substitute. Inventory revisions and task requests retain actual identities. | Actual avatar/attachment/control messages, AvatarAnimation, AgentWearablesUpdate, RequestTaskInventory/ReplyTaskInventory, inventory revisions and self-owner continuity. |
 | Neighbours and crossing | Authenticated grants create bounded circuits/scenes. Crossing promotes an existing scene; disable, expiry and far teleport retire stale circuits. Same-host region reuse gets a new incarnation. | Real loopback peer socket/ACKs, colliding local IDs, outward/return crossings and simulator retirement. |
-| Variable regions and floating origin | Sparse L/M terrain obeys region dimensions. Global origins are subtracted as signed 64-bit integers before float conversion; account position is rebased through global double coordinates. | M patch beyond 256 metres in a 1024Ã—512 neighbour; production crossing; independent large-origin checks. |
+| Variable regions and floating origin | Sparse L/M terrain obeys region dimensions. Global origins are subtracted as signed 64-bit integers before float conversion; account position is rebased through global double coordinates. | M patch beyond 256 metres in a 1024Ãƒâ€”512 neighbour; production crossing; independent large-origin checks. |
 | Motion and correction | Receipt/evaluation timestamps, authoritative transforms, velocity/acceleration, target omega, selection freeze/thaw, dilation, health phase-out and interpolation settings. | Message-driven freeze/thaw across viewer frames; production motion policy with independent numerical expectations and invalid-time inputs. |
 | Shared resource descriptions | Geometry channels/stride/counts, immutable generations, image origin/encoding/alpha, samplers, material resolution and selected-device capabilities. Draw admission rejects another device's resources. | Production renderer/readbacks, replacement/orientation/blending and device capability evidence. |
 | Bounded streaming and retirement | Reservations cover CPU geometry/terrain, GPU meshes/images, masks and decode admission. Queues/retries are bounded; cancellation/replacement check exact adapter/revision. Submissions retain resources through GPU completion; offscreen frames release completed device resources. | Actual decoder/HTTP replacement, last-owner/cancellation fixtures, refusal and old/new generation readbacks using production renderers. |
@@ -91,11 +91,18 @@ World draw bindings now release the bound generation before entering the complet
 binding cache; the charged image remains owned by the submission until that point.
 The software world test observes the actual Diligent texture reference counters,
 verifies the submitted image charge, and requires both allocation and reservation
-to retire after completion while the binding cache remains populated.
+to retire after completion while the binding cache remains populated. World draw
+also unbinds context vertex/index buffers after recording; submissions retain
+their exact geometry through completion. The GPU test independently observes
+both actual buffer reference counters reaching zero on retirement.
 
 `VSWorldRenderer::publishMesh` publishes only admitted replacements. Faces,
 terrain and existing avatar mesh producers share it; refusal preserves the valid
-current mesh and retry state. Compiled production publication tests exercise a
+current mesh and retry state. Same-patch terrain updates and compatible same-owner
+full object updates preserve the admitted GPU generation before publication;
+UUID/kind/asset changes cannot inherit an unrelated mesh. Compiled actual terrain
+and object replacement bodies cover identity, face-count, invalid-data and
+CPU-admission cases as well as preserved ownership and reservations. Compiled production publication tests exercise a
 full budget, successful retry and last-owner release. The real software renderer
 also verifies refusal retains the exact currently published generation and pixels.
 
