@@ -324,10 +324,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          manifest_args=()
+          # Elevated Windows runners ignore Vulkan loader environment overrides.
+          # Register the pinned manifests, as in the other viewer test stages.
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          fi
           python scripts/run_vulkan_session_replay.py \
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --harness-evidence .ci/evidence/results.json --evidence .ci/r1-session-evidence \
-            --skin ansastorm_modern --ui-scale 1.5 --headless --r1-contracts
+            --skin ansastorm_modern --ui-scale 1.5 --headless --r1-contracts "${manifest_args[@]}"
       - name: Record source and build environment
         if: always()
         shell: bash
