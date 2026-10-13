@@ -1,5 +1,5 @@
 {
-  "source_commit": "d4643fbfb3edf77b92414d8618aef42158e1b8fa",
+  "source_commit": "0c93b18b8d5fd3cb3f7128a805cdf62bc28cfc2a",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "28c048dec091fd140bfff7888dff6cecdfff80ac08efe3cd0c0489f0d187fb53",
+      "sha256": "3d64a1e8017f0b151a60bec0645bb546825faab96b785177d00a9d1d4de79d25",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
