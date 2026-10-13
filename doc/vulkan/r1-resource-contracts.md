@@ -1,8 +1,9 @@
-# R1 native resource ownership
+# Historical R1 mesh-budget qualification
 
-The first local R1 integration establishes mesh resource lifetime and accounting
-in the production viewer. R1 remains open: this implementation does not establish
-neighbour scene continuity, motion/selection parity or whole-viewer parity.
+This record describes the initial mesh-budget integration and its retained
+source-specific evidence. The current complete R1 implementation and qualification
+are recorded in [R1 ownership and lifecycle](r1-owner-lifecycle.md). Statements
+below describe that earlier subset, rather than the current scene/session owners.
 
 ## Production ownership
 

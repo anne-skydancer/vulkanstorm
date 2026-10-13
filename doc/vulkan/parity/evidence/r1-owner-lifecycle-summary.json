@@ -1,0 +1,2415 @@
+{
+  "schema": 1,
+  "stage": "R1",
+  "source_commit": "f3c1223638b96879dbebc44a642fc0c46c37f99e",
+  "implementation_complete": true,
+  "local_software_acceptance": true,
+  "full_world_parity_accepted": false,
+  "qualification_scope": "Production viewer ownership/lifecycle through loopback authentication, actual UDP messages and HTTP asset bytes; explicit offscreen Vulkan, not native presentation or public-grid credentials.",
+  "canonical_build": "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64",
+  "configuration": "RelWithDebInfo",
+  "installer": false,
+  "executable_sha256": "ed1c163c26535b6b9dce617832547459df5ccf4b815a94a59ac3d7b2f7ec2bce",
+  "pdb_sha256": "9c11261dcbfa0d8fc4c44fce59179706541a467b10ddf78b1cd7c1e025e96e20",
+  "staging_manifest_sha256": "2644880fc649a6ca485942894410dbc7ff62b2011ddde279030203f4d18af796",
+  "device": {
+    "name": "SwiftShader Device (LLVM 10.0.0)",
+    "api_version": 4206592,
+    "driver_version": 20971520,
+    "vendor_id": 6880,
+    "device_id": 49374,
+    "device_type": 4
+  },
+  "viewer_passed": true,
+  "viewer_exit_code": 0,
+  "presentation_qualified": false,
+  "process_isolation": {
+    "desktop_isolated": false,
+    "desktop_identifier": null,
+    "window_station_identifier": null,
+    "headless_replay": true,
+    "headless_graphics": false
+  },
+  "contracts": {
+    "appearance_startup": [
+      {
+        "asset": "a1000000-0000-0000-0000-000000000001",
+        "item": "71000000-0000-0000-0000-000000000020",
+        "type": 0
+      }
+    ],
+    "asset_replacement": true,
+    "circuit_retirement": true,
+    "crossing_continuity": true,
+    "final_scene": {
+      "accepted": "AAAAAAAAAAw=",
+      "assets": {
+        "budget_bytes": "AAAAAAgAAAA=",
+        "entries": 1,
+        "evictions": "AAAAAAAAAAA=",
+        "replacements": "AAAAAAAAAAE=",
+        "requests": 0,
+        "resident_bytes": "AAAAAAAAAN4="
+      },
+      "avatars": [
+        {
+          "animations": 0,
+          "appearance_known": false,
+          "attachments": 0,
+          "cof_version": -1,
+          "id": "10000000-0000-0000-0000-000000000001",
+          "local_compositor_implemented": false,
+          "meshes": 0,
+          "owner_generation": "AAAAAAAAAAE=",
+          "position_known": false,
+          "region_handle": "AAABAAAAAgA=",
+          "self": true,
+          "server_bakes": false
+        },
+        {
+          "animations": 0,
+          "appearance_known": false,
+          "attachments": 0,
+          "cof_version": -1,
+          "id": "a2000000-0000-0000-0000-000000000006",
+          "local_compositor_implemented": false,
+          "meshes": 0,
+          "owner_generation": "AAAAAAAAAAI=",
+          "position_known": true,
+          "region_handle": "AAABAAAAAgA=",
+          "self": false,
+          "server_bakes": false
+        }
+      ],
+      "binding_allocations": "AAAAAAAAAAA=",
+      "constant_allocations": "AAAAAAAAAAA=",
+      "draw_calls": "AAAAAAAAABo=",
+      "handle": "AAABAAAAAgA=",
+      "height": 256,
+      "host": "127.0.0.1:59033",
+      "images": {
+        "bgra8": true,
+        "depth32": true,
+        "image_allocation_refusals": "AAAAAAAAAAA=",
+        "image_generations": 193,
+        "image_payload_budget_bytes": "AAAAADAAAAA=",
+        "maximum_image_dimension": 16384,
+        "resident_image_payload_bytes": "AAAAAAC2s3g=",
+        "rgba8": true
+      },
+      "mesh_allocation_refusals": "AAAAAAAAAAA=",
+      "mesh_budget_bytes": "AAAAABAAAAA=",
+      "mesh_upload_bytes": "AAAAAAAAEmw=",
+      "mesh_uploads": "AAAAAAAAAA0=",
+      "neighbours": [],
+      "object_request_limit": 4096,
+      "objects": 9,
+      "owned_avatar_slots": 2,
+      "owned_object_requests": 1,
+      "owned_object_slots": 9,
+      "owners": [
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAAAM=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAQ=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAU=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAY=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAc=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAg=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAE=",
+          "geometry_pending": false,
+          "id": "90000000-0000-0000-0000-000000000001",
+          "kind": 2,
+          "local": "AAAAAAAAA4Q=",
+          "motion_timestamp": 1791867841.453681,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "revision": "AAAAAAAAAAE=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            17.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAAAk=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAo=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAs=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAw=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAA0=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAA4=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAI=",
+          "geometry_pending": false,
+          "id": "90000000-0000-0000-0000-000000000002",
+          "kind": 2,
+          "local": "AAAAAAAAA4U=",
+          "motion_timestamp": 1791867841.453681,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            17.0,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "revision": "AAAAAAAAAAI=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAA18=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAA2A=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAA2E=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAA2I=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAA2M=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAA2Q=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAk=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000002",
+          "kind": 2,
+          "local": "AAAAAAAAA7Y=",
+          "motion_timestamp": 1791867841.822727,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.104903221130371,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.010447311215102673,
+            0.999945342540741
+          ],
+          "revision": "AAAAAAAAAAk=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAAlw=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAl0=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAl4=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAl8=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAmA=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAmE=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAQ=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000004",
+          "kind": 2,
+          "local": "AAAAAAAAA7c=",
+          "motion_timestamp": 1791867841.49137,
+          "parent": "AAAAAAAAA7Y=",
+          "parent_generation": "AAAAAAAAAAM=",
+          "parent_retired": true,
+          "predicted_position": [
+            15.275219917297363,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.027179664000868797,
+            0.9996305704116821
+          ],
+          "revision": "AAAAAAAAAAQ=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "a1000000-0000-0000-0000-000000000001",
+          "asset_generation": "AAAAAAAAAAI=",
+          "asset_third_vertex": [
+            0.18665599822998047,
+            0.5,
+            7.62939453125e-06
+          ],
+          "asset_type": 5,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAA2U=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA4=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA4=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA4=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA4=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA4=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA4=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 6,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA4=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 7,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA4=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAo=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000003",
+          "kind": 2,
+          "local": "AAAAAAAAA7g=",
+          "motion_timestamp": 1791867841.8325908,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.094952583312988,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.009460974484682083,
+            0.9999551773071289
+          ],
+          "revision": "AAAAAAAAAA4=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "a1000000-0000-0000-0000-000000000001",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 5,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 1,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA0=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA0=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA0=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA0=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA0=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA0=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 6,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA0=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 7,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAA0=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAU=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000005",
+          "kind": 5,
+          "local": "AAAAAAAAA7k=",
+          "motion_timestamp": 1791867841.49137,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.444849014282227,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.043569423258304596,
+            0.9990506172180176
+          ],
+          "revision": "AAAAAAAAAA0=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [],
+          "generation": "AAAAAAAAAAY=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000006",
+          "kind": 4,
+          "local": "AAAAAAAAA7o=",
+          "motion_timestamp": 1791867841.49137,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.444849014282227,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.043569423258304596,
+            0.9990506172180176
+          ],
+          "revision": "AAAAAAAAAAY=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAA2Y=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAA2c=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAA2g=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAA2k=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAA2o=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAA2s=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAc=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000007",
+          "kind": 6,
+          "local": "AAAAAAAAA7s=",
+          "motion_timestamp": 1791867841.49137,
+          "parent": "AAAAAAAAA7o=",
+          "parent_generation": "AAAAAAAAAAY=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.043569423258304596,
+            0.9990506172180176
+          ],
+          "revision": "AAAAAAAAAAc=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [],
+          "generation": "AAAAAAAAAAg=",
+          "geometry_pending": true,
+          "id": "a2000000-0000-0000-0000-000000000008",
+          "kind": 2,
+          "local": "AAAAAAAAA7w=",
+          "motion_timestamp": 1791867841.49137,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.444849014282227,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.043569423258304596,
+            0.9990506172180176
+          ],
+          "revision": "AAAAAAAAAAg=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        }
+      ],
+      "pending_full_updates": 1,
+      "region_generation": "AAAAAAAAAAE=",
+      "rejected": "AAAAAAAAAAI=",
+      "resident_mesh_bytes": "AAAAAAAEAEQ=",
+      "resident_primitive_payload_bytes": "AAAAAAAAVmg=",
+      "resident_terrain_bytes": "AAAAAAAAAAA=",
+      "sky": "native_default_gradient",
+      "submission_cpu_ms": 0.8412,
+      "terrain_patches": 0,
+      "unsupported": "AAAAAAAAAAE=",
+      "water_height_known": false,
+      "width": 256
+    },
+    "host_ids": true,
+    "initial_scene": {
+      "accepted": "AAAAAAAAAAs=",
+      "assets": {
+        "budget_bytes": "AAAAAAgAAAA=",
+        "entries": 0,
+        "evictions": "AAAAAAAAAAA=",
+        "replacements": "AAAAAAAAAAA=",
+        "requests": 0,
+        "resident_bytes": "AAAAAAAAAAA="
+      },
+      "avatars": [
+        {
+          "animations": 0,
+          "appearance_known": false,
+          "attachments": 0,
+          "cof_version": -1,
+          "id": "10000000-0000-0000-0000-000000000001",
+          "local_compositor_implemented": false,
+          "meshes": 0,
+          "owner_generation": "AAAAAAAAAAE=",
+          "position_known": false,
+          "region_handle": "AAABAAAAAgA=",
+          "self": true,
+          "server_bakes": false
+        },
+        {
+          "animations": 0,
+          "appearance_known": false,
+          "attachments": 0,
+          "cof_version": -1,
+          "id": "a2000000-0000-0000-0000-000000000006",
+          "local_compositor_implemented": false,
+          "meshes": 0,
+          "owner_generation": "AAAAAAAAAAI=",
+          "position_known": true,
+          "region_handle": "AAABAAAAAgA=",
+          "self": false,
+          "server_bakes": false
+        }
+      ],
+      "binding_allocations": "AAAAAAAAAAA=",
+      "constant_allocations": "AAAAAAAAAAA=",
+      "draw_calls": "AAAAAAAAABo=",
+      "handle": "AAABAAAAAgA=",
+      "height": 256,
+      "host": "127.0.0.1:59033",
+      "images": {
+        "bgra8": true,
+        "depth32": true,
+        "image_allocation_refusals": "AAAAAAAAAAA=",
+        "image_generations": 193,
+        "image_payload_budget_bytes": "AAAAADAAAAA=",
+        "maximum_image_dimension": 16384,
+        "resident_image_payload_bytes": "AAAAAAC2s3g=",
+        "rgba8": true
+      },
+      "mesh_allocation_refusals": "AAAAAAAAAAA=",
+      "mesh_budget_bytes": "AAAAABAAAAA=",
+      "mesh_upload_bytes": "AAAAAAAATiA=",
+      "mesh_uploads": "AAAAAAAAAA0=",
+      "neighbours": [
+        {
+          "accepted": "AAAAAAAAAAI=",
+          "assets": {
+            "budget_bytes": "AAAAAAgAAAA=",
+            "entries": 0,
+            "evictions": "AAAAAAAAAAA=",
+            "replacements": "AAAAAAAAAAA=",
+            "requests": 0,
+            "resident_bytes": "AAAAAAAAAAA="
+          },
+          "avatars": [],
+          "binding_allocations": "AAAAAAAAAAA=",
+          "constant_allocations": "AAAAAAAAAAA=",
+          "draw_calls": "AAAAAAAAABo=",
+          "handle": "AAACAAAAAgA=",
+          "height": 512,
+          "host": "127.0.0.1:55946",
+          "images": {
+            "bgra8": true,
+            "depth32": true,
+            "image_allocation_refusals": "AAAAAAAAAAA=",
+            "image_generations": 193,
+            "image_payload_budget_bytes": "AAAAADAAAAA=",
+            "maximum_image_dimension": 16384,
+            "resident_image_payload_bytes": "AAAAAAC2s3g=",
+            "rgba8": true
+          },
+          "mesh_allocation_refusals": "AAAAAAAAAAA=",
+          "mesh_budget_bytes": "AAAAABAAAAA=",
+          "mesh_upload_bytes": "AAAAAAAATiA=",
+          "mesh_uploads": "AAAAAAAAAA0=",
+          "neighbours": [],
+          "object_request_limit": 4096,
+          "objects": 1,
+          "owned_avatar_slots": 2,
+          "owned_object_requests": 1,
+          "owned_object_slots": 9,
+          "owners": [
+            {
+              "asset": "",
+              "asset_generation": "AAAAAAAAAAA=",
+              "asset_type": 0,
+              "authoritative_position": [
+                15.0,
+                20.0,
+                30.0
+              ],
+              "control_animations": 0,
+              "faces": [
+                {
+                  "geometry_generation": "AAAAAAAAAAA=",
+                  "index": 0,
+                  "legacy_material": "",
+                  "material_generation": "AAAAAAAAAAE=",
+                  "texture": ""
+                },
+                {
+                  "geometry_generation": "AAAAAAAAAAA=",
+                  "index": 1,
+                  "legacy_material": "",
+                  "material_generation": "AAAAAAAAAAE=",
+                  "texture": ""
+                },
+                {
+                  "geometry_generation": "AAAAAAAAAAA=",
+                  "index": 2,
+                  "legacy_material": "",
+                  "material_generation": "AAAAAAAAAAE=",
+                  "texture": ""
+                },
+                {
+                  "geometry_generation": "AAAAAAAAAAA=",
+                  "index": 3,
+                  "legacy_material": "",
+                  "material_generation": "AAAAAAAAAAE=",
+                  "texture": ""
+                },
+                {
+                  "geometry_generation": "AAAAAAAAAAA=",
+                  "index": 4,
+                  "legacy_material": "",
+                  "material_generation": "AAAAAAAAAAE=",
+                  "texture": ""
+                },
+                {
+                  "geometry_generation": "AAAAAAAAAAA=",
+                  "index": 5,
+                  "legacy_material": "",
+                  "material_generation": "AAAAAAAAAAE=",
+                  "texture": ""
+                }
+              ],
+              "generation": "AAAAAAAAAAE=",
+              "geometry_pending": false,
+              "id": "a2000000-0000-0000-0000-000000000001",
+              "kind": 2,
+              "local": "AAAAAAAAA7Y=",
+              "motion_timestamp": 1791867841.8279998,
+              "parent": "AAAAAAAAAAA=",
+              "parent_generation": "AAAAAAAAAAA=",
+              "parent_retired": false,
+              "predicted_position": [
+                15.0,
+                20.0,
+                30.0
+              ],
+              "predicted_rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "revision": "AAAAAAAAAAE=",
+              "selected": false,
+              "task_known": false,
+              "task_serial": 0
+            }
+          ],
+          "pending_full_updates": 0,
+          "region_generation": "AAAAAAAAAAI=",
+          "rejected": "AAAAAAAAAAA=",
+          "resident_mesh_bytes": "AAAAAAADXug=",
+          "resident_primitive_payload_bytes": "AAAAAAAAZ7A=",
+          "resident_terrain_bytes": "AAAAAAAAEDA=",
+          "sky": "native_default_gradient",
+          "submission_cpu_ms": 0.6956,
+          "terrain_patches": 1,
+          "unsupported": "AAAAAAAAAAA=",
+          "water_height_known": false,
+          "width": 1024
+        }
+      ],
+      "object_request_limit": 4096,
+      "objects": 8,
+      "owned_avatar_slots": 2,
+      "owned_object_requests": 1,
+      "owned_object_slots": 9,
+      "owners": [
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAAAM=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAQ=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAU=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAY=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAc=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAg=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAE=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAE=",
+          "geometry_pending": false,
+          "id": "90000000-0000-0000-0000-000000000001",
+          "kind": 2,
+          "local": "AAAAAAAAA4Q=",
+          "motion_timestamp": 1791867841.453681,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "revision": "AAAAAAAAAAE=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            17.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAAAk=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAo=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAs=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAw=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAA0=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAA4=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAI=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAI=",
+          "geometry_pending": false,
+          "id": "90000000-0000-0000-0000-000000000002",
+          "kind": 2,
+          "local": "AAAAAAAAA4U=",
+          "motion_timestamp": 1791867841.453681,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            17.0,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "revision": "AAAAAAAAAAI=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAAnQ=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAnU=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAnY=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAnc=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAng=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAnk=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAk=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAk=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000002",
+          "kind": 2,
+          "local": "AAAAAAAAA7Y=",
+          "motion_timestamp": 1791867841.822727,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.005268096923828,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.00052728655282408,
+            0.9999998807907104
+          ],
+          "revision": "AAAAAAAAAAk=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAAlw=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAl0=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAl4=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAl8=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAmA=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAmE=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAQ=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAQ=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000004",
+          "kind": 2,
+          "local": "AAAAAAAAA7c=",
+          "motion_timestamp": 1791867841.49137,
+          "parent": "AAAAAAAAA7Y=",
+          "parent_generation": "AAAAAAAAAAM=",
+          "parent_retired": true,
+          "predicted_position": [
+            15.173925399780273,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.017261935397982597,
+            0.9998509883880615
+          ],
+          "revision": "AAAAAAAAAAQ=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "a1000000-0000-0000-0000-000000000001",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 5,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 1,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAU=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAU=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAU=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAU=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAU=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAU=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 6,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAU=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAAA=",
+              "index": 7,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAU=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAU=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000005",
+          "kind": 5,
+          "local": "AAAAAAAAA7k=",
+          "motion_timestamp": 1791867841.49137,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.341922760009766,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.033656634390354156,
+            0.9994335174560547
+          ],
+          "revision": "AAAAAAAAAAU=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [],
+          "generation": "AAAAAAAAAAY=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000006",
+          "kind": 4,
+          "local": "AAAAAAAAA7o=",
+          "motion_timestamp": 1791867841.49137,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.341922760009766,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.033656634390354156,
+            0.9994335174560547
+          ],
+          "revision": "AAAAAAAAAAY=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [
+            {
+              "geometry_generation": "AAAAAAAAAno=",
+              "index": 0,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAns=",
+              "index": 1,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAnw=",
+              "index": 2,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAn0=",
+              "index": 3,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAn4=",
+              "index": 4,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            },
+            {
+              "geometry_generation": "AAAAAAAAAn8=",
+              "index": 5,
+              "legacy_material": "",
+              "material_generation": "AAAAAAAAAAc=",
+              "texture": ""
+            }
+          ],
+          "generation": "AAAAAAAAAAc=",
+          "geometry_pending": false,
+          "id": "a2000000-0000-0000-0000-000000000007",
+          "kind": 6,
+          "local": "AAAAAAAAA7s=",
+          "motion_timestamp": 1791867841.49137,
+          "parent": "AAAAAAAAA7o=",
+          "parent_generation": "AAAAAAAAAAY=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.033656634390354156,
+            0.9994335174560547
+          ],
+          "revision": "AAAAAAAAAAc=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        },
+        {
+          "asset": "",
+          "asset_generation": "AAAAAAAAAAA=",
+          "asset_type": 0,
+          "authoritative_position": [
+            15.0,
+            20.0,
+            30.0
+          ],
+          "control_animations": 0,
+          "faces": [],
+          "generation": "AAAAAAAAAAg=",
+          "geometry_pending": true,
+          "id": "a2000000-0000-0000-0000-000000000008",
+          "kind": 2,
+          "local": "AAAAAAAAA7w=",
+          "motion_timestamp": 1791867841.49137,
+          "parent": "AAAAAAAAAAA=",
+          "parent_generation": "AAAAAAAAAAA=",
+          "parent_retired": false,
+          "predicted_position": [
+            15.341922760009766,
+            20.0,
+            30.0
+          ],
+          "predicted_rotation": [
+            0.0,
+            0.0,
+            0.033656634390354156,
+            0.9994335174560547
+          ],
+          "revision": "AAAAAAAAAAg=",
+          "selected": false,
+          "task_known": false,
+          "task_serial": 0
+        }
+      ],
+      "pending_full_updates": 1,
+      "region_generation": "AAAAAAAAAAE=",
+      "rejected": "AAAAAAAAAAI=",
+      "resident_mesh_bytes": "AAAAAAADXug=",
+      "resident_primitive_payload_bytes": "AAAAAAAAZ7A=",
+      "resident_terrain_bytes": "AAAAAAAAEDA=",
+      "sky": "native_default_gradient",
+      "submission_cpu_ms": 0.6956,
+      "terrain_patches": 0,
+      "unsupported": "AAAAAAAAAAE=",
+      "water_height_known": true,
+      "width": 256
+    },
+    "inventory_revision": true,
+    "inventory_scope": true,
+    "logout_retirement": {
+      "accepted": "AAAAAAAAAAA=",
+      "assets": {
+        "budget_bytes": "AAAAAAgAAAA=",
+        "entries": 0,
+        "evictions": "AAAAAAAAAAA=",
+        "replacements": "AAAAAAAAAAE=",
+        "requests": 0,
+        "resident_bytes": "AAAAAAAAAAA="
+      },
+      "avatars": [],
+      "binding_allocations": "AAAAAAAAAAA=",
+      "constant_allocations": "AAAAAAAAAAA=",
+      "draw_calls": "AAAAAAAAABo=",
+      "handle": "AAABAAAAAgA=",
+      "height": 256,
+      "host": "127.0.0.1:59033",
+      "images": {
+        "bgra8": true,
+        "depth32": true,
+        "image_allocation_refusals": "AAAAAAAAAAA=",
+        "image_generations": 461,
+        "image_payload_budget_bytes": "AAAAADAAAAA=",
+        "maximum_image_dimension": 16384,
+        "resident_image_payload_bytes": "AAAAAAIcVvA=",
+        "rgba8": true
+      },
+      "mesh_allocation_refusals": "AAAAAAAAAAA=",
+      "mesh_budget_bytes": "AAAAABAAAAA=",
+      "mesh_upload_bytes": "AAAAAAAAEmw=",
+      "mesh_uploads": "AAAAAAAAAA0=",
+      "neighbours": [],
+      "object_request_limit": 4096,
+      "objects": 0,
+      "owned_avatar_slots": 0,
+      "owned_object_requests": 0,
+      "owned_object_slots": 0,
+      "owners": [],
+      "pending_full_updates": 0,
+      "region_generation": "AAAAAAAAAAE=",
+      "rejected": "AAAAAAAAAAA=",
+      "resident_mesh_bytes": "AAAAAAAAJQQ=",
+      "resident_primitive_payload_bytes": "AAAAAAAAAAA=",
+      "resident_terrain_bytes": "AAAAAAAAAAA=",
+      "sky": "native_default_gradient",
+      "submission_cpu_ms": 2.5721,
+      "terrain_patches": 0,
+      "unsupported": "AAAAAAAAAAA=",
+      "water_height_known": false,
+      "width": 256
+    },
+    "mesh_after": {
+      "asset": "a1000000-0000-0000-0000-000000000001",
+      "asset_generation": "AAAAAAAAAAI=",
+      "asset_third_vertex": [
+        0.18665599822998047,
+        0.5,
+        7.62939453125e-06
+      ],
+      "asset_type": 5,
+      "authoritative_position": [
+        15.0,
+        20.0,
+        30.0
+      ],
+      "control_animations": 0,
+      "faces": [
+        {
+          "geometry_generation": "AAAAAAAAArg=",
+          "index": 0,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAA4=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 1,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAA4=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 2,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAA4=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 3,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAA4=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 4,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAA4=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 5,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAA4=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 6,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAA4=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 7,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAA4=",
+          "texture": ""
+        }
+      ],
+      "generation": "AAAAAAAAAAo=",
+      "geometry_pending": false,
+      "id": "a2000000-0000-0000-0000-000000000003",
+      "kind": 2,
+      "local": "AAAAAAAAA7g=",
+      "motion_timestamp": 1791867841.8325908,
+      "parent": "AAAAAAAAAAA=",
+      "parent_generation": "AAAAAAAAAAA=",
+      "parent_retired": false,
+      "predicted_position": [
+        15.022452354431152,
+        20.0,
+        30.0
+      ],
+      "predicted_rotation": [
+        0.0,
+        0.0,
+        0.0022452096454799175,
+        0.9999974966049194
+      ],
+      "revision": "AAAAAAAAAA4=",
+      "selected": false,
+      "task_known": false,
+      "task_serial": 0
+    },
+    "mesh_before": {
+      "asset": "a1000000-0000-0000-0000-000000000001",
+      "asset_generation": "AAAAAAAAAAE=",
+      "asset_third_vertex": [
+        7.62939453125e-06,
+        0.5,
+        7.62939453125e-06
+      ],
+      "asset_type": 5,
+      "authoritative_position": [
+        15.0,
+        20.0,
+        30.0
+      ],
+      "control_animations": 0,
+      "faces": [
+        {
+          "geometry_generation": "AAAAAAAAAp8=",
+          "index": 0,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAs=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 1,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAs=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 2,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAs=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 3,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAs=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 4,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAs=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 5,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAs=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 6,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAs=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAAA=",
+          "index": 7,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAs=",
+          "texture": ""
+        }
+      ],
+      "generation": "AAAAAAAAAAo=",
+      "geometry_pending": false,
+      "id": "a2000000-0000-0000-0000-000000000003",
+      "kind": 2,
+      "local": "AAAAAAAAA7g=",
+      "motion_timestamp": 1791867841.8325908,
+      "parent": "AAAAAAAAAAA=",
+      "parent_generation": "AAAAAAAAAAA=",
+      "parent_retired": false,
+      "predicted_position": [
+        15.009942054748535,
+        20.0,
+        30.0
+      ],
+      "predicted_rotation": [
+        0.0,
+        0.0,
+        0.0009948014048859477,
+        0.9999995231628418
+      ],
+      "revision": "AAAAAAAAAAs=",
+      "selected": false,
+      "task_known": false,
+      "task_serial": 0
+    },
+    "motion_selection": {
+      "asset": "",
+      "asset_generation": "AAAAAAAAAAA=",
+      "asset_type": 0,
+      "authoritative_position": [
+        15.0,
+        20.0,
+        30.0
+      ],
+      "control_animations": 0,
+      "faces": [
+        {
+          "geometry_generation": "AAAAAAAAAkQ=",
+          "index": 0,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAM=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAkU=",
+          "index": 1,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAM=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAkY=",
+          "index": 2,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAM=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAkc=",
+          "index": 3,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAM=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAkg=",
+          "index": 4,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAM=",
+          "texture": ""
+        },
+        {
+          "geometry_generation": "AAAAAAAAAkk=",
+          "index": 5,
+          "legacy_material": "",
+          "material_generation": "AAAAAAAAAAM=",
+          "texture": ""
+        }
+      ],
+      "generation": "AAAAAAAAAAM=",
+      "geometry_pending": false,
+      "id": "a2000000-0000-0000-0000-000000000001",
+      "kind": 2,
+      "local": "AAAAAAAAA7Y=",
+      "motion_timestamp": 1791867841.49137,
+      "parent": "AAAAAAAAAAA=",
+      "parent_generation": "AAAAAAAAAAA=",
+      "parent_retired": false,
+      "predicted_position": [
+        15.155593872070312,
+        20.0,
+        30.0
+      ],
+      "predicted_rotation": [
+        0.0,
+        0.0,
+        0.015456585213541985,
+        0.9998804926872253
+      ],
+      "revision": "AAAAAAAAAAM=",
+      "selected": false,
+      "task_known": false,
+      "task_serial": 0
+    },
+    "object_face_retirement": true,
+    "scene_owner_kinds": true,
+    "self_before": {
+      "animations": 0,
+      "appearance_known": false,
+      "attachments": 0,
+      "cof_version": -1,
+      "id": "10000000-0000-0000-0000-000000000001",
+      "local_compositor_implemented": false,
+      "meshes": 0,
+      "owner_generation": "AAAAAAAAAAE=",
+      "position_known": false,
+      "region_handle": "AAABAAAAAgA=",
+      "self": true,
+      "server_bakes": false
+    },
+    "self_continuity": true,
+    "self_crossed": {
+      "animations": 0,
+      "appearance_known": false,
+      "attachments": 0,
+      "cof_version": -1,
+      "id": "10000000-0000-0000-0000-000000000001",
+      "local_compositor_implemented": false,
+      "meshes": 0,
+      "owner_generation": "AAAAAAAAAAE=",
+      "position_known": false,
+      "region_handle": "AAACAAAAAgA=",
+      "self": true,
+      "server_bakes": false
+    },
+    "task_inventory": {
+      "filename": "r1-task.txt",
+      "id": "a2000000-0000-0000-0000-000000000001",
+      "known": true,
+      "owner_generation": "AAAAAAAAAAM=",
+      "pending": false,
+      "serial": 42
+    },
+    "variable_terrain": true
+  },
+  "loaded_library_sha256": {
+    "C:\\Windows\\System32\\ntdll.dll": "a378d703c3f155d71b57ac53891b5905dc1036d3e763d82980705d1e2a8dd17d",
+    "C:\\Windows\\System32\\kernel32.dll": "4f7e85e01b521aa002692b1e868bee9a3a9ba19b815ce5d16d2e959fb0289feb",
+    "C:\\Windows\\System32\\KernelBase.dll": "bffbb14b005b7b2764dbde1a95512aeb95662215fc33c780618435cde6661d6a",
+    "C:\\Windows\\System32\\oleaut32.dll": "92f48fb8a5f59a507037b55fcfcc4980904ad38443469e289842b3e35e74c234",
+    "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64\\newview\\RelWithDebInfo\\vulkan-1.dll": "5db0230299aaf1597d696f155d16a0357462d18aa2808c5a788e7dc9a0ec2ca3",
+    "C:\\Windows\\System32\\msvcp_win.dll": "c50165e6aaf74395c059564d65fa78b0911844828cbcf791d78f80d964a60f4e",
+    "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64\\newview\\RelWithDebInfo\\llwebrtc.dll": "89e02c2a9d5f5a6887f3117e79a3cfc720e295a6f86a9a4e61c436917eaf334c",
+    "C:\\Windows\\System32\\bcrypt.dll": "9956c503e5adfef784f57ceb361eec14b5e2c83b4308405459590f96c797a471",
+    "C:\\Windows\\System32\\sechost.dll": "eead46552df250325a75563143e9bbe1692a4d6e1855f4676944a464089d2d51",
+    "C:\\Windows\\System32\\user32.dll": "f285937030bcb325cad39ee5be4818f6666241229adeadea4ff1ae469dfd7ef3",
+    "C:\\Windows\\System32\\win32u.dll": "aa252b1dbce963eaa7094132c611c1e05a0a373dc9d5e9a04016c10c361d4606",
+    "C:\\Windows\\System32\\ucrtbase.dll": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192",
+    "C:\\Windows\\System32\\gdi32.dll": "772c73e294a4c5f5e0d4146288af95287a85c074d3aee3fa9f320dc010d7dbfe",
+    "C:\\Windows\\System32\\combase.dll": "a8824384053afd40285a29dcdb637c45ebac867f286daabcf9ce1383690edb0b",
+    "C:\\Windows\\System32\\gdi32full.dll": "8c017d7a9bedbf2d52f4fd5e51716710dcf2ac74122f14f8d0fb56e54aa1f6c4",
+    "C:\\Windows\\System32\\ole32.dll": "1053ffb858cddbe29eaaa6a5b0836b88c7cd11fbd58605288600e507c06db443",
+    "C:\\Windows\\System32\\rpcrt4.dll": "dcf5704bc1ceb9b46896c8c08a6c2448e1908111fe4ad829e25f3da61b26cdaf",
+    "C:\\Windows\\System32\\ws2_32.dll": "d82732cf85c19e632ccaf08bd6be0c70142eafbfcd515c24495261d12aaec570",
+    "C:\\Windows\\System32\\imm32.dll": "7e45f12c1c555e2407c5ca082bd925b34655278fde4dbfac53a0468cc1e77411",
+    "C:\\Windows\\System32\\comdlg32.dll": "7d87ea4e567e74005a7a0ffbb11707265962a24aeb73f909ba7f3d004b5925bf",
+    "C:\\Windows\\System32\\SHCore.dll": "c49f6ca8dcc99077703b654578c5f2000acd126354484678af86282a5baf5163",
+    "C:\\Windows\\System32\\shlwapi.dll": "2708f3d0191400173c2d0917ae189e7089b8bec7e1f35f8f85be383fa610d94c",
+    "C:\\Windows\\System32\\shell32.dll": "be4d90cdb64b98be38083576f872015615ac6930e6c7c462d125a2e50767b887",
+    "C:\\Windows\\System32\\wer.dll": "759b7c6b553f87ab50abae91828aede71555dc0e1d1b1946d527b0c434825c03",
+    "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64\\newview\\RelWithDebInfo\\openjp2.dll": "b559cab2b5c5b3790b232cfa22b30ebb65ac86af0cac1d3e21d6235182d5ae48",
+    "C:\\Windows\\System32\\winmm.dll": "b9035da2ee058fe565ecb3c0064f46f2d09bde01f29e423ffe6b33e15c773f04",
+    "C:\\Windows\\System32\\advapi32.dll": "74fefade3065de4bf2b870777369222fbc2908ddcad2aa4cb63a33f1eef9979d",
+    "C:\\Windows\\System32\\msvcrt.dll": "a1bd0acd64e1a60368b8878d3987f603d966ed45be2252d2d4d0f92feb10fa8e",
+    "C:\\Windows\\System32\\IPHLPAPI.DLL": "8521026d021cc5193a7cd7c0256bd14c7ab39738d22c019e6d544b37deee12c0",
+    "C:\\Windows\\WinSxS\\amd64_microsoft.windows.common-controls_6595b64144ccf1df_5.82.26100.8328_none_87eede957a2ccddd\\comctl32.dll": "67e04b3a6650430ba7b57ce01180d7a8f2e06fb04570f4c26b511e6cb05b1761",
+    "C:\\Windows\\System32\\cfgmgr32.dll": "fea3f02ba1a9ac87f7ec53932a5821d3d894d70c828a441c8767059efa53f5c5",
+    "C:\\Windows\\System32\\dxgi.dll": "023542bb41afcf0ba5ee02cb63ccbaeab4765a5dd859a1b0a6e05fa9b739e89f",
+    "C:\\Windows\\System32\\crypt32.dll": "71da5f9806f7aaf9e081c1df28b13182d2643b7f3534173f868ba65287612bbb",
+    "C:\\Windows\\System32\\powrprof.dll": "096b3c77ad7fece122be0362c72530b1edc024fe7107d1d40d8bcd8fa5428a0e",
+    "C:\\Windows\\System32\\netapi32.dll": "d5b12248b116177329bf72cb517d515637cf2476dff1c159a0e1e7d28420be09",
+    "C:\\Windows\\System32\\dbghelp.dll": "2d2ec94891162a61d86789133623b47d64d74c15d6be99473b25ad7a6468cf39",
+    "C:\\Windows\\System32\\dinput8.dll": "b0f10001fccd05e9863d84588be9b9f8389656d95177287dd4c6cf3be4bf1dfe",
+    "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64\\newview\\RelWithDebInfo\\glod.dll": "8007916e8efe246886bf8236c3c0f38e808c01e157be98f252f1ac1052ffb6e1",
+    "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64\\newview\\RelWithDebInfo\\growl.dll": "715a0ea33b1cd4488068293ca8383d89af4bd712c88bd5eae37b4e6bae80b2b1",
+    "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64\\newview\\RelWithDebInfo\\vcruntime140.dll": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7",
+    "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64\\newview\\RelWithDebInfo\\msvcp140.dll": "7c26614e1d733892c2deac7e245ce115504b1d80592dd0a01b08e3e5a55f89ca",
+    "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64\\newview\\RelWithDebInfo\\vcruntime140_1.dll": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e",
+    "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64\\newview\\RelWithDebInfo\\growl++.dll": "ef217dad51b2e475393cc847c05361538786a5b63795051dec4dd3b198cc16a8",
+    "C:\\Windows\\System32\\dwmapi.dll": "733c4dbf3e3fc521199ae57a5adc0b780d8c63d3de96676670cbf6d27cfed5e2",
+    "C:\\Windows\\System32\\dbgeng.dll": "bfa188b10eb64a94f1eb59bfb0f8d85eb5dfc803cd0f6b5c554816fe311a236e",
+    "C:\\Windows\\System32\\DbgModel.dll": "b1711ae13f4385c2c12e694c8a549c01bcee1f77e149fb792329eefbe4e61798",
+    "C:\\Windows\\System32\\xmllite.dll": "a342608c9370e468cf5c003aa0b9c982af5f2bfea8977f757a2283adf7c8d8d5",
+    "C:\\Windows\\System32\\umpdc.dll": "b3407a812c7f34ac6b5beefb2a78e8f2d7c4376f7c7012f880aab4fe07235e4e",
+    "C:\\Windows\\System32\\netbios.dll": "9309182914603681796894401fd7e9cd9598019893c61226574a23453b5877fe",
+    "C:\\Windows\\System32\\InputHost.dll": "5ce5116117631286e6f51033deeffb24ec151a9407d003d67fc5a9a749dee578",
+    "C:\\Windows\\System32\\CoreMessaging.dll": "3405ac9fa03f3a37a48236ef15e71ab36dc70c0b1f089c209c47ee137dfc2c65",
+    "C:\\Windows\\System32\\cryptbase.dll": "d77b19df871b5a2f02e826ebeb5de86735f5cd0806294fe9143ba138c964ee16",
+    "C:\\Windows\\System32\\bcryptprimitives.dll": "1f74c2fb24bdc76484ede62462c2b45c4b5297b306bf4a550f9407ed402e4096",
+    "C:\\Windows\\System32\\kernel.appcore.dll": "ed6d62f2555d260547cc94a5cdfe2a6fcb684f18b8e182f78f9e4de224321fc9",
+    "C:\\Windows\\System32\\dbgcore.dll": "4aa8f5241b94752cac649e61bdf57c8910e1dbf3d4e9759c658bb41a852f6cdf",
+    "C:\\Windows\\System32\\mswsock.dll": "b4b75a9e5bfaa236a06f78c96f9655529a83d80b6558a84fdd4128d5cf46381c",
+    "C:\\Windows\\System32\\uxtheme.dll": "75b98acc9146e536134126925b75c9efc33fc92e478ccca08d8c9512cf4271a4",
+    "C:\\Windows\\System32\\clbcatq.dll": "f7efed44afb2f843ca2473a51f95d9bafbb8a07a28a0337d5c746cd4acbcae24",
+    "C:\\Windows\\System32\\wbem\\wbemprox.dll": "5747ad5f3c5243babfbabf5e1c0346a5a6987a0ee26bc8b4392f0d5d0c039782",
+    "C:\\Windows\\System32\\wbemcomn.dll": "a386929986d12222169bb945a64df70c19da01c2d87c6425a0b3f9d2d8b8bc36",
+    "C:\\Windows\\System32\\wbem\\wbemsvc.dll": "57a5e66d8c954b9921594dbe832a691cabbce616c3527302e2300adb96a8d6ec",
+    "C:\\Windows\\System32\\wbem\\fastprox.dll": "fb4e9751061b3061ff29cf431b3489aa721d9bbfc1f535b4b8996f7e798b1ee7",
+    "C:\\Windows\\System32\\amsi.dll": "9df7ad9e6826ab76294a91bef274696ee13d18a8cebabcd5c4c352a3d1141df3",
+    "C:\\Windows\\System32\\userenv.dll": "aeb1a6a15397bee7a0ebc67b8188f751e10089c0adadfd86146496c5faae914c",
+    "C:\\Windows\\System32\\profapi.dll": "8983b0b95ce9e3282d3a09890316fc7290ba1ad45624167c576fbc691fbe66b0",
+    "C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\4.18.26080.4-0\\MpOAV.dll": "f8f28a74dfb504e85b87cbc156855c98784d4035916a304cf20d86e20769b977",
+    "C:\\Windows\\System32\\version.dll": "cea99f212af557a9613150c5509631403ed0f05f5d9a06ac42039bd59b40e39a",
+    "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\build-vc170-64\\newview\\RelWithDebInfo\\GraphicsEngineVk_64r.dll": "2b1d2aff247ff23b18ee95d18b1630d7505d09607313cfbc8acae5b733e9bf8f",
+    "C:\\Windows\\System32\\Windows.StateRepositoryCore.dll": "baca5db8d393ed1f16ddb7ee4c27d319381e62d135c4a4a5ad0f6f221f7c032b",
+    "C:\\Windows\\System32\\DXCore.dll": "df9b1da21162c1dba8399c755805b66d2bfde06e55313c73b1360bbed2e2f71d",
+    "C:\\Windows\\System32\\directxdatabasehelper.dll": "20b7b293bf1399d71c6b34ef02dadace07a6a90961ab3c49f388a5e9ebac6703",
+    "C:\\Dev\\vulkanstorm\\.tmp\\software-vulkan-runtime\\staged\\icd\\vk_swiftshader.dll": "e1260cfa385ef57e02f50f320451c4be7475923fa80b60c830e4d8a975990279",
+    "C:\\Dev\\vulkanstorm\\.tmp\\software-vulkan-runtime\\staged\\layers\\VkLayer_khronos_validation.dll": "0385c28aabbd95461ae47c5797eff69065536fe241092570bf46fb30ebe12999",
+    "C:\\Windows\\System32\\MMDevAPI.dll": "9391cb371bdcfaa861166253e57c646e4d18b934ddee4516150a6e43f3421b7f",
+    "C:\\Windows\\System32\\devobj.dll": "39ce6ba5957b16d36ad8ee09224126a1d194f2e9b1bfc048a269a9ba1d9feb50",
+    "C:\\Windows\\System32\\MFWMAAEC.DLL": "cd324e2d7b8de91a4648f83aac70a4edc18088dec9bc29d3997e0ff3436701fc",
+    "C:\\Windows\\System32\\AudioSes.dll": "95af7710ec1a13252283b3740a3efeeb7c014790f99dc9404d6aec426e5c6c4e",
+    "C:\\Windows\\System32\\avrt.dll": "8fc53d3d44d744aede6d5cc2b8afd5edc1c7292e81330755de1a9fda3506255c",
+    "C:\\Windows\\System32\\Windows.UI.dll": "f8bbe0a73569bede3d2141384997086942ed49af6749a61aa723044425cf2c05",
+    "C:\\Windows\\System32\\ResourcePolicyClient.dll": "443a802b2287d316661794f69c690651f46d28fe905e93871cd8cbc99528e79c",
+    "C:\\Windows\\System32\\dnsapi.dll": "c7e1006f7bcbdff6d3668d10b9756a9734c53ccc47783f8908f68b60d0341bbb",
+    "C:\\Windows\\System32\\dsparse.dll": "c78ac36d970b6fa79206a161d4ded0886879c4df80791dd22650a8a7afd9c2eb",
+    "C:\\Windows\\System32\\nsi.dll": "d22f4cc243548dda81e274f95e92433ae8187eddfde39adaaf5996985bb41ef3",
+    "C:\\Windows\\System32\\FWPUCLNT.DLL": "99d3cc8563a095f84b475af7cfbb9698d5bbdf4433472d3c8954f1b27e74f5f0",
+    "C:\\Windows\\System32\\rasadhlp.dll": "95e2a46859a901d397d409e7c010f77d983a3aba09d83aaad02e1c704a06aded",
+    "C:\\Windows\\System32\\msdmo.dll": "32e85193f2c39c0ac0bc51bd9be213fe85c892be41f4cdd4af2d25ff8f60a997"
+  },
+  "readback_sha256": {
+    "session-chat.ppm": "2d7713a6c6cfa4ec40067eaa51ab0207a4f39cb6fe3709dac55794c2a53678ce",
+    "session-chat-expected.ppm": "61cd32d4049abdadcf83be71578caaad86117280b5139204191a990bc4b0d076",
+    "session-chat-expected-products.ppm": "d399e24e979aa1ec158a8dc50f3b7fe73ac916dc06d182abee16d8192a8ea2e4",
+    "session-chat-scene.ppm": "e26ac0d20edb7c4d7175480774c77c275c01e1923e7893966890b96f862afc43",
+    "session-chat-scene.rgba": "301ebe8ae6206c4a603af60ed0c4b02b125614a71ac51a3379e4f0490a704b62",
+    "im\\session-chat.ppm": "47a03aae44d309863a19db385339ec0d7bf3f1bac7bcbca97a0e0e94b9352c48",
+    "im\\session-chat-expected.ppm": "8b1c517aa5fbd8c5c48418fa19ff9efd358f28b9516f8258622a1bafcfb9d5a1",
+    "im\\session-chat-expected-products.ppm": "28c2800ad5233a1b87904fb05f210ac799e1dca42c054d9caa8f3cd96c2eb167",
+    "im\\session-chat-scene.ppm": "35c5b99ec0589d1a1cf5a80726649e1b29af015f7bcae7a47251160a211e450d",
+    "im\\session-chat-scene.rgba": "de04057b71c456cc4df9543aa37f299764966b04d380f48e49762b60bee5e704"
+  },
+  "graphics_cases": [
+    {
+      "mode": "offscreen",
+      "passed": true,
+      "exit_code": 0,
+      "loaded_library_sha256": {
+        "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\.tmp\\r0-software-contract-build\\RelWithDebInfo\\diligent_render_test.exe": "73bff5079df42136c1bc77efaef825aaedd58bdc88bfcde38a7047328c198d0f",
+        "C:\\Windows\\System32\\ntdll.dll": "a378d703c3f155d71b57ac53891b5905dc1036d3e763d82980705d1e2a8dd17d",
+        "C:\\Windows\\System32\\kernel32.dll": "4f7e85e01b521aa002692b1e868bee9a3a9ba19b815ce5d16d2e959fb0289feb",
+        "C:\\Windows\\System32\\KernelBase.dll": "bffbb14b005b7b2764dbde1a95512aeb95662215fc33c780618435cde6661d6a",
+        "C:\\Windows\\System32\\user32.dll": "f285937030bcb325cad39ee5be4818f6666241229adeadea4ff1ae469dfd7ef3",
+        "C:\\Windows\\System32\\win32u.dll": "aa252b1dbce963eaa7094132c611c1e05a0a373dc9d5e9a04016c10c361d4606",
+        "C:\\Windows\\System32\\gdi32.dll": "772c73e294a4c5f5e0d4146288af95287a85c074d3aee3fa9f320dc010d7dbfe",
+        "C:\\Windows\\System32\\gdi32full.dll": "8c017d7a9bedbf2d52f4fd5e51716710dcf2ac74122f14f8d0fb56e54aa1f6c4",
+        "C:\\Windows\\System32\\msvcp_win.dll": "c50165e6aaf74395c059564d65fa78b0911844828cbcf791d78f80d964a60f4e",
+        "C:\\Windows\\System32\\ucrtbase.dll": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192",
+        "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\.tmp\\r0-software-contract-build\\RelWithDebInfo\\vulkan-1.dll": "5db0230299aaf1597d696f155d16a0357462d18aa2808c5a788e7dc9a0ec2ca3",
+        "C:\\Windows\\System32\\advapi32.dll": "74fefade3065de4bf2b870777369222fbc2908ddcad2aa4cb63a33f1eef9979d",
+        "C:\\Windows\\System32\\msvcrt.dll": "a1bd0acd64e1a60368b8878d3987f603d966ed45be2252d2d4d0f92feb10fa8e",
+        "C:\\Windows\\System32\\sechost.dll": "eead46552df250325a75563143e9bbe1692a4d6e1855f4676944a464089d2d51",
+        "C:\\Windows\\System32\\rpcrt4.dll": "dcf5704bc1ceb9b46896c8c08a6c2448e1908111fe4ad829e25f3da61b26cdaf",
+        "C:\\Windows\\System32\\msvcp140.dll": "7c26614e1d733892c2deac7e245ce115504b1d80592dd0a01b08e3e5a55f89ca",
+        "C:\\Windows\\System32\\vcruntime140.dll": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7",
+        "C:\\Windows\\System32\\vcruntime140_1.dll": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e",
+        "C:\\Windows\\System32\\cfgmgr32.dll": "fea3f02ba1a9ac87f7ec53932a5821d3d894d70c828a441c8767059efa53f5c5",
+        "C:\\Windows\\System32\\imm32.dll": "7e45f12c1c555e2407c5ca082bd925b34655278fde4dbfac53a0468cc1e77411",
+        "C:\\Windows\\System32\\dxgi.dll": "023542bb41afcf0ba5ee02cb63ccbaeab4765a5dd859a1b0a6e05fa9b739e89f",
+        "C:\\Windows\\System32\\powrprof.dll": "096b3c77ad7fece122be0362c72530b1edc024fe7107d1d40d8bcd8fa5428a0e",
+        "C:\\Windows\\System32\\umpdc.dll": "b3407a812c7f34ac6b5beefb2a78e8f2d7c4376f7c7012f880aab4fe07235e4e",
+        "C:\\Windows\\System32\\Windows.StateRepositoryCore.dll": "baca5db8d393ed1f16ddb7ee4c27d319381e62d135c4a4a5ad0f6f221f7c032b",
+        "C:\\Windows\\System32\\DXCore.dll": "df9b1da21162c1dba8399c755805b66d2bfde06e55313c73b1360bbed2e2f71d",
+        "C:\\Windows\\System32\\combase.dll": "a8824384053afd40285a29dcdb637c45ebac867f286daabcf9ce1383690edb0b",
+        "C:\\Windows\\System32\\bcrypt.dll": "9956c503e5adfef784f57ceb361eec14b5e2c83b4308405459590f96c797a471",
+        "C:\\Windows\\System32\\bcryptprimitives.dll": "1f74c2fb24bdc76484ede62462c2b45c4b5297b306bf4a550f9407ed402e4096",
+        "C:\\Windows\\System32\\directxdatabasehelper.dll": "20b7b293bf1399d71c6b34ef02dadace07a6a90961ab3c49f388a5e9ebac6703",
+        "C:\\Windows\\System32\\kernel.appcore.dll": "ed6d62f2555d260547cc94a5cdfe2a6fcb684f18b8e182f78f9e4de224321fc9",
+        "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\.tmp\\r0-software-contract-build\\RelWithDebInfo\\GraphicsEngineVk_64r.dll": "2b1d2aff247ff23b18ee95d18b1630d7505d09607313cfbc8acae5b733e9bf8f",
+        "C:\\Windows\\System32\\shlwapi.dll": "2708f3d0191400173c2d0917ae189e7089b8bec7e1f35f8f85be383fa610d94c",
+        "C:\\Dev\\vulkanstorm\\.tmp\\software-vulkan-runtime\\staged\\icd\\vk_swiftshader.dll": "e1260cfa385ef57e02f50f320451c4be7475923fa80b60c830e4d8a975990279",
+        "C:\\Windows\\System32\\shell32.dll": "be4d90cdb64b98be38083576f872015615ac6930e6c7c462d125a2e50767b887",
+        "C:\\Windows\\System32\\ole32.dll": "1053ffb858cddbe29eaaa6a5b0836b88c7cd11fbd58605288600e507c06db443",
+        "C:\\Dev\\vulkanstorm\\.tmp\\software-vulkan-runtime\\staged\\layers\\VkLayer_khronos_validation.dll": "0385c28aabbd95461ae47c5797eff69065536fe241092570bf46fb30ebe12999"
+      },
+      "presentation": null,
+      "process_isolation": {
+        "desktop_isolated": false,
+        "desktop_identifier": null,
+        "window_station_identifier": null,
+        "headless_replay": false,
+        "headless_graphics": true
+      }
+    },
+    {
+      "mode": "world",
+      "passed": true,
+      "exit_code": 0,
+      "loaded_library_sha256": {
+        "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\.tmp\\r0-software-contract-build\\RelWithDebInfo\\diligent_render_test.exe": "73bff5079df42136c1bc77efaef825aaedd58bdc88bfcde38a7047328c198d0f",
+        "C:\\Windows\\System32\\ntdll.dll": "a378d703c3f155d71b57ac53891b5905dc1036d3e763d82980705d1e2a8dd17d",
+        "C:\\Windows\\System32\\kernel32.dll": "4f7e85e01b521aa002692b1e868bee9a3a9ba19b815ce5d16d2e959fb0289feb",
+        "C:\\Windows\\System32\\KernelBase.dll": "bffbb14b005b7b2764dbde1a95512aeb95662215fc33c780618435cde6661d6a",
+        "C:\\Windows\\System32\\user32.dll": "f285937030bcb325cad39ee5be4818f6666241229adeadea4ff1ae469dfd7ef3",
+        "C:\\Windows\\System32\\win32u.dll": "aa252b1dbce963eaa7094132c611c1e05a0a373dc9d5e9a04016c10c361d4606",
+        "C:\\Windows\\System32\\gdi32.dll": "772c73e294a4c5f5e0d4146288af95287a85c074d3aee3fa9f320dc010d7dbfe",
+        "C:\\Windows\\System32\\gdi32full.dll": "8c017d7a9bedbf2d52f4fd5e51716710dcf2ac74122f14f8d0fb56e54aa1f6c4",
+        "C:\\Windows\\System32\\msvcp_win.dll": "c50165e6aaf74395c059564d65fa78b0911844828cbcf791d78f80d964a60f4e",
+        "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\.tmp\\r0-software-contract-build\\RelWithDebInfo\\vulkan-1.dll": "5db0230299aaf1597d696f155d16a0357462d18aa2808c5a788e7dc9a0ec2ca3",
+        "C:\\Windows\\System32\\ucrtbase.dll": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192",
+        "C:\\Windows\\System32\\msvcp140.dll": "7c26614e1d733892c2deac7e245ce115504b1d80592dd0a01b08e3e5a55f89ca",
+        "C:\\Windows\\System32\\vcruntime140.dll": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7",
+        "C:\\Windows\\System32\\vcruntime140_1.dll": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e",
+        "C:\\Windows\\System32\\advapi32.dll": "74fefade3065de4bf2b870777369222fbc2908ddcad2aa4cb63a33f1eef9979d",
+        "C:\\Windows\\System32\\msvcrt.dll": "a1bd0acd64e1a60368b8878d3987f603d966ed45be2252d2d4d0f92feb10fa8e",
+        "C:\\Windows\\System32\\sechost.dll": "eead46552df250325a75563143e9bbe1692a4d6e1855f4676944a464089d2d51",
+        "C:\\Windows\\System32\\cfgmgr32.dll": "fea3f02ba1a9ac87f7ec53932a5821d3d894d70c828a441c8767059efa53f5c5",
+        "C:\\Windows\\System32\\rpcrt4.dll": "dcf5704bc1ceb9b46896c8c08a6c2448e1908111fe4ad829e25f3da61b26cdaf",
+        "C:\\Windows\\System32\\imm32.dll": "7e45f12c1c555e2407c5ca082bd925b34655278fde4dbfac53a0468cc1e77411",
+        "C:\\Windows\\System32\\dxgi.dll": "023542bb41afcf0ba5ee02cb63ccbaeab4765a5dd859a1b0a6e05fa9b739e89f",
+        "C:\\Windows\\System32\\powrprof.dll": "096b3c77ad7fece122be0362c72530b1edc024fe7107d1d40d8bcd8fa5428a0e",
+        "C:\\Windows\\System32\\umpdc.dll": "b3407a812c7f34ac6b5beefb2a78e8f2d7c4376f7c7012f880aab4fe07235e4e",
+        "C:\\Windows\\System32\\Windows.StateRepositoryCore.dll": "baca5db8d393ed1f16ddb7ee4c27d319381e62d135c4a4a5ad0f6f221f7c032b",
+        "C:\\Windows\\System32\\DXCore.dll": "df9b1da21162c1dba8399c755805b66d2bfde06e55313c73b1360bbed2e2f71d",
+        "C:\\Windows\\System32\\combase.dll": "a8824384053afd40285a29dcdb637c45ebac867f286daabcf9ce1383690edb0b",
+        "C:\\Windows\\System32\\bcrypt.dll": "9956c503e5adfef784f57ceb361eec14b5e2c83b4308405459590f96c797a471",
+        "C:\\Windows\\System32\\bcryptprimitives.dll": "1f74c2fb24bdc76484ede62462c2b45c4b5297b306bf4a550f9407ed402e4096",
+        "C:\\Windows\\System32\\directxdatabasehelper.dll": "20b7b293bf1399d71c6b34ef02dadace07a6a90961ab3c49f388a5e9ebac6703",
+        "C:\\Windows\\System32\\kernel.appcore.dll": "ed6d62f2555d260547cc94a5cdfe2a6fcb684f18b8e182f78f9e4de224321fc9",
+        "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\.tmp\\r0-software-contract-build\\RelWithDebInfo\\GraphicsEngineVk_64r.dll": "2b1d2aff247ff23b18ee95d18b1630d7505d09607313cfbc8acae5b733e9bf8f",
+        "C:\\Windows\\System32\\shlwapi.dll": "2708f3d0191400173c2d0917ae189e7089b8bec7e1f35f8f85be383fa610d94c",
+        "C:\\Dev\\vulkanstorm\\.tmp\\software-vulkan-runtime\\staged\\icd\\vk_swiftshader.dll": "e1260cfa385ef57e02f50f320451c4be7475923fa80b60c830e4d8a975990279",
+        "C:\\Windows\\System32\\shell32.dll": "be4d90cdb64b98be38083576f872015615ac6930e6c7c462d125a2e50767b887",
+        "C:\\Windows\\System32\\ole32.dll": "1053ffb858cddbe29eaaa6a5b0836b88c7cd11fbd58605288600e507c06db443",
+        "C:\\Dev\\vulkanstorm\\.tmp\\software-vulkan-runtime\\staged\\layers\\VkLayer_khronos_validation.dll": "0385c28aabbd95461ae47c5797eff69065536fe241092570bf46fb30ebe12999"
+      },
+      "presentation": null,
+      "process_isolation": {
+        "desktop_isolated": false,
+        "desktop_identifier": null,
+        "window_station_identifier": null,
+        "headless_replay": false,
+        "headless_graphics": true
+      }
+    },
+    {
+      "mode": "invalid",
+      "passed": true,
+      "exit_code": 1,
+      "loaded_library_sha256": {},
+      "presentation": null,
+      "process_isolation": {
+        "desktop_isolated": false,
+        "desktop_identifier": null,
+        "window_station_identifier": null,
+        "headless_replay": false,
+        "headless_graphics": true
+      }
+    },
+    {
+      "mode": "invalid-sync",
+      "passed": true,
+      "exit_code": 1,
+      "loaded_library_sha256": {},
+      "presentation": null,
+      "process_isolation": {
+        "desktop_isolated": false,
+        "desktop_identifier": null,
+        "window_station_identifier": null,
+        "headless_replay": false,
+        "headless_graphics": true
+      }
+    },
+    {
+      "mode": "bad-pixels",
+      "passed": true,
+      "exit_code": 1,
+      "loaded_library_sha256": {},
+      "presentation": null,
+      "process_isolation": {
+        "desktop_isolated": false,
+        "desktop_identifier": null,
+        "window_station_identifier": null,
+        "headless_replay": false,
+        "headless_graphics": true
+      }
+    },
+    {
+      "mode": "bad-orientation",
+      "passed": true,
+      "exit_code": 1,
+      "loaded_library_sha256": {},
+      "presentation": null,
+      "process_isolation": {
+        "desktop_isolated": false,
+        "desktop_identifier": null,
+        "window_station_identifier": null,
+        "headless_replay": false,
+        "headless_graphics": true
+      }
+    }
+  ],
+  "regression_suites": [
+    {
+      "test": "scripts/tests/test_progress_panels.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_text_layout_reset.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_software_vulkan_runner.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_session_replay.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_chat_keyboard_routing.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_native_parcel_playback.py",
+      "exit_code": 0,
+      "retested": true
+    },
+    {
+      "test": "scripts/tests/test_native_app_url_routing.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_inventory_settings_controller.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_profile_native_location.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_emoji_connected_controller.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_native_marketplace_account.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_native_bridge_retirement.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_native_simulator_features.py",
+      "exit_code": 0,
+      "retested": true
+    },
+    {
+      "test": "scripts/tests/test_native_account_service_pump.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_world_scene_contracts.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_world_motion_contracts.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_native_camera_transport.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_native_world_assets.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_parity_baseline.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_terrain_packet.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_experience_account_lifetime.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_event_notifier_account.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_viewer_diagnostic.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_windows_clipboard.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_native_pointer_leave.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_viewer_hover_lifecycle.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_viewer_process.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_im_conference_lifetime.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_menu_callbacks.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_preferences.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_friend_status.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_ui_oracle.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_media_pixels.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_font_registry.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_ci_staging.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_vulkan_dependency_overlay.py",
+      "exit_code": 0
+    },
+    {
+      "test": "scripts/tests/test_software_vulkan_dependencies.py",
+      "exit_code": 0
+    }
+  ],
+  "source_catalog": {
+    "pin": "f3c1223638b96879dbebc44a642fc0c46c37f99e",
+    "runtime_parity_qualified": false
+  },
+  "platform_ci": {
+    "baseline_run": 38335464451,
+    "baseline_source": "98a81b8f31c0b07e8bb6265ee4fa46c7eb705d2d",
+    "r1_run": "Queued after documentation/evidence commit; no Linux R1 runtime claim."
+  },
+  "qualification_limits": [
+    "No public-grid authentication evidence for these R1 changes",
+    "No AMD/NVIDIA physical-driver or GPU-performance qualification",
+    "No full-viewer sustained pressure or total process/driver allocation measurement",
+    "No R2-R9 geometry/appearance/material/lighting/postprocessing/service parity acceptance"
+  ],
+  "archive_sha256": "1cb505904ce66e1f94bdff7250dbda58383626ed1ca68a685cdcd122412053c2",
+  "archive_bytes": 542992,
+  "archive_files": {
+    "viewer/http-replay.json": "a3493c94a8f874e4628c9806f8d1644525ddebe65e716d5871587006571f3640",
+    "viewer/preferences-replay.xml": "c7068ba2ded0aebc89c03f51d26a55d7688616c785b5d01d674cf2384741607f",
+    "viewer/results.json": "680892c038db21f9bfa1c285c0bb3b77e36feb3ee4c392946d7de4b83bf277fa",
+    "viewer/session-chat-expected-products.ppm": "d399e24e979aa1ec158a8dc50f3b7fe73ac916dc06d182abee16d8192a8ea2e4",
+    "viewer/session-chat-expected.ppm": "61cd32d4049abdadcf83be71578caaad86117280b5139204191a990bc4b0d076",
+    "viewer/session-chat-scene.ppm": "e26ac0d20edb7c4d7175480774c77c275c01e1923e7893966890b96f862afc43",
+    "viewer/session-chat-scene.rgba": "301ebe8ae6206c4a603af60ed0c4b02b125614a71ac51a3379e4f0490a704b62",
+    "viewer/session-chat.ppm": "2d7713a6c6cfa4ec40067eaa51ab0207a4f39cb6fe3709dac55794c2a53678ce",
+    "viewer/session-replay.xml": "1d1141b5ca83725f43b171fd66a36b2488dbb4995706d7e74f68c265210bab89",
+    "viewer/settings.xml": "10097316583a0d433a1b778edd5f477cb63b4ddff68bbd1238a0c23ca54271ce",
+    "viewer/ui-selection.xml": "324205a6aa33bccd5d841a536cda6d5834b9b303d00c70843c6565068f7921ab",
+    "viewer/viewer.log": "bb21fe1bbf2f39d51cfd5b4e710aa9e00fd1ec980ad929a95a928c1ad1198c62",
+    "viewer/vk_layer_settings.txt": "e57290b47fc4fd8a787ab547eda3175a88ad4ab05f3b1036d2a58284a832b43f",
+    "viewer/im/session-chat-expected-products.ppm": "28c2800ad5233a1b87904fb05f210ac799e1dca42c054d9caa8f3cd96c2eb167",
+    "viewer/im/session-chat-expected.ppm": "8b1c517aa5fbd8c5c48418fa19ff9efd358f28b9516f8258622a1bafcfb9d5a1",
+    "viewer/im/session-chat-scene.ppm": "35c5b99ec0589d1a1cf5a80726649e1b29af015f7bcae7a47251160a211e450d",
+    "viewer/im/session-chat-scene.rgba": "de04057b71c456cc4df9543aa37f299764966b04d380f48e49762b60bee5e704",
+    "viewer/im/session-chat.ppm": "47a03aae44d309863a19db385339ec0d7bf3f1bac7bcbca97a0e0e94b9352c48",
+    "viewer/r1/contracts.xml": "628a35aecafc321132a1be79d7f5a64d36806cb853980e25a52f7fc1727f042b",
+    "viewer/r1/mesh-1.bin": "a89f20df11595ac50660eb128fc3a2adc66e7a47621624e936d2323928b6edb1",
+    "viewer/r1/mesh-2.bin": "6492ead16bb7b31703a20e4f3ca11fb88238b8ee574635c3694c0a593cf9a369",
+    "viewer/r1/mesh-generation.txt": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+    "graphics/results.json": "15e544383126da944ac78441092fef4103cf4c9a6e29ed035fc10e9c19d58bc4",
+    "graphics/vk_layer_settings.txt": "e57290b47fc4fd8a787ab547eda3175a88ad4ab05f3b1036d2a58284a832b43f",
+    "graphics/bad-orientation/first.ppm": "5158b15b689f4a6c178903c9dec8f52aea2abf0da8217ab9b249d442a24b3f66",
+    "graphics/bad-orientation/test.log": "c36f61ae0b7c849b55859ecbb4243c631b1b5a73feb861d6ba3c238e635a0af5",
+    "graphics/bad-pixels/first.ppm": "f1278a678c65167426e821bc1ae125df070cc005909c79b3dc14454167f3625a",
+    "graphics/bad-pixels/test.log": "c36f61ae0b7c849b55859ecbb4243c631b1b5a73feb861d6ba3c238e635a0af5",
+    "graphics/invalid/test.log": "7bfd63fc4d4b1888bd99dbfad784bda024e758315ce3efadd9a6000ee5976035",
+    "graphics/invalid-sync/test.log": "3a9c3941aa1573556422f017d89a576ae488dd647c84aec7abef527659f3609d",
+    "graphics/offscreen/first.ppm": "f1278a678c65167426e821bc1ae125df070cc005909c79b3dc14454167f3625a",
+    "graphics/offscreen/replacement.ppm": "15dcc45a3bcac94696fdabc82b2d811dbc4ababe2b38ec268c0fc8babf583099",
+    "graphics/offscreen/test.log": "0a49e64b7b687ee90011fb17c69b086c3d795e22c43a672154ed290e885dfba0",
+    "graphics/world/budget-replacement.ppm": "a8aabed854f2d8f522abbd963b189ff973c68a9dbff56f4b7d6158632980aeeb",
+    "graphics/world/budget-retained.ppm": "50d9620314d2c6ce3b617a6343254fdc174c8cc8ecb13d81f87b6a94f8437f0c",
+    "graphics/world/first.ppm": "50d9620314d2c6ce3b617a6343254fdc174c8cc8ecb13d81f87b6a94f8437f0c",
+    "graphics/world/near-clip.ppm": "50d9620314d2c6ce3b617a6343254fdc174c8cc8ecb13d81f87b6a94f8437f0c",
+    "graphics/world/replacement.ppm": "ef90f1d083c45464b1a9d34baa9f4fb91a37066588df53c04192bb37f146917f",
+    "graphics/world/resource-reuse.ppm": "82dc3b9ccf4cd4c2c5664e2252f3fb161a9ee9bd3f20c45daf0f9de6f9531701",
+    "graphics/world/sky.ppm": "9658a0373fef6d8dd8596c84e166d2e8bf7b841f8a080d155ad207cc02333333",
+    "graphics/world/test.log": "b82c5e9dc2d1eca56e2f1a2b8ac3f5a683a3da54d2e94b1da7895591579c6928",
+    "graphics/world/texture-0.ppm": "50d9620314d2c6ce3b617a6343254fdc174c8cc8ecb13d81f87b6a94f8437f0c",
+    "graphics/world/texture-1.ppm": "a8aabed854f2d8f522abbd963b189ff973c68a9dbff56f4b7d6158632980aeeb",
+    "graphics/world/texture-2.ppm": "635a40e275633f5348fc7668fa4f16ca063a16877b111d3166a933d2e506b176",
+    "graphics/world/texture-3.ppm": "33321f8df376023d76f562293e1409c551a875c1ab1b96ada7b4d7171e36f7e5",
+    "graphics/world/ui-batch.ppm": "650978fd326b22f248120c8e2c2bee3e1c358b447c278a827d16fc78ae705fd3",
+    "graphics/world/ui-blend-precision-expected-products.ppm": "863d1fa58565fb0c3a8c7c83cdf249083d5e65d4ba0aa28fccb994b202a8b614",
+    "graphics/world/ui-blend-precision-expected.ppm": "f3f73b54d4c189dcd67edd67eadc9f60198cf08f9ac65fa453682db5a3c7feee",
+    "graphics/world/ui-blend-precision.ppm": "f3f73b54d4c189dcd67edd67eadc9f60198cf08f9ac65fa453682db5a3c7feee",
+    "graphics/world/water-depth.ppm": "ef90f1d083c45464b1a9d34baa9f4fb91a37066588df53c04192bb37f146917f",
+    "checks/r1-regression-results.json": "4b2a0e2a4ffa64f297a2a36dacffe0434a0503f6ca8618313fa90454e7e64fc2",
+    "checks/r1-regression-tests.log": "fc05624fe5ed53d2ea4ccf751efd124733fd35e541f2294079b68813b374a42e",
+    "checks/r1-parcel-regression.log": "316de56629ec6d6f8bca69724ed5b1bdcd3e2aca6468a9c1060d863872e61863",
+    "checks/r1-startup-regression.log": "a2edb309751e583cd0fcab5316465736ba18f40544126ae1b50d919301768a33",
+    "checks/r1-full-owner-integration-build.log": "0f86d4eee5c9796750ce00a3be8611ee239611335c011e9343881779dffdabb2",
+    "checks/r1-final-graphics-build.log": "10582180d7397fcb73d495889ac1670c194dfbb6cdd8c6f7a9ad8ae0b4a45824",
+    "build/vulkan-ci-staging.json": "2644880fc649a6ca485942894410dbc7ff62b2011ddde279030203f4d18af796",
+    "build/CMakeCache.txt": "a7056e30a2e3a7c85b664124a7a0fdc0ab754d82f72d1f904c852026fec59535"
+  }
+}

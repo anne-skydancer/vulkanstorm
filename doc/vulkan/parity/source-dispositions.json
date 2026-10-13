@@ -1,13 +1,24 @@
 {
   "schema": 1,
-  "scope": "Explicit partial implementation dispositions from the full source survey; no full feature or runtime acceptance.",
+  "scope": "Explicit reviewed implementation dispositions and scoped qualification; accepted ownership subsets do not confer full rendering/service parity.",
   "entries": {
     "SURVEY.Standard-primitives-linksets": {
       "implementation": "partial",
       "native_source_references": [
         "indra/newview/vsworldscene.cpp"
       ],
-      "implementation_note": "Actual CPU volume/TE decode and primitive publication; complete LOD, classification and scene lifecycle remain open."
+      "implementation_note": "R1 host-qualified object/link/face ownership, parent retirement and lifecycle are implemented and production-replay qualified. Complete primitive LOD, rendering classification and visual variants remain R2/R4 requirements.",
+      "qualification_subsets": [
+        {
+          "stage": "R1",
+          "source_qualified": true,
+          "software_runtime_qualified": true,
+          "authenticated_runtime_qualified": false,
+          "evidence": [
+            "doc/vulkan/parity/evidence/r1-owner-lifecycle-summary.json"
+          ]
+        }
+      ]
     },
     "SURVEY.Mesh-assets-LOD": {
       "implementation": "partial",
@@ -17,14 +28,36 @@
         "indra/newview/vsworldrenderer.cpp",
         "indra/newview/vsresourcebudget.h"
       ],
-      "implementation_note": "Bounded shared mesh decode and LOD retention; mainloop asset/account/region/request generations, same-account decoded reuse, bounded retry/LRU and live-owner CPU/GPU mesh payload reservations are implemented. Isolated production renderer budget refusal/retirement/replacement readbacks pass on SwiftShader; complete streaming, local reload producers, materials and full-viewer runtime coverage remain open. See doc/vulkan/r1-resource-contracts.md."
+      "implementation_note": "R1 bounded mesh decode/cache/retry/replacement, mainloop ownership, crossing reuse and CPU/GPU payload retirement are implemented and software qualified through production HTTP/message replay and renderer readbacks. Full geometry/texture/local-editing/material producer parity remains R2/R3/R9. See doc/vulkan/r1-owner-lifecycle.md.",
+      "qualification_subsets": [
+        {
+          "stage": "R1",
+          "source_qualified": true,
+          "software_runtime_qualified": true,
+          "authenticated_runtime_qualified": false,
+          "evidence": [
+            "doc/vulkan/parity/evidence/r1-owner-lifecycle-summary.json"
+          ]
+        }
+      ]
     },
     "SURVEY.Self-other-system-avatars": {
       "implementation": "partial",
       "native_source_references": [
         "indra/newview/vsworldavatar.cpp"
       ],
-      "implementation_note": "CPU skeleton/morph/keyframe/body mesh and baked mask paths exist; complete appearance, locomotion, cloth and shader/view variants do not."
+      "implementation_note": "R1 typed CPU avatar ownership, early self initialization, wearable metadata and self-owner continuity with safe destination-ground rebinding are implemented and production-replay qualified. Complete appearance/COF, locomotion, cloth and shader/view variants remain R2.",
+      "qualification_subsets": [
+        {
+          "stage": "R1",
+          "source_qualified": true,
+          "software_runtime_qualified": true,
+          "authenticated_runtime_qualified": false,
+          "evidence": [
+            "doc/vulkan/parity/evidence/r1-owner-lifecycle-summary.json"
+          ]
+        }
+      ]
     },
     "SURVEY.Rigged-attachments-animesh": {
       "implementation": "partial",
@@ -32,7 +65,18 @@
         "indra/newview/vsworldavatar.cpp",
         "indra/newview/vsworldscene.cpp"
       ],
-      "implementation_note": "Weighted attachment palette skinning exists; joint overrides/restoration, fitted mesh, HUD attachments and independent animesh ownership remain open."
+      "implementation_note": "R1 attachment/control-avatar identities and control animation metadata are implemented; control owners do not create a human body substitute. Weighted attachment palette skinning exists, while full fitted/HUD/joint-override and independent animesh production remain R2.",
+      "qualification_subsets": [
+        {
+          "stage": "R1",
+          "source_qualified": true,
+          "software_runtime_qualified": true,
+          "authenticated_runtime_qualified": false,
+          "evidence": [
+            "doc/vulkan/parity/evidence/r1-owner-lifecycle-summary.json"
+          ]
+        }
+      ]
     },
     "SURVEY.Terrain": {
       "implementation": "partial",
@@ -40,7 +84,18 @@
         "indra/newview/vsterrainpacket.h",
         "indra/newview/vsworldscene.cpp"
       ],
-      "implementation_note": "Current-region heightfield and single texture per patch; no four-way/PBR splatting or neighbour/variable-region parity."
+      "implementation_note": "R1 sparse bounded L/M terrain, neighbour ownership and variable-region dimensions are implemented and production-replay qualified. Four-way/PBR splatting, geometry LOD and complete terrain/environment rendering remain R2/R3/R5.",
+      "qualification_subsets": [
+        {
+          "stage": "R1",
+          "source_qualified": true,
+          "software_runtime_qualified": true,
+          "authenticated_runtime_qualified": false,
+          "evidence": [
+            "doc/vulkan/parity/evidence/r1-owner-lifecycle-summary.json"
+          ]
+        }
+      ]
     },
     "SURVEY.Analytic-atmosphere-sky-sun-moon-clouds-stars": {
       "implementation": "placeholder",
@@ -88,11 +143,20 @@
       "implementation_note": "Account retirement is guarded, but native attachment/task inventory/script ownership and handshake are incomplete."
     },
     "FEATURE.Startup": {
-      "implementation": "partial",
+      "implementation": "implemented",
       "native_source_references": [
         "indra/newview/llappviewer.cpp",
-        "indra/newview/vsnativesession.cpp"
-      ]
+        "indra/newview/vsnativesession.cpp",
+        "indra/newview/vsnativecircuits.cpp"
+      ],
+      "source_qualified": true,
+      "software_runtime_qualified": true,
+      "authenticated_runtime_qualified": false,
+      "evidence": [
+        "doc/vulkan/parity/evidence/r1-owner-lifecycle-summary.json"
+      ],
+      "implementation_note": "R1 actual startup/settings/account/CPU-worker/authentication/circuit/capability/inventory/appearance-owner sequencing, real progress events, failures/retry/cancellation and shutdown are production-replay qualified.",
+      "remaining_gap": "Platform CI and authenticated public-grid qualification are separate. Full login/logout progress presentation belongs to R9, persistent texture-cache parity to R3 and complete COF/wearable production to R2."
     },
     "FEATURE.LoginProgress": {
       "implementation": "partial",
