@@ -37,6 +37,7 @@ jobs:
       - run: python scripts/tests/test_progress_panels.py
       - run: python scripts/tests/test_text_layout_reset.py
       - run: python scripts/tests/test_software_vulkan_runner.py
+      - run: python scripts/tests/test_vulkan_evidence_package.py
       - run: python scripts/tests/test_vulkan_session_replay.py
       - run: python scripts/tests/test_chat_keyboard_routing.py
       - run: python scripts/tests/test_native_parcel_playback.py
@@ -350,29 +351,21 @@ jobs:
             gcc-14 --version >> .ci/evidence/toolchain.txt
             dpkg-query -W >> .ci/evidence/toolchain.txt
           fi
+      - name: Package qualification evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          completeness_args=()
+          if [[ '${{ job.status }}' == success ]]; then
+            completeness_args+=(--require-complete)
+          fi
+          python scripts/package_vulkan_evidence.py \
+            --viewer-directory '${{ matrix.viewer_directory }}' "${completeness_args[@]}"
       - name: Upload qualification evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: software-vulkan-${{ runner.os }}-${{ matrix.driver }}
           if-no-files-found: error
-          path: |
-            .ci/evidence
-            .ci/headless-evidence
-            .ci/viewer-evidence
-            .ci/session-evidence
-            .ci/r1-session-evidence
-            .ci/parity-evidence
-            .ci/world-parity-evidence
-            .ci/opengl-reference/runtime.json
-            .ci/opengl-reference/install/licenses
-            .ci/audio/*.log
-            .ci/audio/*.txt
-            .ci/runtime/runtime.json
-            .ci/runtime/staged/licenses
-            .ci/ghi/autobuild.xml
-            .ci/test-packages/metadata
-            .ci/test-packages/LICENSES
-            .ci/test-build/CMakeCache.txt
-            ${{ matrix.viewer_directory }}/CMakeCache.txt
-            ${{ matrix.viewer_directory }}/newview/vulkan-ci-staging.json
+          path: .ci/artifact-upload
