@@ -75,7 +75,10 @@ jobs:
 
   graphics:
     needs: source-evidence
-    timeout-minutes: 180
+    # Cold Linux SwiftShader: 114m dependencies/viewer + 38m presentation +
+    # 28m connected replay reached the former 180m limit during artifact cleanup.
+    # Keep a hard bound with margin for evidence upload and the R1 replay.
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
