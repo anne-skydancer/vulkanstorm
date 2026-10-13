@@ -144,7 +144,7 @@ struct VSWorldScene::Impl
     void surfaces(std::vector<VSWorldRenderer::Packet>& packets,const LLVector3& eye)
     {
         if (!sky) sky=renderer.upload({{-1,-1,0,0,0,1,0,0},{1,-1,0,0,0,1,1,0},{1,1,0,0,0,1,1,1},{-1,1,0,0,0,1,0,1}},{0,1,2,0,2,3});
-        VSWorldRenderer::Packet background;background.mesh=sky;background.background=true;background.fullbright=true;packets.push_back(background);
+        if (sky) { VSWorldRenderer::Packet background;background.mesh=sky;background.background=true;background.fullbright=true;packets.push_back(background); }
         for (auto& [key,g]:ground)
         {
             const unsigned x0=key%257,y0=key/257,n=g.size;
@@ -161,8 +161,9 @@ struct VSWorldScene::Impl
                     vertices.push_back({float(gx),float(gy),z,normal.mV[0],normal.mV[1],normal.mV[2],float(gx)/16,1-float(gy)/16});
                     if (x<n && y<n) { const unsigned i=y*(n+1)+x;indices.insert(indices.end(),{i,i+1,i+n+2,i,i+n+2,i+n+1}); }
                 }
-                g.mesh=renderer.upload(vertices,indices);g.dirty=false;
+                g.mesh=renderer.upload(vertices,indices);g.dirty=!g.mesh;
             }
+            if (!g.mesh) continue;
             // First surface pass uses a single height-selected simulator detail
             // map per patch; four-way terrain splatting is a later material pass.
             const float h=height(x0+n/2,y0+n/2,0),start=terrainStarts[0],range=std::max(terrainRanges[0],1.f);
@@ -176,8 +177,11 @@ struct VSWorldScene::Impl
         {
             if (!water) water=renderer.upload({{0,0,waterHeight,0,0,1,0,0},{256,0,waterHeight,0,0,1,1,0},
                 {256,256,waterHeight,0,0,1,1,1},{0,256,waterHeight,0,0,1,0,1}},{0,1,2,0,2,3});
-            VSWorldRenderer::Packet p;p.mesh=water;p.color={.08f,.28f,.38f,.65f};p.alpha=true;
-            p.distanceSquared=(LLVector3(128,128,waterHeight)-eye).lengthSquared();packets.push_back(std::move(p));
+            if (water)
+            {
+                VSWorldRenderer::Packet p;p.mesh=water;p.color={.08f,.28f,.38f,.65f};p.alpha=true;
+                p.distanceSquared=(LLVector3(128,128,waterHeight)-eye).lengthSquared();packets.push_back(std::move(p));
+            }
         }
     }
     U64 accepted=0,rejected=0,unsupported=0;
@@ -290,7 +294,7 @@ struct VSWorldScene::Impl
 };
 VSWorldScene::VSWorldScene(VSWorldRenderer& r,VSUIResources& u):mImpl(std::make_unique<Impl>(r,u)) {}
 VSWorldScene::~VSWorldScene() { mImpl.reset();VSWorldAvatar::cleanupClass(); }
-void VSWorldScene::reset() { mImpl->assets.reset();mImpl->avatars.clear();mImpl->ground.clear();mImpl->heights.fill(std::numeric_limits<float>::quiet_NaN());mImpl->water.reset();mImpl->waterKnown=false;mImpl->terrainTextures={};mImpl->objects.clear();mImpl->pending.clear();mImpl->nextRequest=0;mImpl->accepted=mImpl->rejected=mImpl->unsupported=0; }
+void VSWorldScene::reset(bool preserveAssets) { if (!preserveAssets) mImpl->assets.reset();mImpl->avatars.clear();mImpl->ground.clear();mImpl->heights.fill(std::numeric_limits<float>::quiet_NaN());mImpl->water.reset();mImpl->waterKnown=false;mImpl->terrainTextures={};mImpl->objects.clear();mImpl->pending.clear();mImpl->nextRequest=0;mImpl->accepted=mImpl->rejected=mImpl->unsupported=0; }
 void VSWorldScene::configureRegion(const LLSD& h)
 {
     auto& state=*mImpl;
@@ -480,7 +484,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         for (S32 f=0;f<count;++f)
         {
             auto& face=o.faces[f];
-            if (o.dirty || riggedOwner)
+            if (o.dirty || riggedOwner || !face.mesh)
             {
                 const auto& geometry=o.volume->getVolumeFace(f);
                 if (!geometry.mPositions || !geometry.mNormals || !geometry.mTexCoords || !geometry.mIndices ||
@@ -561,11 +565,15 @@ bool VSWorldScene::agentPosition(LLVector3& position) const
 }
 LLSD VSWorldScene::evidence() const
 {
+    // Counts live decoded owners, including generations retained after cache
+    // eviction/replacement, rather than only the current cache map entries.
     LLSD result;result["avatars"]=LLSD::emptyArray();for (const auto& [id,avatar]:mImpl->avatars) result["avatars"].append(avatar->evidence());result["terrain_patches"]=S32(mImpl->ground.size());result["water_height_known"]=mImpl->waterKnown;result["sky"]= "native_default_gradient";result["objects"]=S32(mImpl->objects.size());result["pending_full_updates"]=S32(mImpl->pending.size());
     const auto stats=mImpl->renderer.statistics();
     result["draw_calls"]=ll_sd_from_U64(stats.draws);result["constant_allocations"]=ll_sd_from_U64(stats.constantBuffersCreated);
     result["binding_allocations"]=ll_sd_from_U64(stats.bindingsCreated);result["mesh_uploads"]=ll_sd_from_U64(stats.meshUploads);
     result["mesh_upload_bytes"]=ll_sd_from_U64(stats.meshUploadBytes);result["submission_cpu_ms"]=stats.cpuMilliseconds;
+    result["resident_mesh_bytes"]=ll_sd_from_U64(stats.residentMeshBytes);result["mesh_budget_bytes"]=ll_sd_from_U64(stats.meshBudgetBytes);
+    result["mesh_allocation_refusals"]=ll_sd_from_U64(stats.meshAllocationRefusals);
     result["accepted"]=ll_sd_from_U64(mImpl->accepted);result["rejected"]=ll_sd_from_U64(mImpl->rejected);
-    result["unsupported"]=ll_sd_from_U64(mImpl->unsupported);return result;
+    result["unsupported"]=ll_sd_from_U64(mImpl->unsupported);result["assets"]=mImpl->assets.evidence();return result;
 }

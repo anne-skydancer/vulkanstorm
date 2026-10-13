@@ -57,6 +57,7 @@ public:
     const std::string& regionName() const { return mName; }
     const LLVector3& position() const { return mPosition; }
     U64 regionEpoch() const { return mRegionEpoch; }
+    bool regionReady() const { return mPhase == Phase::Connected && !mChangingRegion && mSeedReady && mHandshake && mCircuitAck; }
     VSNativeCamera::State cameraState() const { return mCamera.state(mPosition); }
     bool movementAction(U32 key, const std::string& action, bool down, bool repeated = false);
     void releaseMovement();

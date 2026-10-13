@@ -1,6 +1,7 @@
 // Native indexed world geometry and submission ownership. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsworldrenderer.h"
+#include "vsresourcebudget.h"
 #pragma push_macro("Bool")
 #pragma push_macro("True")
 #pragma push_macro("False")
@@ -61,6 +62,7 @@ struct VSWorldRenderer::Geometry
     RefCntAutoPtr<IBuffer> vertices, indices;
     RefCntAutoPtr<IRenderDevice> owner;
     unsigned count = 0;
+    std::shared_ptr<const VSResourceBudget::Reservation> residency;
 };
 struct VSWorldRenderer::Impl
 {
@@ -80,7 +82,8 @@ struct VSWorldRenderer::Impl
     std::map<IPipelineState*,std::vector<DrawResources>> available;
     std::size_t availableCount=0;
     Statistics statistics;
-    Uint64 pendingMeshUploads=0,pendingMeshBytes=0;
+    VSResourceBudget meshBudget{256 * 1024 * 1024};
+    Uint64 pendingMeshUploads=0,pendingMeshBytes=0,meshAllocationRefusals=0;
     struct Submission
     {
         Uint64 completion = 0;
@@ -179,7 +182,10 @@ VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertice
     for (const auto& v:vertices)
         for (float f:{v.x,v.y,v.z,v.nx,v.ny,v.nz,v.u,v.v}) requireWorld(std::isfinite(f),"Non-finite world vertex");
     for (auto i:indices) requireWorld(i<vertices.size(),"World index outside geometry");
+    auto residency=mImpl->meshBudget.reserve(vertices.size()*sizeof(Vertex)+indices.size()*sizeof(unsigned));
+    if (!residency) { ++mImpl->meshAllocationRefusals;return {}; }
     auto mesh=std::make_shared<Geometry>();mesh->owner=mImpl->device;mesh->count=unsigned(indices.size());
+    mesh->residency=std::move(residency);
     BufferDesc bd{};bd.Name="Native world vertex generation";bd.Size=vertices.size()*sizeof(Vertex);
     bd.Usage=USAGE_IMMUTABLE;bd.BindFlags=BIND_VERTEX_BUFFER;
     BufferData data{vertices.data(),bd.Size};mImpl->device->CreateBuffer(bd,&data,&mesh->vertices);
@@ -202,7 +208,13 @@ void VSWorldRenderer::retire()
         mImpl->submitted.pop_front();
     }
 }
-VSWorldRenderer::Statistics VSWorldRenderer::statistics() const { return mImpl->statistics; }
+VSWorldRenderer::Statistics VSWorldRenderer::statistics() const
+{
+    auto result=mImpl->statistics;
+    result.residentMeshBytes=mImpl->meshBudget.used();result.meshBudgetBytes=mImpl->meshBudget.limit();
+    result.meshAllocationRefusals=mImpl->meshAllocationRefusals;
+    return result;
+}
 void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,const View& view,const std::vector<Packet>& packets)
 {
     const auto started=std::chrono::steady_clock::now();
