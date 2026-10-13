@@ -564,7 +564,15 @@ std::function<bool()> VSWorldScene::guard(const FaceHandle& token) const
     const std::weak_ptr<Impl> weak=token.object.host==mImpl->host?mImpl:mNeighbours.at(token.object.host)->mImpl;
     return [weak,token,objectGuard]()
     {
-        if (!objectGuard()) return false;const auto owner=weak.lock();if (!owner) return false;
+        if (!objectGuard())
+        {
+            return false;
+        }
+        const auto owner = weak.lock();
+        if (!owner)
+        {
+            return false;
+        }
         const auto object=owner->objects.find(token.object.local);
         return object!=owner->objects.end() && owner->linksCurrent(object->second) &&
             object->second.revision==token.generation && token.face<object->second.faces.size();
@@ -572,7 +580,11 @@ std::function<bool()> VSWorldScene::guard(const FaceHandle& token) const
 }
 bool VSWorldScene::initializeSelf(const LLUUID& agent,U64 accountGeneration)
 {
-    if (agent.isNull()) return false;mImpl->agent=agent;
+    if (agent.isNull())
+    {
+        return false;
+    }
+    mImpl->agent = agent;
     mImpl->budgets->account=agent;mImpl->budgets->accountGeneration=accountGeneration;
     return mImpl->avatar(agent,mImpl->handle)!=nullptr;
 }
