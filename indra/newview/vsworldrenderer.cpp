@@ -237,6 +237,8 @@ VSWorldRenderer::Statistics VSWorldRenderer::statistics() const
 }
 VSWorldContracts::Geometry VSWorldRenderer::geometryDescription(const Mesh& mesh)
 { return mesh?mesh->description:VSWorldContracts::Geometry{}; }
+std::array<IBuffer*, 2> VSWorldRenderer::geometryBuffers(const Mesh& mesh)
+{ return mesh ? std::array<IBuffer*, 2>{mesh->vertices.RawPtr(), mesh->indices.RawPtr()} : std::array<IBuffer*, 2>{}; }
 void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,const View& view,const std::vector<Packet>& packets)
 {
     const auto started=std::chrono::steady_clock::now();
@@ -307,6 +309,11 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         DrawIndexedAttribs draw{};draw.NumIndices=p.mesh->count;draw.IndexType=VT_UINT32;draw.Flags=DRAW_FLAG_VERIFY_ALL;
         context->DrawIndexed(draw);submitted.draws.push_back(std::move(resources));++mImpl->statistics.draws;
     }
+    // Recorded draws and submission packets own the buffers through completion;
+    // the CPU context must not retain uncharged last-bound geometry afterwards.
+    context->SetVertexBuffers(0, 0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE,
+                              SET_VERTEX_BUFFERS_FLAG_RESET);
+    context->SetIndexBuffer(nullptr, 0, RESOURCE_STATE_TRANSITION_MODE_NONE);
     submitted.completion=mImpl->next++;context->EnqueueSignal(mImpl->fence,submitted.completion);
     context->SetRenderTargets(1,&target,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     mImpl->statistics.cpuMilliseconds=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();

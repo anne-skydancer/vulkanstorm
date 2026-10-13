@@ -202,7 +202,9 @@ struct VSWorldScene::Impl
         {
             const U64 key=(U64(d.x)<<32)|d.y;
             auto reservation=ground.count(key)?ground.at(key).residency:reservations.at(key);
-            patchSize=d.size;ground[key]=Ground{d.size,{},true,d.h,std::move(reservation)};
+            // Keep the last admitted GPU patch while new heights await upload.
+            auto previousMesh = ground.count(key) ? std::move(ground.at(key).mesh) : VSWorldRenderer::Mesh{};
+            patchSize=d.size;ground[key]=Ground{d.size,std::move(previousMesh),true,d.h,std::move(reservation)};
         }
         // Neighbor samples affect edge stitching and normals. Rebuild only the
         // bounded set of received patches on the next rendering frame.
@@ -302,6 +304,12 @@ struct VSWorldScene::Impl
         object.revision=nextRevision++;
         if (sameOwner)
         {
+            // Identity guards/revision still advance immediately; the admitted
+            // GPU generation survives until its replacement can be published.
+            if (object.renderable && previous->second.renderable &&
+                object.params.getSculptID() == previous->second.params.getSculptID())
+                for (std::size_t face = 0; face < std::min(object.faces.size(), previous->second.faces.size()); ++face)
+                    object.faces[face].mesh = std::move(previous->second.faces[face].mesh);
             object.motion=previous->second.motion;
             object.taskSerial=previous->second.taskSerial;object.taskKnown=previous->second.taskKnown;
             object.taskFile=previous->second.taskFile;object.taskRequest=previous->second.taskRequest;object.taskDeadline=previous->second.taskDeadline;

@@ -576,6 +576,15 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     VSWorldRenderer limited(device,context,meshBytes);
     VSWorldRenderer::Packet retained;retained.mesh=limited.upload(budgetVertices,budgetIndices);
     require(retained.mesh!=nullptr,"Budgeted first generation was refused");
+    const auto buffers = VSWorldRenderer::geometryBuffers(retained.mesh);
+    std::array<IReferenceCounters*, 2> bufferLifetimes{};
+    for (unsigned i = 0; i < buffers.size(); ++i)
+    { bufferLifetimes[i] = buffers[i]->GetReferenceCounters(); bufferLifetimes[i]->AddWeakRef(); }
+    struct BufferObservations
+    {
+        std::array<IReferenceCounters*, 2>& counters;
+        ~BufferObservations() { for (auto* counter : counters) counter->ReleaseWeakRef(); }
+    } bufferObservations{bufferLifetimes};
     retained.fullbright=true;retained.color={1,0,0,1};
     limited.draw(rtv,8,8,view,{retained});
     require(limited.statistics().residentMeshBytes==meshBytes,"Submitted geometry lost its byte reservation");
@@ -586,6 +595,9 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     require(limited.statistics().meshAllocationRefusals==1,"Budget refusal evidence is missing");
     capture("budget-retained.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
     retained.mesh.reset();limited.retire();require(limited.statistics().residentMeshBytes==0,"Completed mesh reservation was not retired");
+    for (const auto* counters : bufferLifetimes)
+        require(counters->GetNumStrongRefs() == 0, "Context retained uncharged completed geometry buffers");
+    std::cout << "WORLD_BOUND_BUFFERS_RETIRED=1\n";
     retained.mesh=limited.upload(budgetVertices,budgetIndices);
     require(retained.mesh!=nullptr,"Released mesh budget could not admit replacement");
     const auto imageBytesBefore = images.statistics().residentImageBytes;
