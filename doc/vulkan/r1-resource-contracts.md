@@ -69,9 +69,16 @@ last-owner retirement, capacity overflow and cache-owner destruction. These test
 run without a window or network. Existing scene/camera admission and session
 lifecycle fixtures remain applicable.
 
+The standalone `world` contract executes the production `VSWorldRenderer` with
+a one-quad budget. It verifies allocation refusal while a submitted generation is
+retained, deterministic red readback, release after GPU completion, successful
+green replacement readback, and cumulative refusal evidence across frames. The
+local SwiftShader run passed with core/synchronization validation and no window.
+This qualifies the production renderer's isolated mesh budget/retirement path.
+
 The canonical `build-vc170-64` RelWithDebInfo viewer is rebuilt and fully staged
 through the existing Autobuild/CMake workflow. A build or these compiled fixtures
-does not qualify runtime GPU budget-pressure behavior, real crossing continuity,
-all resource producers, or authenticated relogin. Those remain explicit R1
+does not qualify full-viewer sustained budget-pressure behavior, real crossing
+continuity, all resource producers, or authenticated relogin. Those remain explicit R1
 acceptance work. The running software graphics CI qualifies its own recorded
 source revision; local changes do not retroactively change that evidence.
