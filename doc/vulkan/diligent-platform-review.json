@@ -1,5 +1,5 @@
 {
-  "source_commit": "cc705fae1cf48400e040fc1b3381c663f2a7a86b",
+  "source_commit": "be69a3de7d52228b958192df7622562e65878cf1",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -1645,16 +1645,16 @@
       "path": "indra/llui/lltextbase.cpp",
       "start": 1081,
       "end": 1081,
-      "sha256": "9137bc4d5137337d041e05b7867c606087427a4119a70ea410842ef97f90ec72",
+      "sha256": "1033b98bb9aa21f71cf9c692a407b1b943131419b1d2efbe2774c0774b75703b",
       "record": "I08",
       "disposition": "mapped",
-      "reason": "Shared widget draws preserve explicit native primitives, image dimensions, blend semantics and parent transforms; exact internal factory identities prevent missing connected controls. OpenGL retains its original rendering path. Runtime/pixel qualification remains separate."
+      "reason": "Shared widget draws preserve explicit native primitives, image dimensions, blend semantics and parent transforms; exact internal factory identities prevent missing connected controls. OpenGL retains its original rendering path. Runtime/pixel qualification remains separate. Reviewed empty-document replacement: clearSegments discards line addresses from retired segments and schedules reflow from index zero before cursor movement or reshape. Production getNumChars fixture detects old offset 6399 on an empty buffer and confirms one valid EOF after repeated reset; Linux SwiftShader 150-percent baseline failed after two successful pixel captures at logout/relogin. Full production replay after this fix remains pending. No backend-specific text or skin exception."
     },
     {
       "path": "indra/llui/lltextbase.cpp",
       "start": 1084,
       "end": 1084,
-      "sha256": "9137bc4d5137337d041e05b7867c606087427a4119a70ea410842ef97f90ec72",
+      "sha256": "1033b98bb9aa21f71cf9c692a407b1b943131419b1d2efbe2774c0774b75703b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared widget draws preserve explicit native primitives, image dimensions, blend semantics and parent transforms; exact internal factory identities prevent missing connected controls. OpenGL retains its original rendering path. Runtime/pixel qualification remains separate."
@@ -1663,7 +1663,7 @@
       "path": "indra/llui/lltextbase.cpp",
       "start": 1087,
       "end": 1087,
-      "sha256": "9137bc4d5137337d041e05b7867c606087427a4119a70ea410842ef97f90ec72",
+      "sha256": "1033b98bb9aa21f71cf9c692a407b1b943131419b1d2efbe2774c0774b75703b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Shared widget draws preserve explicit native primitives, image dimensions, blend semantics and parent transforms; exact internal factory identities prevent missing connected controls. OpenGL retains its original rendering path. Runtime/pixel qualification remains separate."
@@ -11741,36 +11741,36 @@
     },
     {
       "path": "indra/llui/lltextbase.cpp",
-      "start": 2555,
-      "end": 2555,
-      "sha256": "9137bc4d5137337d041e05b7867c606087427a4119a70ea410842ef97f90ec72",
+      "start": 2560,
+      "end": 2560,
+      "sha256": "1033b98bb9aa21f71cf9c692a407b1b943131419b1d2efbe2774c0774b75703b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed optional URL context-menu children use findChild and conditional visibility/enabling rather than creating dummy fallback widgets. Existing URL, clipboard, friendship and mute actions retain their ordinary owner callbacks. Exact absence is handled without changing XUI or conferring runtime acceptance."
     },
     {
       "path": "indra/llui/lltextbase.cpp",
-      "start": 2565,
-      "end": 2566,
-      "sha256": "9137bc4d5137337d041e05b7867c606087427a4119a70ea410842ef97f90ec72",
+      "start": 2570,
+      "end": 2571,
+      "sha256": "1033b98bb9aa21f71cf9c692a407b1b943131419b1d2efbe2774c0774b75703b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed optional URL context-menu children use findChild and conditional visibility/enabling rather than creating dummy fallback widgets. Existing URL, clipboard, friendship and mute actions retain their ordinary owner callbacks. Exact absence is handled without changing XUI or conferring runtime acceptance."
     },
     {
       "path": "indra/llui/lltextbase.cpp",
-      "start": 2573,
-      "end": 2574,
-      "sha256": "9137bc4d5137337d041e05b7867c606087427a4119a70ea410842ef97f90ec72",
+      "start": 2578,
+      "end": 2579,
+      "sha256": "1033b98bb9aa21f71cf9c692a407b1b943131419b1d2efbe2774c0774b75703b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed optional URL context-menu children use findChild and conditional visibility/enabling rather than creating dummy fallback widgets. Existing URL, clipboard, friendship and mute actions retain their ordinary owner callbacks. Exact absence is handled without changing XUI or conferring runtime acceptance."
     },
     {
       "path": "indra/llui/lltextbase.cpp",
-      "start": 2585,
-      "end": 2591,
-      "sha256": "9137bc4d5137337d041e05b7867c606087427a4119a70ea410842ef97f90ec72",
+      "start": 2590,
+      "end": 2596,
+      "sha256": "1033b98bb9aa21f71cf9c692a407b1b943131419b1d2efbe2774c0774b75703b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed optional URL context-menu children use findChild and conditional visibility/enabling rather than creating dummy fallback widgets. Existing URL, clipboard, friendship and mute actions retain their ordinary owner callbacks. Exact absence is handled without changing XUI or conferring runtime acceptance."
