@@ -1,5 +1,5 @@
 {
-  "source_commit": "cc705fae1cf48400e040fc1b3381c663f2a7a86b",
+  "source_commit": "be69a3de7d52228b958192df7622562e65878cf1",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -605,7 +605,7 @@
       ]
     },
     "indra/llui/lltextbase.cpp": {
-      "sha256": "9137bc4d5137337d041e05b7867c606087427a4119a70ea410842ef97f90ec72",
+      "sha256": "1033b98bb9aa21f71cf9c692a407b1b943131419b1d2efbe2774c0774b75703b",
       "anchors": [
         "LLTextBase::draw",
         "isNativeUI"
