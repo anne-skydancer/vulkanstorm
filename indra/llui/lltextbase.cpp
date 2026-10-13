@@ -2202,6 +2202,11 @@ void LLTextBase::clearSegments()
 {
     mSegments.clear();
     createDefaultSegment();
+    // Cached lines address the old segments. In particular, setText("")
+    // appends nothing and cannot rely on insertion to invalidate that layout.
+    // Drop it before startOfDoc or a reshape can reenter reflow on new text.
+    mLineInfoList.clear();
+    needsReflow();
 }
 
 S32 LLTextBase::getLineStart( S32 line ) const

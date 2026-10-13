@@ -644,6 +644,7 @@ def main():
             except (subprocess.TimeoutExpired, OSError, ValueError) as error:
                 results[name] = dict(passed=False, error=str(error), evidence=str(child))
             if not results[name]['passed']:
+                print(f'FAIL: connected UI case {name}: {results[name]}', flush=True)
                 break  # Preserve the first actionable failure instead of repeating it across all skins.
         complete = len(results) == len(cases)
         passed = skin_matrix_passed(results, cases)
