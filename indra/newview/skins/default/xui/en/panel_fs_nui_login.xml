@@ -41,16 +41,16 @@
       height="768"
       min_width="300" >
       <layout_stack
-        follows="all"
+        follows="top"
         layout="topleft"
         orientation="horizontal"
         name="ui_stack"
         border_size="0"
         animate="false"
         top="0"
-        left="0"
+        left="12"
         height="768"
-        width="1024" >
+        width="1000" >
         <layout_panel
           auto_resize="false"
           user_resize="false"
@@ -79,26 +79,26 @@
               left="0"
               top="0"
               width="280"
-              height="720"
+              height="660"
               background_visible="false" >
-              <text name="vulkanstorm_title" left="20" top="45" width="260" height="30" follows="left|top" font="SansSerifHuge" halign="center" text_color="0.15 0.85 1 1" layout="topleft">Vulkanstorm</text>
+              <text name="vulkanstorm_title" left="20" top="32" width="260" height="30" follows="left|top" font="SansSerifHuge" halign="center" text_color="0.15 0.85 1 1" layout="topleft">Vulkanstorm</text>
               <panel
                 name="login"
                 left="0"
                 top="116"
                 width="280"
-                height="210"
+                height="160"
                 follows="left|top"
                 layout="topleft" >
-                <text name="password_text" left="40" top="108" width="220" height="18" follows="left|top" layout="topleft" font="SansSerifSmall" text_color="0.72 0.83 0.9 1">Password</text>
+                <text name="password_text" left="40" top="75" width="220" height="18" follows="left|top" layout="topleft" font="SansSerifSmall" text_color="0.72 0.83 0.9 1">Password</text>
                 <text name="username_text" left="40" top="0" width="220" height="18" follows="left|top" layout="topleft" font="SansSerifSmall" text_color="0.72 0.83 0.9 1">Username</text>
                 <combo_box
                   left="40"
                   allow_text_entry="true"
                   follows="left|top"
-                  height="32"
+                  height="24"
                   label="Username"
-                  combo_editor.font="SansSerifLarge"
+                  combo_editor.font="SansSerif"
                   max_chars="128"
                   force_disable_fulltext_search="true"
                   combo_editor.commit_on_focus_lost="false"
@@ -123,7 +123,7 @@
                   label="Remember username"
                   name="remember_username_check"
                   width="185"
-                  top="62"
+                  top="51"
                   layout="topleft" />
                 <button
                   follows="left|top"
@@ -137,10 +137,10 @@
                   name="remove_user_btn"
                   left="235"
                   width="25"
-                  top="62" />
+                  top="51" />
                 <line_editor
                   follows="left|top"
-                  height="32"
+                  height="24"
                   left="40"
                   max_length_chars="16"
                   text_pad_left="8"
@@ -148,38 +148,38 @@
                   name="password_edit"
                   label="Password"
                   bg_image_always_focused="true"
-                  font="SansSerifLarge"
+                  font="SansSerif"
                   is_password="true"
                   select_on_focus="true"
                   commit_on_focus_lost="false"
                   width="190"
-                  top="131"
+                  top="98"
                   layout="topleft" />
                 <button
                   name="password_show_btn"
                   tool_tip="Show password text"
                   follows="left|top"
                   left="235"
-                  height="32"
+                  height="24"
                   width="25"
                   image_pressed="Profile_Group_Visibility_Off_Pressed"
                   image_unselected="Profile_Group_Visibility_Off"
                   tab_stop="false"
                   visible="true"
-                  top="131"
+                  top="98"
                   layout="topleft" />
                 <button
                   name="password_hide_btn"
                   tool_tip="Hide password text"
                   follows="left|top"
                   left="235"
-                  height="32"
+                  height="24"
                   width="25"
                   image_pressed="Profile_Group_Visibility_On_Pressed"
                   image_unselected="Profile_Group_Visibility_On"
                   tab_stop="false"
                   visible="false"
-                  top="131"
+                  top="98"
                   layout="topleft" />
                 <check_box
                   tab_stop="false"
@@ -192,16 +192,16 @@
                   label="Remember password"
                   name="remember_check"
                   width="220"
-                  top="176"
+                  top="126"
                   layout="topleft" />
               </panel>
               <layout_stack
                 name="login_stack"
                 orientation="vertical"
                 left="0"
-                top="335"
+                top="280"
                 width="280"
-                height="385"
+                height="380"
                 follows="left|top"
                 layout="topleft"
                 border_size="0"
@@ -211,7 +211,7 @@
                   left="0"
                   top="0"
                   width="280"
-                  height="80"
+                  height="60"
                   follows="left|top"
                   layout="topleft"
                   auto_resize="false"
@@ -222,7 +222,7 @@
                     control_name="NextLoginLocation"
                     follows="left|top"
                     label="Start location"
-                    height="32"
+                    height="24"
                     max_chars="128"
                     combo_editor.font="SansSerifLarge"
                     left="40"
@@ -254,7 +254,7 @@
                   left="0"
                   top="0"
                   width="280"
-                  height="80"
+                  height="78"
                   follows="left|top"
                   layout="topleft"
                   auto_resize="false"
@@ -276,7 +276,7 @@
                     allow_text_entry="true"
                     font="SansSerifLarge"
                     follows="left|top"
-                    height="32"
+                    height="24"
                     max_chars="256"
                     combo_editor.font="SansSerifLarge"
                     force_disable_fulltext_search="true"
@@ -301,7 +301,7 @@
                     left="40"
                     width="220"
                     visible="false"
-                    top="60"
+                    top="48"
                     layout="topleft" >
     + Click to add more grids
     </text>
@@ -309,7 +309,7 @@
                 <layout_panel
                   name="mode_selection"
                   width="280"
-                  height="80"
+                  height="60"
                   auto_resize="false"
                   user_resize="false"
                   layout="topleft" >
@@ -329,7 +329,7 @@
     </text>
                   <combo_box
                     follows="left|top"
-                    height="32"
+                    height="24"
                     max_chars="128"
                     tool_tip="Select which style of viewer you are most familiar with to set your defaults to appropriately."
                     name="mode_combo"
@@ -365,7 +365,7 @@
                 <layout_panel
                   name="login_actions"
                   width="280"
-                  height="145"
+                  height="182"
                   auto_resize="false"
                   user_resize="false"
                   layout="topleft" >
@@ -376,10 +376,10 @@
                     image_hover_unselected="PushButton_Login_Over"
                     label="Log In"
                     label_color="White"
-                    font="SansSerifLarge"
+                    font="SansSerif"
                     name="connect_btn"
                     width="220"
-                    height="40"
+                    height="30"
                     top="3"
                     left="40"
                     layout="topleft" />
@@ -389,9 +389,10 @@
                     text_color="0.28 0.85 1 1"
                     height="20"
                     name="create_new_account_text"
+                    halign="center"
                     width="220"
                     left="40"
-                    top="72"
+                    top="150"
                     layout="topleft" >
         Create an account
     </text>
@@ -401,9 +402,10 @@
                     text_color="0.28 0.85 1 1"
                     height="20"
                     name="forgot_password_text"
+                    halign="center"
                     width="220"
                     left="40"
-                    top="106"
+                    top="110"
                     layout="topleft" >
         Forgot password?
     </text>
@@ -417,7 +419,7 @@
           user_resize="false"
           layout="topleft"
           name="web_container"
-          width="724"
+          width="700"
           height="768"
           background_visible="true"
           bg_opaque_color="0.035 0.065 0.09 1"

@@ -470,6 +470,25 @@ void FSPanelLogin::giveFocus()
     }
 }
 
+void FSPanelLogin::reshape(S32 width, S32 height, bool called_from_parent)
+{
+    LLPanel::reshape(width, height, called_from_parent);
+
+    // The sidebar and welcome page form one centered column, as in Kokua.
+    // Other skins retain their own login layouts.
+    if (findChild<LLPanel>("login_content"))
+    {
+        if (LLLayoutStack* stack = findChild<LLLayoutStack>("ui_stack"))
+        {
+            const S32 content_width = llmin(width, 1000);
+            LLRect rect;
+            rect.setLeftTopAndSize((width - content_width) / 2, height, content_width, height);
+            stack->setShape(rect);
+            stack->updateLayout();
+        }
+    }
+}
+
 void FSPanelLogin::onUpdateScrollToChild(const LLUICtrl* control)
 {
     LLScrollContainer* scroll = findChild<LLScrollContainer>("login_scroll");
