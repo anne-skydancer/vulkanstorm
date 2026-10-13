@@ -474,17 +474,16 @@ void FSPanelLogin::reshape(S32 width, S32 height, bool called_from_parent)
 {
     LLPanel::reshape(width, height, called_from_parent);
 
-    // The sidebar and welcome page form one centered column, as in Kokua.
-    // Other skins retain their own login layouts.
+    // Kokua's flexible outer spacers center the sidebar, gutter and welcome page.
+    // Let the stacks own their rectangles, including height and child bounds.
+    // Settle both levels before a focused control can scroll the login form.
     if (findChild<LLPanel>("login_content"))
     {
-        if (LLLayoutStack* stack = findChild<LLLayoutStack>("ui_stack"))
+        if (LLLayoutPanel* stage = findChild<LLLayoutPanel>("center_stage"))
         {
-            const S32 content_width = llmin(width, 1000);
-            LLRect rect;
-            rect.setLeftTopAndSize((width - content_width) / 2, height, content_width, height);
-            stack->setShape(rect);
-            stack->updateLayout();
+            stage->setTargetDim(llmin(width, 1008));
+            getChild<LLLayoutStack>("main_stack")->updateLayout();
+            getChild<LLLayoutStack>("ui_stack")->updateLayout();
         }
     }
 }
