@@ -29,6 +29,7 @@ class NativeSimulatorFeaturesTest(unittest.TestCase):
         fixture = r'''
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <functional>
 #include <map>
 #include <memory>
