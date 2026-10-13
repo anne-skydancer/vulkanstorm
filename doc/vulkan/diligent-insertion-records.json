@@ -1,5 +1,5 @@
 {
-  "source_commit": "f3c1223638b96879dbebc44a642fc0c46c37f99e",
+  "source_commit": "b8e1c55fa9e2df0bf4d045957a676e13424ac657",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -35790,25 +35790,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 52,
       "end": 52,
-      "sha256": "c469e57c1a093403619d227c0eab41e00404b81857ab2d6cd1ae35674951d880",
+      "sha256": "9dd26d497a574cf5b9a610e5bfdb7bf46e6e50de912bb714a8f995237569b473",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 319,
-      "end": 327,
-      "sha256": "c469e57c1a093403619d227c0eab41e00404b81857ab2d6cd1ae35674951d880",
+      "start": 322,
+      "end": 330,
+      "sha256": "9dd26d497a574cf5b9a610e5bfdb7bf46e6e50de912bb714a8f995237569b473",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 355,
-      "end": 355,
-      "sha256": "c469e57c1a093403619d227c0eab41e00404b81857ab2d6cd1ae35674951d880",
+      "start": 358,
+      "end": 358,
+      "sha256": "9dd26d497a574cf5b9a610e5bfdb7bf46e6e50de912bb714a8f995237569b473",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38461,45 +38461,45 @@
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 71,
-      "end": 74,
-      "sha256": "dfae07ad345906d61a61fecdd3020201ca3da54381944998a19cd4fb0e42d3d9",
+      "start": 72,
+      "end": 75,
+      "sha256": "a74e18bb5d60b38394c0026db7b96d4e0373149e28b41e23875e87038bb99e15",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 106,
-      "end": 106,
-      "sha256": "dfae07ad345906d61a61fecdd3020201ca3da54381944998a19cd4fb0e42d3d9",
+      "start": 107,
+      "end": 107,
+      "sha256": "a74e18bb5d60b38394c0026db7b96d4e0373149e28b41e23875e87038bb99e15",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 108,
-      "end": 108,
-      "sha256": "dfae07ad345906d61a61fecdd3020201ca3da54381944998a19cd4fb0e42d3d9",
+      "start": 109,
+      "end": 109,
+      "sha256": "a74e18bb5d60b38394c0026db7b96d4e0373149e28b41e23875e87038bb99e15",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 114,
-      "end": 114,
-      "sha256": "dfae07ad345906d61a61fecdd3020201ca3da54381944998a19cd4fb0e42d3d9",
+      "start": 115,
+      "end": 115,
+      "sha256": "a74e18bb5d60b38394c0026db7b96d4e0373149e28b41e23875e87038bb99e15",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 126,
-      "end": 127,
-      "sha256": "dfae07ad345906d61a61fecdd3020201ca3da54381944998a19cd4fb0e42d3d9",
+      "start": 127,
+      "end": 128,
+      "sha256": "a74e18bb5d60b38394c0026db7b96d4e0373149e28b41e23875e87038bb99e15",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -38644,6 +38644,24 @@
       "start": 57,
       "end": 57,
       "sha256": "7f9e22ce17b5ccefc5f13c0e1cb2823839b81640494e7db7403788457de950e6",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 78,
+      "end": 81,
+      "sha256": "9dd26d497a574cf5b9a610e5bfdb7bf46e6e50de912bb714a8f995237569b473",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+    },
+    {
+      "path": "scripts/tests/test_native_simulator_features.py",
+      "start": 32,
+      "end": 32,
+      "sha256": "a74e18bb5d60b38394c0026db7b96d4e0373149e28b41e23875e87038bb99e15",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
