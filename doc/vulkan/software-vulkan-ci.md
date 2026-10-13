@@ -391,3 +391,22 @@ validation logs and HTTP requests. This evidence qualifies deterministic softwar
 execution; it cannot qualify real-server authentication or streamed chat. No
 credentials are needed for the replay, and normal Vulkan execution still selects
 the machine's available drivers.
+
+## Retained artifact packaging
+
+`scripts/package_vulkan_evidence.py` packages the configured evidence paths into
+`qualification-evidence.zip` before upload. The GitHub artifact contains that
+ZIP and `manifest.json`; unpack the inner ZIP to recover the original
+repository-relative evidence paths. The manifest records each retained file's
+size and SHA256, the inner ZIP's SHA256, and every excluded filesystem entry by
+path and type. Sockets, FIFOs, devices and symbolic links are not handed to the
+upload action or followed outside the selected evidence tree.
+
+Successful graphics jobs require the core graphics, presentation, connected-skin
+and R1 records, logs, readbacks, library witnesses, dependency metadata, licenses
+and staging/toolchain records. Recorded session readback hashes are verified
+before packaging. The Lavapipe job also requires its separate OpenGL reference
+and R0 baseline evidence. Missing required evidence fails packaging and therefore
+the job; the partial bundle and error manifest are still uploaded. Jobs already
+failing retain available regular diagnostic files without claiming complete
+qualification. `if-no-files-found: error` remains enabled on the upload action.
