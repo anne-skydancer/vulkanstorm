@@ -29,6 +29,8 @@
 
 #include "llassetstorage.h"
 #include "llcorehttputil.h"
+#include <functional>
+#include <map>
 
 class LLFileSystem;
 
@@ -126,6 +128,8 @@ protected:
     S64 mTotalBytesFetched;
 
     static S32 sAssetCoroCount; // coroutine count, static since coroutines can outlive LLViewerAssetStorage
+    U64 mNextNativeRequest=1;
+    std::map<U64,std::function<void()>> mNativeRequests;
 };
 
 #endif

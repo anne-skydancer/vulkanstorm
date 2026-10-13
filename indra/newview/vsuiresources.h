@@ -5,6 +5,7 @@
 #include <memory>
 
 class LLImageRaw;
+class LLSD;
 class VSUIResources
 {
 public:
@@ -17,7 +18,7 @@ public:
     LLUIImagePtr region(const std::string& key,const std::string& name,const LLRectf& uv,
                         VSUIRenderer::Sampling sampling=VSUIRenderer::Sampling::Linear);
     // Top-left canonical RGBA patch. Replacement never mutates queued packets.
-    void patch(const std::string& key, unsigned x, unsigned y, unsigned width,
+    bool patch(const std::string& key, unsigned x, unsigned y, unsigned width,
                unsigned height, const std::vector<std::uint8_t>& rgba);
     void begin(unsigned width, unsigned height, float dpi);
     void setClip(std::array<float,4> top_left_logical);
@@ -26,6 +27,7 @@ public:
     void erase(const std::string& key);
     std::uint64_t generation(const std::string& key) const;
     VSUIRenderer::Image image(const std::string& key) const;
+    LLSD evidence() const;
     void fontBatch(LLImageRaw*,S32,const LLVector4a*,const LLVector2*,const LLColor4U*,S32);
     // End a font producer epoch; queued packets keep their GPU generations.
     void releaseFontPages();

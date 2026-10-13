@@ -120,9 +120,10 @@ int main(){
         definitions=method(source,'bool VSNativeSession::admit(')
         self.compile('''#include <cassert>
 #include <set>
+#include <map>
 #include <string>
 #include <sstream>
-struct LLHost {int value=1;bool isOk()const{return value!=0;}bool operator==(const LLHost& b)const{return value==b.value;}};
+struct LLHost {int value=1;bool isOk()const{return value!=0;}bool operator==(const LLHost& b)const{return value==b.value;}bool operator<(const LLHost& b)const{return value<b.value;}};
 std::ostringstream sink;
 #define LL_WARNS(x) sink
 #define LL_ENDL ""
@@ -130,15 +131,20 @@ const std::set<std::string> transport={"PacketAck"},session={"ChatFromSimulator"
 struct VSNativeSession {
  enum class Phase {Login,Connecting,Connected,Logout,Disconnected};
  LLHost mHost;Phase mPhase=Phase::Login;bool mChangingRegion=false;unsigned mRejected=0;
+ struct Region {bool acknowledged=false,handshake=false;};std::map<LLHost,Region> mCircuits;
  bool admit(const std::string&,const LLHost&);
 };
 '''+definitions+'''
 int main(){
  VSNativeSession s;assert(!s.admit("ObjectUpdate",{1}));
- s.mPhase=VSNativeSession::Phase::Connecting;assert(!s.admit("ObjectUpdate",{1}));assert(s.admit("LayerData",{1}));assert(!s.admit("LayerData",{2}));
+ s.mPhase=VSNativeSession::Phase::Connecting;assert(s.admit("ObjectUpdate",{1}));assert(s.admit("LayerData",{1}));assert(!s.admit("LayerData",{2}));
  s.mPhase=VSNativeSession::Phase::Connected;assert(s.admit("ObjectUpdate",{1}));
  assert(!s.admit("ObjectUpdate",{2}));assert(s.admit("LayerData",{1}));
- s.mChangingRegion=true;assert(!s.admit("KillObject",{1}));
+ s.mChangingRegion=true;assert(s.admit("KillObject",{1}));
+ s.mCircuits[{2}]={};assert(!s.admit("ObjectUpdate",{2}));
+ s.mCircuits[{2}].acknowledged=true;assert(!s.admit("ObjectUpdate",{2}));
+ s.mCircuits[{2}].handshake=true;assert(s.admit("ObjectUpdate",{2}));
+ s.mCircuits.erase({2});assert(!s.admit("ObjectUpdate",{2}));
  s.mChangingRegion=false;s.mPhase=VSNativeSession::Phase::Logout;assert(!s.admit("ObjectUpdate",{1}));
 }''')
 if __name__=='__main__':unittest.main()

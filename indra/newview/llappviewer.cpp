@@ -1601,10 +1601,21 @@ bool LLAppViewer::initNativeVulkanLogin()
     LLDiskCache::initParamSingleton(cache_dir, uintmax_t(gSavedSettings.getU32("FSDiskCacheSize")) * 1024ULL * 1024ULL,
                                    gSavedSettings.getBOOL("EnableDiskCacheDebugInfo"),
                                    gSavedSettings.getF32("FSDiskCacheHighWaterPercent"), gSavedSettings.getF32("FSDiskCacheLowWaterPercent"));
+    // Initialize the shared CPU cache/decode workers independently of the
+    // legacy GL texture fetcher and drawable repository.
+    LLSD pools=gSavedSettings.getLLSD("ThreadPoolSizes");
+    pools["ImageDecode"]=llclamp(S32(gSavedSettings.getU32("FSImageDecodeThreads")),1,32);
+    gSavedSettings.setLLSD("ThreadPoolSizes",pools);
+    sImageDecodeThread=new LLImageDecodeThread(true);
+    sTextureCache=new LLTextureCache(true);sTextureCache->setReadOnly(mSecondInstance);
+    sTextureCache->initCache(LL_PATH_CACHE,static_cast<S64>(std::clamp<U64>(static_cast<U64>(gSavedSettings.getU32("CacheSize"))*1024*1024,
+        256ULL*1024*1024,100ULL*1024*1024*1024)),false);
+    sPurgeDiskCacheThread=new LLPurgeDiskCacheThread();
     LLFilePickerThread::initClass();
     LLDirPickerThread::initClass();
     LLViewerEventRecorder::createInstance();
     settings_to_globals();
+    if (VSVulkanContext::headlessReplay()) gHeadlessClient = true;
     mSerialNumber = generateSerialNumber();
     initSLURLHandler();
     if (!initWindow()) return false;
@@ -1690,6 +1701,8 @@ bool LLAppViewer::frameNativeVulkanLogin()
     LLCoros::instance().rethrow();
     gMainloopWork.runFor(std::chrono::milliseconds(2));
     LLLFSThread::updateClass(0);
+    if(sImageDecodeThread)sImageDecodeThread->update(0);
+    if(sTextureCache)sTextureCache->update(0);
     if (gServicePump) { gServicePump->pump(); gServicePump->callback(); }
     // Shared text UI views and CPU controllers advance through their idle queue.
     // Only services initialized for this native account register callbacks here.
@@ -1725,6 +1738,9 @@ bool LLAppViewer::frameNativeVulkanLogin()
 
 bool LLAppViewer::cleanupNativeVulkanLogin()
 {
+    #if VS_VULKAN_DIAGNOSTICS
+    extern void vs_r1_replay_cleanup();vs_r1_replay_cleanup();
+    #endif
     // Retire RLVa while account services and the application fiber runtime are
     // alive. Its global destructor must not query LLApp during static teardown.
     SUBSYSTEM_CLEANUP(RlvHandler);
@@ -1733,6 +1749,9 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
     if (gMessageSystem) gMessageSystem->setMessageAdmission({});
     mNativeSession.reset();
 #endif
+    if(sImageDecodeThread) {sImageDecodeThread->shutdown();delete sImageDecodeThread;sImageDecodeThread=nullptr;}
+    if(sTextureCache) {sTextureCache->shutdown();delete sTextureCache;sTextureCache=nullptr;}
+    gMainloopWork.runFor(std::chrono::milliseconds(100));
     LLStartUp::cleanupNameCache();
     if (LLLoginInstance::instanceExists()) LLLoginInstance::getInstance()->disconnect();
     if (LLVoiceClient::instanceExists()) LLVoiceClient::getInstance()->terminate();
@@ -1753,6 +1772,9 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
         gViewerWindow = nullptr;
     }
     gInventory.cleanupInventory();
+    SUBSYSTEM_CLEANUP(LLFilePickerThread);
+    SUBSYSTEM_CLEANUP(LLDirPickerThread);
+    delete gKeyboard;gKeyboard=nullptr;
     if (gAudiop) { gAudiop->shutdown(); delete gAudiop; gAudiop = nullptr; }
     LLViewerMedia::deleteSingleton();
     LLPluginProcessParent::shutdown();
@@ -1781,6 +1803,7 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
         delete mGeneralThreadPool;
         mGeneralThreadPool = nullptr;
     }
+    delete sPurgeDiskCacheThread;sPurgeDiskCacheThread=nullptr;
     mAppCoreHttp.cleanup();
     LLLFSThread::cleanupClass();
     LLImage::cleanupClass();

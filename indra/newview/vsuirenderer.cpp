@@ -1,6 +1,7 @@
 // Vulkanstorm native UI substrate. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "vsuirenderer.h"
+#include "vsresourcebudget.h"
 #pragma push_macro("Bool")
 #pragma push_macro("False")
 #pragma push_macro("True")
@@ -27,6 +28,13 @@ namespace
 {
 void check(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
 using Vertex=VSUIRenderer::Vertex;
+VSWorldContracts::AlphaMode alphaMode(const std::vector<std::uint8_t>& pixels)
+{
+    bool transparent=false,partial=false;
+    for(std::size_t i=3;i<pixels.size();i+=4) {transparent|=pixels[i]!=255;partial|=pixels[i]!=0 && pixels[i]!=255;}
+    return !transparent?VSWorldContracts::AlphaMode::Opaque:
+        partial?VSWorldContracts::AlphaMode::Blend:VSWorldContracts::AlphaMode::Mask;
+}
 }
 struct VSUIRenderer::Texture
 {
@@ -34,6 +42,8 @@ struct VSUIRenderer::Texture
     RefCntAutoPtr<IRenderDevice> owner;
     std::uint64_t generation;
     std::vector<std::uint8_t> pixels;
+    VSWorldContracts::Image description;
+    std::shared_ptr<const VSResourceBudget::Reservation> residency;
 };
 struct VSUIRenderer::Impl
 {
@@ -53,6 +63,8 @@ struct VSUIRenderer::Impl
     Uint64 next_completion = 1;
     std::deque<Submission> submitted;
     Statistics statistics;
+    VSResourceBudget coreImages{256 * 1024 * 1024},remoteImages{512 * 1024 * 1024};
+    std::uint64_t imageAllocationRefusals=0;
     Impl(IRenderDevice* d, IDeviceContext* c) : device(d), context(c)
     {
         check(d && c, "UI renderer requires a native device and context");
@@ -133,11 +145,19 @@ Diligent::ITextureView* VSUIRenderer::imageView(const Image& image)
 const std::vector<std::uint8_t>& VSUIRenderer::imagePixels(const Image& image) { return image->pixels; }
 std::array<unsigned,2> VSUIRenderer::imageExtent(const Image& image)
 { const auto& d=image->resource->GetDesc();return {d.Width,d.Height}; }
-VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba)
+VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba,
+                                       VSWorldContracts::ImageRole role)
 {
     check(width && height && width <= 16384 && height <= 16384 &&
           rgba.size() == std::size_t(width) * height * 4, "Invalid native UI upload extent or byte count");
+    const auto maximum=mImpl->device->GetAdapterInfo().Texture.MaxTexture2DDimension;
+    if (width>maximum || height>maximum) {++mImpl->imageAllocationRefusals;return {};}
+    auto& budget=role==VSWorldContracts::ImageRole::RemoteAsset?mImpl->remoteImages:mImpl->coreImages;
+    // Charge both the GPU payload and the retained independent CPU snapshot.
+    auto residency=budget.reserve(rgba.size()*2);
+    if (!residency) {++mImpl->imageAllocationRefusals;return {};}
     auto image = std::make_shared<Texture>();
+    image->residency=std::move(residency);
     image->owner=mImpl->device;
     TextureDesc desc{}; desc.Name = "Native UI texture generation";
     desc.Type = RESOURCE_DIM_TEX_2D; desc.Width = width; desc.Height = height;
@@ -146,6 +166,9 @@ VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const 
     TextureData data{&sub, 1}; mImpl->device->CreateTexture(desc, &data, &image->resource);
     check(image->resource != nullptr, "Native UI texture upload failed");
     image->generation = mImpl->next_generation++;
+    image->description={width,height,4,VSWorldContracts::ImageOrigin::TopLeft,
+        VSWorldContracts::ColorEncoding::EncodedSRGB,VSWorldContracts::AlphaMode::Blend,role,image->generation};
+    image->description.alpha=alphaMode(rgba);
     image->pixels=rgba;
     return image;
 }
@@ -157,7 +180,10 @@ VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y
     auto desc=old->resource->GetDesc();
     check(width && height && x<=desc.Width && y<=desc.Height && width<=desc.Width-x && height<=desc.Height-y &&
           rgba.size()==std::size_t(width)*height*4,"Invalid native UI replacement patch");
-    auto image=std::make_shared<Texture>(); image->owner=mImpl->device;
+    auto& budget=old->description.role==VSWorldContracts::ImageRole::RemoteAsset?mImpl->remoteImages:mImpl->coreImages;
+    auto residency=budget.reserve(old->pixels.size()*2);
+    if (!residency) {++mImpl->imageAllocationRefusals;return {};}
+    auto image=std::make_shared<Texture>(); image->owner=mImpl->device;image->residency=std::move(residency);
     image->pixels=old->pixels;
     for (unsigned row=0;row<height;++row)
         std::copy_n(rgba.data()+std::size_t(row)*width*4,width*4,
@@ -176,6 +202,8 @@ VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y
     mImpl->context->UpdateTexture(image->resource,0,0,Box{x,x+width,y,y+height},data,
         RESOURCE_STATE_TRANSITION_MODE_TRANSITION,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     image->generation=mImpl->next_generation++;
+    image->description=old->description;image->description.generation=image->generation;
+    image->description.alpha=alphaMode(image->pixels);
     submission.completion=mImpl->next_completion++;
     mImpl->context->EnqueueSignal(mImpl->fence,submission.completion);
     return image;
@@ -297,7 +325,26 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
     submission.completion=mImpl->next_completion++;
     context->EnqueueSignal(mImpl->fence,submission.completion);
 }
-VSUIRenderer::Statistics VSUIRenderer::statistics() const { return mImpl->statistics; }
+VSUIRenderer::Statistics VSUIRenderer::statistics() const
+{
+    auto result=mImpl->statistics;
+    result.residentImageBytes=mImpl->coreImages.used()+mImpl->remoteImages.used();
+    result.imageBudgetBytes=mImpl->coreImages.limit()+mImpl->remoteImages.limit();
+    result.imageAllocationRefusals=mImpl->imageAllocationRefusals;return result;
+}
+VSWorldContracts::Image VSUIRenderer::imageDescription(const Image& image)
+{ return image?image->description:VSWorldContracts::Image{}; }
+bool VSUIRenderer::imageOwnedBy(const Image& image,const IRenderDevice* device)
+{ return image && image->owner.RawPtr()==device; }
+VSWorldContracts::Capabilities VSUIRenderer::capabilities() const
+{
+    VSWorldContracts::Capabilities result;
+    result.maximumImageDimension=mImpl->device->GetAdapterInfo().Texture.MaxTexture2DDimension;
+    result.rgba8=mImpl->device->GetTextureFormatInfo(TEX_FORMAT_RGBA8_UNORM).Supported;
+    result.bgra8=mImpl->device->GetTextureFormatInfo(TEX_FORMAT_BGRA8_UNORM).Supported;
+    result.depth32=mImpl->device->GetTextureFormatInfo(TEX_FORMAT_D32_FLOAT).Supported;
+    return result;
+}
 void VSUIRenderer::retire()
 {
     const auto completed=mImpl->fence->GetCompletedValue();

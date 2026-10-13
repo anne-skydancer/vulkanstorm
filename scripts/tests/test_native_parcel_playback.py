@@ -40,7 +40,9 @@ class NativeParcelPlaybackTests(unittest.TestCase):
         deliver = source[source.index('bool VSNativeSession::deliver('):]
         parcel = balanced(deliver, deliver.index('if (name == "ParcelProperties"'))
         parcel += '\n' + balanced(deliver, deliver.index('else if (name == "ParcelMediaUpdate"'))
-        prelude = deliver[deliver.index('    if (generation !='):deliver.index('    if (name == "ParcelProperties"')]
+        # Keep the actual account/admission guards; neighbour handshake dispatch
+        # is qualified by the scene/session replay, outside this media component.
+        prelude = deliver[deliver.index('    if (generation !='):deliver.index('    if (name=="EnableSimulator")')]
         definitions += '\nbool VSNativeSession::deliver(const std::string& name,const LLSD& body,const LLHost& sender,U64 generation){\n' + prelude + parcel + '\nreturn true;}'
         world_messages = re.search(r'const std::set<std::string> worldMessages = .*?;', source).group(0)
         fixture = STUBS + world_messages + '\n' + definitions + CHECKS
@@ -137,7 +139,8 @@ struct LLSD {
  bool isInteger()const{return kind==Integer;}bool isString()const{return kind==String;}bool isMap()const{return kind==Map;}
  bool has(const char* key)const{return values.count(key);}
 };
-struct LLHost {int id=1;bool isOk()const{return id!=0;}bool operator==(const LLHost& rhs)const{return id==rhs.id;}};
+struct LLHost {int id=1;bool isOk()const{return id!=0;}bool operator==(const LLHost& rhs)const{return id==rhs.id;}
+ bool operator<(const LLHost& rhs)const{return id<rhs.id;}};
 const std::set<std::string> transport={"PacketAck"};
 const std::set<std::string> session={"ParcelProperties","ParcelMediaUpdate","ParcelMediaCommandMessage"};
 namespace LLStringUtil {void trim(std::string& value){auto a=value.find_first_not_of(' ');auto b=value.find_last_not_of(' ');value=a==std::string::npos?"":value.substr(a,b-a+1);}}
@@ -167,6 +170,7 @@ void* gAudiop=reinterpret_cast<void*>(1);
 struct VSNativeSession {
  enum class Phase{Login,Connecting,Connected,Logout,Disconnected};Phase mPhase=Phase::Connected;
  LLHost mHost;bool mChangingRegion=false;Vector mPosition;U32 mWidth=256,mHeight=256;
+ struct Circuit {bool acknowledged=false,handshake=false;};std::map<LLHost,Circuit> mCircuits;
  U64 mGeneration=7,mRegionEpoch=3,mParcelRevision=1,mMusicRequest=1,mMediaRequest=1,mSent=0,mRejected=0,mExpired=0;
  S32 mParcelSequence=11,mParcelID=-1;int mAgent=23,mSession=24;
  bool mMusicRequested=false,mMediaRequested=false,mMusicUserStopped=false,mMediaUserStopped=false,mMediaPresented=false;

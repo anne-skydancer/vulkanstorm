@@ -19,6 +19,41 @@ import run_vulkan_session_replay as session_runner
 from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_r1_requires_owner_retirement_and_both_actual_asset_revisions(self):
+        keys=('host_ids','object_face_retirement','variable_terrain','asset_replacement',
+              'crossing_continuity','circuit_retirement','inventory_scope','inventory_revision','scene_owner_kinds','self_continuity')
+        record={'r1_contracts':{key:True for key in keys}}
+        record['r1_contracts'].update(
+            motion_selection={'authoritative_position':[15,20,30],'predicted_position':[15.1,20,30],
+                              'predicted_rotation':[0,0,.1,.99],'selected':False},
+            task_inventory={'known':True,'pending':False,'serial':42,'filename':'r1-task.txt'},
+            appearance_startup=[{'type':0}],
+            logout_retirement={'owners':[],'neighbours':[],'owned_object_slots':0,'owned_avatar_slots':0,
+                               'assets':{'requests':0,'resident_bytes':'AAAAAAAAAAA='}},
+            mesh_before={'asset_generation':'AAAAAAAAAAE=','asset_third_vertex':[32768/65535-.5,.5,0]},
+            mesh_after={'asset_generation':'AAAAAAAAAAI=','asset_third_vertex':[45000/65535-.5,.5,0]},
+            initial_scene={'neighbours':[{'width':1024,'height':512,'terrain_patches':1}]})
+        requests=[{'path':'/r1-mesh','revision':1},{'path':'/r1-mesh','revision':2}]
+        self.assertTrue(session_runner.r1_contracts_passed(record,requests))
+        self.assertFalse(session_runner.r1_contracts_passed(record,requests[:1]))
+        for key in keys+('logout_retirement',):
+            broken=copy.deepcopy(record);del broken['r1_contracts'][key]
+            self.assertFalse(session_runner.r1_contracts_passed(broken,requests),key)
+        for field,value in (('owned_object_slots',1),('owned_avatar_slots',1)):
+            broken=copy.deepcopy(record);broken['r1_contracts']['logout_retirement'][field]=value
+            self.assertFalse(session_runner.r1_contracts_passed(broken,requests))
+        broken=copy.deepcopy(record);broken['r1_contracts']['mesh_after']['asset_third_vertex'][0]=32768/65535-.5
+        self.assertFalse(session_runner.r1_contracts_passed(broken,requests))
+    def test_headless_prerequisite_does_not_accept_presentation(self):
+        graphics={'passed':True,'tests':[{'mode':'offscreen','passed':True},{'mode':'world','passed':True}]}
+        self.assertTrue(session_runner.harness_prerequisite_passed(graphics,True))
+        self.assertFalse(session_runner.harness_prerequisite_passed(graphics,False))
+        graphics['tests'][1]['passed']=False
+        self.assertFalse(session_runner.harness_prerequisite_passed(graphics,True))
+        graphics['presentation_qualified']=True
+        self.assertTrue(session_runner.harness_prerequisite_passed(graphics,False))
+        graphics['passed']=False
+        self.assertFalse(session_runner.harness_prerequisite_passed(graphics,False))
     def test_linux_ci_debugger_preserves_exit_failure_and_process_deadline(self):
         command = ['viewer', '--settings', 'ci.xml']
         environment = {'GITHUB_ACTIONS': 'true', 'VS_VULKAN_REPLAY_GDB': '1'}

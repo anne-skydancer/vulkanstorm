@@ -34,9 +34,11 @@ public:
         return true;
     }
 };
-inline bool decode(const std::vector<std::uint8_t>& data,unsigned type,std::vector<Patch>& output)
+inline bool decode(const std::vector<std::uint8_t>& data,unsigned type,std::vector<Patch>& output,
+                   unsigned width=256,unsigned height=256)
 {
-    if (data.size()<5 || data.size()>65535 || (type!='L' && type!='M')) return false;
+    if (data.size()<5 || data.size()>65535 || (type!='L' && type!='M') ||
+        width<16 || height<16 || width>65536 || height>65536) return false;
     Bits bits(data);std::uint32_t stride,size,layer;
     if (!bits.read(16,stride) || !bits.read(8,size) || !bits.read(8,layer) ||
         layer!=type || (size!=16 && size!=32) || stride<size) return false;
@@ -49,8 +51,7 @@ inline bool decode(const std::vector<std::uint8_t>& data,unsigned type,std::vect
         if (n==256 || !bits.read(32,raw) || !bits.read(16,range) || !bits.read(type=='M'?32:10,id)) return false;
         Patch p;p.size=size;p.quant=quant;p.range=range;std::memcpy(&p.offset,&raw,4);
         p.x=type=='M'?id>>16:id>>5;p.y=type=='M'?id&65535:id&31;
-        // The native scene currently owns one standard 256m region.
-        if (p.x>=256/size || p.y>=256/size || !std::isfinite(p.offset) || std::abs(p.offset)>65536) return false;
+        if (p.x>=width/size || p.y>=height/size || !std::isfinite(p.offset) || std::abs(p.offset)>65536) return false;
         const unsigned width=(quant&15)+2;
         for (unsigned i=0;i<size*size;++i)
         {

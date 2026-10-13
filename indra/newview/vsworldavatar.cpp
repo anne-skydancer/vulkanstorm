@@ -30,6 +30,7 @@ using namespace LLAvatarAppearanceDefines;
 namespace
 {
 bool ownsAppearanceClass=false;
+U64 nextAvatarGeneration=1; // Native avatar creation and publication run on mainloop.
 class NativeJoint final : public LLAvatarJoint
 {
 public:
@@ -58,7 +59,7 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
     friend class VSWorldAvatar;
     LLUUID id;
     bool self=false,positionKnown=false,appearanceKnown=false,serverBakes=false;
-    U64 handle=0;
+    U64 handle=0,generation=nextAvatarGeneration++;
     VSWorldRenderer& renderer;
     VSUIResources& resources;
     GroundQuery ground;
@@ -197,9 +198,19 @@ void VSWorldAvatar::cleanupClass()
 {
     if (ownsAppearanceClass) { LLAvatarAppearance::cleanupClass();LLPolyMesh::freeAllMeshes();ownsAppearanceClass=false; }
 }
-VSWorldAvatar::VSWorldAvatar(const LLUUID& id,bool self,U64 region,VSWorldRenderer& r,VSUIResources& u,GroundQuery g):
-    mImpl(std::make_unique<Impl>(id,self,region,r,u,std::move(g))) {}
+VSWorldAvatar::VSWorldAvatar(const LLUUID& id,bool self,U64 region,VSWorldRenderer& r,VSUIResources& u,GroundQuery g,std::shared_ptr<const void> ownerReservation):
+    mOwnerReservation(std::move(ownerReservation)),mImpl(std::make_unique<Impl>(id,self,region,r,u,std::move(g))) {}
 VSWorldAvatar::~VSWorldAvatar()=default;
+void VSWorldAvatar::rebase(U64 handle,GroundQuery ground)
+{
+    auto& avatar=*mImpl;
+    if(avatar.handle!=handle)
+    {
+        if(avatar.positionKnown)avatar.position=LLVector3(from_region_handle(avatar.handle)+LLVector3d(avatar.position)-from_region_handle(handle));
+        avatar.handle=handle;avatar.shapeDirty=true;avatar.meshes.clear();
+    }
+    avatar.ground=std::move(ground);
+}
 void VSWorldAvatar::transform(const LLVector3& p,const LLQuaternion& r,const LLVector3& v,const LLVector3& a)
 {
     if (!finite(p) || !r.isFinite() || !finite(v) || !finite(a)) return;
@@ -334,6 +345,7 @@ bool VSWorldAvatar::skinRiggedFace(const LLVolumeFace& face,const LLSD& metadata
 LLSD VSWorldAvatar::evidence() const
 {
     const auto& a=*mImpl;LLSD result;result["id"]=a.id;result["self"]=a.self;result["position_known"]=a.positionKnown;
+    result["owner_generation"]=ll_sd_from_U64(a.generation);result["region_handle"]=ll_sd_from_U64(a.handle);
     result["appearance_known"]=a.appearanceKnown;result["server_bakes"]=a.serverBakes;result["cof_version"]=a.cofVersion;
     result["animations"]=S32(a.animations.size());result["attachments"]=S32(a.simAttachments.size());result["meshes"]=S32(a.meshes.size());
     result["local_compositor_implemented"]=false;return result;

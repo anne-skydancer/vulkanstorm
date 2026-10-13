@@ -322,7 +322,8 @@ public:
         U32 max_cores = 0,
         F32 max_gl_version = 4.6f,
         bool useLegacyCursors = false,
-        GraphicsAPI graphics_api = GraphicsAPI::OpenGL);
+        GraphicsAPI graphics_api = GraphicsAPI::OpenGL,
+        bool headless = false);
     static bool destroyWindow(LLWindow* window);
     static bool isWindowValid(LLWindow *window);
 };

@@ -68,6 +68,10 @@ struct Session {void shutdown(){assert(!gRlvHandler.m_fEnabled&&handler_deletes=
  account_alive=false;}};
 struct Message {void setMessageAdmission(std::function<void()>){}};
 Message* gMessageSystem=nullptr;
+struct Worker {bool stopped=false;void shutdown(){assert(!account_alive);stopped=true;}
+ ~Worker(){assert(stopped);}};
+Worker* sImageDecodeThread=new Worker;Worker* sTextureCache=new Worker;
+struct Mainloop {template<class Duration>void runFor(Duration){assert(!sImageDecodeThread&&!sTextureCache);}} gMainloopWork;
 struct LLAppViewer {std::shared_ptr<Session> mNativeSession=std::make_shared<Session>();
  bool cleanupNativeVulkanLogin();};
 NATIVE_PREFIX
@@ -99,13 +103,15 @@ int main(){
         prefix = connected.split('LLStartUp::initExperiences();', 1)[0] + '}'
         fixture = r'''
 #include <cassert>
+#include <map>
 struct Host {int id=0;bool isOk()const{return id!=0;}
- bool operator!=(const Host& h)const{return id!=h.id;}};
+ bool operator!=(const Host& h)const{return id!=h.id;}bool operator<(const Host& h)const{return id<h.id;}};
 using LLHost=Host;
 struct Message {struct Circuit {void removeCircuitData(Host){}} mCircuitInfo;
  void disableCircuit(Host){}};
 Message* gMessageSystem=nullptr;
 struct Agent {int getPositionGlobal(){return 0;}} gAgent;
+struct Window {void setShowProgress(bool show,bool){assert(!show);}};Window* gViewerWindow=nullptr;
 struct LLTeleportHistory {static LLTeleportHistory& instance(){static LLTeleportHistory h;return h;}
  void updateNativeLocation(int){}};
 double now(){return 5;}
@@ -117,6 +123,8 @@ struct VSNativeSession {
  enum class Phase {Connecting,Connected,Logout};Phase mPhase=Phase::Connecting;
  bool mChangingRegion=false,mHandshake=false,mMovement=false,mSeedReady=false,mCircuitAck=false;
  double mNavigationDeadline=0,mDeadline=0;Host mPreviousHost,mHost;
+ struct Circuit {double deadline=60;};std::map<Host,Circuit> mCircuits;
+ void publishProgress(){}
  void requestParcel(){}void connected();
 };
 CONNECTED

@@ -519,6 +519,7 @@ void LLInventoryModel::cleanupInventory()
 void LLInventoryModel::clearAccountInventory()
 {
     empty();
+    mObjectRevisions.clear();
     mRootFolderID.setNull(); mLibraryRootFolderID.setNull(); mLibraryOwnerID.setNull();
     mIsAgentInvUsable = false;
     mChangedItemIDs.clear();
@@ -2421,6 +2422,11 @@ void LLInventoryModel::notifyObservers(const LLUUID& transaction_id)
 // and id of object change applies to
 void LLInventoryModel::addChangedMask(U32 mask, const LLUUID& referent)
 {
+    if(referent.notNull())
+    {
+        if(mask & LLInventoryObserver::REMOVE)mObjectRevisions.erase(referent);
+        else if(getObject(referent))mObjectRevisions[referent]=mNextObjectRevision++;
+    }
     if (mIsNotifyObservers)
     {
         // Something marked an item for change within a call to notifyObservers
@@ -2617,6 +2623,7 @@ void LLInventoryModel::addCategory(LLViewerInventoryCategory* category)
 
         // Insert category uniquely into the map
         mCategoryMap[category->getUUID()] = category; // LLPointer will deref and delete the old one
+        mObjectRevisions[category->getUUID()]=mNextObjectRevision++;
         //mInventory[category->getUUID()] = category;
     }
 }
@@ -2750,6 +2757,7 @@ void LLInventoryModel::addItem(LLViewerInventoryItem* item)
             addBacklinkInfo(link_id, target_id);
         }
         mItemMap[item->getUUID()] = item;
+        mObjectRevisions[item->getUUID()]=mNextObjectRevision++;
     }
 }
 

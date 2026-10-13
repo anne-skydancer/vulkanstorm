@@ -40,6 +40,17 @@
 #include "llerror.h"
 #include "llkeyboard.h"
 #include "llwindowcallbacks.h"
+#include <cstdlib>
+#include <cstring>
+
+namespace
+{
+bool explicitHeadlessReplay()
+{
+    const char* flag=std::getenv("VS_VULKAN_DIAGNOSTIC_HEADLESS");
+    return flag && std::strcmp(flag,"1")==0 && std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY");
+}
+}
 
 
 //
@@ -71,6 +82,7 @@ const std::string gURLProtocolWhitelist[] = { "secondlife:", "http:", "https:", 
 
 S32 OSMessageBox(const std::string& text, const std::string& caption, U32 type)
 {
+    if(explicitHeadlessReplay()) {LL_WARNS()<<caption<<": "<<text<<LL_ENDL;return OSBTN_CANCEL;}
     // Properly hide the splash screen when displaying the message box
     bool was_visible = false;
     if (LLSplashScreen::isVisible())
@@ -365,6 +377,7 @@ LLSplashScreen *LLSplashScreen::create()
 //static
 void LLSplashScreen::show()
 {
+    if(explicitHeadlessReplay()) return;
     if (!gSplashScreenp)
     {
 #if LL_WINDOWS && !LL_MESA_HEADLESS
@@ -419,11 +432,17 @@ LLWindow* LLWindowManager::createWindow(
     U32 max_cores,
     F32 max_gl_version,
     bool useLegacyCursors,
-    GraphicsAPI graphics_api)
+    GraphicsAPI graphics_api,
+    bool headless)
 {
     LLWindow* new_window;
 
-    if (graphics_api == GraphicsAPI::Vulkan)
+    if (headless)
+    {
+        new_window = new LLWindowHeadless(callbacks,title,name,x,y,width,height,flags,
+            false,clearBg,false,false,ignore_pixel_depth);
+    }
+    else if (graphics_api == GraphicsAPI::Vulkan)
     {
         if (fullscreen)
         {

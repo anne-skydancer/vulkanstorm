@@ -75,6 +75,7 @@
 #include "llteleportflags.h"
 #include "lluri.h"
 #include "llsdutil_math.h"
+#include "llsdutil.h"
 #include "llquaternion.h"
 #include "llfocusmgr.h"
 #include "NACLantispam.h"
@@ -100,12 +101,12 @@ namespace
 std::weak_ptr<VSNativeSession> sOwner;
 double now() { return LLFrameTimer::getTotalSeconds(); }
 const std::set<std::string> transport = {"StartPingCheck", "CompletePingCheck", "PacketAck"};
-const std::set<std::string> worldMessages = {"ObjectUpdate", "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject", "LayerData", "AvatarAppearance", "AvatarAnimation"};
+const std::set<std::string> worldMessages = {"ObjectUpdate", "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject", "LayerData", "AvatarAppearance", "AvatarAnimation", "ReplyTaskInventory"};
 const std::set<std::string> session = {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator",
     "LogoutReply", "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "TeleportStart", "TeleportFinish",
     "TeleportLocal", "TeleportProgress", "TeleportFailed", "ViewerFrozenMessage", "FeatureDisabled", "CrossedRegion", "CloseCircuit", "DisableSimulator", "UUIDNameReply", "UUIDGroupNameReply",
     "MuteListUpdate", "UseCachedMuteList", "SendXferPacket", "ConfirmXferPacket", "AbortXfer", "TransferInfo", "TransferPacket", "TransferAbort",
-    "GenericMessage", "EventInfoReply", "ScriptQuestion", "ScriptDialog", "LoadURL", "EconomyData", "ImprovedInstantMessage", "AgentDataUpdate", "AgentGroupDataUpdate", "AgentDropGroup",
+    "GenericMessage", "EventInfoReply", "ScriptQuestion", "ScriptDialog", "LoadURL", "EconomyData", "ImprovedInstantMessage", "AgentDataUpdate", "AgentGroupDataUpdate", "AgentDropGroup", "AgentWearablesUpdate",
     "OnlineNotification", "OfflineNotification", "ChangeUserRights", "MoneyBalanceReply", "UserInfoReply", "ParcelInfoReply", "PlacesReply",
     "AvatarPropertiesReply", "AvatarInterestsReply", "AvatarGroupsReply", "AvatarNotesReply",
     "AvatarPicksReply", "AvatarClassifiedReply", "AvatarPickerReply", "PickInfoReply", "ClassifiedInfoReply",
@@ -173,6 +174,8 @@ void VSNativeSession::install(LLMessageSystem& msg)
     });
     // Mixed viewer handlers are replaced before any session messages can execute.
     for (const auto& name : worldMessages) msg.setHandlerFunc(name.c_str(), receiveMessage);
+    msg.setHandlerFunc("AgentWearablesUpdate",receiveMessage);
+    msg.setHandlerFunc("EnableSimulator",receiveMessage);
     for (const char* name : {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
          "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
@@ -310,6 +313,14 @@ void VSNativeSession::begin()
     if (!mHost.isOk() || !gMessageSystem) { disconnect(LLTrans::getString("NativeSessionInvalidLogin")); return; }
     install(*static_cast<LLMessageSystem*>(gMessageSystem));
     mPhase = Phase::Connecting; mDeadline = now() + 60;
+    auto& circuit=mCircuits[mHost];circuit.handle=mHandle;circuit.width=mWidth;circuit.height=mHeight;
+    circuit.incarnation=mNextCircuitGeneration++;circuit.deadline=now()+60;
+    if (gViewerWindow && gViewerWindow->nativeContext() &&
+        !gViewerWindow->nativeContext()->world().activateRegion(mHost,mHandle,mWidth,mHeight,circuit.incarnation))
+    { disconnect(LLTrans::getString("NativeSessionInvalidLogin"));return; }
+    if (gViewerWindow && gViewerWindow->nativeContext() && !gViewerWindow->nativeContext()->world().initializeSelf(mAgent,mGeneration))
+    { disconnect(LLTrans::getString("NativeSessionInvalidLogin"));return; }
+    mAppearanceOwnerInitialized=true;
     gDisconnected = false; gAgentMovementCompleted = false;
     gMessageSystem->enableCircuit(mHost, true);
     LLStartUp::initNameCache();
@@ -325,13 +336,18 @@ void VSNativeSession::begin()
     const std::string seed = mSeed;
     LLCoros::instance().launch("nativeSeedCapabilities", [owner, generation, epoch, seed]() { owner->seedCoro(seed, generation, epoch); });
     LLStartUp::setStartupState(STATE_WORLD_WAIT);
+    publishProgress();
 }
 void VSNativeSession::circuitResult(U64 generation, S32 result, U64 regionEpoch)
 {
     if (generation != mGeneration || (regionEpoch && regionEpoch != mRegionEpoch) || (mPhase != Phase::Connecting && !mChangingRegion)) { ++mExpired; return; }
     if (result) { disconnect(LLTrans::getString("NativeSessionConnectionTimeout")); return; }
     mCircuitAck = true;
+    if (auto circuit=mCircuits.find(mHost);circuit!=mCircuits.end()) circuit->second.acknowledged=true;
     send("CompleteAgentMovement", LLSD());
+    gMessageSystem->newMessage("AgentWearablesRequest");gMessageSystem->nextBlock("AgentData");
+    gMessageSystem->addUUID("AgentID",mAgent);gMessageSystem->addUUID("SessionID",mSession);gMessageSystem->sendReliable(mHost);
+    publishProgress();
     connected();
 }
 void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
@@ -343,7 +359,7 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
     auto request = std::make_shared<LLCore::HttpRequest>();
     auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(15); options->setRetries(0);
     LLSD wanted = LLSD::emptyArray();
-    for (const char* name : {"EventQueueGet", "SimulatorFeatures", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "AvatarPickerSearch",
+    for (const char* name : {"EventQueueGet", "SimulatorFeatures", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "GetMesh", "GetMesh2", "AvatarPickerSearch",
          "GroupAPIv1", "GroupMemberData", "AgentProfile", "UploadAgentProfileImage", "NewFileAgentInventory", "InventoryThumbnailUpload", "SetDisplayName", "RemoteParcelRequest", "AcceptFriendship", "DeclineFriendship",
          "AcceptGroupInvite", "DeclineGroupInvite", "FetchInventory2", "FetchLib2",
          "FetchInventoryDescendents2", "FetchLibDescendents2", "InventoryAPIv3", "LibraryAPIv3", "CreateInventoryCategory", "ViewerAsset", "CopyInventoryFromNotecard", "UpdateAgentLanguage", "UpdateAgentInformation", "UpdateNotecardAgentInventory", "UpdateNotecardTaskInventory", "UpdateScriptAgent", "UserInfo", "AgentPreferences", "SearchStatRequest", "Tracking",
@@ -388,7 +404,7 @@ void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionE
     if (!caps.isMap() || !webURL(caps["EventQueueGet"].asString())) { disconnect(LLTrans::getString("NativeSessionInvalidCapabilities")); return; }
     clearSimulatorFeatures();
     mCapabilities = LLSD::emptyMap();
-    for (const char* name : {"EventQueueGet", "SimulatorFeatures", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "AvatarPickerSearch",
+    for (const char* name : {"EventQueueGet", "SimulatorFeatures", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "GetMesh", "GetMesh2", "AvatarPickerSearch",
          "GroupAPIv1", "GroupMemberData", "AgentProfile", "UploadAgentProfileImage", "NewFileAgentInventory", "InventoryThumbnailUpload", "SetDisplayName", "RemoteParcelRequest", "AcceptFriendship", "DeclineFriendship",
          "AcceptGroupInvite", "DeclineGroupInvite", "FetchInventory2", "FetchLib2",
          "FetchInventoryDescendents2", "FetchLibDescendents2", "InventoryAPIv3", "LibraryAPIv3", "CreateInventoryCategory", "ViewerAsset", "CopyInventoryFromNotecard", "UpdateAgentLanguage", "UpdateAgentInformation", "UpdateNotecardAgentInventory", "UpdateNotecardTaskInventory", "UpdateScriptAgent", "UserInfo", "AgentPreferences", "SearchStatRequest", "Tracking",
@@ -399,6 +415,7 @@ void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionE
     // LLSD messages are sent through the host's granted HTTP transport.
     // LLAgent, cache-name and asset services retain copies of this host.
     mHost.setUntrustedSimulatorCap(capability("UntrustedSimulatorMessage"));
+    if (auto circuit=mCircuits.find(mHost);circuit!=mCircuits.end()) circuit->second.capabilities=mCapabilities;
     if (gCacheName) gCacheName->setUpstream(mHost);
     if (gAssetStorage) gAssetStorage->setUpstream(mHost);
     LLAvatarNameCache::getInstance()->setNameLookupURL(capability("GetDisplayNames"));
@@ -406,6 +423,7 @@ void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionE
     LLExperienceCache::instance().setCapabilityQuery([](const std::string& name) { return gAgent.getRegionCapability(name); });
     LLExperienceCache::instance().setAccountGuardQuery([] { return vs_native_im_guard(); });
     mSeedReady = true;
+    publishProgress();
     const std::string features = capability("SimulatorFeatures");
     if (!features.empty())
     {
@@ -835,6 +853,7 @@ bool VSNativeSession::teleportToLure(const LLUUID& lure, bool godlike)
 }
 bool VSNativeSession::changeRegion(const LLSD& body)
 {
+    const LLVector3d globalPosition=from_region_handle(mHandle)+LLVector3d(mPosition);
     const S32 port = body["port"].asInteger(); const U32 ip = U32(body["ip"].asInteger());
     const LLHost destination(ip, port > 0 && port <= 65535 ? port : 0);
     const std::string seed = body["seed"].asString();
@@ -846,16 +865,39 @@ bool VSNativeSession::changeRegion(const LLSD& body)
     mLocationRequests.clear();
     releaseMovement(); mCameraTime = 0;
     clearParcelPlayback();
-    if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().reset(true);
+    const U64 nextHandle=ll_U64_from_sd(body["handle"]);
+    const U32 width=body.has("width")?U32(body["width"].asInteger()):256;
+    const U32 height=body.has("height")?U32(body["height"].asInteger()):256;
+    if(destination==mHost && nextHandle!=mHandle)
+    {
+        auto& reused=mCircuits[destination];if(reused.cancel)reused.cancel();
+        reused=RegionCircuit{};reused.handle=nextHandle;reused.width=width;reused.height=height;
+        reused.incarnation=mNextCircuitGeneration++;reused.deadline=now()+60;
+    }
+    else if (!enableNeighbour(destination,nextHandle,width,height)) return false;
+    auto& destinationCircuit=mCircuits.at(destination);
+    if (gViewerWindow && gViewerWindow->nativeContext() &&
+        !gViewerWindow->nativeContext()->world().activateRegion(destination,nextHandle,width,height,destinationCircuit.incarnation)) return false;
+    if (auto old=mCircuits.find(mHost);old!=mCircuits.end()) old->second.poll=std::move(mPoll);
+    auto cancelNeighbour=std::exchange(destinationCircuit.cancel,{});if (cancelNeighbour) cancelNeighbour();
+    destinationCircuit.poll.reset();
     if (FSLSLBridge::instanceExists()) FSLSLBridge::instance().resetNativeAccount();
     ++mRegionEpoch; clearSimulatorFeatures(); mPreviousHost = mHost; mHost = destination;
     mHandle = ll_U64_from_sd(body["handle"]); mSeed = seed; mName.clear();
+    if(body["teleport"].asBoolean())
+    {
+        std::vector<LLHost> retired;
+        for(const auto& [host,region]:mCircuits) if(host!=mHost)retired.push_back(host);
+        for(const auto& host:retired)retireNeighbour(host);
+        mPreviousHost=LLHost();
+    }
     mWidth = body.has("width") ? U32(body["width"].asInteger()) : 256; mHeight = body.has("height") ? U32(body["height"].asInteger()) : 256;
     mChangingRegion = true; mNavigationDeadline = now() + 60;
     mHandshake = mMovement = mCircuitAck = mSeedReady = false;
     auto cancel = std::move(mCancelSeed); if (cancel) cancel();
     mPoll.reset(); mCapabilities = LLSD::emptyMap();
     gAgent.initOriginGlobal(from_region_handle(mHandle));
+    mPosition=LLVector3(globalPosition-from_region_handle(mHandle));gAgent.setPositionAgent(mPosition);
     if (gCacheName) gCacheName->setUpstream(mHost);
     if (gAssetStorage) gAssetStorage->setUpstream(mHost);
     gMessageSystem->enableCircuit(mHost, true);
@@ -867,12 +909,28 @@ bool VSNativeSession::changeRegion(const LLSD& body)
     LLCoros::instance().launch("nativeRegionCapabilities", [owner, generation, epoch, seed]() { owner->seedCoro(seed, generation, epoch); });
     return true;
 }
+bool VSNativeSession::cancelTeleport()
+{
+    if(mPhase!=Phase::Connected || mChangingRegion || !mNavigationDeadline || !gMessageSystem)return false;
+    gMessageSystem->newMessage("TeleportCancel");gMessageSystem->nextBlock("Info");
+    gMessageSystem->addUUID("AgentID",mAgent);gMessageSystem->addUUID("SessionID",mSession);
+    if(gMessageSystem->sendReliable(mHost)<=0)return false;
+    ++mSent;mRequestedRegion.clear();mNavigationDeadline=0;
+    if(gViewerWindow)gViewerWindow->setShowProgress(false,true);
+    return true;
+}
 
 bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
 {
-    if (transport.count(name)) return mHost.isOk() && sender == mHost && mPhase != Phase::Disconnected;
-    if (name=="LayerData") return mHost.isOk() && sender==mHost && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
-    if (worldMessages.count(name)) return sender==mHost && !mChangingRegion && mPhase==Phase::Connected;
+    const auto peer=mCircuits.find(sender);
+    const bool known=sender==mHost || peer!=mCircuits.end();
+    if (transport.count(name)) return mHost.isOk() && known && mPhase != Phase::Disconnected;
+    if (name=="LayerData") return mHost.isOk() && known && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
+    if (worldMessages.count(name)) return (mPhase==Phase::Connecting || mPhase==Phase::Connected) &&
+        (sender==mHost || (peer!=mCircuits.end() && peer->second.acknowledged && peer->second.handshake));
+    if (known && (name=="RegionHandshake" || name=="DisableSimulator" || name=="CloseCircuit"))
+        return mPhase==Phase::Connecting || mPhase==Phase::Connected;
+    if (sender==mHost && (name=="EnableSimulator" || name=="EstablishAgentCommunication")) return mPhase==Phase::Connecting || mPhase==Phase::Connected;
     if ((mPhase == Phase::Connecting || mPhase == Phase::Connected || mPhase == Phase::Logout)
         && sender == mHost && session.count(name)) return true;
     // Consume after transport decoding/ACK; do not invoke a scene or HTTP node.
@@ -889,14 +947,37 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         if (admit(name,msg->getSender()) && gViewerWindow && gViewerWindow->nativeContext())
         {
             auto& world = gViewerWindow->nativeContext()->world();
-            world.receive(*msg,mHandle,mAgent);
+            const auto circuit=mCircuits.find(msg->getSender());
+            world.receive(*msg,circuit==mCircuits.end()?mHandle:circuit->second.handle,mAgent);
             LLVector3 position;
             if (world.agentPosition(position)) updateAgentPosition(position, msg->getSender(), mGeneration, mRegionEpoch);
         }
         return;
     }
     LLSD body = LLSD::emptyMap();
-    if (name == "ParcelProperties")
+    if(name=="AgentWearablesUpdate")
+    {
+        LLUUID agent,identity;U32 serial;
+        msg->getUUID("AgentData","AgentID",agent);msg->getUUID("AgentData","SessionID",identity);msg->getU32("AgentData","SerialNum",serial);
+        body["agent"]=agent;body["session"]=identity;body["serial"]=ll_sd_from_U32(serial);body["wearables"]=LLSD::emptyArray();
+        const S32 count=msg->getNumberOfBlocks("WearableData");
+        if(count<0 || count>255){++mRejected;return;}
+        for(S32 i=0;i<count;++i)
+        {
+            LLUUID item,asset;U8 type;msg->getUUID("WearableData","ItemID",item,i);msg->getUUID("WearableData","AssetID",asset,i);
+            msg->getU8("WearableData","WearableType",type,i);
+            LLSD row;row["item"]=item;row["asset"]=asset;row["type"]=S32(type);body["wearables"].append(row);
+        }
+    }
+    else if (name=="EnableSimulator")
+    {
+        U64 handle;U32 ip;U16 port;msg->getU64("SimulatorInfo","Handle",handle);
+        msg->getIPAddr("SimulatorInfo","IP",ip);msg->getIPPort("SimulatorInfo","Port",port);
+        body["handle"]=ll_sd_from_U64(handle);body["ip"]=LLSD::Integer(ip);body["port"]=port;
+        if (msg->getSize("SimulatorInfo","RegionSizeX")>0)
+        { U32 width,height;msg->getU32("SimulatorInfo","RegionSizeX",width);msg->getU32("SimulatorInfo","RegionSizeY",height);body["width"]=S32(width);body["height"]=S32(height); }
+    }
+    else if (name == "ParcelProperties")
     {
         S32 result, sequence, id; std::string parcel, music, media;
         msg->getS32("ParcelData", "RequestResult", result); msg->getS32("ParcelData", "SequenceID", sequence);
@@ -967,6 +1048,12 @@ void VSNativeSession::receive(LLMessageSystem* msg)
     }
     else if (name == "TeleportLocal")
     { LLUUID agent; LLVector3 pos; msg->getUUID("Info", "AgentID", agent); msg->getVector3("Info", "Position", pos); body["agent"] = agent; body["position"] = ll_sd_from_vector3(pos); }
+    else if(name=="TeleportStart" || name=="TeleportProgress")
+    {
+        U32 flags;msg->getU32("Info","TeleportFlags",flags);body["flags"]=ll_sd_from_U32(flags);
+        if(name=="TeleportProgress")
+        {LLUUID agent;std::string message;msg->getUUID("AgentData","AgentID",agent);msg->getString("Info","Message",message);body["agent"]=agent;body["text"]=message;}
+    }
     else if (name == "TeleportFailed")
     { LLUUID agent; std::string reason; msg->getUUID("Info", "AgentID", agent); msg->getString("Info", "Reason", reason); body["agent"] = agent; body["text"] = reason; }
     else if (name == "RegionHandshake")
@@ -1048,6 +1135,27 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
 {
     if (generation != mGeneration) { ++mExpired; return false; }
     if (!body.isMap() || !admit(name, sender)) return false;
+    if (name=="EnableSimulator")
+    {
+        if (sender!=mHost) return false;
+        const U64 handle=ll_U64_from_sd(body["handle"]);
+        if (gSavedSettings.getBOOL("FSDisableNeighbourRegionConnections") && handle!=mHandle) return true;
+        const S32 port=body["port"].asInteger();if (port<1 || port>65535) return false;
+        return enableNeighbour(LLHost(U32(body["ip"].asInteger()),port),handle,
+            body.has("width")?U32(body["width"].asInteger()):256,body.has("height")?U32(body["height"].asInteger()):256);
+    }
+    if (sender!=mHost)
+    {
+        auto region=mCircuits.find(sender);if (region==mCircuits.end()) return false;
+        if (name=="DisableSimulator" || name=="CloseCircuit") {retireNeighbour(sender);return true;}
+        if (name!="RegionHandshake" || !body["name"].isString() || body["id"].asUUID().isNull()) return false;
+        if (gViewerWindow && gViewerWindow->nativeContext() && !gViewerWindow->nativeContext()->world().configureRegion(sender,body)) return false;
+        region->second.handshake=true;if (region->second.acknowledged) region->second.deadline=0;
+        gMessageSystem->newMessage("RegionHandshakeReply");gMessageSystem->nextBlock("AgentData");
+        gMessageSystem->addUUID("AgentID",mAgent);gMessageSystem->addUUID("SessionID",mSession);
+        gMessageSystem->nextBlock("RegionInfo");gMessageSystem->addU32("Flags",0);gMessageSystem->sendReliable(sender);
+        ++mReceived;return true;
+    }
     if (name == "ParcelProperties" && mPhase == Phase::Connected && !mChangingRegion)
     {
         if (!body["result"].isInteger() || !body["sequence"].isInteger() || !body["id"].isInteger() ||
@@ -1105,7 +1213,8 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         mName = body["name"].asString().substr(0, 256); mRegionID = body["id"].asUUID(); mOwner = body["owner"].asUUID();
         mFlags = body.has("flags64") ? ll_U64_from_sd(body["flags64"]) : U32(body["flags"].asInteger()); mAccess = U8(body["access"].asInteger());
         LLLandmark::setRegionHandle(mRegionID, mHandle);
-        if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().configureRegion(body);
+        if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().configureRegion(sender,body);
+        if (auto circuit=mCircuits.find(sender);circuit!=mCircuits.end()) circuit->second.handshake=true;
         mHandshake = true; send("RegionHandshakeReply", LLSD()); connected();
     }
     else if (name == "AgentMovementComplete" && (mPhase == Phase::Connecting || mPhase == Phase::Connected))
@@ -1117,6 +1226,16 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         mPosition = pos; gAgent.setPositionAgent(pos); releaseMovement();
         if (body.has("look_at")) mCamera.face(ll_vector3_from_sd(body["look_at"]));
         mMovement = true; connected();
+    }
+    else if(name=="AgentWearablesUpdate" && (mPhase==Phase::Connecting || mPhase==Phase::Connected))
+    {
+        if(body["agent"].asUUID()!=mAgent || body["session"].asUUID()!=mSession || !body["wearables"].isArray() || body["wearables"].size()>255)return false;
+        const U32 serial=ll_U32_from_sd(body["serial"]);
+        if(mWearablesKnown && (U32(serial-mWearablesSerial)>0x7fffffffu ||
+           (serial==mWearablesSerial && body["wearables"]!=mWearablesMetadata)))return false;
+        for(const auto& row:llsd::inArray(body["wearables"]))
+            if(!row.isMap() || !row["type"].isInteger() || row["type"].asInteger()<0 || row["type"].asInteger()>255)return false;
+        mWearablesSerial=serial;mWearablesMetadata=body["wearables"];mWearablesKnown=true;publishProgress();
     }
     else if (name == "MoneyBalanceReply" && mPhase == Phase::Connected)
     {
@@ -1180,13 +1299,15 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
     else if ((name == "TeleportFinish" || name == "CrossedRegion") && mPhase == Phase::Connected)
     {
         if (body["agent"].asUUID() != mAgent || (name == "CrossedRegion" && body["session"].asUUID() != mSession)) return false;
-        return changeRegion(body);
+        LLSD destination=body;destination["teleport"]=name=="TeleportFinish";
+        return changeRegion(destination);
     }
     else if (name == "TeleportLocal" && mPhase == Phase::Connected)
     {
         if (body["agent"].asUUID() != mAgent || !body["position"].isArray() || body["position"].size() != 3) return false;
         const auto pos = ll_vector3_from_sd(body["position"]); if (!pos.isFinite()) return false;
         mPosition = pos; gAgent.setPositionAgent(pos); releaseMovement(); mNavigationDeadline = 0;
+        if(gViewerWindow)gViewerWindow->setShowProgress(false,true);
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
         requestParcel();
     }
@@ -1194,9 +1315,25 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
     {
         if (body["agent"].asUUID() != mAgent) return false;
         mRequestedRegion.clear(); mNavigationDeadline = 0;
+        if(gViewerWindow)gViewerWindow->setShowProgress(false,true);
         LLSD args; args["ERROR_MESSAGE"] = body["text"].asString().substr(0, 4096); LLNotificationsUtil::add("ErrorMessage", args);
     }
-    else if (name == "TeleportStart" || name == "TeleportProgress") { /* Keep CPU account UI and IM ownership alive during travel. */ }
+    else if ((name == "TeleportStart" || name == "TeleportProgress") && mPhase==Phase::Connected)
+    {
+        if(name=="TeleportProgress" && body["agent"].asUUID()!=mAgent)return false;
+        mNavigationDeadline=now()+60;
+        const std::string text=body["text"].asString().substr(0,4096);
+        const auto translated=LLAgent::sTeleportProgressMessages.find(text);
+        const std::string message=translated==LLAgent::sTeleportProgressMessages.end()?text:translated->second;
+        gAgent.setTeleportMessage(message);
+        if(gViewerWindow)
+        {
+            gViewerWindow->setShowProgress(true,!gSavedSettings.getBOOL("FSDisableTeleportScreens"));
+            gViewerWindow->setProgressString(message);
+            gViewerWindow->setProgressCancelButtonVisible(!(ll_U32_from_sd(body["flags"])&TELEPORT_FLAGS_DISABLE_CANCEL),LLTrans::getString("Cancel"));
+        }
+        publishProgress();
+    }
     else if (name == "CloseCircuit" || name == "DisableSimulator")
         disconnect(LLTrans::getString("NativeSessionConnectionTimeout"));
     else return false;
@@ -1204,13 +1341,17 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
 }
 void VSNativeSession::connected()
 {
+    publishProgress();
     if ((mPhase != Phase::Connecting && !mChangingRegion) || !mHandshake || !mMovement || !mSeedReady || !mCircuitAck) return;
+    if (auto circuit=mCircuits.find(mHost);circuit!=mCircuits.end()) circuit->second.deadline=0;
     if (mChangingRegion)
     {
         mChangingRegion = false; mNavigationDeadline = 0; mDeadline = now() + 1;
-        if (gMessageSystem && mPreviousHost.isOk() && mPreviousHost != mHost)
-        { gMessageSystem->disableCircuit(mPreviousHost); gMessageSystem->mCircuitInfo.removeCircuitData(mPreviousHost); }
+        if(gViewerWindow)gViewerWindow->setShowProgress(false,true);
+        // The former current simulator remains an independently owned neighbour.
+        // DisableSimulator or circuit retirement, not crossing, removes its scene.
         mPreviousHost = LLHost();
+        publishProgress();
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
         requestParcel();
         return;
@@ -1266,6 +1407,64 @@ void VSNativeSession::connected()
     send("MoneyBalanceRequest", LLSD());
     LLAgentLanguage::update();
     LL_INFOS("NativeSession") << "Native CPU region ready: " << mName << LL_ENDL;
+    publishProgress();
+}
+std::function<bool()> VSNativeSession::accountGuard(bool allowConnecting) const
+{
+    const auto weak=weak_from_this();const U64 generation=mGeneration;
+    return [weak,generation,allowConnecting]
+    {
+        const auto owner=weak.lock();
+        return owner && !owner->mShutdown && owner->mGeneration==generation &&
+            (owner->mPhase==Phase::Connected || (allowConnecting && owner->mPhase==Phase::Connecting));
+    };
+}
+bool VSNativeSession::current(const AccountHandle& token) const
+{
+    return !mShutdown && token.agent==mAgent && token.session==mSession && token.generation==mGeneration &&
+        (mPhase==Phase::Connecting || mPhase==Phase::Connected);
+}
+std::optional<VSNativeSession::InventoryHandle> VSNativeSession::inventory(const LLUUID& id) const
+{
+    if(!current(account()))return std::nullopt;
+    const auto* item=gInventory.getItem(id);const U64 revision=gInventory.objectRevision(id);
+    if(!item || !revision)return std::nullopt;
+    return InventoryHandle{account(),id,item->getAssetUUID(),revision};
+}
+bool VSNativeSession::current(const InventoryHandle& token) const
+{
+    if(!current(token.account))return false;
+    const auto* item=gInventory.getItem(token.item);
+    return item && item->getAssetUUID()==token.asset && gInventory.objectRevision(token.item)==token.revision;
+}
+std::function<bool()> VSNativeSession::interactionGuard(const VSWorldScene::FaceHandle& token) const
+{
+    if(mPhase!=Phase::Connected || token.object.account!=mAgent || token.object.accountGeneration!=mGeneration ||
+       !gViewerWindow || !gViewerWindow->nativeContext())return []{return false;};
+    const auto objectCurrent=gViewerWindow->nativeContext()->world().guard(token);
+    const auto accountCurrent=accountGuard();
+    return [accountCurrent,objectCurrent]{return accountCurrent() && objectCurrent();};
+}
+bool VSNativeSession::requestTaskInventory(const VSWorldScene::ObjectHandle& token)
+{
+    const auto peer=mCircuits.find(token.host);
+    if(mPhase!=Phase::Connected || token.account!=mAgent || token.accountGeneration!=mGeneration ||
+       peer==mCircuits.end() || !peer->second.acknowledged || !peer->second.handshake || !gMessageSystem ||
+       !gViewerWindow || !gViewerWindow->nativeContext())return false;
+    return gViewerWindow->nativeContext()->world().requestTaskInventory(*static_cast<LLMessageSystem*>(gMessageSystem),token,mAgent,mSession);
+}
+void VSNativeSession::publishProgress()
+{
+    LLSD progress;progress["account_generation"]=ll_sd_from_U64(mGeneration);
+    progress["region_generation"]=ll_sd_from_U64(mRegionEpoch);progress["phase"]=S32(mPhase);
+    progress["circuit"]=mCircuitAck;progress["capabilities"]=mSeedReady;
+    progress["handshake"]=mHandshake;progress["movement"]=mMovement;
+    progress["inventory"]=gInventory.isInventoryUsable();
+    progress["appearance_owner"]=mAppearanceOwnerInitialized;progress["wearable_metadata"]=mWearablesKnown;
+    progress["connected"]=regionReady();
+    if (mPhase==Phase::Connecting && gViewerWindow)
+        gViewerWindow->setProgressPercent(20.f*(unsigned(mCircuitAck)+unsigned(mSeedReady)+unsigned(mHandshake)+unsigned(mMovement)));
+    LLEventPumps::instance().obtain("native_session_progress").post(progress);
 }
 void VSNativeSession::appendChat(LLSD chat, U64 generation)
 {
@@ -1396,6 +1595,11 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
 }
 void VSNativeSession::tick()
 {
+    std::vector<LLHost> retired;
+    for (const auto& [host,region]:mCircuits)
+        if (host!=mHost && ((region.deadline && now()>region.deadline) ||
+            (region.acknowledged && region.handshake && gMessageSystem && !gMessageSystem->checkCircuitAlive(host)))) retired.push_back(host);
+    for (const auto& host:retired) retireNeighbour(host);
 
     if (mPhase==Phase::Connected && !mChangingRegion && gMessageSystem && gViewerWindow && gViewerWindow->nativeContext())
         gViewerWindow->nativeContext()->world().requestUpdates(*static_cast<LLMessageSystem*>(gMessageSystem),mHost,mAgent,mSession);
@@ -1467,7 +1671,9 @@ void VSNativeSession::requestLogout(bool quit)
         typing(false);
         releaseMovement(); send("AgentUpdate", LLSD());
         clearParcelPlayback();
-        unbind(); mPoll.reset(); send("LogoutRequest", LLSD()); mPhase = Phase::Logout; mDeadline = now() + 5;
+        unbind(); mPoll.reset();
+        for(auto& [host,region]:mCircuits) {if(region.cancel)region.cancel();region.cancel={};region.poll.reset();}
+        send("LogoutRequest", LLSD()); mPhase = Phase::Logout; mDeadline = now() + 5;
         gViewerWindow->setShowProgress(true, !gSavedSettings.getBOOL("FSDisableLogoutScreens"));
         gViewerWindow->setProgressPercent(100.f);
         gViewerWindow->setProgressString(LLTrans::getString("LoggingOut"));
@@ -1500,6 +1706,18 @@ void VSNativeSession::reset()
         if (LLDoNotDisturbNotificationStorage::instanceExists()) LLDoNotDisturbNotificationStorage::getInstance()->saveNotifications();
     }
     clearParcelPlayback();
+    auto circuits=std::exchange(mCircuits,{});
+    for (auto& [host,region]:circuits)
+    {
+        if (region.cancel) region.cancel();region.poll.reset();
+        if (gMessageSystem && host!=mHost)
+        {
+            gMessageSystem->newMessage("AgentQuitCopy");gMessageSystem->nextBlock("AgentData");
+            gMessageSystem->addUUID("AgentID",mAgent);gMessageSystem->addUUID("SessionID",mSession);
+            gMessageSystem->nextBlock("FuseBlock");gMessageSystem->addU32("ViewerCircuitCode",mCircuit);gMessageSystem->sendMessage(host);
+            gMessageSystem->disableCircuit(host);gMessageSystem->mCircuitInfo.removeCircuitData(host);
+        }
+    }
     if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().reset();
     if (FSLSLBridge::instanceExists()) FSLSLBridge::instance().resetNativeAccount();
     mMusicUserStopped = mMediaUserStopped = false;
@@ -1537,6 +1755,7 @@ void VSNativeSession::reset()
     gAgent.resetGroups();
     mNameConnections.clear(); mNames.clear(); mPendingNames.clear();
     mPhase = Phase::Login;
+    publishProgress();
     auto cancel = std::move(mCancelSeed); if (cancel) cancel();
     mPoll.reset();
     // Native file transfers are the admitted CPU mute-list queue. Complete its
@@ -1573,8 +1792,10 @@ void VSNativeSession::reset()
     gAgentID.setNull(); gAgentSessionID.setNull(); gAgent.mSecureSessionID.setNull(); gAgent.mMOTD.clear(); gAgentMovementCompleted = false;
     mHandshake = mMovement = mSeedReady = mCircuitAck = mQuit = false;
     mTyping = mFrozen = false;
+    mAppearanceOwnerInitialized=mWearablesKnown=false;mWearablesMetadata=LLSD();mWearablesSerial=0;
     gDisconnected = true;
     if (LLAvatarNameCache::instanceExists()) LLAvatarNameCache::getInstance()->setNameLookupURL("");
+    publishProgress();
 }
 void VSNativeSession::shutdown()
 {
@@ -1592,6 +1813,17 @@ LLSD VSNativeSession::evidence() const
     result["rejected"] = LLSD::Integer(mRejected); result["expired"] = LLSD::Integer(mExpired);
     result["region"] = mName; result["handshake"] = mHandshake; result["movement"] = mMovement;
     result["simulator_features_received"] = mSimulatorFeaturesReceived;
+    result["appearance_owner_initialized"]=mAppearanceOwnerInitialized;
+    result["wearable_metadata_known"]=mWearablesKnown;result["wearable_metadata"]=mWearablesMetadata;
+    result["circuits"]=LLSD::emptyArray();
+    for (const auto& [host,region]:mCircuits)
+    {
+        LLSD row;row["host"]=host.getIPandPort();row["handle"]=ll_sd_from_U64(region.handle);
+        row["generation"]=ll_sd_from_U64(region.incarnation);row["width"]=S32(region.width);row["height"]=S32(region.height);
+        row["acknowledged"]=region.acknowledged;row["handshake"]=region.handshake;row["current"]=host==mHost;
+        row["seed_failed"]=region.seedFailed;row["capability_generation"]=ll_sd_from_U64(region.requestRevision);
+        result["circuits"].append(row);
+    }
     result["capabilities"] = mSeedReady; result["circuit_ack"] = mCircuitAck;
     result["region_width"] = S32(mWidth); result["region_height"] = S32(mHeight);
     result["frozen"] = mFrozen;

@@ -47,36 +47,36 @@ public:
     // override when called on the subclass, yet call the base-class method
     // when indirecting through a polymorphic pointer or reference?
     bool getFullscreen() {return false;}
-    /*virtual*/ bool getPosition(LLCoordScreen *position) override {return false;}
-    /*virtual*/ bool getSize(LLCoordScreen *size) override {return false;}
-    /*virtual*/ bool getSize(LLCoordWindow *size) override {return false;}
-    /*virtual*/ bool setPosition(LLCoordScreen position) override {return false;}
-    /*virtual*/ bool setSizeImpl(LLCoordScreen size) override {return false;}
-    /*virtual*/ bool setSizeImpl(LLCoordWindow size) override {return false;}
+    /*virtual*/ bool getPosition(LLCoordScreen *position) override { if (!position) return false;*position=mPosition;return true; }
+    /*virtual*/ bool getSize(LLCoordScreen *size) override { if (!size) return false;*size=LLCoordScreen(mSize.mX,mSize.mY);return true; }
+    /*virtual*/ bool getSize(LLCoordWindow *size) override { if (!size) return false;*size=mSize;return true; }
+    /*virtual*/ bool setPosition(LLCoordScreen position) override {mPosition=position;return true;}
+    /*virtual*/ bool setSizeImpl(LLCoordScreen size) override { return setSizeImpl(LLCoordWindow(size.mX,size.mY)); }
+    /*virtual*/ bool setSizeImpl(LLCoordWindow size) override { if(size.mX<0 || size.mY<0)return false;mSize=size;return true; }
     /*virtual*/ bool switchContext(bool fullscreen, const LLCoordScreen &size, bool enable_vsync, const LLCoordScreen * const posp = NULL) override {return false;}
     void* createSharedContext() override  { return nullptr; }
     void makeContextCurrent(void*) override  {}
     void destroySharedContext(void*) override  {}
     /*virtual*/ void toggleVSync(bool enable_vsync) override { }
-    /*virtual*/ bool setCursorPosition(LLCoordWindow position) override {return false;}
-    /*virtual*/ bool getCursorPosition(LLCoordWindow *position) override {return false;}
+    /*virtual*/ bool setCursorPosition(LLCoordWindow position) override {mCursor=position;return true;}
+    /*virtual*/ bool getCursorPosition(LLCoordWindow *position) override {if(!position)return false;*position=mCursor;return true;}
 #if LL_WINDOWS
     /*virtual*/ bool getCursorDelta(LLCoordCommon* delta) override { return false; }
 #endif
     /*virtual*/ bool isWrapMouse() const override { return true; }
-    /*virtual*/ void showCursor() override {}
-    /*virtual*/ void hideCursor() override {}
-    /*virtual*/ void showCursorFromMouseMove() override {}
-    /*virtual*/ void hideCursorUntilMouseMove() override {}
-    /*virtual*/ bool isCursorHidden() override {return false;}
-    /*virtual*/ void updateCursor() override {}
+    /*virtual*/ void showCursor() override {mCursorHidden=false;mHideCursorPermanent=false;}
+    /*virtual*/ void hideCursor() override {mCursorHidden=true;mHideCursorPermanent=true;}
+    /*virtual*/ void showCursorFromMouseMove() override {if(!mHideCursorPermanent)showCursor();}
+    /*virtual*/ void hideCursorUntilMouseMove() override {if(!mHideCursorPermanent)mCursorHidden=true;}
+    /*virtual*/ bool isCursorHidden() override {return mCursorHidden;}
+    /*virtual*/ void updateCursor() override {mCurrentCursor=mNextCursor;}
     //virtual ECursorType getCursor() override { return mCurrentCursor; }
     /*virtual*/ void captureMouse() override {}
     /*virtual*/ void releaseMouse() override {}
     /*virtual*/ void setMouseClipping( bool b ) override {}
-    /*virtual*/ bool isClipboardTextAvailable() override {return false; }
-    /*virtual*/ bool pasteTextFromClipboard(LLWString &dst) override {return false; }
-    /*virtual*/ bool copyTextToClipboard(const LLWString &src) override {return false; }
+    /*virtual*/ bool isClipboardTextAvailable() override {return !mClipboard.empty(); }
+    /*virtual*/ bool pasteTextFromClipboard(LLWString &dst) override {dst=mClipboard;return true; }
+    /*virtual*/ bool copyTextToClipboard(const LLWString &src) override {mClipboard=src;return true; }
     /*virtual*/ void flashIcon(F32 seconds) override {}
     /*virtual*/ F32 getGamma() override {return 1.0f; }
     /*virtual*/ bool setGamma(const F32 gamma) override {return false; } // Set the gamma
@@ -90,12 +90,12 @@ public:
 
 
     // handy coordinate space conversion routines
-    /*virtual*/ bool convertCoords(LLCoordScreen from, LLCoordWindow *to) override { return false; }
-    /*virtual*/ bool convertCoords(LLCoordWindow from, LLCoordScreen *to) override { return false; }
-    /*virtual*/ bool convertCoords(LLCoordWindow from, LLCoordGL *to) override { return false; }
-    /*virtual*/ bool convertCoords(LLCoordGL from, LLCoordWindow *to) override { return false; }
-    /*virtual*/ bool convertCoords(LLCoordScreen from, LLCoordGL *to) override { return false; }
-    /*virtual*/ bool convertCoords(LLCoordGL from, LLCoordScreen *to) override { return false; }
+    /*virtual*/ bool convertCoords(LLCoordScreen from, LLCoordWindow *to) override { if(!to)return false;*to=LLCoordWindow(from.mX-mPosition.mX,from.mY-mPosition.mY);return true; }
+    /*virtual*/ bool convertCoords(LLCoordWindow from, LLCoordScreen *to) override { if(!to)return false;*to=LLCoordScreen(from.mX+mPosition.mX,from.mY+mPosition.mY);return true; }
+    /*virtual*/ bool convertCoords(LLCoordWindow from, LLCoordGL *to) override { if(!to)return false;*to=LLCoordGL(from.mX,mSize.mY-from.mY-1);return true; }
+    /*virtual*/ bool convertCoords(LLCoordGL from, LLCoordWindow *to) override { if(!to)return false;*to=LLCoordWindow(from.mX,mSize.mY-from.mY-1);return true; }
+    /*virtual*/ bool convertCoords(LLCoordScreen from, LLCoordGL *to) override { LLCoordWindow intermediate;return convertCoords(from,&intermediate)&&convertCoords(intermediate,to); }
+    /*virtual*/ bool convertCoords(LLCoordGL from, LLCoordScreen *to) override { LLCoordWindow intermediate;return convertCoords(from,&intermediate)&&convertCoords(intermediate,to); }
 
     /*virtual*/ LLWindowResolution* getSupportedResolutions(S32 &num_resolutions) override { return NULL; }
     /*virtual*/ F32 getNativeAspectRatio() override { return 1.0f; }
@@ -114,6 +114,9 @@ public:
     virtual ~LLWindowHeadless();
 
 private:
+    LLCoordWindow mSize,mCursor;
+    LLCoordScreen mPosition;
+    LLWString mClipboard; // Process-local clipboard; never touches the desktop.
 };
 
 class LLSplashScreenHeadless : public LLSplashScreen
