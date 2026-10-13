@@ -74,7 +74,13 @@ a one-quad budget. It verifies allocation refusal while a submitted generation i
 retained, deterministic red readback, release after GPU completion, successful
 green replacement readback, and cumulative refusal evidence across frames. The
 local SwiftShader run passed with core/synchronization validation and no window.
+The isolated intentional-invalid synchronization control failed with its expected
+`SYNC-HAZARD-WRITE-AFTER-WRITE` diagnostic and exit code 1, proving the same
+validation configuration detects and fails hazards.
 This qualifies the production renderer's isolated mesh budget/retirement path.
+The [retained result](parity/evidence/r1-resource-budget-summary.json) records
+source and executable identities, loaded library hashes and the
+[readback/validation archive](parity/evidence/r1-resource-budget.zip).
 
 The canonical `build-vc170-64` RelWithDebInfo viewer is rebuilt and fully staged
 through the existing Autobuild/CMake workflow. A build or these compiled fixtures

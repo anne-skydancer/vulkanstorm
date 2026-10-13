@@ -23726,9 +23726,11 @@
       ],
       "native_source_references": [
         "indra/newview/vsworldassets.cpp",
-        "indra/newview/vsworldscene.cpp"
+        "indra/newview/vsworldscene.cpp",
+        "indra/newview/vsworldrenderer.cpp",
+        "indra/newview/vsresourcebudget.h"
       ],
-      "implementation_note": "Bounded mesh decode/request/cache and LOD retention exist; streaming, full material/resource and runtime coverage remain open.",
+      "implementation_note": "Bounded shared mesh decode and LOD retention; mainloop asset/account/region/request generations, same-account decoded reuse, bounded retry/LRU and live-owner CPU/GPU mesh payload reservations are implemented. Isolated production renderer budget refusal/retirement/replacement readbacks pass on SwiftShader; complete streaming, local reload producers, materials and full-viewer runtime coverage remain open. See doc/vulkan/r1-resource-contracts.md.",
       "review_reference": "doc/vulkan/parity/source-dispositions.json",
       "native_integration_hosts": [
         "indra/newview/vsworldscene.cpp",

@@ -4,53 +4,129 @@
   "entries": {
     "SURVEY.Standard-primitives-linksets": {
       "implementation": "partial",
-      "native_source_references": ["indra/newview/vsworldscene.cpp"],
+      "native_source_references": [
+        "indra/newview/vsworldscene.cpp"
+      ],
       "implementation_note": "Actual CPU volume/TE decode and primitive publication; complete LOD, classification and scene lifecycle remain open."
     },
     "SURVEY.Mesh-assets-LOD": {
       "implementation": "partial",
-      "native_source_references": ["indra/newview/vsworldassets.cpp", "indra/newview/vsworldscene.cpp"],
-      "implementation_note": "Bounded mesh decode/request/cache and LOD retention exist; streaming, full material/resource and runtime coverage remain open."
+      "native_source_references": [
+        "indra/newview/vsworldassets.cpp",
+        "indra/newview/vsworldscene.cpp",
+        "indra/newview/vsworldrenderer.cpp",
+        "indra/newview/vsresourcebudget.h"
+      ],
+      "implementation_note": "Bounded shared mesh decode and LOD retention; mainloop asset/account/region/request generations, same-account decoded reuse, bounded retry/LRU and live-owner CPU/GPU mesh payload reservations are implemented. Isolated production renderer budget refusal/retirement/replacement readbacks pass on SwiftShader; complete streaming, local reload producers, materials and full-viewer runtime coverage remain open. See doc/vulkan/r1-resource-contracts.md."
     },
     "SURVEY.Self-other-system-avatars": {
       "implementation": "partial",
-      "native_source_references": ["indra/newview/vsworldavatar.cpp"],
+      "native_source_references": [
+        "indra/newview/vsworldavatar.cpp"
+      ],
       "implementation_note": "CPU skeleton/morph/keyframe/body mesh and baked mask paths exist; complete appearance, locomotion, cloth and shader/view variants do not."
     },
     "SURVEY.Rigged-attachments-animesh": {
       "implementation": "partial",
-      "native_source_references": ["indra/newview/vsworldavatar.cpp", "indra/newview/vsworldscene.cpp"],
+      "native_source_references": [
+        "indra/newview/vsworldavatar.cpp",
+        "indra/newview/vsworldscene.cpp"
+      ],
       "implementation_note": "Weighted attachment palette skinning exists; joint overrides/restoration, fitted mesh, HUD attachments and independent animesh ownership remain open."
     },
     "SURVEY.Terrain": {
       "implementation": "partial",
-      "native_source_references": ["indra/newview/vsterrainpacket.h", "indra/newview/vsworldscene.cpp"],
+      "native_source_references": [
+        "indra/newview/vsterrainpacket.h",
+        "indra/newview/vsworldscene.cpp"
+      ],
       "implementation_note": "Current-region heightfield and single texture per patch; no four-way/PBR splatting or neighbour/variable-region parity."
     },
     "SURVEY.Analytic-atmosphere-sky-sun-moon-clouds-stars": {
       "implementation": "placeholder",
-      "native_source_references": ["indra/newview/vsworldscene.cpp"],
+      "native_source_references": [
+        "indra/newview/vsworldscene.cpp"
+      ],
       "implementation_note": "Procedural gradient exists; it does not implement the analytic EEP atmosphere, celestial bodies, clouds or stars."
     },
     "SURVEY.Water-void-water-haze-exclusion": {
       "phase": "R7",
       "implementation": "placeholder",
-      "native_source_references": ["indra/newview/vsworldscene.cpp"],
+      "native_source_references": [
+        "indra/newview/vsworldscene.cpp"
+      ],
       "implementation_note": "Flat alpha surface at region water height; reference water/environment/depth/reflection behavior remains open."
     },
-    "SURVEY.Sun-spot-shadows": {"phase": "R6", "implementation": "not-integrated"},
-    "SURVEY.Probes-irradiance-radiance-mirrors": {"phase": "R6", "implementation": "not-integrated"},
-    "SURVEY.Visibility-G-buffer": {"phase": "R4", "implementation": "partial", "implementation_note": "Bounded scene visibility and simple depth exist; native deferred G-buffer and full spatial/occlusion ownership remain open."},
-    "SURVEY.Sun-moon-local-projector-lights": {"implementation": "partial", "implementation_note": "Fixed sun/ambient shader inputs only; complete EEP, local/projector and BRDF lighting remains open."},
-    "SURVEY.Alpha-masks-PPLL": {"phase": "R7", "implementation": "partial", "implementation_note": "Fixed mask threshold and sorted straight alpha exist; full classifications, water ordering, PPLL and residual paths remain open."},
-    "SURVEY.Voice-and-spatial-services": {"implementation": "partial", "implementation_note": "Shared client initialization is present; native provisioning/region/spatial lifecycle still requires integration."},
-    "SURVEY.Firestorm-bridge": {"implementation": "not-integrated", "implementation_note": "Account retirement is guarded, but native attachment/task inventory/script ownership and handshake are incomplete."},
-    "FEATURE.Startup": {"implementation": "partial", "native_source_references": ["indra/newview/llappviewer.cpp", "indra/newview/vsnativesession.cpp"]},
-    "FEATURE.LoginProgress": {"implementation": "partial", "native_source_references": ["indra/newview/llprogressview.cpp", "indra/newview/vsnativesession.cpp"]},
-    "FEATURE.LogoutProgress": {"implementation": "partial", "native_source_references": ["indra/newview/llprogressview.cpp", "indra/newview/vsnativesession.cpp"]},
-    "FEATURE.PersistentTextureCache": {"implementation": "native-subscriber-integration-pending", "native_source_references": ["indra/newview/vsuiimageprovider.cpp"], "implementation_note": "Native CPU HTTP/decode and in-memory images do not establish LLTextureCache disk read/write subscriber parity."},
-    "FEATURE.BuiltinAO": {"implementation": "native-avatar-integration-pending", "native_source_references": ["indra/newview/vsworldavatar.cpp"], "implementation_note": "Shared AO engine exists but its legacy self-avatar animation ownership is not established by the native CPU avatar owner."},
-    "FEATURE.Underwater": {"implementation": "not-integrated"},
-    "FEATURE.HUDProjection": {"implementation": "not-integrated"}
+    "SURVEY.Sun-spot-shadows": {
+      "phase": "R6",
+      "implementation": "not-integrated"
+    },
+    "SURVEY.Probes-irradiance-radiance-mirrors": {
+      "phase": "R6",
+      "implementation": "not-integrated"
+    },
+    "SURVEY.Visibility-G-buffer": {
+      "phase": "R4",
+      "implementation": "partial",
+      "implementation_note": "Bounded scene visibility and simple depth exist; native deferred G-buffer and full spatial/occlusion ownership remain open."
+    },
+    "SURVEY.Sun-moon-local-projector-lights": {
+      "implementation": "partial",
+      "implementation_note": "Fixed sun/ambient shader inputs only; complete EEP, local/projector and BRDF lighting remains open."
+    },
+    "SURVEY.Alpha-masks-PPLL": {
+      "phase": "R7",
+      "implementation": "partial",
+      "implementation_note": "Fixed mask threshold and sorted straight alpha exist; full classifications, water ordering, PPLL and residual paths remain open."
+    },
+    "SURVEY.Voice-and-spatial-services": {
+      "implementation": "partial",
+      "implementation_note": "Shared client initialization is present; native provisioning/region/spatial lifecycle still requires integration."
+    },
+    "SURVEY.Firestorm-bridge": {
+      "implementation": "not-integrated",
+      "implementation_note": "Account retirement is guarded, but native attachment/task inventory/script ownership and handshake are incomplete."
+    },
+    "FEATURE.Startup": {
+      "implementation": "partial",
+      "native_source_references": [
+        "indra/newview/llappviewer.cpp",
+        "indra/newview/vsnativesession.cpp"
+      ]
+    },
+    "FEATURE.LoginProgress": {
+      "implementation": "partial",
+      "native_source_references": [
+        "indra/newview/llprogressview.cpp",
+        "indra/newview/vsnativesession.cpp"
+      ]
+    },
+    "FEATURE.LogoutProgress": {
+      "implementation": "partial",
+      "native_source_references": [
+        "indra/newview/llprogressview.cpp",
+        "indra/newview/vsnativesession.cpp"
+      ]
+    },
+    "FEATURE.PersistentTextureCache": {
+      "implementation": "native-subscriber-integration-pending",
+      "native_source_references": [
+        "indra/newview/vsuiimageprovider.cpp"
+      ],
+      "implementation_note": "Native CPU HTTP/decode and in-memory images do not establish LLTextureCache disk read/write subscriber parity."
+    },
+    "FEATURE.BuiltinAO": {
+      "implementation": "native-avatar-integration-pending",
+      "native_source_references": [
+        "indra/newview/vsworldavatar.cpp"
+      ],
+      "implementation_note": "Shared AO engine exists but its legacy self-avatar animation ownership is not established by the native CPU avatar owner."
+    },
+    "FEATURE.Underwater": {
+      "implementation": "not-integrated"
+    },
+    "FEATURE.HUDProjection": {
+      "implementation": "not-integrated"
+    }
   }
 }

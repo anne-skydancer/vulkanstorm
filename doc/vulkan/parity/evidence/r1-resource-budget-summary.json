@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "date": "2026-10-13",
+  "source_commit": "fa87d6edf36c6c5a2158a30c297b77e08ecbba4d",
+  "qualification_wrapper_commit": "0c93b18b8d5fd3cb3f7128a805cdf62bc28cfc2a",
+  "scope": "Isolated production VSWorldRenderer mesh allocation budget and completion retirement; not full R1 acceptance.",
+  "passed": true,
+  "executable_sha256": "65224df827cac26c09d8525077e21fd3f00a4f6920380ef3e13f85f14276b859",
+  "driver": "SwiftShader Device (LLVM 10.0.0)",
+  "validation": [
+    "core",
+    "synchronization"
+  ],
+  "window_created": false,
+  "budget_bytes": 152,
+  "allocation_refusals": 1,
+  "completion_retirement_passed": true,
+  "loaded_libraries": {
+    "vulkan-1.dll": {
+      "path": "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\.tmp\\r0-software-contract-build\\RelWithDebInfo\\vulkan-1.dll",
+      "sha256": "5db0230299aaf1597d696f155d16a0357462d18aa2808c5a788e7dc9a0ec2ca3"
+    },
+    "GraphicsEngineVk_64r.dll": {
+      "path": "C:\\Dev\\vulkanstorm\\worktrees\\vkstorm-vulkan\\.tmp\\r0-software-contract-build\\RelWithDebInfo\\GraphicsEngineVk_64r.dll",
+      "sha256": "2b1d2aff247ff23b18ee95d18b1630d7505d09607313cfbc8acae5b733e9bf8f"
+    },
+    "vk_swiftshader.dll": {
+      "path": "C:\\Dev\\vulkanstorm\\.tmp\\software-vulkan-runtime\\staged\\icd\\vk_swiftshader.dll",
+      "sha256": "e1260cfa385ef57e02f50f320451c4be7475923fa80b60c830e4d8a975990279"
+    },
+    "VkLayer_khronos_validation.dll": {
+      "path": "C:\\Dev\\vulkanstorm\\.tmp\\software-vulkan-runtime\\staged\\layers\\VkLayer_khronos_validation.dll",
+      "sha256": "0385c28aabbd95461ae47c5797eff69065536fe241092570bf46fb30ebe12999"
+    }
+  },
+  "runtime_sources": {
+    "swiftshader": {
+      "url": "https://swiftshader.googlesource.com/SwiftShader",
+      "revision": "1e80438d2b93ef36a7c05f8d2b81233bac0e3d16",
+      "recursive": false
+    },
+    "validation": {
+      "url": "https://github.com/KhronosGroup/Vulkan-ValidationLayers.git",
+      "revision": "0afe79ff768afd7243b6f697b07b44ee3b2f59ea",
+      "tag_revisions": {
+        "Vulkan-Headers": "b2ff582bfd4448d7b5f9ccd6a766b3ab322d59ed",
+        "Vulkan-Utility-Libraries": "68b0ae52a6cc8de7df3af7b549e9a2efa7c78d8a",
+        "mimalloc": "deac3dcf5f0614884013d411a5c07e16bec96c9f"
+      }
+    },
+    "lavapipe": {
+      "url": "https://archive.mesa3d.org/mesa-25.2.4.tar.xz",
+      "sha256": "a370b4c549cbfbe646b319e34d73edb50ed883978f5e95133f282f0eae39ab52"
+    }
+  },
+  "archive": "r1-resource-budget.zip",
+  "archive_sha256": "c6b9cc5a7b3b9b5c4f4edf4b01d19d17f4234e7cf4e3f618c14509342fc955d3",
+  "files": {
+    "budget-replacement.ppm": "a8aabed854f2d8f522abbd963b189ff973c68a9dbff56f4b7d6158632980aeeb",
+    "budget-retained.ppm": "50d9620314d2c6ce3b617a6343254fdc174c8cc8ecb13d81f87b6a94f8437f0c",
+    "first.ppm": "50d9620314d2c6ce3b617a6343254fdc174c8cc8ecb13d81f87b6a94f8437f0c",
+    "near-clip.ppm": "50d9620314d2c6ce3b617a6343254fdc174c8cc8ecb13d81f87b6a94f8437f0c",
+    "replacement.ppm": "ef90f1d083c45464b1a9d34baa9f4fb91a37066588df53c04192bb37f146917f",
+    "resource-reuse.ppm": "82dc3b9ccf4cd4c2c5664e2252f3fb161a9ee9bd3f20c45daf0f9de6f9531701",
+    "sky.ppm": "9658a0373fef6d8dd8596c84e166d2e8bf7b841f8a080d155ad207cc02333333",
+    "texture-0.ppm": "50d9620314d2c6ce3b617a6343254fdc174c8cc8ecb13d81f87b6a94f8437f0c",
+    "texture-1.ppm": "a8aabed854f2d8f522abbd963b189ff973c68a9dbff56f4b7d6158632980aeeb",
+    "texture-2.ppm": "635a40e275633f5348fc7668fa4f16ca063a16877b111d3166a933d2e506b176",
+    "texture-3.ppm": "33321f8df376023d76f562293e1409c551a875c1ab1b96ada7b4d7171e36f7e5",
+    "ui-batch.ppm": "650978fd326b22f248120c8e2c2bee3e1c358b447c278a827d16fc78ae705fd3",
+    "water-depth.ppm": "ef90f1d083c45464b1a9d34baa9f4fb91a37066588df53c04192bb37f146917f",
+    "test.log": "874c1cecafccfbc332a9dca066c385091714efffdbc6343cae6684463d788fbf",
+    "icd.json": "193fe8fbc88dc7389ac988b50537e3e574b9aa66b42dfe046a238a45bc4bc98c",
+    "vk_layer_settings.txt": "e57290b47fc4fd8a787ab547eda3175a88ad4ab05f3b1036d2a58284a832b43f",
+    "invalid-sync.log": "d2e9c7642983ab657b3143441ee0fe2509c1ffeca2ee86a8ebd7c033d2161255"
+  },
+  "limits": [
+    "No production viewer budget-pressure session or authenticated login/crossing qualification.",
+    "No vendor GPU performance or whole renderer parity claim.",
+    "Payload accounting excludes driver allocation overhead and non-mesh resources."
+  ],
+  "synchronization_negative_control": {
+    "passed": true,
+    "exit_code": 1,
+    "diagnostic": "SYNC-HAZARD-WRITE-AFTER-WRITE"
+  }
+}
