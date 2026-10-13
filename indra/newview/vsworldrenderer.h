@@ -2,6 +2,7 @@
 #pragma once
 #include "vsuirenderer.h"
 #include <array>
+#include <cstddef>
 #include <memory>
 #include <vector>
 namespace Diligent { struct IRenderDevice; struct IDeviceContext; struct ITextureView; }
@@ -37,7 +38,7 @@ public:
         std::uint64_t residentMeshBytes=0,meshBudgetBytes=0,meshAllocationRefusals=0;
         double cpuMilliseconds=0;
     };
-    VSWorldRenderer(Diligent::IRenderDevice*, Diligent::IDeviceContext*);
+    VSWorldRenderer(Diligent::IRenderDevice*, Diligent::IDeviceContext*, std::size_t meshBudgetBytes = 256 * 1024 * 1024);
     ~VSWorldRenderer();
     Mesh upload(const std::vector<Vertex>&, const std::vector<unsigned>&);
     void draw(Diligent::ITextureView*, unsigned width, unsigned height,

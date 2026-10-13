@@ -82,7 +82,7 @@ struct VSWorldRenderer::Impl
     std::map<IPipelineState*,std::vector<DrawResources>> available;
     std::size_t availableCount=0;
     Statistics statistics;
-    VSResourceBudget meshBudget{256 * 1024 * 1024};
+    VSResourceBudget meshBudget;
     Uint64 pendingMeshUploads=0,pendingMeshBytes=0,meshAllocationRefusals=0;
     struct Submission
     {
@@ -92,7 +92,7 @@ struct VSWorldRenderer::Impl
         RefCntAutoPtr<ITexture> depth;
     };
     std::deque<Submission> submitted;
-    Impl(IRenderDevice* d,IDeviceContext* c):device(d),context(c)
+    Impl(IRenderDevice* d,IDeviceContext* c,std::size_t meshBudgetBytes):device(d),context(c),meshBudget(meshBudgetBytes)
     {
         requireWorld(d && c,"World renderer requires a device and context");
         FenceDesc fd{};fd.Name="Native world completion";
@@ -173,7 +173,7 @@ void main() {
         return result;
     }
 };
-VSWorldRenderer::VSWorldRenderer(IRenderDevice* d,IDeviceContext* c):mImpl(std::make_unique<Impl>(d,c)) {}
+VSWorldRenderer::VSWorldRenderer(IRenderDevice* d,IDeviceContext* c,std::size_t meshBudgetBytes):mImpl(std::make_unique<Impl>(d,c,meshBudgetBytes)) {}
 VSWorldRenderer::~VSWorldRenderer()=default;
 VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertices,const std::vector<unsigned>& indices)
 {

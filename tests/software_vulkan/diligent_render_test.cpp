@@ -566,6 +566,29 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     });
     std::cout<<"UI_BATCH_PACKETS="<<images.statistics().packets<<"\nUI_BATCH_DRAWS="<<images.statistics().draws<<'\n';
     context->WaitForIdle();renderer.retire();images.retire();
+    // Exercise the same production allocation and fence retirement with a
+    // one-quad budget. No cache-entry removal may free submitted GPU buffers.
+    const std::vector<VSWorldRenderer::Vertex> budgetVertices{{-1,1,0,0,0,1,0,0},{1,1,0,0,0,1,1,0},
+        {-1,-1,0,0,0,1,0,1},{1,-1,0,0,0,1,1,1}};
+    const std::vector<unsigned> budgetIndices{0,2,1,1,2,3};
+    const auto meshBytes=budgetVertices.size()*sizeof(VSWorldRenderer::Vertex)+budgetIndices.size()*sizeof(unsigned);
+    VSWorldRenderer limited(device,context,meshBytes);
+    VSWorldRenderer::Packet retained;retained.mesh=limited.upload(budgetVertices,budgetIndices);
+    require(retained.mesh!=nullptr,"Budgeted first generation was refused");
+    retained.fullbright=true;retained.color={1,0,0,1};
+    limited.draw(rtv,8,8,view,{retained});retained.mesh.reset();
+    require(limited.statistics().residentMeshBytes==meshBytes,"Submitted geometry lost its byte reservation");
+    require(!limited.upload(budgetVertices,budgetIndices),"Mesh budget admitted overlapping live generations");
+    require(limited.statistics().meshAllocationRefusals==1,"Budget refusal evidence is missing");
+    capture("budget-retained.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
+    limited.retire();require(limited.statistics().residentMeshBytes==0,"Completed mesh reservation was not retired");
+    retained.mesh=limited.upload(budgetVertices,budgetIndices);
+    require(retained.mesh!=nullptr,"Released mesh budget could not admit replacement");
+    retained.color={0,1,0,1};limited.draw(rtv,8,8,view,{retained});retained.mesh.reset();
+    require(limited.statistics().meshAllocationRefusals==1,"Per-frame statistics erased budget refusal evidence");
+    capture("budget-replacement.ppm",[](unsigned,unsigned){return Pixel{0,255,0,255};});
+    limited.retire();require(limited.statistics().residentMeshBytes==0,"Replacement submission did not release its bytes");
+    std::cout<<"WORLD_BUDGET_BYTES="<<meshBytes<<"\nWORLD_BUDGET_REFUSALS=1\nWORLD_BUDGET_RETIRED=1\n";
 }
 
 static void loadedLibraries()
