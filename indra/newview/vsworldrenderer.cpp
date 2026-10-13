@@ -198,6 +198,14 @@ VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertice
     ++mImpl->pendingMeshUploads;mImpl->pendingMeshBytes+=vertices.size()*sizeof(Vertex)+indices.size()*sizeof(unsigned);
     return mesh;
 }
+bool VSWorldRenderer::publishMesh(Mesh& current, const std::vector<Vertex>& vertices,
+                                  const std::vector<unsigned>& indices)
+{
+    auto replacement = upload(vertices, indices);
+    if (!replacement) return false;
+    current = std::move(replacement);
+    return true;
+}
 void VSWorldRenderer::retire()
 {
     const auto complete=mImpl->fence->GetCompletedValue();
@@ -207,7 +215,16 @@ void VSWorldRenderer::retire()
         // bounded cache; packets/images/geometry retire with the submission.
         for (auto& draw:mImpl->submitted.front().draws)
             if (mImpl->availableCount<16384)
-            {mImpl->available[draw.pipeline].push_back(std::move(draw));++mImpl->availableCount;}
+            {
+                // A cached SRB owns its bound texture independently of Packet.image.
+                // Remove that reference while the charged packet owner still lives.
+                auto* texture = draw.binding->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture");
+                requireWorld(texture != nullptr, "Retired world texture binding missing");
+                texture->Set(mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
+                             SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+                mImpl->available[draw.pipeline].push_back(std::move(draw));
+                ++mImpl->availableCount;
+            }
         mImpl->submitted.pop_front();
     }
 }

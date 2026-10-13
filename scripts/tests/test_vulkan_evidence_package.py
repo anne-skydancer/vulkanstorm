@@ -10,7 +10,7 @@ from unittest.mock import patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from package_vulkan_evidence import package
+from package_vulkan_evidence import package, completeness
 
 
 class EvidencePackageTest(unittest.TestCase):
@@ -62,6 +62,32 @@ class EvidencePackageTest(unittest.TestCase):
             self.assertTrue(manifest['errors'])
             with zipfile.ZipFile(root / 'upload/qualification-evidence.zip') as archive:
                 self.assertEqual(archive.read('viewer.log'), b'crash diagnostics')
+
+    def test_r0_artifact_manifest_rejects_missing_corrupt_and_traversal(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            (root/'.ci/runtime').mkdir(parents=True)
+            (root/'.ci/runtime/runtime.json').write_text(json.dumps({'driver':'lavapipe'}))
+            files={'.ci/runtime/runtime.json':root/'.ci/runtime/runtime.json'}
+            digest=hashlib.sha256(b'comparison image').hexdigest()
+            for folder in ('.ci/parity-evidence','.ci/world-parity-evidence'):
+                directory=root/folder;directory.mkdir()
+                report=directory/'baseline-results.json'
+                report.write_text(json.dumps({'artifact_sha256':{'difference.ppm':digest}}))
+                files[folder+'/baseline-results.json']=report
+            def artifact_errors():
+                return [error for error in completeness(files,'build-linux-x86_64')
+                        if 'difference.ppm' in error or 'Invalid R0 artifact' in error]
+            self.assertEqual(len(artifact_errors()),2)
+            for folder in ('.ci/parity-evidence','.ci/world-parity-evidence'):
+                image=root/folder/'difference.ppm';image.write_bytes(b'comparison image')
+                files[folder+'/difference.ppm']=image
+            self.assertEqual(artifact_errors(),[])
+            (root/'.ci/world-parity-evidence/difference.ppm').write_bytes(b'corrupt')
+            self.assertIn('R0 artifact checksum mismatch',artifact_errors()[0])
+            report=root/'.ci/world-parity-evidence/baseline-results.json'
+            report.write_text(json.dumps({'artifact_sha256':{'../outside.ppm':digest}}))
+            self.assertIn('Invalid R0 artifact path',artifact_errors()[0])
 
     def test_output_cannot_recursively_package_itself(self):
         with tempfile.TemporaryDirectory() as temp:

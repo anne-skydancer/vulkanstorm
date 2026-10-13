@@ -413,7 +413,9 @@ bool HttpLibcurl::completeRequest(CURLM * multi_handle, CURL * handle, CURLcode 
     // If not, we assume http pipelining havng gone out of sync. If yes, yield a 503 status and switch
     // pipelining off.
     bool bFailed = false;
-    if (op->mXLLURL.size())
+    // Keep admission failures terminal even when an oversized response also
+    // carries a mismatched simulator URL. Do not turn them into retryable 503s.
+    if (op->mXLLURL.size() && op->mStatus != HttpStatus(HttpStatus::LLCORE, HE_RESPONSE_TOO_LARGE))
     {
         std::string strURI = op->mReqURL;
         size_t i = strURI.find("://");

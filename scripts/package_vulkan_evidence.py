@@ -79,6 +79,20 @@ def completeness(files, viewer):
         for name in ('.ci/opengl-reference/runtime.json', '.ci/parity-evidence/baseline-results.json',
                      '.ci/world-parity-evidence/baseline-results.json', '.ci/parity-evidence/r0-acceptance.json'):
             require(name)
+        for folder in ('.ci/parity-evidence', '.ci/world-parity-evidence'):
+            baseline = read(folder + '/baseline-results.json')
+            artifacts = baseline.get('artifact_sha256', {})
+            if not artifacts:
+                errors.append('Missing R0 artifact hash manifest: ' + folder)
+            for relative, digest in artifacts.items():
+                # Reject traversal and absolute identities; archives use relative paths.
+                relative = relative.replace('\\', '/')
+                if relative.startswith('/') or ':' in relative or '..' in relative.split('/'):
+                    errors.append('Invalid R0 artifact path: ' + relative)
+                    continue
+                name = folder + '/' + relative
+                if require(name) and hashlib.sha256(files[name].read_bytes()).hexdigest() != digest:
+                    errors.append('R0 artifact checksum mismatch: ' + name)
         if not any(name.startswith('.ci/opengl-reference/install/licenses/') for name in files):
             errors.append('Missing OpenGL reference licenses')
     for prefix in ('.ci/evidence', '.ci/headless-evidence'):

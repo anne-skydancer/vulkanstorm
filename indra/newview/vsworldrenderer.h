@@ -46,6 +46,8 @@ public:
     VSWorldRenderer(Diligent::IRenderDevice*, Diligent::IDeviceContext*, std::size_t meshBudgetBytes = 256 * 1024 * 1024);
     ~VSWorldRenderer();
     Mesh upload(const std::vector<Vertex>&, const std::vector<unsigned>&);
+    // Refusal leaves the currently published generation intact.
+    bool publishMesh(Mesh&, const std::vector<Vertex>&, const std::vector<unsigned>&);
     void draw(Diligent::ITextureView*, unsigned width, unsigned height,
               const View&, const std::vector<Packet>&);
     void retire();

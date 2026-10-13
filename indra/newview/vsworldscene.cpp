@@ -229,7 +229,7 @@ struct VSWorldScene::Impl
                     vertices.push_back({float(gx),float(gy),z,normal.mV[0],normal.mV[1],normal.mV[2],float(gx)/16,1-float(gy)/16});
                     if (x<n && y<n) { const unsigned i=y*(n+1)+x;indices.insert(indices.end(),{i,i+1,i+n+2,i,i+n+2,i+n+1}); }
                 }
-                g.mesh=renderer.upload(vertices,indices);g.dirty=!g.mesh;
+                g.dirty = !renderer.publishMesh(g.mesh, vertices, indices);
             }
             if (!g.mesh) continue;
             // First surface pass uses a single height-selected simulator detail
@@ -918,6 +918,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 parent=object->second.parent;
             }
         }
+        bool uploadDeferred = false;
         const S32 count=std::min(S32(o.faces.size()),o.volume->getNumVolumeFaces());
         for (S32 f=0;f<count;++f)
         {
@@ -950,7 +951,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                     vertices.push_back({point.mV[0],point.mV[1],point.mV[2],normal.mV[0],normal.mV[1],normal.mV[2],texU,1-texV});
                 }
                 std::vector<unsigned> indices(geometry.mIndices,geometry.mIndices+geometry.mNumIndices);
-                face.mesh=mImpl->renderer.upload(vertices,indices);
+                if (!mImpl->renderer.publishMesh(face.mesh, vertices, indices)) uploadDeferred = true;
             }
             if (!face.mesh) continue;
             const LLUUID texture=face.material.getID();if (texture.notNull()) LLUI::getUIImageByID(texture);
@@ -968,7 +969,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             }
             packet.distanceSquared=(position-eye).lengthSquared();packets.push_back(std::move(packet));
         }
-        o.dirty=false;
+        o.dirty = uploadDeferred;
     }
     if (mRoot)
     {

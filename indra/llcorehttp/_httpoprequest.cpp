@@ -28,6 +28,7 @@
 
 #include <cstdio>
 #include <algorithm>
+#include <limits>
 
 #include "httpcommon.h"
 #include "httphandler.h"
@@ -803,6 +804,17 @@ size_t HttpOpRequest::writeCallback(void * data, size_t size, size_t nmemb, void
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
     HttpOpRequest::ptr_t op(HttpOpRequest::fromHandle<HttpOpRequest>(userdata));
 
+    // Content-Length and Range are not trustworthy bounds: error responses,
+    // chunked transfers and servers ignoring Range use this same callback.
+    const size_t maximum = op->mReqOptions ? op->mReqOptions->getMaximumResponseBodyBytes() : 0;
+    const size_t received = op->mReplyBody ? op->mReplyBody->size() : 0;
+    if ((size && nmemb > std::numeric_limits<size_t>::max() / size) ||
+        size * nmemb > std::numeric_limits<size_t>::max() - received ||
+        (maximum && (received > maximum || size * nmemb > maximum - received)))
+    {
+        op->mStatus = HttpStatus(HttpStatus::LLCORE, HE_RESPONSE_TOO_LARGE);
+        return 0; // Abort curl before append; completion preserves this failure.
+    }
     if (! op->mReplyBody)
     {
         op->mReplyBody = new BufferArray();

@@ -17,6 +17,41 @@ class WorldSceneContracts(unittest.TestCase):
             self.assertEqual(built.returncode,0,built.stdout+built.stderr)
             run=subprocess.run([str(binary)],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+    def test_refused_mesh_publication_preserves_generation_and_retries(self):
+        source=(ROOT/'indra/newview/vsworldrenderer.cpp').read_text(encoding='utf-8')
+        publication=method(source, 'bool VSWorldRenderer::publishMesh(')
+        budget=(ROOT/'indra/newview/vsresourcebudget.h').read_text(encoding='utf-8').replace('#pragma once','')
+        self.compile(budget+"""
+#include <cassert>
+#include <vector>
+struct VSWorldRenderer {
+ struct Vertex {float value;};
+ struct Geometry {float value;std::shared_ptr<const VSResourceBudget::Reservation> lease;};
+ using Mesh=std::shared_ptr<const Geometry>;
+ VSResourceBudget budget{16};unsigned refusals=0;
+ Mesh upload(const std::vector<Vertex>& vertices,const std::vector<unsigned>& indices) {
+  auto lease=budget.reserve(vertices.size()*sizeof(Vertex)+indices.size()*sizeof(unsigned));
+  if(!lease){++refusals;return {};}
+  return std::make_shared<Geometry>(Geometry{vertices[0].value,std::move(lease)});
+ }
+ bool publishMesh(Mesh&,const std::vector<Vertex>&,const std::vector<unsigned>&);
+};
+"""+publication+"""
+int main() {
+ VSWorldRenderer owner;VSWorldRenderer::Mesh current;
+ assert(owner.publishMesh(current,{{6}},{0}));
+ auto blocker=owner.upload({{9}},{0});
+ auto* original=current.get();std::weak_ptr<const VSWorldRenderer::Geometry> previous=current;
+ bool dirty=!owner.publishMesh(current,{{7}},{0});
+ assert(dirty&&current.get()==original&&current->value==6);
+ assert(owner.refusals==1&&owner.budget.used()==16);
+ blocker.reset();assert(owner.budget.used()==8);
+ dirty=!owner.publishMesh(current,{{7}},{0});
+ assert(!dirty&&current->value==7&&previous.expired());
+ assert(owner.budget.used()==8);
+ current.reset();assert(owner.budget.used()==0);
+}
+""")
     def test_extra_parameter_bounds_and_wire_floats(self):
         source=(ROOT/'indra/newview/vsworldscene.cpp').read_text(encoding='utf-8')
         definitions='\n'.join(method(source,name) for name in ('U32 littleU32(', 'F32 littleFloat(', 'bool baseVolume('))

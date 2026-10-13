@@ -577,18 +577,34 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     VSWorldRenderer::Packet retained;retained.mesh=limited.upload(budgetVertices,budgetIndices);
     require(retained.mesh!=nullptr,"Budgeted first generation was refused");
     retained.fullbright=true;retained.color={1,0,0,1};
-    limited.draw(rtv,8,8,view,{retained});retained.mesh.reset();
+    limited.draw(rtv,8,8,view,{retained});
     require(limited.statistics().residentMeshBytes==meshBytes,"Submitted geometry lost its byte reservation");
-    require(!limited.upload(budgetVertices,budgetIndices),"Mesh budget admitted overlapping live generations");
+    const auto priorMesh = retained.mesh.get();
+    require(!limited.publishMesh(retained.mesh, budgetVertices, budgetIndices),
+            "Mesh budget admitted overlapping live generations");
+    require(retained.mesh.get() == priorMesh, "Refused mesh publication discarded the live generation");
     require(limited.statistics().meshAllocationRefusals==1,"Budget refusal evidence is missing");
     capture("budget-retained.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
-    limited.retire();require(limited.statistics().residentMeshBytes==0,"Completed mesh reservation was not retired");
+    retained.mesh.reset();limited.retire();require(limited.statistics().residentMeshBytes==0,"Completed mesh reservation was not retired");
     retained.mesh=limited.upload(budgetVertices,budgetIndices);
     require(retained.mesh!=nullptr,"Released mesh budget could not admit replacement");
-    retained.color={0,1,0,1};limited.draw(rtv,8,8,view,{retained});retained.mesh.reset();
+    const auto imageBytesBefore = images.statistics().residentImageBytes;
+    retained.image = images.upload(1, 1, {0,255,0,255}, VSWorldContracts::ImageRole::RemoteAsset);
+    require(retained.image != nullptr, "Budget lifetime texture upload failed");
+    auto* textureLifetime = VSUIRenderer::imageView(retained.image)->GetTexture()->GetReferenceCounters();
+    textureLifetime->AddWeakRef();
+    const auto releaseWeak = [](IReferenceCounters* counters) { counters->ReleaseWeakRef(); };
+    std::unique_ptr<IReferenceCounters, decltype(releaseWeak)> lifetimeGuard(textureLifetime, releaseWeak);
+    retained.color={1,1,1,1};limited.draw(rtv,8,8,view,{retained});retained.mesh.reset();retained.image.reset();
+    require(images.statistics().residentImageBytes == imageBytesBefore + 8,
+            "Submitted image lost its charged owner before completion");
     require(limited.statistics().meshAllocationRefusals==1,"Per-frame statistics erased budget refusal evidence");
     capture("budget-replacement.ppm",[](unsigned,unsigned){return Pixel{0,255,0,255};});
     limited.retire();require(limited.statistics().residentMeshBytes==0,"Replacement submission did not release its bytes");
+    require(images.statistics().residentImageBytes == imageBytesBefore,
+            "Completed world image reservation was not released");
+    require(textureLifetime->GetNumStrongRefs() == 0, "Cached world binding retained an uncharged texture");
+    std::cout << "WORLD_BOUND_IMAGE_RETIRED=1\n";
     std::cout<<"WORLD_BUDGET_BYTES="<<meshBytes<<"\nWORLD_BUDGET_REFUSALS=1\nWORLD_BUDGET_RETIRED=1\n";
     // Quantize source RGBA before blend factors at destination precision.
     // Exercise this through the real renderer without opening a window.

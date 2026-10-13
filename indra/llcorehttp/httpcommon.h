@@ -250,7 +250,10 @@ enum HttpError
     HE_INVALID_HTTP_STATUS = 9,
 
     // Couldn't allocate resource, typically libcurl handle
-    HE_BAD_ALLOC = 10
+    HE_BAD_ALLOC = 10,
+
+    // Received body exceeded the caller's admission limit. Not retryable.
+    HE_RESPONSE_TOO_LARGE = 11
 
 }; // end enum HttpError
 
