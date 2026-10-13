@@ -4,7 +4,7 @@ R1 is implemented in the production native viewer. Its complete local software
 replay passes on pinned Windows SwiftShader, including ordinary authentication,
 connected UI, resource replacement, neighbours, crossing, teleport,
 logout/relogin and shutdown. This is an ownership/lifecycle acceptance; rendering
-and service parity assigned to R2–R9 remain separate requirements. Cross-platform
+and service parity assigned to R2â€“R9 remain separate requirements. Cross-platform
 CI repeats the replay and preserves its evidence.
 
 ## Implemented contracts
@@ -15,7 +15,7 @@ CI repeats the replay and preserves its evidence.
 | Object, face, material and interaction identities | Host-qualified local IDs, UUIDs, owner generations and face/material revisions. Replacement expires old interactions immediately; reused parent IDs retire linked interactions. | Real UDP ObjectUpdate/local-ID reuse; live face/linkset guards and decoded mesh replacement. |
 | Avatar, control-avatar, attachment and inventory/task identities | Typed scene owners; early self-avatar CPU initialization and wearable-metadata request. The self owner moves across regions with a new weak terrain query. Control-avatar metadata never creates a human-body substitute. Inventory revisions and task requests retain actual identities. | Actual avatar/attachment/control messages, AvatarAnimation, AgentWearablesUpdate, RequestTaskInventory/ReplyTaskInventory, inventory revisions and self-owner continuity. |
 | Neighbours and crossing | Authenticated grants create bounded circuits/scenes. Crossing promotes an existing scene; disable, expiry and far teleport retire stale circuits. Same-host region reuse gets a new incarnation. | Real loopback peer socket/ACKs, colliding local IDs, outward/return crossings and simulator retirement. |
-| Variable regions and floating origin | Sparse L/M terrain obeys region dimensions. Global origins are subtracted as signed 64-bit integers before float conversion; account position is rebased through global double coordinates. | M patch beyond 256 metres in a 1024×512 neighbour; production crossing; independent large-origin checks. |
+| Variable regions and floating origin | Sparse L/M terrain obeys region dimensions. Global origins are subtracted as signed 64-bit integers before float conversion; account position is rebased through global double coordinates. | M patch beyond 256 metres in a 1024Ã—512 neighbour; production crossing; independent large-origin checks. |
 | Motion and correction | Receipt/evaluation timestamps, authoritative transforms, velocity/acceleration, target omega, selection freeze/thaw, dilation, health phase-out and interpolation settings. | Message-driven freeze/thaw across viewer frames; production motion policy with independent numerical expectations and invalid-time inputs. |
 | Shared resource descriptions | Geometry channels/stride/counts, immutable generations, image origin/encoding/alpha, samplers, material resolution and selected-device capabilities. Draw admission rejects another device's resources. | Production renderer/readbacks, replacement/orientation/blending and device capability evidence. |
 | Bounded streaming and retirement | Reservations cover CPU geometry/terrain, GPU meshes/images, masks and decode admission. Queues/retries are bounded; cancellation/replacement check exact adapter/revision. Submissions retain resources through GPU completion; offscreen frames release completed device resources. | Actual decoder/HTTP replacement, last-owner/cancellation fixtures, refusal and old/new generation readbacks using production renderers. |
@@ -83,3 +83,33 @@ Software evidence does not qualify public-grid authentication, AMD/NVIDIA
 hardware, physical-driver performance, complete COF/wearables production,
 sculpt/flexible/animesh geometry, PBR, lighting or full-world parity. Those
 requirements retain their roadmap assignments and explicit qualification limits.
+
+## Follow-up audit corrections
+
+The 13 October audit reopened three R1 resource cases and an R0 retention check.
+World draw bindings now release the bound generation before entering the completed
+binding cache; the charged image remains owned by the submission until that point.
+The software world test observes the actual Diligent texture reference counters,
+verifies the submitted image charge, and requires both allocation and reservation
+to retire after completion while the binding cache remains populated.
+
+`VSWorldRenderer::publishMesh` publishes only admitted replacements. Faces,
+terrain and existing avatar mesh producers share it; refusal preserves the valid
+current mesh and retry state. Compiled production publication tests exercise a
+full budget, successful retry and last-owner release. The real software renderer
+also verifies refusal retains the exact currently published generation and pixels.
+
+Native mesh/texture downloads enforce 16 MiB received-body limits, and general
+native asset downloads enforce 64 MiB. The shared HTTP callback checks aggregate
+size and integer overflow before allocating/appending each body chunk, regardless
+of response status, chunking or Range compliance. Admission failure is terminal,
+including simulator URL mismatch handling. Other callers retain their default
+unlimited policy. Compiled production callback/retry tests cover exact limits,
+accumulated chunks, oversize/overflow rejection and the unchanged default.
+
+Successful Lavapipe evidence packaging now verifies every startup/world baseline
+`artifact_sha256` entry, including comparisons, readbacks and logs. Missing,
+corrupt or traversing artifact identities fail acceptance. Regression tests
+exercise removal and corruption rather than relying on top-level report presence.
+These follow-up cases require a fresh cross-platform CI run; earlier green runs
+do not qualify them merely because their original cases passed.

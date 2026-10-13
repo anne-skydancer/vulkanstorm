@@ -669,6 +669,7 @@ void LLViewerAssetStorage::assetRequestCoro(
     if(nativeConnected)
     {
         httpOpts->setTransferTimeout(20);httpOpts->setRetries(2);
+        httpOpts->setMaximumResponseBodyBytes(64 * 1024 * 1024);
         nativeRequest=mNextNativeRequest++;
         mNativeRequests[nativeRequest]=[weak=std::weak_ptr<LLCoreHttpUtil::HttpCoroutineAdapter>(httpAdapter)]
         {if(auto adapter=weak.lock())adapter->cancelSuspendedOperation();};

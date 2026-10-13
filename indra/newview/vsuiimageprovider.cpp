@@ -274,6 +274,7 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32)
         images.reset(); // Never retain the resource owner across a suspension.
         auto request = std::make_shared<LLCore::HttpRequest>();
         auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(15); options->setRetries(0);
+        options->setMaximumResponseBodyBytes(16 * 1024 * 1024);
         LLSD result = adapter->getRawAndSuspend(request, url, options);
         LL::WorkQueue::getInstance("mainloop")->post([weak,session,generation,epoch,id,adapter,result]()
         {
@@ -290,7 +291,13 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32)
         // A completed final attempt is terminal until explicit refresh or account reset.
         // Mark before decoding so every HTTP/decode failure has the same outcome.
         if (found->second.attempts >= 3) found->second.failedGeneration = generation;
-        if (!LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"])) return;
+        const auto status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]);
+        if (!status)
+        {
+            if (status == LLCore::HttpStatus(LLCore::HttpStatus::LLCORE, LLCore::HE_RESPONSE_TOO_LARGE))
+                found->second.failedGeneration = generation;
+            return;
+        }
         const auto& bytes = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary();
         if (bytes.empty() || bytes.size() > 16 * 1024 * 1024) return;
         LLPointer<LLImageFormatted> formatted = LLImageFormatted::createFromExtension("j2c");

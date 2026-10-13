@@ -113,10 +113,11 @@ window-station creation remains denied (`WinError 5: CreateWindowStationW`), so 
 foreground fallback was used. The production runtime evidence above comes from
 Linux under Xvfb, using separate checksum-pinned llvmpipe and Lavapipe libraries.
 
-The overall qualification workflow is not clean: connected-session replay fails
-before producing its expected session report. Linux evidence identifies an
-`LLMutex::lock` main-coroutine assertion; Windows reports a fatal process exit.
-This failure is retained against `SURVEY.Remaining-connected-UI-services` (R9),
-with the callback/resource ownership contracts in R1 as a prerequisite. It does
-not qualify authenticated services or connected UI, and is not waived by R0's
-initial controlled baseline. Later stages must close and rerun that evidence.
+The historical connected-session failures recorded with the initial R0 baseline
+were subsequently fixed. The three platform jobs, including connected replay,
+passed in [run 38426103884](https://github.com/anne-skydancer/vulkanstorm/actions/runs/38426103884).
+An independent follow-up audit identified R1 resource-accounting/admission defects
+and an R0 packaging-retention check gap. Their corrections and added acceptance
+cases are described in [R1 ownership and lifecycle](../r1-owner-lifecycle.md).
+The retained R0 images remain valid; current packaging must also verify every
+baseline artifact hash so missing or corrupt comparison evidence fails the job.

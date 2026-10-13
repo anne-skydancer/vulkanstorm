@@ -74,7 +74,8 @@ std::string HttpStatus::toString() const
             "Option has not been explicitly set",
             "Option is not dynamic and must be set early",
             "Invalid HTTP status code received from server",
-            "Could not allocate required resource"
+            "Could not allocate required resource",
+            "Response body exceeded admission limit"
         };
     static const int llcore_errors_count(sizeof(llcore_errors) / sizeof(llcore_errors[0]));
 

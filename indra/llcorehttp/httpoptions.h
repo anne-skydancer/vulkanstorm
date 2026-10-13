@@ -30,6 +30,7 @@
 
 #include "httpcommon.h"
 #include "_refcounted.h"
+#include <cstddef>
 
 
 namespace LLCore
@@ -69,6 +70,11 @@ public:
     HttpOptions& operator=(const HttpOptions&) = delete;
 
 public:
+
+    /// Maximum received body bytes, checked before buffering each chunk.
+    /// Zero preserves the existing unlimited policy for other callers.
+    void setMaximumResponseBodyBytes(std::size_t bytes) { mMaximumResponseBodyBytes = bytes; }
+    std::size_t getMaximumResponseBodyBytes() const { return mMaximumResponseBodyBytes; }
 
     // Default:   false
     void                setWantHeaders(bool wanted);
@@ -192,6 +198,7 @@ public:
     static void         setDefaultSSLVerifyPeer(bool verify);
 
 protected:
+    std::size_t         mMaximumResponseBodyBytes = 0;
     bool                mWantHeaders;
     int                 mTracing;
     unsigned int        mTimeout;

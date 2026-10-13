@@ -264,6 +264,7 @@ void VSWorldAssets::pump()
         LLCoros::instance().launch("nativeWorldMesh", [weak, session, adapter, key, params, url, generation, epoch, revision]()
         {
             auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(20); options->setRetries(0);
+            options->setMaximumResponseBodyBytes(wireLimit);
             auto headers = std::make_shared<LLCore::HttpHeaders>(); headers->append("Range", "bytes=0-16777215");
             // A range prefix is usable only when all advertised visual LODs
             // and skin sections lie inside it; decode rejects truncation.
