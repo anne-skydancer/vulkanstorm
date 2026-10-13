@@ -1,5 +1,5 @@
 {
-  "source_commit": "5ff4ef9abc16450bd7feab25473138f913b3db4a",
+  "source_commit": "f30685a1d4b79429e331e14fe907fce4477c9c54",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -25495,7 +25495,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 52,
       "end": 52,
-      "sha256": "9dd26d497a574cf5b9a610e5bfdb7bf46e6e50de912bb714a8f995237569b473",
+      "sha256": "d7c7f115f17215213dc3f95c3bbaef008b0f0d7bb11cc046a63cecb6d43b2e7d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -25503,17 +25503,17 @@
     {
       "path": ".github/workflows/software_vulkan.yml",
       "start": 322,
-      "end": 330,
-      "sha256": "9dd26d497a574cf5b9a610e5bfdb7bf46e6e50de912bb714a8f995237569b473",
+      "end": 336,
+      "sha256": "d7c7f115f17215213dc3f95c3bbaef008b0f0d7bb11cc046a63cecb6d43b2e7d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 358,
-      "end": 358,
-      "sha256": "9dd26d497a574cf5b9a610e5bfdb7bf46e6e50de912bb714a8f995237569b473",
+      "start": 364,
+      "end": 364,
+      "sha256": "d7c7f115f17215213dc3f95c3bbaef008b0f0d7bb11cc046a63cecb6d43b2e7d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28357,7 +28357,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 78,
       "end": 81,
-      "sha256": "9dd26d497a574cf5b9a610e5bfdb7bf46e6e50de912bb714a8f995237569b473",
+      "sha256": "d7c7f115f17215213dc3f95c3bbaef008b0f0d7bb11cc046a63cecb6d43b2e7d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28406,10 +28406,28 @@
       "record": "I11",
       "disposition": "mapped",
       "reason": "Host/UUID/account/region/object/face ownership, bounded cache requests and payload leases, sparse variable terrain, integer-origin projection, authoritative motion/selection and parent retirement reviewed. Unknown geometry retains identity without substitute primitives. Full producer/rendering parity remains R2-R9."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 327,
+      "end": 332,
+      "sha256": "d7c7f115f17215213dc3f95c3bbaef008b0f0d7bb11cc046a63cecb6d43b2e7d",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 336,
+      "end": 336,
+      "sha256": "d7c7f115f17215213dc3f95c3bbaef008b0f0d7bb11cc046a63cecb6d43b2e7d",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "b8e1c55fa9e2df0bf4d045957a676e13424ac657",
+    "previous_source_commit": "5ff4ef9abc16450bd7feab25473138f913b3db4a",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Hash-pinned existing witnesses remapped through committed source deltas; R1 ownership/resource/startup changes and explicit no-window qualification reviewed individually. Runtime evidence is separate from source classification."
   }
