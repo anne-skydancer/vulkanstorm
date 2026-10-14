@@ -6,10 +6,12 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
+import copy
+import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import vulkan_r2_fixture as fixture
-from run_vulkan_session_replay import r2_contracts_passed
+from run_vulkan_session_replay import r2_contracts_passed, baseline_inventory_item, body_lods_passed
 
 
 class Handler:
@@ -74,11 +76,86 @@ class R2FixtureTest(unittest.TestCase):
         self.assertEqual(rejected.error, 400)
         self.assertEqual(len(self.server.r2_uploads), 1)
 
+    def test_remote_bake_fetch_returns_actual_legacy_xfer_bytes(self):
+        identifier = 'c4000000-0000-0000-0000-000000000001'
+        encoded = b'actual archived legacy xfer fixture bytes'
+        (self.root/(identifier+'.legacy.j2c')).write_bytes(encoded)
+        self.assertTrue(fixture.get(self.handler, '/texture', dict(texture_id=[identifier])))
+        self.assertEqual(self.handler.wfile.getvalue(), encoded)
+        self.assertEqual(self.server.requests[-1]['asset'], identifier)
+
+    def test_standard_motion_assets_are_explicit_not_a_wildcard(self):
+        identifier = 'c7000000-0000-0000-0000-000000000001'
+        (self.root/'motion-catalog.json').write_text(json.dumps(dict(assets=[identifier])))
+        self.assertTrue(fixture.get(self.handler, '/asset/', dict(animatn_id=[identifier])))
+        self.assertEqual(self.handler.wfile.getvalue(), fixture.animation_bytes(locomotion=True))
+        unknown = Handler(self.server)
+        self.assertFalse(fixture.get(unknown, '/asset/', dict(animatn_id=['c7000000-0000-0000-0000-000000000002'])))
+
     def test_unknown_owner_and_missing_contracts_fail(self):
         self.assertTrue(fixture.modify(self.handler, 'DELETE', '/r2-ais/item/unknown'))
         self.assertEqual(self.handler.error, 404)
         self.assertFalse(r2_contracts_passed(dict(passed=True, r1_contracts={}), []))
         self.assertFalse(r2_contracts_passed(dict(r2_contracts=dict(ordinary_inventory_actions=True)), []))
+
+    def test_ais_item_fetch_keeps_connected_inventory_offer_and_script_routes(self):
+        self.server.r2_baseline_item = baseline_inventory_item
+        for suffix, kind in ((1, 'texture'), (4, 'lsltext')):
+            identifier = f'71000000-0000-0000-0000-{suffix:012d}'
+            self.assertTrue(fixture.get(self.handler, '/r2-ais/item/'+identifier, {}))
+            self.assertEqual(self.handler.response, baseline_inventory_item(identifier))
+            self.assertEqual(self.handler.response['type'], kind)
+            self.assertEqual(self.handler.response['item_id'], identifier)
+            self.assertEqual(self.server.requests[-1]['found'], True)
+        unknown = Handler(self.server)
+        self.assertTrue(fixture.get(unknown, '/r2-ais/item/unknown', {}))
+        self.assertEqual(unknown.error, 404)
+        self.assertFalse(self.server.requests[-1]['found'])
+
+    def test_completed_upload_remains_editable_through_real_ais_item_route(self):
+        identifier = '71000000-0000-0000-0000-000000000002'
+        asset = '60000000-0000-0000-0000-000000000007'
+        metadata = dict(folder_id='textures', asset_type='texture', inventory_type='texture',
+                        name='Native uploaded texture', description='Connected native upload qualification',
+                        next_owner_mask=2147483647, group_mask=0, everyone_mask=0)
+        fixture.uploaded_item(self.server, identifier, asset, metadata)
+        cof_version = fixture.folder(self.server, fixture.COF)[1]
+        self.assertEqual(fixture.folder(self.server, 'textures')[1], 2)
+        self.assertEqual(fixture.item(self.server, identifier)['asset_id'], asset)
+        for description in ('Native legacy metadata edit', 'Native modern metadata edit'):
+            self.assertTrue(fixture.modify(self.handler, 'PATCH', '/r2-ais/item/'+identifier, dict(desc=description)))
+            self.assertEqual(self.handler.response['desc'], description)
+            self.assertEqual(fixture.item(self.server, identifier)['desc'], description)
+            self.assertEqual(self.server.requests[-1]['request'], dict(desc=description))
+        self.assertEqual(fixture.item(self.server, identifier)['name'], metadata['name'])
+        self.assertEqual(fixture.folder(self.server, 'textures')[1], 4)
+        self.assertEqual(fixture.folder(self.server, fixture.COF)[1], cof_version)
+
+    def test_body_lod_evidence_requires_every_shipped_mesh_and_case(self):
+        catalog = Path(__file__).resolve().parents[2]/'indra/newview/character/avatar_lad.xml'
+        parts = {}
+        for mesh in ET.parse(catalog).getroot().findall('mesh'):
+            parts.setdefault(mesh.attrib['type'], []).append(mesh)
+        record = dict(all_parts_and_lods=True, unchanged_pose_reuses_geometry=True, cases=[])
+        for name, lods in parts.items():
+            for power in range(16):
+                mesh = lods[power % len(lods)]
+                record['cases'].append(dict(part_name=name, lod=int(mesh.attrib['lod']), height=1 << power,
+                    reference_area=float(mesh.attrib['min_pixel_width'])**2, vertices=100, indices=300))
+        self.assertTrue(body_lods_passed(record))
+        missing = copy.deepcopy(record)
+        missing['cases'] = [row for row in missing['cases'] if row['part_name'] != 'skirtMesh']
+        self.assertFalse(body_lods_passed(missing))
+        truncated = copy.deepcopy(record)
+        truncated['cases'].pop()
+        self.assertFalse(body_lods_passed(truncated))
+        invalid = copy.deepcopy(record)
+        invalid['cases'][0]['reference_area'] += 1
+        self.assertFalse(body_lods_passed(invalid))
+        duplicate = copy.deepcopy(record)
+        duplicate['cases'].append(copy.deepcopy(duplicate['cases'][0]))
+        self.assertFalse(body_lods_passed(duplicate))
+        self.assertFalse(body_lods_passed(dict(all_parts_and_lods=True, unchanged_pose_reuses_geometry=True, cases=[])))
 
     def test_ais_fetch_preserves_baseline_folders_and_reports_complete_cof(self):
         self.server.r2_categories = [dict(folder_id=fixture.COF,parent_id='root',
@@ -118,6 +195,30 @@ class R2FixtureTest(unittest.TestCase):
         self.assertTrue(fixture.get(self.handler,'/asset',dict(animatn_id=[fixture.ANIMATION])))
         self.assertEqual(self.handler.wfile.getvalue(),fixture.animation_bytes())
         self.assertEqual(self.handler.wfile.getvalue()[:4],b'\x01\x00\x00\x00')
+
+    def test_ao_categories_and_links_remain_visible_without_changing_cof(self):
+        root='70000000-0000-0000-0000-000000000001'
+        self.server.r2_categories=[dict(folder_id=root,parent_id='null',type_default=8,name='Root')]
+        self.assertTrue(fixture.post(self.handler,'/r2-ais/category/'+root,
+            dict(categories=[dict(name='#AO',type_default=-1)])))
+        ao=self.handler.response['_created_categories'][0]
+        self.assertTrue(fixture.post(self.handler,'/r2-ais/category/'+ao,
+            dict(categories=[dict(name='Standing',type_default=-1)])))
+        standing=self.handler.response['_created_categories'][0]
+        source='b1000000-0000-0000-0000-000000000006'
+        before=fixture.folder(self.server,fixture.COF)
+        self.assertTrue(fixture.post(self.handler,'/r2-ais/category/'+standing,
+            dict(links=[dict(linked_id=source,desc='0')])))
+        link=self.handler.response['_created_items'][0]
+        rows,version=fixture.folder(self.server,standing)
+        self.assertEqual([row['item_id'] for row in rows],[link])
+        self.assertEqual(version,2)
+        self.assertEqual(fixture.folder(self.server,fixture.COF),before)
+        self.assertTrue(fixture.modify(self.handler,'PATCH','/r2-ais/category/'+ao,dict(name='#AO:**')))
+        self.assertEqual(self.handler.response['name'],'#AO:**')
+        self.assertTrue(fixture.modify(self.handler,'DELETE','/r2-ais/item/'+link))
+        self.assertEqual(fixture.folder(self.server,standing),([],3))
+        self.assertEqual(fixture.folder(self.server,fixture.COF),before)
 
 
 if __name__ == '__main__':

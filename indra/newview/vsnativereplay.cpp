@@ -571,7 +571,8 @@ struct Replay
                 name == "GroupMembersRequest" || name == "GroupRoleDataRequest" || name == "GroupRoleMembersRequest" ||
                 name == "GroupTitlesRequest" || name == "GroupTitleUpdate" || name == "ActivateGroup" || name == "DirFindQuery" || name == "MoneyTransferRequest" || name == "UpdateInventoryItem" || name == "EconomyDataRequest";
             const bool r2Fixture = std::getenv("VS_VULKAN_REPLAY_R2") &&
-                                   (name == "AgentAnimation" || name == "AssetUploadRequest" || name == "ForceScriptControlRelease");
+                                   (name == "AgentAnimation" || name == "AssetUploadRequest" || name == "ForceScriptControlRelease" ||
+                                    name == "RezMultipleAttachmentsFromInv" || name == "DetachAttachmentIntoInv");
             return owner && (((clientFixture || r2Fixture) && sender == owner->host()) || owner->admit(name, sender));
         });
         for (const char* name : {"RegionHandleRequest", "MapBlockRequest", "MapNameRequest", "TeleportLocationRequest", "TeleportLandmarkRequest"})

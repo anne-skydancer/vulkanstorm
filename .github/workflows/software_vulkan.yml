@@ -61,10 +61,18 @@ jobs:
       - run: python scripts/tests/test_world_wind.py
       - run: python scripts/tests/test_control_constraints.py
       - run: python scripts/tests/test_avatar_cpu_compositor.py
+      - run: python scripts/tests/test_avatar_cloth.py
+      - run: python scripts/tests/test_avatar_lod.py
+      - run: python scripts/tests/test_volume_lod.py
+      - run: python scripts/tests/test_vegetation_lod.py
+      - run: python scripts/tests/test_avatar_visibility.py
+      - run: python scripts/tests/test_avatar_sex_motion.py
+      - run: python scripts/tests/test_specialized_motion_loading.py
       - run: python scripts/tests/test_native_appearance_admission.py
       - run: python scripts/tests/test_native_appearance_queue.py
       - run: python scripts/tests/test_avatar_lock_policy.py
       - run: python scripts/tests/test_vulkan_r2_fixture.py
+      - run: python scripts/tests/test_ao_inventory_completion.py
       - run: python scripts/tests/test_native_avatar_reset.py
       - run: python scripts/tests/test_avatar_publication.py
       - run: python scripts/tests/test_avatar_bake_signature.py
@@ -98,7 +106,7 @@ jobs:
     needs: source-evidence
     # Cold Linux SwiftShader: 114m dependencies/viewer + 38m presentation +
     # 28m connected replay reached the former 180m limit during artifact cleanup.
-    # Keep a hard bound with margin for evidence upload and the R1 replay.
+      # Keep a hard bound with margin for evidence upload and the R1/R2 replays.
     timeout-minutes: 240
     strategy:
       fail-fast: false
@@ -358,6 +366,19 @@ jobs:
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --harness-evidence .ci/evidence/results.json --evidence .ci/r1-session-evidence \
             --skin ansastorm_modern --ui-scale 1.5 --headless --r1-contracts "${manifest_args[@]}"
+      - name: Production R2 geometry and appearance replay
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          fi
+          python scripts/run_vulkan_session_replay.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r2-session-evidence \
+            --skin ansastorm_modern --ui-scale 1.5 --headless --r2-contracts "${manifest_args[@]}"
       - name: Record source and build environment
         if: always()
         shell: bash

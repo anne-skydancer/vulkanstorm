@@ -91,6 +91,7 @@ struct VSWorldRenderer::Impl
     VSResourceBudget meshBudget;
     VSResourceBudget                                     snapshotBudget;
     Uint64 pendingMeshUploads=0,pendingMeshBytes=0,meshAllocationRefusals=0;
+    Uint64                                               meshInputRejections = 0;
     struct Submission
     {
         Uint64 completion = 0;
@@ -193,12 +194,20 @@ VSWorldRenderer::~VSWorldRenderer()=default;
 VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, Topology topology)
 {
     const unsigned group = topology == Topology::Triangles ? 3 : topology == Topology::Lines ? 2 : 1;
-    requireWorld(!vertices.empty() && vertices.size() <= 1048576 && !indices.empty() && indices.size() <= 3145728 &&
-                     indices.size() % group == 0,
-                 "Invalid world geometry size");
+    const auto     reject = [&]() -> Mesh
+    {
+        ++mImpl->meshInputRejections;
+        return {};
+    };
+    if (vertices.empty() || vertices.size() > 1048576 || indices.empty() || indices.size() > 3145728 || indices.size() % group)
+        return reject();
     for (const auto& v:vertices)
-        for (float f:{v.x,v.y,v.z,v.nx,v.ny,v.nz,v.u,v.v}) requireWorld(std::isfinite(f),"Non-finite world vertex");
-    for (auto i:indices) requireWorld(i<vertices.size(),"World index outside geometry");
+        for (float f : { v.x, v.y, v.z, v.nx, v.ny, v.nz, v.u, v.v })
+            if (!std::isfinite(f))
+                return reject();
+    for (auto i : indices)
+        if (i >= vertices.size())
+            return reject();
     auto residency=mImpl->meshBudget.reserve(vertices.size()*sizeof(Vertex)+indices.size()*sizeof(unsigned));
     if (!residency) { ++mImpl->meshAllocationRefusals;return {}; }
     auto snapshotResidency = mImpl->snapshotBudget.reserve(vertices.size() * sizeof(Vertex) + indices.size() * sizeof(unsigned));
@@ -271,6 +280,7 @@ VSWorldRenderer::Statistics VSWorldRenderer::statistics() const
     auto result=mImpl->statistics;
     result.residentMeshBytes=mImpl->meshBudget.used();result.meshBudgetBytes=mImpl->meshBudget.limit();
     result.meshAllocationRefusals=mImpl->meshAllocationRefusals;
+    result.meshInputRejections                                              = mImpl->meshInputRejections;
     result.residentGeometrySnapshotBytes                                    = mImpl->snapshotBudget.used();
     return result;
 }

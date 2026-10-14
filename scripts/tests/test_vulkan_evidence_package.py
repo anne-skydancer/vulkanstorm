@@ -104,7 +104,7 @@ class EvidencePackageTest(unittest.TestCase):
             files={'.ci/geometry-evidence/results.json':report}
             def geometry_errors():
                 return [error for error in completeness(files,'build')
-                        if 'geometry' in error.lower()]
+                        if 'geometry' in error.lower() and 'R2' not in error]
             self.assertTrue(geometry_errors())
             logfile=directory/'geometry.log';logfile.write_bytes(log)
             files['.ci/geometry-evidence/geometry.log']=logfile
@@ -123,6 +123,58 @@ class EvidencePackageTest(unittest.TestCase):
             (root / 'evidence').mkdir()
             with self.assertRaisesRegex(ValueError, 'overlaps'):
                 package(root, root / 'evidence/upload', ['evidence'], 'build', False)
+
+    def test_r2_missing_or_unsafe_artifacts_fail_before_opening_them(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            prefix = '.ci/r2-session-evidence'
+            directory = root/prefix/'r2'
+            directory.mkdir(parents=True)
+            manifest = directory/'artifact-hashes.json'
+            contracts = directory/'contracts.xml'
+            contracts.write_text('<llsd><map/></llsd>')
+            files = {prefix+'/r2/artifact-hashes.json': manifest, prefix+'/r2/contracts.xml': contracts}
+            for artifacts in ([dict(path='../outside.rgba')], [dict(path='missing.rgba')], ['invalid record'], 'invalid manifest'):
+                manifest.write_text(json.dumps(dict(artifacts=artifacts)))
+                with patch('package_vulkan_evidence.r2_contracts_passed') as validate:
+                    errors = completeness(files, 'build')
+                    validate.assert_not_called()
+                self.assertTrue(any('R2' in error for error in errors))
+
+    def test_build_stage_and_session_provenance_cannot_be_mixed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            files = {}
+            revision = 'a'*40
+            digest = 'b'*64
+            def put(name, value, text=False):
+                path = root/name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(value if text else json.dumps(value))
+                files[name] = path
+            put('.ci/evidence/source.txt', revision+'\n', True)
+            provenance = dict(complete=True, source_commit=revision, executable_sha256=digest,
+                              executable='C:/build/newview/RelWithDebInfo/vulkanstorm-bin.exe')
+            put('build/parity-build-provenance.json', provenance)
+            put('build/newview/vulkan-ci-staging.json', dict(files={'vulkanstorm-bin.exe': digest}))
+            put('.ci/geometry-evidence/results.json', dict(source_commit=revision))
+            session = dict(passed=True, exit_code=0, source_qualified=True, source_commit=revision,
+                           viewer_executable_sha256=digest)
+            for name in ('r1', 'r2'):
+                put(f'.ci/{name}-session-evidence/results.json', session)
+            def provenance_errors():
+                return [error for error in completeness(files, 'build') if 'provenance' in error]
+            self.assertEqual(provenance_errors(), [])
+            put('.ci/r2-session-evidence/results.json', dict(session, viewer_executable_sha256='c'*64))
+            self.assertTrue(any('Session' in error for error in provenance_errors()))
+            put('.ci/r2-session-evidence/results.json', session)
+            put('build/newview/vulkan-ci-staging.json', dict(files={'vulkanstorm-bin.exe': 'c'*64}))
+            self.assertTrue(any('Staged' in error for error in provenance_errors()))
+            put('build/newview/vulkan-ci-staging.json', dict(files={'vulkanstorm-bin.exe': digest}))
+            put('.ci/geometry-evidence/results.json', dict(source_commit='c'*40))
+            self.assertTrue(any('CPU producer' in error for error in provenance_errors()))
+            put('build/parity-build-provenance.json', dict(provenance, complete=False))
+            self.assertTrue(any('Incomplete' in error for error in provenance_errors()))
 
 
 if __name__ == '__main__':

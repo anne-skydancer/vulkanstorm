@@ -30,6 +30,7 @@
 
 #include "llvovolume.h"
 #include "vsrendercomplexity.h"
+#include "vsvolumelod.h"
 
 #include <sstream>
 
@@ -1607,20 +1608,7 @@ void LLVOVolume::sculpt()
 }
 
 S32 LLVOVolume::computeLODDetail(F32 distance, F32 radius, F32 lod_factor)
-{
-    S32 cur_detail;
-    if (LLPipeline::sDynamicLOD)
-    {
-        // We've got LOD in the profile, and in the twist.  Use radius.
-        F32 tan_angle = (lod_factor*radius)/distance;
-        cur_detail = LLVolumeLODGroup::getDetailFromTan(ll_round(tan_angle, 0.01f));
-    }
-    else
-    {
-        cur_detail = llclamp((S32) (sqrtf(radius)*lod_factor*4.f), 0, 3);
-    }
-    return cur_detail;
-}
+{ return vs_volume_lod_detail(distance, radius, lod_factor, LLPipeline::sDynamicLOD); }
 
 std::string get_debug_object_lod_text(LLVOVolume *rootp)
 {
@@ -1699,7 +1687,7 @@ bool LLVOVolume::calcLOD()
             // MAINT-7926 Handle volumes in an animated object as a special case
             const LLVector3* box = avatar->getLastAnimExtents();
             LLVector3 diag = box[1] - box[0];
-            radius = diag.magVec() * 0.5f;
+            radius                = vs_volume_rigged_lod_radius(diag.magVec(), true);
             LL_DEBUGS("DynamicBox") << avatar->getDebugName() << " diag " << diag << " radius " << radius << LL_ENDL;
         }
         else
@@ -1710,7 +1698,7 @@ bool LLVOVolume::calcLOD()
             // SL-937: add dynamic box handling for rigged mesh on regular avatars.
             const LLVector3* box = avatar->getLastAnimExtents();
             LLVector3 diag = box[1] - box[0];
-            radius = diag.magVec(); // preserve old BinRadius behavior - 2x off
+            radius                = vs_volume_rigged_lod_radius(diag.magVec(), false);
             LL_DEBUGS("DynamicBox") << avatar->getDebugName() << " diag " << diag << " radius " << radius << LL_ENDL;
         }
         if (distance <= 0.f || radius <= 0.f)
@@ -1753,20 +1741,7 @@ bool LLVOVolume::calcLOD()
         }
     }
 
-    distance *= sDistanceFactor;
-
-    F32 rampDist = LLVOVolume::sLODFactor * 2;
-
-    if (distance < rampDist)
-    {
-        // Boost LOD when you're REALLY close
-        distance *= 1.0f/rampDist;
-        distance *= distance;
-        distance *= rampDist;
-    }
-
-
-    distance *= F_PI/3.f;
+    distance = vs_volume_lod_distance(distance, LLVOVolume::sLODFactor, sDistanceFactor);
 
     static LLCachedControl<bool> ignore_fov_zoom(gSavedSettings,"IgnoreFOVZoomForLODs");
     if(!ignore_fov_zoom)

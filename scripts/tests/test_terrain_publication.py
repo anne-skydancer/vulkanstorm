@@ -32,7 +32,7 @@ struct LLVector3 {
  float length()const{return std::sqrt(mV[0]*mV[0]+mV[1]*mV[1]+mV[2]*mV[2]);}
 };
 struct LLVector2{float mV[2]{};LLVector2()=default;LLVector2(float x,float y):mV{x,y}{};static const LLVector2 zero;};const LLVector2 LLVector2::zero{};
-struct Settings{float getF32(const char*)const{return 1;}}gSavedSettings;
+struct Settings{bool dynamic=true;float getF32(const char*)const{return 1;}bool getBOOL(const char*)const{return dynamic;}}gSavedSettings;
 struct VSWorldRenderer {
  struct Vertex{float x,y,z,nx,ny,nz,u,v;};using Mesh=std::shared_ptr<unsigned>;
  unsigned attempts=0,next=10,refuse=0;
@@ -59,7 +59,9 @@ struct Impl {
  std::shared_ptr<const VSResourceBudget::Reservation>groundCandidateResidency;
  std::shared_ptr<Budgets>budgets=std::make_shared<Budgets>();VSWorldRenderer&renderer;
  explicit Impl(VSWorldRenderer& r):renderer(r){}
- float height(int,int,float value){return value;}LLVector3 terrainNormal(int,int,float){return {0,0,1};}
+ bool edgePeak=false;
+ float height(int x,int y,float value){return edgePeak&&x==32&&y==32?1000.f:value;}
+ LLVector3 terrainNormal(int,int,float){return {0,0,1};}
 PREPARE
 };
 namespace VSWorldContracts {std::array<float,3> regionOffset(U64 a,U64 b){return {float(int(b)-int(a)),0,0};}}
@@ -94,6 +96,14 @@ int main(){
  const auto retired=neighbor.mImpl->ground.at(0).mesh;scene.publishGroundFrame(eye);
  assert(scene.mImpl->ground.at(0).mesh!=admitted&&neighbor.mImpl->ground.at(0).mesh==retired);
  assert(neighbor.mImpl->ground.at(0).dirty);
+ // Interior patch LOD uses the north/east shared samples in its radius.
+ Scene detail(gpu);const U64 key=(U64(16)<<32)|16;detail.mImpl->ground[key]=Ground{};
+ detail.publishGroundFrame({200,24,0});assert(detail.mImpl->ground.at(key).stride==16);
+ detail.mImpl->edgePeak=true;detail.mImpl->ground.at(key).dirty=true;
+ detail.publishGroundFrame({200,24,0});assert(detail.mImpl->ground.at(key).stride==4);
+ // Disabling adaptive LOD requests full detail rather than distance reduction.
+ gSavedSettings.dynamic=false;detail.publishGroundFrame({200,24,0});
+ assert(detail.mImpl->ground.at(key).stride==1);
 }
 """.replace('PREPARE',prepare).replace('COMMIT',commit)
         compiler=shutil.which('clang++') or shutil.which('g++');self.assertIsNotNone(compiler)

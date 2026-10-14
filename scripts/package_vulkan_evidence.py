@@ -6,10 +6,11 @@ from pathlib import Path
 import stat
 import zipfile
 from run_vulkan_geometry_tests import required_checks
+from run_vulkan_session_replay import r2_contracts_passed
 
 
 EVIDENCE_DIRECTORIES = ('evidence', 'headless-evidence', 'viewer-evidence',
-                        'session-evidence', 'r1-session-evidence', 'parity-evidence',
+                        'session-evidence', 'r1-session-evidence', 'r2-session-evidence', 'parity-evidence',
                         'world-parity-evidence', 'geometry-evidence')
 
 
@@ -20,6 +21,7 @@ def inputs(viewer):
             '.ci/runtime/staged/licenses', '.ci/ghi/autobuild.xml',
             '.ci/test-packages/metadata', '.ci/test-packages/LICENSES',
             '.ci/test-build/CMakeCache.txt', f'{viewer}/CMakeCache.txt',
+            f'{viewer}/parity-build-provenance.json',
             f'{viewer}/newview/vulkan-ci-staging.json']
 
 
@@ -76,7 +78,20 @@ def completeness(files, viewer):
         if not any(name.startswith(prefix) for name in files):
             errors.append('Missing required evidence group: ' + prefix)
     runtime = read('.ci/runtime/runtime.json')
+    provenance = read(f'{viewer}/parity-build-provenance.json')
+    source_file = files.get('.ci/evidence/source.txt')
+    source = source_file.read_text().strip() if source_file else ''
+    if (provenance.get('complete') is not True or provenance.get('source_commit') != source or not source or
+            len(provenance.get('executable_sha256', '')) != 64):
+        errors.append('Incomplete or mismatched source/build provenance')
+    staging = read(f'{viewer}/newview/vulkan-ci-staging.json')
+    executable = Path(str(provenance.get('executable', '')).replace('\\', '/')).name
+    staged_hashes = {Path(name.replace('\\', '/')).name: digest for name, digest in staging.get('files', {}).items()}
+    if not executable or staged_hashes.get(executable) != provenance.get('executable_sha256'):
+        errors.append('Staged executable does not match source/build provenance')
     geometry=read('.ci/geometry-evidence/results.json')
+    if geometry.get('source_commit') != source:
+        errors.append('CPU producer source does not match viewer source/build provenance')
     log_name='.ci/geometry-evidence/geometry.log'
     count=geometry.get('tree_species')
     checks=required_checks(count) if isinstance(count,int) and count>0 else []
@@ -140,12 +155,15 @@ def completeness(files, viewer):
             or not matrix.get('planned_cases')
             or set(matrix.get('cases', {})) != set(matrix.get('planned_cases', []))):
         errors.append('Incomplete connected skin matrix')
-    folders = ['.ci/r1-session-evidence'] + [
+    folders = ['.ci/r1-session-evidence', '.ci/r2-session-evidence'] + [
         '.ci/session-evidence/' + name for name in matrix.get('cases', {})]
     for folder in folders:
         result = read(folder + '/results.json')
         if result.get('passed') is not True or result.get('exit_code') != 0:
             errors.append('Unqualified session evidence: ' + folder)
+        if (result.get('source_qualified') is not True or result.get('source_commit') != source or
+                result.get('viewer_executable_sha256') != provenance.get('executable_sha256')):
+            errors.append('Session source/executable does not match build provenance: ' + folder)
         for name in ('session-replay.xml', 'viewer.log', 'http-replay.json', 'vk_layer_settings.txt'):
             require(folder + '/' + name)
         hashes = result.get('readback_sha256', {})
@@ -158,6 +176,30 @@ def completeness(files, viewer):
         if folder.endswith('r1-session-evidence'):
             for name in ('r1/contracts.xml', 'r1/mesh-1.bin', 'r1/mesh-2.bin', 'r1/mesh-generation.txt'):
                 require(folder + '/' + name)
+        if folder.endswith('r2-session-evidence'):
+            manifest = read(folder + '/r2/artifact-hashes.json')
+            artifacts = manifest.get('artifacts', [])
+            if not isinstance(artifacts, list): artifacts = []
+            valid = bool(artifacts)
+            for artifact in artifacts:
+                if not isinstance(artifact, dict):
+                    valid = False
+                    continue
+                relative = artifact.get('path', '')
+                if not relative or '/' in relative or '\\' in relative or relative in ('.', '..'):
+                    errors.append('Invalid R2 artifact path: ' + relative)
+                    valid = False
+                    continue
+                valid = require(folder + '/r2/' + relative) and valid
+            valid = require(folder + '/r2/contracts.xml') and valid
+            if valid:
+                try:
+                    requests = json.loads(files[folder + '/http-replay.json'].read_text())
+                    valid = r2_contracts_passed(result, requests, files[folder + '/results.json'].parent, write_manifest=False)
+                except (KeyError, ValueError, OSError, TypeError):
+                    valid = False
+            if not valid:
+                errors.append('Incomplete or inconsistent R2 geometry/appearance evidence')
     return errors
 
 

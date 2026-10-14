@@ -10,6 +10,8 @@
 #include "vsvegetation.h"
 #include "vsterraingeometry.h"
 #include "vsrendercomplexity.h"
+#include "vsvolumelod.h"
+#include "vsvegetationlod.h"
 #include "llmeshrepository.h"
 #include "llpartdata.h"
 #include "lltextureanim.h"
@@ -50,11 +52,22 @@
 namespace
 {
 constexpr std::size_t maxObjects=16384;
-S32                   meshDetail(const LLVector3& position, const LLVector3& scale, const LLVector3& eye, bool hud)
+S32 meshDetail(const LLVector3& position, const LLVector3& scale, const LLVector3& eye, bool hud, const LLVector3* scaleBias = nullptr,
+               bool selected = false)
 {
-    const float distance = std::max((position - eye).length(), .01f);
-    const float factor   = llclamp(gSavedSettings.getF32("RenderVolumeLODFactor"), .01f, 16.f);
-    return hud ? 3 : LLVolumeLODGroup::getDetailFromTan(ll_round(factor * .5f * scale.length() / distance, .01f));
+    if (hud)
+        return 3;
+    const S32 selectedLOD = gSavedSettings.getS32("DebugSelectionLODs");
+    if (selected && selectedLOD >= 0)
+        return llmin(selectedLOD, 3);
+    const F32 factor      = llclamp(gSavedSettings.getF32("RenderVolumeLODFactor"), 0.f, 16.f);
+    LLVector3 radiusScale = scale;
+    if (scaleBias)
+        radiusScale.scaleVec(*scaleBias);
+    const F32 radius   = ll_round(radiusScale.length(), .01f);
+    const F32 distance = std::max(ll_round(vs_volume_lod_distance((position - eye).length(), factor, 1.f - factor * .1f), .01f), .01f);
+    // Native presentation currently uses the reference default PI/3 FOV.
+    return vs_volume_lod_detail(distance, radius, factor, gSavedSettings.getBOOL("RenderDynamicLOD"));
 }
 bool finiteVector(const LLVector3& v) { return std::isfinite(v.mV[0]) && std::isfinite(v.mV[1]) && std::isfinite(v.mV[2]); }
 U32 littleU32(const U8* p) { return U32(p[0]) | U32(p[1])<<8 | U32(p[2])<<16 | U32(p[3])<<24; }
@@ -237,6 +250,43 @@ struct VSWorldScene::Impl
     }
     struct Request { double deadline=0; unsigned attempts=0;std::shared_ptr<const VSResourceBudget::Reservation> slot; };
     std::map<U32,Object> objects;std::map<U32,Request> pending;
+    VSWorldAvatar*                                     skeletonOwner(const Object& object) const
+    {
+        const Object* owner = &object;
+        std::set<U32> visited;
+        for (unsigned depth = 0; owner && depth < 256; ++depth)
+        {
+            if (owner->controlAvatar)
+                return owner->controlAvatar.get();
+            const auto avatar = avatars.find(owner->id);
+            if (avatar != avatars.end())
+                return avatar->second.get();
+            if (!owner->parent || !visited.insert(owner->parent).second)
+                break;
+            const auto parent = objects.find(owner->parent);
+            owner             = parent == objects.end() ? nullptr : &parent->second;
+        }
+        return nullptr;
+    }
+    bool hudObject(const Object& object) const
+    {
+        const Object* child = &object;
+        std::set<U32> visited;
+        while (child->parent && visited.insert(child->parent).second && visited.size() <= 256)
+        {
+            const auto parent = objects.find(child->parent);
+            if (parent == objects.end())
+                break;
+            if (parent->second.pcode == LL_PCODE_LEGACY_AVATAR)
+            {
+                const auto     avatar = avatars.find(parent->second.id);
+                const unsigned state  = child->attachment;
+                return avatar != avatars.end() && avatar->second->hudAttachment(((state & 15) << 4) | (state >> 4));
+            }
+            child = &parent->second;
+        }
+        return false;
+    }
     struct AnimationState
     {
         std::map<LLUUID, S32>                                animations;
@@ -547,12 +597,22 @@ struct VSWorldScene::Impl
         const F32               factor = std::max(gSavedSettings.getF32("RenderTerrainLODFactor"), .1f);
         for (const auto& [key, patch] : ground)
         {
-            const auto [minimum, maximum] = std::minmax_element(patch.heights.begin(), patch.heights.begin() + patch.size * patch.size);
-            const LLVector3 center(float(U32(key >> 32)) + patch.size * .5f, float(U32(key)) + patch.size * .5f,
-                                   (*minimum + *maximum) * .5f);
-            const F32       radius = LLVector3(F32(patch.size), F32(patch.size), *maximum - *minimum).length() * .5f;
+            // Reference patch bounds include the shared north/east samples.
+            F32 minimum = patch.heights[0], maximum = minimum;
+            for (unsigned y = 0; y <= patch.size; ++y)
+                for (unsigned x = 0; x <= patch.size; ++x)
+                {
+                    const F32 fallback = patch.heights[std::min(y, patch.size - 1) * patch.size + std::min(x, patch.size - 1)];
+                    const F32 value    = height(S32(U32(key >> 32) + x), S32(U32(key) + y), fallback);
+                    minimum            = std::min(minimum, value);
+                    maximum            = std::max(maximum, value);
+                }
+            const LLVector3 center(float(U32(key >> 32)) + patch.size * .5f, float(U32(key)) + patch.size * .5f, (minimum + maximum) * .5f);
+            const F32       radius = LLVector3(F32(patch.size), F32(patch.size), maximum - minimum).length() * .5f;
             const unsigned  limit =
-                unsigned(llclamp(lltrunc(std::max((center - eye).length() - radius, 0.f) / factor * .15f), 1, S32(patch.size)));
+                gSavedSettings.getBOOL("RenderDynamicLOD")
+                    ? unsigned(llclamp(lltrunc(std::max((center - eye).length() - radius, 0.f) / factor * .15f), 1, S32(patch.size)))
+                    : 1;
             unsigned stride = 1;
             while (stride * 2 <= limit)
                 stride *= 2;
@@ -1950,6 +2010,49 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             avatar->second->transform(p, q, o.velocity, o.angularVelocity, o.scale.mV[VZ]);
         }
     }
+    // Use previous admitted animated extents, as the reference does. A resident's
+    // rigged LOD follows its body/linkset rather than each attachment's scale.
+    using Bounds = std::array<std::array<float, 3>, 2>;
+    std::map<VSWorldAvatar*, Bounds> skeletonBounds;
+    for (const auto& [local, object] : mImpl->objects)
+    {
+        if (!mImpl->linksCurrent(object))
+            continue;
+        if (object.pcode != LL_PCODE_LEGACY_AVATAR && (!object.asset || !object.asset->skin.isMap()))
+            continue;
+        auto* owner = mImpl->skeletonOwner(object);
+        if (!owner || mImpl->hudObject(object))
+            continue;
+        const auto& faces = object.admittedFaces.empty() ? object.faces : object.admittedFaces;
+        for (const auto& face : faces)
+            if (face.mesh)
+            {
+                const auto bounds      = VSWorldRenderer::bounds(face.mesh);
+                auto [found, inserted] = skeletonBounds.emplace(owner, bounds);
+                if (!inserted)
+                    for (unsigned axis = 0; axis < 3; ++axis)
+                    {
+                        found->second[0][axis] = std::min(found->second[0][axis], bounds[0][axis]);
+                        found->second[1][axis] = std::max(found->second[1][axis], bounds[1][axis]);
+                    }
+            }
+    }
+    const auto volumeLOD = [&](const Impl::Object& object, const LLVector3& position, bool hud)
+    {
+        if (!hud && object.asset && object.asset->skin.isMap())
+            if (auto* owner = mImpl->skeletonOwner(object))
+                if (const auto found = skeletonBounds.find(owner); found != skeletonBounds.end())
+                {
+                    const LLVector3 minimum(found->second[0].data()), maximum(found->second[1].data());
+                    const bool      control = owner->isControlAvatar();
+                    const F32       radius  = vs_volume_rigged_lod_radius((maximum - minimum).length(), control);
+                    if (radius > 0)
+                        return meshDetail((minimum + maximum) * .5f, LLVector3(radius, 0, 0), eye, false, nullptr,
+                                          object.motion.selected());
+                }
+        return meshDetail(position, object.scale, eye, hud, object.volume ? &object.volume->mLODScaleBias : nullptr,
+                          object.motion.selected());
+    };
     // Admit completed mesh metadata before skeleton overrides and control-avatar
     // palettes are evaluated. A mesh must not publish its first skinned frame
     // with the previous skeleton and acquire its fitted overrides a frame later.
@@ -1982,7 +2085,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         const float limit = llclamp(farClip, 16.f, 1024.f) + object.scale.length() * 2.f;
         if (!hud && (position - eye).lengthSquared() > limit * limit)
             continue;
-        const auto lod = meshDetail(position, object.scale, eye, hud);
+        const auto lod = volumeLOD(object, position, hud);
         mImpl->assets->request(object.params, lod);
         if (const auto asset = mImpl->assets->geometry(object.params.getSculptID(), lod); asset && asset != object.asset)
         {
@@ -2036,6 +2139,10 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         if (object.volume)
             cost.area += object.volume->getSurfaceArea() * std::max({ object.scale.mV[0], object.scale.mV[1], object.scale.mV[2] });
     }
+    // Match the reference's previous visibility pass when adapting remote
+    // avatar detail to render load; pending and distant owners do not count.
+    const unsigned visibleAvatars = unsigned(std::count_if(mImpl->avatars.begin(), mImpl->avatars.end(),
+                                                           [&](const auto& owner) { return owner.second->visibleFrom(eye, farClip); }));
     for (auto& [id,avatar]:mImpl->avatars)
     {
         Impl::Object* owner = nullptr;
@@ -2049,17 +2156,21 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             continue; // Early appearance does not invent a scene transform.
         F64       complexity = 0;
         F32       area       = 0;
+        bool      animatedAttachments = false;
         const F32 maximum    = std::max(gSavedSettings.getF32("MaxAttachmentComplexity"), 1.e6f);
         for (auto& [root, cost] : costs[id])
         {
             for (const auto& texture : cost.textures)
                 cost.cost += mImpl->textureCost(texture);
             if (cost.animated)
+            {
                 cost.cost += 1000;
+                animatedAttachments = true;
+            }
             complexity += llclamp(cost.cost, 0.f, maximum);
             area += cost.area;
         }
-        avatar->updateVisibility(U32(std::min(complexity, F64(std::numeric_limits<U32>::max()))), area);
+        avatar->updateVisibility(U32(std::min(complexity, F64(std::numeric_limits<U32>::max()))), area, animatedAttachments);
         if (owner->gltf)
             continue;
         std::map<LLUUID, LLSD> skins;
@@ -2093,7 +2204,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             (mImpl->windAt(position * 4) * .25f + mImpl->windAt(position * 2) * .5f + mImpl->windAt(position)) * (2.f / 1.75f);
         avatar->environment(wind, mImpl->waterHeight, eye, at);
         const auto start = packets.size();
-        avatar->append(packets, eye, farClip, viewportHeight, mImpl->timeDilation, viewportWidth);
+        avatar->append(packets, eye, farClip, viewportHeight, mImpl->timeDilation, viewportWidth, visibleAvatars);
         for (auto& face : owner->faces)
             face.mesh.reset();
         for (auto index=start;index<packets.size();++index)
@@ -2277,6 +2388,15 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             const float distance=std::max((position-eye).length(),.01f);
             LLUUID      texture;
             S32         detail = 0;
+            const F32   treeFactor = llclamp(gSavedSettings.getF32("RenderTreeLODFactor"), 0.f, 16.f);
+            if (vs_vegetation_stopped(treeFactor))
+            {
+                o.faces.front().mesh.reset();
+                o.admittedFaces.clear();
+                o.vegetationLOD = -1;
+                o.dirty         = true;
+                continue;
+            }
             if (o.pcode == LL_PCODE_LEGACY_GRASS)
             {
                 if (LLVOGrass::sSpeciesTable.empty())
@@ -2306,26 +2426,17 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 if (species == LLVOTree::sSpeciesTable.end())
                     continue;
                 texture          = species->second->mTextureID;
-                const F32 factor = llclamp(gSavedSettings.getF32("RenderTreeLODFactor"), .01f, 16.f);
                 const F32 range  = distance - o.scale.length() * .5f;
-                const F32 angle =
-                    (range < F_ALMOST_ZERO ? 180.f
-                                           : std::atan2(std::max({ o.scale.mV[0], o.scale.mV[1], o.scale.mV[2] }), range) * RAD_TO_DEG) *
-                    factor;
-                constexpr F32 angles[] = { 30, 20, 15, F_ALMOST_ZERO };
-                detail                 = 4;
-                for (S32 index = 0; index < 4; ++index)
-                    if (angle > angles[index])
-                    {
-                        detail = index;
-                        break;
-                    }
-                const F32 size         = species->second->mBillboardScale * species->second->mBillboardRatio * o.scale.length();
-                const S32 volumeDetail = LLVolumeLODGroup::getDetailFromTan(ll_round(factor * 64 * size / (distance * (F_PI / 3)), .01f));
-                detail                 = std::min(4, std::max(detail, 3 - volumeDetail));
+                const F32 angle        = (range < F_ALMOST_ZERO || hud
+                                              ? 180.f
+                                              : std::atan2(std::max({ o.scale.mV[0], o.scale.mV[1], o.scale.mV[2] }), range) * RAD_TO_DEG);
+                const F32 volumeFactor = llclamp(gSavedSettings.getF32("RenderVolumeLODFactor"), 0.f, 16.f);
+                detail                 = vs_tree_lod(angle, treeFactor, distance, o.scale.length(), species->second->mBillboardScale,
+                                                     species->second->mBillboardRatio, 1.f - volumeFactor * .1f);
                 if (detail == 4)
                 {
                     o.faces.front().mesh.reset();
+                    o.admittedFaces.clear();
                     o.dirty = true;
                     continue;
                 }
@@ -2400,6 +2511,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 if (!packet.image)
                     continue;
                 packet.masked          = true;
+                packet.hud             = hud;
                 packet.distanceSquared = (position - eye).lengthSquared();
                 std::copy(o.id.mData, o.id.mData + UUID_BYTES, packet.objectIdentity.begin());
                 packet.objectGeneration = o.generation;
@@ -2467,7 +2579,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             continue;
         }
         const float distance         = std::max((position - eye).length(), .01f);
-        const S32   lod              = meshDetail(position, o.scale, eye, hud);
+        const S32   lod              = volumeLOD(o, position, hud);
         bool        producerDeferred = false;
         if (o.params.isMeshSculpt())
         {
@@ -3080,6 +3192,7 @@ LLSD VSWorldScene::evidence() const
     result["resident_mesh_bytes"]=ll_sd_from_U64(stats.residentMeshBytes);result["mesh_budget_bytes"]=ll_sd_from_U64(stats.meshBudgetBytes);
     result["resident_geometry_snapshot_bytes"] = ll_sd_from_U64(stats.residentGeometrySnapshotBytes);
     result["mesh_allocation_refusals"]=ll_sd_from_U64(stats.meshAllocationRefusals);
+    result["mesh_input_rejections"]            = ll_sd_from_U64(stats.meshInputRejections);
     result["accepted"]=ll_sd_from_U64(mImpl->accepted);result["rejected"]=ll_sd_from_U64(mImpl->rejected);
     result["unsupported"]=ll_sd_from_U64(mImpl->unsupported);result["assets"]=mImpl->assets->evidence();
     result["images"]=mImpl->resources.evidence();

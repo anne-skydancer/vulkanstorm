@@ -16967,13 +16967,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleRenderAvatarMouselookChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsworldavatar.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20204,13 +20206,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleSetShaderChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsworldavatar.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20234,13 +20238,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleUserImpostorByDistEnabledChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsworldavatar.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20262,13 +20268,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleAvatarLODChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsworldavatar.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20543,13 +20551,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleRenderDynamicLODChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsworldscene.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20635,6 +20645,7 @@
       "remaining_gap": "Review reference callback handleRenderFarClipChanged; saving a value is not applying its effect.",
       "native_source_references": [
         "indra/newview/vsnativesession.cpp",
+        "indra/newview/vsviewerwindow.cpp",
         "indra/newview/vsvulkancontext.cpp"
       ],
       "native_integration_hosts": [
@@ -21556,13 +21567,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleTerrainLODChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsworldscene.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -21752,13 +21765,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleTreeLODChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsworldscene.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -22368,13 +22383,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleUploadBakedTexOldChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsnativeappearance.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -23862,11 +23879,15 @@
       "reference_sources": [
         "doc/vulkan/full-render-chain-survey.md#geometry-and-simulation"
       ],
-      "native_owner": "native scene/geometry/avatar producers",
-      "phase": "R2",
+      "native_owner": "native particle/effect simulation and composition owners",
+      "phase": "R7",
       "dependencies": [
         "R0",
-        "R1"
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6"
       ],
       "variants": [],
       "implementation": "unqualified",
@@ -23883,8 +23904,8 @@
       ],
       "native_integration_hosts": [
         "indra/newview/vsworldscene.cpp",
-        "indra/newview/vsworldavatar.cpp",
-        "indra/newview/vsworldassets.cpp"
+        "indra/newview/vsworldrenderer.cpp",
+        "indra/newview/vsnativesession.cpp"
       ],
       "owner_scope": "Allocated responsibility/integration hosts; existence of a host does not establish this feature implementation."
     },
@@ -24465,6 +24486,11 @@
         "LLDrawPoolTerrain::renderDeferred",
         "lldrawpoolterrain.cpp:145"
       ],
+      "phase_requirements": {
+        "R2": "Decoded heightfield, geometry/LOD, normals, neighbouring/variable regions, patch joins and picking.",
+        "R3": "Four-corner controls, smooth splatting, GLTF/PBR materials and channel/tangent conventions.",
+        "R6": "Terrain shadow/dependent-view qualification."
+      },
       "native_source_references": [
         "indra/newview/vsterrainpacket.h",
         "indra/newview/vsworldscene.cpp"
@@ -24547,6 +24573,11 @@
         "llvograss.cpp:416",
         "llvotree.cpp:502"
       ],
+      "phase_requirements": {
+        "R2": "Species, procedural geometry/seeds, reference wind and billboard/LOD choices.",
+        "R3": "Species texture/mask/material and sampler variants.",
+        "R6": "Masked tree/grass shadow/dependent-view qualification."
+      },
       "native_integration_hosts": [
         "indra/newview/vsworldscene.cpp",
         "indra/newview/vsworldavatar.cpp",
@@ -41807,6 +41838,7 @@
       "shared_source_references": [
         "indra/llmessage/message_prehash.cpp",
         "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsr2replay.cpp",
         "indra/newview/vsworldavatar.cpp"
       ],
       "native_integration_hosts": [

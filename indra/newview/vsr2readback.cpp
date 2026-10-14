@@ -24,6 +24,8 @@
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
+#include <limits>
+#include <cstring>
 
 namespace
 {
@@ -102,6 +104,81 @@ void vs_r2_capture_bakes(VSVulkanContext& owner, std::vector<VSWorldAvatar::Loca
                 require(output.good(), "R2 composite GPU report write failed");
                 require(actual == expected, "R2 actual composite GPU pixels differ from CPU pixels or orientation");
             }
+            // Exercise actual Diligent buffer allocation and the production
+            // publication/lease path under a deliberately bounded mesh pool.
+            const std::vector<VSWorldRenderer::Vertex> vertices{ { 0, 0, 0, 0, 0, 1, 0, 0 },
+                                                                 { 1, 0, 0, 0, 0, 1, 1, 0 },
+                                                                 { 0, 1, 0, 0, 0, 1, 0, 1 } };
+            const std::vector<unsigned>                indices{ 0, 1, 2 };
+            const std::size_t bytes = vertices.size() * sizeof(VSWorldRenderer::Vertex) + indices.size() * sizeof(unsigned);
+            VSWorldRenderer   pressure(device, context, bytes);
+            auto              mesh = pressure.upload(vertices, indices);
+            require(bool(mesh), "R2 pressure fixture failed its admitted GPU buffer allocation");
+            const auto firstGeneration = VSWorldRenderer::geometryDescription(mesh).generation;
+            auto       invalid         = vertices;
+            invalid[0].x               = std::numeric_limits<float>::infinity();
+            require(!pressure.publishMesh(mesh, invalid, indices) && !pressure.publishMesh(mesh, vertices, { 0, 1, 3 }) &&
+                        VSWorldRenderer::geometryDescription(mesh).generation == firstGeneration,
+                    "R2 invalid source geometry changed or crashed its prior admitted generation");
+            auto replacement = vertices;
+            replacement[0].x = .25f;
+            require(!pressure.publishMesh(mesh, replacement, indices) &&
+                        VSWorldRenderer::geometryDescription(mesh).generation == firstGeneration &&
+                        VSWorldRenderer::geometryVertices(mesh)[0].x == 0,
+                    "R2 mesh refusal changed the admitted GPU/picking generation");
+            auto                                           retained = mesh;
+            std::weak_ptr<const VSWorldRenderer::Geometry> retired  = mesh;
+            mesh.reset();
+            require(!pressure.publishMesh(mesh, replacement, indices) && !mesh, "R2 mesh admission ignored a still-live generation owner");
+            retained.reset();
+            require(retired.expired() && pressure.publishMesh(mesh, replacement, indices),
+                    "R2 mesh generation did not retire or allow its refused upload to retry");
+            const auto buffers = VSWorldRenderer::geometryBuffers(mesh);
+            require(buffers[0] && buffers[1] && VSWorldRenderer::geometryDescription(mesh).generation > firstGeneration &&
+                        VSWorldRenderer::geometryVertices(mesh)[0].x == .25f,
+                    "R2 mesh retry did not publish actual replacement buffers and matching picking vertices");
+            for (unsigned index = 0; index < 2; ++index)
+            {
+                const std::size_t size = index ? indices.size() * sizeof(unsigned) : replacement.size() * sizeof(VSWorldRenderer::Vertex);
+                const void* expected   = index ? static_cast<const void*>(indices.data()) : static_cast<const void*>(replacement.data());
+                BufferDesc  desc{};
+                desc.Name           = "R2 actual world mesh GPU buffer readback";
+                desc.Size           = size;
+                desc.Usage          = USAGE_STAGING;
+                desc.CPUAccessFlags = CPU_ACCESS_READ;
+                RefCntAutoPtr<IBuffer> staging;
+                device->CreateBuffer(desc, nullptr, &staging);
+                require(staging != nullptr, "R2 mesh staging buffer allocation failed");
+                context->CopyBuffer(buffers[index], 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, staging, 0, size,
+                                    RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+                context->WaitForIdle();
+                void* mapped = nullptr;
+                context->MapBuffer(staging, MAP_READ, MAP_FLAG_DO_NOT_WAIT, mapped);
+                require(mapped, "R2 actual GPU mesh buffer could not be mapped");
+                std::vector<U8> actual(static_cast<const U8*>(mapped), static_cast<const U8*>(mapped) + size);
+                context->UnmapBuffer(staging, MAP_READ);
+                require(std::memcmp(actual.data(), expected, size) == 0, "R2 GPU vertex/index bytes differ from their publication input");
+                const auto name = std::filesystem::path(directory) / (index ? "mesh-indices" : "mesh-vertices");
+                write(name.string() + "-actual.bin", actual);
+                write(name.string() + "-expected.bin",
+                      std::vector<U8>(static_cast<const U8*>(expected), static_cast<const U8*>(expected) + size));
+            }
+            mesh.reset();
+            const auto state = pressure.statistics();
+            require(state.meshAllocationRefusals == 2 && state.meshInputRejections == 2 && state.residentMeshBytes == 0 &&
+                        state.residentGeometrySnapshotBytes == 0,
+                    "R2 mesh replacement retained GPU/snapshot byte leases after its last owner");
+            report["mesh_replacement"]["budget_bytes"]                = S32(bytes);
+            report["mesh_replacement"]["gpu_buffer_readbacks"]        = 2;
+            report["mesh_replacement"]["input_rejections"]            = S32(state.meshInputRejections);
+            report["mesh_replacement"]["refusals"]                    = S32(state.meshAllocationRefusals);
+            report["mesh_replacement"]["prior_generation_retained"]   = true;
+            report["mesh_replacement"]["owner_release_allows_retry"]  = true;
+            report["mesh_replacement"]["bytes_after_retire"]          = S32(state.residentMeshBytes);
+            report["mesh_replacement"]["snapshot_bytes_after_retire"] = S32(state.residentGeometrySnapshotBytes);
+            std::ofstream output(std::filesystem::path(directory) / "bake-readbacks.xml");
+            LLSDSerialize::toPrettyXML(report, output);
+            require(output.good(), "R2 complete GPU publication/readback evidence write failed");
             *complete = true;
         });
 }

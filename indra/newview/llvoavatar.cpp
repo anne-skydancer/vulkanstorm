@@ -28,6 +28,7 @@
 
 #include "llvoavatar.h"
 #include "vsavatarmotions.h"
+#include "vsavatarlod.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -210,7 +211,6 @@ const F32 APPEARANCE_MORPH_TIME = 0.65f;
 const F32 TIME_BEFORE_MESH_CLEANUP = 5.f; // seconds
 const S32 AVATAR_RELEASE_THRESHOLD = 10; // number of avatar instances before releasing memory
 const F32 FOOT_GROUND_COLLISION_TOLERANCE = 0.25f;
-const F32 AVATAR_LOD_TWEAK_RANGE = 0.7f;
 const S32 MAX_BUBBLE_CHAT_LENGTH = DB_CHAT_MSG_STR_LEN;
 const S32 MAX_BUBBLE_CHAT_UTTERANCES = 12;
 const F32 CHAT_FADE_TIME = 8.0;
@@ -7858,40 +7858,16 @@ void LLVOAvatar::setPixelAreaAndAngle(LLAgent &agent)
 //-----------------------------------------------------------------------------
 bool LLVOAvatar::updateJointLODs()
 {
-    const F32 MAX_PIXEL_AREA = 100000000.f;
-    F32 lod_factor = (sLODFactor * AVATAR_LOD_TWEAK_RANGE + (1.f - AVATAR_LOD_TWEAK_RANGE));
-    F32 avatar_num_min_factor = clamp_rescale(sLODFactor, 0.f, 1.f, 0.25f, 0.6f);
-    F32 avatar_num_factor = clamp_rescale((F32)sNumVisibleAvatars, 8, 25, 1.f, avatar_num_min_factor);
-    F32 area_scale = 0.16f;
+    mAdjustedPixelArea = vs_avatar_lod_area(mPixelArea, sLODFactor, unsigned(llmax(0, sNumVisibleAvatars)), isSelf(),
+                                            isSelf() ? (gAgentCamera.cameraCustomizeAvatar() || gAgentCamera.cameraMouselook()) : mIsDummy);
 
-        if (isSelf())
-        {
-            if(gAgentCamera.cameraCustomizeAvatar() || gAgentCamera.cameraMouselook())
-            {
-                mAdjustedPixelArea = MAX_PIXEL_AREA;
-            }
-            else
-            {
-                mAdjustedPixelArea = mPixelArea*area_scale;
-            }
-        }
-        else if (mIsDummy)
-        {
-            mAdjustedPixelArea = MAX_PIXEL_AREA;
-        }
-        else
-        {
-            // reported avatar pixel area is dependent on avatar render load, based on number of visible avatars
-            mAdjustedPixelArea = (F32)mPixelArea * area_scale * lod_factor * lod_factor * avatar_num_factor * avatar_num_factor;
-        }
-
-        // now select meshes to render based on adjusted pixel area
-        LLViewerJoint* root = dynamic_cast<LLViewerJoint*>(mRoot);
-        bool res = false;
-        if (root)
-        {
-            res = root->updateLOD(mAdjustedPixelArea, true);
-        }
+    // now select meshes to render based on adjusted pixel area
+    LLViewerJoint* root = dynamic_cast<LLViewerJoint*>(mRoot);
+    bool           res  = false;
+    if (root)
+    {
+        res = root->updateLOD(mAdjustedPixelArea, true);
+    }
         if (res)
         {
             sNumLODChangesThisFrame++;

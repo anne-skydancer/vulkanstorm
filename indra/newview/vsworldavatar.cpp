@@ -38,6 +38,7 @@
 #include "vscontrolconstraints.h"
 #include "vsresourcebudget.h"
 #include "vsavatarcloth.h"
+#include "vsavatarlod.h"
 #include "llcriticaldamp.h"
 #include "noise.h"
 #include "llskinningutil.h"
@@ -49,6 +50,7 @@
 #include <bit>
 #include <cmath>
 #include <map>
+#include <limits>
 #include <set>
 #include <stdexcept>
 using namespace LLAvatarAppearanceDefines;
@@ -347,7 +349,21 @@ struct VSWorldAvatar::Impl : LLWearableData, LLAvatarAppearance
         const ESex sex = getVisualParamWeight("male") > .5f ? SEX_MALE : SEX_FEMALE;
         if (getSex() != sex)
         {
+            std::vector<LLUUID> remapped;
+            if (!control)
+                for (const auto& [id, sequence] : animations)
+                {
+                    const auto previous = vs_remap_avatar_motion(id, getSex() == SEX_FEMALE);
+                    const auto next     = vs_remap_avatar_motion(id, sex == SEX_FEMALE);
+                    if (previous != next && LLCharacter::isMotionActive(previous))
+                    {
+                        LLCharacter::stopMotion(previous, true);
+                        remapped.push_back(next);
+                    }
+                }
             setSex(sex);
+            for (const auto& motion : remapped)
+                LLCharacter::startMotion(motion);
             shapeDirty = true;
             compositeSignature.clear();
         }
@@ -884,7 +900,7 @@ void VSWorldAvatar::sitting(bool sitting)
         avatar.LLCharacter::startMotion(ANIM_AGENT_BODY_NOISE);
     avatar.updateJellyMotion();
 }
-VSWorldAvatar::Visibility VSWorldAvatar::updateVisibility(U32 attachmentCost, F32 attachmentArea)
+VSWorldAvatar::Visibility VSWorldAvatar::updateVisibility(U32 attachmentCost, F32 attachmentArea, bool animatedAttachments)
 {
     auto& avatar = *mImpl;
     U32   cost   = attachmentCost;
@@ -895,7 +911,7 @@ VSWorldAvatar::Visibility VSWorldAvatar::updateVisibility(U32 attachmentCost, F3
                 continue;
             const auto id = avatar.textures.getTE(U8(baked->mTextureIndex))->getID();
             if (id.notNull() && id != IMG_DEFAULT_AVATAR && id != IMG_INVISIBLE)
-                cost += 200;
+                cost = U32(std::min<U64>(U64(cost) + 200, std::numeric_limits<U32>::max()));
         }
     avatar.complexity     = cost;
     avatar.attachmentArea = attachmentArea;
@@ -914,10 +930,10 @@ VSWorldAvatar::Visibility VSWorldAvatar::updateVisibility(U32 attachmentCost, F3
             const F32  maxArea       = gSavedSettings.getF32("RenderAutoMuteSurfaceAreaLimit");
             const bool friendExempt  = friendAvatar && mode > LLVOAvatar::AV_RENDER_LIMIT_BY_COMPLEXITY;
             const U32  exclusions    = gSavedSettings.getU32("FSImpostorAvatarExclude");
-            const bool controlExempt = avatar.control && exclusions >= 2;
-            if (setting == LLVOAvatar::AV_DO_NOT_RENDER || (!friendExempt && !controlExempt &&
-                                                            ((mode == LLVOAvatar::AV_RENDER_ONLY_SHOW_FRIENDS && !avatar.control) ||
-                                                             (maximum && (cost > maximum || (maxArea > 0 && attachmentArea > maxArea))))))
+            const bool animeshExempt = (avatar.control && exclusions >= 2) || (animatedAttachments && (exclusions & 1));
+            if (setting == LLVOAvatar::AV_DO_NOT_RENDER ||
+                (!friendExempt && ((mode == LLVOAvatar::AV_RENDER_ONLY_SHOW_FRIENDS && !avatar.control) ||
+                                   (!animeshExempt && maximum && (cost > maximum || (maxArea > 0 && attachmentArea > maxArea))))))
                 state = Visibility::Jellydoll;
         }
     }
@@ -1210,8 +1226,16 @@ void VSWorldAvatar::animations(const std::map<LLUUID, S32>& next)
     }
     a.motionFrameKnown = false;
 }
+bool VSWorldAvatar::visibleFrom(const LLVector3& eye, float farClip) const
+{
+    const auto& a = *mImpl;
+    return a.positionKnown && a.appearanceKnown && a.visibility != Visibility::Invisible &&
+           (a.position - eye).lengthSquared() <= farClip * farClip;
+}
+bool VSWorldAvatar::isControlAvatar() const
+{ return mImpl->control; }
 void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const LLVector3& eye, float farClip, unsigned viewportHeight,
-                           float timeDilation, unsigned viewportWidth)
+                           float timeDilation, unsigned viewportWidth, unsigned visibleAvatars)
 {
     auto& a = *mImpl;
     if (a.screen)
@@ -1238,6 +1262,9 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
     a.timeDilation=llclamp(timeDilation,0.f,1.f);
     const float radius=.5f*a.mBodySize.length(),projected=radius*float(viewportHeight)*.5f/std::tan(F_PI/6);
     a.pixelArea=F_PI*projected*projected/std::max(distance,.01f);
+    const auto session    = VSNativeSession::active();
+    const bool fullDetail = a.self && session && session->cameraState().firstPerson;
+    const F32 lodArea = vs_avatar_lod_area(a.pixelArea, gSavedSettings.getF32("RenderAvatarLODFactor"), visibleAvatars, a.self, fullDetail);
     if (!a.control && a.visibility != Visibility::Jellydoll)
     {
         bool walking = false;
@@ -1328,7 +1355,12 @@ void VSWorldAvatar::append(std::vector<VSWorldRenderer::Packet>& packets, const 
             continue;
         }
         auto& parts=a.mMeshLOD[index]->mMeshParts;LLAvatarJointMesh* part=nullptr;
-        for (auto* candidate:parts) {part=candidate;if (a.pixelArea>=candidate->getLOD()) break;}
+        for (auto* candidate : parts)
+        {
+            part = candidate;
+            if (lodArea >= candidate->getLOD())
+                break;
+        }
         if (!part) continue;
         selected.push_back({ index, part, image });
         const auto  found     = a.publications.find(index);
@@ -1550,6 +1582,81 @@ bool VSWorldAvatar::skinRiggedFace(const LLVolumeFace& face,const LLSD& metadata
     }
     return true;
 }
+#if VS_VULKAN_DIAGNOSTICS
+LLSD VSWorldAvatar::qualifyBodyLODs(const LLVector3& eye)
+{
+    auto& a       = *mImpl;
+    auto  require = [](bool condition, const char* message)
+    {
+        if (!condition)
+            throw std::runtime_error(message);
+    };
+    require(a.self && a.localAppearance && a.positionKnown && a.appearanceKnown,
+            "R2 body LOD check requires the actual connected local appearance");
+    require(a.isWearingWearableType(LLWearableType::WT_SKIRT), "R2 body LOD check lacks the ordinary worn skirt branch");
+    struct Restore
+    {
+        bool& state;
+        bool  previous;
+        ~Restore() { state = previous; }
+    } restore{ a.clothEnabled, a.clothEnabled };
+    a.clothEnabled = false; // Isolate LOD/publication from independently qualified cloth time.
+    std::map<S32, std::set<LLAvatarJointMesh*>> observed;
+    LLSD                                        report;
+    for (unsigned height = 1; height <= 32768; height *= 2)
+    {
+        std::vector<VSWorldRenderer::Packet> packets;
+        append(packets, eye, 128, height, 1, height);
+        require(!packets.empty(), "R2 body LOD case published no visible geometry");
+        std::map<unsigned, VSWorldRenderer::Mesh> first;
+        for (const auto& packet : packets)
+        {
+            const auto& publication = a.publications.at(S32(packet.faceIndex));
+            auto*       source      = publication.part->getMesh();
+            const auto  description = VSWorldRenderer::geometryDescription(packet.mesh);
+            const auto& indices     = VSWorldRenderer::geometryIndices(packet.mesh);
+            const auto  buffers     = VSWorldRenderer::geometryBuffers(packet.mesh);
+            require(source && buffers[0] && buffers[1] && description.vertices == unsigned(source->getNumVertices()) &&
+                        description.indices == unsigned(source->getNumFaces()) * 3,
+                    "R2 body LOD GPU publication differs from its shared reference topology");
+            require(indices.size() == description.indices, "R2 body LOD lacks its admitted picking topology");
+            for (S32 face = 0; face < source->getNumFaces(); ++face)
+                for (unsigned corner = 0; corner < 3; ++corner)
+                    require(indices[unsigned(face) * 3 + corner] == unsigned(source->getFaces()[face][corner]),
+                            "R2 body LOD changed reference triangle order or winding");
+            observed[S32(packet.faceIndex)].insert(publication.part);
+            first.emplace(packet.faceIndex, packet.mesh);
+            LLSD row;
+            row["part"]           = S32(packet.faceIndex);
+            row["part_name"]      = a.mMeshLOD[packet.faceIndex]->getName();
+            const auto& parts     = a.mMeshLOD[packet.faceIndex]->mMeshParts;
+            row["lod"]            = S32(std::distance(parts.begin(), std::find(parts.begin(), parts.end(), publication.part)));
+            row["height"]         = S32(height);
+            row["reference_area"] = publication.part->getLOD();
+            row["vertices"]       = S32(description.vertices);
+            row["indices"]        = S32(description.indices);
+            report["cases"].append(row);
+        }
+        packets.clear();
+        append(packets, eye, 128, height, 1, height);
+        require(packets.size() == first.size(), "R2 unchanged pose changed body topology");
+        for (const auto& packet : packets)
+            require(first.at(packet.faceIndex) == packet.mesh, "R2 unchanged pose/LOD rebuilt admitted body geometry");
+    }
+    for (const auto& [index, entry] : LLAvatarAppearance::getDictionary()->getMeshEntries())
+    {
+        if (entry->mBakedID == BAKED_NUM_INDICES || unsigned(index) >= a.mMeshLOD.size())
+            continue;
+        const auto& expected = a.mMeshLOD[index]->mMeshParts;
+        require(!expected.empty() && observed[index].size() == expected.size(), "R2 body LOD sweep omitted a reference body part/LOD");
+        for (auto* part : expected)
+            require(observed[index].count(part) != 0, "R2 body LOD sweep omitted a loaded reference mesh");
+    }
+    report["all_parts_and_lods"]             = true;
+    report["unchanged_pose_reuses_geometry"] = true;
+    return report;
+}
+#endif
 LLSD VSWorldAvatar::evidence() const
 {
     const auto& a=*mImpl;LLSD result;result["id"]=a.id;result["self"]=a.self;result["position_known"]=a.positionKnown;
