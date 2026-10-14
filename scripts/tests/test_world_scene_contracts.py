@@ -108,6 +108,7 @@ int main() {
         self.compile('''#include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <vector>
 using U8=uint8_t;using U16=uint16_t;using U32=uint32_t;
 constexpr unsigned UUID_BYTES=16;constexpr U8 LL_SCULPT_TYPE_MASK=7,LL_SCULPT_TYPE_MESH=5;

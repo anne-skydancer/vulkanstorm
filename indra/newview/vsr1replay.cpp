@@ -180,7 +180,9 @@ struct Replay
                 LLExtendedMeshParams::ANIMATED_MESH_ENABLED_FLAG);
             objectPacket(original,originalHandle,954,LLUUID("a2000000-0000-0000-0000-000000000006"),0,false,0,LL_PCODE_LEGACY_AVATAR);
             objectPacket(original,originalHandle,955,LLUUID("a2000000-0000-0000-0000-000000000007"),954,false,0,LL_PCODE_VOLUME,1);
-            objectPacket(original,originalHandle,956,LLUUID("a2000000-0000-0000-0000-000000000008"),0,false,0,LL_PCODE_LEGACY_TREE);
+            // R2 implements trees. Keep R1's no-substitute check on an actually
+            // unknown wire PCode instead of requiring supported trees to fail.
+            objectPacket(original,originalHandle,956,LLUUID("a2000000-0000-0000-0000-000000000008"),0,false,0,U8(0x7e));
             ++step;return false;
         }
         require(LLFrameTimer::getTotalSeconds()<deadline,"R1 ownership replay exceeded its deadline");
