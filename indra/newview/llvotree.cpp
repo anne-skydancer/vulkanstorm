@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsvegetationlod.h"
 
 #include "llvotree.h"
 #include "vsvegetation.h"
@@ -105,9 +106,7 @@ LLVOTree::~LLVOTree()
 
 //static
 bool LLVOTree::isTreeRenderingStopped()
-{
-    return LLVOTree::sTreeFactor < LLVOTree::sLODAngles[sMAX_NUM_TREE_LOD_LEVELS - 1] ;
-}
+{ return vs_vegetation_stopped(LLVOTree::sTreeFactor); }
 
 // static
 void LLVOTree::initClass()
@@ -361,27 +360,8 @@ void LLVOTree::idleUpdate(LLAgent &agent, const F64 &time)
         return;
     }
 
-    S32 trunk_LOD = sMAX_NUM_TREE_LOD_LEVELS ; // disabled
-    F32 app_angle = getAppAngle()*LLVOTree::sTreeFactor;
-    F32 distance = mDrawable->mDistanceWRTCamera * LLVOVolume::sDistanceFactor * (F_PI / 3.f);
-    F32 diameter = getScale().length(); // trees have very broken scale, but length rougtly outlines proper diameter
-    F32 sz = mBillboardScale * mBillboardRatio * diameter;
-
-    for (S32 j = 0; j < sMAX_NUM_TREE_LOD_LEVELS; j++)
-    {
-        if (app_angle > LLVOTree::sLODAngles[j])
-        {
-            trunk_LOD = j;
-            break;
-        }
-    }
-
-    F32 tan_angle = (LLVOTree::sTreeFactor * 64 * sz) / distance;
-    S32 cur_detail = LLVolumeLODGroup::getDetailFromTan(ll_round(tan_angle, 0.01f)); // larger value, better quality
-
-    // for trunk_LOD lower value means better quality, but both trunk_LOD and cur_detail have 4 levels
-    trunk_LOD = llmax(trunk_LOD, LLVolumeLODGroup::NUM_LODS - cur_detail - 1);
-    trunk_LOD = llmin(trunk_LOD, sMAX_NUM_TREE_LOD_LEVELS);
+    const S32 trunk_LOD = vs_tree_lod(getAppAngle(), LLVOTree::sTreeFactor, mDrawable->mDistanceWRTCamera, getScale().length(),
+                                      mBillboardScale, mBillboardRatio, LLVOVolume::sDistanceFactor);
 
     if (mReferenceBuffer.isNull())
     {

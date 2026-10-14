@@ -1650,7 +1650,6 @@ void AOEngine::update()
                 newSet = new AOSet(currentCategory->getUUID());
                 newSet->setName(setName);
                 mSets.emplace_back(newSet);
-                setsToWrite.emplace_back(currentCategory->getUUID(), newSet);
             }
             else
             {
@@ -1661,6 +1660,10 @@ void AOEngine::update()
                 }
                 LL_DEBUGS("AOEngine") << "Updating set " << setFolderName << " in AO." << LL_ENDL;
             }
+            // An asynchronous fetch can complete after the AOSet was created.
+            // Revisit that existing incomplete set as well as a new one; only
+            // fully populated sets can skip the following state-reading pass.
+            setsToWrite.emplace_back(currentCategory->getUUID(), newSet);
             allComplete = false;
 
             for (auto num = 1; num < params.size(); ++num)

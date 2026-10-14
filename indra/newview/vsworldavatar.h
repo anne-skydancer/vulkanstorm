@@ -34,7 +34,8 @@ public:
     void     transform(const LLVector3&, const LLQuaternion&, const LLVector3& velocity, const LLVector3& angularVelocity,
                        F32 simulatorHeight = 0);
     void     append(std::vector<VSWorldRenderer::Packet>&, const LLVector3& eye, float farClip, unsigned viewportHeight, float timeDilation,
-                    unsigned viewportWidth = 0);
+                    unsigned viewportWidth = 0, unsigned visibleAvatars = 1);
+    bool     visibleFrom(const LLVector3& eye, float farClip) const;
     bool attachmentTransform(unsigned point, LLVector3&, LLQuaternion&);
     bool skinRiggedFace(const LLVolumeFace&,const LLSD&,std::vector<VSWorldRenderer::Vertex>&);
     U64      poseGeneration() const;
@@ -50,6 +51,7 @@ public:
     std::vector<AttachmentPoint>         attachmentPoints() const;
     bool                                 attachmentVisible(unsigned point, bool firstPerson) const;
     LLCharacter&                         character();
+    bool                                 isControlAvatar() const;
     bool                                 resetSkeleton(bool resetAnimations);
     void                                 resyncAnimations();
     LLAvatarAppearance&                  appearanceOwner();
@@ -69,7 +71,7 @@ public:
         Jellydoll,
         Invisible
     };
-    Visibility updateVisibility(U32 attachmentCost = 0, F32 attachmentArea = 0);
+    Visibility updateVisibility(U32 attachmentCost = 0, F32 attachmentArea = 0, bool animatedAttachments = false);
     Visibility visibility() const;
     using Attention = std::function<std::optional<LLVector3d>()>;
     void      attention(bool point, Attention target, F32 duration);
@@ -87,6 +89,9 @@ public:
     bool                   setLocalBake(unsigned index, U64 generation, const LLUUID&);
     bool                   sendAppearance(LLMessageSystem&, const LLUUID& session, U32 serial) const;
     LLSD evidence() const;
+#if VS_VULKAN_DIAGNOSTICS
+    LLSD qualifyBodyLODs(const LLVector3& eye);
+#endif
 private:
     std::shared_ptr<const void> mOwnerReservation;
     struct Impl;

@@ -79,8 +79,37 @@ def r1_contracts_passed(record, requests):
     return {1,2}.issubset({request.get('revision') for request in requests if request.get('path')=='/r1-mesh'})
 
 
-def r2_contracts_passed(record, requests, directory=None):
+def body_lods_passed(body):
+    """Require every shipped body mesh/LOD and every actual viewport case."""
+    try:
+        if body['all_parts_and_lods'] is not True or body['unchanged_pose_reuses_geometry'] is not True:
+            return False
+        catalog = Path(__file__).resolve().parents[1]/'indra/newview/character/avatar_lad.xml'
+        expected = {(mesh.attrib['type'], int(mesh.attrib['lod'])): float(mesh.attrib['min_pixel_width'])**2
+                    for mesh in ET.parse(catalog).getroot().findall('mesh')}
+        parts = {name for name, _ in expected}
+        cases = body['cases']
+        observed = set()
+        heights = {1 << power for power in range(16)}
+        visited = set()
+        for row in cases:
+            identity = (row['part_name'], row['lod'])
+            case = (row['part_name'], row['height'])
+            if (identity not in expected or row['height'] not in heights or case in visited or
+                    row['reference_area'] != expected[identity] or not 0 < row['vertices'] <= 65536 or
+                    not 0 < row['indices'] <= 131072*3 or row['indices'] % 3):
+                return False
+            observed.add(identity)
+            visited.add(case)
+        return observed == set(expected) and visited == {(part, height) for part in parts for height in heights}
+    except (KeyError, TypeError, ValueError, OSError, ET.ParseError):
+        return False
+
+
+def r2_contracts_passed(record, requests, directory=None, *, write_manifest=True):
     """Never promote a passing R1/UI replay into R2 qualification."""
+    if not isinstance(requests, list) or any(not isinstance(request, dict) for request in requests):
+        return False
     contracts = record.get('r2_contracts', {})
     required = ('ordinary_inventory_actions', 'layer_order_changed',
                 'avatar_reset', 'animated_geometry', 'animated_selection',
@@ -90,11 +119,20 @@ def r2_contracts_passed(record, requests, directory=None):
                 'motion_gesture_ao', 'logout_retirement', 'bake_gpu_readbacks',
                 'gltf_empty_replacement', 'gltf_skin_animation', 'gltf_trs_animation',
                 'fitted_detach_restoration', 'script_control_transport',
-                'gesture_animation_transport', 'ao_inventory_override')
+                'gesture_animation_transport', 'ao_inventory_override',
+                'remote_animation_selection', 'remote_visibility_restoration', 'remote_avatar_retirement',
+                'ordinary_attachment_rez', 'ordinary_attachment_detach',
+                'specialized_motions', 'physics_morphs', 'sitting_ground_hover')
     if not all(contracts.get(key) is True for key in required):
         return False
     observed = {request.get('path') for request in requests}
     if not {'r2-asset', 'r2-mesh', 'r2-bake-upload', 'r2-patch', 'r2-delete'}.issubset(observed):
+        return False
+    if record.get('connected_inventory_properties_transport') != 'ais':
+        return False
+    property_edits = [request.get('request', {}).get('desc') for request in requests
+        if request.get('path') == 'r2-patch' and request.get('item') == '71000000-0000-0000-0000-000000000002']
+    if property_edits != ['Native legacy metadata edit', 'Native modern metadata edit']:
         return False
     if directory is None:
         return False
@@ -102,16 +140,41 @@ def r2_contracts_passed(record, requests, directory=None):
         root = Path(directory) / 'r2'
         if contracts['gltf_topology_cases'] != list(range(9)) or contracts['hud_attachment_points'] != list(range(31,39)):
             return False
+        if contracts['remote_body_parts'] != list(range(8)):
+            return False
+        catalog = json.loads((root/'motion-catalog.json').read_text())
+        expected_motion_labels = {'stand','female-old-walk','female-old-run','female-new-walk','female-new-run',
+            'fall-standup','ground-sit','crouch','crouch-walk','turn-left','turn-right','female-sit','male-sit',
+            'male-old-walk','male-old-run','male-new-walk','male-new-run','female-emote-smile'}
+        expected_motion_labels.update('emote-express_'+name for name in ('afraid_emote','anger_emote','bored_emote','cry_emote','disdain',
+            'embarrassed_emote','frown','kiss','laugh_emote','open_mouth','repulsed_emote','sad_emote','shrug_emote','smile','surprise_emote','tongue_out',
+            'toothsmile','wink_emote','worry_emote'))
+        motion_rows = contracts['specialized_motion_cases']
+        if (motion_rows != catalog['cases'] or len(motion_rows) != 37 or
+                {row['label'] for row in motion_rows} != expected_motion_labels):
+            return False
+        fetched = {request.get('asset') for request in requests if request.get('path') == 'r2-asset'}
+        if not {row['mapped'] for row in motion_rows if row['kind'] != 'emote'}.issubset(fetched):
+            return False
+        if len(contracts['physics_weights']) != 3 or not all(math.isfinite(value) for value in contracts['physics_weights']):
+            return False
         retired = contracts['retired_scene']
         if retired['owners'] or retired['neighbours'] or retired['owned_object_slots'] or retired['owned_avatar_slots']:
             return False
         if retired['assets']['requests'] or int.from_bytes(base64.b64decode(retired['assets']['resident_bytes'],validate=True),'big'):
             return False
-        readbacks = read_llsd(ET.fromstring((root/'bake-readbacks.xml').read_text()))['bakes']
-        comparisons = contracts['bake_codec_comparisons']
-        if len(readbacks) != 10 or len(comparisons) != 10:
+        capture = read_llsd(ET.fromstring((root/'bake-readbacks.xml').read_text()))
+        readbacks = capture['bakes']
+        if capture['mesh_replacement'] != dict(budget_bytes=108, refusals=2, input_rejections=2, gpu_buffer_readbacks=2,
+                prior_generation_retained=True, owner_release_allows_retry=True,
+                bytes_after_retire=0, snapshot_bytes_after_retire=0):
             return False
-        if len({row['index'] for row in readbacks}) != 10 or {row['index'] for row in readbacks} != {row['index'] for row in comparisons}:
+        comparisons = contracts['bake_codec_comparisons']
+        if len(readbacks) != 11 or len(comparisons) != 11:
+            return False
+        if {row['index'] for row in readbacks} != set(range(11)) or {row['index'] for row in readbacks} != {row['index'] for row in comparisons}:
+            return False
+        if not body_lods_passed(contracts['body_lod_publications']):
             return False
         artifacts = []
         for row in readbacks:
@@ -129,6 +192,17 @@ def r2_contracts_passed(record, requests, directory=None):
                 digests.append(digest)
                 artifacts.append(dict(path=path.name,bytes=path.stat().st_size,sha256=digest))
             if digests[0] != digests[1]:
+                return False
+        for kind, size in (('vertices', 96), ('indices', 12)):
+            hashes = []
+            for side in ('actual', 'expected'):
+                path = root/f'mesh-{kind}-{side}.bin'
+                if path.stat().st_size != size:
+                    return False
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                hashes.append(digest)
+                artifacts.append(dict(path=path.name, bytes=size, sha256=digest))
+            if hashes[0] != hashes[1]:
                 return False
         for row in comparisons:
             if (row['maximum_allowed_error'] != 16 or row['maximum_allowed_mean_error'] != 2 or
@@ -157,7 +231,11 @@ def r2_contracts_passed(record, requests, directory=None):
         saved = read_llsd(ET.fromstring((root/'contracts.xml').read_text()))
         if saved != contracts:
             return False
-        (root/'artifact-hashes.json').write_text(json.dumps(dict(artifacts=artifacts),indent=2)+'\n')
+        manifest = dict(artifacts=artifacts)
+        if write_manifest:
+            (root/'artifact-hashes.json').write_text(json.dumps(manifest,indent=2)+'\n')
+        elif json.loads((root/'artifact-hashes.json').read_text()) != manifest:
+            return False
     except (KeyError,TypeError,ValueError,OSError,ET.ParseError):
         return False
     return True
@@ -178,6 +256,22 @@ INVENTORY_SKELETON = [dict(folder_id=INVENTORY_ROOT,
     dict(folder_id=f'70000000-0000-0000-0000-{suffix:012d}', parent_id=INVENTORY_ROOT,
          name=name, type_default=kind, version=1) for kind, name, suffix in SYSTEM_FOLDERS]
 
+
+
+def baseline_inventory_item(identifier):
+    """Known received texture and script, shared by AIS and legacy item fetches."""
+    script = identifier == '71000000-0000-0000-0000-000000000004'
+    if not script and identifier != '71000000-0000-0000-0000-000000000001':
+        return None
+    agent = '10000000-0000-0000-0000-000000000001'
+    return dict(item_id=identifier,
+        parent_id='70000000-0000-0000-0000-000000000009' if script else '70000000-0000-0000-0000-000000000003',
+        asset_id='60000000-0000-0000-0000-000000000009' if script else '60000000-0000-0000-0000-000000000006',
+        type='lsltext' if script else 'texture', inv_type='lsl' if script else 'texture',
+        name='Native script' if script else 'Native received texture', desc='Loopback inventory asset', flags=0, created_at=0,
+        permissions=dict(creator_id=agent, owner_id=agent, last_owner_id=agent, base_mask=2147483647,
+                         owner_mask=2147483647, next_owner_mask=2147483647, group_mask=0, everyone_mask=0),
+        sale_info=dict(sale_type='not', sale_price=0))
 
 
 def baseline_inventory_items(identifier):
@@ -543,6 +637,8 @@ class Handler(BaseHTTPRequestHandler):
                                              signature=payload[:16].hex(), metadata=metadata))
             suffix = '002' if kind == 'texture' else '003'
             asset_suffix = '007' if kind == 'texture' else '008'
+            r2_fixture.uploaded_item(self.server, '71000000-0000-0000-0000-000000000' + suffix,
+                                     '60000000-0000-0000-0000-000000000' + asset_suffix, metadata)
             self.respond_llsd(dict(state='complete', new_inventory_item='71000000-0000-0000-0000-000000000' + suffix,
                                    new_asset='60000000-0000-0000-0000-000000000' + asset_suffix,
                                    upload_price=0, new_next_owner_mask=2147483647,
@@ -676,25 +772,9 @@ class Handler(BaseHTTPRequestHandler):
                 fixture=r2_fixture.item(self.server,item.get('item_id'))
                 if fixture is not None:
                     append_llsd(items,fixture);continue
-                script = item['item_id'] == '71000000-0000-0000-0000-000000000004'
-                result = ET.SubElement(items, 'map')
-                for key, tag, value in [('item_id', 'uuid', item['item_id']),
-                                        ('parent_id', 'uuid', '70000000-0000-0000-0000-000000000009' if script else '70000000-0000-0000-0000-000000000003'),
-                                        ('asset_id', 'uuid', '60000000-0000-0000-0000-000000000009' if script else '60000000-0000-0000-0000-000000000006'),
-                                        ('type', 'string', 'lsltext' if script else 'texture'), ('inv_type', 'string', 'lsl' if script else 'texture'),
-                                        ('name', 'string', 'Native script' if script else 'Native received texture'), ('desc', 'string', 'Loopback inventory asset'),
-                                        ('flags', 'integer', '0'), ('created_at', 'integer', '0')]:
-                    ET.SubElement(result, 'key').text = key; ET.SubElement(result, tag).text = value
-                ET.SubElement(result, 'key').text = 'permissions'; permissions = ET.SubElement(result, 'map')
-                for key in ('creator_id', 'owner_id', 'last_owner_id'):
-                    ET.SubElement(permissions, 'key').text = key
-                    ET.SubElement(permissions, 'uuid').text = '10000000-0000-0000-0000-000000000001'
-                for key, value in [('base_mask', '2147483647'), ('owner_mask', '2147483647'),
-                                   ('next_owner_mask', '2147483647'), ('group_mask', '0'), ('everyone_mask', '0')]:
-                    ET.SubElement(permissions, 'key').text = key; ET.SubElement(permissions, 'integer').text = value
-                ET.SubElement(result, 'key').text = 'sale_info'; sale = ET.SubElement(result, 'map')
-                ET.SubElement(sale, 'key').text = 'sale_type'; ET.SubElement(sale, 'string').text = 'not'
-                ET.SubElement(sale, 'key').text = 'sale_price'; ET.SubElement(sale, 'integer').text = '0'
+                baseline = baseline_inventory_item(item['item_id'])
+                if baseline is not None:
+                    append_llsd(items, baseline)
         elif self.path == '/inventory':
             root = ET.Element('llsd'); mapping = ET.SubElement(root, 'map')
             ET.SubElement(mapping, 'key').text = 'folders'
@@ -702,7 +782,8 @@ class Handler(BaseHTTPRequestHandler):
             for folder in request.get('folders', []):
                 children = [dict(folder_id=item['folder_id'], parent_id=item['parent_id'],
                                  name=item['name'], type=item['type_default'], version=1)
-                            for item in INVENTORY_SKELETON if item['parent_id'] == folder['folder_id']]
+                            for item in getattr(self.server,'r2_categories',INVENTORY_SKELETON)
+                            if item['parent_id'] == folder['folder_id']]
                 result = ET.SubElement(folders, 'map')
                 for key, tag, value in [('folder_id', 'uuid', folder['folder_id']),
                                         ('owner_id', 'uuid', folder['owner_id']),
@@ -916,6 +997,7 @@ def main():
         r2_fixture.configure(server,directory/'r2' if args.r2_contracts else None)
         server.r2_categories = [dict(row) for row in INVENTORY_SKELETON]
         server.r2_baseline_items = baseline_inventory_items
+        server.r2_baseline_item = baseline_inventory_item
         server.upload_directory = directory / 'upload-bodies'
         worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
         env['VS_VULKAN_REPLAY_SEED'] = server.url + '/seed'
@@ -1001,6 +1083,19 @@ def main():
             server.shutdown(); worker.join()
         (directory / 'http-replay.json').write_text(json.dumps(server.requests, indent=2) + '\n')
     (directory / 'viewer.log').write_text(log, encoding='utf-8')
+    report['viewer_executable_sha256'] = hashlib.sha256(executable.read_bytes()).hexdigest()
+    report['source_qualified'] = False
+    try:
+        provenance = json.loads((build/'parity-build-provenance.json').read_text())
+        root = Path(__file__).resolve().parents[1]
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
+        dirty = subprocess.check_output(['git', 'status', '--porcelain', '--', 'indra', 'scripts', 'tests'], cwd=root, text=True)
+        if (not dirty.strip() and provenance.get('complete') is True and provenance.get('source_commit') == head and
+                provenance.get('executable_sha256') == report['viewer_executable_sha256']):
+            report['source_qualified'] = True
+            report['source_commit'] = head
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        pass  # Development replay evidence remains distinct from source qualification.
     report.update(passed=passed, exit_code=code, live_server_qualified=False,
                   presentation_qualified=False if args.headless else bool(harness.get('presentation_qualified')),
                   execution_budget=dict(viewer=VIEWER_REPLAY_SECONDS, process=PROCESS_REPLAY_SECONDS,

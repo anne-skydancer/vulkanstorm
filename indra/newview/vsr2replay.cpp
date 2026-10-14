@@ -19,10 +19,17 @@
 #include "llinventorymodel.h"
 #include "llinventorymodelbackgroundfetch.h"
 #include "llappearancemgr.h"
+#include "llattachmentsmgr.h"
 #include "llframetimer.h"
 #include "llcharacter.h"
 #include "lljoint.h"
 #include "llkeyframemotion.h"
+#include "llkeyframestandmotion.h"
+#include "llkeyframewalkmotion.h"
+#include "llkeyframefallmotion.h"
+#include "llemote.h"
+#include "llphysicsmotion.h"
+#include "vsavatarmotions.h"
 #include "llagent.h"
 #include "lldir.h"
 #include "llxfermanager.h"
@@ -38,6 +45,7 @@
 #include "llsdjson.h"
 #include "llsdutil_math.h"
 #include "llprimitive.h"
+#include "llquantize.h"
 #include "llvolumemessage.h"
 #include "message.h"
 #include <array>
@@ -57,15 +65,68 @@ void require(bool condition, const char* message)
 const LLUUID cof("70000000-0000-0000-0000-000000000017");
 const LLUUID bodyFolder("70000000-0000-0000-0000-000000000010");
 const LLUUID clothingFolder("70000000-0000-0000-0000-000000000007");
+const LLUUID       objectsFolder("70000000-0000-0000-0000-000000000008");
 const LLUUID animationID("c1000000-0000-0000-0000-000000000001");
 const LLUUID geometryID("c2000000-0000-0000-0000-000000000001");
 const LLUUID riggedAssetID("c3000000-0000-0000-0000-000000000001");
+const LLUUID       remoteAvatarID("c5000000-0000-0000-0000-000000000001");
+constexpr unsigned completedStep = 53;
+struct MotionCase
+{
+    std::string label;
+    LLUUID      source, mapped;
+    bool        female, newWalk;
+    std::string kind;
+};
+const std::vector<MotionCase>& motionCases()
+{
+    static const std::vector<MotionCase> cases = []
+    {
+        std::vector<MotionCase> rows{ { "stand", ANIM_AGENT_STAND, ANIM_AGENT_STAND, true, false, "stand" },
+                                      { "female-old-walk", ANIM_AGENT_WALK, ANIM_AGENT_FEMALE_WALK, true, false, "walk" },
+                                      { "female-old-run", ANIM_AGENT_RUN, ANIM_AGENT_RUN, true, false, "walk" },
+                                      { "female-new-walk", ANIM_AGENT_WALK, ANIM_AGENT_FEMALE_WALK_NEW, true, true, "walk" },
+                                      { "female-new-run", ANIM_AGENT_RUN, ANIM_AGENT_FEMALE_RUN_NEW, true, true, "walk" },
+                                      { "fall-standup", ANIM_AGENT_STANDUP, ANIM_AGENT_STANDUP, true, true, "fall" },
+                                      { "ground-sit", ANIM_AGENT_SIT_GROUND_CONSTRAINED, ANIM_AGENT_SIT_GROUND_CONSTRAINED, true, true,
+                                        "keyframe" },
+                                      { "crouch", ANIM_AGENT_CROUCH, ANIM_AGENT_CROUCH, true, true, "stand" },
+                                      { "crouch-walk", ANIM_AGENT_CROUCHWALK, ANIM_AGENT_CROUCHWALK, true, true, "walk" },
+                                      { "turn-left", ANIM_AGENT_TURNLEFT, ANIM_AGENT_TURNLEFT, true, true, "walk" },
+                                      { "turn-right", ANIM_AGENT_TURNRIGHT, ANIM_AGENT_TURNRIGHT, true, true, "walk" },
+                                      { "female-sit", ANIM_AGENT_SIT, ANIM_AGENT_SIT_FEMALE, true, true, "keyframe" },
+                                      { "male-sit", ANIM_AGENT_SIT, ANIM_AGENT_SIT, false, true, "keyframe" },
+                                      { "male-old-walk", ANIM_AGENT_WALK, ANIM_AGENT_WALK, false, false, "walk" },
+                                      { "male-old-run", ANIM_AGENT_RUN, ANIM_AGENT_RUN, false, false, "walk" },
+                                      { "male-new-walk", ANIM_AGENT_WALK, ANIM_AGENT_WALK_NEW, false, true, "walk" },
+                                      { "male-new-run", ANIM_AGENT_RUN, ANIM_AGENT_RUN_NEW, false, true, "walk" },
+                                      { "female-emote-smile", ANIM_AGENT_EXPRESS_SMILE, ANIM_AGENT_EXPRESS_SMILE, true, true, "emote" } };
+        for (const auto& id :
+             { ANIM_AGENT_EXPRESS_AFRAID, ANIM_AGENT_EXPRESS_ANGER, ANIM_AGENT_EXPRESS_BORED, ANIM_AGENT_EXPRESS_CRY,
+               ANIM_AGENT_EXPRESS_DISDAIN, ANIM_AGENT_EXPRESS_EMBARRASSED, ANIM_AGENT_EXPRESS_FROWN, ANIM_AGENT_EXPRESS_KISS,
+               ANIM_AGENT_EXPRESS_LAUGH, ANIM_AGENT_EXPRESS_OPEN_MOUTH, ANIM_AGENT_EXPRESS_REPULSED, ANIM_AGENT_EXPRESS_SAD,
+               ANIM_AGENT_EXPRESS_SHRUG, ANIM_AGENT_EXPRESS_SMILE, ANIM_AGENT_EXPRESS_SURPRISE, ANIM_AGENT_EXPRESS_TONGUE_OUT,
+               ANIM_AGENT_EXPRESS_TOOTHSMILE, ANIM_AGENT_EXPRESS_WINK, ANIM_AGENT_EXPRESS_WORRY })
+        {
+            const auto* name = gAnimLibrary.animStateToString(id);
+            require(name, "R2 motion fixture lacks a standard animation name");
+            rows.push_back({ std::string("emote-") + name, id, id, false, true, "emote" });
+        }
+        return rows;
+    }();
+    return cases;
+}
 LLUUID       item(unsigned index)
 { return LLUUID(llformat("b1000000-0000-0000-0000-%012u", index)); }
 LLUUID asset(unsigned index)
 { return LLUUID(llformat("b2000000-0000-0000-0000-%012u", index)); }
 struct Replay
 {
+    bool                                 savedNewWalk = false, savedPhysics = false;
+    F32                                  savedPhysicsLOD = 0;
+    unsigned                             motionCase = 0, motionPhase = 0;
+    double                               motionTime = 0;
+    std::array<F32, 3>                   physicsWeights{};
     unsigned                             step = 0, logged = ~0u;
     double                               deadline     = 0;
     double                               nextProgress = 0;
@@ -75,8 +136,15 @@ struct Replay
     std::filesystem::path                directory;
     std::map<LLUUID, S32>                serverAnimations;
     bool                                 animationReply = false;
+    bool                                 attachmentQueued = false, attachmentRezSeen = false;
+    bool                                 detachQueued = false, detachSeen = false;
     std::vector<VSWorldRenderer::Packet> initialPose;
     LLQuaternion                         initialShoulder;
+    LLQuaternion                         remoteShoulder;
+    F32                                  remoteHeight              = 0;
+    bool                                 visibilitySettingsChanged = false, savedFriendsOnly = false;
+    U32                                  savedComplexity     = 0;
+    S32                                  savedComplexityMode = 0;
     unsigned                             topologyCase      = 0;
     unsigned                             gltfAnimationCase = 0;
     LLVector3                            originalShoulderPosition;
@@ -122,10 +190,13 @@ struct Replay
     }
     ~Replay()
     {
+        restoreVisibilitySettings();
         if (gMessageSystem)
         {
             gMessageSystem->setHandlerFunc("AgentAnimation", nullptr);
             gMessageSystem->setHandlerFunc("ForceScriptControlRelease", nullptr);
+            gMessageSystem->setHandlerFunc("RezMultipleAttachmentsFromInv", nullptr);
+            gMessageSystem->setHandlerFunc("DetachAttachmentIntoInv", nullptr);
             if (legacyEnabled)
             {
                 gMessageSystem->setHandlerFunc("AssetUploadRequest", nullptr);
@@ -320,14 +391,26 @@ struct Replay
         }
         require(message->sendReliable(session.host()) > 0, "R2 simulator animation response could not be sent");
     }
-    std::vector<VSWorldRenderer::Packet> body(VSNativeSession& session)
+    void restoreVisibilitySettings()
     {
+        if (!visibilitySettingsChanged)
+            return;
+        gSavedSettings.setBOOL("RenderAvatarFriendsOnly", savedFriendsOnly);
+        gSavedSettings.setU32("RenderAvatarMaxComplexity", savedComplexity);
+        gSavedSettings.setS32("RenderAvatarComplexityMode", savedComplexityMode);
+        gSavedSettings.setBOOL("UseNewWalkRun", savedNewWalk);
+        gSavedSettings.setBOOL("AvatarPhysics", savedPhysics);
+        gSavedSettings.setF32("RenderAvatarPhysicsLODFactor", savedPhysicsLOD);
+        visibilitySettingsChanged = false;
+    }
+    std::vector<VSWorldRenderer::Packet> body(VSNativeSession& session, const LLUUID* identity = nullptr)
+    {
+        const LLUUID& id      = identity ? *identity : account.agent;
         auto& world   = gViewerWindow->nativeContext()->world();
         auto  packets = world.packets(session.position() + LLVector3(0, -4, 1), 128, 480, 640);
-        packets.erase(
-            std::remove_if(packets.begin(), packets.end(), [&](const auto& packet)
-                           { return !std::equal(packet.objectIdentity.begin(), packet.objectIdentity.end(), account.agent.mData); }),
-            packets.end());
+        packets.erase(std::remove_if(packets.begin(), packets.end(), [&](const auto& packet)
+                                     { return !std::equal(packet.objectIdentity.begin(), packet.objectIdentity.end(), id.mData); }),
+                      packets.end());
         require(!packets.empty(), "R2 real avatar did not publish visible body triangles");
         auto bounds = VSWorldRenderer::bounds(packets.front().mesh);
         for (const auto& packet : packets)
@@ -342,7 +425,7 @@ struct Replay
                 bounds[1][axis] = std::max(bounds[1][axis], candidate[1][axis]);
             }
         }
-        const auto object = world.object(account.agent);
+        const auto object = world.object(id);
         require(object.has_value(), "R2 animated avatar has no scene handle");
         const auto selected = world.selectionBounds(*object);
         require(selected.has_value(), "R2 animated selection bounds are missing");
@@ -372,15 +455,17 @@ struct Replay
         LLSD             manifest;
         const std::array types{ LLWearableType::WT_SHAPE, LLWearableType::WT_SKIN,  LLWearableType::WT_HAIR, LLWearableType::WT_EYES,
                                 LLWearableType::WT_SHIRT, LLWearableType::WT_SHAPE, LLWearableType::WT_SHIRT };
-        for (unsigned index = 1; index <= types.size(); ++index)
+        for (unsigned index : { 1u, 2u, 3u, 4u, 5u, 6u, 7u, 10u, 11u })
         {
-            const auto type     = types[index - 1];
+            const auto type     = index == 11 ? LLWearableType::WT_PHYSICS : index == 10 ? LLWearableType::WT_SKIRT : types[index - 1];
             auto       wearable = VSWearable::create(item(index), asset(index), {});
             wearable->setType(type, &appearance);
             wearable->setName("R2 fixture " + std::to_string(index));
             wearable->setDefinitionVersion(LLWearable::getCurrentDefinitionVersion());
             if (type == LLWearableType::WT_SHAPE)
                 wearable->setVisualParamWeight(33, index == 6 ? .85f : .25f, false);
+            if (type == LLWearableType::WT_PHYSICS)
+                wearable->setVisualParamWeight(10014, .8f, false);
             for (const auto& [texture, entry] : LLAvatarAppearance::getDictionary()->getTextures())
                 if (entry->mIsLocalTexture && entry->mWearableType == type)
                 {
@@ -421,6 +506,15 @@ struct Replay
             row["name"]     = index == 8 ? "R2 actual animation" : "R2 actual gesture";
             manifest["items"].append(row);
         }
+        LLSD attachment         = manifest["items"][4];
+        attachment["item_id"]   = item(12);
+        attachment["asset_id"]  = LLUUID("c6000000-0000-0000-0000-000000000001");
+        attachment["parent_id"] = objectsFolder;
+        attachment["type"]      = "object";
+        attachment["inv_type"]  = "object";
+        attachment["flags"]     = 0;
+        attachment["name"]      = "R2 inventory attachment";
+        manifest["items"].append(attachment);
         LLMultiGesture gesture;
         gesture.mName       = "R2 actual gesture";
         gesture.mTrigger    = "/r2-gesture";
@@ -441,6 +535,29 @@ struct Replay
         gestureFile.write(reinterpret_cast<const char*>(bytes.data()), packer.getCurrentSize());
         require(gestureFile.good(), "R2 actual gesture fixture write failed");
         manifest["agent"]     = agent;
+        LLSD             motionCatalog;
+        std::set<LLUUID> clips;
+        for (const auto& test : motionCases())
+        {
+            LLSD row;
+            row["label"]    = test.label;
+            row["source"]   = test.source;
+            row["mapped"]   = test.mapped;
+            row["female"]   = test.female;
+            row["new_walk"] = test.newWalk;
+            row["kind"]     = test.kind;
+            motionCatalog["cases"].append(row);
+            if (test.kind != "emote")
+                clips.insert(test.mapped);
+        }
+        for (const auto& clip : clips)
+            motionCatalog["assets"].append(clip);
+        const auto    motionPending = directory / "motion-catalog.pending.json";
+        std::ofstream motionFile(motionPending);
+        motionFile << LlsdToJson(motionCatalog);
+        motionFile.close();
+        require(!motionFile.fail(), "R2 standard motion catalog write failed");
+        std::filesystem::rename(motionPending, directory / "motion-catalog.json");
         const auto    pending = directory / "inventory.pending.json";
         std::ofstream output(pending);
         output << LlsdToJson(manifest);
@@ -450,7 +567,8 @@ struct Replay
         std::filesystem::rename(pending, directory / "inventory.json");
     }
     void avatarPacket(VSNativeSession& session, bool primitive = false, U32 parent = 0, U8 point = 0, bool rigged = false,
-                      bool control = false)
+                      bool control = false, bool remote = false, const LLUUID& inventory = LLUUID::null,
+                      const LLVector3& velocity = LLVector3::zero)
     {
         LLMessageSystem* message = gMessageSystem;
         message->newMessage("ObjectUpdate");
@@ -458,9 +576,9 @@ struct Replay
         message->addU64("RegionHandle", session.handle());
         message->addU16("TimeDilation", 65535);
         message->nextBlock("ObjectData");
-        message->addU32("ID", primitive ? 981 : 980);
+        message->addU32("ID", remote ? 982 : primitive ? 981 : 980);
         message->addU8("State", U8((point << 4) | (point >> 4)));
-        message->addUUID("FullID", primitive ? geometryID : session.account().agent);
+        message->addUUID("FullID", remote ? remoteAvatarID : primitive ? geometryID : session.account().agent);
         message->addU32("CRC", 0);
         message->addU8("PCode", primitive ? LL_PCODE_VOLUME : LL_PCODE_LEGACY_AVATAR);
         message->addU8("Material", 0);
@@ -472,6 +590,8 @@ struct Replay
         pose[offset]               = position.mV[0];
         pose[offset + 1]           = position.mV[1];
         pose[offset + 2]           = position.mV[2];
+        for (unsigned axis = 0; axis < 3; ++axis)
+            pose[offset + 3 + axis] = velocity.mV[axis];
         message->addBinaryData("ObjectData", pose.data(), S32((primitive ? 15 : 19) * sizeof(F32)));
         message->addU32("ParentID", parent);
         message->addU32("UpdateFlags", 0);
@@ -480,8 +600,10 @@ struct Replay
         LLPrimitive textures;
         textures.setNumTEs(primitive ? 1 : TEX_NUM_INDICES);
         textures.packTEMessage(message);
-        for (const char* name : { "TextureAnim", "NameValue", "Data", "Text", "MediaURL", "PSBlock" })
+        for (const char* name : { "TextureAnim", "Data", "Text", "MediaURL", "PSBlock" })
             message->addBinaryData(name, nullptr, 0);
+        const std::string names = inventory.isNull() ? "" : "AttachItemID STRING RW SV " + inventory.asString() + "\n";
+        message->addBinaryData("NameValue", names.data(), S32(names.size()));
         if (rigged)
         {
             std::vector<U8> extra(control ? 34 : 24);
@@ -512,12 +634,102 @@ struct Replay
         message->addVector3("JointAxisOrAnchor", LLVector3::zero);
         require(message->sendReliable(session.host()) > 0, "R2 avatar transport failed");
     }
-    void killGeometry(VSNativeSession& session)
+    static void attachmentRequest(LLMessageSystem* message, void** data)
+    {
+        auto&      replay  = *reinterpret_cast<Replay*>(data);
+        const auto session = VSNativeSession::active();
+        if (!session || !session->current(replay.account) || message->getSender() != session->host())
+            return;
+        LLUUID agent, login, inventory, owner, compound;
+        message->getUUID("AgentData", "AgentID", agent);
+        message->getUUID("AgentData", "SessionID", login);
+        message->getUUID("HeaderData", "CompoundMsgID", compound);
+        U8   count, point;
+        bool detach;
+        message->getU8("HeaderData", "TotalObjects", count);
+        message->getBOOL("HeaderData", "FirstDetachAll", detach);
+        require(message->getNumberOfBlocks("ObjectData") == 1, "R2 attachment compound packet contains unexpected objects");
+        message->getUUID("ObjectData", "ItemID", inventory);
+        message->getUUID("ObjectData", "OwnerID", owner);
+        message->getU8("ObjectData", "AttachmentPt", point);
+        require(agent == replay.account.agent && login == replay.account.session && owner == agent && compound.notNull() && count == 1 &&
+                    !detach && inventory == item(12) && point == 0x81,
+                "R2 ordinary attachment request lost its account/inventory/point ownership");
+        require(!replay.attachmentRezSeen, "R2 ordinary attachment queue duplicated its acknowledged rez request");
+        replay.attachmentRezSeen = true;
+    }
+    static void detachRequest(LLMessageSystem* message, void** data)
+    {
+        auto&      replay  = *reinterpret_cast<Replay*>(data);
+        const auto session = VSNativeSession::active();
+        if (!session || !session->current(replay.account) || message->getSender() != session->host())
+            return;
+        LLUUID agent, inventory;
+        message->getUUID("ObjectData", "AgentID", agent);
+        message->getUUID("ObjectData", "ItemID", inventory);
+        require(agent == replay.account.agent && inventory == item(12), "R2 ordinary detach request lost account/inventory ownership");
+        require(!replay.detachSeen, "R2 ordinary attachment queue duplicated its acknowledged detach request");
+        replay.detachSeen = true;
+    }
+    void remoteAppearance(VSNativeSession& session, VSWorldAvatar& source, std::optional<bool> female = {})
+    {
+        LLMessageSystem* message = gMessageSystem;
+        message->newMessage("AvatarAppearance");
+        message->nextBlock("Sender");
+        message->addUUID("ID", remoteAvatarID);
+        message->addBOOL("IsTrial", false);
+        message->nextBlock("ObjectData");
+        LLPrimitive textures;
+        textures.setNumTEs(TEX_NUM_INDICES);
+        const auto uploads = session.appearance()->evidence()["bake_uploads"];
+        for (const auto& row : llsd::inArray(uploads))
+        {
+            const auto* baked = LLAvatarAppearance::getDictionary()->getBakedTexture(EBakedTextureIndex(row["index"].asInteger()));
+            require(baked, "R2 remote appearance contains an unknown bake channel");
+            textures.setTETexture(U8(baked->mTextureIndex), row["asset"].asUUID());
+        }
+        textures.packTEMessage(message);
+        auto&       appearance = source.appearanceOwner();
+        const auto* sexParam   = appearance.getVisualParam("male");
+        require(sexParam, "R2 remote appearance lacks the shared sex parameter");
+        for (auto* param = appearance.getFirstVisualParam(); param; param = appearance.getNextVisualParam())
+            if (param->getGroup() == VISUAL_PARAM_GROUP_TWEAKABLE || param->getGroup() == VISUAL_PARAM_GROUP_TRANSMIT_NOT_TWEAKABLE)
+            {
+                message->nextBlock("VisualParam");
+                message->addU8("ParamValue", female && param == sexParam
+                                                 ? (*female ? 0 : 255)
+                                                 : F32_to_U8(param->getWeight(), param->getMinWeight(), param->getMaxWeight()));
+            }
+        message->nextBlock("AppearanceData");
+        message->addU8("AppearanceVersion", 1);
+        message->addS32("CofVersion", 1);
+        message->addU32("Flags", 0);
+        message->nextBlock("AppearanceHover");
+        message->addVector3("HoverHeight", LLVector3(0, 0, .1f));
+        require(message->sendReliable(session.host()) > 0, "R2 remote appearance transport failed");
+    }
+    void remoteAnimation(VSNativeSession& session, const LLUUID& id = animationID, S32 sequence = 1)
+    {
+        LLMessageSystem* message = gMessageSystem;
+        message->newMessage("AvatarAnimation");
+        message->nextBlock("Sender");
+        message->addUUID("ID", remoteAvatarID);
+        if (id.notNull())
+        {
+            message->nextBlock("AnimationList");
+            message->addUUID("AnimID", id);
+            message->addS32("AnimSequenceID", sequence);
+            message->nextBlock("AnimationSourceList");
+            message->addUUID("ObjectID", remoteAvatarID);
+        }
+        require(message->sendReliable(session.host()) > 0, "R2 remote animation transport failed");
+    }
+    void killGeometry(VSNativeSession& session, U32 local = 981)
     {
         LLMessageSystem* message = gMessageSystem;
         message->newMessage("KillObject");
         message->nextBlock("ObjectData");
-        message->addU32("ID", 981);
+        message->addU32("ID", local);
         require(message->sendReliable(session.host()) > 0, "R2 object retirement transport failed");
     }
     void riggedFixture(VSWorldAvatar& avatar)
@@ -590,6 +802,14 @@ struct Replay
     }
     bool tick(VSNativeSession& session, LLSD& report)
     {
+        // The enclosing replay may continue its skin/preferences traversal for
+        // minutes. The R2 deadline bounds unfinished R2 work, not those later
+        // independent UI stages; logout still validates retirement separately.
+        if (step == completedStep)
+        {
+            report["r2_contracts"] = evidence;
+            return true;
+        }
         report["r2_progress"] = evidence;
         if (logged != step)
         {
@@ -609,7 +829,7 @@ struct Replay
             fixtures(*avatar, account.agent);
             gMessageSystem->setHandlerFunc("AgentAnimation", animationRequest, reinterpret_cast<void**>(this));
             avatarPacket(session);
-            for (const auto folder : { cof, bodyFolder, clothingFolder })
+            for (const auto folder : { cof, bodyFolder, clothingFolder, objectsFolder })
                 if (auto* category = gInventory.getCategory(folder))
                 {
                     category->setVersion(LLViewerInventoryCategory::VERSION_UNKNOWN);
@@ -666,13 +886,15 @@ struct Replay
             if (!session.appearance()->isWorn(item(5)))
                 return false;
             LLAppearanceMgr::instance().wearItemOnAvatar(item(7), true, false);
+            LLAppearanceMgr::instance().wearItemOnAvatar(item(10), true, false);
+            LLAppearanceMgr::instance().wearItemOnAvatar(item(11), true, false);
             ++step;
             return false;
         }
         if (step == 4)
         {
             const auto worn = vs_avatar_wearable_items(unsigned(LLWearableType::WT_SHIRT));
-            if (worn.size() != 2)
+            if (worn.size() != 2 || !session.appearance()->isWorn(item(10)) || !session.appearance()->isWorn(item(11)))
                 return false;
             auto links = LLAppearanceMgr::instance().findCOFItemLinks(item(7));
             require(!links.empty(), "R2 real COF link is missing");
@@ -718,6 +940,7 @@ struct Replay
         }
         if (step == 8)
         {
+            evidence["body_lod_publications"] = avatar->qualifyBodyLODs(session.position() + LLVector3(0, -4, 1));
             initialPose    = body(session);
             auto* shoulder = avatar->character().getJoint("mShoulderRight");
             require(shoulder, "R2 avatar shoulder joint is missing");
@@ -952,14 +1175,29 @@ struct Replay
         {
             if (world.object(geometryID))
                 return false;
+            if (!gInventory.getItem(item(12)))
+                return false;
+            if (!attachmentQueued)
+            {
+                gMessageSystem->setHandlerFunc("RezMultipleAttachmentsFromInv", attachmentRequest, reinterpret_cast<void**>(this));
+                gMessageSystem->setHandlerFunc("DetachAttachmentIntoInv", detachRequest, reinterpret_cast<void**>(this));
+                LLAttachmentsMgr::instance().addAttachmentRequest(item(12), 1, true);
+                attachmentQueued = true;
+                return false;
+            }
+            if (!attachmentRezSeen)
+                return false;
             originalShoulderPosition = avatar->character().getJoint("mShoulderRight")->getPosition();
             riggedFixture(*avatar);
-            avatarPacket(session, true, 980, 1, true);
+            avatarPacket(session, true, 980, 1, true, false, false, item(12));
             ++step;
             return false;
         }
         if (step == 19)
         {
+            if (!session.appearance()->isWorn(item(12)) || session.appearance()->evidence()["pending_attachment_operations"].asInteger() ||
+                LLAppearanceMgr::instance().findCOFItemLinks(item(12)).empty())
+                return false;
             const auto packets = geometry(session);
             if (packets.empty())
                 return false;
@@ -970,6 +1208,7 @@ struct Replay
             require(avatar->character().getJoint("mShoulderRight")->hasAttachmentPosOverride(position, owner) && owner == riggedAssetID,
                     "R2 fitted attachment did not acquire its real joint override");
             initialGLTF = packets.front().mesh;
+            evidence["ordinary_attachment_rez"] = true;
             gltfBounds(*world.object(geometryID), initialGLTF);
             require(session.requestAnimations({ animationID }, true), "R2 rigged animation request failed");
             ++step;
@@ -995,6 +1234,17 @@ struct Replay
                            .01f;
             if (!changed)
                 return false;
+            if (step == 20)
+            {
+                if (!detachQueued)
+                {
+                    LLAppearanceMgr::instance().removeItemFromAvatar(item(12));
+                    detachQueued = true;
+                    return false;
+                }
+                if (!detachSeen)
+                    return false;
+            }
             gltfBounds(*world.object(geometryID), packets.front().mesh);
             evidence[step == 20 ? "rigged_attachments" : "animesh"] = true;
             if (step == 20)
@@ -1010,6 +1260,10 @@ struct Replay
         {
             if (world.object(geometryID) || !retiredGLTF.expired())
                 return false;
+            if (session.appearance()->isWorn(item(12)) || session.appearance()->evidence()["pending_attachment_operations"].asInteger() ||
+                !LLAppearanceMgr::instance().findCOFItemLinks(item(12)).empty())
+                return false;
+            evidence["ordinary_attachment_detach"] = true;
             require(!world.current(*retiredObject), "R2 detached rigged object remained current");
             LLVector3 position;
             LLUUID    owner;
@@ -1071,7 +1325,7 @@ struct Replay
             std::vector<VSWorldAvatar::LocalBake> snapshots;
             for (const auto& bake : avatar->localBakes())
                 snapshots.push_back(avatar->localBake(bake.index));
-            require(snapshots.size() == 10, "R2 composite readback lacks all applicable body bake publications");
+            require(snapshots.size() == 11, "R2 composite readback lacks all body bake publications including the worn skirt");
             vs_r2_capture_bakes(*gViewerWindow->nativeContext(), std::move(snapshots), directory.string(), bakeReadback);
             ++step;
             return false;
@@ -1088,7 +1342,7 @@ struct Replay
         if (step == 28)
         {
             const auto uploads = session.appearance()->evidence()["bake_uploads"];
-            require(uploads.isArray() && uploads.size() == 10, "R2 codec replay lacks complete bake upload identities");
+            require(uploads.isArray() && uploads.size() == 11, "R2 codec replay lacks complete bake upload identities");
             const auto& row      = uploads[codecCase];
             const auto  snapshot = avatar->localBake(row["index"].asInteger());
             require(snapshot.color && snapshot.generation == ll_U64_from_sd(row["generation"]),
@@ -1199,8 +1453,12 @@ struct Replay
             LLInventoryModel::cat_array_t  categories;
             LLInventoryModel::item_array_t links;
             gInventory.collectDescendents(state->mInventoryUUID, categories, links, LLInventoryModel::EXCLUDE_TRASH);
-            require(std::any_of(links.begin(), links.end(), [](const auto& link) { return link->getLinkedUUID() == item(8); }),
-                    "R2 AO animation lacks a real inventory state link");
+            const auto linked = std::find_if(links.begin(), links.end(), [](const auto& link) { return link->getLinkedUUID() == item(8); });
+            // addAnimation exposes an optimistic state row before its ordinary
+            // asynchronous inventory callback publishes the real link.
+            if (linked == links.end())
+                return false;
+            require((*linked)->getAssetUUID() == animationID, "R2 AO inventory link resolved to a different animation asset");
             AOEngine::instance().selectSet(set);
             AOEngine::instance().enable(true);
             require(session.requestAnimations({ ANIM_AGENT_STAND }, true), "R2 ordinary stand animation request failed");
@@ -1258,8 +1516,320 @@ struct Replay
             retiredAccountGuard     = session.accountGuard();
             evidence["final_scene"] = world.evidence();
             ++step;
+            return false;
         }
-        require(step == 39, "R2 replay reached completion without all connected stages");
+        if (step == 39)
+        {
+            savedFriendsOnly          = gSavedSettings.getBOOL("RenderAvatarFriendsOnly");
+            savedComplexity           = gSavedSettings.getU32("RenderAvatarMaxComplexity");
+            savedComplexityMode       = gSavedSettings.getS32("RenderAvatarComplexityMode");
+            savedNewWalk              = gSavedSettings.getBOOL("UseNewWalkRun");
+            savedPhysics              = gSavedSettings.getBOOL("AvatarPhysics");
+            savedPhysicsLOD           = gSavedSettings.getF32("RenderAvatarPhysicsLODFactor");
+            visibilitySettingsChanged = true;
+            gSavedSettings.setBOOL("RenderAvatarFriendsOnly", false);
+            gSavedSettings.setU32("RenderAvatarMaxComplexity", 0);
+            gSavedSettings.setS32("RenderAvatarComplexityMode", 0);
+            avatarPacket(session, false, 0, 0, false, false, true);
+            remoteAppearance(session, *avatar);
+            ++step;
+            return false;
+        }
+        if (step == 40)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            if (!remote || !remote->evidence()["appearance_known"].asBoolean())
+                return false;
+            auto       packets = world.packets(session.position() + LLVector3(0, -4, 1), 128, 480, 640);
+            const auto visible =
+                std::count_if(packets.begin(), packets.end(), [](const auto& packet)
+                              { return std::equal(packet.objectIdentity.begin(), packet.objectIdentity.end(), remoteAvatarID.mData); });
+            if (!visible)
+                return false;
+            auto current = body(session, &remoteAvatarID);
+            if (current.size() != MESH_ID_NUM_INDICES)
+                return false;
+            require(std::all_of(current.begin(), current.end(), [](const auto& packet) { return bool(packet.image); }),
+                    "R2 remote avatar did not use decoded server bakes");
+            evidence["remote_body_parts"] = LLSD::emptyArray();
+            for (const auto& packet : current)
+                evidence["remote_body_parts"].append(S32(packet.faceIndex));
+            initialPose    = std::move(current);
+            remoteHeight   = remote->appearanceOwner().getVisualParamWeight(33);
+            remoteShoulder = remote->character().getJoint("mShoulderRight")->getRotation();
+            remoteAnimation(session);
+            ++step;
+            return false;
+        }
+        if (step == 41)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            require(remote, "R2 remote avatar retired before animation qualification");
+            auto* motion = dynamic_cast<LLKeyframeMotion*>(remote->character().findMotion(animationID));
+            if (!motion || !motion->isLoaded() || !remote->character().isMotionActive(animationID))
+                return false;
+            const auto rotation = remote->character().getJoint("mShoulderRight")->getRotation();
+            F32        dot      = 0;
+            for (unsigned axis = 0; axis < 4; ++axis)
+                dot += remoteShoulder.mQ[axis] * rotation.mQ[axis];
+            if (std::abs(dot) > .999f)
+                return false;
+            const auto current = body(session, &remoteAvatarID);
+            bool       changed = false;
+            for (const auto& packet : current)
+            {
+                const auto before = std::find_if(initialPose.begin(), initialPose.end(),
+                                                 [&](const auto& old) { return old.faceIndex == packet.faceIndex; });
+                require(before != initialPose.end(), "R2 remote animation lost a received body branch");
+                const auto& previous = VSWorldRenderer::geometryVertices(before->mesh);
+                const auto& next     = VSWorldRenderer::geometryVertices(packet.mesh);
+                require(previous.size() == next.size(), "R2 remote animation changed stable body topology");
+                for (unsigned vertex = 0; vertex < next.size(); ++vertex)
+                    changed |= std::abs(previous[vertex].x - next[vertex].x) + std::abs(previous[vertex].y - next[vertex].y) +
+                                   std::abs(previous[vertex].z - next[vertex].z) >
+                               1.e-4f;
+            }
+            require(changed, "R2 remote animation did not change admitted body vertices");
+            initialPose.clear();
+            evidence["remote_animation_selection"] = true;
+            gSavedSettings.setU32("RenderAvatarMaxComplexity", 1);
+            ++step;
+            return false;
+        }
+        if (step == 42)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            require(remote, "R2 remote avatar retired before jellydoll qualification");
+            if (remote->visibility() != VSWorldAvatar::Visibility::Jellydoll)
+                return false;
+            const auto current = body(session, &remoteAvatarID);
+            require(std::all_of(current.begin(), current.end(),
+                                [](const auto& packet) { return !packet.image && packet.fullbright && !packet.alpha && !packet.masked; }),
+                    "R2 jellydoll retained ordinary body materials");
+            gSavedSettings.setBOOL("RenderAvatarFriendsOnly", true);
+            ++step;
+            return false;
+        }
+        if (step == 43)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            require(remote, "R2 remote avatar retired before invisible qualification");
+            if (remote->visibility() != VSWorldAvatar::Visibility::Invisible)
+                return false;
+            const auto token = world.object(remoteAvatarID);
+            require(token && !world.selectionBounds(*token), "R2 invisible remote retained selectable body geometry");
+            gSavedSettings.setBOOL("RenderAvatarFriendsOnly", false);
+            gSavedSettings.setU32("RenderAvatarMaxComplexity", 0);
+            ++step;
+            return false;
+        }
+        if (step == 44)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            require(remote, "R2 remote avatar retired before visibility restoration");
+            if (remote->visibility() != VSWorldAvatar::Visibility::Normal)
+                return false;
+            require(std::abs(remote->appearanceOwner().getVisualParamWeight(33) - remoteHeight) < 1.e-5f,
+                    "R2 jellydoll restoration lost the actual received shape");
+            if (!remote->character().isMotionActive(animationID))
+                return false;
+            const auto current = body(session, &remoteAvatarID);
+            for (const auto& packet : current)
+                logoutMeshes.push_back(packet.mesh);
+            evidence["remote_visibility_restoration"] = true;
+            ++step;
+            return false;
+        }
+        if (step == 45)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            require(remote, "R2 motion matrix lost its actual remote character");
+            if (motionCase < motionCases().size())
+            {
+                const auto& test                = motionCases()[motionCase];
+                evidence["motion_case_pending"] = test.label;
+                if (!motionPhase)
+                {
+                    if (test.label != "male-sit")
+                    {
+                        remoteAnimation(session, LLUUID::null);
+                        motionPhase = 3;
+                        return false;
+                    }
+                    gSavedSettings.setBOOL("UseNewWalkRun", test.newWalk);
+                    remoteAppearance(session, *avatar, test.female);
+                    motionPhase = 1;
+                    return false;
+                }
+                if (motionPhase == 3)
+                {
+                    // Retire the old clip under its original saved remap policy.
+                    // The male-sit case deliberately changes sex while sitting.
+                    const LLUUID previous = motionCase ? motionCases()[motionCase - 1].mapped : animationID;
+                    if (!remote->signaledAnimations().empty() || remote->character().isMotionActive(previous))
+                        return false;
+                    gSavedSettings.setBOOL("UseNewWalkRun", test.newWalk);
+                    remoteAppearance(session, *avatar, test.female);
+                    motionPhase = 1;
+                    return false;
+                }
+                if (motionPhase == 1)
+                {
+                    if ((remote->appearanceOwner().getSex() == SEX_FEMALE) != test.female)
+                        return false;
+                    if (test.label == "male-sit")
+                    {
+                        require(!remote->character().isMotionActive(ANIM_AGENT_SIT_FEMALE),
+                                "R2 sex change retained its previous mapped sit motion");
+                        if (!remote->character().isMotionActive(ANIM_AGENT_SIT))
+                            return false;
+                    }
+                    remoteAnimation(session, test.source, S32(motionCase + 2));
+                    motionTime  = 0;
+                    motionPhase = 2;
+                    return false;
+                }
+                auto* motion = remote->character().findMotion(test.mapped);
+                if (!motion || !remote->character().isMotionActive(test.mapped))
+                    return false;
+                auto* keyframe = dynamic_cast<LLKeyframeMotion*>(motion);
+                if (test.kind != "emote" && (!keyframe || !keyframe->isLoaded()))
+                    return false;
+                if (!motionTime)
+                    motionTime = LLFrameTimer::getTotalSeconds();
+                if (LLFrameTimer::getTotalSeconds() - motionTime < .12)
+                    return false;
+                require((test.kind != "stand" || dynamic_cast<LLKeyframeStandMotion*>(motion)) &&
+                            (test.kind != "walk" || dynamic_cast<LLKeyframeWalkMotion*>(motion)) &&
+                            (test.kind != "fall" || dynamic_cast<LLKeyframeFallMotion*>(motion)) &&
+                            (test.kind != "emote" || dynamic_cast<LLEmote*>(motion)),
+                        "R2 motion ID did not use its actual registered specialized factory");
+                if (test.kind == "emote")
+                {
+                    auto* param = remote->character().getVisualParam(motion->getName().c_str());
+                    require(param && param->getWeight() > param->getMinWeight() + 1.e-5f,
+                            "R2 emote did not update its real facial morph parameter");
+                }
+                require(body(session, &remoteAvatarID).size() == MESH_ID_NUM_INDICES, "R2 specialized motion lost an admitted body branch");
+                LLSD row;
+                row["label"]    = test.label;
+                row["source"]   = test.source;
+                row["mapped"]   = test.mapped;
+                row["female"]   = test.female;
+                row["new_walk"] = test.newWalk;
+                row["kind"]     = test.kind;
+                evidence["specialized_motion_cases"].append(row);
+                ++motionCase;
+                motionPhase = 0;
+                return false;
+            }
+            evidence["specialized_motions"] = true;
+            ++step;
+            return false;
+        }
+        if (step == 46)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            require(remote, "R2 physics fixture lost its real character");
+            gSavedSettings.setBOOL("AvatarPhysics", true);
+            gSavedSettings.setF32("RenderAvatarPhysicsLODFactor", 1);
+            for (unsigned index = 0; index < physicsWeights.size(); ++index)
+                physicsWeights[index] = remote->appearanceOwner().getVisualParamWeight(S32(1202 + index));
+            initialPose = body(session, &remoteAvatarID);
+            remoteAnimation(session, LLUUID::null);
+            avatarPacket(session, false, 0, 0, false, false, true, LLUUID::null, LLVector3(0, 0, 5));
+            motionTime = LLFrameTimer::getTotalSeconds();
+            ++step;
+            return false;
+        }
+        if (step == 47)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            require(remote && remote->character().isMotionActive(ANIM_AGENT_PHYSICS_MOTION), "R2 native physics controller is not active");
+            if (LLFrameTimer::getTotalSeconds() - motionTime < .2)
+                return false;
+            bool changed = false;
+            LLSD values;
+            for (unsigned index = 0; index < physicsWeights.size(); ++index)
+            {
+                const F32 value = remote->appearanceOwner().getVisualParamWeight(S32(1202 + index));
+                require(std::isfinite(value), "R2 physics produced a nonfinite morph weight");
+                values.append(value);
+                changed |= std::abs(value - physicsWeights[index]) > 1.e-4f;
+            }
+            evidence["physics_weights"] = values;
+            if (!changed)
+                return false;
+            body(session, &remoteAvatarID);
+            initialPose.clear();
+            evidence["physics_morphs"] = true;
+            avatarPacket(session, false, 0, 0, false, false, true);
+            remoteAnimation(session, ANIM_AGENT_SIT, 100);
+            ++step;
+            return false;
+        }
+        if (step == 48)
+        {
+            avatarPacket(session, false, 900, 0, false, false, true);
+            ++step;
+            return false;
+        }
+        if (step == 49)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            require(remote, "R2 seated avatar lost its owner");
+            if (!remote->sitting())
+                return false;
+            const auto expected =
+                remote->character().getCharacterPosition() + LLVector3(0, 0, .1f) * remote->character().getCharacterRotation();
+            require((remote->appearanceOwner().getRootJoint()->getWorldPosition() - expected).lengthSquared() < 1.e-6f,
+                    "R2 object sit did not use its parent-relative hover transform");
+            body(session, &remoteAvatarID);
+            avatarPacket(session, false, 0, 0, false, false, true);
+            remoteAnimation(session, ANIM_AGENT_SIT_GROUND_CONSTRAINED, 101);
+            ++step;
+            return false;
+        }
+        if (step == 50)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            require(remote, "R2 ground-sitting avatar lost its owner");
+            if (!remote->sitting() || !remote->signaledAnimations().count(ANIM_AGENT_SIT_GROUND_CONSTRAINED))
+                return false;
+            auto expected = remote->character().getCharacterPosition() + LLVector3(0, 0, .1f);
+            expected.mV[VZ] -= .5f * remote->appearanceOwner().mBodySize.mV[VZ] - remote->appearanceOwner().getPelvisToFoot();
+            require((remote->appearanceOwner().getRootJoint()->getWorldPosition() - expected).lengthSquared() < 1.e-6f,
+                    "R2 ground sit dropped or applied its hover offset twice");
+            body(session, &remoteAvatarID);
+            remoteAnimation(session, ANIM_AGENT_STAND, 102);
+            ++step;
+            return false;
+        }
+        if (step == 51)
+        {
+            auto* remote = world.avatarForObject(remoteAvatarID);
+            require(remote, "R2 standing avatar lost its owner");
+            if (remote->sitting() || !remote->character().isMotionActive(ANIM_AGENT_STAND))
+                return false;
+            for (const auto& packet : body(session, &remoteAvatarID))
+                logoutMeshes.push_back(packet.mesh);
+            evidence["sitting_ground_hover"] = true;
+            killGeometry(session, 982);
+            ++step;
+            return false;
+        }
+        if (step == 52)
+        {
+            if (world.avatarForObject(remoteAvatarID) || world.object(remoteAvatarID))
+                return false;
+            evidence["remote_avatar_retirement"] = true;
+            restoreVisibilitySettings();
+            for (const auto& packet : body(session))
+                logoutMeshes.push_back(packet.mesh);
+            evidence["final_scene"] = world.evidence();
+            ++step;
+        }
+        require(step == completedStep, "R2 replay reached completion without all connected stages");
         report["r2_contracts"] = evidence;
         std::ofstream output(directory / "contracts.xml");
         LLSDSerialize::toPrettyXML(evidence, output);

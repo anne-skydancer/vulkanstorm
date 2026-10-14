@@ -246,7 +246,8 @@ def inventory(root=ROOT):
         literals=set(re.findall(r'"([^"\n]+)"',(root/relative).read_text(encoding='utf-8',errors='replace')))
         for name in literals & ui_names: source_index.setdefault(name,[]).append(relative)
         if relative.startswith('indra/newview/vs') and not any(tag in relative for tag in
-                ('vsparity','vsnativereplay','vsnativeimreplay','vsvkdiag','vsuifixture','vsuipixeloracle')):
+                ('vsparity','vsnativereplay','vsnativeimreplay','vsr1replay','vsr2replay',
+                 'vsr2readback','vsvkdiag','vsuifixture','vsuipixeloracle')):
             for name in literals: native_settings.setdefault(name,[]).append(relative)
     for row in rows.values():
         if row['category']=='UI':

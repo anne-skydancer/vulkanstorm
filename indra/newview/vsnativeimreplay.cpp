@@ -1,5 +1,6 @@
 // Real skinned contacts/IM controls and encoded loopback messages. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "llaisapi.h"
 #include "llinventorymodelbackgroundfetch.h"
 #include "vsnativeimreplay.h"
 #include "vsnativeim.h"
@@ -1614,7 +1615,9 @@ struct Replay : public LLAvatarPropertiesObserver
         if (step == 44)
         {
             const LLUUID uploaded("71000000-0000-0000-0000-000000000002");
-            if (propertyWrites < 1 || gInventory.getItem(uploaded)->getDescription() != "Native legacy metadata edit") return false;
+            if ((!AISAPI::isAvailable() && propertyWrites < 1) ||
+                gInventory.getItem(uploaded)->getDescription() != "Native legacy metadata edit")
+                return false;
             gSavedSettings.setBOOL("FSUseLegacyObjectProperties", false); show_item_profile(uploaded);
             auto* properties = LLFloaterReg::findInstance("item_properties", LLSD().with("id", uploaded));
             require(properties && properties->isInVisibleChain(), "Real modern inventory Properties did not open");
@@ -1637,9 +1640,12 @@ struct Replay : public LLAvatarPropertiesObserver
         if (step == 46)
         {
             const LLUUID uploaded("71000000-0000-0000-0000-000000000002");
-            if (propertyWrites < 2 || gInventory.getItem(uploaded)->getDescription() != "Native modern metadata edit") return false;
+            if ((!AISAPI::isAvailable() && propertyWrites < 2) ||
+                gInventory.getItem(uploaded)->getDescription() != "Native modern metadata edit")
+                return false;
             gSavedSettings.setBOOL("FSUseLegacyObjectProperties", savedLegacyProperties);
             evidence["connected_inventory_properties"] = true;
+            evidence["connected_inventory_properties_transport"] = AISAPI::isAvailable() ? "ais" : "udp";
             gMessageSystem->setHandlerFunc("UpdateInventoryItem", null_message_callback);
             auto* info = modernProperties.get()->findChild<LLSidepanelItemInfo>("sidepanel");
             auto* thumbnailButton = info->getChild<LLButton>("change_thumbnail_btn");

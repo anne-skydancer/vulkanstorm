@@ -1199,6 +1199,9 @@ set(viewer_HEADER_FILES
     vsrendercomplexity.h
     vscontrolconstraints.h
     vsavatarcloth.h
+    vsavatarlod.h
+    vsvolumelod.h
+    vsvegetationlod.h
     vsvegetation.h
     vsavatarmotions.h
     vsavatarservices.h

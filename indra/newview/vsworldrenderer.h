@@ -62,6 +62,7 @@ public:
         std::uint64_t meshUploads=0,meshUploadBytes=0;
         std::uint64_t constantUploadBytes=0,resourceCommits=0;
         std::uint64_t residentMeshBytes=0,meshBudgetBytes=0,meshAllocationRefusals=0;
+        std::uint64_t meshInputRejections           = 0;
         std::uint64_t residentGeometrySnapshotBytes = 0;
         double cpuMilliseconds=0;
     };
