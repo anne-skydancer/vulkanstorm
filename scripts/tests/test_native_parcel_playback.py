@@ -44,7 +44,9 @@ class NativeParcelPlaybackTests(unittest.TestCase):
         # is qualified by the scene/session replay, outside this media component.
         prelude = deliver[deliver.index('    if (generation !='):deliver.index('    if (name=="EnableSimulator")')]
         definitions += '\nbool VSNativeSession::deliver(const std::string& name,const LLSD& body,const LLHost& sender,U64 generation){\n' + prelude + parcel + '\nreturn true;}'
-        world_messages = re.search(r'const std::set<std::string> worldMessages = .*?;', source).group(0)
+        declaration = re.search(r'const\s+std::set<std::string>\s+worldMessages\s*=\s*\{.*?\};', source, re.S)
+        self.assertIsNotNone(declaration, 'The real world-message admission set must be present')
+        world_messages = declaration.group(0)
         fixture = STUBS + world_messages + '\n' + definitions + CHECKS
         with tempfile.TemporaryDirectory() as directory:
             cpp = Path(directory) / 'native_parcel_playback.cpp'
