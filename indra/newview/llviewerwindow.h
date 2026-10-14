@@ -182,6 +182,7 @@ public:
 #if VS_NATIVE_VULKAN
     VSVulkanContext* nativeContext() const { return mVulkanContext.get(); }
     VSPlainChat* nativeChat() const { return mNativeChat; }
+    bool             nativePick(LLPickInfo&);
 #endif
     virtual ~LLViewerWindow();
 

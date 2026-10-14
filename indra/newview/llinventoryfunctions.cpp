@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 
 #include <utility> // for std::pair<>
 
@@ -645,6 +649,10 @@ bool get_is_parent_to_worn_item(const LLUUID& id)
 
 bool get_is_item_worn(const LLUUID& id, const LLViewerInventoryItem* item)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active(); session && item && item->getType() != LLAssetType::AT_GESTURE)
+        return session->appearance() && session->appearance()->isWorn(id);
+#endif
     if (!item)
         return false;
 
@@ -3543,14 +3551,6 @@ bool get_selection_object_uuids(LLFolderView *root, uuid_vec_t& ids)
 
 void LLInventoryAction::doToSelected(LLInventoryModel* model, LLFolderView* root, const std::string& action, bool user_confirm)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
-        (action == "wear" || action == "wear_add" || action == "attach" || action == "detach" ||
-         action == "take_off" || action == "replace_outfit" || action == "add_to_outfit" ||
-         action == "remove_from_outfit" || action == "playworld" || action == "playlocal"))
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
     std::set<LLFolderViewItem*> selected_items = root->getSelectionList();
     if (selected_items.empty()
         && action != "wear"

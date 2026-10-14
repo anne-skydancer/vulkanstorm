@@ -472,6 +472,21 @@ void LLVOGrass::plantBlades()
     LLPipeline::sCompiles++;
 }
 
+VSVegetationMesh LLVOGrass::cpuMesh(U8 species, const LLVector3& position, const LLVector3& scale, unsigned count,
+                                    const VSVegetationGround& ground)
+{
+    if (sSpeciesTable.empty())
+        initClass();
+    auto found = sSpeciesTable.find(species);
+    if (found == sSpeciesTable.end())
+        found = sSpeciesTable.begin();
+    if (found == sSpeciesTable.end())
+        return {};
+    VSGrassBlade blades[GRASS_MAX_BLADES];
+    for (unsigned i = 0; i < GRASS_MAX_BLADES; ++i)
+        blades[i] = { exp_x[i], exp_y[i], rot_x[i], rot_y[i], dz_x[i], dz_y[i], w_mod[i] };
+    return vs_grass_mesh(position, scale, found->second->mBladeSizeX, found->second->mBladeSizeY, blades, count, ground);
+}
 void LLVOGrass::getGeometry(S32 idx,
                                 LLStrider<LLVector4a>& verticesp,
                                 LLStrider<LLVector3>& normalsp,
@@ -480,123 +495,26 @@ void LLVOGrass::getGeometry(S32 idx,
                                 LLStrider<LLColor4U>& emissivep,
                                 LLStrider<U16>& indicesp)
 {
-    if(!mNumBlades)//stop rendering grass
-    {
-        return ;
-    }
-
+    if (!mNumBlades)
+        return;
     mPatch = mRegionp->getLand().resolvePatchRegion(getPositionRegion());
     if (mPatch)
         mLastPatchUpdateTime = mPatch->getLastUpdateTime();
-
-    LLVector3 position;
-    // Create random blades of grass with gaussian distribution
-    F32 x,y,xf,yf,dzx,dzy;
-
-    LLColor4U color(255,255,255,255);
-
-    LLFace *face = mDrawable->getFace(idx);
+    const auto* face = mDrawable->getFace(idx);
     if (!face)
         return;
-
-    F32 width  = sSpeciesTable[mSpecies]->mBladeSizeX;
-    F32 height = sSpeciesTable[mSpecies]->mBladeSizeY;
-
-    U32 index_offset = face->getGeomIndex();
-
-    for (S32 i = 0;  i < mNumBlades; i++)
+    const auto mesh = cpuMesh(mSpecies, mPosition, mScale, unsigned(mNumBlades),
+                              [this](const LLVector3& position) { return mRegionp->getLand().resolveHeightRegion(position); });
+    for (std::size_t i = 0; i < mesh.vertices.size(); ++i)
     {
-        x   = exp_x[i] * mScale.mV[VX];
-        y   = exp_y[i] * mScale.mV[VY];
-        xf  = rot_x[i] * GRASS_BLADE_BASE * width * w_mod[i];
-        yf  = rot_y[i] * GRASS_BLADE_BASE * width * w_mod[i];
-        dzx = dz_x [i];
-        dzy = dz_y [i];
-
-        LLVector3 v1,v2,v3;
-        F32 blade_height= GRASS_BLADE_HEIGHT * height * w_mod[i];
-
-        *texcoordsp++   = LLVector2(0, 0);
-        *texcoordsp++   = LLVector2(0, 0);
-        *texcoordsp++   = LLVector2(0, 0.98f);
-        *texcoordsp++   = LLVector2(0, 0.98f);
-        *texcoordsp++   = LLVector2(1, 0);
-        *texcoordsp++   = LLVector2(1, 0);
-        *texcoordsp++   = LLVector2(1, 0.98f);
-        *texcoordsp++   = LLVector2(1, 0.98f);
-
-        position.mV[0]  = mPosition.mV[VX] + x + xf;
-        position.mV[1]  = mPosition.mV[VY] + y + yf;
-        position.mV[2]  = mRegionp->getLand().resolveHeightRegion(position);
-        v1 = position + mRegionp->getOriginAgent();
-        (*verticesp++).load3(v1.mV);
-        (*verticesp++).load3(v1.mV);
-
-
-        position.mV[0] += dzx;
-        position.mV[1] += dzy;
-        position.mV[2] += blade_height;
-        v2 = position + mRegionp->getOriginAgent();
-        (*verticesp++).load3(v2.mV);
-        (*verticesp++).load3(v2.mV);
-
-        position.mV[0]  = mPosition.mV[VX] + x - xf;
-        position.mV[1]  = mPosition.mV[VY] + y - xf;
-        position.mV[2]  = mRegionp->getLand().resolveHeightRegion(position);
-        v3 = position + mRegionp->getOriginAgent();
-        (*verticesp++).load3(v3.mV);
-        (*verticesp++).load3(v3.mV);
-
-        LLVector3 normal1 = (v1-v2) % (v2-v3);
-        normal1.mV[VZ] = 0.75f;
-        normal1.normalize();
-        LLVector3 normal2 = -normal1;
-        normal2.mV[VZ] = -normal2.mV[VZ];
-
-        position.mV[0] += dzx;
-        position.mV[1] += dzy;
-        position.mV[2] += blade_height;
-        v1 = position + mRegionp->getOriginAgent();
-        (*verticesp++).load3(v1.mV);
-        (*verticesp++).load3(v1.mV);
-
-        *(normalsp++)   = normal1;
-        *(normalsp++)   = normal2;
-        *(normalsp++)   = normal1;
-        *(normalsp++)   = normal2;
-
-        *(normalsp++)   = normal1;
-        *(normalsp++)   = normal2;
-        *(normalsp++)   = normal1;
-        *(normalsp++)   = normal2;
-
-        *(colorsp++)   = color;
-        *(colorsp++)   = color;
-        *(colorsp++)   = color;
-        *(colorsp++)   = color;
-        *(colorsp++)   = color;
-        *(colorsp++)   = color;
-        *(colorsp++)   = color;
-        *(colorsp++)   = color;
-
-        *indicesp++     = index_offset + 0;
-        *indicesp++     = index_offset + 2;
-        *indicesp++     = index_offset + 4;
-
-        *indicesp++     = index_offset + 2;
-        *indicesp++     = index_offset + 6;
-        *indicesp++     = index_offset + 4;
-
-        *indicesp++     = index_offset + 1;
-        *indicesp++     = index_offset + 5;
-        *indicesp++     = index_offset + 3;
-
-        *indicesp++     = index_offset + 3;
-        *indicesp++     = index_offset + 5;
-        *indicesp++     = index_offset + 7;
-        index_offset   += 8;
+        const auto vertex = mesh.vertices[i] + mRegionp->getOriginAgent();
+        (*verticesp++).load3(vertex.mV);
+        *normalsp++   = mesh.normals[i];
+        *texcoordsp++ = mesh.uv[i];
+        *colorsp++    = mesh.colors[i];
     }
-
+    for (const U16 index : mesh.indices)
+        *indicesp++ = U16(face->getGeomIndex() + index);
     LLPipeline::sCompiles++;
 }
 

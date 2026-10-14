@@ -423,17 +423,6 @@ inline S32 RlvAttachPtLookup::getAttachPointIndex(const LLViewerObject* pObj)
 //
 
 // Checked: 2011-05-22 (RLVa-1.3.1b) | Modified: RLVa-1.3.1b
-inline ERlvWearMask RlvAttachmentLocks::canAttach(const LLInventoryItem* pItem, LLViewerJointAttachment** ppAttachPtOut /*=NULL*/) const
-{
-    // The specified item can be attached if:
-    //   - it doesn't specify an attachment point and there is at least one attachment point that can be attached to
-    //   - the attachment point it specifies can be attached to
-    LLViewerJointAttachment* pAttachPt = RlvAttachPtLookup::getAttachPoint(pItem);
-    if (ppAttachPtOut)
-        *ppAttachPtOut = pAttachPt;
-    return ((canAttach()) && (pItem) && (!RlvFolderLocks::instance().isLockedFolder(pItem->getParentUUID(), RLV_LOCK_ADD)))
-        ? ((!pAttachPt) ? RLV_WEAR : canAttach(pAttachPt)) : RLV_WEAR_LOCKED;
-}
 
 // Checked: 2010-08-07 (RLVa-1.2.0i) | Modified: RLVa-1.2.0i
 inline ERlvWearMask RlvAttachmentLocks::canAttach(const LLViewerJointAttachment* pAttachPt) const
@@ -450,12 +439,6 @@ inline ERlvWearMask RlvAttachmentLocks::canAttach(const LLViewerJointAttachment*
 }
 
 // Checked: 2010-02-28 (RLVa-1.2.0)
-inline bool RlvAttachmentLocks::canDetach(const LLInventoryItem* pItem) const
-{
-    const LLViewerObject* pAttachObj =
-        ((pItem) && (isAgentAvatarValid())) ? gAgentAvatarp->getWornAttachment(pItem->getLinkedUUID()) : NULL;
-    return (!pAttachObj) || (!isLockedAttachment(pAttachObj));
-}
 
 // Checked: 2010-11-30 (RLVa-1.3.0b) | Modified: RLVa-1.3.0b
 inline bool RlvAttachmentLocks::hasLockedAttachmentPoint(ERlvLockMask eLock) const
@@ -502,13 +485,6 @@ inline bool RlvAttachmentLocks::isLockedAttachmentPoint(const LLViewerJointAttac
 //
 
 // Checked: 2010-03-19 (RLVa-1.2.0c) | Added: RLVa-1.2.0a
-inline bool RlvWearableLocks::canRemove(const LLInventoryItem* pItem) const
-{
-    // The specified item can be removed if its wearable can be removed
-    RLV_ASSERT( (pItem) && (LLInventoryType::IT_WEARABLE == pItem->getInventoryType()) );
-    const LLViewerWearable* pWearable = (pItem) ? gAgentWearables.getWearableFromItemID(pItem->getLinkedUUID()) : NULL;
-    return (pWearable) && (!isLockedWearable(pWearable));
-}
 
 // Checked: 2011-03-27 (RLVa-1.3.0g) | Modified: RLVa-1.3.0g
 inline ERlvWearMask RlvWearableLocks::canWear(const LLViewerInventoryItem* pItem) const

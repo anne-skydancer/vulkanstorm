@@ -511,7 +511,8 @@ bool LLPhysicsMotion::onUpdate(F32 time)
 
         // Higher LOD is better.  This controls the granularity
         // and frequency of updates for the motions.
-        const F32 lod_factor = LLVOAvatar::sPhysicsLODFactor;
+        static LLCachedControl<F32> physics_lod(gSavedSettings, "RenderAvatarPhysicsLODFactor", 1.f);
+        const F32                   lod_factor = llclamp(F32(physics_lod), 0.f, 1.f);
         if (lod_factor == 0)
         {
                 return true;
@@ -708,16 +709,17 @@ bool LLPhysicsMotion::onUpdate(F32 time)
         const F32 area_for_this_setting = area_for_max_settings + (area_for_min_settings-area_for_max_settings)*(1.0f-lod_factor);
             const F32 pixel_area = sqrtf(mCharacter->getPixelArea());
 
-        const bool is_self = (dynamic_cast<LLVOAvatarSelf *>(mCharacter) != NULL);
-        if ((pixel_area > area_for_this_setting) || is_self)
-        {
-            const F32 position_diff_local = llabs(mPositionLastUpdate_local-position_new_local_clamped);
-            const F32 min_delta = (1.0001f-lod_factor)*0.4f;
-            if (llabs(position_diff_local) > min_delta)
+            const auto* appearance = dynamic_cast<LLAvatarAppearance*>(mCharacter);
+            const bool  is_self    = appearance && appearance->isSelf();
+            if ((pixel_area > area_for_this_setting) || is_self)
             {
-                update_visuals = true;
-                mPositionLastUpdate_local = position_new_local;
-            }
+                const F32 position_diff_local = llabs(mPositionLastUpdate_local - position_new_local_clamped);
+                const F32 min_delta           = (1.0001f - lod_factor) * 0.4f;
+                if (llabs(position_diff_local) > min_delta)
+                {
+                    update_visuals            = true;
+                    mPositionLastUpdate_local = position_new_local;
+                }
         }
 
         //

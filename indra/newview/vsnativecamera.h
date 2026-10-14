@@ -19,6 +19,7 @@ public:
     };
     void reset() { mHeld.clear(); mYaw = mBodyYaw = mRoll = 0; mPitch = -.15f; mDistance = 3.f; mPan.clear(); mFlying = false; }
     void release() { mHeld.clear(); }
+    void setFlying(bool flying) { mFlying = flying; }
     void face(const LLVector3& direction)
     { if (direction.isFinite() && direction.magVecSquared() > .001f) mYaw = mBodyYaw = std::atan2(direction.mV[VY], direction.mV[VX]); }
     bool action(U32 token, const std::string& name, bool down, bool repeated)
@@ -39,11 +40,11 @@ public:
         mDistance = std::clamp(mDistance + F32(clicks) * std::max(.2f, mDistance * .15f), 0.f, 128.f);
         if (firstPerson()) { mPan.clear(); mBodyYaw = mYaw; }
     }
-    void step(F32 dt)
+    void step(F32 dt, bool rotationCaptured = false)
     {
         if (!std::isfinite(dt) || dt <= 0) return;
         dt = std::min(dt, .1f); // A stalled frame cannot produce an unbounded turn.
-        const F32 turn = axis("turn_left", "turn_right") * dt * 1.5f;
+        const F32 turn      = rotationCaptured ? 0 : axis("turn_left", "turn_right") * dt * 1.5f;
         mBodyYaw = wrap(mBodyYaw + turn); orbit(turn + axis("spin_around_cw", "spin_around_ccw") * dt * 1.5f,
             axis("spin_over", "spin_under") * dt);
         mRoll = wrap(mRoll + axis("roll_left", "roll_right") * dt);

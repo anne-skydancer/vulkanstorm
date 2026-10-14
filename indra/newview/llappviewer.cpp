@@ -1740,7 +1740,9 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
 {
     #if VS_VULKAN_DIAGNOSTICS
     extern void vs_r1_replay_cleanup();vs_r1_replay_cleanup();
-    #endif
+    extern void vs_r2_replay_cleanup();
+    vs_r2_replay_cleanup();
+#endif
     // Retire RLVa while account services and the application fiber runtime are
     // alive. Its global destructor must not query LLApp during static teardown.
     SUBSYSTEM_CLEANUP(RlvHandler);

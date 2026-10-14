@@ -4,12 +4,20 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import re
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def method(source, signature):
-    start = source.index(signature)
+    start = source.find(signature)
+    if start < 0:
+        # Formatting must not select or suppress a production method. Match
+        # the same signature tokens across whitespace changes only.
+        match = re.search(r'\s*'.join(re.escape(char) for char in signature if not char.isspace()), source)
+        if not match:
+            raise ValueError('Missing production method: ' + signature)
+        start = match.start()
     opening = source.index('{', start)
     depth, end = 1, opening + 1
     while depth:
@@ -105,6 +113,7 @@ int main(){
         fixture = r'''
 #include <cassert>
 #include <map>
+#include <memory>
 struct Host {int id=0;bool isOk()const{return id!=0;}
  bool operator!=(const Host& h)const{return id!=h.id;}bool operator<(const Host& h)const{return id<h.id;}};
 using LLHost=Host;
@@ -120,11 +129,14 @@ struct LLInventoryModelBackgroundFetch {
  int starts=0;static LLInventoryModelBackgroundFetch& instance(){static LLInventoryModelBackgroundFetch f;return f;}
  void start(){++starts;}
 };
+struct VSNativeAppearance {explicit VSNativeAppearance(int){} void fallback(int){}};
 struct VSNativeSession {
  enum class Phase {Connecting,Connected,Logout};Phase mPhase=Phase::Connecting;
  bool mChangingRegion=false,mHandshake=false,mMovement=false,mSeedReady=false,mCircuitAck=false;
  double mNavigationDeadline=0,mDeadline=0;Host mPreviousHost,mHost;
  struct Circuit {double deadline=60;};std::map<Host,Circuit> mCircuits;
+ std::unique_ptr<VSNativeAppearance> mAppearance;int mWearablesMetadata=0;
+ int shared_from_this(){return 0;}
  void publishProgress(){}
  void requestParcel(){}void connected();
 };

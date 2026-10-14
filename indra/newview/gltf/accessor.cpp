@@ -29,6 +29,7 @@
 #include "asset.h"
 #include "buffer_util.h"
 #include "llfilesystem.h"
+#include "llbase64.h"
 
 using namespace LL::GLTF;
 using namespace boost::json;
@@ -150,8 +151,13 @@ bool Buffer::prep(Asset& asset)
     }
     else if (mUri.find("data:") == 0)
     { // loaded from a data URI, load the texture from the data
-        LL_WARNS() << "Data URIs not yet supported" << LL_ENDL;
-        return false;
+        const auto delimiter = mUri.find(";base64,");
+        if (delimiter == std::string::npos || mUri.size() > 96 * 1024 * 1024 || mByteLength < 0 || mByteLength > 64 * 1024 * 1024)
+            return false;
+        const auto data = LLBase64::decodeAsString(mUri.substr(delimiter + 8));
+        if (data.size() != std::size_t(mByteLength))
+            return false;
+        mData.assign(data.begin(), data.end());
     }
     else if (!asset.mFilename.empty() &&
         !mUri.empty()) // <-- uri could be empty if we're loading from .glb
@@ -185,7 +191,7 @@ bool Buffer::prep(Asset& asset)
 
     // POSTCONDITION: on success, mData.size == mByteLength
     llassert(mData.size() == mByteLength);
-    return true;
+    return mData.size() == std::size_t(mByteLength);
 }
 
 bool Buffer::save(Asset& asset, const std::string& folder)

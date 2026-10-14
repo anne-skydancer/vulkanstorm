@@ -52,6 +52,24 @@ jobs:
       - run: python scripts/tests/test_world_scene_contracts.py
       - run: python scripts/tests/test_world_scene_replacement.py
       - run: python scripts/tests/test_world_motion_contracts.py
+      - run: python scripts/tests/test_world_surface_picking.py
+      - run: python scripts/tests/test_terrain_geometry.py
+      - run: python scripts/tests/test_terrain_publication.py
+      - run: python scripts/tests/test_world_gltf_ownership.py
+      - run: python scripts/tests/test_world_gltf_publication.py
+      - run: python scripts/tests/test_world_gltf_topology.py
+      - run: python scripts/tests/test_world_wind.py
+      - run: python scripts/tests/test_control_constraints.py
+      - run: python scripts/tests/test_avatar_cpu_compositor.py
+      - run: python scripts/tests/test_native_appearance_admission.py
+      - run: python scripts/tests/test_native_appearance_queue.py
+      - run: python scripts/tests/test_avatar_lock_policy.py
+      - run: python scripts/tests/test_vulkan_r2_fixture.py
+      - run: python scripts/tests/test_native_avatar_reset.py
+      - run: python scripts/tests/test_avatar_publication.py
+      - run: python scripts/tests/test_avatar_bake_signature.py
+      - run: python scripts/tests/test_avatar_image_pool.py
+      - run: python scripts/tests/test_native_bake_callback.py
       - run: python scripts/tests/test_native_camera_transport.py
       - run: python scripts/tests/test_native_world_assets.py
       - run: python scripts/tests/test_native_http_body_limit.py
@@ -251,6 +269,9 @@ jobs:
           cmake --build '${{ matrix.viewer_directory }}' --config RelWithDebInfo --parallel 3
           python scripts/vulkan_parity_provenance.py finish '${{ matrix.viewer_directory }}'
           python scripts/check_vulkan_ci_staging.py '${{ matrix.viewer_directory }}'
+      - name: Qualify viewer CPU geometry producers
+        timeout-minutes: 3
+        run: python scripts/run_vulkan_geometry_tests.py --build-directory '${{ matrix.viewer_directory }}' --evidence .ci/geometry-evidence
       - name: Provision headless audio for normal viewer startup
         if: runner.os == 'Linux'
         timeout-minutes: 2

@@ -12,6 +12,7 @@ class LLMessageSystem;
 class VSUIResources;
 class LLSD;
 class VSWorldAssets;
+class VSWorldAvatar;
 class VSWorldScene
 {
 public:
@@ -31,27 +32,58 @@ public:
         LLUUID account;U64 accountGeneration=0;
     };
     struct FaceHandle { ObjectHandle object; U32 face=0; U64 generation=0; };
+    struct Attachment
+    {
+        ObjectHandle object;
+        LLUUID       item;
+        U8           point = 0;
+    };
+    std::vector<Attachment> attachments() const;
+    struct Pick
+    {
+        FaceHandle           face;
+        LLVector3            position, normal;
+        std::array<float, 2> uv{};
+        S32                  gltfNode = -1, gltfPrimitive = -1;
+        float                fraction = 1;
+        bool                 hud      = false;
+        bool                 land     = false;
+    };
+    std::optional<Pick>       pick(const LLVector3& start, const LLVector3& end, bool transparent = true, float lineRadius = 0,
+                                   bool hud = false) const;
+    std::optional<Pick>       pickHUD(float normalizedX, float normalizedY, float aspect, float zoom) const;
     std::optional<FaceHandle> face(const ObjectHandle&, U32 index) const;
     bool current(const FaceHandle&) const;
     std::optional<VSWorldContracts::Material> material(const FaceHandle&) const;
+    std::optional<std::array<std::array<float, 3>, 2>> selectionBounds(const ObjectHandle&) const;
     bool requestTaskInventory(LLMessageSystem&, const ObjectHandle&, const LLUUID& agent, const LLUUID& session);
     LLSD taskInventory(const ObjectHandle&) const;
     std::optional<ObjectHandle> object(const LLHost&, U32 local) const;
+    std::optional<ObjectHandle>          object(const LLUUID&) const;
+    bool                                 loadGLTF(const ObjectHandle&, const std::string& filename);
     bool current(const ObjectHandle&) const;
     bool freeze(const ObjectHandle&, bool);
     std::function<bool()> guard(const ObjectHandle&) const;
     std::function<bool()> guard(const FaceHandle&) const;
     bool initializeSelf(const LLUUID& agent,U64 accountGeneration=0);
     void replaceAsset(const LLUUID&);
+    void                                 derenderAnimatedObjects();
     bool receive(LLMessageSystem&, U64 regionHandle, const LLUUID& agent);
     void requestUpdates(LLMessageSystem&, const LLHost&, const LLUUID&, const LLUUID&);
-    std::vector<VSWorldRenderer::Packet> packets(const LLVector3& eye, float farClip,unsigned viewportHeight=0);
+    std::vector<VSWorldRenderer::Packet> packets(const LLVector3& eye, float farClip, unsigned viewportHeight = 0,
+                                                 unsigned viewportWidth = 0);
     static VSWorldRenderer::View view(const LLVector3& eye, unsigned width, unsigned height, float farClip);
     static VSWorldRenderer::View cameraView(const LLVector3& eye,const LLVector3& at,const LLVector3& up,
                                             unsigned width,unsigned height,float farClip);
     bool agentPosition(LLVector3&) const;
+    VSWorldAvatar*                       selfAvatar() const;
+    VSWorldAvatar*                       avatarForObject(const LLUUID&) const;
+    void                                 resyncAvatarAnimations();
+    LLUUID                               rootID(const LLUUID&) const;
+    bool                                 isAttachment(const LLUUID&) const;
     LLSD evidence() const;
 private:
+    void publishGroundFrame(const LLVector3& eye);
     struct Budgets;
     VSWorldScene(VSWorldRenderer&, VSUIResources&, std::shared_ptr<VSWorldAssets>, std::shared_ptr<Budgets>);
     struct Impl;

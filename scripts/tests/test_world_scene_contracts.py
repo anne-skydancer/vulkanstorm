@@ -25,16 +25,17 @@ class WorldSceneContracts(unittest.TestCase):
 #include <cassert>
 #include <vector>
 struct VSWorldRenderer {
+ enum class Topology {Triangles,Lines,Points};
  struct Vertex {float value;};
  struct Geometry {float value;std::shared_ptr<const VSResourceBudget::Reservation> lease;};
  using Mesh=std::shared_ptr<const Geometry>;
  VSResourceBudget budget{16};unsigned refusals=0;
- Mesh upload(const std::vector<Vertex>& vertices,const std::vector<unsigned>& indices) {
+ Mesh upload(const std::vector<Vertex>& vertices,const std::vector<unsigned>& indices,Topology=Topology::Triangles) {
   auto lease=budget.reserve(vertices.size()*sizeof(Vertex)+indices.size()*sizeof(unsigned));
   if(!lease){++refusals;return {};}
   return std::make_shared<Geometry>(Geometry{vertices[0].value,std::move(lease)});
  }
- bool publishMesh(Mesh&,const std::vector<Vertex>&,const std::vector<unsigned>&);
+ bool publishMesh(Mesh&,const std::vector<Vertex>&,const std::vector<unsigned>&,Topology=Topology::Triangles);
 };
 """+publication+"""
 int main() {
@@ -58,6 +59,7 @@ int main() {
         self.compile('''#include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <vector>
 #include <cmath>
 using U8=uint8_t;using U16=uint16_t;using U32=uint32_t;using F32=float;
@@ -110,18 +112,27 @@ int main() {
 using U8=uint8_t;using U16=uint16_t;using U32=uint32_t;
 constexpr unsigned UUID_BYTES=16;constexpr U8 LL_SCULPT_TYPE_MASK=7,LL_SCULPT_TYPE_MESH=5;
 struct LLUUID {U8 mData[16]{};bool isNull()const {for(auto c:mData)if(c)return false;return true;}};
-struct LLVolumeParams {LLUUID id;U8 type=0;bool setSculptID(const LLUUID& value,U8 t){id=value;type=t;return true;}};
+constexpr int LL_PCODE_PATH_FLEXIBLE=128;
+struct LLFlexibleObjectData {};
+bool flexibleData(const U8*,U32 length,LLFlexibleObjectData&){return length==4||length==16;}
+struct LLVolumeParams {LLUUID id;U8 type=0;bool setSculptID(const LLUUID& value,U8 t){id=value;type=t;return true;}
+ LLUUID getSculptID()const{return id;}struct Profile {int getCurveType()const{return 0;}};
+ Profile getProfileParams()const{return {};}bool setType(int,int){return true;}};
 '''+definitions+'''
 int main(){
- LLVolumeParams p;assert(volumeExtras({},p));
+ LLVolumeParams p;std::optional<LLFlexibleObjectData> flexible;
+ auto decode=[&](const std::vector<U8>& bytes){return volumeExtras(bytes,p,flexible);};
+ assert(decode({}));
  std::vector<U8> mesh={1,0x30,0,17,0,0,0};mesh.resize(24);mesh[7]=42;mesh[23]=5;
- assert(volumeExtras(mesh,p));assert(p.id.mData[0]==42&&p.type==5);
- auto invalid=mesh;invalid.pop_back();assert(!volumeExtras(invalid,p));
- invalid=mesh;invalid[7]=0;assert(!volumeExtras(invalid,p));
- invalid=mesh;invalid[23]=1;assert(!volumeExtras(invalid,p));
- invalid=mesh;invalid[1]=0x10;assert(!volumeExtras(invalid,p));
- invalid=mesh;invalid[3]=255;assert(!volumeExtras(invalid,p));
- invalid=mesh;invalid.push_back(0);assert(!volumeExtras(invalid,p));
+ assert(decode(mesh));assert(p.id.mData[0]==42&&p.type==5);
+ auto invalid=mesh;invalid.pop_back();assert(!decode(invalid));
+ invalid=mesh;invalid[7]=0;assert(!decode(invalid));
+ // R2 accepts sculpt maps as well as mesh identities, preserving flags.
+ auto sculpt=mesh;sculpt[23]=1;assert(decode(sculpt)&&p.type==1);
+ sculpt[23]=0xc1;assert(decode(sculpt)&&p.type==0xc1);
+ invalid=mesh;invalid[1]=0x10;assert(!decode(invalid));
+ invalid=mesh;invalid[3]=255;assert(!decode(invalid));
+ invalid=mesh;invalid.push_back(0);assert(!decode(invalid));
 }''')
     def test_camera_basis_projection(self):
         source=(ROOT/'indra/newview/vsworldscene.cpp').read_text(encoding='utf-8')

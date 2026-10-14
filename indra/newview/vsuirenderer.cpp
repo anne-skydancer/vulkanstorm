@@ -64,6 +64,18 @@ struct VSUIRenderer::Impl
     std::deque<Submission> submitted;
     Statistics statistics;
     VSResourceBudget coreImages{256 * 1024 * 1024},remoteImages{512 * 1024 * 1024};
+    // Eleven maximum-size local bakes cost 322 MiB including independent CPU
+    // snapshots. Bound three complete generations (published, candidate and
+    // retiring submission) separately from UI and fetched world assets.
+    VSResourceBudget  compositeImages{ 1024 * 1024 * 1024 };
+    VSResourceBudget& imageBudget(VSWorldContracts::ImageRole role)
+    {
+        if (role == VSWorldContracts::ImageRole::AvatarComposite)
+            return compositeImages;
+        if (role == VSWorldContracts::ImageRole::RemoteAsset)
+            return remoteImages;
+        return coreImages;
+    }
     std::uint64_t imageAllocationRefusals=0;
     Impl(IRenderDevice* d, IDeviceContext* c) : device(d), context(c)
     {
@@ -152,7 +164,7 @@ VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const 
           rgba.size() == std::size_t(width) * height * 4, "Invalid native UI upload extent or byte count");
     const auto maximum=mImpl->device->GetAdapterInfo().Texture.MaxTexture2DDimension;
     if (width>maximum || height>maximum) {++mImpl->imageAllocationRefusals;return {};}
-    auto& budget=role==VSWorldContracts::ImageRole::RemoteAsset?mImpl->remoteImages:mImpl->coreImages;
+    auto& budget = mImpl->imageBudget(role);
     // Charge both the GPU payload and the retained independent CPU snapshot.
     auto residency=budget.reserve(rgba.size()*2);
     if (!residency) {++mImpl->imageAllocationRefusals;return {};}
@@ -180,7 +192,7 @@ VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y
     auto desc=old->resource->GetDesc();
     check(width && height && x<=desc.Width && y<=desc.Height && width<=desc.Width-x && height<=desc.Height-y &&
           rgba.size()==std::size_t(width)*height*4,"Invalid native UI replacement patch");
-    auto& budget=old->description.role==VSWorldContracts::ImageRole::RemoteAsset?mImpl->remoteImages:mImpl->coreImages;
+    auto& budget   = mImpl->imageBudget(old->description.role);
     auto residency=budget.reserve(old->pixels.size()*2);
     if (!residency) {++mImpl->imageAllocationRefusals;return {};}
     auto image=std::make_shared<Texture>(); image->owner=mImpl->device;image->residency=std::move(residency);
@@ -328,8 +340,8 @@ void VSUIRenderer::draw(ITextureView* target, unsigned width, unsigned height, f
 VSUIRenderer::Statistics VSUIRenderer::statistics() const
 {
     auto result=mImpl->statistics;
-    result.residentImageBytes=mImpl->coreImages.used()+mImpl->remoteImages.used();
-    result.imageBudgetBytes=mImpl->coreImages.limit()+mImpl->remoteImages.limit();
+    result.residentImageBytes     = mImpl->coreImages.used() + mImpl->remoteImages.used() + mImpl->compositeImages.used();
+    result.imageBudgetBytes       = mImpl->coreImages.limit() + mImpl->remoteImages.limit() + mImpl->compositeImages.limit();
     result.imageAllocationRefusals=mImpl->imageAllocationRefusals;return result;
 }
 VSWorldContracts::Image VSUIRenderer::imageDescription(const Image& image)

@@ -26,9 +26,14 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarservices.h"
+#include "llcharacter.h"
 #include "vsnativeim.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#include "vsworldavatar.h"
 #endif
 
 #include "llagent.h"
@@ -1015,6 +1020,10 @@ bool LLAgent::getFlying() const
 //-----------------------------------------------------------------------------
 void LLAgent::setFlying(bool fly, bool fail_sound)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active() && fly && isSitting())
+        return;
+#endif
     if (isAgentAvatarValid())
     {
         // *HACK: Don't allow to start the flying mode if we got ANIM_AGENT_STANDUP signal
@@ -1069,6 +1078,10 @@ void LLAgent::setFlying(bool fly, bool fail_sound)
 
     // Update Movement Controls according to Fly mode
     LLFloaterMove::setFlyingMode(fly);
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+        session->setFlying(getFlying());
+#endif
 }
 
 // UI based mechanism of setting fly state
@@ -1105,6 +1118,10 @@ void LLAgent::toggleFlying()
 // static
 bool LLAgent::enableFlying()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+        return gAgent.canFly() && !gAgent.isSitting();
+#endif
     // <FS:Zi> Fix "Agent.enableFlying" function for menu entry and toolbar button
     // bool sitting = false;
     // if (isAgentAvatarValid())
@@ -1123,6 +1140,11 @@ bool LLAgent::enableFlying()
 // static
 bool LLAgent::isSitting()
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->nativeContext())
+        if (const auto* avatar = gViewerWindow->nativeContext()->world().selfAvatar())
+            return avatar->sitting();
+#endif
     bool sitting = false;
     if (isAgentAvatarValid())
     {
@@ -3951,6 +3973,13 @@ LLQuaternion LLAgent::getHeadRotation()
 
 void LLAgent::sendAnimationRequests(const std::vector<LLUUID> &anim_ids, EAnimRequest request)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active())
+    {
+        native->requestAnimations(anim_ids, request == ANIM_REQUEST_START);
+        return;
+    }
+#endif
     if (gAgentID.isNull())
     {
         return;
@@ -3991,6 +4020,13 @@ void LLAgent::sendAnimationRequests(const std::vector<LLUUID> &anim_ids, EAnimRe
 
 void LLAgent::sendAnimationRequest(const LLUUID &anim_id, EAnimRequest request)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active())
+    {
+        native->requestAnimations({ anim_id }, request == ANIM_REQUEST_START);
+        return;
+    }
+#endif
     if (gAgentID.isNull() || anim_id.isNull() || !mRegionp)
     {
         return;
@@ -4015,6 +4051,13 @@ void LLAgent::sendAnimationRequest(const LLUUID &anim_id, EAnimRequest request)
 // This will reset animation state overrides for the agent.
 void LLAgent::sendAnimationStateReset()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        session->requestAnimations({ LLUUID::null }, false);
+        return;
+    }
+#endif
     if (gAgentID.isNull() || !mRegionp)
     {
         return;
@@ -4739,6 +4782,11 @@ bool LLAgent::anyControlGrabbed() const
     }
     return false;
 }
+void LLAgent::clearScriptControlState()
+{
+    std::fill_n(mControlsTakenCount, TOTAL_CONTROLS, 0);
+    std::fill_n(mControlsTakenPassedOnCount, TOTAL_CONTROLS, 0);
+}
 
 bool LLAgent::isControlGrabbed(S32 control_index) const
 {
@@ -4747,6 +4795,20 @@ bool LLAgent::isControlGrabbed(S32 control_index) const
 
 void LLAgent::forceReleaseControls()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        if (!session->regionReady() || !gMessageSystem)
+            return;
+        gMessageSystem->newMessage("ForceScriptControlRelease");
+        gMessageSystem->nextBlock("AgentData");
+        gMessageSystem->addUUID("AgentID", getID());
+        gMessageSystem->addUUID("SessionID", getSessionID());
+        if (gMessageSystem->sendReliable(session->host()) > 0)
+            clearScriptControlState();
+        return;
+    }
+#endif
     gMessageSystem->newMessage("ForceScriptControlRelease");
     gMessageSystem->nextBlock("AgentData");
     gMessageSystem->addUUID("AgentID", getID());
@@ -5673,6 +5735,49 @@ void LLAgent::setTeleportState(ETeleportState state)
 void LLAgent::stopCurrentAnimations(bool force_keep_script_perms /*= false*/)
 // </FS:Ansariel>
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        auto* character = vs_avatar_character();
+        if (!character)
+            return;
+        std::vector<LLUUID>   stopped;
+        std::map<LLUUID, S32> kept;
+        bool                  standing = true;
+        for (const auto& [id, sequence] : vs_avatar_signaled_animations())
+        {
+            if (id == ANIM_AGENT_SIT_GROUND_CONSTRAINED || id == ANIM_AGENT_DO_NOT_DISTURB)
+            {
+                kept[id] = sequence;
+                if (id == ANIM_AGENT_SIT_GROUND_CONSTRAINED)
+                    standing = false;
+            }
+            else
+            {
+                character->stopMotion(id, true);
+                stopped.push_back(id);
+            }
+        }
+        sendAnimationRequests(stopped, ANIM_REQUEST_STOP);
+        sendAnimationStateReset();
+        if (gViewerWindow && gViewerWindow->nativeContext())
+            if (auto* avatar = gViewerWindow->nativeContext()->world().selfAvatar())
+                avatar->animations(kept);
+        if (mRegionp && !force_keep_script_perms && gSavedSettings.getBOOL("RevokePermsOnStopAnimation"))
+        {
+            sendRevokePermissions(mRegionp->getRegionID(), SCRIPT_PERMISSIONS[SCRIPT_PERMISSION_TRIGGER_ANIMATION].permbit |
+                                                               SCRIPT_PERMISSIONS[SCRIPT_PERMISSION_OVERRIDE_ANIMATIONS].permbit);
+            if (isSitting())
+                standUp();
+        }
+        if (standing)
+            sendAnimationRequest(ANIM_AGENT_STAND, ANIM_REQUEST_START);
+        if (gSavedSettings.getBOOL("FSPlayDefaultBentoAnimation"))
+            sendAnimationRequest(ANIM_AGENT_BENTO_IDLE, ANIM_REQUEST_START);
+        return;
+    }
+#endif
+
     LL_DEBUGS("Avatar") << "Stopping current animations" << LL_ENDL;
 
     // This function stops all current overriding animations on this

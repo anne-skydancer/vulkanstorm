@@ -56,6 +56,17 @@ int main() {
  assert(VSTerrain::decode(packet(32,'M',(7u<<16)|7u),'M',result));
  assert(result[0].x==7&&result[0].y==7&&result[0].size==32);
  assert(!VSTerrain::decode(packet(32,'M',(8u<<16)),'M',result));
+ for (const unsigned type:{unsigned('7'),unsigned('9')}) {
+  Writer w;w.put(264,16);w.put(16,8);w.put(type,8);
+  for (unsigned component=0;component<2;++component) {
+   w.put(0,8);float offset=float(component+1);uint32_t raw;std::memcpy(&raw,&offset,4);
+   w.put(raw,32);w.put(20,16);w.put(component,10);w.put(1,1);w.put(0,1);
+  }
+  assert(VSTerrain::decode(w.data,type,result) && result.size()==2);
+  assert(result[0].offset==1 && result[1].offset==2);
+  for(size_t n=0;n<w.data.size();++n) {auto truncated=w.data;truncated.resize(n);assert(!VSTerrain::decode(truncated,type,result));}
+  assert(!VSTerrain::decode(packet(16,type,0),type,result)); // Missing the second wind component.
+ }
 }
 ''')
 

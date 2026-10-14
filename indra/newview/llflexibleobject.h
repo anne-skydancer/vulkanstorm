@@ -40,6 +40,7 @@
 #include "llprimitive.h"
 #include "llvovolume.h"
 #include "llwind.h"
+#include "vsflexiblepath.h"
 
 // 10 ms for the whole thing!
 const F32   FLEXIBLE_OBJECT_TIMESLICE       = 0.003f;
@@ -49,21 +50,7 @@ const U32   FLEXIBLE_OBJECT_MAX_LOD         = 10;
 
 //-------------------------------------------------------------------
 
-struct LLFlexibleObjectSection
-{
-    // Input parameters
-    LLVector2       mScale;
-    LLQuaternion    mAxisRotation;
-    // Simulated state
-    LLVector3       mPosition;
-    LLVector3       mVelocity;
-    LLVector3       mDirection;
-    LLQuaternion    mRotation;
-    // Derivatives (Not all currently used, will come back with LLVolume changes to automagically generate normals)
-    LLVector3       mdPosition;
-    //LLMatrix4     mRotScale;
-    //LLMatrix4     mdRotScale;
-};
+using LLFlexibleObjectSection = VSFlexibleSection;
 
 //---------------------------------------------------------
 // The LLVolumeImplFlexible class

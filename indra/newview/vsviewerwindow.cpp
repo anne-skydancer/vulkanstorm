@@ -34,6 +34,8 @@
 #include "fsregistrarutils.h"
 #include "lllocationinputctrl.h"
 #include "vsnativesession.h"
+#include "llagentcamera.h"
+#include "llagent.h"
 #include "llbutton.h"
 #include "llimview.h"
 #include "llconsole.h"
@@ -43,6 +45,8 @@
 #include "lltrans.h"
 #include "lluictrlfactory.h"
 #include "vsvulkancontext.h"
+#include "vsworldscene.h"
+#include "llregionhandle.h"
 #include "vsuicontext.h"
 #include "vsstartupui.h"
 #include "vsplainchat.h"
@@ -346,6 +350,46 @@ void LLViewerWindow::reshapeNative(S32 width, S32 height, F32 system_scale)
     mWorldViewRectScaled = mWindowRectScaled;
     mRootView->reshape(mWindowRectScaled.getWidth(), mWindowRectScaled.getHeight());
 }
+bool LLViewerWindow::nativePick(LLPickInfo& info)
+{
+    info.mPickType = LLPickInfo::PICK_INVALID;
+    info.mObjectID.setNull();
+    info.mObjectFace    = -1;
+    info.mPickPt        = info.mMousePt;
+    info.mGLTFNodeIndex = info.mGLTFPrimitiveIndex = -1;
+    const auto owner                               = VSNativeSession::active();
+    if (!owner || !owner->regionReady() || !mVulkanContext)
+        return false;
+    const auto rect = getWindowRectScaled();
+    if (!rect.getWidth() || !rect.getHeight())
+        return false;
+    const auto  camera    = owner->cameraState();
+    const float x         = 2.f * float(info.mMousePt.mX - rect.mLeft) / rect.getWidth() - 1;
+    const float y         = 2.f * float(info.mMousePt.mY - rect.mBottom) / rect.getHeight() - 1;
+    const float tangent   = std::tan(F_PI / 6);
+    LLVector3   direction = camera.at - camera.left * (x * tangent * float(rect.getWidth()) / rect.getHeight()) + camera.up * (y * tangent);
+    if (direction.normalize() < 1.e-6f)
+        return false;
+    const float distance = llclamp(gSavedSettings.getF32("RenderFarClip"), 16.f, 1024.f);
+    auto        pick     = mVulkanContext->world().pickHUD(x, y, float(rect.getWidth()) / rect.getHeight(), gAgentCamera.mHUDCurZoom);
+    if (!pick)
+        pick = mVulkanContext->world().pick(camera.center, camera.center + direction * distance, info.mPickTransparent,
+                                            distance * tangent / rect.getHeight());
+    if (!pick)
+        return false;
+    info.mPickType           = pick->land ? LLPickInfo::PICK_LAND : LLPickInfo::PICK_OBJECT;
+    info.mObjectID           = pick->face.object.id;
+    info.mObjectFace         = S32(pick->face.face);
+    info.mIntersection       = pick->position;
+    info.mNormal             = pick->normal;
+    info.mUVCoords           = LLVector2(pick->uv.data());
+    info.mSTCoords           = info.mUVCoords;
+    info.mGLTFNodeIndex      = pick->gltfNode;
+    info.mGLTFPrimitiveIndex = pick->gltfPrimitive;
+    info.mPickHUD            = pick->hud;
+    info.mPosGlobal          = from_region_handle(owner->handle()) + LLVector3d(pick->position);
+    return true;
+}
 bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type, bool down)
 {
     if (!mRootView)
@@ -355,6 +399,9 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
     mCurrentMousePoint = pos;
     if (type == CLICK_LEFT || type == CLICK_DOUBLELEFT)
         mLeftMouseDown = down;
+    if (!down && (type == CLICK_LEFT || type == CLICK_DOUBLELEFT))
+        if (const auto owner = VSNativeSession::active())
+            owner->mouseButton(false);
     if (type == CLICK_RIGHT)
         mRightMouseDown = down;
     if (type == CLICK_MIDDLE)
@@ -373,6 +420,15 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
         owner->releaseMovement();
         if (down && ((type == CLICK_LEFT && (mask & MASK_ALT)) || type == CLICK_RIGHT))
         { mNativeCameraDrag = true; return true; }
+        if (down && type == CLICK_LEFT)
+        {
+            owner->mouseButton(true);
+            if (gAgent.leftButtonGrabbed())
+                return true;
+            mLastPick = LLPickInfo(pos, mask, true, true, false, false, true, false, nullptr);
+            nativePick(mLastPick);
+            return true;
+        }
     }
     return false;
 }

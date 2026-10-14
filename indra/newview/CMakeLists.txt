@@ -324,6 +324,11 @@ set(viewer_SOURCE_FILES
     llfilteredwearablelist.cpp
     llfirstuse.cpp
     llflexibleobject.cpp
+    vsflexiblepath.cpp
+    vsterraingeometry.cpp
+    vsvegetation.cpp
+    vsavatarmotions.cpp
+    vsavatarservices.cpp
     llfloater360capture.cpp
     llfloaterabout.cpp
     llfloateravatarwelcomepack.cpp
@@ -1189,6 +1194,15 @@ set(viewer_HEADER_FILES
     llfilteredwearablelist.h
     llfirstuse.h
     llflexibleobject.h
+    vsflexiblepath.h
+    vsterraingeometry.h
+    vsrendercomplexity.h
+    vscontrolconstraints.h
+    vsavatarcloth.h
+    vsvegetation.h
+    vsavatarmotions.h
+    vsavatarservices.h
+    vswindfield.h
     llfloater360capture.h
     llfloaterabout.h
     llfloateravatarwelcomepack.h
@@ -2270,11 +2284,14 @@ if(USE_DILIGENTCORE)
           vsplainchat.cpp vsplainchat.h vsnativesession.cpp vsnativesession.h vsnativeim.cpp vsnativeim.h
           vsgroupsearch.cpp vsgroupsearch.h
           vsworldrenderer.cpp vsworldrenderer.h vsworldscene.cpp vsworldscene.h vsterrainpacket.h vsworldavatar.cpp vsworldavatar.h
-          vsworldassets.cpp vsworldassets.h vsresourcebudget.h vsnativecamera.h vsworldmotion.h
+          vsworldassets.cpp vsworldassets.h vsworldgltf.cpp vsworldgltf.h vsresourcebudget.h vsnativecamera.h vsworldmotion.h
+          vswearable.cpp vswearable.h
+          vsnativeappearance.cpp vsnativeappearance.h
           vsnativecircuits.cpp vsworldcontracts.h)
 endif()
 if(VS_VULKAN_DIAGNOSTICS)
-      list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h vsr1replay.cpp vsr1replay.h
+      list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h vsr1replay.cpp vsr1replay.h vsr2replay.cpp vsr2replay.h
+         vsr2readback.cpp vsr2readback.h
          vsparitybaseline.cpp vsparitybaseline.h
          vsparityscene.cpp vsparityscene.h
          vsuifixture.cpp vsuifixture.h vsuipixeloracle.cpp vsuipixeloracle.h
@@ -3236,3 +3253,13 @@ if (LL_VLC_AUDIO_PROTOCOL_TESTS)
 endif ()
 
 check_message_template(${VIEWER_BINARY_NAME})
+
+if(VS_VULKAN_DIAGNOSTICS)
+  add_executable(viewer_geometry_test
+      ${CMAKE_SOURCE_DIR}/../tests/software_vulkan/viewer_geometry_test.cpp
+      ${CMAKE_SOURCE_DIR}/../tests/software_vulkan/geometry_dependencies.cpp
+      noise.cpp
+      vsvegetation.cpp vsflexiblepath.cpp vsterraingeometry.cpp)
+  target_include_directories(viewer_geometry_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(viewer_geometry_test llprimitive llui llxml llmath llcommon)
+endif()

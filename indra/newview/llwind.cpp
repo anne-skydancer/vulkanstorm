@@ -34,6 +34,7 @@
 #include "indra_constants.h"
 
 #include "llwind.h"
+#include "vswindfield.h"
 
 // linden libraries
 #include "llgl.h"
@@ -211,66 +212,10 @@ LLVector3 LLWind::getVelocityNoisy(const LLVector3 &pos_region, const F32 dim)
 
 LLVector3 LLWind::getVelocity(const LLVector3 &pos_region)
 {
-    llassert(mSize == 16);
-    // Resolves value of wind at a location relative to SW corner of region
-    //
-    // Returns wind magnitude in X,Y components of vector3
-    LLVector3 r_val;
-    F32 dx,dy;
-    S32 k;
-
-    LLVector3 pos_clamped_region(pos_region);
-
-// <FS:CR> Aurora Sim
-    //F32 region_width_meters = LLWorld::getInstance()->getRegionWidthInMeters();
-    F32 region_width_meters = gAgent.getRegion()->getWidth();
-// </FS:CR> Aurora Sim
-
-    if (pos_clamped_region.mV[VX] < 0.f)
-    {
-        pos_clamped_region.mV[VX] = 0.f;
-    }
-    else if (pos_clamped_region.mV[VX] >= region_width_meters)
-    {
-        pos_clamped_region.mV[VX] = (F32) fmod(pos_clamped_region.mV[VX], region_width_meters);
-    }
-
-    if (pos_clamped_region.mV[VY] < 0.f)
-    {
-        pos_clamped_region.mV[VY] = 0.f;
-    }
-    else if (pos_clamped_region.mV[VY] >= region_width_meters)
-    {
-        pos_clamped_region.mV[VY] = (F32) fmod(pos_clamped_region.mV[VY], region_width_meters);
-    }
-
-
-    S32 i = llfloor(pos_clamped_region.mV[VX] * mSize / region_width_meters);
-    S32 j = llfloor(pos_clamped_region.mV[VY] * mSize / region_width_meters);
-    k = i + j*mSize;
-    dx = ((pos_clamped_region.mV[VX] * mSize / region_width_meters) - (F32) i);
-    dy = ((pos_clamped_region.mV[VY] * mSize / region_width_meters) - (F32) j);
-
-    if ((i < mSize-1) && (j < mSize-1))
-    {
-        //  Interior points, no edges
-        r_val.mV[VX] =  mVelX[k]*(1.0f - dx)*(1.0f - dy) +
-                        mVelX[k + 1]*dx*(1.0f - dy) +
-                        mVelX[k + mSize]*dy*(1.0f - dx) +
-                        mVelX[k + mSize + 1]*dx*dy;
-        r_val.mV[VY] =  mVelY[k]*(1.0f - dx)*(1.0f - dy) +
-                        mVelY[k + 1]*dx*(1.0f - dy) +
-                        mVelY[k + mSize]*dy*(1.0f - dx) +
-                        mVelY[k + mSize + 1]*dx*dy;
-    }
-    else
-    {
-        r_val.mV[VX] = mVelX[k];
-        r_val.mV[VY] = mVelY[k];
-    }
-
-    r_val.mV[VZ] = 0.f;
-    return r_val * WIND_SCALE_HACK;
+    if (!gAgent.getRegion())
+        return LLVector3::zero;
+    const F32 width = gAgent.getRegion()->getWidth();
+    return vs_wind_velocity(std::span<const float, 256>(mVelX, 256), std::span<const float, 256>(mVelY, 256), pos_region, width, width);
 }
 
 void LLWind::setOriginGlobal(const LLVector3d &origin_global)

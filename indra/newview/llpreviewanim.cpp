@@ -27,6 +27,8 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpreviewanim.h"
+#include "vsavatarservices.h"
+#include "llcharacter.h"
 #include "llbutton.h"
 #include "llresmgr.h"
 #include "llinventory.h"
@@ -85,8 +87,9 @@ bool LLPreviewAnim::postBuild()
 void LLPreviewAnim::play(const LLSD& param)
 {
     const LLInventoryItem *item = getItem();
+    auto*                  avatar = vs_avatar_character();
 
-    if(item)
+    if (item && avatar)
     {
         LLUUID itemID=item->getAssetUUID();
 
@@ -127,10 +130,10 @@ void LLPreviewAnim::play(const LLSD& param)
             }
             else
             {
-                gAgentAvatarp->startMotion(item->getAssetUUID());
+                avatar->startMotion(item->getAssetUUID());
             }
 
-            LLMotion* motion = gAgentAvatarp->findMotion(itemID);
+            LLMotion* motion = avatar->findMotion(itemID);
             if (motion)
             {
                 mItemID = itemID;
@@ -139,7 +142,7 @@ void LLPreviewAnim::play(const LLSD& param)
         }
         else
         {
-            gAgentAvatarp->stopMotion(itemID);
+            avatar->stopMotion(itemID);
             gAgent.sendAnimationRequest(itemID, ANIM_REQUEST_STOP);
 
             if (btn_other)
@@ -154,19 +157,20 @@ void LLPreviewAnim::play(const LLSD& param)
 void LLPreviewAnim::draw()
 {
     LLPreview::draw();
-    if (!this->mItemID.isNull())
+    auto* avatar = vs_avatar_character();
+    if (avatar && !this->mItemID.isNull())
     {
-        LLMotion* motion = gAgentAvatarp->findMotion(this->mItemID);
+        LLMotion* motion = avatar->findMotion(this->mItemID);
         if (motion)
         {
             if (motion->isStopped() && this->mDidStart)
             {
                 cleanup();
             }
-            if(gAgentAvatarp->isMotionActive(this->mItemID) && !this->mDidStart)
+            if (avatar->isMotionActive(this->mItemID) && !this->mDidStart)
             {
                 const LLInventoryItem *item = getItem();
-                LLMotion* motion = gAgentAvatarp->findMotion(this->mItemID);
+                LLMotion*              motion = avatar->findMotion(this->mItemID);
                 if (item && motion)
                 {
                     motion->setName(item->getName());
@@ -181,15 +185,16 @@ void LLPreviewAnim::draw()
 void LLPreviewAnim::refreshFromItem()
 {
     const LLInventoryItem* item = getItem();
-    if (!item)
+    auto*                  avatar = vs_avatar_character();
+    if (!item || !avatar)
     {
         return;
     }
 
     // Preload motion
     // <FS:Ansariel> Improved animation preview
-    //gAgentAvatarp->createMotion(item->getAssetUUID());
-    LLMotion *motion = gAgentAvatarp->createMotion(item->getAssetUUID());
+    // avatar->createMotion(item->getAssetUUID());
+    LLMotion* motion = avatar->createMotion(item->getAssetUUID());
     if (motion)
     {
         LLTextBox* stats_box_left = getChild<LLTextBox>("AdvancedStatsLeft");
@@ -220,16 +225,17 @@ void LLPreviewAnim::cleanup()
 void LLPreviewAnim::onClose(bool app_quitting)
 {
     const LLInventoryItem *item = getItem();
+    auto*                  avatar = vs_avatar_character();
 
-    if(item)
+    if (item && avatar)
     {
-        gAgentAvatarp->stopMotion(item->getAssetUUID());
+        avatar->stopMotion(item->getAssetUUID());
         gAgent.sendAnimationRequest(item->getAssetUUID(), ANIM_REQUEST_STOP);
     }
 }
 
 // <FS:Ansariel> Improved animation preview
-//void LLPreviewAnim::showAdvanced()
+// void LLPreviewAnim::showAdvanced()
 //{
 //    bool was_visible =  pAdvancedStatsTextBox->getVisible();
 //
@@ -251,7 +257,7 @@ void LLPreviewAnim::onClose(bool app_quitting)
 //        {
 //            // if motion exists, will return existing one.
 //            // Needed because viewer can purge motions
-//            motion = gAgentAvatarp->createMotion(item->getAssetUUID());
+//            motion = avatar->createMotion(item->getAssetUUID());
 //        }
 //
 //        // set text
@@ -261,8 +267,9 @@ void LLPreviewAnim::onClose(bool app_quitting)
 //            pAdvancedStatsTextBox->setTextArg("[DURATION]", llformat("%.2f", pMotion->getDuration()));
 //            pAdvancedStatsTextBox->setTextArg("[EASE_IN]", llformat("%.2f", pMotion->getEaseInDuration()));
 //            pAdvancedStatsTextBox->setTextArg("[EASE_OUT]", llformat("%.2f", pMotion->getEaseOutDuration()));
-//            pAdvancedStatsTextBox->setTextArg("[IS_LOOP]", (pMotion->getLoop() ? LLTrans::getString("PermYes") : LLTrans::getString("PermNo")));
-//            pAdvancedStatsTextBox->setTextArg("[NUM_JOINTS]", llformat("%d", pMotion->getNumJointMotions()));
+//            pAdvancedStatsTextBox->setTextArg("[IS_LOOP]", (pMotion->getLoop() ? LLTrans::getString("PermYes") :
+//            LLTrans::getString("PermNo"))); pAdvancedStatsTextBox->setTextArg("[NUM_JOINTS]", llformat("%d",
+//            pMotion->getNumJointMotions()));
 //        }
 //    }
 //}

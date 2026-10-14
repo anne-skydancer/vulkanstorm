@@ -18,7 +18,12 @@ enum class OwnerKind { Account, Region, Object, Face, Avatar, ControlAvatar, Att
 enum class ImageOrigin { TopLeft, BottomLeft };
 enum class ColorEncoding { EncodedSRGB, Linear, Data };
 enum class AlphaMode { Opaque, Mask, Blend };
-enum class ImageRole { CoreUI, RemoteAsset };
+enum class ImageRole
+{
+    CoreUI,
+    RemoteAsset,
+    AvatarComposite
+};
 enum class AddressMode { Clamp, Repeat };
 enum class Filter { Nearest, Linear };
 struct Sampler

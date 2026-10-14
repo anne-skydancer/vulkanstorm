@@ -12,6 +12,7 @@
 #include "vsworldrenderer.h"
 #include "vsworldscene.h"
 #include "vsnativesession.h"
+#include "llagentcamera.h"
 #pragma push_macro("Bool")
 #pragma push_macro("False")
 #pragma push_macro("True")
@@ -346,8 +347,9 @@ struct VSVulkanContext::Impl
         {
             const auto camera=session->cameraState();const LLVector3 eye=camera.center;
             const float distance=gSavedSettings.getF32("RenderFarClip");
-            worldRenderer->draw(target,size.mX,size.mY,
-                VSWorldScene::cameraView(eye,camera.at,camera.up,size.mX,size.mY,distance),worldScene->packets(eye,distance,size.mY));
+            auto view    = VSWorldScene::cameraView(eye, camera.at, camera.up, size.mX, size.mY, distance);
+            view.hudZoom = gAgentCamera.mHUDCurZoom;
+            worldRenderer->draw(target, size.mX, size.mY, view, worldScene->packets(eye, distance, size.mY, size.mX));
         }
         if (sceneObserver) sceneObserver(device, context, target, size.mX, size.mY);
         resources->begin(size.mX, size.mY, dpi);
@@ -399,7 +401,11 @@ VSWorldScene& VSVulkanContext::world() { return *mImpl->worldScene; }
 bool VSVulkanContext::present(float dpi, const std::function<void()>& draw)
 { return mImpl->present(dpi, draw); }
 void VSVulkanContext::wait()
-{ mImpl->context->WaitForIdle(); }
+{
+    mImpl->context->WaitForIdle();
+    mImpl->renderer->retire();
+    mImpl->worldRenderer->retire();
+}
 LLSD VSVulkanContext::rendererInfo() const
 { return mImpl->renderer_info; }
 const std::string& VSVulkanContext::adapter() const

@@ -25,6 +25,11 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsvulkancontext.h"
+#include "llviewerwindow.h"
+#endif
 
 #include "gltfscenemanager.h"
 #include "llviewermenufile.h"
@@ -57,6 +62,30 @@ using namespace LL::GLTF;
 
 void GLTFSceneManager::load()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        auto&      world    = gViewerWindow->nativeContext()->world();
+        const auto selected = world.object(gViewerWindow->getLastPick().mObjectID);
+        if (!selected)
+        {
+            LLNotificationsUtil::add("GLTFOpenSelection");
+            return;
+        }
+        const auto account = session->accountGuard(), object = world.guard(*selected);
+        const auto token = *selected;
+        LLFilePickerReplyThread::startPicker(
+            [account, object, token](const std::vector<std::string>& files, LLFilePicker::ELoadFilter, LLFilePicker::ESaveFilter)
+            {
+                if (!account() || !object() || files.empty() || !gViewerWindow || !gViewerWindow->nativeContext())
+                    return;
+                if (!gViewerWindow->nativeContext()->world().loadGLTF(token, files.front()))
+                    LLNotificationsUtil::add("GLTFLoadFailed");
+            },
+            LLFilePicker::FFLOAD_GLTF, false);
+        return;
+    }
+#endif
     LLViewerObject* obj = LLSelectMgr::instance().getSelection()->getFirstRootObject();
 
     if (obj)

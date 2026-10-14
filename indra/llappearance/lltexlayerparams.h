@@ -30,6 +30,7 @@
 #include "llpointer.h"
 #include "v4color.h"
 #include "llviewervisualparam.h"
+#include "vstexlayercpu.h"
 
 #include <atomic>	// <FS:Zi> fix compile for gcc
 
@@ -106,6 +107,8 @@ public:
     bool                    getSkip() const;
     void                    deleteCaches();
     bool                    getMultiplyBlend() const;
+    // CPU mask source with the same sex, domain and weight evaluation as render().
+    bool prepareCPU(LLPointer<LLImageRaw>&, F32& effectiveWeight, const LLTexLayerCPUAllocate&);
 
 private:
     LLTexLayerParamAlpha(const LLTexLayerParamAlpha& pOther);

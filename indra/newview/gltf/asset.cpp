@@ -133,6 +133,8 @@ void Asset::updateTransforms()
 
 void Asset::uploadTransforms()
 {
+    if (!mLoadIntoVRAM)
+        return;
     LL_PROFILE_ZONE_SCOPED_CATEGORY_GLTF;
     // prepare matrix palette
     U32 max_nodes = LLSkinningUtil::getMaxGLTFJointCount();
@@ -190,6 +192,8 @@ void Asset::uploadTransforms()
 
 void Asset::uploadMaterials()
 {
+    if (!mLoadIntoVRAM)
+        return;
     LL_PROFILE_ZONE_SCOPED_CATEGORY_GLTF;
     // see pbrmetallicroughnessV.glsl for the layout of the material UBO
     std::vector<vec4> md;
@@ -961,6 +965,11 @@ LLViewerFetchedTexture* fetch_texture(const LLUUID& id);
 bool Image::prep(Asset& asset, bool loadIntoVRAM)
 {
     mLoadIntoTexturePipe = loadIntoVRAM;
+    // CPU consumers retain image references and encoded bytes. They supply
+    // their own texture publication and must never create a legacy fetched
+    // texture/local bitmap, or block the main coroutine waiting on itself.
+    if (!loadIntoVRAM)
+        return true;
 
     LLUUID id;
     if (mUri.size() == UUID_STR_SIZE && LLUUID::parseUUID(mUri, &id) && id.notNull())

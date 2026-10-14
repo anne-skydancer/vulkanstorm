@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llvoavatar.h"
+#include "vsavatarmotions.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -185,14 +186,8 @@ const F32 PELVIS_LAG_FLYING     = 0.22f;// pelvis follow half life while flying
 const F32 PELVIS_LAG_WALKING    = 0.4f; // ...while walking
 const F32 PELVIS_LAG_MOUSELOOK = 0.15f;
 const F32 MOUSELOOK_PELVIS_FOLLOW_FACTOR = 0.5f;
-const F32 TORSO_NOISE_AMOUNT = 1.0f;    // Amount of deviation from up-axis, in degrees
-const F32 TORSO_NOISE_SPEED = 0.2f; // Time scale factor on torso noise.
 
-const F32 BREATHE_ROT_MOTION_STRENGTH = 0.05f;
 
-const S32 MIN_REQUIRED_PIXEL_AREA_BODY_NOISE = 10000;
-const S32 MIN_REQUIRED_PIXEL_AREA_BREATHE = 10000;
-const S32 MIN_REQUIRED_PIXEL_AREA_PELVIS_FIX = 40;
 
 const S32 TEX_IMAGE_SIZE_OTHER = 512 / 4;  // The size of local textures for other (!isSelf()) avatars
 
@@ -297,319 +292,6 @@ struct LLAppearanceMessageContents: public LLRefCount
 //-----------------------------------------------------------------------------
 // class LLBodyNoiseMotion
 //-----------------------------------------------------------------------------
-class LLBodyNoiseMotion :
-    public LLMotion
-{
-public:
-    // Constructor
-    LLBodyNoiseMotion(const LLUUID &id)
-        : LLMotion(id)
-    {
-        mName = "body_noise";
-        mTorsoState = new LLJointState;
-    }
-
-    // Destructor
-    virtual ~LLBodyNoiseMotion() { }
-
-public:
-    //-------------------------------------------------------------------------
-    // functions to support MotionController and MotionRegistry
-    //-------------------------------------------------------------------------
-    // static constructor
-    // all subclasses must implement such a function and register it
-    static LLMotion *create(const LLUUID &id) { return new LLBodyNoiseMotion(id); }
-
-public:
-    //-------------------------------------------------------------------------
-    // animation callbacks to be implemented by subclasses
-    //-------------------------------------------------------------------------
-
-    // motions must specify whether or not they loop
-    virtual bool getLoop() { return true; }
-
-    // motions must report their total duration
-    virtual F32 getDuration() { return 0.0; }
-
-    // motions must report their "ease in" duration
-    virtual F32 getEaseInDuration() { return 0.0; }
-
-    // motions must report their "ease out" duration.
-    virtual F32 getEaseOutDuration() { return 0.0; }
-
-    // motions must report their priority
-    virtual LLJoint::JointPriority getPriority() { return LLJoint::HIGH_PRIORITY; }
-
-    virtual LLMotionBlendType getBlendType() { return ADDITIVE_BLEND; }
-
-    // called to determine when a motion should be activated/deactivated based on avatar pixel coverage
-    virtual F32 getMinPixelArea() { return MIN_REQUIRED_PIXEL_AREA_BODY_NOISE; }
-
-    // run-time (post constructor) initialization,
-    // called after parameters have been set
-    // must return true to indicate success and be available for activation
-    virtual LLMotionInitStatus onInitialize(LLCharacter *character)
-    {
-        if( !mTorsoState->setJoint( character->getJoint("mTorso") ))
-        {
-            return STATUS_FAILURE;
-        }
-
-        mTorsoState->setUsage(LLJointState::ROT);
-
-        addJointState( mTorsoState );
-        return STATUS_SUCCESS;
-    }
-
-    // called when a motion is activated
-    // must return true to indicate success, or else
-    // it will be deactivated
-    virtual bool onActivate() { return true; }
-
-    // called per time step
-    // must return true while it is active, and
-    // must return false when the motion is completed.
-    virtual bool onUpdate(F32 time, U8* joint_mask)
-    {
-        LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
-        F32 nx[2];
-        nx[0]=time*TORSO_NOISE_SPEED;
-        nx[1]=0.0f;
-        F32 ny[2];
-        ny[0]=0.0f;
-        ny[1]=time*TORSO_NOISE_SPEED;
-        F32 noiseX = noise2(nx);
-        F32 noiseY = noise2(ny);
-
-        F32 rx = TORSO_NOISE_AMOUNT * DEG_TO_RAD * noiseX / 0.42f;
-        F32 ry = TORSO_NOISE_AMOUNT * DEG_TO_RAD * noiseY / 0.42f;
-        LLQuaternion tQn;
-        tQn.setQuat( rx, ry, 0.0f );
-        mTorsoState->setRotation( tQn );
-
-        return true;
-    }
-
-    // called when a motion is deactivated
-    virtual void onDeactivate() {}
-
-private:
-    //-------------------------------------------------------------------------
-    // joint states to be animated
-    //-------------------------------------------------------------------------
-    LLPointer<LLJointState> mTorsoState;
-};
-
-//-----------------------------------------------------------------------------
-// class LLBreatheMotionRot
-//-----------------------------------------------------------------------------
-class LLBreatheMotionRot :
-    public LLMotion
-{
-public:
-    // Constructor
-    LLBreatheMotionRot(const LLUUID &id) :
-        LLMotion(id),
-        mBreatheRate(1.f),
-        mCharacter(NULL)
-    {
-        mName = "breathe_rot";
-        mChestState = new LLJointState;
-    }
-
-    // Destructor
-    virtual ~LLBreatheMotionRot() {}
-
-public:
-    //-------------------------------------------------------------------------
-    // functions to support MotionController and MotionRegistry
-    //-------------------------------------------------------------------------
-    // static constructor
-    // all subclasses must implement such a function and register it
-    static LLMotion *create(const LLUUID &id) { return new LLBreatheMotionRot(id); }
-
-public:
-    //-------------------------------------------------------------------------
-    // animation callbacks to be implemented by subclasses
-    //-------------------------------------------------------------------------
-
-    // motions must specify whether or not they loop
-    virtual bool getLoop() { return true; }
-
-    // motions must report their total duration
-    virtual F32 getDuration() { return 0.0; }
-
-    // motions must report their "ease in" duration
-    virtual F32 getEaseInDuration() { return 0.0; }
-
-    // motions must report their "ease out" duration.
-    virtual F32 getEaseOutDuration() { return 0.0; }
-
-    // motions must report their priority
-    virtual LLJoint::JointPriority getPriority() { return LLJoint::MEDIUM_PRIORITY; }
-
-    virtual LLMotionBlendType getBlendType() { return NORMAL_BLEND; }
-
-    // called to determine when a motion should be activated/deactivated based on avatar pixel coverage
-    virtual F32 getMinPixelArea() { return MIN_REQUIRED_PIXEL_AREA_BREATHE; }
-
-    // run-time (post constructor) initialization,
-    // called after parameters have been set
-    // must return true to indicate success and be available for activation
-    virtual LLMotionInitStatus onInitialize(LLCharacter *character)
-    {
-        mCharacter = character;
-        bool success = true;
-
-        if ( !mChestState->setJoint( character->getJoint( "mChest" ) ) )
-        {
-            success = false;
-        }
-
-        if ( success )
-        {
-            mChestState->setUsage(LLJointState::ROT);
-            addJointState( mChestState );
-        }
-
-        if ( success )
-        {
-            return STATUS_SUCCESS;
-        }
-        else
-        {
-            return STATUS_FAILURE;
-        }
-    }
-
-    // called when a motion is activated
-    // must return true to indicate success, or else
-    // it will be deactivated
-    virtual bool onActivate() { return true; }
-
-    // called per time step
-    // must return true while it is active, and
-    // must return false when the motion is completed.
-    virtual bool onUpdate(F32 time, U8* joint_mask)
-    {
-        LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
-        mBreatheRate = 1.f;
-
-        F32 breathe_amt = (sinf(mBreatheRate * time) * BREATHE_ROT_MOTION_STRENGTH);
-
-        mChestState->setRotation(LLQuaternion(breathe_amt, LLVector3(0.f, 1.f, 0.f)));
-
-        return true;
-    }
-
-    // called when a motion is deactivated
-    virtual void onDeactivate() {}
-
-private:
-    //-------------------------------------------------------------------------
-    // joint states to be animated
-    //-------------------------------------------------------------------------
-    LLPointer<LLJointState> mChestState;
-    F32                 mBreatheRate;
-    LLCharacter*        mCharacter;
-};
-
-//-----------------------------------------------------------------------------
-// class LLPelvisFixMotion
-//-----------------------------------------------------------------------------
-class LLPelvisFixMotion :
-    public LLMotion
-{
-public:
-    // Constructor
-    LLPelvisFixMotion(const LLUUID &id)
-        : LLMotion(id), mCharacter(NULL)
-    {
-        mName = "pelvis_fix";
-
-        mPelvisState = new LLJointState;
-    }
-
-    // Destructor
-    virtual ~LLPelvisFixMotion() { }
-
-public:
-    //-------------------------------------------------------------------------
-    // functions to support MotionController and MotionRegistry
-    //-------------------------------------------------------------------------
-    // static constructor
-    // all subclasses must implement such a function and register it
-    static LLMotion *create(const LLUUID& id) { return new LLPelvisFixMotion(id); }
-
-public:
-    //-------------------------------------------------------------------------
-    // animation callbacks to be implemented by subclasses
-    //-------------------------------------------------------------------------
-
-    // motions must specify whether or not they loop
-    virtual bool getLoop() { return true; }
-
-    // motions must report their total duration
-    virtual F32 getDuration() { return 0.0; }
-
-    // motions must report their "ease in" duration
-    virtual F32 getEaseInDuration() { return 0.5f; }
-
-    // motions must report their "ease out" duration.
-    virtual F32 getEaseOutDuration() { return 0.5f; }
-
-    // motions must report their priority
-    virtual LLJoint::JointPriority getPriority() { return LLJoint::LOW_PRIORITY; }
-
-    virtual LLMotionBlendType getBlendType() { return NORMAL_BLEND; }
-
-    // called to determine when a motion should be activated/deactivated based on avatar pixel coverage
-    virtual F32 getMinPixelArea() { return MIN_REQUIRED_PIXEL_AREA_PELVIS_FIX; }
-
-    // run-time (post constructor) initialization,
-    // called after parameters have been set
-    // must return true to indicate success and be available for activation
-    virtual LLMotionInitStatus onInitialize(LLCharacter *character)
-    {
-        mCharacter = character;
-
-        if (!mPelvisState->setJoint( character->getJoint("mPelvis")))
-        {
-            return STATUS_FAILURE;
-        }
-
-        mPelvisState->setUsage(LLJointState::POS);
-
-        addJointState( mPelvisState );
-        return STATUS_SUCCESS;
-    }
-
-    // called when a motion is activated
-    // must return true to indicate success, or else
-    // it will be deactivated
-    virtual bool onActivate() { return true; }
-
-    // called per time step
-    // must return true while it is active, and
-    // must return false when the motion is completed.
-    virtual bool onUpdate(F32 time, U8* joint_mask)
-    {
-        LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
-        mPelvisState->setPosition(LLVector3::zero);
-
-        return true;
-    }
-
-    // called when a motion is deactivated
-    virtual void onDeactivate() {}
-
-private:
-    //-------------------------------------------------------------------------
-    // joint states to be animated
-    //-------------------------------------------------------------------------
-    LLPointer<LLJointState> mPelvisState;
-    LLCharacter* mCharacter;
-};
 
 /**
  **
@@ -1390,61 +1072,7 @@ void LLVOAvatar::initInstance()
     //-------------------------------------------------------------------------
     // register motions
     //-------------------------------------------------------------------------
-    if (LLCharacter::sInstances.size() == 1)
-    {
-        registerMotion( ANIM_AGENT_DO_NOT_DISTURB,          LLNullMotion::create );
-        registerMotion( ANIM_AGENT_CROUCH,                  LLKeyframeStandMotion::create );
-        registerMotion( ANIM_AGENT_CROUCHWALK,              LLKeyframeWalkMotion::create );
-        registerMotion( ANIM_AGENT_EXPRESS_AFRAID,          LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_ANGER,           LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_BORED,           LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_CRY,             LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_DISDAIN,         LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_EMBARRASSED,     LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_FROWN,           LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_KISS,            LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_LAUGH,           LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_OPEN_MOUTH,      LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_REPULSED,        LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_SAD,             LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_SHRUG,           LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_SMILE,           LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_SURPRISE,        LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_TONGUE_OUT,      LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_TOOTHSMILE,      LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_WINK,            LLEmote::create );
-        registerMotion( ANIM_AGENT_EXPRESS_WORRY,           LLEmote::create );
-        registerMotion( ANIM_AGENT_FEMALE_RUN_NEW,          LLKeyframeWalkMotion::create );
-        registerMotion( ANIM_AGENT_FEMALE_WALK,             LLKeyframeWalkMotion::create );
-        registerMotion( ANIM_AGENT_FEMALE_WALK_NEW,         LLKeyframeWalkMotion::create );
-        registerMotion( ANIM_AGENT_RUN,                     LLKeyframeWalkMotion::create );
-        registerMotion( ANIM_AGENT_RUN_NEW,                 LLKeyframeWalkMotion::create );
-        registerMotion( ANIM_AGENT_STAND,                   LLKeyframeStandMotion::create );
-        registerMotion( ANIM_AGENT_STAND_1,                 LLKeyframeStandMotion::create );
-        registerMotion( ANIM_AGENT_STAND_2,                 LLKeyframeStandMotion::create );
-        registerMotion( ANIM_AGENT_STAND_3,                 LLKeyframeStandMotion::create );
-        registerMotion( ANIM_AGENT_STAND_4,                 LLKeyframeStandMotion::create );
-        registerMotion( ANIM_AGENT_STANDUP,                 LLKeyframeFallMotion::create );
-        registerMotion( ANIM_AGENT_TURNLEFT,                LLKeyframeWalkMotion::create );
-        registerMotion( ANIM_AGENT_TURNRIGHT,               LLKeyframeWalkMotion::create );
-        registerMotion( ANIM_AGENT_WALK,                    LLKeyframeWalkMotion::create );
-        registerMotion( ANIM_AGENT_WALK_NEW,                LLKeyframeWalkMotion::create );
-
-        // motions without a start/stop bit
-        registerMotion( ANIM_AGENT_BODY_NOISE,              LLBodyNoiseMotion::create );
-        registerMotion( ANIM_AGENT_BREATHE_ROT,             LLBreatheMotionRot::create );
-        registerMotion( ANIM_AGENT_PHYSICS_MOTION,          LLPhysicsMotionController::create );
-        registerMotion( ANIM_AGENT_EDITING,                 LLEditingMotion::create );
-        registerMotion( ANIM_AGENT_EYE,                     LLEyeMotion::create );
-        registerMotion( ANIM_AGENT_FEMALE_WALK,             LLKeyframeWalkMotion::create );
-        registerMotion( ANIM_AGENT_FLY_ADJUST,              LLFlyAdjustMotion::create );
-        registerMotion( ANIM_AGENT_HAND_MOTION,             LLHandMotion::create );
-        registerMotion( ANIM_AGENT_HEAD_ROT,                LLHeadRotMotion::create );
-        registerMotion( ANIM_AGENT_PELVIS_FIX,              LLPelvisFixMotion::create );
-        registerMotion( ANIM_AGENT_SIT_FEMALE,              LLKeyframeMotion::create );
-        registerMotion( ANIM_AGENT_TARGET,                  LLTargetingMotion::create );
-        registerMotion( ANIM_AGENT_WALK_ADJUST,             LLWalkAdjustMotion::create );
-    }
+    vs_register_avatar_motions(*this);
 
     LLAvatarAppearance::initInstance();
 
@@ -2509,13 +2137,7 @@ void LLVOAvatar::startDefaultMotions()
     //-------------------------------------------------------------------------
     // start default motions
     //-------------------------------------------------------------------------
-    startMotion( ANIM_AGENT_HEAD_ROT );
-    startMotion( ANIM_AGENT_EYE );
-    startMotion( ANIM_AGENT_BODY_NOISE );
-    startMotion( ANIM_AGENT_BREATHE_ROT );
-    startMotion( ANIM_AGENT_PHYSICS_MOTION );
-    startMotion( ANIM_AGENT_HAND_MOTION );
-    startMotion( ANIM_AGENT_PELVIS_FIX );
+    vs_start_avatar_default_motions(*this);
 
     //-------------------------------------------------------------------------
     // restart any currently active motions
@@ -2581,76 +2203,10 @@ void LLVOAvatar::buildCharacter()
 // resetVisualParams()
 //-----------------------------------------------------------------------------
 void LLVOAvatar::resetVisualParams()
-{
-    // Skeletal params
-    {
-        LLAvatarXmlInfo::skeletal_distortion_info_list_t::iterator iter;
-        for (iter = sAvatarXmlInfo->mSkeletalDistortionInfoList.begin();
-             iter != sAvatarXmlInfo->mSkeletalDistortionInfoList.end();
-             ++iter)
-        {
-            LLPolySkeletalDistortionInfo *info = (LLPolySkeletalDistortionInfo*)*iter;
-            LLPolySkeletalDistortion *param = dynamic_cast<LLPolySkeletalDistortion*>(getVisualParam(info->getID()));
-            *param = LLPolySkeletalDistortion(this);
-            llassert(param);
-            if (!param->setInfo(info))
-            {
-                llassert(false);
-            }
-        }
-    }
-
-    // Driver parameters
-    for (LLAvatarXmlInfo::driver_info_list_t::iterator iter = sAvatarXmlInfo->mDriverInfoList.begin();
-         iter != sAvatarXmlInfo->mDriverInfoList.end();
-         ++iter)
-    {
-        LLDriverParamInfo *info = *iter;
-        LLDriverParam *param = dynamic_cast<LLDriverParam*>(getVisualParam(info->getID()));
-        LLDriverParam::entry_list_t driven_list = param->getDrivenList();
-        *param = LLDriverParam(this);
-        llassert(param);
-        if (!param->setInfo(info))
-        {
-            llassert(false);
-        }
-        param->setDrivenList(driven_list);
-    }
-}
+{ LLAvatarAppearance::resetVisualParams(); }
 
 void LLVOAvatar::applyDefaultParams()
-{
-    // These are params from avs with newly created copies of shape,
-    // skin, hair, eyes, plus gender set as noted. Run arche_tool.py
-    // to get params from some other xml appearance dump.
-    std::map<S32, U8> male_params = {
-        {1,33}, {2,61}, {4,85}, {5,23}, {6,58}, {7,127}, {8,63}, {10,85}, {11,63}, {12,42}, {13,0}, {14,85}, {15,63}, {16,36}, {17,85}, {18,95}, {19,153}, {20,63}, {21,34}, {22,0}, {23,63}, {24,109}, {25,88}, {27,132}, {31,63}, {33,136}, {34,81}, {35,85}, {36,103}, {37,136}, {38,127}, {80,255}, {93,203}, {98,0}, {99,0}, {105,127}, {108,0}, {110,0}, {111,127}, {112,0}, {113,0}, {114,127}, {115,0}, {116,0}, {117,0}, {119,127}, {130,114}, {131,127}, {132,99}, {133,63}, {134,127}, {135,140}, {136,127}, {137,127}, {140,0}, {141,0}, {142,0}, {143,191}, {150,0}, {155,104}, {157,0}, {162,0}, {163,0}, {165,0}, {166,0}, {167,0}, {168,0}, {169,0}, {177,0}, {181,145}, {182,216}, {183,133}, {184,0}, {185,127}, {192,0}, {193,127}, {196,170}, {198,0}, {503,0}, {505,127}, {506,127}, {507,109}, {508,85}, {513,127}, {514,127}, {515,63}, {517,85}, {518,42}, {603,100}, {604,216}, {605,214}, {606,204}, {607,204}, {608,204}, {609,51}, {616,25}, {617,89}, {619,76}, {624,204}, {625,0}, {629,127}, {637,0}, {638,0}, {646,144}, {647,85}, {649,127}, {650,132}, {652,127}, {653,85}, {654,0}, {656,127}, {659,127}, {662,127}, {663,127}, {664,127}, {665,127}, {674,59}, {675,127}, {676,85}, {678,127}, {682,127}, {683,106}, {684,47}, {685,79}, {690,127}, {692,127}, {693,204}, {700,63}, {701,0}, {702,0}, {703,0}, {704,0}, {705,127}, {706,127}, {707,0}, {708,0}, {709,0}, {710,0}, {711,127}, {712,0}, {713,159}, {714,0}, {715,0}, {750,178}, {752,127}, {753,36}, {754,85}, {755,131}, {756,127}, {757,127}, {758,127}, {759,153}, {760,95}, {762,0}, {763,140}, {764,74}, {765,27}, {769,127}, {773,127}, {775,0}, {779,214}, {780,204}, {781,198}, {785,0}, {789,0}, {795,63}, {796,30}, {799,127}, {800,226}, {801,255}, {802,198}, {803,255}, {804,255}, {805,255}, {806,255}, {807,255}, {808,255}, {812,255}, {813,255}, {814,255}, {815,204}, {816,0}, {817,255}, {818,255}, {819,255}, {820,255}, {821,255}, {822,255}, {823,255}, {824,255}, {825,255}, {826,255}, {827,255}, {828,0}, {829,255}, {830,255}, {834,255}, {835,255}, {836,255}, {840,0}, {841,127}, {842,127}, {844,255}, {848,25}, {858,100}, {859,255}, {860,255}, {861,255}, {862,255}, {863,84}, {868,0}, {869,0}, {877,0}, {879,51}, {880,132}, {921,255}, {922,255}, {923,255}, {10000,0}, {10001,0}, {10002,25}, {10003,0}, {10004,25}, {10005,23}, {10006,51}, {10007,0}, {10008,25}, {10009,23}, {10010,51}, {10011,0}, {10012,0}, {10013,25}, {10014,0}, {10015,25}, {10016,23}, {10017,51}, {10018,0}, {10019,0}, {10020,25}, {10021,0}, {10022,25}, {10023,23}, {10024,51}, {10025,0}, {10026,25}, {10027,23}, {10028,51}, {10029,0}, {10030,25}, {10031,23}, {10032,51}, {11000,1}, {11001,127}
-    };
-    std::map<S32, U8> female_params = {
-        {1,33}, {2,61}, {4,85}, {5,23}, {6,58}, {7,127}, {8,63}, {10,85}, {11,63}, {12,42}, {13,0}, {14,85}, {15,63}, {16,36}, {17,85}, {18,95}, {19,153}, {20,63}, {21,34}, {22,0}, {23,63}, {24,109}, {25,88}, {27,132}, {31,63}, {33,136}, {34,81}, {35,85}, {36,103}, {37,136}, {38,127}, {80,0}, {93,203}, {98,0}, {99,0}, {105,127}, {108,0}, {110,0}, {111,127}, {112,0}, {113,0}, {114,127}, {115,0}, {116,0}, {117,0}, {119,127}, {130,114}, {131,127}, {132,99}, {133,63}, {134,127}, {135,140}, {136,127}, {137,127}, {140,0}, {141,0}, {142,0}, {143,191}, {150,0}, {155,104}, {157,0}, {162,0}, {163,0}, {165,0}, {166,0}, {167,0}, {168,0}, {169,0}, {177,0}, {181,145}, {182,216}, {183,133}, {184,0}, {185,127}, {192,0}, {193,127}, {196,170}, {198,0}, {503,0}, {505,127}, {506,127}, {507,109}, {508,85}, {513,127}, {514,127}, {515,63}, {517,85}, {518,42}, {603,100}, {604,216}, {605,214}, {606,204}, {607,204}, {608,204}, {609,51}, {616,25}, {617,89}, {619,76}, {624,204}, {625,0}, {629,127}, {637,0}, {638,0}, {646,144}, {647,85}, {649,127}, {650,132}, {652,127}, {653,85}, {654,0}, {656,127}, {659,127}, {662,127}, {663,127}, {664,127}, {665,127}, {674,59}, {675,127}, {676,85}, {678,127}, {682,127}, {683,106}, {684,47}, {685,79}, {690,127}, {692,127}, {693,204}, {700,63}, {701,0}, {702,0}, {703,0}, {704,0}, {705,127}, {706,127}, {707,0}, {708,0}, {709,0}, {710,0}, {711,127}, {712,0}, {713,159}, {714,0}, {715,0}, {750,178}, {752,127}, {753,36}, {754,85}, {755,131}, {756,127}, {757,127}, {758,127}, {759,153}, {760,95}, {762,0}, {763,140}, {764,74}, {765,27}, {769,127}, {773,127}, {775,0}, {779,214}, {780,204}, {781,198}, {785,0}, {789,0}, {795,63}, {796,30}, {799,127}, {800,226}, {801,255}, {802,198}, {803,255}, {804,255}, {805,255}, {806,255}, {807,255}, {808,255}, {812,255}, {813,255}, {814,255}, {815,204}, {816,0}, {817,255}, {818,255}, {819,255}, {820,255}, {821,255}, {822,255}, {823,255}, {824,255}, {825,255}, {826,255}, {827,255}, {828,0}, {829,255}, {830,255}, {834,255}, {835,255}, {836,255}, {840,0}, {841,127}, {842,127}, {844,255}, {848,25}, {858,100}, {859,255}, {860,255}, {861,255}, {862,255}, {863,84}, {868,0}, {869,0}, {877,0}, {879,51}, {880,132}, {921,255}, {922,255}, {923,255}, {10000,0}, {10001,0}, {10002,25}, {10003,0}, {10004,25}, {10005,23}, {10006,51}, {10007,0}, {10008,25}, {10009,23}, {10010,51}, {10011,0}, {10012,0}, {10013,25}, {10014,0}, {10015,25}, {10016,23}, {10017,51}, {10018,0}, {10019,0}, {10020,25}, {10021,0}, {10022,25}, {10023,23}, {10024,51}, {10025,0}, {10026,25}, {10027,23}, {10028,51}, {10029,0}, {10030,25}, {10031,23}, {10032,51}, {11000,1}, {11001,127}
-    };
-    std::map<S32, U8> *params = NULL;
-    if (getSex() == SEX_MALE)
-        params = &male_params;
-    else
-        params = &female_params;
-
-    for( auto it = params->begin(); it != params->end(); ++it)
-    {
-        LLVisualParam* param = getVisualParam(it->first);
-        if( !param )
-        {
-            // invalid id
-            break;
-        }
-
-        U8 value = it->second;
-        F32 newWeight = U8_to_F32(value, param->getMinWeight(), param->getMaxWeight());
-        // <FS:Ansariel> [Legacy Bake]
-        //param->setWeight(newWeight);
-        param->setWeight(newWeight, false); // Most likely false is correct here because it's used in resetSkeleton, which is a local operation
-    }
-}
+{ LLAvatarAppearance::applyDefaultParams(); }
 
 //-----------------------------------------------------------------------------
 // resetSkeleton()
@@ -7166,55 +6722,7 @@ void LLVOAvatar::resetAnimations()
 //-----------------------------------------------------------------------------
 // virtual
 LLUUID LLVOAvatar::remapMotionID(const LLUUID& id)
-{
-    static LLCachedControl<bool> use_new_walk_run(gSavedSettings, "UseNewWalkRun");
-    LLUUID result = id;
-
-    // start special case female walk for female avatars
-    if (getSex() == SEX_FEMALE)
-    {
-        if (id == ANIM_AGENT_WALK)
-        {
-            if (use_new_walk_run)
-                result = ANIM_AGENT_FEMALE_WALK_NEW;
-            else
-                result = ANIM_AGENT_FEMALE_WALK;
-        }
-        else if (id == ANIM_AGENT_RUN)
-        {
-            // There is no old female run animation, so only override
-            // in one case.
-            if (use_new_walk_run)
-                result = ANIM_AGENT_FEMALE_RUN_NEW;
-        }
-        else if (id == ANIM_AGENT_SIT)
-        {
-            result = ANIM_AGENT_SIT_FEMALE;
-        }
-    }
-    else
-    {
-        // Male avatar.
-        if (id == ANIM_AGENT_WALK)
-        {
-            if (use_new_walk_run)
-                result = ANIM_AGENT_WALK_NEW;
-        }
-        else if (id == ANIM_AGENT_RUN)
-        {
-            if (use_new_walk_run)
-                result = ANIM_AGENT_RUN_NEW;
-        }
-        // keeps in sync with setSex() related code (viewer controls sit's sex)
-        else if (id == ANIM_AGENT_SIT_FEMALE)
-        {
-            result = ANIM_AGENT_SIT;
-        }
-
-    }
-
-    return result;
-}
+{ return vs_remap_avatar_motion(id, getSex() == SEX_FEMALE); }
 
 //-----------------------------------------------------------------------------
 // startMotion()
