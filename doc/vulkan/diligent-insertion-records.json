@@ -1,5 +1,5 @@
 {
-  "source_commit": "7fc86019ac781a00eed9f76591c09196d3aa519e",
+  "source_commit": "be41116c5ad1fbfc3addf6c5ce7eb7ceac5b552a",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -38436,25 +38436,25 @@
       "path": "scripts/tests/test_native_parcel_playback.py",
       "start": 43,
       "end": 45,
-      "sha256": "0adce44e4013429139deee3804b9624701e1d9f22dae756d621f44141e55f115",
+      "sha256": "3d62a0585194c6a8431e55a1160a209d9a0b2ea1f21fc58d0ddb4a8bd382b219",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_parcel_playback.py",
-      "start": 142,
-      "end": 143,
-      "sha256": "0adce44e4013429139deee3804b9624701e1d9f22dae756d621f44141e55f115",
+      "start": 144,
+      "end": 145,
+      "sha256": "3d62a0585194c6a8431e55a1160a209d9a0b2ea1f21fc58d0ddb4a8bd382b219",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_parcel_playback.py",
-      "start": 173,
-      "end": 173,
-      "sha256": "0adce44e4013429139deee3804b9624701e1d9f22dae756d621f44141e55f115",
+      "start": 175,
+      "end": 175,
+      "sha256": "3d62a0585194c6a8431e55a1160a209d9a0b2ea1f21fc58d0ddb4a8bd382b219",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -45556,6 +45556,15 @@
       "start": 1,
       "end": 235,
       "sha256": "57a793bd65a7d2037ab4d3bdf020431f48dd58176c5c8be9b6d5a815471dc02d",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_native_parcel_playback.py",
+      "start": 47,
+      "end": 49,
+      "sha256": "3d62a0585194c6a8431e55a1160a209d9a0b2ea1f21fc58d0ddb4a8bd382b219",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
