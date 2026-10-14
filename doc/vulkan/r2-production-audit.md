@@ -3,8 +3,9 @@
 R2 remains **in progress, not qualified**. Its requirements are the geometry,
 avatar and appearance obligations in [the parity roadmap](full-parity-roadmap.md#r2--geometry-avatars-and-appearance).
 R0/R1 acceptance does not certify these changes. The pushed implementation
-checkpoint is `e0794c1e92`; subsequent audit fixes and the expanded acceptance
-contract require a fresh committed-source build and three-platform CI evidence.
+checkpoint was `e0794c1e92`. The expanded contract passed locally against clean
+source `4ab2691708`; three-platform CI and the subsequent compatibility fixes
+still require qualification.
 
 ## Production paths and acceptance coverage
 
@@ -53,11 +54,24 @@ SwiftShader and Linux Lavapipe, separately from R1 and the connected skin matrix
 It must pass together with the viewer-linked geometry executable, staging,
 existing native presentation/validation tests and prior acceptance gates.
 
+The clean-source `4ab2691708` build, complete stage and viewer-linked geometry
+gate passed. Its full headless R2 replay also passed, retaining 38 hashed
+artifacts, all 37 specialized motions, physics/sitting/hover and logout checks.
+The independently rebuilt software harness passed offscreen/world rendering
+and its validation, synchronization, pixel and orientation negative tests.
+
+The prior R1 replay exposed an outdated fixture assumption: its unsupported
+object was a tree, which R2 now implements. That fixture now sends an unknown
+wire PCode while retaining the no-substitute/identity assertion. The Ubuntu
+source gate also exposed a missing explicit `<optional>` include in the
+standalone mesh-decoding fixture. These compatibility corrections do not waive
+either gate and require a fresh final-source replay/CI result.
+
 The evidence packager requires complete R2 contracts, all readbacks and their
 hashes, transport receipts, source revision, build provenance and staged viewer
 hash. It revalidates artifacts without rewriting their manifests. A passing UI
 or R1 replay cannot substitute for R2. Dirty-source development results cannot
-satisfy the final provenance gate. Final committed-source local runs and CI are
+satisfy the final provenance gate. Final-source compatibility runs and CI are
 still outstanding; R2 is not marked complete by these development checkpoints.
 
 The acceptance ledger retains later material, shadow, particle and composition

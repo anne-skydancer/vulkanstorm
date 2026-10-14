@@ -1,5 +1,5 @@
 {
-  "source_commit": "be41116c5ad1fbfc3addf6c5ce7eb7ceac5b552a",
+  "source_commit": "a7e36b78a0a889af767aec8758666be5bd5b0a0d",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -26475,8 +26475,8 @@
     {
       "path": "indra/newview/vsr1replay.cpp",
       "start": 1,
-      "end": 352,
-      "sha256": "fa653c24b542d6dc30fdf3ec8dd70be7c910a7bba50b1bbded238c87715e28e5",
+      "end": 354,
+      "sha256": "faa032c1146e146eaaebb45aba7ab35af23808b164088fccdc6cf525cfcbb156",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -28274,45 +28274,45 @@
     },
     {
       "path": "scripts/tests/test_world_scene_contracts.py",
-      "start": 169,
-      "end": 169,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "start": 170,
+      "end": 170,
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_world_scene_contracts.py",
-      "start": 172,
-      "end": 172,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "start": 173,
+      "end": 173,
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_world_scene_contracts.py",
-      "start": 180,
-      "end": 180,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "start": 181,
+      "end": 181,
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_world_scene_contracts.py",
-      "start": 186,
-      "end": 186,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "start": 187,
+      "end": 187,
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_world_scene_contracts.py",
-      "start": 189,
-      "end": 193,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "start": 190,
+      "end": 194,
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -28348,7 +28348,7 @@
       "path": "indra/newview/vsr1replay.cpp",
       "start": 57,
       "end": 57,
-      "sha256": "fa653c24b542d6dc30fdf3ec8dd70be7c910a7bba50b1bbded238c87715e28e5",
+      "sha256": "faa032c1146e146eaaebb45aba7ab35af23808b164088fccdc6cf525cfcbb156",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -28382,9 +28382,9 @@
     },
     {
       "path": "indra/newview/vsr1replay.cpp",
-      "start": 345,
-      "end": 349,
-      "sha256": "fa653c24b542d6dc30fdf3ec8dd70be7c910a7bba50b1bbded238c87715e28e5",
+      "start": 347,
+      "end": 351,
+      "sha256": "faa032c1146e146eaaebb45aba7ab35af23808b164088fccdc6cf525cfcbb156",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -28699,7 +28699,7 @@
       "path": "scripts/tests/test_world_scene_contracts.py",
       "start": 20,
       "end": 55,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -34945,7 +34945,7 @@
       "path": "scripts/tests/test_world_scene_contracts.py",
       "start": 28,
       "end": 28,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34954,7 +34954,7 @@
       "path": "scripts/tests/test_world_scene_contracts.py",
       "start": 33,
       "end": 33,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34963,7 +34963,7 @@
       "path": "scripts/tests/test_world_scene_contracts.py",
       "start": 38,
       "end": 38,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34972,34 +34972,34 @@
       "path": "scripts/tests/test_world_scene_contracts.py",
       "start": 62,
       "end": 62,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_contracts.py",
-      "start": 115,
-      "end": 120,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "start": 116,
+      "end": 121,
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_contracts.py",
-      "start": 123,
-      "end": 125,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "start": 124,
+      "end": 126,
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_contracts.py",
-      "start": 127,
-      "end": 135,
-      "sha256": "93d0dd2653244b0b6cdf4dc72c36036faf7cd3bbaffa76c10b00b15113e6f722",
+      "start": 128,
+      "end": 136,
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35273,10 +35273,28 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsr1replay.cpp",
+      "start": 183,
+      "end": 185,
+      "sha256": "faa032c1146e146eaaebb45aba7ab35af23808b164088fccdc6cf525cfcbb156",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostics-only connected inventory/animation/attachment/AIS loopback and actual GPU readbacks; narrowly gated fixture transport, deterministic expected data and zero-owner retirement are required. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_contracts.py",
+      "start": 111,
+      "end": 111,
+      "sha256": "b74fad3de5853106a2115986c28fce6d9a2080f49ed5c16ada58a6e05eea7e11",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "7fc86019ac781a00eed9f76591c09196d3aa519e",
+    "previous_source_commit": "be41116c5ad1fbfc3addf6c5ce7eb7ceac5b552a",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Hash-pinned existing witnesses remapped through committed source deltas; R2 geometry/appearance/motion/resource and diagnostic changes reviewed by producer and ownership responsibility; see r2-production-audit.md. Runtime evidence is separate from source classification."
   }
