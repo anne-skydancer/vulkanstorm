@@ -37,21 +37,32 @@ public:
 inline bool decode(const std::vector<std::uint8_t>& data,unsigned type,std::vector<Patch>& output,
                    unsigned width=256,unsigned height=256)
 {
-    if (data.size()<5 || data.size()>65535 || (type!='L' && type!='M') ||
-        width<16 || height<16 || width>65536 || height>65536) return false;
+    const bool wind = type == '7' || type == '9';
+    if (data.size() < 5 || data.size() > 65535 || (type != 'L' && type != 'M' && !wind) || width < 16 || height < 16 || width > 65536 ||
+        height > 65536)
+        return false;
     Bits bits(data);std::uint32_t stride,size,layer;
     if (!bits.read(16,stride) || !bits.read(8,size) || !bits.read(8,layer) ||
         layer!=type || (size!=16 && size!=32) || stride<size) return false;
+    if (wind && size != 16)
+        return false;
     std::vector<Patch> patches;
     for (unsigned n=0;n<=256;++n)
     {
         std::uint32_t quant,raw,range,id;
         if (!bits.read(8,quant)) return false;
-        if (quant==97) { output=std::move(patches);return true; }
+        if (quant == 97)
+        {
+            if (wind && patches.size() != 2)
+                return false;
+            output = std::move(patches);
+            return true;
+        }
         if (n==256 || !bits.read(32,raw) || !bits.read(16,range) || !bits.read(type=='M'?32:10,id)) return false;
         Patch p;p.size=size;p.quant=quant;p.range=range;std::memcpy(&p.offset,&raw,4);
         p.x=type=='M'?id>>16:id>>5;p.y=type=='M'?id&65535:id&31;
-        if (p.x>=width/size || p.y>=height/size || !std::isfinite(p.offset) || std::abs(p.offset)>65536) return false;
+        if ((!wind && (p.x >= width / size || p.y >= height / size)) || !std::isfinite(p.offset) || std::abs(p.offset) > 65536)
+            return false;
         const unsigned width=(quant&15)+2;
         for (unsigned i=0;i<size*size;++i)
         {
@@ -64,6 +75,11 @@ inline bool decode(const std::vector<std::uint8_t>& data,unsigned type,std::vect
             p.coefficients[i]=sign?-int(value):int(value);
         }
         patches.push_back(std::move(p));
+        if (wind && patches.size() == 2)
+        {
+            output = std::move(patches);
+            return true;
+        }
     }
     return false;
 }

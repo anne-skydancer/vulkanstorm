@@ -1,6 +1,7 @@
 // Replay ordinary login and native session dispatch against a loopback fixture. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsr1replay.h"
+#include "vsr2replay.h"
 #include "vsnativereplay.h"
 #include "vsnativeimreplay.h"
 #include "vsnativesession.h"
@@ -569,7 +570,9 @@ struct Replay
             const bool clientFixture = name == "RegionHandleRequest" || name == "AgentPause" || name == "AgentResume" || name == "ScriptDialogReply" || name == "MapBlockRequest" || name == "MapNameRequest" || name == "TeleportLocationRequest" || name == "TeleportLandmarkRequest" || name == "ChatFromViewer" || name == "MuteListRequest" ||
                 name == "GroupMembersRequest" || name == "GroupRoleDataRequest" || name == "GroupRoleMembersRequest" ||
                 name == "GroupTitlesRequest" || name == "GroupTitleUpdate" || name == "ActivateGroup" || name == "DirFindQuery" || name == "MoneyTransferRequest" || name == "UpdateInventoryItem" || name == "EconomyDataRequest";
-            return owner && ((clientFixture && sender == owner->host()) || owner->admit(name, sender));
+            const bool r2Fixture = std::getenv("VS_VULKAN_REPLAY_R2") &&
+                                   (name == "AgentAnimation" || name == "AssetUploadRequest" || name == "ForceScriptControlRelease");
+            return owner && (((clientFixture || r2Fixture) && sender == owner->host()) || owner->admit(name, sender));
         });
         for (const char* name : {"RegionHandleRequest", "MapBlockRequest", "MapNameRequest", "TeleportLocationRequest", "TeleportLandmarkRequest"})
             gMessageSystem->setHandlerFunc(name, outgoingNavigation, reinterpret_cast<void**>(this));
@@ -674,7 +677,8 @@ struct Replay
         {
             // Crossing deliberately changes the current scene. Continue the
             // owner replay before the initial-region chat/scene prerequisites.
-            if(r1Started && !vs_r1_replay_tick(owner,imEvidence))return;
+            if (r1Started && (!vs_r1_replay_tick(owner, imEvidence) || !vs_r2_replay_tick(owner, imEvidence)))
+                return;
             if (gViewerWindow->nativeContext()->world().evidence()["objects"].asInteger()<2) return;
             auto* chat = gViewerWindow->nativeChat();
             auto* nearby = FSFloaterNearbyChat::findInstance();
@@ -693,7 +697,8 @@ struct Replay
                 LLLandmarkActions::getSLURLfromPosGlobal(favoritePosition, [&favoriteURL](std::string& url) { favoriteURL = url; });
                 require(!favoriteURL.empty() && !LLWorldMap::instanceExists(), "Current favorite SLURL helper created world map or lost location");
                 r1Started=true;
-                if(!vs_r1_replay_tick(owner,imEvidence))return;
+                if (!vs_r1_replay_tick(owner, imEvidence) || !vs_r2_replay_tick(owner, imEvidence))
+                    return;
                 qualifyConnectedSkinGeometry(imEvidence);
                 qualifyScriptNotifications(imEvidence, owner.host());
                 const std::string path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));
@@ -746,6 +751,7 @@ struct Replay
                 "Logout did not detach both shared and diagnostic nearby frontends");
             require(vs_native_im_replay_expired(), "Logout retained a live IM callback generation");
             vs_r1_replay_retired(owner,imEvidence);
+            vs_r2_replay_retired(owner, imEvidence);
             imEvidence["im_callback_expired"] = true;
             chat->input()->handleKeyHere(KEY_UP, MASK_CONTROL);
             require(chat->input()->getText().empty(), "Logout retained input history from the previous identity");

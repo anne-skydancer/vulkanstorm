@@ -571,6 +571,7 @@ public:
     bool            controlFlagsDirty() const;
     void            resetControlFlags();
     bool            anyControlGrabbed() const;      // True iff a script has taken over a control
+    void            clearScriptControlState();
     bool            isControlGrabbed(S32 control_index) const;
     // Send message to simulator to force grabbed controls to be
     // released, in case of a poorly written script.

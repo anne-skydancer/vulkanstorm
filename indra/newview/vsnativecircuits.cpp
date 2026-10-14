@@ -129,7 +129,10 @@ void VSNativeSession::neighbourSeedCoro(LLHost host,std::string seed,U64 account
         { if (auto request=weak.lock()) request->cancelSuspendedOperation(); };
     auto request=std::make_shared<LLCore::HttpRequest>();auto options=std::make_shared<LLCore::HttpOptions>();
     options->setTransferTimeout(15);options->setRetries(2);
-    LLSD wanted=LLSD::emptyArray();for (const char* name:{"EventQueueGet","GetMesh","GetMesh2","GetTexture","ViewerAsset","UntrustedSimulatorMessage"}) wanted.append(name);
+    LLSD wanted = LLSD::emptyArray();
+    for (const char* name :
+         { "EventQueueGet", "GetMesh", "GetMesh2", "GetTexture", "ViewerAsset", "UpdateAvatarAppearance", "UntrustedSimulatorMessage" })
+        wanted.append(name);
     const LLSD result=adapter->postAndSuspend(request,seed,wanted,options);
     const auto weak=weak_from_this();
     LL::WorkQueue::getInstance("mainloop")->post([weak,host,account,incarnation,requestRevision,result,adapter]()
@@ -141,7 +144,8 @@ void VSNativeSession::neighbourSeedCoro(LLHost host,std::string seed,U64 account
         region.seedFailed=!LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]) || !result.isMap();
         if (region.seedFailed) return;
         region.capabilities=LLSD::emptyMap();
-        for (const char* name:{"EventQueueGet","GetMesh","GetMesh2","GetTexture","ViewerAsset","UntrustedSimulatorMessage"})
+        for (const char* name :
+             { "EventQueueGet", "GetMesh", "GetMesh2", "GetTexture", "ViewerAsset", "UpdateAvatarAppearance", "UntrustedSimulatorMessage" })
             if (circuitURL(result[name].asString())) region.capabilities[name]=result[name];
         if (circuitURL(region.capabilities["EventQueueGet"].asString())) region.poll=std::make_unique<LLEventPoll>(region.capabilities["EventQueueGet"].asString(),host);
     });

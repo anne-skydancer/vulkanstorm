@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarservices.h"
 
 #include "llwearableitemslist.h"
 
@@ -217,11 +218,11 @@ void LLPanelWearableOutfitItem::updateItem(const std::string& name,
         if (getType() == LLAssetType::AT_OBJECT && get_is_item_worn(mInventoryItemUUID))
         {
             std::string attachment_point_name;
-            if (!isAgentAvatarValid())
+            if (!vs_avatar_character())
             {
                 search_label += LLTrans::getString("worn");
             }
-            else if (gAgentAvatarp->getAttachedPointName(mInventoryItemUUID, attachment_point_name))
+            else if (vs_avatar_attachment_name(mInventoryItemUUID, attachment_point_name))
             {
                 LLStringUtil::format_map_t args;
                 args["[ATTACHMENT_POINT]"] = LLTrans::getString(attachment_point_name);
@@ -493,10 +494,10 @@ void LLPanelAttachmentListItem::updateItem(const std::string& name,
     std::string title_joint = name;
 
     LLViewerInventoryItem* inv_item = getItem();
-    if (inv_item && isAgentAvatarValid() && gAgentAvatarp->isWearingAttachment(inv_item->getLinkedUUID()))
+    if (inv_item && get_is_item_worn(inv_item->getLinkedUUID()))
     {
         std::string found_name;
-        bool found = gAgentAvatarp->getAttachedPointName(inv_item->getLinkedUUID(),found_name);
+        bool        found      = vs_avatar_attachment_name(inv_item->getLinkedUUID(), found_name);
         std::string trans_name = LLTrans::getString(found_name);
         if (!found)
         {
@@ -1368,7 +1369,7 @@ void LLWearableItemsList::ContextMenu::updateItemsVisibility(LLContextMenu* menu
         const bool is_worn = get_is_item_worn(id);
         const bool is_editable = get_is_item_editable(id);
         const bool is_touchable = enable_attachment_touch(id);
-        const bool is_already_worn = gAgentWearables.selfHasWearable(wearable_type);
+        const bool                  is_already_worn = !vs_avatar_wearable_items(unsigned(wearable_type)).empty();
 
         LLUUID linked_id = item->getLinkedUUID();
         LLViewerInventoryItem* linked_item = gInventory.getItem(linked_id);

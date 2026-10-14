@@ -7670,6 +7670,15 @@ LLPickInfo::LLPickInfo(const LLCoordGL& mouse_pos,
 
 void LLPickInfo::fetchResults()
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        gViewerWindow->nativePick(*this);
+        if (mPickCallback)
+            mPickCallback(*this);
+        return;
+    }
+#endif
     S32 face_hit = -1;
 
     LLVector4a intersection, normal;

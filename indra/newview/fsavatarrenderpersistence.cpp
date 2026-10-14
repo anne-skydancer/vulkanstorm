@@ -42,6 +42,7 @@ FSAvatarRenderPersistence::~FSAvatarRenderPersistence()
 void FSAvatarRenderPersistence::init()
 {
     LL_INFOS() << "Initializing avatar render persistence manager..." << LL_ENDL;
+    mAvatarRenderMap.clear();
     loadAvatarRenderSettings();
 }
 

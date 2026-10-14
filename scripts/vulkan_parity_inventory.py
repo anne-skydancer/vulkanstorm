@@ -56,6 +56,10 @@ def inventory(root=ROOT):
         title = cells[0].split(':', 1)[0].replace('**', '').strip()
         key = re.sub(r'[^A-Za-z0-9]+', '-', title).strip('-')
         phase, owner = families[section]
+        # Survey table placement is not a milestone assignment. The roadmap
+        # explicitly puts particle simulation/composition in R7.
+        if section == 'Geometry and simulation' and title == 'Particles/effects':
+            phase, owner = 'R7', 'native particle/effect simulation and composition owners'
         add('SURVEY', key, title, ['doc/vulkan/full-render-chain-survey.md#' +
             re.sub(r'[^a-z0-9 -]', '', section.lower()).replace(' ', '-')],
             owner, phase, 'Implement and qualify every behavior in this survey row. ' +
@@ -63,6 +67,16 @@ def inventory(root=ROOT):
         row=rows[stable_id('SURVEY',key)]
         row['reference_seams']=cells[0]
         row['reference_symbols']=sorted(set(re.findall(r'`([^`]+)`',cells[0])))
+        if section == 'Geometry and simulation' and title == 'Terrain':
+            row['phase_requirements'] = {
+                'R2': 'Decoded heightfield, geometry/LOD, normals, neighbouring/variable regions, patch joins and picking.',
+                'R3': 'Four-corner controls, smooth splatting, GLTF/PBR materials and channel/tangent conventions.',
+                'R6': 'Terrain shadow/dependent-view qualification.'}
+        elif section == 'Geometry and simulation' and title == 'Trees/grass':
+            row['phase_requirements'] = {
+                'R2': 'Species, procedural geometry/seeds, reference wind and billboard/LOD choices.',
+                'R3': 'Species texture/mask/material and sampler variants.',
+                'R6': 'Masked tree/grass shadow/dependent-view qualification.'}
 
     pool_path = 'indra/newview/lldrawpool.h'
     code = (root / pool_path).read_text(encoding='utf-8')

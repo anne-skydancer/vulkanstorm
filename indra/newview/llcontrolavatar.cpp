@@ -26,6 +26,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llcontrolavatar.h"
+#include "vscontrolconstraints.h"
 #include "llagent.h" //  Get state values from here
 #include "llviewerobjectlist.h"
 #include "pipeline.h"
@@ -101,61 +102,13 @@ LLVOAvatar *LLControlAvatar::getAttachedAvatar()
 
 void LLControlAvatar::getNewConstraintFixups(LLVector3& new_pos_fixup, F32& new_scale_fixup) const
 {
-    static LLCachedControl<F32> anim_max_legal_offset(gSavedSettings, "AnimatedObjectsMaxLegalOffset", MAX_LEGAL_OFFSET);
-    F32 max_legal_offset = llmax(anim_max_legal_offset(), 0.f);
-
-    static LLCachedControl<F32> anim_max_legal_size(gSavedSettings, "AnimatedObjectsMaxLegalSize", MAX_LEGAL_SIZE);
-    F32 max_legal_size = llmax(anim_max_legal_size(), 1.f);
-
-    new_pos_fixup = LLVector3();
-    new_scale_fixup = 1.0f;
-    LLVector3 vol_pos = mRootVolp->getRenderPosition();
-
-    // Fix up position if needed to prevent visual encroachment
-    if (box_valid_and_non_zero(getLastAnimExtents())) // wait for state to settle down
-    {
-        // The goal here is to ensure that the extent of the avatar's
-        // bounding box does not wander too far from the
-        // official position of the corresponding volume. We
-        // do this by tracking the distance and applying a
-        // correction to the control avatar position if
-        // needed.
-        const LLVector3 *extents = getLastAnimExtents();
-        LLVector3 unshift_extents[2];
-        unshift_extents[0] = extents[0] - mPositionConstraintFixup;
-        unshift_extents[1] = extents[1] - mPositionConstraintFixup;
-        LLVector3 box_dims = extents[1]-extents[0];
-        F32 box_size = llmax(box_dims[0],box_dims[1],box_dims[2]);
-
-        if (!mRootVolp->isAttachment())
-        {
-            LLVector3 pos_box_offset = point_to_box_offset(vol_pos, unshift_extents);
-            F32 offset_dist = pos_box_offset.length();
-            if (offset_dist > max_legal_offset && offset_dist > 0.f)
-            {
-                F32 target_dist = (offset_dist - max_legal_offset);
-                new_pos_fixup = (target_dist/offset_dist)*pos_box_offset;
-            }
-            if (new_pos_fixup != mPositionConstraintFixup)
-            {
-                LL_DEBUGS("ConstraintFix") << getDebugName() << " pos fix, offset_dist " << offset_dist << " pos fixup "
-                                           << new_pos_fixup << " was " << mPositionConstraintFixup << LL_ENDL;
-                LL_DEBUGS("ConstraintFix") << "vol_pos " << vol_pos << LL_ENDL;
-                LL_DEBUGS("ConstraintFix") << "extents " << extents[0] << " " << extents[1] << LL_ENDL;
-                LL_DEBUGS("ConstraintFix") << "unshift_extents " << unshift_extents[0] << " " << unshift_extents[1] << LL_ENDL;
-
-            }
-        }
-        if (box_size/mScaleConstraintFixup > max_legal_size)
-        {
-            new_scale_fixup = mScaleConstraintFixup*max_legal_size/box_size;
-            LL_DEBUGS("ConstraintFix") << getDebugName() << " scale fix, box_size " << box_size << " fixup "
-                                       << mScaleConstraintFixup << " max legal " << max_legal_size
-                                       << " -> new scale " << new_scale_fixup << LL_ENDL;
-        }
-    }
+    static LLCachedControl<F32> maxOffset(gSavedSettings, "AnimatedObjectsMaxLegalOffset", MAX_LEGAL_OFFSET);
+    static LLCachedControl<F32> maxSize(gSavedSettings, "AnimatedObjectsMaxLegalSize", MAX_LEGAL_SIZE);
+    const auto result = vs_control_constraints(mRootVolp->getRenderPosition(), getLastAnimExtents(), mPositionConstraintFixup,
+                                               mScaleConstraintFixup, mRootVolp->isAttachment(), maxOffset(), maxSize());
+    new_pos_fixup     = result.position;
+    new_scale_fixup   = result.scale;
 }
-
 void LLControlAvatar::matchVolumeTransform()
 {
     if (mRootVolp)
@@ -268,17 +221,7 @@ void LLControlAvatar::setGlobalScale(F32 scale)
 }
 
 void LLControlAvatar::recursiveScaleJoint(LLJoint* joint, F32 factor)
-{
-    joint->setScale(factor * joint->getScale());
-
-    for (LLJoint::joints_t::iterator iter = joint->mChildren.begin();
-         iter != joint->mChildren.end(); ++iter)
-    {
-        LLJoint* child = *iter;
-        recursiveScaleJoint(child, factor);
-    }
-}
-
+{ vs_scale_avatar_joints(joint, factor); }
 // Based on LLViewerJointAttachment::setupDrawable(), without the attaching part.
 void LLControlAvatar::updateVolumeGeom()
 {

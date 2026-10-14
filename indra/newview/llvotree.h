@@ -73,53 +73,18 @@ public:
 
     void updateRadius();
 
-    void calcNumVerts(U32& vert_count, U32& index_count, S32 trunk_LOD, S32 stop_level, U16 depth, U16 trunk_depth, F32 branches);
-
     void updateMesh();
+    void destroyVB() { mReferenceBuffer = nullptr; }
 
-    void destroyVB() { mReferenceBuffer = NULL; }
-
-    void appendMesh(LLStrider<LLVector3>& vertices,
-                         LLStrider<LLVector3>& normals,
-                         LLStrider<LLVector2>& tex_coords,
-                         LLStrider<LLColor4U>& colors,
-                         LLStrider<U16>& indices,
-                         U16& idx_offset,
-                         LLMatrix4& matrix,
-                         LLMatrix4& norm_mat,
-                         S32 vertex_offset,
-                         S32 vertex_count,
-                         S32 index_count,
-                         S32 index_offset);
-
-    void genBranchPipeline(LLStrider<LLVector3>& vertices,
-                                 LLStrider<LLVector3>& normals,
-                                 LLStrider<LLVector2>& tex_coords,
-                                 LLStrider<LLColor4U>& colors,
-                                 LLStrider<U16>& indices,
-                                 U16& index_offset,
-                                 LLMatrix4& matrix,
-                                 S32 trunk_LOD,
-                                 S32 stop_level,
-                                 U16 depth,
-                                 U16 trunk_depth,
-                                 F32 scale,
-                                 F32 twist,
-                                 F32 droop,
-                                 F32 branches,
-                                 F32 alpha);
-
-     /*virtual*/ bool lineSegmentIntersect(const LLVector4a& start, const LLVector4a& end,
-                                          S32 face = -1,                        // which face to check, -1 = ALL_SIDES
-                                          bool pick_transparent = false,
-                                          bool pick_rigged = false,
-                                          bool pick_unselectable = true,
-                                          S32* face_hit = NULL,                 // which face was hit
-                                          LLVector4a* intersection = NULL,       // return the intersection point
-                                          LLVector2* tex_coord = NULL,          // return the texture coordinates of the intersection point
-                                          LLVector4a* normal = NULL,             // return the surface normal at the intersection point
-                                          LLVector4a* tangent = NULL           // return the surface tangent at the intersection point
-        );
+    /*virtual*/ bool lineSegmentIntersect(const LLVector4a& start, const LLVector4a& end,
+                                          S32  face             = -1, // which face to check, -1 = ALL_SIDES
+                                          bool pick_transparent = false, bool pick_rigged = false, bool pick_unselectable = true,
+                                          S32*        face_hit     = NULL, // which face was hit
+                                          LLVector4a* intersection = NULL, // return the intersection point
+                                          LLVector2*  tex_coord    = NULL, // return the texture coordinates of the intersection point
+                                          LLVector4a* normal       = NULL, // return the surface normal at the intersection point
+                                          LLVector4a* tangent      = NULL  // return the surface tangent at the intersection point
+    );
 
     static S32 sMaxTreeSpecies;
 

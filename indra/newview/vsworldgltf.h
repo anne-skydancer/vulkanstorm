@@ -1,0 +1,26 @@
+// Native glTF scene ownership and CPU animation. LGPL-2.1.
+#pragma once
+#include "vsworldrenderer.h"
+#include "vsresourcebudget.h"
+#include "lluuid.h"
+#include "v3math.h"
+#include "llquaternion.h"
+#include <functional>
+#include <memory>
+class VSUIResources;
+class LLSD;
+class VSWorldGLTF
+{
+public:
+    VSWorldGLTF(const LLUUID&, VSWorldRenderer&, VSUIResources&, VSResourceBudget, std::function<bool()> current);
+    VSWorldGLTF(const std::string& filename, VSWorldRenderer&, VSUIResources&, VSResourceBudget, std::function<bool()> current);
+    bool ready() const;
+    bool hasPublication() const;
+    ~VSWorldGLTF();
+    void append(std::vector<VSWorldRenderer::Packet>&, const LLVector3&, const LLQuaternion&, const LLVector3& scale, const LLVector3& eye);
+    LLSD evidence() const;
+
+private:
+    struct Impl;
+    std::shared_ptr<Impl> mImpl;
+};

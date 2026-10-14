@@ -11,6 +11,7 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from package_vulkan_evidence import package, completeness
+from run_vulkan_geometry_tests import required_checks
 
 
 class EvidencePackageTest(unittest.TestCase):
@@ -88,6 +89,33 @@ class EvidencePackageTest(unittest.TestCase):
             report=root/'.ci/world-parity-evidence/baseline-results.json'
             report.write_text(json.dumps({'artifact_sha256':{'../outside.ppm':digest}}))
             self.assertIn('Invalid R0 artifact path',artifact_errors()[0])
+
+    def test_geometry_evidence_rejects_missing_corrupt_and_substituted_checks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            directory=root/'.ci/geometry-evidence';directory.mkdir(parents=True)
+            checks=required_checks(21)
+            log=('\n'.join(checks)+'\n').encode()
+            report=directory/'results.json'
+            data=dict(passed=True,checks=checks,tree_species=21,source_commit='a'*40,
+                      executable_sha256='b'*64,tree_species_sha256='c'*64,
+                      log_sha256=hashlib.sha256(log).hexdigest())
+            report.write_text(json.dumps(data))
+            files={'.ci/geometry-evidence/results.json':report}
+            def geometry_errors():
+                return [error for error in completeness(files,'build')
+                        if 'geometry' in error.lower()]
+            self.assertTrue(geometry_errors())
+            logfile=directory/'geometry.log';logfile.write_bytes(log)
+            files['.ci/geometry-evidence/geometry.log']=logfile
+            self.assertEqual(geometry_errors(),[])
+            logfile.write_bytes(b'corrupt')
+            self.assertTrue(any('checksum' in error for error in geometry_errors()))
+            logfile.write_bytes(log)
+            data['checks']=[checks[0]]*5;report.write_text(json.dumps(data))
+            self.assertTrue(any('Incomplete' in error for error in geometry_errors()))
+            data['checks']=checks;data['tree_species']=0;report.write_text(json.dumps(data))
+            self.assertTrue(geometry_errors())
 
     def test_output_cannot_recursively_package_itself(self):
         with tempfile.TemporaryDirectory() as temp:

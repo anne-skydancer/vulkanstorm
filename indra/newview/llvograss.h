@@ -28,6 +28,7 @@
 #define LL_LLVOGRASS_H
 
 #include "llviewerobject.h"
+#include "vsvegetation.h"
 #include <map>
 
 class LLSurfacePatch;
@@ -70,6 +71,8 @@ public:
     /*virtual*/ bool updateLOD();
     /*virtual*/ void setPixelAreaAndAngle(LLAgent &agent); // generate accurate apparent angle and area
 
+    static VSVegetationMesh cpuMesh(U8 species, const LLVector3& position, const LLVector3& scale, unsigned blades,
+                                    const VSVegetationGround& ground);
     void plantBlades();
 
     /*virtual*/ bool    isActive() const; // Whether this object needs to do an idleUpdate.

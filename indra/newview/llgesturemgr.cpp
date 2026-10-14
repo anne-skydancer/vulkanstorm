@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarservices.h"
 
 #include "llgesturemgr.h"
 
@@ -900,7 +901,8 @@ void LLGestureMgr::stepGesture(LLMultiGesture* gesture)
     {
         return;
     }
-    if (!isAgentAvatarValid() || hasLoadingAssets(gesture)) return;
+    if (!vs_avatar_character() || hasLoadingAssets(gesture))
+        return;
 
     // Of the ones that started playing, have any stopped?
 
@@ -911,8 +913,9 @@ void LLGestureMgr::stepGesture(LLMultiGesture* gesture)
     {
         // look in signaled animations (simulator's view of what is
         // currently playing.
-        LLVOAvatar::AnimIterator play_it = gAgentAvatarp->mSignaledAnimations.find(*gest_it);
-        if (play_it != gAgentAvatarp->mSignaledAnimations.end())
+        const auto& signaled = vs_avatar_signaled_animations();
+        auto        play_it  = signaled.find(*gest_it);
+        if (play_it != signaled.end())
         {
             ++gest_it;
         }
@@ -930,8 +933,9 @@ void LLGestureMgr::stepGesture(LLMultiGesture* gesture)
          gest_it != gesture->mRequestedAnimIDs.end();
          )
     {
-     LLVOAvatar::AnimIterator play_it = gAgentAvatarp->mSignaledAnimations.find(*gest_it);
-        if (play_it != gAgentAvatarp->mSignaledAnimations.end())
+        const auto& signaled = vs_avatar_signaled_animations();
+        auto        play_it  = signaled.find(*gest_it);
+        if (play_it != signaled.end())
         {
             // Hooray, this animation has started playing!
             // Copy into playing.

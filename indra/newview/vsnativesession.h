@@ -21,6 +21,7 @@ class LLEventPoll;
 class VSPlainChat;
 class LLFloater;
 class LLViewerMediaImpl;
+class VSNativeAppearance;
 
 // Deliberately does not own LLWorld, LLViewerRegion or scene resources.
 // All asynchronous deliveries carry an owner and a session generation.
@@ -42,6 +43,9 @@ public:
     bool admit(const std::string&, const LLHost&);
     bool sendChat(const std::string&, U8 type = 1, S32 channel = 0);
     bool sendChatProcessed(const std::string&, U8 type, S32 channel);
+    bool                  requestAnimations(const std::vector<LLUUID>&, bool start);
+    bool                  resetAvatar(const LLUUID&, bool resetAnimations);
+    VSNativeAppearance*   appearance() const { return mAppearance.get(); }
     void typing(bool active);
     void receive(LLMessageSystem*);
     bool deliver(const std::string&, const LLSD&, const LLHost&, U64 generation);
@@ -73,6 +77,8 @@ public:
     VSNativeCamera::State cameraState() const { return mCamera.state(mPosition); }
     bool movementAction(U32 key, const std::string& action, bool down, bool repeated = false);
     void releaseMovement();
+    void                  setFlying(bool);
+    void                  mouseButton(bool down);
     void cameraOrbit(F32 yaw, F32 pitch);
     void cameraZoom(S32 clicks);
     bool updateAgentPosition(const LLVector3&, const LLHost&, U64 generation, U64 regionEpoch);
@@ -145,6 +151,7 @@ private:
     bool mAppearanceOwnerInitialized=false,mWearablesKnown=false;
     U32 mWearablesSerial=0;
     LLSD mWearablesMetadata;
+    std::unique_ptr<VSNativeAppearance> mAppearance;
     LLHost mPreviousHost;
     struct RegionCircuit
     {
@@ -185,6 +192,8 @@ private:
     S32 mLastChannel = 0;
     U32 mWidth = 256, mHeight = 256;
     LLVector3 mPosition;
+    F32                                             mWaterHeight = 20;
+    bool                                            mWaterKnown  = false;
     VSNativeCamera mCamera;
     double mCameraTime = 0, mAgentUpdateTime = 0;
     std::string mSeed, mName;
@@ -199,6 +208,9 @@ private:
     double mTypingDeadline = 0;
     bool mTyping = false;
     bool mFrozen = false;
+    bool                                            mWorldMouseDown = false, mWorldMouseMouselook = false;
+    U32                                             mMouseControls   = 0;
+    U64                                             mAttentionAvatar = 0;
     bool mHandshake = false, mMovement = false, mSeedReady = false, mCircuitAck = false, mQuit = false;
     U64 mReceived = 0, mSent = 0, mRejected = 0, mExpired = 0;
     std::vector<boost::signals2::scoped_connection> mSettingConnections;

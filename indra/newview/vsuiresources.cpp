@@ -161,8 +161,11 @@ LLUIImagePtr VSUIResources::publish(const std::string& key,const LLImageRaw& raw
         d[0]=s[0]; d[1]=components<3?s[0]:s[1]; d[2]=components<3?s[0]:s[2];
         d[3]=components==2?s[1]:components==4?s[3]:255;
     }
-    asset->image=mImpl->renderer.upload(width,height,bytes,key.compare(0,7,"remote:")==0?
-        VSWorldContracts::ImageRole::RemoteAsset:VSWorldContracts::ImageRole::CoreUI);
+    const auto role = key.compare(0, 17, "avatar-composite:") == 0 ? VSWorldContracts::ImageRole::AvatarComposite
+                      : (key.compare(0, 7, "remote:") == 0 || key.compare(0, 17, "gltf-scene-image:") == 0)
+                          ? VSWorldContracts::ImageRole::RemoteAsset
+                          : VSWorldContracts::ImageRole::CoreUI;
+    asset->image    = mImpl->renderer.upload(width, height, bytes, role);
     if (!asset->image) return nullptr;
     std::weak_ptr<Impl> owner=mImpl;
     LLUIImagePtr facade=new LLUIImage(key,width,height,

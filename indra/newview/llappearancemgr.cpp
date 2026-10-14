@@ -25,6 +25,13 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarservices.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#include "vsvulkancontext.h"
+#include "llviewerwindow.h"
+#endif
 
 #include <boost/lexical_cast.hpp>
 #include "llaccordionctrltab.h"
@@ -1481,6 +1488,14 @@ void LLAppearanceMgr::wearItemsOnAvatar(const uuid_vec_t& item_ids_to_wear,
                                         bool replace,
                                         LLPointer<LLInventoryCallback> cb)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        if (auto* appearance = session->appearance())
+            appearance->wear(item_ids_to_wear, replace, cb);
+        return;
+    }
+#endif
     LL_DEBUGS("UIUsage") << "wearItemsOnAvatar" << LL_ENDL;
     LLUIUsage::instance().logCommand("Avatar.WearItem");
 
@@ -2094,6 +2109,13 @@ bool LLAppearanceMgr::getCanReplaceCOF(const LLUUID& outfit_cat_id)
 // Moved from LLWearableList::ContextMenu for wider utility.
 bool LLAppearanceMgr::canAddWearables(const uuid_vec_t& item_ids, bool warn_on_type_mismatch) const
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        const auto* appearance = session->appearance();
+        return appearance && appearance->canWear(item_ids);
+    }
+#endif
     // TODO: investigate wearables may not be loaded at this point EXT-8231
 
     U32 n_objects = 0;
@@ -2211,6 +2233,14 @@ void LLAppearanceMgr::filterWearableItems(
 
 void LLAppearanceMgr::updateCOF(const LLUUID& category, bool append)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        if (auto* appearance = session->appearance())
+            appearance->wearCategory(category, append);
+        return;
+    }
+#endif
     LLViewerInventoryCategory *pcat = gInventory.getCategory(category);
     if (!pcat)
     {
@@ -2688,6 +2718,16 @@ void LLAppearanceMgr::updateAppearanceFromCOF(bool enforce_item_restrictions,
                                               bool enforce_ordering,
                                               nullary_func_t post_update_func)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        if (auto* appearance = session->appearance())
+            appearance->refresh();
+        if (post_update_func)
+            post_update_func();
+        return;
+    }
+#endif
     if (mIsInUpdateAppearanceFromCOF)
     {
         LL_WARNS() << "Called updateAppearanceFromCOF inside updateAppearanceFromCOF, skipping" << LL_ENDL;
@@ -3208,6 +3248,14 @@ void LLAppearanceMgr::wearCategoryFinal(const LLUUID& cat_id, bool copy_items, b
 // *NOTE: hack to get from avatar inventory to avatar
 void LLAppearanceMgr::wearInventoryCategoryOnAvatar( LLInventoryCategory* category, bool append )
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        if (category && session->appearance())
+            session->appearance()->wearCategory(category->getUUID(), append);
+        return;
+    }
+#endif
     // Avoid unintentionally overwriting old wearables.  We have to do
     // this up front to avoid having to deal with the case of multiple
     // wearables being dirty.
@@ -3445,6 +3493,15 @@ void LLAppearanceMgr::removeAllClothesFromAvatar()
 
 void LLAppearanceMgr::removeAllAttachmentsFromAvatar()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        if (session->appearance() && gViewerWindow && gViewerWindow->nativeContext())
+            for (const auto& attachment : gViewerWindow->nativeContext()->world().attachments())
+                session->appearance()->detach(attachment.item.notNull() ? attachment.item : attachment.object.id);
+        return;
+    }
+#endif
     if (!isAgentAvatarValid()) return;
 
     LLAgentWearables::llvo_vec_t objects_to_remove;
@@ -4153,6 +4210,14 @@ void LLAppearanceMgr::onIdle(void *)
 
 void LLAppearanceMgr::requestServerAppearanceUpdate()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        if (auto* appearance = session->appearance())
+            appearance->refresh();
+        return;
+    }
+#endif
     // Workaround: we shouldn't request update from server prior to uploading all attachments, but it is
     // complicated to check for pending attachment uploads, so we are just waiting for uploads to complete
     if (!mOutstandingAppearanceBakeRequest && gAssetStorage->getNumPendingUploads() == 0)
@@ -4579,7 +4644,8 @@ void LLAppearanceMgr::onOutfitFolderCreatedAndClothingOrdered(const LLUUID& fold
 
 void LLAppearanceMgr::makeNewOutfitLinks(const std::string& new_folder_name, bool show_panel)
 {
-    if (!isAgentAvatarValid()) return;
+    if (!vs_avatar_appearance())
+        return;
 
     LLUIUsage::instance().logCommand("Avatar.CreateNewOutfit");
 
@@ -4613,6 +4679,26 @@ void LLAppearanceMgr::wearBaseOutfit()
 void LLAppearanceMgr::removeItemsFromAvatar(const uuid_vec_t& ids_to_remove, nullary_func_t post_update_func, LLPointer<LLInventoryCallback> cb /*= NULL*/, bool immediate_delete /*= false*/)
 // [/SL:KB]
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        const auto                     guard     = session->accountGuard();
+        LLPointer<LLInventoryCallback> completed = new LLBoostFuncInventoryCallback(
+            [cb](const LLUUID& item) mutable
+            {
+                if (cb)
+                    cb->fire(item);
+            },
+            [guard, post_update_func]
+            {
+                if (guard() && post_update_func)
+                    post_update_func();
+            });
+        if (auto* appearance = session->appearance())
+            appearance->remove(ids_to_remove, completed);
+        return;
+    }
+#endif
     LL_DEBUGS("UIUsage") << "removeItemsFromAvatar" << LL_ENDL;
     LLUIUsage::instance().logCommand("Avatar.RemoveItem");
 
@@ -4708,6 +4794,10 @@ bool LLAppearanceMgr::shouldRemoveTempAttachment(const LLUUID& item_id)
 
 bool LLAppearanceMgr::moveWearable(LLViewerInventoryItem* item, bool closer_to_body)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+        return item && session->appearance() && session->appearance()->moveWearable(item->getUUID(), closer_to_body);
+#endif
     if (!item || !item->isWearableType()) return false;
     if (item->getType() != LLAssetType::AT_CLOTHING) return false;
     if (!gInventory.isObjectDescendentOf(item->getUUID(), getCOF())) return false;
@@ -4864,6 +4954,12 @@ void LLAppearanceMgr::setAttachmentInvLinkEnable(bool val)
 {
     LL_DEBUGS("Avatar") << "setAttachmentInvLinkEnable => " << (int) val << LL_ENDL;
     mAttachmentInvLinkEnabled = val;
+}
+void LLAppearanceMgr::notifyAttachmentChange(const LLUUID& item)
+{
+    if (item.notNull())
+        gInventory.addChangedMask(LLInventoryObserver::LABEL, item);
+    mAttachmentsChangeSignal(item);
 }
 boost::signals2::connection LLAppearanceMgr::setAttachmentsChangedCallback(attachments_changed_callback_t cb)
 {

@@ -37,6 +37,10 @@
 #if VS_NATIVE_VULKAN
 #include "vsplainchat.h"
 #include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#include "vsavatarservices.h"
+#include "vsworldavatar.h"
+#include "vsvulkancontext.h"
 #include "llpanelpeople.h"
 #include "vsuiadmission.h"
 #endif
@@ -8581,10 +8585,34 @@ class FSAvatarSearchVisible : public view_listener_t
 };
 // </FS:Ansariel>
 
+#if VS_NATIVE_VULKAN
+static VSWorldAvatar* nativeMenuAvatar()
+{
+    return VSNativeSession::active() && gViewerWindow && gViewerWindow->nativeContext()
+               ? gViewerWindow->nativeContext()->world().avatarForObject(gViewerWindow->getLastPick().mObjectID)
+               : nullptr;
+}
+static bool nativeResetMenuAvatar(bool animations, bool selfFallback)
+{
+    const auto session = VSNativeSession::active();
+    if (!session)
+        return false;
+    auto* avatar = nativeMenuAvatar();
+    return session->resetAvatar(avatar ? avatar->character().getID() : selfFallback ? session->account().agent : LLUUID::null, animations);
+}
+#endif
 class LLAvatarResetSkeleton : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            nativeResetMenuAvatar(false, false);
+            return true;
+        }
+#endif
+
         if (LLVOAvatar* avatar = find_avatar_from_object(LLSelectMgr::getInstance()->getSelection()->getPrimaryObject()))
         {
             if(avatar->getID() == gAgentID)
@@ -8607,6 +8635,11 @@ class LLAvatarEnableResetSkeleton : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+            return nativeMenuAvatar() != nullptr;
+#endif
+
         LLViewerObject* obj = LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
         return obj && obj->getAvatar();
     }
@@ -8616,6 +8649,14 @@ class LLAvatarResetSkeletonAndAnimations : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            nativeResetMenuAvatar(true, false);
+            return true;
+        }
+#endif
+
         if (LLVOAvatar* avatar = find_avatar_from_object(LLSelectMgr::getInstance()->getSelection()->getPrimaryObject()))
         {
             if(avatar->getID() == gAgentID)
@@ -8638,6 +8679,14 @@ class LLAvatarResetSelfSkeleton : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            nativeResetMenuAvatar(false, true);
+            return true;
+        }
+#endif
+
         if (LLVOAvatar* avatar = find_avatar_from_object(LLSelectMgr::getInstance()->getSelection()->getPrimaryObject()))
         {
             avatar->resetSkeleton(false);
@@ -8654,6 +8703,14 @@ class LLAvatarResetSelfSkeletonAndAnimations : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            nativeResetMenuAvatar(true, true);
+            return true;
+        }
+#endif
+
         if (LLVOAvatar* avatar = find_avatar_from_object(LLSelectMgr::getInstance()->getSelection()->getPrimaryObject()))
         {
             if(avatar->getID() == gAgentID)
@@ -11072,6 +11129,15 @@ class FSToolsResyncAnimations : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            if (gViewerWindow && gViewerWindow->nativeContext())
+                gViewerWindow->nativeContext()->world().resyncAvatarAnimations();
+            return true;
+        }
+#endif
+
         for (S32 i = 0; i < gObjectList.getNumObjects(); i++)
         {
             LLViewerObject* object = gObjectList.getObject(i);
@@ -11101,6 +11167,15 @@ class FSToolsUndeform : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if (const auto session = VSNativeSession::active())
+        {
+            session->resetAvatar(session->account().agent, true);
+            session->requestAnimations({ LLUUID(gSavedSettings.getString("FSUndeformUUID")) }, true);
+            return true;
+        }
+#endif
+
         if (isAgentAvatarValid())
         {
             gAgentAvatarp->resetSkeleton(true);
@@ -12186,6 +12261,16 @@ class LLEditEnableTakeOff : public view_listener_t
     bool handleEvent(const LLSD& userdata)
     {
         std::string clothing = userdata.asString();
+#if VS_NATIVE_VULKAN
+        if (const auto session = VSNativeSession::active())
+        {
+            const auto type = LLWearableType::getInstance()->typeNameToType(clothing);
+            for (const auto& id : vs_avatar_wearable_items(unsigned(type)))
+                if (!rlv_handler_t::isEnabled() || rlvPredCanRemoveItem(id))
+                    return true;
+            return false;
+        }
+#endif
         LLWearableType::EType type = LLWearableType::getInstance()->typeNameToType(clothing);
 //      if (type >= LLWearableType::WT_SHAPE && type < LLWearableType::WT_COUNT)
 // [RLVa:KB] - Checked: 2010-03-20 (RLVa-1.2.0c) | Modified: RLVa-1.2.0a
@@ -12205,6 +12290,14 @@ class FSDerenderAnimatedObjects : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            if (gViewerWindow && gViewerWindow->nativeContext())
+                gViewerWindow->nativeContext()->world().derenderAnimatedObjects();
+            return true;
+        }
+#endif
         gObjectList.killAnimatedObjects();
         return true;
     }
@@ -12221,6 +12314,14 @@ class LLEditTakeOff : public view_listener_t
         else
         {
             LLWearableType::EType type = LLWearableType::getInstance()->typeNameToType(clothing);
+#if VS_NATIVE_VULKAN
+            if (const auto session = VSNativeSession::active())
+            {
+                if (session->appearance())
+                    session->appearance()->removeTop(unsigned(type));
+                return true;
+            }
+#endif
             if (type >= LLWearableType::WT_SHAPE
                 && type < LLWearableType::WT_COUNT
                 && (gAgentWearables.getWearableCount(type) > 0))

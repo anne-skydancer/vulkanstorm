@@ -30,6 +30,7 @@
 #include "rlvcommon.h"
 #include "rlveffects.h"
 #include "rlvhelper.h"
+#include "llinventoryfunctions.h"
 #include "rlvhandler.h"
 #include "rlvinventory.h"
 #include "rlvmodifiers.h"
@@ -1249,26 +1250,12 @@ void RlvObject::setModifierValue(ERlvLocalBhvrModifier eBhvrModifier, const RlvB
 //
 
 // Checked: 2010-04-05 (RLVa-1.2.0d) | Modified: RLVa-1.2.0d
-bool RlvForceWear::isWearingItem(const LLInventoryItem* pItem)
+bool RlvForceWear::isWearingItem(const LLInventoryItem* item)
 {
-    if (pItem)
-    {
-        switch (pItem->getActualType())
-        {
-            case LLAssetType::AT_BODYPART:
-            case LLAssetType::AT_CLOTHING:
-                return gAgentWearables.isWearingItem(pItem->getUUID());
-            case LLAssetType::AT_OBJECT:
-                return (isAgentAvatarValid()) && (gAgentAvatarp->isWearingAttachment(pItem->getUUID()));
-            case LLAssetType::AT_GESTURE:
-                return LLGestureMgr::instance().isGestureActive(pItem->getUUID());
-            case LLAssetType::AT_LINK:
-                return isWearingItem(gInventory.getItem(pItem->getLinkedUUID()));
-            default:
-                break;
-        }
-    }
-    return false;
+    if (!item)
+        return false;
+    const auto* actual = gInventory.getItem(item->getLinkedUUID());
+    return actual && get_is_item_worn(actual->getUUID());
 }
 
 // Checked: 2010-03-21 (RLVa-1.2.0a) | Modified: RLVa-1.2.0a

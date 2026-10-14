@@ -31,6 +31,7 @@
 #include "lleventtimer.h"
 #include "llextendedstatus.h"
 #include "llsingleton.h"
+#include <memory>
 #include "llviewerinventory.h"
 
 #include <map>
@@ -170,6 +171,7 @@ public:
 
     // callback from LLAppViewer
     static void onLoginComplete();
+    void        resetAccount();
 
     const std::vector<AOSet*> getSetList() const;
     const std::string         getCurrentSetName() const;
@@ -283,6 +285,9 @@ protected:
     AOSet*              mImportSet;
     std::vector<AOSet*> mOldImportSets;
     S32                 mImportRetryCount;
+    U64                   mImportGeneration = 0;
+    U64                   mSetGeneration    = 0;
+    std::shared_ptr<char> mAccountCallbacks = std::make_shared<char>();
 
     // timers of the active state's cycling tracks, and the state
     // whose tracks are currently playing. The pointer stays valid because tracks get

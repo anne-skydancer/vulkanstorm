@@ -29,12 +29,13 @@ class WorldSceneReplacement(unittest.TestCase):
         scene = SOURCE.read_text(encoding='utf-8')
         bodies = '\n'.join(method(scene, signature) for signature in (
             'static VSWorldContracts::OwnerKind kind(', 'void eraseObject(',
-            'bool replace(U32 id,Object&& object)'))
+            'bool replace(U32 id,Object&& object)', 'void eraseAnimated()'))
         self.compile(r'''
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <optional>
 #include <vector>
@@ -52,7 +53,9 @@ struct LLVolume {
  int getNumVolumeFaces()const{return 0;}
  Face getVolumeFace(int)const{return {};}
 };
-struct Params {LLUUID asset;LLUUID getSculptID()const{return asset;}};
+struct Params {LLUUID asset;LLUUID getSculptID()const{return asset;}int getSculptType()const{return 0;}bool operator==(const Params&)const=default;};
+struct Flexible {bool operator==(const Flexible&)const=default;};
+struct FlexState {unsigned pathSignatureSize=9;};
 struct Motion {int state=12;void accept(int,int,int,int,int,double){++state;}};
 struct LLFrameTimer {static double getTotalSeconds(){return 100;}};
 namespace VSWorldContracts {enum class OwnerKind {Avatar,ControlAvatar,Attachment,Object};}
@@ -63,17 +66,23 @@ struct Object {
  U64 generation=0,revision=0;U32 extendedMeshFlags=0;bool parentRetired=false,renderable=true,dirty=true;
  std::shared_ptr<const VSResourceBudget::Reservation> slot,primitiveResidency;
  std::shared_ptr<LLVolume> volume;Params params;
- struct Face {std::shared_ptr<Mesh> mesh;};std::vector<Face> faces;
- Motion motion;int position=0,rotation=0,velocity=0,acceleration=0,angularVelocity=0;
+ struct Face {std::shared_ptr<Mesh> mesh;int publishedMaterial=0;std::shared_ptr<int> publishedImage;bool published=false;U64 poseGeneration=0;};std::vector<Face> faces,admittedFaces;
+ Motion motion;int scale=0,position=0,rotation=0,velocity=0,acceleration=0,angularVelocity=0;
  U16 taskSerial=0;bool taskKnown=false;std::string taskFile;
  std::optional<int> taskRequest;double taskDeadline=0;std::map<LLUUID,S32> controlAnimations;
+ std::shared_ptr<int> gltf,pendingGLTF,controlAvatar;
+ std::shared_ptr<const VSResourceBudget::Reservation> controlAnimationResidency;
+ std::optional<Flexible> flexible;std::shared_ptr<FlexState> flex;
 };
 struct Budgets {VSResourceBudget objects{32},primitiveBytes{1024};};
 struct Scene {
  std::map<U32,Object> objects;std::map<LLUUID,int> avatars;std::map<U32,int> pending;
+ struct AnimationState {std::map<LLUUID,S32> animations;double deadline=0;std::shared_ptr<const VSResourceBudget::Reservation> residency;};
+ std::map<LLUUID,AnimationState> pendingAnimations;
  std::shared_ptr<Budgets> budgets=std::make_shared<Budgets>();
  U64 nextObjectGeneration=1,nextRevision=1;unsigned requests=0;
  void request(U32){++requests;}void dirtyChildren(U32){}
+ bool linksCurrent(const Object& object)const{return !object.parentRetired;}
 BODIES
 };
 Object update(int identity=7,int asset=42){
@@ -84,19 +93,28 @@ int main(){
  Scene scene;assert(scene.replace(50,update()));
  auto first=std::make_shared<Mesh>(Mesh{81});auto second=std::make_shared<Mesh>(Mesh{82});
  auto& original=scene.objects.at(50);original.faces[0].mesh=first;original.faces[1].mesh=second;
+ original.faces[0].published=true;original.faces[0].publishedMaterial=34;original.faces[0].poseGeneration=9;
+ original.faces[0].publishedImage=std::make_shared<int>(112);const auto image=original.faces[0].publishedImage;
  original.taskKnown=true;original.taskSerial=17;original.taskRequest=4;original.controlAnimations[{21}]=6;
+ original.controlAvatar=std::make_shared<int>(123);auto controller=original.controlAvatar;
+ original.flexible=Flexible{};original.flex=std::make_shared<FlexState>();auto simulation=original.flex;
  const auto generation=original.generation,revision=original.revision;
  auto lease=original.slot;
- assert(scene.replace(50,update()));
+ auto compatible=update();compatible.flexible=Flexible{};assert(scene.replace(50,std::move(compatible)));
  const auto& preserved=scene.objects.at(50);
  assert(preserved.faces[0].mesh==first&&preserved.faces[1].mesh==second);
+ assert(preserved.faces[0].published&&preserved.faces[0].publishedMaterial==34&&
+        preserved.faces[0].publishedImage==image&&preserved.faces[0].poseGeneration==9);
  assert(preserved.generation==generation&&preserved.revision>revision&&preserved.dirty);
  assert(preserved.slot==lease&&preserved.taskKnown&&preserved.taskSerial==17);
  assert(preserved.taskRequest==4&&preserved.controlAnimations.at({21})==6);
+ assert(preserved.controlAvatar==controller && preserved.flex==simulation && simulation->pathSignatureSize==0);
  assert(scene.budgets->objects.used()==1);
  // A face-count change preserves matching indices, not nonexistent faces.
  auto fewer=update();fewer.faces.resize(1);assert(scene.replace(50,std::move(fewer)));
  assert(scene.objects.at(50).faces.size()==1&&scene.objects.at(50).faces[0].mesh==first);
+ assert(scene.objects.at(50).admittedFaces.size()==2);
+ assert(scene.objects.at(50).admittedFaces[0].mesh==first&&scene.objects.at(50).admittedFaces[1].mesh==second);
  auto extra=update();extra.faces.resize(3);assert(scene.replace(50,std::move(extra)));
  assert(scene.objects.at(50).faces[0].mesh==first&&!scene.objects.at(50).faces[1].mesh&&!scene.objects.at(50).faces[2].mesh);
  // Owner, producer, resource identity or unsupported state changes prohibit reuse.
@@ -114,6 +132,15 @@ int main(){
   assert(fresh.replace(50,std::move(next)));
   assert(!fresh.objects.at(50).faces[0].mesh);
  }
+ // The ordinary animesh kill switch retires the complete linked family,
+ // while retaining unrelated owners and their resource leases.
+ Scene animated;auto control=update();control.extendedMeshFlags=1;
+ assert(animated.replace(50,std::move(control)));
+ auto member=update(9);member.parent=50;assert(animated.replace(51,std::move(member)));
+ assert(animated.replace(52,update(10)));
+ auto held=animated.objects.at(50).slot;animated.eraseAnimated();
+ assert(!animated.objects.count(50)&&!animated.objects.count(51)&&animated.objects.count(52));
+ assert(animated.budgets->objects.used()==2);held.reset();assert(animated.budgets->objects.used()==1);
  // UUID reassignment expires the old host/local binding and its linked children.
  Scene moved;assert(moved.replace(50,update()));moved.objects.at(50).faces[0].mesh=first;
  auto child=update(9);child.parent=50;assert(moved.replace(51,std::move(child)));
@@ -135,6 +162,7 @@ int main(){
 #include <vector>
 #include <limits>
 using U8=uint8_t;using U16=uint16_t;using U32=uint32_t;using U64=uint64_t;
+constexpr int LL_PCODE_LEGACY_GRASS=95;
 namespace VSTerrain {
  struct Patch {unsigned x=0,y=0,size=16;float offset=0;unsigned range=1,quant=1;std::array<int,1024> coefficients{};};
  std::vector<Patch> supplied;bool valid=true;
@@ -153,15 +181,23 @@ struct Ground {
  unsigned size=0;VSWorldRenderer::Mesh mesh;bool dirty=true;std::array<float,1024> heights{};
  std::shared_ptr<const VSResourceBudget::Reservation> residency;
 };
-struct Budgets {VSResourceBudget terrainBytes{sizeof(Ground)*2};};
+struct Scene;
+struct Budgets {VSResourceBudget terrainBytes{sizeof(Ground)*2};std::map<int,std::weak_ptr<Scene>> regions;};
 struct Scene {
+ bool retired=false;
  U32 width=256,regionHeight=256;unsigned patchSize=0;std::map<U64,Ground> ground;
+ struct Object {int pcode=0;bool dirty=false;};std::map<U32,Object> objects;
  std::shared_ptr<Budgets> budgets=std::make_shared<Budgets>();
 TERRAIN
 };
 int main(){
  Scene scene;VSTerrain::Patch patch;patch.offset=2;VSTerrain::supplied={patch};
+ auto neighbor=std::make_shared<Scene>();neighbor->ground[0].dirty=false;
+ neighbor->objects[4]={LL_PCODE_LEGACY_GRASS,false};scene.budgets->regions[1]=neighbor;
+ auto retired=std::make_shared<Scene>();retired->retired=true;retired->ground[0].dirty=false;
+ scene.budgets->regions[2]=retired;
  assert(scene.terrain({},0));assert(scene.ground.size()==1);
+ assert(neighbor->ground.at(0).dirty&&neighbor->objects.at(4).dirty&&!retired->ground.at(0).dirty);
  auto& first=scene.ground.at(0);assert(!first.mesh&&first.dirty&&first.heights[0]==2);
  first.mesh=std::make_shared<int>(99);first.dirty=false;
  auto mesh=first.mesh;auto lease=first.residency;

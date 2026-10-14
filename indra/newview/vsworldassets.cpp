@@ -94,6 +94,9 @@ std::shared_ptr<const VSWorldAssets::Geometry> VSWorldAssets::decode(
     if (actual < 0) return fail("No valid complete mesh visual LOD");
     if (!inflatedBound(bytes.data() + offset, length)) return fail("Invalid or oversized mesh LOD expansion");
     auto result = std::make_shared<Geometry>(); result->lod = actual;
+    const char* names[]                                            = { "lowest_lod", "low_lod", "medium_lod", "high_lod" };
+    for (unsigned index = 0; index < 4; ++index)
+        result->lodBytes[index] = header[names[index]]["size"].asInteger();
     result->volume = new LLVolume(params, LLVolumeLODGroup::getVolumeScaleFromDetail(actual));
     if (!result->volume->unpackVolumeFaces(const_cast<U8*>(bytes.data()) + offset, static_cast<S32>(length)))
         return fail("Shared mesh face decoder rejected LOD");

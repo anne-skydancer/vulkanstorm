@@ -4,6 +4,7 @@
 #include "llsd.h"
 #include "vsresourcebudget.h"
 #include <memory>
+#include <array>
 #include <string>
 class VSNativeSession;
 class VSWorldAssets
@@ -16,6 +17,7 @@ public:
         // packed joint weights are retained by the shared decoder.
         LLPointer<LLVolume> volume;
         LLSD skin;
+        std::array<S32, 4>                                   lodBytes{};
         S32 lod = 0;
         size_t bytes = 0;
         U64 generation = 0;

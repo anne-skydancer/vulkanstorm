@@ -175,6 +175,8 @@ protected:
     bool                setupBone(const LLAvatarBoneInfo* info, LLJoint* parent, S32 &current_volume_num, S32 &current_joint_num);
     bool                allocateCharacterJoints(S32 num);
     bool                buildSkeleton(const LLAvatarSkeletonInfo *info);
+    void                resetVisualParams();
+    void                applyDefaultParams();
 
     void                clearSkeleton();
     bool                mIsBuilt{ false }; // state of deferred character building

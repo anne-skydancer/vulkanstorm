@@ -25,6 +25,8 @@
 #include "pipeline.h"
 
 #include "rlvlocks.h"
+#include "vsavatarservices.h"
+#include "llinventoryfunctions.h"
 #include "rlvhelper.h"
 #include "rlvinventory.h"
 
@@ -41,23 +43,22 @@ void RlvAttachPtLookup::initLookupTable()
     static bool fInitialized = false;
     if (!fInitialized)
     {
-        if ( (gAgentAvatarp) && (gAgentAvatarp->mAttachmentPoints.size() > 0) )
+        const auto points = vs_avatar_attachment_points();
+        if (!points.empty())
         {
             std::string strAttachPtName;
-            for (LLVOAvatar::attachment_map_t::const_iterator itAttach = gAgentAvatarp->mAttachmentPoints.begin();
-                     itAttach != gAgentAvatarp->mAttachmentPoints.end(); ++itAttach)
+            for (const auto& [index, name] : points)
             {
-                const LLViewerJointAttachment* pAttachPt = itAttach->second;
-                if (pAttachPt)
+                if (!name.empty())
                 {
-                    strAttachPtName = pAttachPt->getName();
+                    strAttachPtName = name;
                     LLStringUtil::toLower(strAttachPtName);
-                    m_AttachPtLookupMap.insert(std::pair<std::string, S32>(strAttachPtName, itAttach->first));
+                    m_AttachPtLookupMap.insert(std::pair<std::string, S32>(strAttachPtName, S32(index)));
 
                     // HACK: the RLV API randomly renames "Avatar Center" to "Root" so make sure we add it (but keep the official name)
                     if ("avatar center" == strAttachPtName)
                     {
-                        m_AttachPtLookupMap.insert(std::pair<std::string, S32>("root", itAttach->first));
+                        m_AttachPtLookupMap.insert(std::pair<std::string, S32>("root", S32(index)));
                     }
                 }
             }
@@ -216,16 +217,40 @@ void RlvAttachmentLocks::addAttachmentPointLock(S32 idxAttachPt, const LLUUID& i
 // Checked: 2011-05-22 (RLVa-1.3.1b) | Added: RLVa-1.3.1b
 bool RlvAttachmentLocks::canAttach() const
 {
-    if (isAgentAvatarValid())
-    {
-        for (LLVOAvatar::attachment_map_t::const_iterator itAttachPt = gAgentAvatarp->mAttachmentPoints.begin();
-                itAttachPt != gAgentAvatarp->mAttachmentPoints.end(); ++itAttachPt)
-        {
-            if (!isLockedAttachmentPoint(itAttachPt->first, RLV_LOCK_ADD))
-                return true;
-        }
-    }
+    for (const auto& [point, name] : vs_avatar_attachment_points())
+        if (!isLockedAttachmentPoint(S32(point), RLV_LOCK_ADD))
+            return true;
     return false;
+}
+ERlvWearMask RlvAttachmentLocks::canAttach(const LLInventoryItem* item, LLViewerJointAttachment** output) const
+{
+    if (output)
+        *output = RlvAttachPtLookup::getAttachPoint(item);
+    if (!canAttach() || !item || RlvFolderLocks::instance().isLockedFolder(item->getParentUUID(), RLV_LOCK_ADD))
+        return RLV_WEAR_LOCKED;
+    const auto point = RlvAttachPtLookup::getAttachPointIndex(item, true);
+    if (!point)
+        return RLV_WEAR;
+    if (isLockedAttachmentPoint(point, RLV_LOCK_ADD))
+        return RLV_WEAR_LOCKED;
+    bool replace = !isLockedAttachmentPoint(point, RLV_LOCK_REMOVE);
+    for (const auto& attachment : vs_avatar_attachments())
+        if (S32(attachment.point) == point &&
+            (m_AttachObjRem.count(attachment.object) ||
+             (attachment.item.notNull() && RlvFolderLocks::instance().isLockedAttachment(attachment.item))))
+            replace = false;
+    return ERlvWearMask(RLV_WEAR_ADD | (replace ? RLV_WEAR_REPLACE : 0));
+}
+bool RlvAttachmentLocks::canDetach(const LLInventoryItem* item) const
+{
+    if (!item)
+        return true;
+    for (const auto& attachment : vs_avatar_attachments())
+        if (attachment.item == item->getLinkedUUID() &&
+            (isLockedAttachmentPoint(S32(attachment.point), RLV_LOCK_REMOVE) || m_AttachObjRem.count(attachment.object) ||
+             RlvFolderLocks::instance().isLockedAttachment(attachment.item)))
+            return false;
+    return true;
 }
 
 // Checked: 2010-08-07 (RLVa-1.2.0i) | Modified: RLVa-1.2.0i
@@ -833,11 +858,17 @@ void RlvWearableLocks::addWearableTypeLock(LLWearableType::EType eType, const LL
 }
 
 // Checked: 2010-03-19 (RLVa-1.2.0c) | Added: RLVa-1.2.0a
+bool RlvWearableLocks::canRemove(const LLInventoryItem* item) const
+{
+    const auto* actual = item ? gInventory.getItem(item->getLinkedUUID()) : nullptr;
+    return actual && get_is_item_worn(actual->getUUID()) && !isLockedWearableType(actual->getWearableType(), RLV_LOCK_REMOVE) &&
+           !RlvFolderLocks::instance().isLockedWearable(actual->getUUID());
+}
 bool RlvWearableLocks::canRemove(LLWearableType::EType eType) const
 {
     // NOTE: we return true if the wearable type has at least one wearable that can be removed by the user
-    for (U32 idxWearable = 0, cntWearable = gAgentWearables.getWearableCount(eType); idxWearable < cntWearable; idxWearable++)
-        if (!isLockedWearable(gAgentWearables.getViewerWearable(eType, idxWearable)))
+    for (const auto& id : vs_avatar_wearable_items(unsigned(eType)))
+        if (!isLockedWearableType(eType, RLV_LOCK_REMOVE) && !RlvFolderLocks::instance().isLockedWearable(id))
             return true;
     return false;
 }
@@ -846,8 +877,8 @@ bool RlvWearableLocks::canRemove(LLWearableType::EType eType) const
 bool RlvWearableLocks::hasLockedWearable(LLWearableType::EType eType) const
 {
     // NOTE: we return true if there is at least 1 non-removable wearable currently worn on this wearable type
-    for (U32 idxWearable = 0, cntWearable = gAgentWearables.getWearableCount(eType); idxWearable < cntWearable; idxWearable++)
-        if (isLockedWearable(gAgentWearables.getViewerWearable(eType, idxWearable)))
+    for (const auto& id : vs_avatar_wearable_items(unsigned(eType)))
+        if (isLockedWearableType(eType, RLV_LOCK_REMOVE) || RlvFolderLocks::instance().isLockedWearable(id))
             return true;
     return false;
 }
@@ -974,7 +1005,8 @@ void RlvFolderLocks::addFolderLock(const folderlock_source_t& lockSource, ELockP
     }
 
     if (!m_AttachmentChangeConnection.connected())
-        m_AttachmentChangeConnection = gAgentAvatarp->setAttachmentCallback(boost::bind(&RlvFolderLocks::onNeedsLookupRefresh, this));
+        m_AttachmentChangeConnection =
+            LLAppearanceMgr::instance().setAttachmentsChangedCallback([this](const LLUUID&) { onNeedsLookupRefresh(); });
     m_fLookupDirty = true;
 }
 
@@ -987,17 +1019,14 @@ bool RlvFolderLocks::getLockedFolders(const folderlock_source_t& lockSource, LLI
         case ST_ATTACHMENT:
             {
                 RLV_ASSERT(typeid(LLUUID) == lockSource.second.type())
-                const LLViewerObject* pObj = gObjectList.findObject(boost::get<LLUUID>(lockSource.second));
-                if ( (pObj) && (pObj->isAttachment()) )
-                {
-                    const LLViewerInventoryItem* pItem = gInventory.getItem(pObj->getAttachmentItemID());
-                    if ( (pItem) && (RlvInventory::instance().isSharedFolder(pItem->getParentUUID())) )
+                for (const auto& attachment : vs_avatar_attachments())
+                    if (attachment.object == boost::get<LLUUID>(lockSource.second))
                     {
-                        LLViewerInventoryCategory* pItemFolder = gInventory.getCategory(pItem->getParentUUID());
-                        if (pItemFolder)
-                            lockFolders.push_back(pItemFolder);
+                        const auto* item = gInventory.getItem(attachment.item);
+                        if (item && RlvInventory::instance().isSharedFolder(item->getParentUUID()))
+                            if (auto* folder = gInventory.getCategory(item->getParentUUID()))
+                                lockFolders.push_back(folder);
                     }
-                }
             }
             break;
         case ST_FOLDER:
@@ -1031,9 +1060,13 @@ bool RlvFolderLocks::getLockedFolders(const folderlock_source_t& lockSource, LLI
 
                 uuid_vec_t idItems;
                 if (ST_ATTACHMENTPOINT == lockSource.first)
-                    RlvCommandOptionGetPath::getItemIDs(RlvAttachPtLookup::getAttachPoint(boost::get<S32>(lockSource.second)), idItems);
+                {
+                    for (const auto& attachment : vs_avatar_attachments())
+                        if (S32(attachment.point) == boost::get<S32>(lockSource.second) && attachment.item.notNull())
+                            idItems.push_back(attachment.item);
+                }
                 else if (ST_WEARABLETYPE == lockSource.first)
-                    RlvCommandOptionGetPath::getItemIDs(boost::get<LLWearableType::EType>(lockSource.second), idItems);
+                    idItems = vs_avatar_wearable_items(unsigned(boost::get<LLWearableType::EType>(lockSource.second)));
 
                 LLInventoryModel::cat_array_t itemFolders;
                 if (RlvInventory::instance().getPath(idItems, itemFolders))

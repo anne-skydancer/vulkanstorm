@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 #include "llattachmentsmgr.h"
 
 #include "llvoavatarself.h"
@@ -75,7 +79,15 @@ void LLAttachmentsMgr::addAttachmentRequest(const LLUUID& item_id,
                                             const bool add, const bool fRlvForce /*=false*/)
 // [/RLVa:KB]
 {
-// [SL:KB] - Appearance-Fixes
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active())
+    {
+        if (auto* appearance = session->appearance())
+            appearance->attach(item_id, attachment_pt, add);
+        return;
+    }
+#endif
+    // [SL:KB] - Appearance-Fixes
     if (item_id.isNull())
         return;
 // [/SL:KB]

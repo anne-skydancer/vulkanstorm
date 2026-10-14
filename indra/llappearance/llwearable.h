@@ -89,6 +89,7 @@ public:
     typedef std::vector<LLVisualParam*> visual_param_vec_t;
 
     virtual void    writeToAvatar(LLAvatarAppearance* avatarp);
+    virtual bool    usesGraphicsContext() const { return true; }
 
     enum EImportResult
     {

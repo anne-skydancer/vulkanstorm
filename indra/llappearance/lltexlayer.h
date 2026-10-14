@@ -28,6 +28,7 @@
 #define LL_LLTEXLAYER_H
 
 #include <deque>
+#include <functional>
 #include "llglslshader.h"
 #include "llgltexture.h"
 #include "llavatarappearancedefines.h"
@@ -69,6 +70,8 @@ public:
     virtual void            deleteCaches() = 0;
     virtual bool            blendAlphaTexture(S32 x, S32 y, S32 width, S32 height) = 0;
     virtual bool            isInvisibleAlphaMask() const = 0;
+    virtual bool            renderCPU(LLImageRaw&, const LLTexLayerCPUTexture&, bool alphaOnly = false) = 0;
+    virtual void            gatherCPUAlphaMasks(U8*, S32 width, S32 height) const                       = 0;
 
     const LLTexLayerInfo*   getInfo() const             { return mInfo; }
     virtual bool            setInfo(const LLTexLayerInfo *info, LLWearable* wearable); // sets mInfo, calls initialization functions
@@ -122,6 +125,8 @@ public:
     LLTexLayerTemplate(const LLTexLayerTemplate &layer);
     /*virtual*/ ~LLTexLayerTemplate();
     /*virtual*/ bool        render(S32 x, S32 y, S32 width, S32 height, LLRenderTarget* bound_target);
+    bool                    renderCPU(LLImageRaw&, const LLTexLayerCPUTexture&, bool alphaOnly = false) override;
+    void                    gatherCPUAlphaMasks(U8*, S32 width, S32 height) const override;
     /*virtual*/ bool        setInfo(const LLTexLayerInfo *info, LLWearable* wearable); // This sets mInfo and calls initialization functions
     /*virtual*/ bool        blendAlphaTexture(S32 x, S32 y, S32 width, S32 height); // Multiplies a single alpha texture against the frame buffer
     /*virtual*/ void        gatherAlphaMasks(U8 *data, S32 originX, S32 originY, S32 width, S32 height, LLRenderTarget* bound_target);
@@ -153,6 +158,8 @@ public:
 
     /*virtual*/ bool        setInfo(const LLTexLayerInfo *info, LLWearable* wearable); // This sets mInfo and calls initialization functions
     /*virtual*/ bool        render(S32 x, S32 y, S32 width, S32 height, LLRenderTarget* bound_target);
+    bool                    renderCPU(LLImageRaw&, const LLTexLayerCPUTexture&, bool alphaOnly = false) override;
+    void                    gatherCPUAlphaMasks(U8*, S32 width, S32 height) const override;
 
     /*virtual*/ void        deleteCaches();
     const U8*               getAlphaData() const;
@@ -175,6 +182,7 @@ protected:
     typedef std::map<U32, U8*> alpha_cache_t;
     alpha_cache_t           mAlphaCache;
     LLLocalTextureObject*   mLocalTextureObject;
+    LLPointer<LLImageRaw>      mCPUMorphMask;
 };
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -217,6 +225,8 @@ public:
     LLAvatarAppearanceDefines::EBakedTextureIndex getBakedTexIndex() const { return mBakedTexIndex; }
     void                        setBakedTexIndex(LLAvatarAppearanceDefines::EBakedTextureIndex index) { mBakedTexIndex = index; }
     bool                        isVisible() const           { return mIsVisible; }
+    bool                        renderCPU(LLImageRaw&, const LLTexLayerCPUTexture&);
+    LLPointer<LLImageRaw>       cpuMorphMask() const { return mCPUMorphMask; }
 
     static bool                 sHasCaches;
 
@@ -230,6 +240,7 @@ protected:
 
     LLAvatarAppearanceDefines::EBakedTextureIndex mBakedTexIndex;
     const LLTexLayerSetInfo*    mInfo;
+    LLPointer<LLImageRaw>                         mCPUMorphMask;
 };
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -21,6 +21,8 @@ import xmlrpc.client
 from uuid import UUID
 from urllib.parse import urlsplit, parse_qs
 
+import vulkan_r2_fixture as r2_fixture
+
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
 from run_vulkan_viewer_diagnostic import runtime_libraries, skin_cases
 from vulkan_viewer_process import run_viewer_process, run_headless_viewer_process, process_isolation_evidence
@@ -76,6 +78,90 @@ def r1_contracts_passed(record, requests):
         return False
     return {1,2}.issubset({request.get('revision') for request in requests if request.get('path')=='/r1-mesh'})
 
+
+def r2_contracts_passed(record, requests, directory=None):
+    """Never promote a passing R1/UI replay into R2 qualification."""
+    contracts = record.get('r2_contracts', {})
+    required = ('ordinary_inventory_actions', 'layer_order_changed',
+                'avatar_reset', 'animated_geometry', 'animated_selection',
+                'hud_attachments', 'rigged_attachments', 'animesh',
+                'gltf_topologies', 'gltf_animation', 'geometry_replacement',
+                'bake_pixels', 'bake_capability_upload', 'bake_legacy_upload',
+                'motion_gesture_ao', 'logout_retirement', 'bake_gpu_readbacks',
+                'gltf_empty_replacement', 'gltf_skin_animation', 'gltf_trs_animation',
+                'fitted_detach_restoration', 'script_control_transport',
+                'gesture_animation_transport', 'ao_inventory_override')
+    if not all(contracts.get(key) is True for key in required):
+        return False
+    observed = {request.get('path') for request in requests}
+    if not {'r2-asset', 'r2-mesh', 'r2-bake-upload', 'r2-patch', 'r2-delete'}.issubset(observed):
+        return False
+    if directory is None:
+        return False
+    try:
+        root = Path(directory) / 'r2'
+        if contracts['gltf_topology_cases'] != list(range(9)) or contracts['hud_attachment_points'] != list(range(31,39)):
+            return False
+        retired = contracts['retired_scene']
+        if retired['owners'] or retired['neighbours'] or retired['owned_object_slots'] or retired['owned_avatar_slots']:
+            return False
+        if retired['assets']['requests'] or int.from_bytes(base64.b64decode(retired['assets']['resident_bytes'],validate=True),'big'):
+            return False
+        readbacks = read_llsd(ET.fromstring((root/'bake-readbacks.xml').read_text()))['bakes']
+        comparisons = contracts['bake_codec_comparisons']
+        if len(readbacks) != 10 or len(comparisons) != 10:
+            return False
+        if len({row['index'] for row in readbacks}) != 10 or {row['index'] for row in readbacks} != {row['index'] for row in comparisons}:
+            return False
+        artifacts = []
+        for row in readbacks:
+            width,height = row['width'],row['height']
+            if (row['passed'] is not True or row['row_order'] != 'top-first' or row['channels'] != 'RGBA' or
+                    not 0 < width <= 2048 or not 0 < height <= 2048 or row['bytes'] != width*height*4):
+                return False
+            names = [root/f"bake-{row['index']}-{kind}.rgba" for kind in ('actual','expected')]
+            if any(path.stat().st_size != row['bytes'] for path in names):
+                return False
+            digests = []
+            for path in names:
+                with path.open('rb') as stream:
+                    digest = hashlib.file_digest(stream,'sha256').hexdigest()
+                digests.append(digest)
+                artifacts.append(dict(path=path.name,bytes=path.stat().st_size,sha256=digest))
+            if digests[0] != digests[1]:
+                return False
+        for row in comparisons:
+            if (row['maximum_allowed_error'] != 16 or row['maximum_allowed_mean_error'] != 2 or
+                    not 0 <= row['maximum_error'] <= 16 or not math.isfinite(row['mean_error']) or not 0 <= row['mean_error'] <= 2):
+                return False
+        uploads = {row['asset']:row for row in requests if row.get('path') == 'r2-bake-upload'}
+        for row in contracts['uploaded_appearance']['bake_uploads']:
+            identifier = str(UUID(row['asset']))
+            filename = root/(identifier+'.j2c')
+            receipt = uploads[identifier]
+            with filename.open('rb') as stream:
+                digest = hashlib.file_digest(stream,'sha256').hexdigest()
+            if filename.stat().st_size != receipt['bytes'] or digest != receipt['sha256']:
+                return False
+            artifacts.append(dict(path=filename.name,bytes=filename.stat().st_size,sha256=digest))
+        legacy = contracts['legacy_uploads']
+        if not legacy:
+            return False
+        for row in legacy:
+            filename = root/(str(UUID(row['asset']))+'.legacy.j2c')
+            if row['packets'] <= 0 or filename.stat().st_size != row['bytes'] or row['bytes'] <= 0:
+                return False
+            with filename.open('rb') as stream:
+                digest = hashlib.file_digest(stream,'sha256').hexdigest()
+            artifacts.append(dict(path=filename.name,bytes=filename.stat().st_size,sha256=digest))
+        saved = read_llsd(ET.fromstring((root/'contracts.xml').read_text()))
+        if saved != contracts:
+            return False
+        (root/'artifact-hashes.json').write_text(json.dumps(dict(artifacts=artifacts),indent=2)+'\n')
+    except (KeyError,TypeError,ValueError,OSError,ET.ParseError):
+        return False
+    return True
+
 INVENTORY_ROOT = '70000000-0000-0000-0000-000000000001'
 LIBRARY_ROOT = '72000000-0000-0000-0000-000000000001'
 LIBRARY_OWNER = '72000000-0000-0000-0000-000000000002'
@@ -91,6 +177,18 @@ INVENTORY_SKELETON = [dict(folder_id=INVENTORY_ROOT,
                           name='My Inventory', type_default=8, version=1)] + [
     dict(folder_id=f'70000000-0000-0000-0000-{suffix:012d}', parent_id=INVENTORY_ROOT,
          name=name, type_default=kind, version=1) for kind, name, suffix in SYSTEM_FOLDERS]
+
+
+
+def baseline_inventory_items(identifier):
+    return [dict(item_id='71000000-0000-0000-0000-000000000020',
+                    parent_id=identifier, asset_id='60000000-0000-0000-0000-000000000020',
+                    type='landmark', inv_type='landmark', flags=1, name='Native favorite', desc='Replay connected landmark',
+                    created_at=1, permissions=dict(base_mask=2147483647, owner_mask=2147483647,
+                    group_mask=0, everyone_mask=0, next_owner_mask=2147483647,
+                    creator_id='10000000-0000-0000-0000-000000000001', owner_id='10000000-0000-0000-0000-000000000001',
+                    last_owner_id='10000000-0000-0000-0000-000000000001', group_id='00000000-0000-0000-0000-000000000000',
+                    is_owner_group=False), sale_info=dict(sale_type=0, sale_price=0))] if identifier == '70000000-0000-0000-0000-000000000016' else []
 
 
 def append_llsd(parent, value):
@@ -187,10 +285,15 @@ def isolated_profile_environment(environment, evidence, windows):
 
 def favorites_fetch_observed(requests):
     """Require account favorites to come through the real descendants service."""
-    return any(record.get('path') == '/inventory' and any(
+    legacy = any(record.get('path') == '/inventory' and any(
         folder.get('folder_id') == '70000000-0000-0000-0000-000000000016'
         and folder.get('fetch_items') is True
         for folder in record.get('request', {}).get('folders', [])) for record in requests)
+    ais = any(record.get('path') == 'r2-ais-category' and any(
+        category.get('category') == '70000000-0000-0000-0000-000000000016'
+        and '71000000-0000-0000-0000-000000000020' in category.get('items', [])
+        for category in record.get('categories', [])) for record in requests)
+    return legacy or ais
 
 
 def run_staged_viewer(command, stage, env):
@@ -280,14 +383,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
-        if path == '/r1-mesh' and getattr(self.server,'r1_directory',None):
+        if r2_fixture.get(self,path,parse_qs(urlsplit(self.path).query)):return
+        if path in ('/r1-mesh', '/r2-mesh') and getattr(self.server,'r1_directory',None):
             if parse_qs(urlsplit(self.path).query).get('mesh_id') != ['a1000000-0000-0000-0000-000000000001']:
                 self.send_error(404); return
             directory=self.server.r1_directory
             marker=directory/'mesh-generation.txt'
             revision=2 if marker.exists() and marker.read_text().strip()=='2' else 1
             data=(directory/f'mesh-{revision}.bin').read_bytes()
-            self.server.requests.append({'path':path,'revision':revision,'bytes':len(data)})
+            self.server.requests.append({'path':'/r1-mesh','revision':revision,'bytes':len(data)})
             self.send_response(200);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data);return
         if path.rstrip('/') == '/asset':
             query = parse_qs(urlsplit(self.path).query)
@@ -371,6 +475,17 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def do_DELETE(self):
+        if r2_fixture.modify(self,'DELETE',urlsplit(self.path).path):return
+        self.send_error(404)
+
+    def do_PATCH(self):
+        size=int(self.headers.get('Content-Length','0'))
+        if not 0<size<=65536:self.send_error(400);return
+        request=read_llsd(ET.fromstring(self.rfile.read(size)))
+        if r2_fixture.modify(self,'PATCH',urlsplit(self.path).path,request):return
+        self.send_error(404)
+
     def do_PUT(self):
         path = urlsplit(self.path).path
         size = int(self.headers.get('Content-Length', '0'))
@@ -388,7 +503,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         size = int(self.headers.get('Content-Length', '0'))
-        if size < 0 or size > 65536:
+        path = urlsplit(self.path).path
+        limit = 64 * 1024 * 1024 if path == '/r2-bake-upload' else 65536
+        if size < 0 or size > limit:
             self.send_error(413)
             return
         payload = self.rfile.read(size)
@@ -479,8 +596,10 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             return
+        if r2_fixture.binary_post(self,path,payload):return
         request = read_llsd(ET.fromstring(payload))
         self.server.requests.append({'path': self.path, 'request': request})
+        if r2_fixture.post(self,path,request):return
         if path == '/metadata':
             if request.get('fields') != ['experience'] or not request.get('item-id'):
                 self.send_error(400)
@@ -526,7 +645,10 @@ class Handler(BaseHTTPRequestHandler):
                                 ('GetMetadata', '/metadata')]:
                 ET.SubElement(mapping, 'key').text = name
                 ET.SubElement(mapping, 'string').text = self.server.url + route
-            if getattr(self.server,'r1_directory',None):
+            if getattr(self.server,'r2_directory',None):
+                ET.SubElement(mapping,'key').text='GetMesh2'
+                ET.SubElement(mapping,'string').text=self.server.url+'/r2-mesh'
+            elif getattr(self.server,'r1_directory',None):
                 ET.SubElement(mapping,'key').text='GetMesh2'
                 ET.SubElement(mapping,'string').text=self.server.url+'/r1-mesh'
             ET.SubElement(mapping, 'key').text = 'EventQueueGet'
@@ -535,6 +657,11 @@ class Handler(BaseHTTPRequestHandler):
             ET.SubElement(mapping, 'string').text = self.server.url + '/items'
             ET.SubElement(mapping, 'key').text = 'FetchInventoryDescendents2'
             ET.SubElement(mapping, 'string').text = self.server.url + '/inventory'
+            if getattr(self.server,'r2_directory',None):
+                ET.SubElement(mapping,'key').text='InventoryAPIv3'
+                ET.SubElement(mapping,'string').text=self.server.url+'/r2-ais'
+                ET.SubElement(mapping,'key').text='UploadBakedTexture'
+                ET.SubElement(mapping,'string').text=self.server.url+'/r2-bake'
             ET.SubElement(mapping, 'key').text = 'GetTexture'
             ET.SubElement(mapping, 'string').text = self.server.url + '/texture'
             ET.SubElement(mapping, 'key').text = 'ChatSessionRequest'
@@ -546,6 +673,9 @@ class Handler(BaseHTTPRequestHandler):
             ET.SubElement(mapping, 'key').text = 'items'
             items = ET.SubElement(mapping, 'array')
             for item in request.get('items', []):
+                fixture=r2_fixture.item(self.server,item.get('item_id'))
+                if fixture is not None:
+                    append_llsd(items,fixture);continue
                 script = item['item_id'] == '71000000-0000-0000-0000-000000000004'
                 result = ET.SubElement(items, 'map')
                 for key, tag, value in [('item_id', 'uuid', item['item_id']),
@@ -580,17 +710,16 @@ class Handler(BaseHTTPRequestHandler):
                     ET.SubElement(result, 'key').text = key; ET.SubElement(result, tag).text = value
                 ET.SubElement(result, 'key').text = 'categories'; append_llsd(result, children)
                 favorites = folder['folder_id'] == '70000000-0000-0000-0000-000000000016'
-                landmark_items = [dict(item_id='71000000-0000-0000-0000-000000000020',
-                    parent_id=folder['folder_id'], asset_id='60000000-0000-0000-0000-000000000020',
-                    type='landmark', inv_type='landmark', flags=1, name='Native favorite', desc='Replay connected landmark',
-                    created_at=1, permissions=dict(base_mask=2147483647, owner_mask=2147483647,
-                    group_mask=0, everyone_mask=0, next_owner_mask=2147483647,
-                    creator_id='10000000-0000-0000-0000-000000000001', owner_id='10000000-0000-0000-0000-000000000001',
-                    last_owner_id='10000000-0000-0000-0000-000000000001', group_id='00000000-0000-0000-0000-000000000000',
-                    is_owner_group=False), sale_info=dict(sale_type=0, sale_price=0))] if favorites else []
+                landmark_items = baseline_inventory_items(folder['folder_id'])
                 if favorites:
                     for idx, element in enumerate(list(result)):
                         if element.tag == 'key' and element.text == 'descendents': list(result)[idx+1].text = str(len(children) + len(landmark_items))
+                fixture=r2_fixture.folder(self.server,folder['folder_id'])
+                if fixture is not None:
+                    landmark_items,version=fixture
+                    for idx,element in enumerate(list(result)):
+                        if element.tag=='key' and element.text=='version':list(result)[idx+1].text=str(version)
+                        if element.tag=='key' and element.text=='descendents':list(result)[idx+1].text=str(len(children)+len(landmark_items))
                 ET.SubElement(result, 'key').text = 'items'; append_llsd(result, landmark_items)
         elif self.path == '/message':
             root = ET.Element('llsd'); append_llsd(root, {})
@@ -668,6 +797,7 @@ def main():
     parser.add_argument('--all-skins', action='store_true', help='Run the complete connected replay for every packaged skin/theme and German overlay')
     parser.add_argument('--headless', action='store_true', help='Replay production viewer integration offscreen without a native window; does not qualify presentation')
     parser.add_argument('--r1-contracts', action='store_true', help='Replay R1 owner, region, resource and lifecycle contracts through production viewer code')
+    parser.add_argument('--r2-contracts',action='store_true',help='Replay production R2 geometry and connected appearance actions')
     parser.add_argument('--native-backtrace', action='store_true', help='Run Linux replay under GDB; ordinary qualification runs directly')
     args = parser.parse_args()
     if not .75 <= args.ui_scale <= 4:
@@ -702,6 +832,7 @@ def main():
                 command.append('--headless')
             if args.r1_contracts:
                 command.append('--r1-contracts')
+            if args.r2_contracts:command.append('--r2-contracts')
             try:
                 code = subprocess.run(command, timeout=CASE_REPLAY_SECONDS).returncode
                 record = json.loads((child / 'results.json').read_text())
@@ -758,6 +889,8 @@ def main():
         env.pop('DISPLAY', None); env.pop('WAYLAND_DISPLAY', None)
     else:
         env.pop('VS_VULKAN_DIAGNOSTIC_HEADLESS', None)
+    if args.r2_contracts:env['VS_VULKAN_REPLAY_R2']='1'
+    else:env.pop('VS_VULKAN_REPLAY_R2',None)
     if args.r1_contracts:env['VS_VULKAN_REPLAY_R1']='1'
     else:env.pop('VS_VULKAN_REPLAY_R1',None)
     layer = directory / 'vk_layer_settings.txt'; layer.write_text('khronos_validation.validate_sync = true\n')
@@ -780,6 +913,9 @@ def main():
     report = {}; log = ''; code = None; passed = False
     with SimulatorHTTP() as server:
         server.r1_directory=directory/'r1' if args.r1_contracts else None
+        r2_fixture.configure(server,directory/'r2' if args.r2_contracts else None)
+        server.r2_categories = [dict(row) for row in INVENTORY_SKELETON]
+        server.r2_baseline_items = baseline_inventory_items
         server.upload_directory = directory / 'upload-bodies'
         worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
         env['VS_VULKAN_REPLAY_SEED'] = server.url + '/seed'
@@ -794,6 +930,8 @@ def main():
             passed = assess(report, code, log)
             if args.r1_contracts and not r1_contracts_passed(report,server.requests):
                 raise RuntimeError('Missing production R1 ownership/lifecycle or actual mesh replacement evidence')
+            if args.r2_contracts and not r2_contracts_passed(report,server.requests,directory):
+                raise RuntimeError('Missing complete production R2 geometry/appearance/lifecycle evidence')
             report['conference_start_request'] = conference_start_observed(server.requests)
             if not report['conference_start_request']:
                 raise RuntimeError('Missing or incorrect actual authenticated conference start request')

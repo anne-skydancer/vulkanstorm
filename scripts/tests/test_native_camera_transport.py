@@ -44,7 +44,9 @@ struct LLQuaternion{float angle=0;LLVector3 axis;LLQuaternion()=default;LLQuater
 struct LLUUID{int id=1;static const LLUUID null;};const LLUUID LLUUID::null{0};
 struct LLHost{int id=1;bool isOk()const{return id!=0;}bool operator!=(LLHost other)const{return id!=other.id;}};
 struct LLSD{const LLSD& operator[](const char*)const{return *this;}std::string asString()const{return {};}int asInteger()const{return 0;}};
-struct Agent{LLVector3 position;void setPositionAgent(LLVector3 p){position=p;}}gAgent;
+struct Agent{LLVector3 position;U32 flags=0;bool flying=false;
+ void setPositionAgent(LLVector3 p){position=p;}void setFlying(bool value){flying=value;}bool getFlying()const{return flying;}
+ U32 getControlFlags(){return flags;}void resetControlFlags(){flags=0;}}gAgent;
 struct Settings{float getF32(const char*){return 128;}}gSavedSettings;
 template<class T>T llclamp(T v,T a,T b){return std::clamp(v,a,b);}
 struct LLMessageSystem{
@@ -118,7 +120,7 @@ int main(){
         fixture = STUBS + constants + header + r'''
 struct VSNativeSession{
  enum class Phase{Login,Connected,Disconnected};Phase mPhase=Phase::Connected;bool mChangingRegion=false,mFrozen=false;
- LLHost mHost;LLUUID mAgent,mSession;U32 mCircuit=99;U64 mGeneration=3,mRegionEpoch=7,mSent=0;
+ LLHost mHost;LLUUID mAgent,mSession;U32 mCircuit=99,mMouseControls=0;U64 mGeneration=3,mRegionEpoch=7,mSent=0;
  VSNativeCamera mCamera;LLVector3 mPosition{100,100,20};double mAgentUpdateTime=1;
  VSNativeCamera::State cameraState()const{return mCamera.state(mPosition);}
  bool movementAction(U32,const std::string&,bool,bool=false);void releaseMovement();void cameraOrbit(F32,F32);void cameraZoom(S32);
@@ -136,6 +138,10 @@ int main(){
  assert(close(messages.vectors["CameraCenter"].mV[0],initial.center.mV[0]));
  owner.movementAction(2,"",false);assert(!(owner.mCamera.controls()&AGENT_CONTROL_AT_POS));
  owner.movementAction(3,"toggle_fly",true);owner.movementAction(3,"toggle_fly",true,true);assert(owner.mCamera.controls()&AGENT_CONTROL_FLY);
+ gAgent.flags=AGENT_CONTROL_STAND_UP;assert(owner.send("AgentUpdate",{}));
+ assert(messages.ints["ControlFlags"]&AGENT_CONTROL_STAND_UP);assert(gAgent.flags==0);
+ gAgent.flags=AGENT_CONTROL_SIT_ON_GROUND;assert(owner.send("AgentUpdate",{}));
+ assert(messages.ints["ControlFlags"]&AGENT_CONTROL_SIT_ON_GROUND);assert(gAgent.flags==0);
  owner.movementAction(3,"",false);owner.movementAction(3,"toggle_fly",true);assert(!(owner.mCamera.controls()&AGENT_CONTROL_FLY));
  owner.movementAction(4,"turn_left",true);owner.mCamera.step(.1f);auto turned=owner.cameraState();assert(turned.at.mV[1]>initial.at.mV[1]);
  owner.releaseMovement();assert(owner.mCamera.controls()==0);

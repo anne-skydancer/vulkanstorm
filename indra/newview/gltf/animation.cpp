@@ -93,7 +93,8 @@ void Animation::apply(Asset& asset, float time)
     LL_PROFILE_ZONE_SCOPED_CATEGORY_GLTF;
 
     // convert time to animation loop time
-    time = fmod(time, mMaxTime - mMinTime) + mMinTime;
+    const F32 duration = mMaxTime - mMinTime;
+    time               = duration > 0 ? fmod(time, duration) + mMinTime : mMinTime;
 
     // apply each channel
     {
@@ -127,13 +128,23 @@ void Animation::apply(Asset& asset, float time)
 bool Animation::Sampler::prep(Asset& asset)
 {
     Accessor& accessor = asset.mAccessors[mInput];
-    mMinTime = (F32)accessor.mMin[0];
-    mMaxTime = (F32)accessor.mMax[0];
+    if (accessor.mCount <= 0 || accessor.mType != Accessor::Type::SCALAR || accessor.mComponentType != Accessor::ComponentType::FLOAT)
+        return false;
+    if (mInterpolation.empty())
+        mInterpolation = "LINEAR";
+    if (mInterpolation != "LINEAR" && mInterpolation != "STEP" && mInterpolation != "CUBICSPLINE")
+        return false;
 
     mFrameTimes.resize(accessor.mCount);
 
     LLStrider<F32> frame_times = mFrameTimes.data();
     copy(asset, accessor, frame_times);
+
+    for (unsigned i = 0; i < mFrameTimes.size(); ++i)
+        if (!std::isfinite(mFrameTimes[i]) || (i && mFrameTimes[i] <= mFrameTimes[i - 1]))
+            return false;
+    mMinTime = mFrameTimes.front();
+    mMaxTime = mFrameTimes.back();
 
     return true;
 }
@@ -238,6 +249,8 @@ void Animation::Sampler::getFrameInfo(Asset& asset, F32 time, U32& frameIndex, F
         {
             frameIndex = i;
             t = (time - mFrameTimes[i]) / (mFrameTimes[i + 1] - mFrameTimes[i]);
+            if (mInterpolation == "STEP")
+                t = 0;
             mLastFrameIndex = frameIndex;
             return;
         }
@@ -247,9 +260,20 @@ void Animation::Sampler::getFrameInfo(Asset& asset, F32 time, U32& frameIndex, F
 bool Animation::RotationChannel::prep(Asset& asset, Animation::Sampler& sampler)
 {
     Accessor& accessor = asset.mAccessors[sampler.mOutput];
+    if (accessor.mComponentType != Accessor::ComponentType::FLOAT || accessor.mType != Accessor::Type::VEC4 ||
+        std::size_t(accessor.mCount) != sampler.mFrameTimes.size() * (sampler.mInterpolation == "CUBICSPLINE" ? 3 : 1))
+        return false;
 
     copy(asset, accessor, mRotations);
-
+    for (std::size_t index = 0; index < mRotations.size(); ++index)
+    {
+        const auto& value = mRotations[index];
+        for (const F32 component : { value.x, value.y, value.z, value.w })
+            if (!std::isfinite(component))
+                return false;
+        if ((sampler.mInterpolation != "CUBICSPLINE" || index % 3 == 1) && glm::dot(value, value) < 1.e-12f)
+            return false;
+    }
     return true;
 }
 
@@ -262,14 +286,23 @@ void Animation::RotationChannel::apply(Asset& asset, Sampler& sampler, F32 time)
 
     if (sampler.mFrameTimes.size() < 2)
     {
-        node.setRotation(mRotations[0]);
+        node.setRotation(glm::normalize(mRotations[sampler.mInterpolation == "CUBICSPLINE" ? 1 : 0]));
     }
     else
     {
         sampler.getFrameInfo(asset, time, frameIndex, t);
 
         // interpolate
-        quat qf = glm::slerp(mRotations[frameIndex], mRotations[frameIndex + 1], t);
+        quat qf;
+        if (sampler.mInterpolation == "CUBICSPLINE")
+        {
+            const F32 dt = sampler.mFrameTimes[frameIndex + 1] - sampler.mFrameTimes[frameIndex];
+            const F32 t2 = t * t, t3 = t2 * t;
+            qf = mRotations[3 * frameIndex + 1] * (2 * t3 - 3 * t2 + 1) + mRotations[3 * frameIndex + 2] * (dt * (t3 - 2 * t2 + t)) +
+                 mRotations[3 * (frameIndex + 1) + 1] * (-2 * t3 + 3 * t2) + mRotations[3 * (frameIndex + 1)] * (dt * (t3 - t2));
+        }
+        else
+            qf = glm::slerp(mRotations[frameIndex], mRotations[frameIndex + 1], t);
 
         qf = glm::normalize(qf);
 
@@ -280,9 +313,15 @@ void Animation::RotationChannel::apply(Asset& asset, Sampler& sampler, F32 time)
 bool Animation::TranslationChannel::prep(Asset& asset, Animation::Sampler& sampler)
 {
     Accessor& accessor = asset.mAccessors[sampler.mOutput];
+    if (accessor.mComponentType != Accessor::ComponentType::FLOAT || accessor.mType != Accessor::Type::VEC3 ||
+        std::size_t(accessor.mCount) != sampler.mFrameTimes.size() * (sampler.mInterpolation == "CUBICSPLINE" ? 3 : 1))
+        return false;
 
     copy(asset, accessor, mTranslations);
-
+    for (const auto& value : mTranslations)
+        for (const F32 component : { value.x, value.y, value.z })
+            if (!std::isfinite(component))
+                return false;
     return true;
 }
 
@@ -295,17 +334,23 @@ void Animation::TranslationChannel::apply(Asset& asset, Sampler& sampler, F32 ti
 
     if (sampler.mFrameTimes.size() < 2)
     {
-        node.setTranslation(mTranslations[0]);
+        node.setTranslation(mTranslations[sampler.mInterpolation == "CUBICSPLINE" ? 1 : 0]);
     }
     else
     {
         sampler.getFrameInfo(asset, time, frameIndex, t);
 
         // interpolate
-        const vec3& v0 = mTranslations[frameIndex];
-        const vec3& v1 = mTranslations[frameIndex + 1];
-
-        vec3 vf = v0 + t * (v1 - v0);
+        vec3 vf;
+        if (sampler.mInterpolation == "CUBICSPLINE")
+        {
+            const F32 dt = sampler.mFrameTimes[frameIndex + 1] - sampler.mFrameTimes[frameIndex];
+            const F32 t2 = t * t, t3 = t2 * t;
+            vf = mTranslations[3 * frameIndex + 1] * (2 * t3 - 3 * t2 + 1) + mTranslations[3 * frameIndex + 2] * (dt * (t3 - 2 * t2 + t)) +
+                 mTranslations[3 * (frameIndex + 1) + 1] * (-2 * t3 + 3 * t2) + mTranslations[3 * (frameIndex + 1)] * (dt * (t3 - t2));
+        }
+        else
+            vf = glm::mix(mTranslations[frameIndex], mTranslations[frameIndex + 1], t);
 
         node.setTranslation(vf);
     }
@@ -314,9 +359,15 @@ void Animation::TranslationChannel::apply(Asset& asset, Sampler& sampler, F32 ti
 bool Animation::ScaleChannel::prep(Asset& asset, Animation::Sampler& sampler)
 {
     Accessor& accessor = asset.mAccessors[sampler.mOutput];
+    if (accessor.mComponentType != Accessor::ComponentType::FLOAT || accessor.mType != Accessor::Type::VEC3 ||
+        std::size_t(accessor.mCount) != sampler.mFrameTimes.size() * (sampler.mInterpolation == "CUBICSPLINE" ? 3 : 1))
+        return false;
 
     copy(asset, accessor, mScales);
-
+    for (const auto& value : mScales)
+        for (const F32 component : { value.x, value.y, value.z })
+            if (!std::isfinite(component))
+                return false;
     return true;
 }
 
@@ -329,17 +380,23 @@ void Animation::ScaleChannel::apply(Asset& asset, Sampler& sampler, F32 time)
 
     if (sampler.mFrameTimes.size() < 2)
     {
-        node.setScale(mScales[0]);
+        node.setScale(mScales[sampler.mInterpolation == "CUBICSPLINE" ? 1 : 0]);
     }
     else
     {
         sampler.getFrameInfo(asset, time, frameIndex, t);
 
         // interpolate
-        const vec3& v0 = mScales[frameIndex];
-        const vec3& v1 = mScales[frameIndex + 1];
-
-        vec3 vf = v0 + t * (v1 - v0);
+        vec3 vf;
+        if (sampler.mInterpolation == "CUBICSPLINE")
+        {
+            const F32 dt = sampler.mFrameTimes[frameIndex + 1] - sampler.mFrameTimes[frameIndex];
+            const F32 t2 = t * t, t3 = t2 * t;
+            vf = mScales[3 * frameIndex + 1] * (2 * t3 - 3 * t2 + 1) + mScales[3 * frameIndex + 2] * (dt * (t3 - 2 * t2 + t)) +
+                 mScales[3 * (frameIndex + 1) + 1] * (-2 * t3 + 3 * t2) + mScales[3 * (frameIndex + 1)] * (dt * (t3 - t2));
+        }
+        else
+            vf = glm::mix(mScales[frameIndex], mScales[frameIndex + 1], t);
 
         node.setScale(vf);
     }
@@ -401,6 +458,8 @@ Skin::~Skin()
 
 void Skin::uploadMatrixPalette(Asset& asset)
 {
+    if (!asset.mLoadIntoVRAM)
+        return;
     // prepare matrix palette
     LL_PROFILE_ZONE_SCOPED_CATEGORY_GLTF;
 
@@ -464,6 +523,13 @@ bool Skin::prep(Asset& asset)
         Accessor& accessor = asset.mAccessors[mInverseBindMatrices];
         copy(asset, accessor, mInverseBindMatricesData);
     }
+
+    // Omitted inverse-bind matrices mean identity in glTF. Both native CPU
+    // skinning and the GL palette need one matrix per declared joint.
+    if (mInverseBindMatrices == INVALID_INDEX)
+        mInverseBindMatricesData.assign(mJoints.size(), glm::identity<mat4>());
+    if (mInverseBindMatricesData.size() != mJoints.size())
+        return false;
 
     return true;
 }

@@ -4,8 +4,14 @@
 #include "lfsimfeaturehandler.h"
 #include "llviewergenericmessage.h"
 #include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#include "aoengine.h"
+#include "fsavatarrenderpersistence.h"
 #include "vsvulkancontext.h"
 #include "vsworldscene.h"
+#include "vsworldavatar.h"
+#include "llhudobject.h"
+#include "llcharacter.h"
 #include "fsconsoleutils.h"
 #include "fslslbridge.h"
 #include "vsnativeim.h"
@@ -101,24 +107,106 @@ namespace
 std::weak_ptr<VSNativeSession> sOwner;
 double now() { return LLFrameTimer::getTotalSeconds(); }
 const std::set<std::string> transport = {"StartPingCheck", "CompletePingCheck", "PacketAck"};
-const std::set<std::string> worldMessages = {"ObjectUpdate", "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject", "LayerData", "AvatarAppearance", "AvatarAnimation", "ReplyTaskInventory"};
-const std::set<std::string> session = {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator",
-    "LogoutReply", "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "TeleportStart", "TeleportFinish",
-    "TeleportLocal", "TeleportProgress", "TeleportFailed", "ViewerFrozenMessage", "FeatureDisabled", "CrossedRegion", "CloseCircuit", "DisableSimulator", "UUIDNameReply", "UUIDGroupNameReply",
-    "MuteListUpdate", "UseCachedMuteList", "SendXferPacket", "ConfirmXferPacket", "AbortXfer", "TransferInfo", "TransferPacket", "TransferAbort",
-    "GenericMessage", "EventInfoReply", "ScriptQuestion", "ScriptDialog", "LoadURL", "EconomyData", "ImprovedInstantMessage", "AgentDataUpdate", "AgentGroupDataUpdate", "AgentDropGroup", "AgentWearablesUpdate",
-    "OnlineNotification", "OfflineNotification", "ChangeUserRights", "MoneyBalanceReply", "UserInfoReply", "ParcelInfoReply", "PlacesReply",
-    "AvatarPropertiesReply", "AvatarInterestsReply", "AvatarGroupsReply", "AvatarNotesReply",
-    "AvatarPicksReply", "AvatarClassifiedReply", "AvatarPickerReply", "PickInfoReply", "ClassifiedInfoReply",
-    "CreateGroupReply", "JoinGroupReply", "EjectGroupMemberReply", "LeaveGroupReply",
-    "GroupProfileReply", "GroupMembersReply", "GroupRoleDataReply", "GroupRoleMembersReply",
-    "DirGroupsReply", "GroupTitlesReply", "GroupNoticesListReply", "GroupAccountSummaryReply",
-    "GroupAccountDetailsReply", "GroupAccountTransactionsReply",
-    "UpdateCreateInventoryItem", "RemoveInventoryItem", "RemoveInventoryFolder", "RemoveInventoryObjects",
-    "SaveAssetIntoInventory", "BulkUpdateInventory", "MoveInventoryItem", "InventoryDescendents", "FetchInventoryReply",
-    "SetDisplayNameReply", "DisplayNameUpdate",
-    "ChatterBoxSessionStartReply", "ChatterBoxSessionEventReply", "ChatterBoxSessionAgentListUpdates",
-    "ChatterBoxSessionUpdate", "ChatterBoxInvitation", "ForceCloseChatterBoxSession"};
+const std::set<std::string>    worldMessages = {
+    "ObjectUpdate",      "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject",
+    "LayerData",         "AvatarAppearance",       "AvatarAnimation",    "ObjectAnimation",           "ViewerEffect",
+    "ReplyTaskInventory"
+};
+const std::set<std::string> session = { "SimStats",
+                                        "ParcelProperties",
+                                        "ParcelMediaUpdate",
+                                        "ParcelMediaCommandMessage",
+                                        "RegionIDAndHandleReply",
+                                        "MapBlockReply",
+                                        "RegionHandshake",
+                                        "AgentMovementComplete",
+                                        "ChatFromSimulator",
+                                        "LogoutReply",
+                                        "KickUser",
+                                        "AlertMessage",
+                                        "AgentAlertMessage",
+                                        "Error",
+                                        "TeleportStart",
+                                        "TeleportFinish",
+                                        "TeleportLocal",
+                                        "TeleportProgress",
+                                        "TeleportFailed",
+                                        "ViewerFrozenMessage",
+                                        "FeatureDisabled",
+                                        "CrossedRegion",
+                                        "CloseCircuit",
+                                        "DisableSimulator",
+                                        "UUIDNameReply",
+                                        "UUIDGroupNameReply",
+                                        "MuteListUpdate",
+                                        "UseCachedMuteList",
+                                        "RequestXfer",
+                                        "SendXferPacket",
+                                        "ConfirmXferPacket",
+                                        "AbortXfer",
+                                        "TransferInfo",
+                                        "TransferPacket",
+                                        "TransferAbort",
+                                        "AssetUploadComplete",
+                                        "GenericMessage",
+                                        "EventInfoReply",
+                                        "ScriptQuestion",
+                                        "ScriptDialog",
+                                        "ScriptControlChange",
+                                        "LoadURL",
+                                        "EconomyData",
+                                        "ImprovedInstantMessage",
+                                        "AgentDataUpdate",
+                                        "AgentGroupDataUpdate",
+                                        "AgentDropGroup",
+                                        "AgentWearablesUpdate",
+                                        "OnlineNotification",
+                                        "OfflineNotification",
+                                        "ChangeUserRights",
+                                        "MoneyBalanceReply",
+                                        "UserInfoReply",
+                                        "ParcelInfoReply",
+                                        "PlacesReply",
+                                        "AvatarPropertiesReply",
+                                        "AvatarInterestsReply",
+                                        "AvatarGroupsReply",
+                                        "AvatarNotesReply",
+                                        "AvatarPicksReply",
+                                        "AvatarClassifiedReply",
+                                        "AvatarPickerReply",
+                                        "PickInfoReply",
+                                        "ClassifiedInfoReply",
+                                        "CreateGroupReply",
+                                        "JoinGroupReply",
+                                        "EjectGroupMemberReply",
+                                        "LeaveGroupReply",
+                                        "GroupProfileReply",
+                                        "GroupMembersReply",
+                                        "GroupRoleDataReply",
+                                        "GroupRoleMembersReply",
+                                        "DirGroupsReply",
+                                        "GroupTitlesReply",
+                                        "GroupNoticesListReply",
+                                        "GroupAccountSummaryReply",
+                                        "GroupAccountDetailsReply",
+                                        "GroupAccountTransactionsReply",
+                                        "UpdateCreateInventoryItem",
+                                        "RemoveInventoryItem",
+                                        "RemoveInventoryFolder",
+                                        "RemoveInventoryObjects",
+                                        "SaveAssetIntoInventory",
+                                        "BulkUpdateInventory",
+                                        "MoveInventoryItem",
+                                        "InventoryDescendents",
+                                        "FetchInventoryReply",
+                                        "SetDisplayNameReply",
+                                        "DisplayNameUpdate",
+                                        "ChatterBoxSessionStartReply",
+                                        "ChatterBoxSessionEventReply",
+                                        "ChatterBoxSessionAgentListUpdates",
+                                        "ChatterBoxSessionUpdate",
+                                        "ChatterBoxInvitation",
+                                        "ForceCloseChatterBoxSession" };
 struct CircuitDelivery { std::weak_ptr<VSNativeSession> owner; U64 generation; U64 regionEpoch; };
 void circuitCallback(void** userdata, S32 result)
 {
@@ -163,6 +251,62 @@ std::shared_ptr<VSNativeSession> VSNativeSession::create()
     return owner;
 }
 std::shared_ptr<VSNativeSession> VSNativeSession::active() { return sOwner.lock(); }
+bool                             VSNativeSession::resetAvatar(const LLUUID& id, bool resetAnimations)
+{
+    if (mPhase != Phase::Connected || !gViewerWindow || !gViewerWindow->nativeContext())
+        return false;
+    auto* avatar = gViewerWindow->nativeContext()->world().avatarForObject(id);
+    if (!avatar || !avatar->resetSkeleton(resetAnimations))
+        return false;
+    if (avatar->character().getID() != mAgent)
+        return true; // local reset of another avatar
+    if (!gMessageSystem)
+        return false;
+    std::array<U8, 17> data{};
+    std::copy(mAgent.mData, mAgent.mData + UUID_BYTES, data.begin());
+    data[16] = resetAnimations ? 1 : 0;
+    const U8         colour[4]{ 255, 255, 255, 255 };
+    LLMessageSystem* message = gMessageSystem;
+    message->newMessage("ViewerEffect");
+    message->nextBlock("AgentData");
+    message->addUUID("AgentID", mAgent);
+    message->addUUID("SessionID", mSession);
+    message->nextBlock("Effect");
+    message->addUUID("ID", LLUUID::generateNewID());
+    message->addUUID("AgentID", mAgent);
+    message->addU8("Type", LLHUDObject::LL_HUD_EFFECT_RESET_SKELETON);
+    message->addF32("Duration", 0);
+    message->addBinaryData("Color", colour, 4);
+    message->addBinaryData("TypeData", data.data(), S32(data.size()));
+    return message->sendReliable(mHost) > 0;
+}
+bool VSNativeSession::requestAnimations(const std::vector<LLUUID>& animations, bool start)
+{
+    if (!regionReady() || !gMessageSystem || animations.empty() || animations.size() > 256)
+        return false;
+    std::vector<LLUUID> valid;
+    for (const auto& animation : animations)
+        if (animation.notNull() || (!start && animations.size() == 1))
+            valid.push_back(animation);
+    if (valid.empty())
+        return false;
+    gMessageSystem->newMessage("AgentAnimation");
+    gMessageSystem->nextBlock("AgentData");
+    gMessageSystem->addUUID("AgentID", mAgent);
+    gMessageSystem->addUUID("SessionID", mSession);
+    for (const auto& animation : valid)
+    {
+        gMessageSystem->nextBlock("AnimationList");
+        gMessageSystem->addUUID("AnimID", animation);
+        gMessageSystem->addBOOL("StartAnim", start);
+    }
+    gMessageSystem->nextBlock("PhysicalAvatarEventList");
+    gMessageSystem->addBinaryData("TypeData", nullptr, 0);
+    if (gMessageSystem->sendReliable(mHost) <= 0)
+        return false;
+    ++mSent;
+    return true;
+}
 VSNativeSession::~VSNativeSession() { if (!mShutdown) reset(); }
 void VSNativeSession::install(LLMessageSystem& msg)
 {
@@ -184,6 +328,7 @@ void VSNativeSession::install(LLMessageSystem& msg)
     msg.setHandlerFunc("SimStats", process_sim_stats);
     msg.setHandlerFunc("ScriptQuestion", process_script_question);
     msg.setHandlerFunc("ScriptDialog", process_script_dialog);
+    msg.setHandlerFunc("ScriptControlChange", LLAgent::processScriptControlChange);
     msg.setHandlerFunc("LoadURL", process_load_url);
     msg.setHandlerFunc("AlertMessage", process_alert_message);
     msg.setHandlerFunc("AgentAlertMessage", process_agent_alert_message);
@@ -359,13 +504,60 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
     auto request = std::make_shared<LLCore::HttpRequest>();
     auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(15); options->setRetries(0);
     LLSD wanted = LLSD::emptyArray();
-    for (const char* name : {"EventQueueGet", "SimulatorFeatures", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "GetMesh", "GetMesh2", "AvatarPickerSearch",
-         "GroupAPIv1", "GroupMemberData", "AgentProfile", "UploadAgentProfileImage", "NewFileAgentInventory", "InventoryThumbnailUpload", "SetDisplayName", "RemoteParcelRequest", "AcceptFriendship", "DeclineFriendship",
-         "AcceptGroupInvite", "DeclineGroupInvite", "FetchInventory2", "FetchLib2",
-         "FetchInventoryDescendents2", "FetchLibDescendents2", "InventoryAPIv3", "LibraryAPIv3", "CreateInventoryCategory", "ViewerAsset", "CopyInventoryFromNotecard", "UpdateAgentLanguage", "UpdateAgentInformation", "UpdateNotecardAgentInventory", "UpdateNotecardTaskInventory", "UpdateScriptAgent", "UserInfo", "AgentPreferences", "SearchStatRequest", "Tracking",
-         "GetExperiences", "GetExperienceInfo", "GroupExperiences", "GetMetadata", "DirectDelivery",
-         "GetAdminExperiences", "GetCreatorExperiences", "AgentExperiences", "UpdateExperience",
-         "ExperiencePreferences", "IsExperienceAdmin", "FindExperienceByName"}) wanted.append(name);
+    for (const char* name : { "EventQueueGet",
+                              "SimulatorFeatures",
+                              "UntrustedSimulatorMessage",
+                              "GetDisplayNames",
+                              "ChatSessionRequest",
+                              "GetTexture",
+                              "GetMesh",
+                              "GetMesh2",
+                              "UpdateAvatarAppearance",
+                              "UploadBakedTexture",
+                              "AvatarPickerSearch",
+                              "GroupAPIv1",
+                              "GroupMemberData",
+                              "AgentProfile",
+                              "UploadAgentProfileImage",
+                              "NewFileAgentInventory",
+                              "InventoryThumbnailUpload",
+                              "SetDisplayName",
+                              "RemoteParcelRequest",
+                              "AcceptFriendship",
+                              "DeclineFriendship",
+                              "AcceptGroupInvite",
+                              "DeclineGroupInvite",
+                              "FetchInventory2",
+                              "FetchLib2",
+                              "FetchInventoryDescendents2",
+                              "FetchLibDescendents2",
+                              "InventoryAPIv3",
+                              "LibraryAPIv3",
+                              "CreateInventoryCategory",
+                              "ViewerAsset",
+                              "CopyInventoryFromNotecard",
+                              "UpdateAgentLanguage",
+                              "UpdateAgentInformation",
+                              "UpdateNotecardAgentInventory",
+                              "UpdateNotecardTaskInventory",
+                              "UpdateScriptAgent",
+                              "UserInfo",
+                              "AgentPreferences",
+                              "SearchStatRequest",
+                              "Tracking",
+                              "GetExperiences",
+                              "GetExperienceInfo",
+                              "GroupExperiences",
+                              "GetMetadata",
+                              "DirectDelivery",
+                              "GetAdminExperiences",
+                              "GetCreatorExperiences",
+                              "AgentExperiences",
+                              "UpdateExperience",
+                              "ExperiencePreferences",
+                              "IsExperienceAdmin",
+                              "FindExperienceByName" })
+        wanted.append(name);
     for (unsigned attempt = 0; attempt < 3; ++attempt)
     {
         LLSD result = adapter->postAndSuspend(request, url, wanted, options);
@@ -404,13 +596,59 @@ void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionE
     if (!caps.isMap() || !webURL(caps["EventQueueGet"].asString())) { disconnect(LLTrans::getString("NativeSessionInvalidCapabilities")); return; }
     clearSimulatorFeatures();
     mCapabilities = LLSD::emptyMap();
-    for (const char* name : {"EventQueueGet", "SimulatorFeatures", "UntrustedSimulatorMessage", "GetDisplayNames", "ChatSessionRequest", "GetTexture", "GetMesh", "GetMesh2", "AvatarPickerSearch",
-         "GroupAPIv1", "GroupMemberData", "AgentProfile", "UploadAgentProfileImage", "NewFileAgentInventory", "InventoryThumbnailUpload", "SetDisplayName", "RemoteParcelRequest", "AcceptFriendship", "DeclineFriendship",
-         "AcceptGroupInvite", "DeclineGroupInvite", "FetchInventory2", "FetchLib2",
-         "FetchInventoryDescendents2", "FetchLibDescendents2", "InventoryAPIv3", "LibraryAPIv3", "CreateInventoryCategory", "ViewerAsset", "CopyInventoryFromNotecard", "UpdateAgentLanguage", "UpdateAgentInformation", "UpdateNotecardAgentInventory", "UpdateNotecardTaskInventory", "UpdateScriptAgent", "UserInfo", "AgentPreferences", "SearchStatRequest", "Tracking",
-         "GetExperiences", "GetExperienceInfo", "GroupExperiences", "GetMetadata", "DirectDelivery",
-         "GetAdminExperiences", "GetCreatorExperiences", "AgentExperiences", "UpdateExperience",
-         "ExperiencePreferences", "IsExperienceAdmin", "FindExperienceByName"})
+    for (const char* name : { "EventQueueGet",
+                              "SimulatorFeatures",
+                              "UntrustedSimulatorMessage",
+                              "GetDisplayNames",
+                              "ChatSessionRequest",
+                              "GetTexture",
+                              "GetMesh",
+                              "GetMesh2",
+                              "UpdateAvatarAppearance",
+                              "UploadBakedTexture",
+                              "AvatarPickerSearch",
+                              "GroupAPIv1",
+                              "GroupMemberData",
+                              "AgentProfile",
+                              "UploadAgentProfileImage",
+                              "NewFileAgentInventory",
+                              "InventoryThumbnailUpload",
+                              "SetDisplayName",
+                              "RemoteParcelRequest",
+                              "AcceptFriendship",
+                              "DeclineFriendship",
+                              "AcceptGroupInvite",
+                              "DeclineGroupInvite",
+                              "FetchInventory2",
+                              "FetchLib2",
+                              "FetchInventoryDescendents2",
+                              "FetchLibDescendents2",
+                              "InventoryAPIv3",
+                              "LibraryAPIv3",
+                              "CreateInventoryCategory",
+                              "ViewerAsset",
+                              "CopyInventoryFromNotecard",
+                              "UpdateAgentLanguage",
+                              "UpdateAgentInformation",
+                              "UpdateNotecardAgentInventory",
+                              "UpdateNotecardTaskInventory",
+                              "UpdateScriptAgent",
+                              "UserInfo",
+                              "AgentPreferences",
+                              "SearchStatRequest",
+                              "Tracking",
+                              "GetExperiences",
+                              "GetExperienceInfo",
+                              "GroupExperiences",
+                              "GetMetadata",
+                              "DirectDelivery",
+                              "GetAdminExperiences",
+                              "GetCreatorExperiences",
+                              "AgentExperiences",
+                              "UpdateExperience",
+                              "ExperiencePreferences",
+                              "IsExperienceAdmin",
+                              "FindExperienceByName" })
         if (webURL(caps[name].asString())) mCapabilities[name] = caps[name];
     // LLSD messages are sent through the host's granted HTTP transport.
     // LLAgent, cache-name and asset services retain copies of this host.
@@ -763,10 +1001,31 @@ bool VSNativeSession::movementAction(U32 key, const std::string& action, bool do
     if (!down) { const bool handled = mCamera.action(key, action, false, repeated); if (handled) mAgentUpdateTime = 0; return handled; }
     if (mPhase != Phase::Connected || mChangingRegion || mFrozen) return false;
     const bool handled = mCamera.action(key, action, true, repeated);
+    if (handled && action == "toggle_fly")
+    {
+        gAgent.setFlying((mCamera.controls() & AGENT_CONTROL_FLY) != 0);
+        mCamera.setFlying(gAgent.getFlying());
+    }
     if (handled) mAgentUpdateTime = 0;
     return handled;
 }
 void VSNativeSession::releaseMovement() { mCamera.release(); mAgentUpdateTime = 0; }
+void VSNativeSession::setFlying(bool flying)
+{
+    mCamera.setFlying(flying);
+    mAgentUpdateTime = 0;
+}
+void VSNativeSession::mouseButton(bool down)
+{
+    if (!regionReady() || (!down && !mWorldMouseDown))
+        return;
+    if (down)
+        mWorldMouseMouselook = mCamera.firstPerson();
+    mWorldMouseDown  = down;
+    mMouseControls   = mWorldMouseMouselook ? (down ? AGENT_CONTROL_ML_LBUTTON_DOWN : AGENT_CONTROL_ML_LBUTTON_UP)
+                                            : (down ? AGENT_CONTROL_LBUTTON_DOWN : AGENT_CONTROL_LBUTTON_UP);
+    mAgentUpdateTime = 0;
+}
 void VSNativeSession::cameraOrbit(F32 yaw, F32 pitch)
 { if (mPhase == Phase::Connected && !mChangingRegion) { mCamera.orbit(yaw, pitch); mAgentUpdateTime = 0; } }
 void VSNativeSession::cameraZoom(S32 clicks)
@@ -1212,6 +1471,8 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         if (!body["name"].isString() || body["id"].asUUID().isNull()) return false;
         mName = body["name"].asString().substr(0, 256); mRegionID = body["id"].asUUID(); mOwner = body["owner"].asUUID();
         mFlags = body.has("flags64") ? ll_U64_from_sd(body["flags64"]) : U32(body["flags"].asInteger()); mAccess = U8(body["access"].asInteger());
+        mWaterHeight = F32(body["water_height"].asReal());
+        mWaterKnown  = body["water_height"].isReal() && std::isfinite(mWaterHeight);
         LLLandmark::setRegionHandle(mRegionID, mHandle);
         if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().configureRegion(sender,body);
         if (auto circuit=mCircuits.find(sender);circuit!=mCircuits.end()) circuit->second.handshake=true;
@@ -1236,6 +1497,8 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         for(const auto& row:llsd::inArray(body["wearables"]))
             if(!row.isMap() || !row["type"].isInteger() || row["type"].asInteger()<0 || row["type"].asInteger()>255)return false;
         mWearablesSerial=serial;mWearablesMetadata=body["wearables"];mWearablesKnown=true;publishProgress();
+        if (mAppearance)
+            mAppearance->fallback(mWearablesMetadata);
     }
     else if (name == "MoneyBalanceReply" && mPhase == Phase::Connected)
     {
@@ -1357,6 +1620,11 @@ void VSNativeSession::connected()
         return;
     }
     mPhase = Phase::Connected; mDeadline = now() + 1;
+    if (!mAppearance)
+    {
+        mAppearance = std::make_unique<VSNativeAppearance>(shared_from_this());
+        mAppearance->fallback(mWearablesMetadata);
+    }
     // Filtered inventory tabs require the initial recursive account fetch,
     // just as they do after the ordinary inventory startup stages.
     LLInventoryModelBackgroundFetch::instance().start();
@@ -1365,6 +1633,8 @@ void VSNativeSession::connected()
     LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
     LLStartUp::setStartupState(STATE_STARTED);
     LLAppViewer::instance()->handleLoginComplete();
+    FSAvatarRenderPersistence::instance().init();
+    AOEngine::onLoginComplete();
     FSPanelLogin::closePanel();
     gViewerWindow->setNativeConnected(true);
     gViewerWindow->getProgressView()->setVisible(false);
@@ -1586,15 +1856,49 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
         msg->addQuat("BodyRotation", camera.bodyRotation); msg->addQuat("HeadRotation", camera.headRotation); msg->addU8("State", 0);
         msg->addVector3("CameraCenter", camera.center); msg->addVector3("CameraAtAxis", camera.at);
         msg->addVector3("CameraLeftAxis", camera.left); msg->addVector3("CameraUpAxis", camera.up);
-        msg->addF32("Far", llclamp(gSavedSettings.getF32("RenderFarClip"),16.f,1024.f)); msg->addU32("ControlFlags", mFrozen ? 0 : mCamera.controls()); msg->addU8("Flags", 0);
+        msg->addF32("Far", llclamp(gSavedSettings.getF32("RenderFarClip"), 16.f, 1024.f));
+        msg->addU32("ControlFlags", mFrozen ? 0 : mCamera.controls() | mMouseControls | gAgent.getControlFlags());
+        msg->addU8("Flags", 0);
     }
     // Periodic movement/camera snapshots supersede older state. Reliable retries
     // would replay stale input and accumulate under packet loss.
     if ((name == "AgentUpdate" ? msg->sendMessage(mHost) : msg->sendReliable(mHost)) <= 0) return false;
+    if (name == "AgentUpdate")
+    {
+        mMouseControls &= ~(AGENT_CONTROL_LBUTTON_UP | AGENT_CONTROL_ML_LBUTTON_UP);
+        if (!mFrozen)
+            gAgent.resetControlFlags();
+    }
     ++mSent; return true;
 }
 void VSNativeSession::tick()
 {
+    if (mAppearance)
+        mAppearance->tick();
+    if (mPhase == Phase::Connected && AOEngine::instanceExists())
+    {
+        AOEngine::instance().inMouselook(mCamera.firstPerson());
+        if (mWaterKnown)
+            AOEngine::instance().checkBelowWater(mPosition.mV[VZ] < mWaterHeight);
+    }
+    if (mPhase == Phase::Connected && gViewerWindow && gViewerWindow->nativeContext())
+        if (auto* avatar = gViewerWindow->nativeContext()->world().selfAvatar(); avatar && avatar->ownerGeneration() != mAttentionAvatar)
+        {
+            const auto weak  = weak_from_this();
+            const auto token = account();
+            avatar->attention(
+                false,
+                [weak, token]() -> std::optional<LLVector3d>
+                {
+                    const auto session = weak.lock();
+                    if (!session || !session->current(token))
+                        return {};
+                    const auto camera = session->cameraState();
+                    return from_region_handle(session->handle()) + LLVector3d(camera.center + camera.at * 10);
+                },
+                0);
+            mAttentionAvatar = avatar->ownerGeneration();
+        }
     std::vector<LLHost> retired;
     for (const auto& [host,region]:mCircuits)
         if (host!=mHost && ((region.deadline && now()>region.deadline) ||
@@ -1622,7 +1926,8 @@ void VSNativeSession::tick()
     const double cameraTime = now();
     if (mPhase == Phase::Connected && !mChangingRegion)
     {
-        if (mCameraTime > 0) mCamera.step(F32(cameraTime - mCameraTime));
+        if (mCameraTime > 0)
+            mCamera.step(F32(cameraTime - mCameraTime), gAgent.rotateGrabbed());
         if (cameraTime >= mAgentUpdateTime)
         { send("AgentUpdate", LLSD()); mAgentUpdateTime = cameraTime + .1; }
     }
@@ -1699,6 +2004,11 @@ void VSNativeSession::disconnect(const std::string& reason)
 void VSNativeSession::reset()
 {
     if (mShutdown) return;
+    mAppearance.reset();
+    if (AOEngine::instanceExists())
+        AOEngine::instance().resetAccount();
+    gAgent.clearScriptControlState();
+    gAgent.clearControlFlags(std::numeric_limits<U32>::max());
     mCamera.reset(); mCameraTime = mAgentUpdateTime = 0;
     if (mAgent.notNull() && (mPhase == Phase::Connected || mPhase == Phase::Logout || mPhase == Phase::Disconnected))
     {
@@ -1796,6 +2106,11 @@ void VSNativeSession::reset()
     gAgentID.setNull(); gAgentSessionID.setNull(); gAgent.mSecureSessionID.setNull(); gAgent.mMOTD.clear(); gAgentMovementCompleted = false;
     mHandshake = mMovement = mSeedReady = mCircuitAck = mQuit = false;
     mTyping = mFrozen = false;
+    mWorldMouseDown = mWorldMouseMouselook = false;
+    mMouseControls                         = 0;
+    mAttentionAvatar                       = 0;
+    mWaterKnown                            = false;
+    mWaterHeight                           = 20;
     mAppearanceOwnerInitialized=mWearablesKnown=false;mWearablesMetadata=LLSD();mWearablesSerial=0;
     gDisconnected = true;
     if (LLAvatarNameCache::instanceExists()) LLAvatarNameCache::getInstance()->setNameLookupURL("");
@@ -1819,6 +2134,8 @@ LLSD VSNativeSession::evidence() const
     result["simulator_features_received"] = mSimulatorFeaturesReceived;
     result["appearance_owner_initialized"]=mAppearanceOwnerInitialized;
     result["wearable_metadata_known"]=mWearablesKnown;result["wearable_metadata"]=mWearablesMetadata;
+    if (mAppearance)
+        result["appearance"] = mAppearance->evidence();
     result["circuits"]=LLSD::emptyArray();
     for (const auto& [host,region]:mCircuits)
     {

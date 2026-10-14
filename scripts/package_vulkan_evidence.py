@@ -5,11 +5,12 @@ import json
 from pathlib import Path
 import stat
 import zipfile
+from run_vulkan_geometry_tests import required_checks
 
 
 EVIDENCE_DIRECTORIES = ('evidence', 'headless-evidence', 'viewer-evidence',
                         'session-evidence', 'r1-session-evidence', 'parity-evidence',
-                        'world-parity-evidence')
+                        'world-parity-evidence', 'geometry-evidence')
 
 
 def inputs(viewer):
@@ -75,6 +76,21 @@ def completeness(files, viewer):
         if not any(name.startswith(prefix) for name in files):
             errors.append('Missing required evidence group: ' + prefix)
     runtime = read('.ci/runtime/runtime.json')
+    geometry=read('.ci/geometry-evidence/results.json')
+    log_name='.ci/geometry-evidence/geometry.log'
+    count=geometry.get('tree_species')
+    checks=required_checks(count) if isinstance(count,int) and count>0 else []
+    if (geometry.get('passed') is not True or not checks or geometry.get('checks')!=checks or
+            not geometry.get('source_commit') or len(geometry.get('executable_sha256', ''))!=64 or
+            len(geometry.get('tree_species_sha256', ''))!=64):
+        errors.append('Incomplete CPU geometry qualification evidence')
+    if require(log_name):
+        log=files[log_name].read_bytes()
+        if hashlib.sha256(log).hexdigest()!=geometry.get('log_sha256'):
+            errors.append('CPU geometry log checksum mismatch')
+        text=log.decode('utf-8',errors='replace')
+        if any(check not in text for check in checks) or 'FAIL:' in text:
+            errors.append('CPU geometry log is missing successful producer checks')
     if viewer == 'build-linux-x86_64' and runtime.get('driver') == 'lavapipe':
         for name in ('.ci/opengl-reference/runtime.json', '.ci/parity-evidence/baseline-results.json',
                      '.ci/world-parity-evidence/baseline-results.json', '.ci/parity-evidence/r0-acceptance.json'):

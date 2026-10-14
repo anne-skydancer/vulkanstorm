@@ -25,6 +25,13 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsavatarservices.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#include "vsvulkancontext.h"
+#include "vsworldavatar.h"
+#endif
 #include "vsnativeim.h"
 #include "llinventorybridge.h"
 
@@ -7723,12 +7730,6 @@ void LLGestureBridge::performAction(LLInventoryModel* model, std::string action)
 
 void LLGestureBridge::openItem()
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
     LLViewerInventoryItem* item = getItem();
 
     if (item)
@@ -7924,12 +7925,6 @@ void LLAnimationBridge::performAction(LLInventoryModel* model, std::string actio
 
 void LLAnimationBridge::openItem()
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
     LLViewerInventoryItem* item = getItem();
 
     if (item)
@@ -8089,12 +8084,6 @@ void LLObjectBridge::performAction(LLInventoryModel* model, std::string action)
 
 void LLObjectBridge::openItem()
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
     static LLCachedControl<bool> replace_item(gSavedSettings, "FSDoubleClickAddInventoryObjects", false); // <FS> Double-click add/replace
     // object double-click action is to wear/unwear object
     performAction(getInventoryModel(),
@@ -8108,12 +8097,12 @@ std::string LLObjectBridge::getLabelSuffix() const
 {
     if (get_is_item_worn(mUUID))
     {
-        if (!isAgentAvatarValid()) // Error condition, can't figure out attach point
+        if (!vs_avatar_character()) // Error condition, can't figure out attach point
         {
             return LLItemBridge::getLabelSuffix() + LLTrans::getString("worn");
         }
         std::string attachment_point_name;
-        if (gAgentAvatarp->getAttachedPointName(mUUID, attachment_point_name))
+        if (vs_avatar_attachment_name(mUUID, attachment_point_name))
         {
             LLStringUtil::format_map_t args;
             args["[ATTACHMENT_POINT]"] =  LLTrans::getString(attachment_point_name);
@@ -8132,7 +8121,23 @@ std::string LLObjectBridge::getLabelSuffix() const
 
 void rez_attachment(LLViewerInventoryItem* item, LLViewerJointAttachment* attachment, bool replace)
 {
-// [RLVa:KB] - Checked: 2010-08-25 (RLVa-1.2.1)
+#if VS_NATIVE_VULKAN
+    if (const auto session = VSNativeSession::active(); session && session->appearance())
+    {
+        if (item && (!rlv_handler_t::isEnabled() || rlvPredCanWearItem(item, replace ? RLV_WEAR_REPLACE : RLV_WEAR_ADD)))
+        {
+            U8 point = 0;
+            if (attachment)
+            {
+                if (const auto* avatar = gViewerWindow->nativeContext()->world().selfAvatar())
+                    point = U8(avatar->attachmentPoint(attachment->getName()));
+            }
+            session->appearance()->attach(item->getLinkedUUID(), point, !replace);
+        }
+        return;
+    }
+#endif
+    // [RLVa:KB] - Checked: 2010-08-25 (RLVa-1.2.1)
     // If no attachment point was specified, try looking it up from the item name
     static LLCachedControl<bool> fRlvDeprecateAttachPt(gSavedSettings, "RLVaDebugDeprecateExplicitPoint", false);
     if ( (rlv_handler_t::isEnabled()) && (!fRlvDeprecateAttachPt) &&
@@ -8261,9 +8266,61 @@ void LLObjectBridge::buildContextMenu(LLMenuGL& menu, U32 flags)
 
         LLObjectBridge::sContextMenuItemID = mUUID;
 
-        LLInventoryItem *item = getItem();
+        LLViewerInventoryItem* item = getItem();
         if(item)
         {
+#if VS_NATIVE_VULKAN
+            if (const auto session = VSNativeSession::active(); session && session->appearance())
+            {
+                items.push_back("Wearable And Object Separator");
+                if (get_is_item_worn(mUUID))
+                {
+                    items.push_back("Detach From Yourself");
+                    if (rlv_handler_t::isEnabled() && !rlvPredCanRemoveItem(item))
+                        disabled_items.push_back("Detach From Yourself");
+                }
+                else if (!isItemInTrash() && !isLinkedObjectInTrash() && !isLinkedObjectMissing() && !isCOFFolder())
+                {
+                    items.push_back("Wearable And Object Wear");
+                    items.push_back("Wearable Add");
+                    items.push_back("Attach To");
+                    items.push_back("Attach To HUD");
+                    if (rlv_handler_t::isEnabled())
+                    {
+                        if (!rlvPredCanWearItem(item, RLV_WEAR_REPLACE))
+                            disabled_items.push_back("Wearable And Object Wear");
+                        if (!rlvPredCanWearItem(item, RLV_WEAR_ADD))
+                            disabled_items.push_back("Wearable Add");
+                    }
+                    auto*       bodyMenu = menu.findChildMenuByName("Attach To", true);
+                    auto*       hudMenu  = menu.findChildMenuByName("Attach To HUD", true);
+                    const auto* avatar   = gViewerWindow->nativeContext()->world().selfAvatar();
+                    if (bodyMenu && hudMenu && avatar && !bodyMenu->getChildCount() && !hudMenu->getChildCount())
+                        for (const auto& point : avatar->attachmentPoints())
+                        {
+                            LLMenuItemCallGL::Params params;
+                            params.name = LLTrans::getString(point.name);
+                            if (!point.hud)
+                                params.name = params.name() + " (" + std::to_string(point.index) + ")";
+                            params.on_click.function = [index = point.index](LLUICtrl*, const LLSD&)
+                            {
+                                const auto  owner = VSNativeSession::active();
+                                const auto* item  = gInventory.getItem(LLObjectBridge::sContextMenuItemID);
+                                if (owner && owner->appearance() && item &&
+                                    (!rlv_handler_t::isEnabled() || (rlvPredCanWearItem(item, RLV_WEAR_REPLACE) &&
+                                                                     !gRlvAttachmentLocks.isLockedAttachmentPoint(index, RLV_LOCK_ADD))))
+                                    owner->appearance()->attach(item->getLinkedUUID(), U8(index), false);
+                            };
+                            LLUICtrlFactory::create<LLMenuItemCallGL>(params, point.hud ? hudMenu : bodyMenu);
+                            items.push_back(params.name);
+                        }
+                }
+                addLinkReplaceMenuOption(items, disabled_items);
+                addMoveToDefaultFolderMenuOption(items);
+                hide_context_entries(menu, items, disabled_items);
+                return;
+            }
+#endif
             if (!isAgentAvatarValid()) return;
 
             if( get_is_item_worn( mUUID ) )
@@ -8514,12 +8571,6 @@ void LLWearableBridge::performAction(LLInventoryModel* model, std::string action
 
 void LLWearableBridge::openItem()
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
     // <FS:Ansariel> Don't take off body parts!
     if (get_is_item_worn(mUUID) && !canRemoveFromAvatar(this))
     {
@@ -8639,7 +8690,12 @@ void LLWearableBridge::buildContextMenu(LLMenuGL& menu, U32 flags)
                     if (LLWearableType::getInstance()->getAllowMultiwear(mWearableType))
                     {
                         items.push_back(std::string("Wearable Add"));
-                        if (!gAgentWearables.canAddWearable(mWearableType))
+                        bool canAdd = gAgentWearables.canAddWearable(mWearableType);
+#if VS_NATIVE_VULKAN
+                        if (const auto session = VSNativeSession::active())
+                            canAdd = session->appearance() && session->appearance()->canWear({ item->getUUID() });
+#endif
+                        if (!canAdd)
                         {
                             disabled_items.push_back(std::string("Wearable Add"));
                         }
