@@ -56,7 +56,7 @@ class ToolTests(unittest.TestCase):
             self.assertIn("-G 'Ninja Multi-Config'", text)
             self.assertIn('-C scripts/ci_compiler_cache.cmake', text)
             self.assertIn('restore-keys: viewer-objects-', text)
-            self.assertIn(f'-{configuration}-${{{{ hashFiles', text)
+            self.assertTrue(f'-{configuration}-${{{{ hashFiles' in text or '-${{ env.VIEWER_BUILD_TYPE }}-${{ hashFiles' in text)
             self.assertLess(text.index('Restore compiled objects'), text.index('-C scripts/ci_compiler_cache.cmake'))
             self.assertIn('if: always() && inputs.clean_compiler_cache', text)
             self.assertIn('compiler-cache.txt', text if filename == 'build.yaml' else

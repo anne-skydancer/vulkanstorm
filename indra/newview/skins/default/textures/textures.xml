@@ -1229,4 +1229,5 @@ with the same filename but different name
 <texture name="LagStatus_Good" file_name="icons/green_square.png" preload="false" />
 <texture name="LagStatus_Warning" file_name="icons/yellow_square.png" preload="false" />
 <texture name="LagStatus_Critical" file_name="icons/red_square.png" preload="false" />
+  <texture name="Inv_Script_Luau" file_name="icons/Inv_Script_Luau.png" preload="false" />
 </textures>

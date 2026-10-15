@@ -148,6 +148,8 @@ public:
         }
     };
     LLTransactionID getTransactionID() const { return mTransactionID; }
+    bool getIsRunning() const { return mIsRunning; }
+    bool getIsFaulted() const { return mIsFaulted; }
 
     bool getIsBrokenLink() const; // true if the baseitem this points to doesn't exist in memory.
     LLViewerInventoryItem *getLinkedItem() const;
@@ -166,6 +168,8 @@ public:
 public:
     bool mIsComplete;
     LLTransactionID mTransactionID;
+    bool mIsRunning = false;
+    bool mIsFaulted = false;
 };
 
 

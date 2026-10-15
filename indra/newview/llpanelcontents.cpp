@@ -28,6 +28,8 @@
 
 // file include
 #include "llpanelcontents.h"
+#include "llcombobox.h"
+#include "llscripteditorws.h"
 
 // linden library includes
 #include "llerror.h"
@@ -66,8 +68,8 @@
 // [RLVa:KB] - Checked: 2011-05-22 (RLVa-1.3.1a)
 #include "rlvhandler.h"
 #include "rlvlocks.h"
+#include "fsnewitemctrl.h"
 // [/RLVa:KB]
-#include "fsnewitemctrl.h" // <FS:mjr> [FIRE-36685] - Toolbox Window - Add new notecard button to Content tab
 
 //
 // Imported globals
@@ -89,11 +91,14 @@ bool LLPanelContents::postBuild()
 {
     setMouseOpaque(false);
 
-    childSetAction("button new script",&LLPanelContents::onClickNewScript, this);
-    childSetAction("button new notecard", &LLPanelContents::onClickNewNotecard, this); // <FS:mjr> [FIRE-36685] - Toolbox Window - Add new notecard button to Content tab
+    getChild<LLUICtrl>("button new script")->setCommitCallback(boost::bind(&LLPanelContents::onNewScriptFlyoutCommit, this, _1));
+    childSetAction("button new notecard", boost::bind(&LLPanelContents::onNewNotecardCommit, this));
     childSetAction("button permissions",&LLPanelContents::onClickPermissions, this);
-    childSetAction("btn_reset_scripts", &LLPanelContents::onClickResetScripts, this); // <FS> Script reset in edit floater
-    childSetAction("button refresh",&LLPanelContents::onClickRefresh, this);
+    childSetAction("btn_reset_scripts", &LLPanelContents::onClickResetScripts, this);
+    childSetAction("button refresh", &LLPanelContents::onClickRefresh, this);
+
+    mPublishButton = getChild<LLButton>("button publish");
+    mPublishButton->setClickedCallback([this](LLUICtrl*, const LLSD&) { onClickPublish(); });
 
     mFilterEditor = getChild<LLFilterEditor>("contents_filter");
     mFilterEditor->setCommitCallback([&](LLUICtrl*, const LLSD&) { onFilterEdit(); });
@@ -115,6 +120,7 @@ LLPanelContents::LLPanelContents()
 
 LLPanelContents::~LLPanelContents()
 {
+    mSimulatorFeaturesConnection.disconnect();
     // Children all cleaned up by default view destructor.
 }
 
@@ -123,11 +129,13 @@ void LLPanelContents::getState(LLViewerObject *objectp )
 {
     if( !objectp )
     {
+        mSimulatorFeaturesConnection.disconnect();
+        mLastScriptObjectID.setNull();
         getChildView("button new script")->setEnabled(false);
-        getChildView("btn_reset_scripts")->setEnabled(false); // <FS> Script reset in edit floater
-        // <FS:mjr> [FIRE-36685] - Toolbox Window - Add new notecard button to Content tab
+        getChildView("btn_reset_scripts")->setEnabled(false);
         getChildView("button new notecard")->setEnabled(false);
-        // </FS:mjr> [FIRE-36685]
+        mPublishButton->setEnabled(false);
+        mPublishButton->setToggleState(false);
         return;
     }
 
@@ -139,6 +147,10 @@ void LLPanelContents::getState(LLViewerObject *objectp )
                     || (objectp->permModify() && !objectp->isPermanentEnforced()
                            && ( objectp->permYouOwner() || ( !group_id.isNull() && gAgent.isInGroup(group_id) )));  // solves SL-23488
     bool all_volume = LLSelectMgr::getInstance()->selectionAllPCode( LL_PCODE_VOLUME );
+
+    S32  object_count = LLSelectMgr::getInstance()->getSelection()->getObjectCount();
+    S32  root_count = LLSelectMgr::getInstance()->getSelection()->getRootObjectCount();
+    bool single_root  = (root_count == 1);
 
 // [RLVa:KB] - Checked: 2010-04-01 (RLVa-1.2.0c) | Modified: RLVa-1.0.5a
     if ( (rlv_handler_t::isEnabled()) && (editable) )
@@ -159,27 +171,58 @@ void LLPanelContents::getState(LLViewerObject *objectp )
     }
 // [/RLVa:KB]
 
-    // Edit script buttons - ok if object is editable and there's an unambiguous destination for the object.
-    // <FS:PP> FIRE-3219: Reset Scripts button in Build floater
-    //  getChildView("button new script")->setEnabled(
-    //      editable &&
-    //      all_volume &&
-    //      ((LLSelectMgr::getInstance()->getSelection()->getRootObjectCount() == 1)
-    //          || (LLSelectMgr::getInstance()->getSelection()->getObjectCount() == 1)));
+    bool new_button_enabled = editable && all_volume && (single_root || (object_count == 1));
 
-    bool objectIsOK = false;
-    if( editable && all_volume && ( (LLSelectMgr::getInstance()->getSelection()->getRootObjectCount() == 1) || (LLSelectMgr::getInstance()->getSelection()->getObjectCount() == 1) ) )
+    // Edit script button - ok if object is editable and there's an unambiguous destination for the object.
+    getChildView("button new script")->setEnabled(new_button_enabled);
+    getChildView("btn_reset_scripts")->setEnabled(new_button_enabled);
+
+    // Enable the Lua script option only when the region supports it.
+    bool lua_region = false;
+    LLViewerRegion* region = objectp->getRegion();
+    if (region && region->simulatorFeaturesReceived())
     {
-        objectIsOK = true;
+        LLSD simulatorFeatures;
+        region->getSimulatorFeatures(simulatorFeatures);
+        lua_region = simulatorFeatures["LuaScriptsEnabled"].asBoolean();
     }
-
-    getChildView("button new script")->setEnabled(objectIsOK);
-    getChildView("button new notecard")->setEnabled(objectIsOK); // <FS:mjr> [FIRE-36685] - Toolbox Window - Add new notecard button to Content tab
-    getChildView("btn_reset_scripts")->setEnabled(objectIsOK);
-    // </FS:PP>
+    mSimulatorFeaturesConnection.disconnect();
+    if (region && !region->simulatorFeaturesReceived())
+    {
+        mSimulatorFeaturesConnection = region->setSimulatorFeaturesReceivedCallback(
+            boost::bind(&LLPanelContents::onSimulatorFeaturesReceived, this, _1));
+    }
+    LLComboBox* new_script = getChild<LLComboBox>("button new script");
+    new_script->setEnabledByValue("lua", lua_region);
+    if (mLastScriptObjectID != objectp->getID() || mLastLuaRegion != lua_region)
+    {
+        mNewScriptIsLua = lua_region;
+        new_script->setValue(mNewScriptIsLua ? "lua" : "lsl");
+    }
+    mLastScriptObjectID = objectp->getID();
+    mLastLuaRegion = lua_region;
 
     getChildView("button permissions")->setEnabled(!objectp->isPermanentEnforced());
     mPanelInventoryObject->setEnabled(!objectp->isPermanentEnforced());
+
+
+
+    // Canary retains avatar-inventory creation when the direct capability is absent.
+    getChildView("button new notecard")->setEnabled(new_button_enabled);
+
+    // Publish button - enabled only when WS server is configured, and a single editable root object is selected.
+    mPublishButton->setEnabled(LLScriptEditorWSServer::isEnabled() && new_button_enabled);
+
+    // Sync toggle state to reflect whether the object is currently published.
+    if (LLScriptEditorWSServer::isEnabled())
+    {
+        auto server = LLScriptEditorWSServer::getServer();
+        mPublishButton->setToggleState(server && server->isObjectPublished(objectp->getID()));
+    }
+    else
+    {
+        mPublishButton->setToggleState(false);
+    }
 }
 
 void LLPanelContents::onFilterEdit()
@@ -267,90 +310,36 @@ void LLPanelContents::clearContents()
 //
 
 // static
-void LLPanelContents::onClickNewScript(void *userdata)
+void LLPanelContents::onNewScriptFlyoutCommit(LLUICtrl* ctrl)
 {
-    // <FS:mjr> [FIRE-36685] - Toolbox Window - Add new notecard button to Content tab
-    FSNewItemCtrl* new_item_ctrl = FSNewItemCtrl::getInstance();
-    // Get the Panel Contents from the userdata void pointer.
-    LLPanelContents* self = (LLPanelContents*)userdata;
-    // </FS:mjr> [FIRE-36685]
     const bool children_ok = true;
     LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject(children_ok);
-    if(object)
+    if (!object) return;
+
+    const std::string value = ctrl->getValue().asString();
+    if (value == "lsl")
     {
-// [RLVa:KB] - Checked: 2010-03-31 (RLVa-1.2.0c) | Modified: RLVa-1.0.5a
-        if (rlv_handler_t::isEnabled()) // Fallback code [see LLPanelContents::getState()]
-        {
-            if (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit()))
-            {
-                return;                 // Disallow creating new scripts in a locked attachment
-            }
-            else if ( (gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || (gRlvHandler.hasBehaviour(RLV_BHVR_SITTP)) )
-            {
-                if ( (isAgentAvatarValid()) && (gAgentAvatarp->isSitting()) && (gAgentAvatarp->getRoot() == object->getRootEdit()) )
-                    return;             // .. or in a linkset the avie is sitting on under @unsit=n/@sittp=n
-            }
-        }
-// [/RLVa:KB]
-
-        // <FS:PP> FIRE-36059 Optional custom script template for New Script button
-        if (gSavedPerAccountSettings.getBOOL("FSBuildPrefs_UseCustomScript"))
-        {
-            if (LLUUID custom_script_id(gSavedPerAccountSettings.getString("FSBuildPrefs_CustomScriptItem")); custom_script_id.notNull())
-            {
-                if (auto custom_script = gInventory.getItem(custom_script_id); custom_script && custom_script->getType() == LLAssetType::AT_LSL_TEXT)
-                {
-                    // <FS:mjr> [FIRE-36685] - Toolbox Window - Add new notecard button to Content tab
-                    // Flag the new script to also needs to be scrolled to and opened if needed.
-                    new_item_ctrl->startDNDInvToObject(LLUUID::null, std::bind(&LLPanelContents::onFinishCreateItem, self));
-                    // </FS:mjr> [FIRE-36685]
-                    LLToolDragAndDrop::dropScript(object, custom_script, true, LLToolDragAndDrop::SOURCE_AGENT, gAgentID);
-                    return;
-                }
-            }
-        }
-        // </FS:PP>
-
-        LLPermissions perm;
-        perm.init(gAgent.getID(), gAgent.getID(), LLUUID::null, LLUUID::null);
-
-        // Parameters are base, owner, everyone, group, next
-        perm.initMasks(
-            PERM_ALL,
-            PERM_ALL,
-            LLFloaterPerms::getEveryonePerms("Scripts"),
-            LLFloaterPerms::getGroupPerms("Scripts"),
-            PERM_MOVE | LLFloaterPerms::getNextOwnerPerms("Scripts"));
-        std::string desc;
-        LLViewerAssetType::generateDescriptionFor(LLAssetType::AT_LSL_TEXT, desc);
-        // <FS:mjr> [FIRE-36685] - Toolbox Window - Add new notecard button to Content tab
-        // Flag the new script to also needs to be scrolled to and opened if needed.
-        new_item_ctrl->startDNDInvToObject(LLUUID::null, std::bind(&LLPanelContents::onFinishCreateItem, self));
-        // </FS:mjr> [FIRE-36685]
-        LLPointer<LLViewerInventoryItem> new_item =
-            new LLViewerInventoryItem(
-                LLUUID::null,
-                LLUUID::null,
-                perm,
-                LLUUID::null,
-                LLAssetType::AT_LSL_TEXT,
-                LLInventoryType::IT_LSL,
-                "New Script",
-                desc,
-                LLSaleInfo::DEFAULT,
-                LLInventoryItemFlags::II_FLAGS_NONE,
-                time_corrected());
-        object->saveScript(new_item, true, true);
-
-        std::string name = new_item->getName();
-
-        // *NOTE: In order to resolve SL-22177, we needed to create
-        // the script first, and then you have to click it in
-        // inventory to edit it.
-        // *TODO: The script creation should round-trip back to the
-        // viewer so the viewer can auto-open the script and start
-        // editing ASAP.
+        mNewScriptIsLua = false;
     }
+    else if (value == "lua")
+    {
+        mNewScriptIsLua = true;
+    }
+    ctrl->setValue(mNewScriptIsLua ? "lua" : "lsl");
+
+    const U8 script_language = mNewScriptIsLua ? SST_LUA : SST_LSL;
+    std::string vm = (script_language == SST_LUA) ? "luau" : "mono";
+
+    LLSD params;
+    params["enabled"] = true;
+    params["vm"] = vm;
+
+    createTaskInventoryItemHelper(object,
+        LLAssetType::AT_LSL_TEXT,
+        LLInventoryType::IT_LSL,
+        script_language,
+        "New Script",
+        params);
 }
 
 // static
@@ -375,8 +364,162 @@ void LLPanelContents::onClickRefresh(void *userdata)
     self->refresh();
 }
 
-// <FS:mjr> [FIRE-36685] - Toolbox Window - Add new notecard button to Content tab
-// static
+
+void LLPanelContents::onSimulatorFeaturesReceived(const LLUUID&)
+{
+    refresh();
+}
+
+
+void LLPanelContents::createTaskInventoryItemHelper(
+    LLViewerObject* object,
+    LLAssetType::EType asset_type,
+    LLInventoryType::EType inventory_type,
+    U8 sub_type,
+    const std::string& name,
+    const LLSD& params)
+{
+// [RLVa:KB] - Checked: 2010-03-31 (RLVa-1.2.0c) | Modified: RLVa-1.0.5a
+        if (rlv_handler_t::isEnabled()) // Fallback code [see LLPanelContents::getState()]
+        {
+            if (gRlvAttachmentLocks.isLockedAttachment(object->getRootEdit()))
+            {
+                return;                 // Disallow creating new scripts in a locked attachment
+            }
+            else if ( (gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) || (gRlvHandler.hasBehaviour(RLV_BHVR_SITTP)) )
+            {
+                if ( (isAgentAvatarValid()) && (gAgentAvatarp->isSitting()) && (gAgentAvatarp->getRoot() == object->getRootEdit()) )
+                    return;             // .. or in a linkset the avie is sitting on under @unsit=n/@sittp=n
+            }
+        }
+// [/RLVa:KB]
+
+        // <FS:PP> FIRE-36059 Optional custom script template for New Script button
+        if (asset_type == LLAssetType::AT_LSL_TEXT && gSavedPerAccountSettings.getBOOL("FSBuildPrefs_UseCustomScript"))
+        {
+            if (LLUUID custom_script_id(gSavedPerAccountSettings.getString("FSBuildPrefs_CustomScriptItem")); custom_script_id.notNull())
+            {
+                if (auto custom_script = gInventory.getItem(custom_script_id); custom_script && custom_script->getType() == LLAssetType::AT_LSL_TEXT && custom_script->getInventorySubType() == sub_type)
+                {
+                    LLHandle<LLPanel> handle = getHandle();
+                    FSNewItemCtrl::getInstance()->startDNDInvToObject(LLUUID::null,
+                        [handle]() { if (!handle.isDead()) static_cast<LLPanelContents*>(handle.get())->onFinishCreateItem(); });
+                    LLToolDragAndDrop::dropScript(object, custom_script, true, LLToolDragAndDrop::SOURCE_AGENT, gAgentID);
+                    return;
+                }
+            }
+        }
+        // </FS:PP>
+
+    const char* perm_key = (asset_type == LLAssetType::AT_LSL_TEXT) ? "Scripts" : "Notecards";
+
+    LLPermissions perm;
+    perm.init(gAgent.getID(), gAgent.getID(), LLUUID::null, LLUUID::null);
+    perm.initMasks(
+        PERM_ALL,
+        PERM_ALL,
+        LLFloaterPerms::getEveryonePerms(perm_key),
+        LLFloaterPerms::getGroupPerms(perm_key),
+        PERM_MOVE | LLFloaterPerms::getNextOwnerPerms(perm_key));
+
+    std::string desc;
+    LLViewerAssetType::generateDescriptionFor(asset_type, desc);
+
+    // Use cap if available, fall back to saveScript for scripts
+    if (!object->getRegion()->getCapability("CreateTaskInventoryItem").empty())
+    {
+        object->createInventoryItem(asset_type, inventory_type, sub_type,
+            name, desc, perm, params,
+            [](bool success, const LLSD& response)
+            {
+                if (!success)
+                {
+                    LL_WARNS() << "CreateTaskInventoryItem failed: "
+                               << response["message"].asString() << LL_ENDL;
+                }
+            });
+    }
+    else if (asset_type == LLAssetType::AT_LSL_TEXT)
+    {
+        // Fallback: use legacy RezScript UDP
+                    LLHandle<LLPanel> handle = getHandle();
+                    FSNewItemCtrl::getInstance()->startDNDInvToObject(LLUUID::null,
+                        [handle]() { if (!handle.isDead()) static_cast<LLPanelContents*>(handle.get())->onFinishCreateItem(); });
+        LLPointer<LLViewerInventoryItem> new_item =
+            new LLViewerInventoryItem(
+                LLUUID::null, LLUUID::null, perm,
+                LLUUID::null, asset_type, inventory_type,
+                name, desc, LLSaleInfo::DEFAULT,
+                LLInventoryItemFlags::II_FLAGS_SUBTYPE_MASK & sub_type,
+                time_corrected());
+        object->saveScript(new_item, true, true, LLUUID::null);
+    }
+    else
+    {
+        LL_WARNS() << "Cannot create " << LLAssetType::lookup(asset_type)
+                   << " — capability not available" << LL_ENDL;
+    }
+}
+
+
+void LLPanelContents::onNewNotecardCommit()
+{
+    const bool children_ok = true;
+    LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject(children_ok);
+    if (!object) return;
+
+    if (object->getRegion()->getCapability("CreateTaskInventoryItem").empty())
+    {
+        onClickNewNotecard(this);
+        return;
+    }
+
+    createTaskInventoryItemHelper(object,
+        LLAssetType::AT_NOTECARD,
+        LLInventoryType::IT_NOTECARD,
+        0,
+        "New Notecard",
+        LLSD());
+}
+
+
+void LLPanelContents::onClickPublish()
+{
+    const bool children_ok = true;
+    LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject(children_ok);
+    if (!object)
+    {
+        LL_WARNS() << "No root object selected for publish/unpublish" << LL_ENDL;
+        return;
+    }
+
+    auto server = LLScriptEditorWSServer::ensureServerRunning();
+    if (!server)
+    {
+        LL_WARNS() << "Cannot publish/unpublish: WebSocket server failed to start" << LL_ENDL;
+        return;
+    }
+
+    const LLUUID object_id = object->getID();
+    if (server->getConnectionCount())
+    { // if we already have at least one connection, then we can toggle the publish state of the object
+        if (server->isObjectPublished(object_id))
+        {
+            server->unpublishObject(object_id, "user");
+        }
+        else
+        {
+            server->publishObject(object_id);
+        }
+    }
+    else
+    {   // if we don't have any connections, we need to build the url and launch vscode
+        // Launch VSCode
+        LLScriptEditorWSServer::launchVSCode(object_id);
+
+    }
+}
+
 void LLPanelContents::onClickNewNotecard(void* userdata)
 {
     FSNewItemCtrl* new_item_ctrl = FSNewItemCtrl::getInstance();
@@ -385,6 +528,8 @@ void LLPanelContents::onClickNewNotecard(void* userdata)
     // Maintain RLV support for notecard object type being added.
     const bool children_ok = true;
     LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getFirstRootObject(children_ok);
+
+    if (!object) return;
 
     // [RLVa:KB] - Checked: 2010-03-31 (RLVa-1.2.0c) | Modified: RLVa-1.0.5a
     if (rlv_handler_t::isEnabled()) // Fallback code [see LLPanelContents::getState()]
@@ -419,7 +564,11 @@ void LLPanelContents::onClickNewNotecard(void* userdata)
     std::function<void(const LLUUID&)> callback_item_created = [handle](const LLUUID& new_id)
     {
         // Call the on Create Inventory Done of the new item controller which will kick off next steps
-        FSNewItemCtrl::getInstance()->onCreateInvDone(handle, new_id, std::bind(&LLPanelContents::onFinishCreateItem, (LLPanelContents*)handle.get()));
+        if (!handle.isDead())
+        {
+            FSNewItemCtrl::getInstance()->onCreateInvDone(handle, new_id,
+                [handle]() { if (!handle.isDead()) static_cast<LLPanelContents*>(handle.get())->onFinishCreateItem(); });
+        }
     };
 
     // Save and clear the Show Inventroy flags used to prevent the floaters appearing
@@ -438,4 +587,3 @@ void LLPanelContents::onFinishCreateItem()
 {
     getChildView("button new notecard")->setEnabled(true);
 }
-// </FS:mjr> [FIRE-36685]

@@ -10,6 +10,7 @@ include(Linking)
 include(Boost)
 include(bugsplat)
 include(BuildPackagesInfo)
+include(LSLDefinitions)
 include(BuildVersion)
 include(CMakeCopyIfDifferent)
 include(CubemapToEquirectangularJS)
@@ -701,6 +702,9 @@ set(viewer_SOURCE_FILES
     llsceneview.cpp
     llscreenchannel.cpp
     llscripteditor.cpp
+    llscripteditorws.cpp
+    llpublishedobjectmgr.cpp
+    llfloaterscripting.cpp
     llscriptfloater.cpp
     llscrollingpanelparam.cpp
     llscrollingpanelparambase.cpp
@@ -1562,6 +1566,10 @@ set(viewer_HEADER_FILES
     llsceneview.h
     llscreenchannel.h
     llscripteditor.h
+    llscripteditorws.h
+    llscripteditorposixfile.h
+    llpublishedobjectmgr.h
+    llfloaterscripting.h
     llscriptfloater.h
     llscriptruntimeperms.h
     llscrollingpanelparam.h
