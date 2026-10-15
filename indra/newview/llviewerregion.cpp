@@ -3496,6 +3496,8 @@ void LLViewerRegionImpl::buildCapabilityNames(LLSD& capabilityNames)
     capabilityNames.append("FetchInventoryDescendents2");
     capabilityNames.append("IncrementCOFVersion");
     capabilityNames.append("RequestTaskInventory");
+    capabilityNames.append("CreateTaskInventoryItem");
+    capabilityNames.append("ScriptDefinitions");
     AISAPI::getCapNames(capabilityNames);
     } //</FS:Ansariel>
 
