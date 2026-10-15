@@ -76,6 +76,18 @@ Linux LTO. The corrections preserve strict compiler flags and the real geometry
 libraries. The test supplies its own settings owner and rejects any unexpected
 name-presentation call. Linux runtime acceptance remains outstanding.
 
+The replacement run, [38684802492](https://github.com/anne-skydancer/vulkanstorm/actions/runs/38684802492),
+passed the Linux builds and reached their connected skin matrices. Windows
+crashed with an access violation while opening transcript preview in Firestorm
+High Contrast. Inspection exposed worker-thread mutation of preview widgets and
+an unguarded preview pointer in the completion callback. Transcript results now
+cross a synchronized mailbox scoped to each open preview; the UI thread alone
+updates controls, and close/destruction releases the message pointer before
+starting deletion. History completion uses a synchronized predicate wait to
+avoid lost notifications. Threaded regression checks cover publication,
+close/reopen/destruction and completion before/during multiple waits. A complete
+runtime rerun remains required; a failed skin case is not waived.
+
 The evidence packager requires complete R2 contracts, all readbacks and their
 hashes, transport receipts, source revision, build provenance and staged viewer
 hash. It revalidates artifacts without rewriting their manifests. A passing UI
