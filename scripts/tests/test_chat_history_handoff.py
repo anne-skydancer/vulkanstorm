@@ -80,6 +80,7 @@ int main() {
         methods = '\n'.join(method(source, name) for name in
                             ('void LLActionThread::waitFinished()', 'void LLActionThread::setFinished()',
                              'LLActionThread::~LLActionThread()'))
+        loader_destructor = method(source, 'LLLoadHistoryThread::~LLLoadHistoryThread()')
         self.compile(r'''
 #include <cassert>
 #include <condition_variable>
@@ -92,7 +93,10 @@ struct LLActionThread:LLThread {
  bool mFinished=false;std::mutex mMutex;std::condition_variable mRunCondition;
  ~LLActionThread();void waitFinished();void setFinished();
 };
+struct Signal { std::atomic<bool>& retired;~Signal(){assert(retired);} };
+struct LLLoadHistoryThread:LLActionThread { Signal* mLoadEndSignal;~LLLoadHistoryThread(); };
 METHODS
+LOADER_DESTRUCTOR
 int main() {
  for(int iteration=0;iteration<100;++iteration) {
   if(iteration%25==0)std::cerr<<"completion iteration "<<iteration<<std::endl;
@@ -108,8 +112,14 @@ int main() {
   owner.worker=std::thread([&]{owner.setFinished();retired=true;});
  } // Join before the completion mutex and condition variable are destroyed.
  assert(retired);
+ retired=false;
+ {
+  LLLoadHistoryThread owner;owner.mLoadEndSignal=new Signal{retired};
+  owner.worker=std::thread([&]{owner.setFinished();retired=true;});
+ } // The loader joins before destroying its signal and other derived payload.
+ assert(retired);
 }
-'''.replace('METHODS', methods))
+'''.replace('METHODS', methods).replace('LOADER_DESTRUCTOR', loader_destructor))
 
     def compile(self, fixture):
         compiler = shutil.which('clang++') or shutil.which('g++')
