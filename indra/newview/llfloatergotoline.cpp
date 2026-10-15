@@ -111,7 +111,7 @@ void LLFloaterGotoLine::handleBtnGoto()
    //             if (mEditorCore && mEditorCore->mEditor)
    //             {
             //mEditorCore->mEditor->deselect();
-            //mEditorCore->mEditor->setCursor(row, column);
+            //mEditorCore->mEditor->setCursor(mEditorCore->mEditor->getIsLuauLanguage() ? row - 1 : row, column);
             //mEditorCore->mEditor->setFocus(true);
    //             }
             if (mEditorCore && mEditorCore->mCurrentEditor)
@@ -153,7 +153,7 @@ void LLFloaterGotoLine::onGotoBoxCommit()
             // <FS:Ansariel> LSL Preprocessor
    //             if (mEditorCore && mEditorCore->mEditor)
    //             {
-            //mEditorCore->mEditor->setCursor(row, column);
+            //mEditorCore->mEditor->setCursor(mEditorCore->mEditor->getIsLuauLanguage() ? row - 1 : row, column);
 
             //S32 rownew = 0;
             //S32 columnnew = 0;
