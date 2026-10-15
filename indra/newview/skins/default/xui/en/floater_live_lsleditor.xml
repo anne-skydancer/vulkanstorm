@@ -91,17 +91,6 @@
     layout="topleft"
     name="running"
     width="205" />
-  <check_box
-    left_delta="130"
-    enabled="true"
-    follows="left|bottom"
-    font="SansSerif"
-    height="18"
-    initial_value="true"
-    label="Mono"
-    layout="topleft"
-    name="mono"
-    width="100" />
   <check_box width="130"
              height="21"
              enabled="false"

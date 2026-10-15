@@ -470,6 +470,24 @@ void FSPanelLogin::giveFocus()
     }
 }
 
+void FSPanelLogin::reshape(S32 width, S32 height, bool called_from_parent)
+{
+    LLPanel::reshape(width, height, called_from_parent);
+
+    // Kokua's flexible outer spacers center the sidebar, gutter and welcome page.
+    // Let the stacks own their rectangles, including height and child bounds.
+    // Settle both levels before a focused control can scroll the login form.
+    if (findChild<LLPanel>("login_content"))
+    {
+        if (LLLayoutPanel* stage = findChild<LLLayoutPanel>("center_stage"))
+        {
+            stage->setTargetDim(llmin(width, 1008));
+            getChild<LLLayoutStack>("main_stack")->updateLayout();
+            getChild<LLLayoutStack>("ui_stack")->updateLayout();
+        }
+    }
+}
+
 void FSPanelLogin::onUpdateScrollToChild(const LLUICtrl* control)
 {
     LLScrollContainer* scroll = findChild<LLScrollContainer>("login_scroll");

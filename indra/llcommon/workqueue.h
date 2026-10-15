@@ -264,6 +264,7 @@ namespace LL
          * post work, unless the queue is full
          */
         bool tryPost(const Work&) override;
+        static bool postToMainLoop(const Work& work);
 
     private:
         using Queue = LLThreadSafeQueue<Work>;

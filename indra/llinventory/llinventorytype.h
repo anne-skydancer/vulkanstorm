@@ -123,6 +123,8 @@ public:
 
         ICONNAME_MATERIAL,
 
+        ICONNAME_SCRIPT_LUAU,
+
         ICONNAME_INVALID,
         ICONNAME_UNKNOWN,
         ICONNAME_COUNT,
@@ -149,6 +151,8 @@ private:
     LLInventoryType( void );
     ~LLInventoryType( void );
 };
+
+enum ScriptSubtype_t { SST_LSL = 0, SST_LUA = 1 };
 
 // helper function that returns true if inventory type and asset type
 // are potentially compatible. For example, an attachment must be an

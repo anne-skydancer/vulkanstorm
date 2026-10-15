@@ -1413,3 +1413,7 @@ char const* const _PREHASH_RegionSizeY = LLMessageStringTable::getInstance()->ge
 char const* const _PREHASH_SizeX = LLMessageStringTable::getInstance()->getString("SizeX");
 char const* const _PREHASH_SizeY = LLMessageStringTable::getInstance()->getString("SizeY");
 // </FS:CR> Aurora Sim
+
+char const* const _PREHASH_Mono = LLMessageStringTable::getInstance()->getString("Mono");
+char const* const _PREHASH_Luau = LLMessageStringTable::getInstance()->getString("Luau");
+char const* const _PREHASH_LuauLanguage = LLMessageStringTable::getInstance()->getString("LuauLanguage");

@@ -84,6 +84,10 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         
         # <FS:LO> Copy dictionaries to a place where the viewer can find them if ran from visual studio
         pkgdir = os.path.join(self.args['build'], os.pardir, 'packages')
+        with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
+            self.path('websocketpp.txt')
+            self.path('lsl_definitions.txt')
+        self.path('luau.txt', 'licenses/luau.txt')
         with self.prefix(src=pkgdir, dst="app_settings"):
             self.path("dictionaries")
 
@@ -2311,7 +2315,7 @@ class LinuxManifest(ViewerManifest):
         # <FS:ND> HACK! Force parent to always copy XML/... even when not having configured with --package.
         # This allows build result to be started without always having to --package and thus waiting for the length tar ball generation --package incurs
         savedActions = self.args['actions']
-        self.args["actions"].append("package")
+        self.args["actions"] = savedActions + ["package"]
 
         super(LinuxManifest, self).construct()
 
