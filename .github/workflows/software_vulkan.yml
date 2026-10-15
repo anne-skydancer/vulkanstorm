@@ -11,6 +11,10 @@ on:
         description: Ignore dependency caches for reproducibility qualification
         type: boolean
         default: false
+      clean_compiler_cache:
+        description: Start with an empty compiled-object cache
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -94,6 +98,7 @@ jobs:
       - run: python scripts/tests/test_im_conference_lifetime.py
       - run: python scripts/tests/test_chat_history_handoff.py
       - run: python scripts/tests/test_ui_publication_retry.py
+      - run: python scripts/tests/test_ci_compiler_cache.py
       - run: python scripts/tests/test_ci_allocation_bounds.py
       - run: python scripts/tests/test_vulkan_menu_callbacks.py
       - run: python scripts/tests/test_vulkan_preferences.py
@@ -144,7 +149,7 @@ jobs:
         if: runner.os == 'Windows'
         run: python scripts/tests/test_vulkan_viewer_process.py
       - name: Install tools
-        run: python -m pip install autobuild==3.9.3 llsd cmake==4.1.2 ninja==1.13.0 meson==1.9.0 Mako==1.3.10 PyYAML==6.0.2 packaging==25.0
+        run: python -m pip install -r scripts/ci_build_requirements.txt
       - name: Linux build and X11 dependencies
         if: runner.os == 'Linux'
         run: |
@@ -180,7 +185,7 @@ jobs:
             .ci/runtime/staged
             .ci/runtime/runtime.json
             .autobuild-installables
-          key: software-vulkan-v2-${{ runner.os }}-${{ matrix.driver }}-${{ env.CI_IMAGE_VERSION }}-${{ hashFiles('3p/vulkan-dependencies.json', '3p/3p-diligentcore/*.cmake', '3p/3p-diligentcore/*.patch', 'scripts/vulkan_ci_dependencies.json', 'scripts/build_vulkan_dependencies.py', 'scripts/build_software_vulkan.py', '.github/workflows/software_vulkan.yml') }}
+          key: software-vulkan-v3-${{ runner.os }}-${{ matrix.driver }}-${{ env.CI_IMAGE_VERSION }}-${{ hashFiles('scripts/ci_build_requirements.txt', '3p/vulkan-dependencies.json', '3p/3p-diligentcore/*.cmake', '3p/3p-diligentcore/*.patch', 'scripts/vulkan_ci_dependencies.json', 'scripts/build_vulkan_dependencies.py', 'scripts/build_software_vulkan.py') }}
       - name: Build and install pinned Autobuild GHI packages
         shell: bash
         run: |
@@ -251,6 +256,20 @@ jobs:
           set -euo pipefail
           python scripts/build_vulkan_dependencies.py --work-dir .ci/ghi --install-only \
             --install-dir '${{ matrix.viewer_directory }}/packages'
+      - name: Install pinned compiler cache and select native toolchain
+        run: python scripts/ci_compiler_cache.py setup
+      - name: Verify actual compiler cache hits and invalidation
+        env:
+          VS_REQUIRE_COMPILER_CACHE: '1'
+        run: python scripts/tests/test_ci_compiler_cache.py
+      - name: Restore compiled objects
+        id: compiler-cache
+        if: inputs.clean_compiler_cache != true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci/compiler-cache
+          key: viewer-objects-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CI_IMAGE_VERSION }}-RelWithDebInfo-${{ hashFiles('scripts/ci_compiler_cache.json') }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.driver }}
+          restore-keys: viewer-objects-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CI_IMAGE_VERSION }}-RelWithDebInfo-${{ hashFiles('scripts/ci_compiler_cache.json') }}-
       - name: Configure and stage development viewer without installer
         shell: bash
         run: |
@@ -260,11 +279,11 @@ jobs:
           options=()
           if [[ "$RUNNER_OS" == Windows ]]; then
             export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
-            options+=(-G 'Visual Studio 17 2022' -A x64)
+            options+=(-G 'Ninja Multi-Config' -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl)
           fi
           # CMake's existing use_prebuilt_binary() installs only enabled viewer
           # dependencies through Autobuild, excluding disabled local SDK URLs.
-          cmake -S indra -B '${{ matrix.viewer_directory }}' "${options[@]}" \
+          cmake -C scripts/ci_compiler_cache.cmake -S indra -B '${{ matrix.viewer_directory }}' "${options[@]}" \
             -DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo -DADDRESS_SIZE:STRING=64 \
             -DVIEWER_CHANNEL:STRING=Vulkanstorm-Vulkan-Development -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
@@ -280,6 +299,15 @@ jobs:
           cmake --build '${{ matrix.viewer_directory }}' --config RelWithDebInfo --parallel 3
           python scripts/vulkan_parity_provenance.py finish '${{ matrix.viewer_directory }}'
           python scripts/check_vulkan_ci_staging.py '${{ matrix.viewer_directory }}'
+      - name: Record compiler cache statistics
+        if: always()
+        run: python scripts/ci_compiler_cache.py report --evidence .ci/evidence
+      - name: Save compiled objects before qualification
+        if: always() && inputs.clean_compiler_cache != true && steps.compiler-cache.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci/compiler-cache
+          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
       - name: Qualify viewer CPU geometry producers
         timeout-minutes: 3
         run: python scripts/run_vulkan_geometry_tests.py --build-directory '${{ matrix.viewer_directory }}' --evidence .ci/geometry-evidence

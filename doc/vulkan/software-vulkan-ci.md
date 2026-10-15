@@ -103,6 +103,41 @@ System compiler and development packages come from the runner; their actual
 versions are recorded. This is repeatable testing with recorded environments,
 not a claim of bit-for-bit reproducible builds across changed OS repositories.
 
+### Reusing viewer compilation
+
+Both the ordinary Windows/Linux Build workflow and Vulkan qualification use
+checksum-pinned sccache 0.12.0, with a bounded 2 GiB object cache per job. The
+compiler cache hashes compiler identity, arguments and preprocessed inputs;
+changes to included headers and compile definitions invalidate the affected
+objects. Restoring a cache is never evidence that the current viewer passed.
+Direct/preprocessor caching is disabled, so newly appearing optional headers
+also participate in compilation rather than reusing an outdated include list.
+Linking, runtime/assets staging, provenance checks and all qualification suites
+still run against the current source.
+
+Windows CI selects the existing MSVC 2022 x64 toolchain with Ninja Multi-Config,
+which supports compiler launchers and retains the existing configuration staging
+directories. MSBuild does not support these launchers. This CI-only configuration
+disables PCH because sccache does not support MSVC PCH and GCC PCH needs relaxed
+hashing. Optimization, LTO and debug information remain enabled. Local canonical
+builds keep their existing generator and PCH configuration.
+
+Object-cache restore prefixes separate OS, architecture, runner image, Release
+and RelWithDebInfo, and pinned cache-tool identity. Each run/attempt/driver saves
+a new snapshot; Linux ICD jobs can restore one another's compatible viewer
+objects. Objects are saved before graphics qualification, including after a
+partial compilation failure, so a subsequent test failure does not discard
+successful compilations. No executable, test result, or build tree is restored
+from this cache. Statistics appear in the job summary and evidence artifacts.
+
+Dependency caches hash the graphics pins, dependency build scripts/overlays and
+the shared pinned build-tool requirements rather than the whole workflow. Adding
+an unrelated test no longer invalidates the immutable graphics dependencies.
+Manual dispatch offers `clean_compiler_cache`; Vulkan dispatch separately offers
+`clean_dependencies`. First runs populate caches, and cold compiler builds may
+take longer without PCH. End-to-end improvements require measured warm CI runs;
+cache eviction and source/header changes can still require recompilation.
+
 The runner sets `VK_DRIVER_FILES` to one ICD and an isolated validation layer
 path. Elevated Windows loaders ignore these environment overrides. On the
 hosted Windows runner only, the runner temporarily registers the pinned ICD and

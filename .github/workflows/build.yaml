@@ -2,7 +2,16 @@ name: Build
 
 on:
   workflow_dispatch:
+    inputs:
+      clean_compiler_cache:
+        description: Start with an empty compiled-object cache
+        type: boolean
+        default: false
   workflow_call:
+    inputs:
+      clean_compiler_cache:
+        type: boolean
+        default: false
   pull_request:
   push:
     branches: ["vkstorm-release", "vkstorm-devel", "codex/**"]
@@ -21,6 +30,7 @@ jobs:
       - run: node --test scripts/tests/ci_publish_latest.test.cjs
       - run: python3 scripts/tests/test_windows_symbol_archive.py
       - run: python3 scripts/tests/test_version_schema.py
+      - run: python3 scripts/tests/test_ci_compiler_cache.py
       - run: python3 scripts/tests/test_ndof_cmake.py
       - name: Check update version parsing
         run: |
@@ -94,7 +104,7 @@ jobs:
           persist-credentials: false
 
       - name: Install build dependencies
-        run: python -m pip install autobuild==3.9.3 llsd
+        run: python -m pip install -r scripts/ci_build_requirements.txt
 
       - name: Check installer version and payload
         run: |
@@ -117,6 +127,23 @@ jobs:
           key: ${{ runner.os }}-64-ReleaseFS_open-${{ hashFiles('autobuild.xml') }}
           restore-keys: ${{ runner.os }}-64-ReleaseFS_open-
 
+      - name: Identify runner image for cache compatibility
+        shell: bash
+        run: echo "CI_IMAGE_VERSION=${ImageVersion:?Runner image version missing}" >> "$GITHUB_ENV"
+      - name: Install pinned compiler cache and select native toolchain
+        run: python scripts/ci_compiler_cache.py setup
+      - name: Verify actual compiler cache hits and invalidation
+        env:
+          VS_REQUIRE_COMPILER_CACHE: '1'
+        run: python scripts/tests/test_ci_compiler_cache.py
+      - name: Restore compiled objects
+        id: compiler-cache
+        if: inputs.clean_compiler_cache != true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci/compiler-cache
+          key: viewer-objects-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CI_IMAGE_VERSION }}-Release-${{ hashFiles('scripts/ci_compiler_cache.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: viewer-objects-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CI_IMAGE_VERSION }}-Release-${{ hashFiles('scripts/ci_compiler_cache.json') }}-
       - name: Configure local Release settings
         shell: bash
         env:
@@ -129,11 +156,11 @@ jobs:
           if [[ "$RUNNER_OS" == Windows ]]; then
             # The flags used by the successful local Release build.
             export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
-            options+=(-G 'Visual Studio 17 2022' -A x64 -DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=ON)
+            options+=(-G 'Ninja Multi-Config' -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=ON)
           else
             options+=(-DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=OFF)
           fi
-          cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
+          cmake -C scripts/ci_compiler_cache.cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
             -DCMAKE_BUILD_TYPE:STRING=Release -DADDRESS_SIZE:STRING=64 \
             -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
@@ -169,6 +196,15 @@ jobs:
       - name: Build Release and installer
         run: cmake --build ${{ matrix.directory }} --config Release --parallel 3
 
+      - name: Record compiler cache statistics
+        if: always()
+        run: python scripts/ci_compiler_cache.py report --evidence ${{ matrix.directory }}/cache-evidence
+      - name: Save compiled objects before qualification
+        if: always() && inputs.clean_compiler_cache != true && steps.compiler-cache.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci/compiler-cache
+          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
         shell: bash
@@ -196,6 +232,7 @@ jobs:
         with:
           name: ${{ runner.os }}-build-evidence
           path: |
+            ${{ matrix.directory }}/cache-evidence/compiler-cache.txt
             ${{ matrix.directory }}/CMakeCache.txt
             ${{ matrix.directory }}/CMakeFiles/CMakeConfigureLog.yaml
             ${{ matrix.directory }}/packages/autobuild-package.xml
