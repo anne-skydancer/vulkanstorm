@@ -320,7 +320,7 @@ bool LLScriptEditorWSServer::isEnabled()
 
 bool LLScriptEditorWSServer::isTightIntegration()
 {
-    static LLCachedControl<bool> OPT_TIGHTINTEGRATION(gSavedSettings, "ExternalWebsocketSyncTightIntegration", false);
+    static LLCachedControl<bool> OPT_TIGHTINTEGRATION(gSavedSettings, "ExternalEditorTightIntegration", false);
     return OPT_TIGHTINTEGRATION;
 }
 
@@ -449,12 +449,16 @@ LLWebsocketMgr::WSConnection::ptr_t LLScriptEditorWSServer::connectionFactory(LL
                                                                               LLWebsocketMgr::connection_h handle)
 {
     auto connection = std::make_shared<LLScriptEditorWSConnection>(server, handle);
-    mActiveConnections[connection->getConnectionID()] = connection;
 
     // Call setupConnectionMethods to register any global methods
     setupConnectionMethods(connection);
 
     return connection;
+}
+
+bool LLScriptEditorWSServer::update()
+{
+    return isEnabled() && LLJSONRPCServer::update();
 }
 
 void LLScriptEditorWSServer::onStarted()
@@ -485,6 +489,7 @@ void LLScriptEditorWSServer::onStopped()
     mPublishedObjectManager.clearAllStateWithListenerCleanup();
 
     mSubscriptions.clear();
+    mConnectionSubscriptionCounts.clear();
     mActiveConnections.clear();
 
     LL_INFOS("ScriptEditorWS") << "Script editor WebSocket server stopped, all state cleaned up" << LL_ENDL;
@@ -494,32 +499,34 @@ void LLScriptEditorWSServer::onStopped()
 
 void LLScriptEditorWSServer::onConnectionOpened(const LLWebsocketMgr::WSConnection::ptr_t& connection)
 {
-    // Call parent class to handle JSON-RPC setup and standard methods
     LLJSONRPCServer::onConnectionOpened(connection);
-
-    LL_INFOS("ScriptEditorWS") << "New script editor client connected via JSON-RPC" << LL_ENDL;
-
+    const wptr_t weak = std::static_pointer_cast<LLScriptEditorWSServer>(shared_from_this());
+    LL::WorkQueue::postToMainLoop([weak, connection]()
+    {
+        const auto self = weak.lock();
+        const auto script = std::dynamic_pointer_cast<LLScriptEditorWSConnection>(connection);
+        if (self && self->isRunning() && script)
+        {
+            self->mActiveConnections[script->getConnectionID()] = script;
+        }
+    });
 }
 
 void LLScriptEditorWSServer::onConnectionClosed(const LLWebsocketMgr::WSConnection::ptr_t& connection)
 {
-    // Call parent class to handle JSON-RPC cleanup
     LLJSONRPCServer::onConnectionClosed(connection);
-
-    LL_INFOS("ScriptEditorWS") << "Script editor client disconnected" << LL_ENDL;
-
-    // Remove from active connections
-    auto script_connection = std::dynamic_pointer_cast<LLScriptEditorWSConnection>(connection);
-    if (script_connection)
+    const wptr_t weak = std::static_pointer_cast<LLScriptEditorWSServer>(shared_from_this());
+    LL::WorkQueue::postToMainLoop([weak, connection]()
     {
-        U32 connection_id = script_connection->getConnectionID();
-        unsubscribeConnection(connection_id);
-        mActiveConnections.erase(connection_id);
-
-        LL_DEBUGS("ScriptEditorWS") << "Removed connection from active connections. Total: "
-                                   << mActiveConnections.size() << LL_ENDL;
-        // TODO: When connections reach 0, stop the server after a timeout.
-    }
+        const auto self = weak.lock();
+        const auto script = std::dynamic_pointer_cast<LLScriptEditorWSConnection>(connection);
+        if (self && self->isRunning() && script)
+        {
+            const U32 id = script->getConnectionID();
+            self->unsubscribeConnection(id);
+            self->mActiveConnections.erase(id);
+        }
+    });
 }
 
 bool LLScriptEditorWSServer::subscribeScriptEditor(const LLUUID& object_id, const LLUUID& item_id, std::string_view script_name,
@@ -2849,6 +2856,10 @@ void LLScriptEditorWSConnection::sendHandshake()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SCRIPTDEV;
 
+    if (mClosed || !LLScriptEditorWSServer::isEnabled())
+    {
+        return;
+    }
     // Build hello data
     LLSD handshake;
     handshake["server_version"]   = "1.0.0";
@@ -2893,17 +2904,20 @@ void LLScriptEditorWSConnection::sendHandshake()
         {
             // Whatever the answer, the file has done its work.
             LLFile::remove(challenge.mFile);
-            auto self = that.lock();
-            if (!self)
+            LL::WorkQueue::postToMainLoop([that, result, error, secret = challenge.mSecret]()
             {
-                return;
-            }
-            if (error.isDefined())
-            {
-                self->handleHandshakeError(error);
-                return;
-            }
-            self->handleHandshakeResponse(result, challenge.mSecret);
+                const auto self = that.lock();
+                if (!self || self->mClosed || !LLScriptEditorWSServer::isEnabled())
+                {
+                    return;
+                }
+                if (error.isDefined())
+                {
+                    self->handleHandshakeError(error);
+                    return;
+                }
+                self->handleHandshakeResponse(result, secret);
+            });
         },
         HANDSHAKE_TIMEOUT);
     if (sent.isUndefined())
@@ -2919,18 +2933,12 @@ void LLScriptEditorWSConnection::sendHandshake()
 void LLScriptEditorWSConnection::onClose()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SCRIPTDEV;
+    mClosed = true;
     // Call parent class to clean up JSON-RPC infrastructure
     LLJSONRPCConnection::onClose();
-    mOwningServer.reset();
+    // Negotiated fields are main-thread owned; leave them immutable until
+    // destruction rather than clearing them on the I/O thread.
 
-    // Clean up handshake response data
-    mClientName.clear();
-    mClientVersion.clear();
-    mProtocolVersion.clear();
-    mScriptName.clear();
-    mScriptLanguage.clear();
-    mLanguages.clear();
-    mFeatures.clear();
 }
 
 void LLScriptEditorWSConnection::sendDisconnect(DisconnectReason reason, const std::string& message)
