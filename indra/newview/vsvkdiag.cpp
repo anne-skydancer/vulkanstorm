@@ -605,14 +605,16 @@ struct VSVulkanDiagnostic::Impl : LLWindowCallbacks
             const auto rendered=producer.renderUTF8("AV\xCE\xA9\xD0\x96",0,32.f,240/dpi-100,LLColor4::white,
                 LLFontGL::LEFT,LLFontGL::BASELINE,LLFontGL::NORMAL,LLFontGL::NO_SHADOW);
             require(rendered==4,"Native viewer font producer did not render its text");
+            const auto atlasBytes = ui->statistics().residentImageBytes;
             require(producer.renderUTF8("B",0,130.f,240/dpi-100,LLColor4::white,
                 LLFontGL::LEFT,LLFontGL::BASELINE,LLFontGL::NORMAL,LLFontGL::NO_SHADOW)==1,
                 "Native viewer lazy atlas update did not render its text");
             auto font_packets=resources.finish();
             require(!font_packets.empty(),"Native viewer font producer emitted no geometry");
-            require(VSUIRenderer::generation(font_packets.front().image)<
-                    VSUIRenderer::generation(font_packets.back().image),
-                    "Native viewer atlas update did not replace its GPU generation");
+            require(font_packets.front().image == font_packets.back().image &&
+                        VSUIRenderer::generation(font_packets.front().image) == VSUIRenderer::generation(font_packets.back().image),
+                    "Native viewer glyph addition replaced its atlas page");
+            require(ui->statistics().residentImageBytes == atlasBytes, "Native viewer glyph addition allocated another atlas reservation");
             packets.insert(packets.end(),font_packets.begin(),font_packets.end());font_packets.clear();
             float pen=32*dpi;
             const std::array<llwchar,5> text{'A','V',0x03a9,0x0416,'B'};

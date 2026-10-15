@@ -57,6 +57,10 @@ int main(){
              'void VSUIResources::releaseFontPages('))
         page = source[source.index('struct FontPage'):source.index('static std::vector<std::uint8_t> fontPixels')]
         pixels = method(source, 'static std::vector<std::uint8_t> fontPixels(')
+        diagnostic = (ROOT/'indra/newview/vsvkdiag.cpp').read_text()
+        start = diagnostic.index('require(font_packets.front().image')
+        end = diagnostic.index('packets.insert(packets.end(),font_packets.begin()', start)
+        checks = diagnostic[start:end].replace('ui->', 'renderer->')
         fixture = r'''
 #include <algorithm>
 #include <array>
@@ -92,6 +96,9 @@ struct VSUIRenderer {
  struct Vertex{float x,y,u,v,r,g,b,a;};
  struct Packet{int blend;Image image;std::array<float,4> clip;std::optional<std::array<Vertex,6>> triangles;};
  unsigned allocations=0,updates=0;bool refuse=false;
+ struct Statistics{unsigned residentImageBytes;};
+ Statistics statistics()const{return {allocations*32};}
+ static std::uintptr_t generation(const Image& image){return reinterpret_cast<std::uintptr_t>(image.get());}
  FontAtlas createFontAtlas(unsigned w,unsigned h,const std::vector<U8>& bytes){
   if(refuse)throw std::runtime_error("allocation refused");
   ++allocations;return std::make_shared<Texture>(Texture{bytes,w,h});
@@ -100,6 +107,7 @@ struct VSUIRenderer {
  static std::array<unsigned,2> imageExtent(const Image& atlas){return {atlas->w,atlas->h};}
 };
 void check(bool value,const char* message){if(!value)throw std::runtime_error(message);}
+void require(bool value,const char* message){check(value,message);}
 int nativeBlend(){return 0;}
 struct VSUIResources {
  struct Impl {
@@ -126,10 +134,13 @@ int main(){
   try{draw(1);}catch(const std::runtime_error&){failed=true;}
   assert(failed&&ui.mImpl->packets.empty());
   ui.mImpl->renderer.refuse=false;draw(1);
+  auto* renderer=&ui.mImpl->renderer;const auto atlasBytes=renderer->statistics().residentImageBytes;
   auto original=ui.mImpl->packets.front().image;
   for(int generation=2;generation<=100;++generation){raw.bytes[0]=generation;draw(generation);}
   assert(ui.mImpl->renderer.allocations==1&&ui.mImpl->renderer.updates==0);
   auto packets=ui.finish();assert(packets.size()==100&&ui.mImpl->renderer.updates==1);
+  auto font_packets=packets;
+  CHECKS
   assert(original==packets.back().image&&original->pixels[8]==100);
   assert(original->pixels[9]==(components==2?100:255)&&original->pixels[11]==255);
   assert((*packets[0].triangles)[0].x==3&&(*packets[0].triangles)[0].y==8);
@@ -142,7 +153,7 @@ int main(){
  }
 }
 '''
-        self.compile(fixture.replace('PAGE', page).replace('PIXELS', pixels).replace('METHODS', methods))
+        self.compile(fixture.replace('PAGE', page).replace('PIXELS', pixels).replace('METHODS', methods).replace('CHECKS', checks))
 
     def compile(self, fixture):
         compiler = shutil.which('clang++') or shutil.which('g++')
