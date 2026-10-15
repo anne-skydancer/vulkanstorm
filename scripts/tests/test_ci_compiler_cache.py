@@ -97,16 +97,29 @@ class ActualCompilationTests(unittest.TestCase):
             source = root / 'source'
             source.mkdir()
             (source / 'value.h').write_text('#define VALUE 7\n')
-            (source / 'main.cpp').write_text('#include "value.h"\n#ifndef OFFSET\n#define OFFSET 0\n#endif\n'
+            (source / 'main.cpp').write_text('#ifndef OFFSET\n#define OFFSET 0\n#endif\n'
                 '#if __has_include("optional.h")\n#include "optional.h"\n#else\n#define BONUS 0\n#endif\n'
                 'int main(){return VALUE+OFFSET+BONUS;}\n')
+            (source / 'plain.cpp').write_text('#ifdef VALUE\n#error PCH skip was ignored\n#endif\nint plain(){return 0;}\n')
+            staging_rule = 'ADD_CUSTOM_COMMAND(TARGET llwebrtc POST_BUILD' + (
+                ROOT / 'indra/llwebrtc/CMakeLists.txt').read_text().split(
+                    'ADD_CUSTOM_COMMAND(TARGET llwebrtc POST_BUILD', 1)[1].split('# Add tests', 1)[0]
             (source / 'CMakeLists.txt').write_text('''cmake_minimum_required(VERSION 3.25)
 project(CacheProbe LANGUAGES CXX)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-add_executable(probe main.cpp)
+add_executable(probe main.cpp plain.cpp)
+set_source_files_properties(plain.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
 target_precompile_headers(probe PRIVATE value.h)
+include("@HELPER@")
+vs_target_textual_pch(probe "${CMAKE_CURRENT_SOURCE_DIR}/value.h")
 target_compile_definitions(probe PRIVATE OFFSET=${PROBE_OFFSET})
-''')
+add_library(llwebrtc SHARED plain.cpp)
+set(SHARED_LIB_STAGING_DIR "${CMAKE_BINARY_DIR}/sharedlibs/$<CONFIG>")
+@POST@
+add_custom_target(viewer_stage ALL DEPENDS llwebrtc
+  "${SHARED_LIB_STAGING_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}llwebrtc${CMAKE_SHARED_LIBRARY_SUFFIX}")
+'''.replace('@HELPER@', (ROOT / 'indra/cmake/CompilerCacheHeaders.cmake').as_posix()).replace(
+    '@POST@', staging_rule))
             build = root / 'build'
             generator = 'Ninja Multi-Config' if platform.system() == 'Windows' else 'Ninja'
             try:

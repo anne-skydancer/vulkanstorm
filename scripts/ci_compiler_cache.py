@@ -87,7 +87,8 @@ def report(output):
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
             summary.write('\nCompiler cache statistics\n\n```text\n' + result.stdout + '\n```\n')
-    subprocess.run([executable, '--stop-server'], check=True, capture_output=True)
+    # There may be no server when configure/Ninja failed before compilation.
+    subprocess.run([executable, '--stop-server'], capture_output=True)
 
 
 if __name__ == '__main__':

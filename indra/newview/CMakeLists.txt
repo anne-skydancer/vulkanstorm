@@ -2318,6 +2318,8 @@ set(PACKAGE ON CACHE BOOL
 
 if(USE_PRECOMPILED_HEADERS)
   target_precompile_headers( ${VIEWER_BINARY_NAME} PRIVATE llviewerprecompiledheaders.h )
+  include(CompilerCacheHeaders)
+  vs_target_textual_pch(${VIEWER_BINARY_NAME} "${CMAKE_CURRENT_SOURCE_DIR}/llviewerprecompiledheaders.h")
 endif(USE_PRECOMPILED_HEADERS)
 
 if (OPENSIM)
