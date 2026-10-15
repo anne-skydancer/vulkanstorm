@@ -1567,6 +1567,7 @@ set(viewer_HEADER_FILES
     llscreenchannel.h
     llscripteditor.h
     llscripteditorws.h
+    llscripteditorposixfile.h
     llpublishedobjectmgr.h
     llfloaterscripting.h
     llscriptfloater.h

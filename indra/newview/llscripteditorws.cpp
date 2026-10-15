@@ -80,6 +80,8 @@
 
 #if LL_WINDOWS
 #include <aclapi.h>
+#else
+#include "llscripteditorposixfile.h"
 #endif
 
 namespace
@@ -3091,7 +3093,7 @@ bool LLScriptEditorWSConnection::writeUserOnlyFile(const std::string& file, cons
     sa.bInheritHandle       = FALSE;
 
     const std::wstring wfile = ll_convert<std::wstring>(file);
-    // CREATE_NEW: fails if the file already exists, matching LLFile::noreplace.
+    // CREATE_NEW: fail if a challenge file already exists.
     HANDLE handle = CreateFileW(wfile.c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     LocalFree(dacl);
     if (handle == INVALID_HANDLE_VALUE)
@@ -3109,20 +3111,6 @@ bool LLScriptEditorWSConnection::writeUserOnlyFile(const std::string& file, cons
     }
     return ok;
 #else
-    // POSIX open() honors the mode bits directly.
-    std::error_code ec;
-    LLFile          out(file, LLFile::out | LLFile::noreplace, ec, 0600);
-    if (ec)
-    {
-        return false;
-    }
-    const bool written = out.write(text.data(), static_cast<S64>(text.size()), ec) == static_cast<S64>(text.size()) && !ec;
-    const bool closed  = out.close(ec) == 0;
-    if (!written || !closed)
-    {
-        LLFile::remove(file);
-        return false;
-    }
-    return true;
+    return LLScriptEditorPOSIX::writeUserOnlyFile(file, text);
 #endif
 }
