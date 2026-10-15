@@ -3386,4 +3386,7 @@ Your current position: [AVATAR_POS]
 
   <!-- <FS:TJ> Launch new instance option from macOS dock> -->
   <string name="FSMacOSNewViewerInstance">New Viewer Instance</string>
+ <string name="ExternalEditorFailedToStart">Failed to start the WebSocket server. Ensure the ExternalWebsocketSyncEnable setting is on.</string>
+
+ <string name="VSCodeLaunchFailed">Failed to launch VS Code. Ensure the 'code' command is available on your PATH.</string>
 </strings>

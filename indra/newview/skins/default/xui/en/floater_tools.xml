@@ -3687,84 +3687,17 @@ Low ↔ Lwst
          name="Contents"
          top_delta="0"
          width="295">
-            <button
-             follows="left|top"
-             height="16"
-             label="New Script"
-             label_selected="New Script"
-             layout="topleft"
-             left="10"
-             name="button new script"
-             top="8"
-             width="90"
-             font="DejaVu"
-             font.size="LSmall" />
-            <button
-             follows="left|top"
-             height="16"
-             label="New Notecard"
-             label_selected="New Notecard"
-             layout="topleft"
-             left="10"
-             name="button new notecard"
-             top_pad="4"
-             width="90"
-             font="DejaVu"
-             font.size="LSmall" />
-            <button
-             follows="left|top"
-             height="35"
-             label="Permissions"
-             layout="topleft"
-             left_pad="5"
-			 top="8"
-             name="button permissions"
-             width="80"
-             font="DejaVu"
-             font.size="LSmall" />
-            <button
-             top="8"
-             follows="left|top"
-             height="20"
-             label="Refresh"
-             layout="topleft"
-             left_pad="5"
-             name="button refresh"
-             width="90"
-             font="DejaVu"
-             font.size="LSmall" />
-            <button
-             follows="left|top"
-             height="16"
-             label="Reset Scripts"
-             layout="topleft"
-             top_pad="1"
-             name="btn_reset_scripts"
-             width="90"
-             font="DejaVu"
-             font.size="LSmall" />
-            <filter_editor
-             follows="left|top|right"
-             label="Enter filter text"
-             layout="topleft"
-             top="45"
-             left="10"
-             max_length_chars="300"
-             highlight_text_field="true"
-             name="contents_filter"
-             height="23"
-             width="275" />
-           <panel_inventory_object
-             border="true"
-             border_visible="true"
-             bevel_style="in"
-             follows="left|top|right"
-             height="325"
-             layout="topleft"
-             left="10"
-             name="contents_inventory"
-             top="70"
-             width="275" />
+            <flyout_button follows="left|top" height="23" label="New Script" layout="topleft" left="10" name="button new script" top="8" width="132">
+                <flyout_button.item label="New LSL Script" name="new_lsl_script" value="lsl" />
+                <flyout_button.item label="New Lua Script" name="new_lua_script" value="lua" />
+            </flyout_button>
+<button follows="left|top" height="23" is_toggle="true" label="Explore in IDE" label_selected="Stop Exploring" layout="topleft" name="button publish" width="132" left="10" top="34" />
+<button follows="left|top" height="23" label="New Notecard" layout="topleft" name="button new notecard" width="132" left="153" top="8" />
+            <button follows="left|top" height="23" label="Permissions" layout="topleft" name="button permissions" width="132" left="153" top="34" />
+            <button top="60" follows="left|top" height="23" label="Refresh" layout="topleft" name="button refresh" width="132" left="10" />
+            <button follows="left|top" height="23" label="Reset Scripts" layout="topleft" name="btn_reset_scripts" width="132" left="153" top="60" />
+            <filter_editor follows="left|top|right" label="Enter filter text" layout="topleft" top="88" left="10" max_length_chars="300" highlight_text_field="true" name="contents_filter" height="23" width="275" />
+           <panel_inventory_object border="true" border_visible="true" bevel_style="in" follows="left|top|right" height="282" layout="topleft" left="10" name="contents_inventory" top="113" width="275" />
 		</panel>
         </tab_container>
 	<panel

@@ -1756,6 +1756,10 @@
      name="BuildTools"
      tear_off="true"
      visible="true">
+    <menu_item_call label="Scripting Settings..." name="Scripting Settings">
+      <menu_item_call.on_click function="Floater.Show" parameter="scripting_settings" />
+    </menu_item_call>
+
        <menu_item_check
          label="Build"
          name="Show Build Tools"
@@ -2039,6 +2043,14 @@
                parameter="compile lsl" />
             <menu_item_call.on_enable
                function="EditableSelected" />
+          </menu_item_call>
+<menu_item_call label="Recompile LSL Scripts (LSL on Lua)" name="LSL on Luau">
+            <menu_item_call.on_click function="Tools.SelectedScriptAction" parameter="compile lsl-luau" />
+            <menu_item_call.on_enable function="EditableSelectedLua" />
+          </menu_item_call>
+<menu_item_call label="Recompile Lua Scripts" name="Lua">
+            <menu_item_call.on_click function="Tools.SelectedScriptAction" parameter="compile lua" />
+            <menu_item_call.on_enable function="EditableSelectedLua" />
           </menu_item_call>
           <menu_item_call
              label="Reset Scripts"
