@@ -1247,6 +1247,7 @@ LLDeleteHistoryThread::LLDeleteHistoryThread(std::list<LLSD>* messages, LLLoadHi
 }
 LLDeleteHistoryThread::~LLDeleteHistoryThread()
 {
+    LLThread::shutdown();
 }
 void LLDeleteHistoryThread::run()
 {
@@ -1302,6 +1303,9 @@ LLLoadHistoryThread::LLLoadHistoryThread(const std::string& file_name, std::list
 
 LLLoadHistoryThread::~LLLoadHistoryThread()
 {
+    LLThread::shutdown();
+    delete mLoadEndSignal;
+    mLoadEndSignal = nullptr;
 }
 
 void LLLoadHistoryThread::run()
