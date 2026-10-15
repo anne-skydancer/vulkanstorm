@@ -26,6 +26,10 @@ jobs:
         run: |
           g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/viewer_version_parser_test.cpp -o "$RUNNER_TEMP/version-parser-test"
           "$RUNNER_TEMP/version-parser-test"
+      - name: Check POSIX handshake file creation
+        run: |
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/llscripteditorposixfile_test.cpp -o "$RUNNER_TEMP/challenge-file-test"
+          "$RUNNER_TEMP/challenge-file-test"
       - name: Keep development hooks out of release
         if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release'
         run: python3 scripts/tests/check_release_hooks.py
