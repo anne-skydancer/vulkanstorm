@@ -628,7 +628,7 @@ struct VSWorldScene::Impl
             for (auto& [key, stride] : desired)
             {
                 const S32 x = S32(key >> 32), y = S32(U32(key)), size = S32(ground.at(key).size);
-                for (const auto offset : { std::pair<S32, S32>{ size, 0 }, { -size, 0 }, { 0, size }, { 0, -size } })
+                for (const auto& offset : { std::pair<S32, S32>{ size, 0 }, { -size, 0 }, { 0, size }, { 0, -size } })
                 {
                     if (x + offset.first < 0 || y + offset.second < 0)
                         continue;
@@ -1565,7 +1565,7 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
             LLVector3d offset;
             std::memcpy(offset.mdV, data + 32, 24);
             const U8 subtype = data[56];
-            if (!offset.isFinite() || subtype >= (point ? POINTAT_NUM_TARGETS : LOOKAT_NUM_TARGETS))
+            if (!offset.isFinite() || subtype >= (point ? U32(POINTAT_NUM_TARGETS) : U32(LOOKAT_NUM_TARGETS)))
             {
                 ++state.rejected;
                 continue;
@@ -1573,7 +1573,7 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
             const auto avatar = state.avatars.find(source);
             if (avatar == state.avatars.end() || source == agent)
                 continue;
-            if (!subtype || subtype == (point ? POINTAT_TARGET_CLEAR : LOOKAT_TARGET_CLEAR))
+            if (!subtype || subtype == (point ? U32(POINTAT_TARGET_CLEAR) : U32(LOOKAT_TARGET_CLEAR)))
             {
                 avatar->second->attention(point, {}, 0);
                 ++state.accepted;

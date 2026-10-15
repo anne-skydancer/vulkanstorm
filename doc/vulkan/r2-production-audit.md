@@ -67,6 +67,15 @@ source gate also exposed a missing explicit `<optional>` include in the
 standalone mesh-decoding fixture. These compatibility corrections do not waive
 either gate and require a fresh final-source replay/CI result.
 
+Run [38651748416](https://github.com/anne-skydancer/vulkanstorm/actions/runs/38651748416)
+passed the complete Windows SwiftShader job, including R2 and evidence packaging.
+Both Linux jobs stopped during the build: GCC rejected an unnecessary terrain
+loop copy and mixed point/look enum conditionals; the standalone geometry target
+also lacked application-owned settings and name-presentation link symbols under
+Linux LTO. The corrections preserve strict compiler flags and the real geometry
+libraries. The test supplies its own settings owner and rejects any unexpected
+name-presentation call. Linux runtime acceptance remains outstanding.
+
 The evidence packager requires complete R2 contracts, all readbacks and their
 hashes, transport receipts, source revision, build provenance and staged viewer
 hash. It revalidates artifacts without rewriting their manifests. A passing UI
