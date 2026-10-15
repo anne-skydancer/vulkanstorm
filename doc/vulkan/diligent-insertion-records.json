@@ -1,5 +1,5 @@
 {
-  "source_commit": "ecf0734485f82beaba4da7c238e165679cccb82c",
+  "source_commit": "ae47ba9609150501c8cb68f31284c2ef759180ad",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -1239,16 +1239,16 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 9,
       "end": 9,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md. Connected UI qualification review: capture the production scene before UI submission, preserve its RGBA bytes, independently rasterize all UI packets over that input, and compare every final pixel with unchanged tolerance. Missing or wrong-sized scene readbacks fail. Scene images are evidence inputs, not a world parity oracle; R0 independent peer world baselines and standalone world contracts retain their own checks. No production renderer policy changes."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 369,
-      "end": 369,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 374,
+      "end": 374,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -6234,7 +6234,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 1,
       "end": 18,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -6243,7 +6243,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 25,
       "end": 29,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -6251,98 +6251,98 @@
     {
       "path": "indra/newview/vsuiresources.cpp",
       "start": 31,
-      "end": 55,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "end": 56,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 72,
-      "end": 72,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 73,
+      "end": 73,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 74,
-      "end": 90,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 75,
+      "end": 91,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 92,
-      "end": 97,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 93,
+      "end": 98,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 107,
-      "end": 130,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 108,
+      "end": 131,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 141,
-      "end": 177,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 142,
+      "end": 178,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 184,
-      "end": 202,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 185,
+      "end": 203,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 212,
-      "end": 244,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 213,
+      "end": 248,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 250,
-      "end": 334,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 254,
+      "end": 358,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 336,
-      "end": 368,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 360,
+      "end": 392,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 370,
-      "end": 372,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 394,
+      "end": 396,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed native UI resource/facade and admission delta: canonical CPU pixels publish immutable Diligent generations; region, mask and nine-slice draws preserve ordered packet state. Native LLUIImage refuses GL texture/3D access. Factory/floater gates precede construction and validation callbacks and default to legacy admission when no native owner exists. Required widget policy, primitive/matrix adaptation and input qualification remain open; this is not full G-UI closure."
@@ -7305,7 +7305,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 5,
       "end": 5,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -7314,7 +7314,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 25,
       "end": 29,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -7323,7 +7323,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 31,
       "end": 35,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -7332,61 +7332,52 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 49,
       "end": 49,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 76,
-      "end": 76,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 77,
+      "end": 77,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 81,
-      "end": 81,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 82,
+      "end": 82,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 88,
-      "end": 89,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 89,
+      "end": 90,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 110,
-      "end": 111,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 111,
+      "end": 112,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 231,
-      "end": 231,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
-      "record": "I08",
-      "disposition": "mapped",
-      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
-    },
-    {
-      "path": "indra/newview/vsuiresources.cpp",
-      "start": 309,
-      "end": 309,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 232,
+      "end": 232,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -7395,34 +7386,43 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 327,
       "end": 327,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 333,
-      "end": 333,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 345,
+      "end": 345,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 337,
-      "end": 368,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 357,
+      "end": 357,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 370,
-      "end": 372,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 361,
+      "end": 392,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 394,
+      "end": 396,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native XUI integration review: scoped primitive/transform/clip and blend adapters publish explicit Diligent packets; CPU skin assets and existing font/widget geometry are collected without GL publication. Closed fixture admission covers corrected mini-progress XUI, line/text editors and their internal widgets. Window character/key/focus dispatch, Tab traversal, scrolling, preedit contract, actual pixels and partial-construction cleanup passed Windows SwiftShader. Login/status/alerts/agreements, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL and world routes remain mapped, not CPU-only, and full G-UI/G-RESOURCE closure is not claimed."
@@ -7672,9 +7672,9 @@
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 342,
-      "end": 348,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 366,
+      "end": 372,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native UI input and guard review: capture-aware window mouse/hover/wheel callbacks target the existing admitted widgets; focus loss cancels capture. Synthetic native events must change editor focus and transcript scroll position. LLRender::begin rejects GL geometry before state mutation while the native owner is active; legacy begin behavior is preserved outside it. Fractional-DPI clip checks preserve the legacy physical-pixel margin. Fifteen Windows SwiftShader cases and actual XUI pixel readback passed. Required login/status/alerts/agreements, additional control states, general native lifecycle admission, OS DPI and OS IME qualification remain open; legacy GL/world routes remain mapped and full G-UI/G-RESOURCE closure is not claimed."
@@ -9409,18 +9409,18 @@
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 350,
-      "end": 368,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 374,
+      "end": 392,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native viewer-window integration review: LLViewerWindow owns its native device/swapchain, required startup root, login holder, popup/dialog owners, progress controllers, skin-aware UI and resource lifetimes. Normal initWindow dispatch has a native branch; normal LLAppViewer login is now wired; connected-region/session admission remains gated. Native input/reshape routes avoid GL. CPU media buffers and progress images publish immutable Diligent resources; live browser and authentication qualification remain open. Shared translation initialization preserves viewer substitution defaults. Registered specialized factories remain closed while ordinary named panels retain their admitted widget path. Native alert shadows and context cones use explicit triangle packets. Linux primary native font faces retain glyph-generation ownership; cross-platform runtime confirmation is pending dedicated CI. Runtime qualification is recorded separately in viewer-ui-substrate.md; none of these source mappings asserts complete V3, connected UI/chat or world parity."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 370,
-      "end": 372,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 394,
+      "end": 396,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native viewer-window integration review: LLViewerWindow owns its native device/swapchain, required startup root, login holder, popup/dialog owners, progress controllers, skin-aware UI and resource lifetimes. Normal initWindow dispatch has a native branch; normal LLAppViewer login is now wired; connected-region/session admission remains gated. Native input/reshape routes avoid GL. CPU media buffers and progress images publish immutable Diligent resources; live browser and authentication qualification remain open. Shared translation initialization preserves viewer substitution defaults. Registered specialized factories remain closed while ordinary named panels retain their admitted widget path. Native alert shadows and context cones use explicit triangle packets. Linux primary native font faces retain glyph-generation ownership; cross-platform runtime confirmation is pending dedicated CI. Runtime qualification is recorded separately in viewer-ui-substrate.md; none of these source mappings asserts complete V3, connected UI/chat or world parity."
@@ -9753,7 +9753,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 1,
       "end": 2,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9762,7 +9762,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 7,
       "end": 11,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9771,7 +9771,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 16,
       "end": 32,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9780,7 +9780,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 38,
       "end": 38,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9789,7 +9789,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 43,
       "end": 53,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9798,7 +9798,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 64,
       "end": 64,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9807,7 +9807,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 143,
       "end": 152,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9816,7 +9816,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 155,
       "end": 197,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9825,7 +9825,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 199,
       "end": 202,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9834,7 +9834,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 213,
       "end": 213,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9843,7 +9843,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 214,
       "end": 253,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9852,7 +9852,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 256,
       "end": 269,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9861,7 +9861,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 272,
       "end": 323,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9870,7 +9870,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 355,
       "end": 355,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9879,7 +9879,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 359,
       "end": 361,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -9888,43 +9888,43 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 365,
       "end": 365,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 369,
-      "end": 369,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 374,
+      "end": 374,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 380,
-      "end": 380,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 385,
+      "end": 385,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 382,
-      "end": 399,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 387,
+      "end": 404,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 401,
-      "end": 420,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 406,
+      "end": 425,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -11958,7 +11958,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 25,
       "end": 26,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -11967,7 +11967,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 156,
       "end": 156,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -11976,7 +11976,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 193,
       "end": 197,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -11985,7 +11985,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 199,
       "end": 202,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -11994,7 +11994,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 213,
       "end": 213,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -12003,16 +12003,16 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 214,
       "end": 216,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 409,
-      "end": 410,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 414,
+      "end": 415,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "About caches API/device/driver and dedicated-memory facts from the actual selected Vulkan device at creation; no GL identity, Windows adapter fallback, or vendor-independent decoding of driverVersion. The physical-device API version is a capability, and zero dedicated memory remains unavailable."
@@ -21219,52 +21219,52 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 30,
       "end": 30,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 56,
-      "end": 60,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 57,
+      "end": 61,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 62,
-      "end": 71,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 63,
+      "end": 72,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 178,
-      "end": 183,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 179,
+      "end": 184,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 203,
-      "end": 211,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 204,
+      "end": 212,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 373,
-      "end": 384,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 397,
+      "end": 408,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
@@ -21694,36 +21694,36 @@
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 61,
-      "end": 61,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 62,
+      "end": 62,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification. Plain-image physical extents round at fractional DPI like the GL image helper, while nonzero rotated extents remain unsnapped; nine-slice inner boundaries match GL translated physical rounding without changing outer bounds."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 73,
-      "end": 73,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 74,
+      "end": 74,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification. Plain-image physical extents round at fractional DPI like the GL image helper, while nonzero rotated extents remain unsnapped; nine-slice inner boundaries match GL translated physical rounding without changing outer bounds."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 98,
-      "end": 106,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 99,
+      "end": 107,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification. Plain-image physical extents round at fractional DPI like the GL image helper, while nonzero rotated extents remain unsnapped; nine-slice inner boundaries match GL translated physical rounding without changing outer bounds."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 131,
-      "end": 140,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 132,
+      "end": 141,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification. Plain-image physical extents round at fractional DPI like the GL image helper, while nonzero rotated extents remain unsnapped; nine-slice inner boundaries match GL translated physical rounding without changing outer bounds."
@@ -27303,34 +27303,34 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 19,
       "end": 24,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Image, rectangle and non-font triangle producers now preserve exact legacy LLRender::color4f vertex representation: clamp normalized floats, multiply by 255, truncate U8, normalize. Font producers already use U8 and remain unchanged. Shared tabs, skin colors/assets, texture decoding and blend selection remain unchanged; native runtime parity still requires rebuilt readback."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 91,
-      "end": 91,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 92,
+      "end": 92,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Image, rectangle and non-font triangle producers now preserve exact legacy LLRender::color4f vertex representation: clamp normalized floats, multiply by 255, truncate U8, normalize. Font producers already use U8 and remain unchanged. Shared tabs, skin colors/assets, texture decoding and blend selection remain unchanged; native runtime parity still requires rebuilt readback."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 335,
-      "end": 335,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 359,
+      "end": 359,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Image, rectangle and non-font triangle producers now preserve exact legacy LLRender::color4f vertex representation: clamp normalized floats, multiply by 255, truncate U8, normalize. Font producers already use U8 and remain unchanged. Shared tabs, skin colors/assets, texture decoding and blend selection remain unchanged; native runtime parity still requires rebuilt readback."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 369,
-      "end": 369,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 393,
+      "end": 393,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Image, rectangle and non-font triangle producers now preserve exact legacy LLRender::color4f vertex representation: clamp normalized floats, multiply by 255, truncate U8, normalize. Font producers already use U8 and remain unchanged. Shared tabs, skin colors/assets, texture decoding and blend selection remain unchanged; native runtime parity still requires rebuilt readback."
@@ -27852,7 +27852,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 54,
       "end": 63,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate."
@@ -27861,7 +27861,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 209,
       "end": 212,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate."
@@ -31767,7 +31767,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 33,
       "end": 34,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate. Native About uses selected Vulkan physical device identity: Windows LUID is matched exactly to DXGI adapter and installed package version, without creating a D3D device or GL context. Supplied driver release/build metadata and vendor packing are bounded fallbacks, distinct from API version. Core/extension support is verified before driver-property queries. Production compiler fixtures cover adapter mismatch/retirement and missing metadata; live driver output is separate evidence."
@@ -31776,7 +31776,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 37,
       "end": 37,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate. Native About uses selected Vulkan physical device identity: Windows LUID is matched exactly to DXGI adapter and installed package version, without creating a D3D device or GL context. Supplied driver release/build metadata and vendor packing are bounded fallbacks, distinct from API version. Core/extension support is verified before driver-property queries. Production compiler fixtures cover adapter mismatch/retirement and missing metadata; live driver output is separate evidence."
@@ -31785,7 +31785,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 39,
       "end": 42,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate. Native About uses selected Vulkan physical device identity: Windows LUID is matched exactly to DXGI adapter and installed package version, without creating a D3D device or GL context. Supplied driver release/build metadata and vendor packing are bounded fallbacks, distinct from API version. Core/extension support is verified before driver-property queries. Production compiler fixtures cover adapter mismatch/retirement and missing metadata; live driver output is separate evidence."
@@ -31794,7 +31794,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 65,
       "end": 142,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate. Native About uses selected Vulkan physical device identity: Windows LUID is matched exactly to DXGI adapter and installed package version, without creating a D3D device or GL context. Supplied driver release/build metadata and vendor packing are bounded fallbacks, distinct from API version. Core/extension support is verified before driver-property queries. Production compiler fixtures cover adapter mismatch/retirement and missing metadata; live driver output is separate evidence."
@@ -31803,7 +31803,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 203,
       "end": 208,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I08",
       "disposition": "mapped",
       "reason": "About reports selected native physical-device device-local heap capacity, counting each heap once including CPU-visible local heaps. It excludes separate host-only heaps, retains unknown when no local capacity is reported, and never queries OpenGL. Memory reporting does not set an allocation budget. Compiler fixtures exercise actual selected-device query/report code and 64-bit sizes; hardware display qualification remains separate. Native About uses selected Vulkan physical device identity: Windows LUID is matched exactly to DXGI adapter and installed package version, without creating a D3D device or GL context. Supplied driver release/build metadata and vendor packing are bounded fallbacks, distinct from API version. Core/extension support is verified before driver-property queries. Production compiler fixtures cover adapter mismatch/retirement and missing metadata; live driver output is separate evidence."
@@ -32224,9 +32224,9 @@
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 245,
-      "end": 249,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 249,
+      "end": 253,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -32244,7 +32244,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 12,
       "end": 14,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -32253,7 +32253,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 153,
       "end": 154,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -32262,7 +32262,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 254,
       "end": 255,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -32271,7 +32271,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 270,
       "end": 271,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -32280,7 +32280,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 346,
       "end": 347,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -32289,7 +32289,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 349,
       "end": 350,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -32298,25 +32298,25 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 353,
       "end": 353,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 381,
-      "end": 381,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 386,
+      "end": 386,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 400,
-      "end": 400,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 405,
+      "end": 405,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -33927,7 +33927,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 348,
       "end": 348,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Reviewed native camera snapshot and actual viewport projection wiring into production frame/scene submission; complete HDR/deferred/post-processing graph remains absent. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
@@ -33936,7 +33936,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 351,
       "end": 351,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Reviewed native camera snapshot and actual viewport projection wiring into production frame/scene submission; complete HDR/deferred/post-processing graph remains absent. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
@@ -34854,7 +34854,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 3,
       "end": 4,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -34863,7 +34863,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 6,
       "end": 6,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -34872,7 +34872,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 324,
       "end": 326,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -34881,7 +34881,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 362,
       "end": 364,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -35484,7 +35484,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 5,
       "end": 5,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35493,7 +35493,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 36,
       "end": 36,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35502,7 +35502,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 327,
       "end": 345,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35511,25 +35511,25 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 356,
       "end": 358,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 366,
-      "end": 368,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 371,
+      "end": 373,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 377,
-      "end": 379,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 382,
+      "end": 384,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35673,7 +35673,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 198,
       "end": 198,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35790,25 +35790,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 54,
       "end": 54,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 355,
-      "end": 369,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "start": 356,
+      "end": 370,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 416,
-      "end": 416,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "start": 417,
+      "end": 417,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -37122,7 +37122,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 9,
       "end": 10,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -37131,52 +37131,43 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 42,
       "end": 42,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 156,
-      "end": 156,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 157,
+      "end": 157,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 160,
-      "end": 160,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 161,
+      "end": 161,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 164,
-      "end": 169,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 165,
+      "end": 170,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 215,
-      "end": 215,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
-      "record": "I08",
-      "disposition": "mapped",
-      "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
-    },
-    {
-      "path": "indra/newview/vsuiresources.cpp",
-      "start": 222,
-      "end": 222,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 216,
+      "end": 216,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -37184,53 +37175,62 @@
     {
       "path": "indra/newview/vsuiresources.cpp",
       "start": 223,
-      "end": 224,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "end": 223,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 226,
-      "end": 226,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 224,
+      "end": 225,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 289,
-      "end": 289,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 227,
+      "end": 227,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 300,
-      "end": 301,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 303,
+      "end": 303,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 382,
-      "end": 382,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 314,
+      "end": 315,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 385,
-      "end": 395,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 406,
+      "end": 406,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 409,
+      "end": 420,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -37275,7 +37275,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 35,
       "end": 35,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -37284,7 +37284,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 150,
       "end": 150,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -37293,7 +37293,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 218,
       "end": 226,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -37302,7 +37302,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 251,
       "end": 251,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -37311,7 +37311,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 282,
       "end": 282,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -37320,7 +37320,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 291,
       "end": 299,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -37329,7 +37329,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 307,
       "end": 312,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -37338,7 +37338,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 317,
       "end": 317,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -37347,25 +37347,25 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 319,
       "end": 319,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 369,
-      "end": 376,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 374,
+      "end": 381,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 389,
-      "end": 397,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 394,
+      "end": 402,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I02",
       "disposition": "mapped",
       "reason": "Explicit no-window diagnostic context renders through the same native world/UI interfaces, flushes and releases completed device resources; real swapchain branch remains separate and unchanged in policy. No offscreen claim for presentation."
@@ -38650,9 +38650,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 108,
-      "end": 111,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "start": 109,
+      "end": 112,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38704,18 +38704,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 360,
-      "end": 365,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "start": 361,
+      "end": 366,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 369,
-      "end": 369,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "start": 370,
+      "end": 370,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38724,25 +38724,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 40,
       "end": 40,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 399,
-      "end": 409,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "start": 400,
+      "end": 410,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 416,
-      "end": 416,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "start": 417,
+      "end": 417,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38769,7 +38769,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 83,
       "end": 83,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -39048,7 +39048,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 53,
       "end": 53,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -39138,34 +39138,34 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 55,
       "end": 80,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 110,
-      "end": 110,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "start": 111,
+      "end": 111,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 281,
-      "end": 283,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "start": 282,
+      "end": 284,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 370,
-      "end": 382,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "start": 371,
+      "end": 383,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -42466,9 +42466,9 @@
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 164,
-      "end": 168,
-      "sha256": "504ddc745ccfef854d23acceb745542de3fce250c17268344572cb8293a67960",
+      "start": 165,
+      "end": 169,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Role-specific bounded composite/image pools, immutable published masks/pixels and actual GPU image handles; native metadata decode/admission and scoped callback publication preserve prior resources and account ownership. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -42558,7 +42558,7 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 15,
       "end": 15,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Immutable selected-device mesh generations retain CPU/GPU reservations; invalid inputs refuse without replacing valid geometry; fence/WaitForIdle retirement and exact buffer readback are separate from full render-graph qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -42567,16 +42567,16 @@
       "path": "indra/newview/vsvulkancontext.cpp",
       "start": 350,
       "end": 352,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Immutable selected-device mesh generations retain CPU/GPU reservations; invalid inputs refuse without replacing valid geometry; fence/WaitForIdle retirement and exact buffer readback are separate from full render-graph qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsvulkancontext.cpp",
-      "start": 404,
-      "end": 408,
-      "sha256": "6b06d20dbf4951e4c7eff63c80bdec7be296f308300c8f0f8da9c33e4a6ab089",
+      "start": 409,
+      "end": 413,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
       "record": "I12",
       "disposition": "mapped",
       "reason": "Immutable selected-device mesh generations retain CPU/GPU reservations; invalid inputs refuse without replacing valid geometry; fence/WaitForIdle retirement and exact buffer readback are separate from full render-graph qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45627,7 +45627,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 95,
       "end": 95,
-      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45943,6 +45943,96 @@
       "start": 13,
       "end": 43,
       "sha256": "7d68fe3a6fadb259ae16de6038fb1d6650f82fda8df844e71c418ffd37329b98",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 96,
+      "end": 96,
+      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 54,
+      "end": 54,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 232,
+      "end": 235,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 270,
+      "end": 271,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 273,
+      "end": 284,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 315,
+      "end": 319,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 349,
+      "end": 355,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 413,
+      "end": 413,
+      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsvulkancontext.cpp",
+      "start": 365,
+      "end": 370,
+      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
+      "record": "I12",
+      "disposition": "mapped",
+      "reason": "Native frame owner retains rendering, presentation and retirement after transient UI publication refusal; observers wait for zero deferred visible batches so a missing font/fill cannot satisfy the pixel oracle. Persistent pressure reaches the unchanged finite replay deadline. No rendering budget or acceptance threshold is enlarged. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ui_publication_retry.py",
+      "start": 1,
+      "end": 162,
+      "sha256": "faa0d44c8fe6ff694d698698482b69c630541c6dd408fddf17aeb953def39f8f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
