@@ -1,5 +1,5 @@
 {
-  "source_commit": "b77dd55a73111fcd2381bef69cb39bec5332c1ef",
+  "source_commit": "12f37552fed1804f55682711ce37bc036bcda0d4",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -35790,7 +35790,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 58,
       "end": 58,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -35799,7 +35799,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 385,
       "end": 399,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -35808,7 +35808,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 446,
       "end": 446,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38652,7 +38652,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 115,
       "end": 118,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38706,7 +38706,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 390,
       "end": 395,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38715,7 +38715,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 399,
       "end": 399,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38724,7 +38724,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 44,
       "end": 44,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38733,7 +38733,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 429,
       "end": 439,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38742,7 +38742,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 446,
       "end": 446,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38769,7 +38769,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 87,
       "end": 87,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -39048,7 +39048,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 57,
       "end": 57,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -39138,7 +39138,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 59,
       "end": 84,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -39147,7 +39147,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 117,
       "end": 117,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -39156,7 +39156,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 311,
       "end": 313,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -39165,7 +39165,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 400,
       "end": 412,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45627,7 +45627,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 99,
       "end": 99,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45951,7 +45951,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 100,
       "end": 100,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46329,7 +46329,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 102,
       "end": 102,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46680,7 +46680,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 5,
       "end": 9,
-      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46689,7 +46689,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 11,
       "end": 14,
-      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46698,7 +46698,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 33,
       "end": 33,
-      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46707,7 +46707,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 107,
       "end": 107,
-      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46716,7 +46716,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 130,
       "end": 146,
-      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46725,7 +46725,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 159,
       "end": 159,
-      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46734,7 +46734,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 163,
       "end": 163,
-      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46743,7 +46743,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 199,
       "end": 207,
-      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46752,7 +46752,7 @@
       "path": ".github/workflows/build.yaml",
       "start": 235,
       "end": 235,
-      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46761,7 +46761,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 15,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46770,7 +46770,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 101,
       "end": 101,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46779,7 +46779,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 152,
       "end": 152,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46788,7 +46788,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 188,
       "end": 188,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46797,7 +46797,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 259,
       "end": 272,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46806,7 +46806,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 282,
       "end": 282,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46815,7 +46815,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 286,
       "end": 286,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -46824,7 +46824,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 302,
       "end": 310,
-      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -47229,7 +47229,7 @@
       "path": "scripts/ci_compiler_cache.cmake",
       "start": 1,
       "end": 11,
-      "sha256": "7ab1ae2be31d140c7c84d20aad0aeac091fc96d118027c7077eef0205f6dc70c",
+      "sha256": "f5ef7b5b844bb685ae437d53e90e15a3d93b50df86e46e8c9795a4c7aeeaae37",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -47255,8 +47255,8 @@
     {
       "path": "scripts/tests/test_ci_compiler_cache.py",
       "start": 1,
-      "end": 161,
-      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "end": 177,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -47274,7 +47274,7 @@
       "path": "indra/llwebrtc/CMakeLists.txt",
       "start": 69,
       "end": 70,
-      "sha256": "73e704eb4b028975aaed58133ef6f377ff3fa7f376df9ed6f6eb845de9fbdd36",
+      "sha256": "0a82fe7b95720005e509e97fd672bf1687402f3d10f8b384d87a67d2cb48ed33",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -47308,45 +47308,45 @@
     },
     {
       "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 100,
-      "end": 100,
-      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "start": 101,
+      "end": 101,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 103,
-      "end": 106,
-      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "start": 104,
+      "end": 107,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 110,
-      "end": 111,
-      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "start": 123,
+      "end": 124,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 113,
-      "end": 114,
-      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "start": 126,
+      "end": 127,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 116,
-      "end": 122,
-      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "start": 129,
+      "end": 138,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -47368,6 +47368,114 @@
       "record": "I13",
       "disposition": "mapped",
       "reason": "The material-list count is explicitly converted to the existing F64 statistic representation before LLTrace sampling; avoids an MSVC narrowing warning while preserving the numeric statistic and renderer behavior. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 159,
+      "end": 159,
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 161,
+      "end": 161,
+      "sha256": "0364a8361cda5a4c03c97580e7e7212e5fab03456a7e83230d2fe3dde57b5d97",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 291,
+      "end": 291,
+      "sha256": "f76530d9f1c0253939aefc732de32b011376264d2a7748af2c973afe77c0fa56",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/cmake/00-Common.cmake",
+      "start": 20,
+      "end": 26,
+      "sha256": "df8810363630c513243d69b887a5039a44304b55d8dcf4fa9a18298c17562e47",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llwebrtc/CMakeLists.txt",
+      "start": 45,
+      "end": 45,
+      "sha256": "0a82fe7b95720005e509e97fd672bf1687402f3d10f8b384d87a67d2cb48ed33",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llwebrtc/CMakeLists.txt",
+      "start": 63,
+      "end": 63,
+      "sha256": "0a82fe7b95720005e509e97fd672bf1687402f3d10f8b384d87a67d2cb48ed33",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/ci_compiler_cache.cmake",
+      "start": 12,
+      "end": 18,
+      "sha256": "f5ef7b5b844bb685ae437d53e90e15a3d93b50df86e46e8c9795a4c7aeeaae37",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 89,
+      "end": 89,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 108,
+      "end": 112,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 115,
+      "end": 121,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 130,
+      "end": 132,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 138,
+      "end": 138,
+      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     }
   ]
 }
