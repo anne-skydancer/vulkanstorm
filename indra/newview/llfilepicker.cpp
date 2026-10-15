@@ -892,7 +892,7 @@ void set_nav_save_data(LLFilePicker::ESaveFilter filter, std::string &extension,
         case LLFilePicker::FFSAVE_SCRIPT:
             type = "LSL ";
             creator = "\?\?\?\?";
-            extension = "lsl";
+            extension.clear(); // Keep the editor's source-language filename extension.
             break;
 
         // <FS:CR> Export filter

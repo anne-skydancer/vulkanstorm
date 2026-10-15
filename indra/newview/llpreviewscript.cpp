@@ -1947,7 +1947,20 @@ void LLScriptEdCore::onBtnSaveToFile( void* userdata )
 
     if( self->mSaveCallback )
     {
-        LLFilePickerReplyThread::startPicker(boost::bind(&LLScriptEdCore::saveScriptToFile, _1, userdata), LLFilePicker::FFSAVE_SCRIPT, self->mScriptName);
+        std::string filename = self->mScriptName;
+        if (self->mEditor->getIsLuauLanguage())
+        {
+            const std::string extension = gDirUtilp->getExtension(filename);
+            if (extension != "lua" && extension != "luau")
+            {
+                filename += ".luau";
+            }
+        }
+        else if (gDirUtilp->getExtension(filename).empty())
+        {
+            filename += ".lsl";
+        }
+        LLFilePickerReplyThread::startPicker(boost::bind(&LLScriptEdCore::saveScriptToFile, _1, userdata), LLFilePicker::FFSAVE_SCRIPT, filename);
     }
 }
 
