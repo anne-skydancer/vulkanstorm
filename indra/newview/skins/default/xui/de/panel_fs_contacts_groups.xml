@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <panel name="groups">
-	<filter_editor label="Gruppen filtern" name="group_filter_input" right="-91"/>
+	<filter_editor label="Gruppen filtern" name="group_filter_input" right="-95"/>
 	<view_border
-	 width="257"
+	 width="253"
 	 name="info_border" />
 	<group_list
-	 width="255"
+	 width="251"
 	 name="group_list" />
 	<button
 	 label="IM/Anruf"
 	 name="chat_btn"
 	 tool_tip="Öffnet eine Instant-Message-Sitzung"
-	 left_delta="262"
+	 right="-5"
 	 width="85" />
 	<button
 	 label="Profil"
