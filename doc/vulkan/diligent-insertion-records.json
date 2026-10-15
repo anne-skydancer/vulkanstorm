@@ -1,5 +1,5 @@
 {
-  "source_commit": "826e24bdf7eb4125b1977f2662cdbb99ef7a5ed1",
+  "source_commit": "b77dd55a73111fcd2381bef69cb39bec5332c1ef",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -35601,7 +35601,7 @@
       "path": "indra/newview/llviewerobjectlist.cpp",
       "start": 28,
       "end": 30,
-      "sha256": "709a014c5245ddecc497ad1ba49b6bd8ef405487724697951293adfb7ad0a708",
+      "sha256": "1089400cf2543fafcd970ac8658593da7eab69997f612a6587b29d22220abfae",
       "record": "I11",
       "disposition": "mapped",
       "reason": "Development-only offline R0 object-update seam preserves the fixture timestamp during the actual shared CPU object update, with all global timestamps saved/restored outside rendering. Zero motion delta is independent of a bounded geometry creation budget. Captured clock and projection evidence is required. Ordinary service time is unchanged; authenticated and avatar workloads remain unqualified."
@@ -35610,7 +35610,7 @@
       "path": "indra/newview/llviewerobjectlist.cpp",
       "start": 971,
       "end": 975,
-      "sha256": "709a014c5245ddecc497ad1ba49b6bd8ef405487724697951293adfb7ad0a708",
+      "sha256": "1089400cf2543fafcd970ac8658593da7eab69997f612a6587b29d22220abfae",
       "record": "I11",
       "disposition": "mapped",
       "reason": "Development-only offline R0 object-update seam preserves the fixture timestamp during the actual shared CPU object update, with all global timestamps saved/restored outside rendering. Zero motion delta is independent of a bounded geometry creation budget. Captured clock and projection evidence is required. Ordinary service time is unchanged; authenticated and avatar workloads remain unqualified."
@@ -47350,6 +47350,24 @@
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llgltfmateriallist.cpp",
+      "start": 717,
+      "end": 717,
+      "sha256": "304a0a6b8a795d6c9edfdfaf14047e23603e685e30feb1f87db88eb8092bbcee",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "The material-list count is explicitly converted to the existing F64 statistic representation before LLTrace sampling; avoids an MSVC narrowing warning while preserving the numeric statistic and renderer behavior. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llviewerobjectlist.cpp",
+      "start": 1134,
+      "end": 1134,
+      "sha256": "1089400cf2543fafcd970ac8658593da7eab69997f612a6587b29d22220abfae",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "The material-list count is explicitly converted to the existing F64 statistic representation before LLTrace sampling; avoids an MSVC narrowing warning while preserving the numeric statistic and renderer behavior. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     }
   ]
 }
