@@ -13,8 +13,12 @@ class VSUIRenderer
 {
 public:
     struct Texture;
-    // A packet owns its exact generation, even after its producer replaces it.
+    // A packet owns its resource, even after its producer replaces it. Ordinary
+    // images are immutable generations; font atlas cells follow the shared cache.
     using Image = std::shared_ptr<const Texture>;
+    // Font caches append glyphs to stable atlas cells, as in LLFontBitmapCache.
+    // Only this handle permits in-place updates; ordinary images stay immutable.
+    using FontAtlas = std::shared_ptr<Texture>;
     enum class Blend { StraightAlpha, PremultipliedAlpha, Additive, AdditiveAlpha, Replace };
     enum class Sampling { Nearest, Linear };
     struct Vertex { float x,y,u,v,r,g,b,a; };
@@ -40,6 +44,8 @@ public:
                  VSWorldContracts::ImageRole role=VSWorldContracts::ImageRole::CoreUI);
     Image replace(const Image& old,unsigned x,unsigned y,unsigned width,unsigned height,
                   const std::vector<std::uint8_t>& rgba);
+    FontAtlas     createFontAtlas(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba);
+    void          updateFontAtlas(const FontAtlas&, const std::vector<std::uint8_t>& rgba);
     // Submission order is paint order. Positive DPI scales logical coordinates.
     // The caller owns clear/present; no ambient GL state is consulted.
     void draw(Diligent::ITextureView* target, unsigned width, unsigned height,
@@ -49,7 +55,8 @@ public:
     void retire();
     Statistics statistics() const;
     static std::uint64_t generation(const Image&);
-    // CPU publication snapshots for an independent diagnostic raster oracle.
+    // CPU pixels for an independent diagnostic raster oracle. Font atlas pixels
+    // are synchronized before the frame's draws and observer, like the GPU page.
     static const std::vector<std::uint8_t>& imagePixels(const Image&);
     static std::array<unsigned,2> imageExtent(const Image&);
     // Borrowed view; callers retain the exact Image generation through completion.
@@ -58,6 +65,8 @@ public:
     static bool imageOwnedBy(const Image&, const Diligent::IRenderDevice*);
     VSWorldContracts::Capabilities capabilities() const;
 private:
+    FontAtlas uploadTexture(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba, VSWorldContracts::ImageRole role,
+                            bool fontAtlas);
     struct Impl;
     std::unique_ptr<Impl> mImpl;
 };

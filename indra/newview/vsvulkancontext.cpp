@@ -362,7 +362,7 @@ struct VSVulkanContext::Impl
 #if VS_VULKAN_DIAGNOSTICS
         vs_parity_baseline_capture_vk(device,context,target,size.mX,size.mY);
 #endif
-        // A refused font/fill upload is retried on the next frame. Captures
+        // A refused solid-fill upload is retried on the next frame. Captures
         // must wait for complete visible UI, so omitted packets cannot make
         // a pixel oracle falsely accept an incomplete frame. A persistent
         // refusal therefore reaches the existing bounded replay timeout.

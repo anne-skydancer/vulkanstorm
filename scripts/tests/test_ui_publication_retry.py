@@ -1,4 +1,4 @@
-"""Exercise production font/fill drawing when bounded image publication refuses."""
+"""Exercise local font-atlas reuse and complete-frame capture admission."""
 from pathlib import Path
 import shutil
 import subprocess
@@ -50,10 +50,13 @@ int main(){
 }
 '''.replace('BEGIN', begin).replace('OBSERVE', observe))
 
-    def test_refusal_never_commits_a_missing_generation_and_can_retry(self):
+    def test_local_font_pages_reuse_atlas_and_coalesce_updates(self):
         source = (ROOT/'indra/newview/vsuiresources.cpp').read_text()
         methods = '\n'.join(method(source, name) for name in
-                            ('void VSUIResources::fontBatch(', 'void VSUIResources::rectangle('))
+            ('void VSUIResources::fontBatch(', 'std::vector<VSUIRenderer::Packet> VSUIResources::finish(',
+             'void VSUIResources::releaseFontPages('))
+        page = source[source.index('struct FontPage'):source.index('static std::vector<std::uint8_t> fontPixels')]
+        pixels = method(source, 'static std::vector<std::uint8_t> fontPixels(')
         fixture = r'''
 #include <algorithm>
 #include <array>
@@ -82,68 +85,64 @@ struct LLVector4a {float values[4]{};const float* getF32ptr()const{return values
 struct LLVector2 {float mV[2]{};};struct LLColor4U {U8 mV[4]{255,255,255,255};};
 struct LLColor4 {float mV[4]{1,1,1,1};};
 struct LLRectf {float mLeft=0,mTop=1,mRight=1,mBottom=0;float getWidth()const{return mRight-mLeft;}float getHeight()const{return mTop-mBottom;}};
+
 struct VSUIRenderer {
- struct Texture{std::vector<U8> pixels;};using Image=std::shared_ptr<Texture>;
+ struct Texture{std::vector<U8> pixels;unsigned w,h;};
+ using Image=std::shared_ptr<const Texture>;using FontAtlas=std::shared_ptr<Texture>;
  struct Vertex{float x,y,u,v,r,g,b,a;};
- struct Packet{int blend;Image image;std::array<float,4> clip,bounds,color;std::optional<std::array<Vertex,6>> triangles;};
- static const std::vector<U8>& imagePixels(const Image& image){return image->pixels;}
+ struct Packet{int blend;Image image;std::array<float,4> clip;std::optional<std::array<Vertex,6>> triangles;};
+ unsigned allocations=0,updates=0;bool refuse=false;
+ FontAtlas createFontAtlas(unsigned w,unsigned h,const std::vector<U8>& bytes){
+  if(refuse)throw std::runtime_error("allocation refused");
+  ++allocations;return std::make_shared<Texture>(Texture{bytes,w,h});
+ }
+ void updateFontAtlas(const FontAtlas& atlas,const std::vector<U8>& bytes){++updates;atlas->pixels=bytes;}
+ static std::array<unsigned,2> imageExtent(const Image& atlas){return {atlas->w,atlas->h};}
 };
 void check(bool value,const char* message){if(!value)throw std::runtime_error(message);}
-int nativeBlend(){return 0;}float nativeVertexColor(float value){return value;}
+int nativeBlend(){return 0;}
 struct VSUIResources {
  struct Impl {
   struct Asset{unsigned width,height;VSUIRenderer::Image image;};
   struct Entry{std::shared_ptr<Asset> asset;};
-  struct Page{LLPointer<LLImageRaw> raw;S32 generation=-1;std::string key;};
-  std::map<LLImageRaw*,Page> font_pages;std::map<std::string,Entry> assets;
+  PAGE
+  PIXELS
+  std::map<LLImageRaw*,FontPage> font_pages;std::map<std::string,Entry> assets;
   std::vector<VSUIRenderer::Packet> packets;std::array<float,4> clip{0,0,10,10};
-  bool active=true;float dpi=1,logical_height=10;unsigned deferred_draw_batches=0;
+  bool active=true;float dpi=2,logical_height=10;VSUIRenderer renderer;
  };
- std::unique_ptr<Impl> mImpl=std::make_unique<Impl>();bool refuse=false;int publications=0;
- bool publish(const std::string& key,const LLImageRaw& raw){
-  ++publications;if(refuse)return false;
-  auto image=std::make_shared<VSUIRenderer::Texture>();image->pixels.resize(raw.w*raw.h*4,255);
-  for(int y=0;y<raw.h;++y)for(int x=0;x<raw.w;++x){
-   auto* d=image->pixels.data()+(y*raw.w+x)*4;
-   const auto* p=raw.bytes.data()+((raw.h-1-y)*raw.w+x)*raw.components;
-   d[0]=p[0];d[1]=raw.components==2?p[0]:p[1];d[2]=raw.components==2?p[0]:p[2];d[3]=raw.components==2?p[1]:p[3];
-  }
-  mImpl->assets[key]={std::make_shared<Impl::Asset>(Impl::Asset{unsigned(raw.w),unsigned(raw.h),image})};return true;
- }
- bool patch(const std::string& key,unsigned x,unsigned y,unsigned w,unsigned h,const std::vector<U8>& bytes){
-  if(refuse)return false;auto& asset=*mImpl->assets.at(key).asset;
-  auto image=std::make_shared<VSUIRenderer::Texture>(*asset.image);
-  for(unsigned row=0;row<h;++row)std::copy_n(bytes.data()+row*w*4,w*4,image->pixels.data()+((y+row)*asset.width+x)*4);
-  asset.image=image;return true;
- }
+ std::unique_ptr<Impl> mImpl=std::make_unique<Impl>();
  void fontBatch(LLImageRaw*,S32,const LLVector4a*,const LLVector2*,const LLColor4U*,S32);
- void rectangle(const LLRectf&,const LLColor4&);
+ std::vector<VSUIRenderer::Packet> finish();void releaseFontPages();
 };
 METHODS
 int main(){
  LLVector4a positions[6];LLVector2 uv[6];LLColor4U colors[6];
+ positions[0].values[0]=6;positions[0].values[1]=4;uv[0].mV[1]=.25f;
  for(int components:{2,4}){
-  VSUIResources ui;LLImageRaw raw(1,1,components);
+  VSUIResources ui;LLImageRaw raw(2,2,components);
   auto draw=[&](int generation){ui.fontBatch(&raw,generation,positions,uv,colors,6);};
-  ui.refuse=true;draw(1);assert(ui.mImpl->packets.empty()&&ui.mImpl->assets.empty()&&ui.mImpl->deferred_draw_batches==1);
-  assert(ui.mImpl->font_pages.at(&raw).generation!=1);
-  ui.refuse=false;draw(1);assert(ui.mImpl->packets.size()==1&&ui.mImpl->font_pages.at(&raw).generation==1);
-  auto old=ui.mImpl->packets.front().image;raw.bytes[0]=17;
-  ui.refuse=true;draw(2);assert(ui.mImpl->packets.size()==1&&old->pixels[0]==255&&ui.mImpl->deferred_draw_batches==2);
-  ui.refuse=false;draw(2);assert(ui.mImpl->packets.size()==2&&ui.mImpl->packets.back().image->pixels[0]==17&&old->pixels[0]==255);
-  auto key=ui.mImpl->font_pages.at(&raw).key;
-  ui.mImpl->assets.erase(key);draw(2);assert(ui.mImpl->assets.count(key)&&ui.mImpl->packets.size()==3);
-  raw.w=2;raw.bytes.resize(2*components,255);ui.refuse=true;draw(3);
-  assert(ui.mImpl->packets.size()==3&&ui.mImpl->assets.at(key).asset->width==1&&ui.mImpl->deferred_draw_batches==3);
-  ui.refuse=false;draw(3);assert(ui.mImpl->packets.size()==4&&ui.mImpl->assets.at(key).asset->width==2);
+  ui.mImpl->renderer.refuse=true;bool failed=false;
+  try{draw(1);}catch(const std::runtime_error&){failed=true;}
+  assert(failed&&ui.mImpl->packets.empty());
+  ui.mImpl->renderer.refuse=false;draw(1);
+  auto original=ui.mImpl->packets.front().image;
+  for(int generation=2;generation<=100;++generation){raw.bytes[0]=generation;draw(generation);}
+  assert(ui.mImpl->renderer.allocations==1&&ui.mImpl->renderer.updates==0);
+  auto packets=ui.finish();assert(packets.size()==100&&ui.mImpl->renderer.updates==1);
+  assert(original==packets.back().image&&original->pixels[8]==100);
+  assert(original->pixels[9]==(components==2?100:255)&&original->pixels[11]==255);
+  assert((*packets[0].triangles)[0].x==3&&(*packets[0].triangles)[0].y==8);
+  assert((*packets[0].triangles)[0].v==.75f);
+  ui.mImpl->active=true;draw(100);ui.finish();assert(ui.mImpl->renderer.updates==1);
+  ui.releaseFontPages();assert(ui.mImpl->assets.empty()&&ui.mImpl->font_pages.empty());
+  assert(original->pixels[8]==100); // queued draw survives reset
+  ui.mImpl->active=true;draw(101);ui.finish();assert(ui.mImpl->renderer.allocations==2);
+  assert(original!=ui.mImpl->assets.begin()->second.asset->image);
  }
- VSUIResources ui;ui.refuse=true;ui.rectangle(LLRectf{},LLColor4{});
- assert(ui.mImpl->packets.empty()&&ui.mImpl->assets.empty()&&ui.mImpl->deferred_draw_batches==1);
- ui.refuse=false;ui.rectangle(LLRectf{},LLColor4{});
- assert(ui.mImpl->packets.size()==1&&ui.mImpl->packets.front().image);
 }
-'''.replace('METHODS', methods)
-        self.compile(fixture)
+'''
+        self.compile(fixture.replace('PAGE', page).replace('PIXELS', pixels).replace('METHODS', methods))
 
     def compile(self, fixture):
         compiler = shutil.which('clang++') or shutil.which('g++')

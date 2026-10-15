@@ -48,7 +48,31 @@ struct VSUIResources::Impl
     VSUIRenderer::Sampling sampling=VSUIRenderer::Sampling::Linear;
     float logical_height=0,logical_width=0;
     float dpi=1;
-    struct FontPage { LLPointer<LLImageRaw> raw; S32 generation=-1; std::string key; };
+    struct FontPage
+    {
+        LLPointer<LLImageRaw>   raw;
+        S32                     generation = -1, pending_generation = -1;
+        std::string             key;
+        VSUIRenderer::FontAtlas atlas;
+    };
+    static std::vector<std::uint8_t> fontPixels(const LLImageRaw& raw)
+    {
+        const auto components = raw.getComponents();
+        check(components == 2 || components == 4, "Invalid native font atlas components");
+        const unsigned            width = raw.getWidth(), height = raw.getHeight();
+        std::vector<std::uint8_t> pixels(std::size_t(width) * height * 4);
+        for (unsigned y = 0; y < height; ++y)
+            for (unsigned x = 0; x < width; ++x)
+            {
+                const auto* source = raw.getData() + (std::size_t(height - 1 - y) * width + x) * components;
+                auto*       target = pixels.data() + (std::size_t(y) * width + x) * 4;
+                target[0]          = source[0];
+                target[1]          = components == 2 ? source[0] : source[1];
+                target[2]          = components == 2 ? source[0] : source[2];
+                target[3]          = components == 2 ? source[1] : source[3];
+            }
+        return pixels;
+    }
     std::map<LLImageRaw*,FontPage> font_pages;
     std::array<float,4> clip{};
     unsigned                       deferred_draw_batches = 0;
@@ -242,7 +266,21 @@ void VSUIResources::setClip(std::array<float,4> clip)
 }
 std::vector<VSUIRenderer::Packet> VSUIResources::finish()
 {
-    check(mImpl->active,"Native UI collection is not active"); mImpl->active=false;
+    check(mImpl->active, "Native UI collection is not active");
+    // LLFontBitmapCache appends glyphs without moving earlier cells. Packet
+    // collection can therefore coalesce additions to each page into one update
+    // before any of this frame's glyphs are drawn. Cache reset uses a new raw
+    // page; retained packets keep the old atlas alive through GPU completion.
+    for (auto& entry : mImpl->font_pages)
+    {
+        auto& page = entry.second;
+        if (page.atlas && page.generation != page.pending_generation)
+        {
+            mImpl->renderer.updateFontAtlas(page.atlas, Impl::fontPixels(*page.raw));
+            page.generation = page.pending_generation;
+        }
+    }
+    mImpl->active = false;
     return std::move(mImpl->packets);
 }
 void VSUIResources::erase(const std::string& key) { mImpl->assets.erase(key); }
@@ -267,61 +305,19 @@ void VSUIResources::fontBatch(LLImageRaw* raw,S32 generation,const LLVector4a* p
     {
         page.raw=raw;page.key="viewer-font-"+std::to_string(c.font_pages.size());
     }
-    auto existing = c.assets.find(page.key);
-    if (page.generation != generation || existing == c.assets.end())
+    if (!page.atlas ||
+        VSUIRenderer::imageExtent(page.atlas) != std::array<unsigned, 2>{ unsigned(raw->getWidth()), unsigned(raw->getHeight()) })
     {
-        if (existing == c.assets.end() || existing->second.asset->width != unsigned(raw->getWidth()) ||
-            existing->second.asset->height != unsigned(raw->getHeight()))
-        {
-            // Initial publication and atlas resize can be refused just like a
-            // patch. Keep the producer generation pending and retry next draw;
-            // never look up or advertise an atlas that was not published.
-            if (!publish(page.key, *raw))
-            {
-                ++c.deferred_draw_batches;
-                return;
-            }
-        }
-        else
-        {
-            // The upstream atlas exposes a generation but no dirty rectangle.
-            // Compare its CPU bytes with the published snapshot and upload only
-            // the bounding changed region into a new immutable GPU generation.
-            const auto& asset=*existing->second.asset;
-            const auto components=raw->getComponents();
-            check(components==2 || components==4,"Invalid native font atlas components");
-            unsigned left=asset.width,top=asset.height,right=0,bottom=0;
-            auto pixel=[&](unsigned x,unsigned y)
-            {
-                const auto* s=raw->getData()+((std::size_t(asset.height)-1-y)*asset.width+x)*components;
-                return std::array<std::uint8_t,4>{s[0],components==2?s[0]:s[1],
-                    components==2?s[0]:s[2],components==2?s[1]:s[3]};
-            };
-            for (unsigned y=0;y<asset.height;++y) for (unsigned x=0;x<asset.width;++x)
-            {
-                const auto p=pixel(x,y);
-                if (!std::equal(p.begin(),p.end(),VSUIRenderer::imagePixels(asset.image).begin()+(std::size_t(y)*asset.width+x)*4))
-                { left=std::min(left,x);top=std::min(top,y);right=std::max(right,x+1);bottom=std::max(bottom,y+1); }
-            }
-            if (right>left && bottom>top)
-            {
-                std::vector<std::uint8_t> bytes(std::size_t(right-left)*(bottom-top)*4);
-                for (unsigned y=top;y<bottom;++y) for (unsigned x=left;x<right;++x)
-                {
-                    const auto p=pixel(x,y);
-                    std::copy(p.begin(),p.end(),bytes.begin()+(std::size_t(y-top)*(right-left)+x-left)*4);
-                }
-                if (!patch(page.key,left,top,right-left,bottom-top,bytes))
-                {
-                    page.generation = -1;
-                    ++c.deferred_draw_batches;
-                    return;
-                } // Retry when residency becomes available.
-            }
-        }
-        page.generation=generation;
+        // Allocation failure is a renderer error, never a successful textless
+        // frame. Ordinary glyph additions do not allocate another GPU atlas.
+        auto atlas      = c.renderer.createFontAtlas(raw->getWidth(), raw->getHeight(), Impl::fontPixels(*raw));
+        page.atlas      = std::move(atlas);
+        page.generation = generation;
+        c.assets[page.key].asset =
+            std::make_shared<Impl::Asset>(Impl::Asset{ unsigned(raw->getWidth()), unsigned(raw->getHeight()), page.atlas });
     }
-    auto image=c.assets.at(page.key).asset->image;
+    page.pending_generation = generation;
+    auto image              = page.atlas;
     for (S32 first=0;first<count;first+=6)
     {
         VSUIRenderer::Packet p; p.blend=nativeBlend();p.image=image;p.clip=c.clip;p.triangles.emplace();
