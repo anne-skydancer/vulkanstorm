@@ -27,6 +27,8 @@
 #ifndef LL_LLLOGCHAT_H
 #define LL_LLLOGCHAT_H
 #include "llthread.h"
+#include <condition_variable>
+#include <mutex>
 
 class LLChat;
 
@@ -37,13 +39,18 @@ public:
     ~LLActionThread();
 
     void waitFinished();
-    bool isFinished() { return mFinished; }
+    bool isFinished()
+    {
+        std::lock_guard<std::mutex> lock(mMutex);
+        return mFinished;
+    }
+
 protected:
     void setFinished();
 private:
     bool mFinished;
-    LLMutex mMutex;
-    LLCondition mRunCondition;
+    std::mutex              mMutex;
+    std::condition_variable mRunCondition;
 };
 
 class LLLoadHistoryThread : public LLActionThread

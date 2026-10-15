@@ -92,6 +92,7 @@ jobs:
       - run: python scripts/tests/test_viewer_hover_lifecycle.py
       - run: python scripts/tests/test_vulkan_viewer_process.py
       - run: python scripts/tests/test_im_conference_lifetime.py
+      - run: python scripts/tests/test_chat_history_handoff.py
       - run: python scripts/tests/test_vulkan_menu_callbacks.py
       - run: python scripts/tests/test_vulkan_preferences.py
       - run: python scripts/tests/test_vulkan_friend_status.py

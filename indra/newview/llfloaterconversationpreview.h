@@ -31,6 +31,9 @@
 #include "fschathistory.h"
 // </FS:CR> [FS communication UI]
 #include "llfloater.h"
+#include "vschathistoryhandoff.h"
+#include <list>
+#include <memory>
 
 extern const std::string LL_FCP_COMPLETE_NAME;  //"complete_name"
 extern const std::string LL_FCP_ACCOUNT_NAME;       //"user_name"
@@ -62,7 +65,9 @@ private:
     void onClickSearch();   // [FS:CR] FIRE-6545
 
     boost::signals2::scoped_connection mHistoryConnection;
-    LLMutex         mMutex;
+    using HistoryHandoff = VSChatHistoryHandoff<std::list<LLSD>>;
+    std::shared_ptr<HistoryHandoff> mPendingHistory;
+    std::list<LLSD>                 mLoadingMessages;
     LLSpinCtrl*     mPageSpinner;
     // <FS:CR> [FS communication UI]
     //LLChatHistory*    mChatHistory;

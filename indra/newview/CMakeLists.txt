@@ -1214,6 +1214,7 @@ set(viewer_HEADER_FILES
     vscontrolconstraints.h
     vsavatarcloth.h
     vsavatarlod.h
+    vschathistoryhandoff.h
     vsvolumelod.h
     vsvegetationlod.h
     vsvegetation.h
