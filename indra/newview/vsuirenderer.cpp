@@ -44,6 +44,7 @@ struct VSUIRenderer::Texture
     std::vector<std::uint8_t> pixels;
     VSWorldContracts::Image description;
     std::shared_ptr<const VSResourceBudget::Reservation> residency;
+    bool                                                 fontAtlas = false;
 };
 struct VSUIRenderer::Impl
 {
@@ -159,6 +160,15 @@ std::array<unsigned,2> VSUIRenderer::imageExtent(const Image& image)
 { const auto& d=image->resource->GetDesc();return {d.Width,d.Height}; }
 VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba,
                                        VSWorldContracts::ImageRole role)
+{ return uploadTexture(width, height, rgba, role, false); }
+VSUIRenderer::FontAtlas VSUIRenderer::createFontAtlas(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba)
+{
+    auto atlas = uploadTexture(width, height, rgba, VSWorldContracts::ImageRole::CoreUI, true);
+    check(atlas != nullptr, "Native font atlas allocation refused");
+    return atlas;
+}
+VSUIRenderer::FontAtlas VSUIRenderer::uploadTexture(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba,
+                                                    VSWorldContracts::ImageRole role, bool fontAtlas)
 {
     check(width && height && width <= 16384 && height <= 16384 &&
           rgba.size() == std::size_t(width) * height * 4, "Invalid native UI upload extent or byte count");
@@ -173,7 +183,10 @@ VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const 
     image->owner=mImpl->device;
     TextureDesc desc{}; desc.Name = "Native UI texture generation";
     desc.Type = RESOURCE_DIM_TEX_2D; desc.Width = width; desc.Height = height;
-    desc.Format = TEX_FORMAT_RGBA8_UNORM; desc.Usage = USAGE_IMMUTABLE; desc.BindFlags = BIND_SHADER_RESOURCE;
+    desc.Format                                                      = TEX_FORMAT_RGBA8_UNORM;
+    desc.Usage                                                       = fontAtlas ? USAGE_DEFAULT : USAGE_IMMUTABLE;
+    desc.BindFlags                                                   = BIND_SHADER_RESOURCE;
+    image->fontAtlas                                                 = fontAtlas;
     TextureSubResData sub{}; sub.pData = rgba.data(); sub.Stride = std::uint64_t(width) * 4;
     TextureData data{&sub, 1}; mImpl->device->CreateTexture(desc, &data, &image->resource);
     check(image->resource != nullptr, "Native UI texture upload failed");
@@ -185,6 +198,30 @@ VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const 
     return image;
 }
 std::uint64_t VSUIRenderer::generation(const Image& image) { return image ? image->generation : 0; }
+void          VSUIRenderer::updateFontAtlas(const FontAtlas& atlas, const std::vector<std::uint8_t>& rgba)
+{
+    check(atlas && atlas->fontAtlas && atlas->owner.RawPtr() == mImpl->device.RawPtr(), "Invalid native font atlas owner");
+    const auto& desc = atlas->resource->GetDesc();
+    check(rgba.size() == atlas->pixels.size(), "Invalid native font atlas byte count");
+    if (rgba == atlas->pixels)
+        return;
+    // LLFontFreeType updates its existing GL atlas with setSubImage. Do the
+    // same on the immediate Vulkan context: transitions order earlier reads,
+    // this transfer and subsequent reads without allocating another texture.
+    // Retain the atlas even if its font cache is reset before the transfer ends.
+    mImpl->submitted.emplace_back();
+    auto& submission = mImpl->submitted.back();
+    submission.images.push_back(atlas);
+    TextureSubResData data{};
+    data.pData  = rgba.data();
+    data.Stride = std::uint64_t(desc.Width) * 4;
+    mImpl->context->UpdateTexture(atlas->resource, 0, 0, Box{ 0, desc.Width, 0, desc.Height }, data,
+                                  RESOURCE_STATE_TRANSITION_MODE_TRANSITION, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    atlas->pixels            = rgba;
+    atlas->description.alpha = alphaMode(rgba);
+    submission.completion    = mImpl->next_completion++;
+    mImpl->context->EnqueueSignal(mImpl->fence, submission.completion);
+}
 VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y,unsigned width,unsigned height,
                                          const std::vector<std::uint8_t>& rgba)
 {

@@ -566,6 +566,44 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
         return x>=2 && x<6 ? Pixel{127,128,0,255} : Pixel{255,0,0,255};
     });
     std::cout<<"UI_BATCH_PACKETS="<<images.statistics().packets<<"\nUI_BATCH_DRAWS="<<images.statistics().draws<<'\n';
+    // Font pages keep their GPU identity while local glyph bytes change. Queue
+    // reads between updates without waiting: synchronization validation must
+    // cover read/transfer/read ordering on the same atlas, not replacement copies.
+    const auto           atlasBytesBefore = images.statistics().residentImageBytes;
+    auto                 atlas            = images.createFontAtlas(2, 2, texels);
+    auto*                atlasTexture     = VSUIRenderer::imageView(atlas)->GetTexture();
+    const auto           atlasGeneration  = VSUIRenderer::generation(atlas);
+    VSUIRenderer::Packet glyph;
+    glyph.image  = atlas;
+    glyph.bounds = { 0, 0, 8, 8 };
+    glyph.clip   = { 0, 0, 8, 8 };
+    glyph.blend  = VSUIRenderer::Blend::Replace;
+    images.draw(rtv, 8, 8, 1, { glyph });
+    for (unsigned update = 0; update < 64; ++update)
+    {
+        auto pixels = texels;
+        pixels[0]   = static_cast<std::uint8_t>(update);
+        images.updateFontAtlas(atlas, pixels);
+        images.draw(rtv, 8, 8, 1, { glyph });
+        require(VSUIRenderer::imageView(atlas)->GetTexture() == atlasTexture && VSUIRenderer::generation(atlas) == atlasGeneration,
+                "Glyph update replaced the font atlas");
+        require(images.statistics().residentImageBytes == atlasBytesBefore + texels.size() * 2,
+                "Glyph update allocated another atlas reservation");
+    }
+    images.updateFontAtlas(atlas, texels);
+    images.draw(rtv, 8, 8, 1, { glyph });
+    capture("font-atlas-update.ppm",
+            [&](unsigned x, unsigned y)
+            {
+                const unsigned corner = (x >= 4 ? 1 : 0) + (y >= 4 ? 2 : 0);
+                return Pixel{ texels[corner * 4], texels[corner * 4 + 1], texels[corner * 4 + 2], 255 };
+            });
+    require(VSUIRenderer::imagePixels(atlas) == texels, "Font oracle snapshot differs from local glyph bytes");
+    glyph.image.reset();
+    atlas.reset();
+    images.retire();
+    require(images.statistics().residentImageBytes == atlasBytesBefore, "Retired font atlas retained its reservation");
+    std::cout << "UI_FONT_ATLAS_UPDATES=65\nUI_FONT_ATLAS_ALLOCATION_GENERATIONS=1\nUI_FONT_ATLAS_RETIRED=1\n";
     context->WaitForIdle();renderer.retire();images.retire();
     // Exercise the same production allocation and fence retirement with a
     // one-quad budget. No cache-entry removal may free submitted GPU buffers.

@@ -90,17 +90,32 @@ avoid lost notifications. Threaded regression checks cover publication,
 close/reopen/destruction and completion before/during multiple waits. A complete
 runtime rerun remains required; a failed skin case is not waived.
 
-Native Windows exception tracing also identified an uncaught `std::out_of_range`
-in `VSUIResources::fontBatch`: initial font atlas publication could be refused
-by the bounded image pool, but the batch still committed its generation and
-accessed the absent entry. Font publication and resize now retain a pending
-generation and retry after refusal; solid fills handle the same refusal path.
-Queued image generations remain immutable. Each frame records deferred batches,
-and capture observers wait for a complete frame; persistent refusal fails at
-the existing replay deadline instead of accepting missing text. Regression
-checks exercise initial refusal, patch refusal, resize, erased-entry recovery,
-immutable queued images, solid fills and capture admission. No budget or timeout
-has been increased. Final-source runtime qualification remains required.
+Native Windows exception tracing identified an uncaught std::out_of_range
+in VSUIResources::fontBatch after initial atlas publication was refused.
+The adapter had been replacing a complete GPU texture and CPU snapshot for
+successive glyph additions, retaining overlapping generations until GPU
+completion. That differs from LLFontFreeType::addGlyphFromFont, which updates
+the existing OpenGL atlas with setSubImage.
+
+The Vulkan font adapter now uses the same local FreeType glyph generation,
+packing, cache generations and page ownership. Each raw atlas page owns one
+mutable Diligent texture. Glyph additions collected during a frame produce at
+most one update per changed page before drawing; unchanged pages do not upload.
+Diligent resource transitions order previous reads, the transfer and subsequent
+reads on the immediate context. Submission fences retain pages through GPU
+completion. Cache reset establishes a new page; queued draws retain the old one.
+Ordinary skin/world image generations remain immutable. A genuine font-atlas
+allocation failure raises an explicit renderer error rather than presenting a
+successful frame with omitted text. No image budget or deadline is enlarged.
+
+Compiler-backed production-method regressions cover local grayscale/color
+conversion, orientation, DPI, repeated glyph additions, one allocation per page,
+coalesced updates, unchanged-page reuse and retained draws across cache reset.
+The software Vulkan harness additionally exercises repeated updates interleaved
+with GPU draws, stable texture identity and charged residency, deterministic
+readback and retirement. These checks and final-source runtime/CI qualification
+must pass before this correction is accepted. The earlier retry/capture guard
+alone was insufficient; solid-fill refusal still prevents incomplete captures.
 
 The evidence packager requires complete R2 contracts, all readbacks and their
 hashes, transport receipts, source revision, build provenance and staged viewer
