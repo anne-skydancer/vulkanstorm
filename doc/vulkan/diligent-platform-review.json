@@ -1,5 +1,5 @@
 {
-  "source_commit": "5d74f4a6bd876542e45696c2709dd1f7e8eea1e9",
+  "source_commit": "e6716e4bcadba4efd916a69294dd81b1985783a0",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -1105,7 +1105,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 17,
       "end": 18,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag. Reviewed independent floating-sum and destination-unit blend-product CPU references, with unchanged three-unit full-RGBA criterion requiring a complete reference per pixel, no hardware identity branch or geometry masks. Six alpha-one border draws reproduce31/37 without observed-GPU input; wrong colour, alpha, clipping and mixed references fail. Both expected images are retained; streams close before fatal oracle failure. Production rendering is unchanged."
@@ -1114,7 +1114,7 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 50,
       "end": 50,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
@@ -1123,34 +1123,25 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 272,
       "end": 272,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1091,
-      "end": 1091,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1093,
+      "end": 1093,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1486,
-      "end": 1490,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
-      "record": "I25",
-      "disposition": "mapped-gate",
-      "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
-    },
-    {
-      "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1500,
-      "end": 1500,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1488,
+      "end": 1492,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
@@ -1159,34 +1150,43 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 1502,
       "end": 1502,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1513,
-      "end": 1552,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1504,
+      "end": 1504,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1587,
-      "end": 1587,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1515,
+      "end": 1554,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1597,
-      "end": 1597,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1589,
+      "end": 1589,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
+      "record": "I25",
+      "disposition": "mapped-gate",
+      "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 1599,
+      "end": 1599,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "mapped-gate",
       "reason": "About acceptance installs normal keyboard-label translation, processes resize/layout, and activates the existing Help menu, About action, every tab and copy action through OS mouse events. It verifies displayed native device/API identity and absent OpenGL version, preserves support text, compares OS clipboard text, and renders all four tabs against the pixel oracle; success requires 24 readbacks and the About verification flag."
@@ -11120,72 +11120,72 @@
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1204,
-      "end": 1207,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1206,
+      "end": 1209,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1209,
-      "end": 1212,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1211,
+      "end": 1214,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1461,
-      "end": 1463,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1463,
+      "end": 1465,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 876,
-      "end": 879,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 878,
+      "end": 881,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 896,
-      "end": 897,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
-      "record": "I02",
-      "disposition": "mapped-gate",
-      "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
-    },
-    {
-      "path": "indra/newview/vsvkdiag.cpp",
-      "start": 899,
+      "start": 898,
       "end": 899,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 909,
-      "end": 912,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 901,
+      "end": 901,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 926,
-      "end": 926,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 911,
+      "end": 914,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
+      "record": "I02",
+      "disposition": "mapped-gate",
+      "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 928,
+      "end": 928,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I02",
       "disposition": "mapped-gate",
       "reason": "Development-only startup probe retains OS-driven Login and Return submission with synthetic field-retention assertions. Unsupported-status qualification targets deferred world map now that production Preferences is admitted. No production authentication interception outside diagnostic mode and no runtime acceptance inferred from source. XUI qualification compares all RGBA channels against the independent oracle, checks known replacement alpha, and preserves actual/expected alpha artifacts; no color threshold is loosened."
@@ -11255,9 +11255,9 @@
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1503,
-      "end": 1512,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1505,
+      "end": 1514,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Open the actual Viewer menu through Win32/SDL events and evaluate hidden Close Window enable callback before the existing Help/About interaction. This closes the construction-only menu coverage gap."
@@ -16637,9 +16637,9 @@
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 914,
-      "end": 924,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 916,
+      "end": 926,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image."
@@ -16918,52 +16918,52 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 274,
       "end": 274,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1105,
-      "end": 1112,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1107,
+      "end": 1114,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1113,
-      "end": 1141,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1115,
+      "end": 1143,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1151,
-      "end": 1152,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1153,
+      "end": 1154,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1166,
-      "end": 1178,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1168,
+      "end": 1180,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1593,
-      "end": 1593,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1595,
+      "end": 1595,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately."
@@ -17024,18 +17024,18 @@
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1142,
-      "end": 1150,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1144,
+      "end": 1152,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately. Hover layout proof samples fresh actual geometry after OS resize/layout delivery, requires entry before displacement and verifies pointer outside actual moved bounds; exact enter/leave/capture assertions remain decisive. Failure diagnostics preserve geometry and counts."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1153,
-      "end": 1165,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1155,
+      "end": 1167,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately. Hover layout proof samples fresh actual geometry after OS resize/layout delivery, requires entry before displacement and verifies pointer outside actual moved bounds; exact enter/leave/capture assertions remain decisive. Failure diagnostics preserve geometry and counts."
@@ -17087,27 +17087,27 @@
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 770,
-      "end": 770,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
-      "record": "I08",
-      "disposition": "mapped",
-      "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately. Hover layout proof samples fresh actual geometry after OS resize/layout delivery, requires entry before displacement and verifies pointer outside actual moved bounds; exact enter/leave/capture assertions remain decisive. Failure diagnostics preserve geometry and counts. Win32 fixture places and restores real OS pointer around both synthetic motion phases; exact coordinates require newly delivered motion and unchanged mouse release/scroll acceptance."
-    },
-    {
-      "path": "indra/newview/vsvkdiag.cpp",
       "start": 772,
       "end": 772,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately. Hover layout proof samples fresh actual geometry after OS resize/layout delivery, requires entry before displacement and verifies pointer outside actual moved bounds; exact enter/leave/capture assertions remain decisive. Failure diagnostics preserve geometry and counts. Win32 fixture places and restores real OS pointer around both synthetic motion phases; exact coordinates require newly delivered motion and unchanged mouse release/scroll acceptance."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 777,
-      "end": 777,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 774,
+      "end": 774,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately. Hover layout proof samples fresh actual geometry after OS resize/layout delivery, requires entry before displacement and verifies pointer outside actual moved bounds; exact enter/leave/capture assertions remain decisive. Failure diagnostics preserve geometry and counts. Win32 fixture places and restores real OS pointer around both synthetic motion phases; exact coordinates require newly delivered motion and unchanged mouse release/scroll acceptance."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 779,
+      "end": 779,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing mapped staged XUI readback now additionally compares two selected-skin inactive-tab samples against independent GL-byte tint/alpha values at one-byte tolerance, retaining whole-image RGB/alpha oracle and artifacts. Diagnostic assertions execute for existing packaged skin cases; runtime results await rebuilt image. Actual skinned connect_btn must clear highlight on motion departure, actual WM_MOUSELEAVE/SDL leave callback, stationary layout displacement and capture release; every positive startup/skin result requires native_hover_lifecycle_verified. Regression compiles actual shared/native controller bodies and proves missing lifecycle evidence fails acceptance. Runtime/software-device evidence recorded separately. Hover layout proof samples fresh actual geometry after OS resize/layout delivery, requires entry before displacement and verifies pointer outside actual moved bounds; exact enter/leave/capture assertions remain decisive. Failure diagnostics preserve geometry and counts. Win32 fixture places and restores real OS pointer around both synthetic motion phases; exact coordinates require newly delivered motion and unchanged mouse release/scroll acceptance."
@@ -17125,25 +17125,25 @@
       "path": "indra/newview/vsvkdiag.cpp",
       "start": 317,
       "end": 326,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed isolated UI qualification: private Windows station and desktop, strict setup failure, bounded job-contained process capture and teardown, unchanged Linux Xvfb workflow. Shared native hover lifecycle retains pending motion before leave. Diagnostic injection never manipulates the physical pointer; runtime qualification remains separate."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 774,
-      "end": 776,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 776,
+      "end": 778,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed isolated UI qualification: private Windows station and desktop, strict setup failure, bounded job-contained process capture and teardown, unchanged Linux Xvfb workflow. Shared native hover lifecycle retains pending motion before leave. Diagnostic injection never manipulates the physical pointer; runtime qualification remains separate."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 847,
-      "end": 850,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 849,
+      "end": 852,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Reviewed isolated UI qualification: private Windows station and desktop, strict setup failure, bounded job-contained process capture and teardown, unchanged Linux Xvfb workflow. Shared native hover lifecycle retains pending motion before leave. Diagnostic injection never manipulates the physical pointer; runtime qualification remains separate."
@@ -17719,16 +17719,16 @@
       "path": "indra/newview/llviewerstats.cpp",
       "start": 30,
       "end": 32,
-      "sha256": "39d7b8cc0a8149f729fc0aa7bb60da3f8646bf7adebf3c12934224758ef4d619",
+      "sha256": "35e6ea3efc93a475d7abfee586ea5a4f04eb5b592c76a71c780b08e9a739a63b",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Native CPU frame-period/jitter sampling and current-circuit ping/loss/bandwidth are generation and host scoped, reset on account change, and never construct scene owners. Actual shared Statistics/Lag Meter/FPS controllers are admitted and retired; empty recordings remain unavailable, native history triangles retain shared geometry, and trusted SimStats uses the existing CPU decoder. Real floater, sample and shrink/restore replay is added; runtime qualification remains pending."
     },
     {
       "path": "indra/newview/llviewerstats.cpp",
-      "start": 454,
-      "end": 516,
-      "sha256": "39d7b8cc0a8149f729fc0aa7bb60da3f8646bf7adebf3c12934224758ef4d619",
+      "start": 461,
+      "end": 523,
+      "sha256": "35e6ea3efc93a475d7abfee586ea5a4f04eb5b592c76a71c780b08e9a739a63b",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Native CPU frame-period/jitter sampling and current-circuit ping/loss/bandwidth are generation and host scoped, reset on account change, and never construct scene owners. Actual shared Statistics/Lag Meter/FPS controllers are admitted and retired; empty recordings remain unavailable, native history triangles retain shared geometry, and trusted SimStats uses the existing CPU decoder. Real floater, sample and shrink/restore replay is added; runtime qualification remains pending."
@@ -24980,18 +24980,18 @@
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1491,
-      "end": 1499,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1493,
+      "end": 1501,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Restore the deliberately injected 144-DPI system-scale fixture through the existing native DPI route before the full About floater controls test. UI preference reset alone left simulated system scale at 1.5 and clipped copy control in Windows CI. Preserves all control and pixel assertions; does not confer ordinary UI runtime acceptance before replay."
     },
     {
       "path": "indra/newview/vsvkdiag.cpp",
-      "start": 1501,
-      "end": 1501,
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "start": 1503,
+      "end": 1503,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Restore the deliberately injected 144-DPI system-scale fixture through the existing native DPI route before the full About floater controls test. UI preference reset alone left simulated system scale at 1.5 and clipped copy control in Windows CI. Preserves all control and pixel assertions; does not confer ordinary UI runtime acceptance before replay."
@@ -25495,25 +25495,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 54,
       "end": 54,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 356,
-      "end": 370,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "start": 357,
+      "end": 371,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 417,
-      "end": 417,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "start": 418,
+      "end": 418,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28355,9 +28355,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 109,
-      "end": 112,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "start": 110,
+      "end": 113,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28409,18 +28409,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 361,
-      "end": 366,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "start": 362,
+      "end": 367,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 370,
-      "end": 370,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "start": 371,
+      "end": 371,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28429,25 +28429,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 40,
       "end": 40,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 400,
-      "end": 410,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "start": 401,
+      "end": 411,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 417,
-      "end": 417,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "start": 418,
+      "end": 418,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28474,7 +28474,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 83,
       "end": 83,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28753,7 +28753,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 53,
       "end": 53,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28843,34 +28843,34 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 55,
       "end": 80,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 111,
-      "end": 111,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "start": 112,
+      "end": 112,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 282,
-      "end": 284,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "start": 283,
+      "end": 285,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 371,
-      "end": 383,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "start": 372,
+      "end": 384,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35332,7 +35332,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 95,
       "end": 95,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35656,7 +35656,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 96,
       "end": 96,
-      "sha256": "668deb1320c8558afa36b1d9f7a9db7a8da80630dcfbdb7ce2b8fba3b38e0ce9",
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35736,8 +35736,8 @@
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
       "start": 1,
-      "end": 161,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "end": 172,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35881,7 +35881,7 @@
       "path": "scripts/tests/test_ui_publication_retry.py",
       "start": 1,
       "end": 1,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35890,7 +35890,7 @@
       "path": "scripts/tests/test_ui_publication_retry.py",
       "start": 53,
       "end": 53,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35899,70 +35899,43 @@
       "path": "scripts/tests/test_ui_publication_retry.py",
       "start": 56,
       "end": 59,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 88,
-      "end": 88,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "start": 92,
+      "end": 92,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 90,
-      "end": 91,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "start": 94,
+      "end": 95,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 93,
-      "end": 100,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "start": 97,
+      "end": 107,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 103,
-      "end": 103,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 108,
-      "end": 110,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 112,
-      "end": 112,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 114,
-      "end": 114,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "start": 111,
+      "end": 111,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35970,53 +35943,80 @@
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
       "start": 116,
-      "end": 116,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "end": 118,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 121,
-      "end": 121,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "start": 120,
+      "end": 120,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 123,
-      "end": 123,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "start": 122,
+      "end": 122,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 125,
-      "end": 141,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "start": 124,
+      "end": 124,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 143,
-      "end": 143,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "start": 129,
+      "end": 129,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_ui_publication_retry.py",
-      "start": 144,
-      "end": 145,
-      "sha256": "e2a24f333dd34deb735709afb080f924f5ef1ea0b6f3ff5a672e37d7b654fc3b",
+      "start": 131,
+      "end": 131,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ui_publication_retry.py",
+      "start": 133,
+      "end": 152,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ui_publication_retry.py",
+      "start": 154,
+      "end": 154,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ui_publication_retry.py",
+      "start": 155,
+      "end": 156,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -36029,10 +36029,262 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 97,
+      "end": 97,
+      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llcommon/llstringtable.h",
+      "start": 36,
+      "end": 37,
+      "sha256": "7ea48dc93b0f3d408c0a61781c974a96e7646632ba38bc4ca78b8e5109303e17",
+      "record": "I26",
+      "disposition": "mapped",
+      "reason": "CPU string-table rounding preserves nearest-power-of-two and tie behavior using unsigned bounded arithmetic; negative and unrepresentable signed counts fail before allocation. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llcommon/llstringtable.h",
+      "start": 111,
+      "end": 112,
+      "sha256": "7ea48dc93b0f3d408c0a61781c974a96e7646632ba38bc4ca78b8e5109303e17",
+      "record": "I26",
+      "disposition": "mapped",
+      "reason": "CPU string-table rounding preserves nearest-power-of-two and tie behavior using unsigned bounded arithmetic; negative and unrepresentable signed counts fail before allocation. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llcommon/llstringtable.h",
+      "start": 117,
+      "end": 123,
+      "sha256": "7ea48dc93b0f3d408c0a61781c974a96e7646632ba38bc4ca78b8e5109303e17",
+      "record": "I26",
+      "disposition": "mapped",
+      "reason": "CPU string-table rounding preserves nearest-power-of-two and tie behavior using unsigned bounded arithmetic; negative and unrepresentable signed counts fail before allocation. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llcommon/llstringtable.h",
+      "start": 125,
+      "end": 127,
+      "sha256": "7ea48dc93b0f3d408c0a61781c974a96e7646632ba38bc4ca78b8e5109303e17",
+      "record": "I26",
+      "disposition": "mapped",
+      "reason": "CPU string-table rounding preserves nearest-power-of-two and tie behavior using unsigned bounded arithmetic; negative and unrepresentable signed counts fail before allocation. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llcommon/llstringtable.h",
+      "start": 129,
+      "end": 130,
+      "sha256": "7ea48dc93b0f3d408c0a61781c974a96e7646632ba38bc4ca78b8e5109303e17",
+      "record": "I26",
+      "disposition": "mapped",
+      "reason": "CPU string-table rounding preserves nearest-power-of-two and tie behavior using unsigned bounded arithmetic; negative and unrepresentable signed counts fail before allocation. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llmessage/llcoproceduremanager.cpp",
+      "start": 35,
+      "end": 36,
+      "sha256": "f87e51cc678d0d037b28db5a103f77d49720a91a5bea4dce2276b2ea04634fed",
+      "record": "I24",
+      "disposition": "mapped",
+      "reason": "Coroutine capacities validate power-of-two, worker fit, signed public count range and slot-array allocation bounds before Boost construction. Ordinary queue sizes and transport behavior remain unchanged. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llmessage/llcoproceduremanager.cpp",
+      "start": 125,
+      "end": 136,
+      "sha256": "f87e51cc678d0d037b28db5a103f77d49720a91a5bea4dce2276b2ea04634fed",
+      "record": "I24",
+      "disposition": "mapped",
+      "reason": "Coroutine capacities validate power-of-two, worker fit, signed public count range and slot-array allocation bounds before Boost construction. Ordinary queue sizes and transport behavior remain unchanged. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llmessage/llcoproceduremanager.cpp",
+      "start": 333,
+      "end": 333,
+      "sha256": "f87e51cc678d0d037b28db5a103f77d49720a91a5bea4dce2276b2ea04634fed",
+      "record": "I24",
+      "disposition": "mapped",
+      "reason": "Coroutine capacities validate power-of-two, worker fit, signed public count range and slot-array allocation bounds before Boost construction. Ordinary queue sizes and transport behavior remain unchanged. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llmessage/llcoproceduremanager.cpp",
+      "start": 336,
+      "end": 336,
+      "sha256": "f87e51cc678d0d037b28db5a103f77d49720a91a5bea4dce2276b2ea04634fed",
+      "record": "I24",
+      "disposition": "mapped",
+      "reason": "Coroutine capacities validate power-of-two, worker fit, signed public count range and slot-array allocation bounds before Boost construction. Ordinary queue sizes and transport behavior remain unchanged. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llsurface.cpp",
+      "start": 48,
+      "end": 49,
+      "sha256": "5f6d7af76650e78a6394f864d92e93e8477b3fd29e5ff1644522ad080060065d",
+      "record": "I15",
+      "disposition": "mapped",
+      "reason": "Validate terrain dimensions before signed arithmetic and array allocation; existing patch topology and valid dimensions remain unchanged. Production guard regressions cover ordinary and overflow dimensions. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llsurface.cpp",
+      "start": 153,
+      "end": 158,
+      "sha256": "5f6d7af76650e78a6394f864d92e93e8477b3fd29e5ff1644522ad080060065d",
+      "record": "I15",
+      "disposition": "mapped",
+      "reason": "Validate terrain dimensions before signed arithmetic and array allocation; existing patch topology and valid dimensions remain unchanged. Production guard regressions cover ordinary and overflow dimensions. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llsurface.cpp",
+      "start": 1175,
+      "end": 1177,
+      "sha256": "5f6d7af76650e78a6394f864d92e93e8477b3fd29e5ff1644522ad080060065d",
+      "record": "I15",
+      "disposition": "mapped",
+      "reason": "Validate terrain dimensions before signed arithmetic and array allocation; existing patch topology and valid dimensions remain unchanged. Production guard regressions cover ordinary and overflow dimensions. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llviewerstats.cpp",
+      "start": 74,
+      "end": 80,
+      "sha256": "35e6ea3efc93a475d7abfee586ea5a4f04eb5b592c76a71c780b08e9a739a63b",
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "Native build uses canonical installed Vulkan declarations; SDK-free OpenGL loader probe declarations remain internal, avoiding cross-translation-unit enum conflicts. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llviewerstats.cpp",
+      "start": 83,
+      "end": 91,
+      "sha256": "35e6ea3efc93a475d7abfee586ea5a4f04eb5b592c76a71c780b08e9a739a63b",
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "Native build uses canonical installed Vulkan declarations; SDK-free OpenGL loader probe declarations remain internal, avoiding cross-translation-unit enum conflicts. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llviewerstats.cpp",
+      "start": 99,
+      "end": 102,
+      "sha256": "35e6ea3efc93a475d7abfee586ea5a4f04eb5b592c76a71c780b08e9a739a63b",
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "Native build uses canonical installed Vulkan declarations; SDK-free OpenGL loader probe declarations remain internal, avoiding cross-translation-unit enum conflicts. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llviewerstats.cpp",
+      "start": 104,
+      "end": 107,
+      "sha256": "35e6ea3efc93a475d7abfee586ea5a4f04eb5b592c76a71c780b08e9a739a63b",
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "Native build uses canonical installed Vulkan declarations; SDK-free OpenGL loader probe declarations remain internal, avoiding cross-translation-unit enum conflicts. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llviewerstats.cpp",
+      "start": 109,
+      "end": 109,
+      "sha256": "35e6ea3efc93a475d7abfee586ea5a4f04eb5b592c76a71c780b08e9a739a63b",
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "Native build uses canonical installed Vulkan declarations; SDK-free OpenGL loader probe declarations remain internal, avoiding cross-translation-unit enum conflicts. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llviewerstats.cpp",
+      "start": 124,
+      "end": 125,
+      "sha256": "35e6ea3efc93a475d7abfee586ea5a4f04eb5b592c76a71c780b08e9a739a63b",
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "Native build uses canonical installed Vulkan declarations; SDK-free OpenGL loader probe declarations remain internal, avoiding cross-translation-unit enum conflicts. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 608,
+      "end": 608,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Shared viewer UI diagnostic requires font atlas identity and residency reuse; independent Unicode pixel oracles, ordinary image replacement and delayed GPU completion remain decisive. Corrects the stale replacement-generation assertion common to every UI/skin case. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsvkdiag.cpp",
+      "start": 614,
+      "end": 617,
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Shared viewer UI diagnostic requires font atlas identity and residency reuse; independent Unicode pixel oracles, ordinary image replacement and delayed GPU completion remain decisive. Corrects the stale replacement-generation assertion common to every UI/skin case. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_allocation_bounds.py",
+      "start": 1,
+      "end": 116,
+      "sha256": "52a9855fd6fc3ccd6aab7e4067862c19491f77ecbb4a5cf89f48fb689b01b080",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ui_publication_retry.py",
+      "start": 60,
+      "end": 63,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ui_publication_retry.py",
+      "start": 99,
+      "end": 101,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ui_publication_retry.py",
+      "start": 110,
+      "end": 110,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ui_publication_retry.py",
+      "start": 137,
+      "end": 137,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ui_publication_retry.py",
+      "start": 142,
+      "end": 143,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ui_publication_retry.py",
+      "start": 156,
+      "end": 156,
+      "sha256": "ccd78535c29a3c432bddbbd37df08a198b80b0be0aacabfc2e54e86946d84c08",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "ae47ba9609150501c8cb68f31284c2ef759180ad",
+    "previous_source_commit": "5d74f4a6bd876542e45696c2709dd1f7e8eea1e9",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Hash-pinned existing witnesses remapped through committed source deltas; R2 geometry/appearance/motion/resource and diagnostic changes reviewed by producer and ownership responsibility; see r2-production-audit.md. Runtime evidence is separate from source classification."
   }

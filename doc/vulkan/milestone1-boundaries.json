@@ -1,5 +1,5 @@
 {
-  "source_commit": "5d74f4a6bd876542e45696c2709dd1f7e8eea1e9",
+  "source_commit": "e6716e4bcadba4efd916a69294dd81b1985783a0",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -339,7 +339,7 @@
       ]
     },
     "indra/newview/vsvkdiag.cpp": {
-      "sha256": "f66c2b625c68366bdbc8087c919e1dfef3837315a14ebee10cfc0df8a8567b68",
+      "sha256": "5e62130d7c746bcc22f06008bf9cb23019db79ff8bc6ea8977ed062a9e14d3db",
       "anchors": [
         "VSVulkanDiagnostic::Impl",
         "CreateDeviceAndContextsVk",
