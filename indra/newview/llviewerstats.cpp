@@ -71,17 +71,24 @@
 #include "lltranslate.h"
 
 // "Minimal Vulkan" to get max API Version
+#if VS_NATIVE_VULKAN
+#include <vulkan/vulkan_core.h>
+#else
+// The OpenGL-only build probes the loader without an SDK dependency. Keep its
+// minimal ABI declarations private: they are not definitions of Vulkan's types.
+namespace
+{
 
 // Calls
-    #if defined(_WIN32)
-        #define VKAPI_ATTR
-        #define VKAPI_CALL __stdcall
-        #define VKAPI_PTR  VKAPI_CALL
-    #else
-        #define VKAPI_ATTR
-        #define VKAPI_CALL
-        #define VKAPI_PTR
-    #endif // _WIN32
+#if defined(_WIN32)
+#define VKAPI_ATTR
+#define VKAPI_CALL __stdcall
+#define VKAPI_PTR  VKAPI_CALL
+#else
+#define VKAPI_ATTR
+#define VKAPI_CALL
+#define VKAPI_PTR
+#endif                                                                         // _WIN32
 
 // Macros
     // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
@@ -89,19 +96,17 @@
     // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
     // <variant> <-------major-------><-----------minor-----------> <--------------patch-------------->
     //      0x7          0x7F                     0x3FF                           0xFFF
-    #define VK_API_VERSION_MAJOR(  version) (((uint32_t)(version) >> 22) & 0x07FU)  //  7 bits
-    #define VK_API_VERSION_MINOR(  version) (((uint32_t)(version) >> 12) & 0x3FFU)  // 10 bits
-    #define VK_API_VERSION_PATCH(  version) (((uint32_t)(version)      ) & 0xFFFU)  // 12 bits
-    #define VK_API_VERSION_VARIANT(version) (((uint32_t)(version) >> 29) & 0x007U)  //  3 bits
+#define VK_API_VERSION_MAJOR(version)   (((uint32_t)(version) >> 22) & 0x07FU) //  7 bits
+#define VK_API_VERSION_MINOR(version)   (((uint32_t)(version) >> 12) & 0x3FFU) // 10 bits
+#define VK_API_VERSION_PATCH(version)   (((uint32_t)(version)) & 0xFFFU)       // 12 bits
+#define VK_API_VERSION_VARIANT(version) (((uint32_t)(version) >> 29) & 0x007U) //  3 bits
 
-    // NOTE: variant is first parameter!  This is to match vulkan/vulkan_core.h
-    #define VK_MAKE_API_VERSION(variant, major, minor, patch) (0\
-        | (((uint32_t)(major   & 0x07FU)) << 22) \
-        | (((uint32_t)(minor   & 0x3FFU)) << 12) \
-        | (((uint32_t)(patch   & 0xFFFU))      ) \
-        | (((uint32_t)(variant & 0x007U)) << 29) )
+// NOTE: variant is first parameter!  This is to match vulkan/vulkan_core.h
+#define VK_MAKE_API_VERSION(variant, major, minor, patch)                                                                   \
+    ((((uint32_t)(variant) & 0x007U) << 29) | (((uint32_t)(major) & 0x07FU) << 22) | (((uint32_t)(minor) & 0x3FFU) << 12) | \
+     ((uint32_t)(patch) & 0xFFFU))
 
-    #define VK_DEFINE_HANDLE(object) typedef struct object##_T* object;
+#define VK_DEFINE_HANDLE(object) typedef struct object##_T* object;
 
 // Types
     VK_DEFINE_HANDLE(VkInstance);
@@ -116,6 +121,8 @@
     typedef void               (VKAPI_PTR *PFN_vkVoidFunction            )(void);
     typedef PFN_vkVoidFunction (VKAPI_PTR *PFN_vkGetInstanceProcAddr     )(VkInstance instance, const char* pName);
     typedef VkResult           (VKAPI_PTR *PFN_vkEnumerateInstanceVersion)(uint32_t* pApiVersion);
+    } // namespace
+#endif
 
 namespace LLStatViewer
 {

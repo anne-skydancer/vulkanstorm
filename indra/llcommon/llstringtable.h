@@ -33,6 +33,8 @@
 #include "llstl.h"
 #include <list>
 #include <set>
+#include <limits>
+#include <stdexcept>
 
 #if LL_WINDOWS
 # if (_MSC_VER >= 1300 && _MSC_VER < 1400)
@@ -106,24 +108,26 @@ class LL_COMMON_API LLStdStringTable
 public:
     LLStdStringTable(S32 tablesize = 0)
     {
+        if (tablesize < 0)
+            throw std::invalid_argument("Negative string table size");
         if (tablesize == 0)
         {
             tablesize = 256; // default
         }
-        // Make sure tablesize is power of 2
-        for (S32 i = 31; i>0; i--)
+        // Preserve nearest-power-of-two rounding (ties round up), without
+        // signed shifts into the sign bit or an unrepresentable array count.
+        const U32 requested = static_cast<U32>(tablesize);
+        U32       rounded   = 1;
+        while (rounded <= requested / 2)
+            rounded *= 2;
+        if (rounded > 1 && requested - rounded >= rounded / 2)
         {
-            if (tablesize & (1<<i))
-            {
-                if (tablesize >= (3<<(i-1)))
-                    tablesize = (1<<(i+1));
-                else
-                    tablesize = (1<<i);
-                break;
-            }
+            if (rounded > U32(std::numeric_limits<S32>::max()) / 2)
+                throw std::length_error("String table size exceeds signed index range");
+            rounded *= 2;
         }
-        mTableSize = tablesize;
-        mStringList = new string_set_t[tablesize];
+        mTableSize  = static_cast<S32>(rounded);
+        mStringList = new string_set_t[rounded];
     }
     ~LLStdStringTable()
     {

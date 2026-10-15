@@ -127,6 +127,22 @@ or R1 replay cannot substitute for R2. Dirty-source development results cannot
 satisfy the final provenance gate. Final-source compatibility runs and CI are
 still outstanding; R2 is not marked complete by these development checkpoints.
 
+The font-atlas run `38719485889` failed the Windows and Linux Lavapipe UI/skin
+gates at the same stale diagnostic assertion: it required a glyph addition to
+replace its GPU generation. The diagnostic now requires reuse of that atlas and
+unchanged charged residency. Independent Unicode glyph pixels, ordinary-image
+replacement and delayed-completion checks remain required. The production-method
+regression also executes these actual diagnostic assertions, so their contract
+cannot silently diverge from the adapter again. Fresh graphics CI is required.
+
+The same build exposed a global minimal `VkResult` declaration conflicting with
+the installed Vulkan header under Linux LTO. Native builds now use the canonical
+header; OpenGL-only loader probes retain private SDK-free declarations. Terrain
+grid arithmetic, nearest-power-of-two string-table rounding and coroutine queue
+allocation now reject invalid or unrepresentable counts before allocation.
+Compiler-backed production-method checks cover their ordinary and extreme
+inputs; Linux LTO warning clearance remains subject to the fresh platform build.
+
 The acceptance ledger retains later material, shadow, particle and composition
 obligations. Terrain/vegetation rows span R2/R3/R6; particles/ribbons/beams remain
 R7. No later feature is waived or certified by R2 geometry evidence.
