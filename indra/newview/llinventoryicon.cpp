@@ -31,6 +31,7 @@
 
 #include "lldictionary.h"
 #include "llinventorydefines.h"
+#include "llinventorytype.h"
 #include "llui.h"
 #include "lluiimage.h"
 #include "llwearabletype.h"
@@ -101,6 +102,8 @@ LLIconDictionary::LLIconDictionary()
 
     addEntry(LLInventoryType::ICONNAME_MATERIAL,                new IconEntry("Inv_Material"));
 
+    addEntry(LLInventoryType::ICONNAME_SCRIPT_LUAU,             new IconEntry("Inv_Script_Luau"));
+
     addEntry(LLInventoryType::ICONNAME_INVALID,                 new IconEntry("Inv_Invalid"));
     addEntry(LLInventoryType::ICONNAME_UNKNOWN,                 new IconEntry("Inv_Unknown"));
 
@@ -150,8 +153,11 @@ const std::string& LLInventoryIcon::getIconName(LLAssetType::EType asset_type,
             idx = LLInventoryType::ICONNAME_LANDMARK;
             // </FS:Ansariel>
             break;
-        case LLAssetType::AT_SCRIPT:
         case LLAssetType::AT_LSL_TEXT:
+            idx = (misc_flag & LLInventoryItemFlags::II_FLAGS_SUBTYPE_MASK) == SST_LUA
+                ? LLInventoryType::ICONNAME_SCRIPT_LUAU : LLInventoryType::ICONNAME_SCRIPT;
+            break;
+        case LLAssetType::AT_SCRIPT:
         case LLAssetType::AT_LSL_BYTECODE:
             idx = LLInventoryType::ICONNAME_SCRIPT;
             break;

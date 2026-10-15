@@ -24,6 +24,7 @@
  * $/LicenseInfo$
  */
 
+#include "llscripteditorws.h"
 #include "llviewerprecompiledheaders.h"
 
 // file include
@@ -6385,10 +6386,14 @@ void LLSelectMgr::processObjectProperties(LLMessageSystem* msg, void** user_data
             node->mInventorySerial = inv_serial;
             node->mSitName.assign(sit_name);
             node->mTouchName.assign(touch_name);
-
             // <FS:ND> Fire for any observer interested in object properties
             LLSelectMgr::instance().firePropertyReceived( node );
             // </FS:ND>
+        }
+        if (auto server = LLScriptEditorWSServer::getServer())
+        {
+            server->onObjectPropertyChanged(id, name, desc, inv_serial);
+            server->onObjectPermissionsReceived(id, owner_id, owner_mask, next_owner_mask);
         }
     }
 
@@ -6476,6 +6481,12 @@ void LLSelectMgr::processObjectPropertiesFamily(LLMessageSystem* msg, void** use
     }
 
     dialog_refresh_all();
+
+    if (auto ws_server = LLScriptEditorWSServer::getServer())
+    {
+        ws_server->onObjectPropertyChanged(id, name, desc);
+        ws_server->onObjectPermissionsReceived(id, owner_id, owner_mask, next_owner_mask);
+    }
 }
 
 

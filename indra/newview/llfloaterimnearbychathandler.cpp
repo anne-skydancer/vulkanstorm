@@ -24,6 +24,7 @@
  * $/LicenseInfo$
  */
 
+#include "llscripteditorws.h"
 #include "llviewerprecompiledheaders.h"
 
 #include "llagent.h"
@@ -616,6 +617,23 @@ void LLFloaterIMNearbyChatHandler::processChat(const LLChat& chat_msg,
 
     // <FS:Ansariel> Add notification callback for new chat
     mNewChatSignal(chat);
+
+    if (LLScriptEditorWSServer::isEnabled() &&
+        gSavedSettings.getBOOL("ExternalWebsocketForwardDebug") &&
+        (chat_msg.mChatType == CHAT_TYPE_DEBUG_MSG ||
+         chat_msg.mChatType == CHAT_TYPE_OWNER))
+    {
+        LLScriptEditorWSServer::ptr_t server =
+            LLScriptEditorWSServer::getServer();
+        if (server)
+        {
+            const auto channel =
+                chat_msg.mChatType == CHAT_TYPE_OWNER
+                    ? LLPublishedObjectMgr::RuntimeEventAggregator::Channel::OWNER_SAY
+                    : LLPublishedObjectMgr::RuntimeEventAggregator::Channel::DEBUG;
+            server->forwardChatToIDE(chat_msg, channel);
+        }
+    }
 
     // don't show toast and add message to chat history on receive debug message
     // with disabled setting showing script errors or enabled setting to show script
