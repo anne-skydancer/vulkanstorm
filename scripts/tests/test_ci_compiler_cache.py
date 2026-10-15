@@ -92,6 +92,7 @@ class ActualCompilationTests(unittest.TestCase):
                 result = subprocess.run([str(arg) for arg in args], env=env, cwd=root,
                                         text=True, capture_output=True, timeout=120)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertNotIn('warning D9025', result.stdout + result.stderr)
                 return result.stdout
 
             def stats():
@@ -110,8 +111,20 @@ class ActualCompilationTests(unittest.TestCase):
             staging_rule = 'ADD_CUSTOM_COMMAND(TARGET llwebrtc POST_BUILD' + (
                 ROOT / 'indra/llwebrtc/CMakeLists.txt').read_text().split(
                     'ADD_CUSTOM_COMMAND(TARGET llwebrtc POST_BUILD', 1)[1].split('# Add tests', 1)[0]
+            common = (ROOT / 'indra/cmake/00-Common.cmake').read_text()
+            build_flags = 'set(_ll_build_flags' + common.split('set(_ll_build_flags', 1)[1].split('# Given that', 1)[0]
+            webrtc = (ROOT / 'indra/llwebrtc/CMakeLists.txt').read_text()
+            runtime = 'set_property(TARGET llwebrtc PROPERTY' + webrtc.split(
+                'set_property(TARGET llwebrtc PROPERTY', 1)[1].split(')', 1)[0] + ')'
             (source / 'CMakeLists.txt').write_text('''cmake_minimum_required(VERSION 3.25)
 project(CacheProbe LANGUAGES CXX)
+set(WINDOWS ${WIN32})
+if(MSVC)
+  set(ENV{LL_BUILD} "/MD /O2 /Ob2")
+else()
+  set(ENV{LL_BUILD} "")
+endif()
+@FLAGS@
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 add_executable(probe main.cpp plain.cpp)
 set_source_files_properties(plain.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
@@ -120,12 +133,15 @@ include("@HELPER@")
 vs_target_textual_pch(probe "${CMAKE_CURRENT_SOURCE_DIR}/value.h")
 target_compile_definitions(probe PRIVATE OFFSET=${PROBE_OFFSET})
 add_library(llwebrtc SHARED plain.cpp)
+if(MSVC)
+  @RUNTIME@
+endif()
 set(SHARED_LIB_STAGING_DIR "${CMAKE_BINARY_DIR}/sharedlibs/$<CONFIG>")
 @POST@
 add_custom_target(viewer_stage ALL DEPENDS llwebrtc
   "${SHARED_LIB_STAGING_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}llwebrtc${CMAKE_SHARED_LIBRARY_SUFFIX}")
 '''.replace('@HELPER@', (ROOT / 'indra/cmake/CompilerCacheHeaders.cmake').as_posix()).replace(
-    '@POST@', staging_rule))
+    '@POST@', staging_rule).replace('@FLAGS@', build_flags).replace('@RUNTIME@', runtime))
             build = root / 'build'
             generator = 'Ninja Multi-Config' if platform.system() == 'Windows' else 'Ninja'
             try:

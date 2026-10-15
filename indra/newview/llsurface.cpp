@@ -45,6 +45,8 @@
 #include "llviewerregion.h"
 #include "lldrawpoolterrain.h"
 #include "llworldmipmap.h"
+#include <limits>
+#include <stdexcept>
 
 extern LLPipeline gPipeline;
 extern bool gShiftFrame;
@@ -150,6 +152,12 @@ void LLSurface::create(const S32 grids_per_edge,
                        const LLVector3d &origin_global,
                        const F32 width)
 {
+    // Grid and patch offsets are signed 32-bit throughout the terrain code.
+    // Validate before addition, division and squaring can overflow those indices.
+    if (grids_per_edge <= 0 || grids_per_patch_edge <= 0 || grids_per_patch_edge > grids_per_edge ||
+        grids_per_edge % grids_per_patch_edge != 0 ||
+        (U64(grids_per_edge) + 1) * (U64(grids_per_edge) + 1) > U64(std::numeric_limits<S32>::max()))
+        throw std::invalid_argument("Terrain dimensions exceed grid index range");
     // Initialize various constants for the surface
     mGridsPerEdge = grids_per_edge + 1;  // Add 1 for the east and north buffer
     mOOGridsPerEdge = 1.f / mGridsPerEdge;
@@ -1200,7 +1208,9 @@ void LLSurface::createPatchData()
     LLSurfacePatch *patchp;
 
     // Allocate memory
-    mPatchList = new LLSurfacePatch[mNumberOfPatches];
+    if (mNumberOfPatches <= 0)
+        throw std::invalid_argument("Invalid terrain patch count");
+    mPatchList = new LLSurfacePatch[static_cast<U32>(mNumberOfPatches)];
 
     // One of each for each camera
     mVisiblePatchCount = mNumberOfPatches;
