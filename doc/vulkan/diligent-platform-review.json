@@ -1,5 +1,5 @@
 {
-  "source_commit": "841ce009cc94b2ec21348a898b5f08ce938d9087",
+  "source_commit": "ecf0734485f82beaba4da7c238e165679cccb82c",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -35458,7 +35458,7 @@
       "path": "indra/newview/lllogchat.cpp",
       "start": 1268,
       "end": 1268,
-      "sha256": "fd97a2704dc98c01a0d71cebbc21fbb356b31ad9f9def7fab5fa1831d8ab629b",
+      "sha256": "cc40ca7b63456f86d254ca26052f579f7c297a7c0e775b81f189eaa826fa1060",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35467,7 +35467,7 @@
       "path": "indra/newview/lllogchat.cpp",
       "start": 1281,
       "end": 1282,
-      "sha256": "fd97a2704dc98c01a0d71cebbc21fbb356b31ad9f9def7fab5fa1831d8ab629b",
+      "sha256": "cc40ca7b63456f86d254ca26052f579f7c297a7c0e775b81f189eaa826fa1060",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35476,7 +35476,7 @@
       "path": "indra/newview/lllogchat.cpp",
       "start": 1287,
       "end": 1291,
-      "sha256": "fd97a2704dc98c01a0d71cebbc21fbb356b31ad9f9def7fab5fa1831d8ab629b",
+      "sha256": "cc40ca7b63456f86d254ca26052f579f7c297a7c0e775b81f189eaa826fa1060",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35485,7 +35485,7 @@
       "path": "indra/newview/lllogchat.h",
       "start": 30,
       "end": 31,
-      "sha256": "ba1de801c97defad4fa133123b30826f323bc146d7ac29386556e633aff1da84",
+      "sha256": "83f48e343734f57893ac59c0ef0b272f9c9579440698d86e818cd2f144f23ff7",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35494,7 +35494,7 @@
       "path": "indra/newview/lllogchat.h",
       "start": 42,
       "end": 47,
-      "sha256": "ba1de801c97defad4fa133123b30826f323bc146d7ac29386556e633aff1da84",
+      "sha256": "83f48e343734f57893ac59c0ef0b272f9c9579440698d86e818cd2f144f23ff7",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35503,7 +35503,7 @@
       "path": "indra/newview/lllogchat.h",
       "start": 52,
       "end": 53,
-      "sha256": "ba1de801c97defad4fa133123b30826f323bc146d7ac29386556e633aff1da84",
+      "sha256": "83f48e343734f57893ac59c0ef0b272f9c9579440698d86e818cd2f144f23ff7",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35520,8 +35520,8 @@
     {
       "path": "scripts/tests/test_chat_history_handoff.py",
       "start": 1,
-      "end": 139,
-      "sha256": "0d54c22b64fe056612b87cb0de94d164177d909063c8d3eefd10f37784949cad",
+      "end": 170,
+      "sha256": "7d68fe3a6fadb259ae16de6038fb1d6650f82fda8df844e71c418ffd37329b98",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35530,7 +35530,7 @@
       "path": "indra/newview/lllogchat.cpp",
       "start": 1250,
       "end": 1250,
-      "sha256": "fd97a2704dc98c01a0d71cebbc21fbb356b31ad9f9def7fab5fa1831d8ab629b",
+      "sha256": "cc40ca7b63456f86d254ca26052f579f7c297a7c0e775b81f189eaa826fa1060",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35539,7 +35539,7 @@
       "path": "indra/newview/lllogchat.cpp",
       "start": 1274,
       "end": 1276,
-      "sha256": "fd97a2704dc98c01a0d71cebbc21fbb356b31ad9f9def7fab5fa1831d8ab629b",
+      "sha256": "cc40ca7b63456f86d254ca26052f579f7c297a7c0e775b81f189eaa826fa1060",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35548,77 +35548,113 @@
       "path": "indra/newview/lllogchat.cpp",
       "start": 1306,
       "end": 1308,
-      "sha256": "fd97a2704dc98c01a0d71cebbc21fbb356b31ad9f9def7fab5fa1831d8ab629b",
+      "sha256": "cc40ca7b63456f86d254ca26052f579f7c297a7c0e775b81f189eaa826fa1060",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_chat_history_handoff.py",
-      "start": 81,
-      "end": 83,
-      "sha256": "0d54c22b64fe056612b87cb0de94d164177d909063c8d3eefd10f37784949cad",
+      "start": 112,
+      "end": 114,
+      "sha256": "7d68fe3a6fadb259ae16de6038fb1d6650f82fda8df844e71c418ffd37329b98",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_chat_history_handoff.py",
-      "start": 90,
-      "end": 92,
-      "sha256": "0d54c22b64fe056612b87cb0de94d164177d909063c8d3eefd10f37784949cad",
+      "start": 121,
+      "end": 123,
+      "sha256": "7d68fe3a6fadb259ae16de6038fb1d6650f82fda8df844e71c418ffd37329b98",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_chat_history_handoff.py",
-      "start": 94,
-      "end": 94,
-      "sha256": "0d54c22b64fe056612b87cb0de94d164177d909063c8d3eefd10f37784949cad",
+      "start": 125,
+      "end": 125,
+      "sha256": "7d68fe3a6fadb259ae16de6038fb1d6650f82fda8df844e71c418ffd37329b98",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_chat_history_handoff.py",
-      "start": 96,
-      "end": 97,
-      "sha256": "0d54c22b64fe056612b87cb0de94d164177d909063c8d3eefd10f37784949cad",
+      "start": 127,
+      "end": 128,
+      "sha256": "7d68fe3a6fadb259ae16de6038fb1d6650f82fda8df844e71c418ffd37329b98",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_chat_history_handoff.py",
-      "start": 99,
-      "end": 99,
-      "sha256": "0d54c22b64fe056612b87cb0de94d164177d909063c8d3eefd10f37784949cad",
+      "start": 130,
+      "end": 130,
+      "sha256": "7d68fe3a6fadb259ae16de6038fb1d6650f82fda8df844e71c418ffd37329b98",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_chat_history_handoff.py",
-      "start": 109,
-      "end": 120,
-      "sha256": "0d54c22b64fe056612b87cb0de94d164177d909063c8d3eefd10f37784949cad",
+      "start": 140,
+      "end": 151,
+      "sha256": "7d68fe3a6fadb259ae16de6038fb1d6650f82fda8df844e71c418ffd37329b98",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_chat_history_handoff.py",
-      "start": 122,
-      "end": 122,
-      "sha256": "0d54c22b64fe056612b87cb0de94d164177d909063c8d3eefd10f37784949cad",
+      "start": 153,
+      "end": 153,
+      "sha256": "7d68fe3a6fadb259ae16de6038fb1d6650f82fda8df844e71c418ffd37329b98",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/lllogchat.cpp",
+      "start": 1296,
+      "end": 1296,
+      "sha256": "cc40ca7b63456f86d254ca26052f579f7c297a7c0e775b81f189eaa826fa1060",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/lllogchat.cpp",
+      "start": 1298,
+      "end": 1298,
+      "sha256": "cc40ca7b63456f86d254ca26052f579f7c297a7c0e775b81f189eaa826fa1060",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/lllogchat.h",
+      "start": 59,
+      "end": 59,
+      "sha256": "83f48e343734f57893ac59c0ef0b272f9c9579440698d86e818cd2f144f23ff7",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_chat_history_handoff.py",
+      "start": 13,
+      "end": 43,
+      "sha256": "7d68fe3a6fadb259ae16de6038fb1d6650f82fda8df844e71c418ffd37329b98",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "11c6480ada6462306d77141cec84d81a96403c12",
+    "previous_source_commit": "841ce009cc94b2ec21348a898b5f08ce938d9087",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Hash-pinned existing witnesses remapped through committed source deltas; R2 geometry/appearance/motion/resource and diagnostic changes reviewed by producer and ownership responsibility; see r2-production-audit.md. Runtime evidence is separate from source classification."
   }
