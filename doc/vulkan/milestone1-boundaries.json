@@ -1,5 +1,5 @@
 {
-  "source_commit": "b77dd55a73111fcd2381bef69cb39bec5332c1ef",
+  "source_commit": "12f37552fed1804f55682711ce37bc036bcda0d4",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
