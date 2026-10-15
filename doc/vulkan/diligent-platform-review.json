@@ -1,5 +1,5 @@
 {
-  "source_commit": "12f37552fed1804f55682711ce37bc036bcda0d4",
+  "source_commit": "d9b78e38343871e5ea0d3fcc062eaefa6f5ac35f",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -37181,10 +37181,217 @@
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/ansastorm/xui/en/panel_fs_contacts_friends.xml",
+      "start": 16,
+      "end": 16,
+      "sha256": "cdab8c167b37c09e9cac8a453dedee804f7916a68e55d60a89ea0f1adf5e86d8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/ansastorm/xui/en/panel_fs_contacts_friends.xml",
+      "start": 121,
+      "end": 121,
+      "sha256": "cdab8c167b37c09e9cac8a453dedee804f7916a68e55d60a89ea0f1adf5e86d8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/ansastorm_modern/xui/en/panel_fs_contacts_friends.xml",
+      "start": 16,
+      "end": 16,
+      "sha256": "cdab8c167b37c09e9cac8a453dedee804f7916a68e55d60a89ea0f1adf5e86d8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/ansastorm_modern/xui/en/panel_fs_contacts_friends.xml",
+      "start": 121,
+      "end": 121,
+      "sha256": "cdab8c167b37c09e9cac8a453dedee804f7916a68e55d60a89ea0f1adf5e86d8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/de/panel_fs_contacts_friends.xml",
+      "start": 3,
+      "end": 3,
+      "sha256": "46546a8e11471cc9154c974c36ff1f87fb920b98b539b9a90a3c91173ab4cc90",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/de/panel_fs_contacts_friends.xml",
+      "start": 25,
+      "end": 25,
+      "sha256": "46546a8e11471cc9154c974c36ff1f87fb920b98b539b9a90a3c91173ab4cc90",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/de/panel_fs_contacts_groups.xml",
+      "start": 3,
+      "end": 3,
+      "sha256": "d98e1c89727567cba9e90488b002e97c2426367f8757ca9efa4f223af6c86f03",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/de/panel_fs_contacts_groups.xml",
+      "start": 5,
+      "end": 5,
+      "sha256": "d98e1c89727567cba9e90488b002e97c2426367f8757ca9efa4f223af6c86f03",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/de/panel_fs_contacts_groups.xml",
+      "start": 8,
+      "end": 8,
+      "sha256": "d98e1c89727567cba9e90488b002e97c2426367f8757ca9efa4f223af6c86f03",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/de/panel_fs_contacts_groups.xml",
+      "start": 14,
+      "end": 14,
+      "sha256": "d98e1c89727567cba9e90488b002e97c2426367f8757ca9efa4f223af6c86f03",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/de/panel_fs_contacts_sets.xml",
+      "start": 22,
+      "end": 25,
+      "sha256": "242c7d5832e405763d501c639123fc04701e61c130c3080882cc983b36f70a4d",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_contacts_friends.xml",
+      "start": 16,
+      "end": 16,
+      "sha256": "cb0fcc6c7f8c9bcba6ce570518a965da74a64d3e7a65a498684c615682fd6fe8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_contacts_friends.xml",
+      "start": 121,
+      "end": 121,
+      "sha256": "cb0fcc6c7f8c9bcba6ce570518a965da74a64d3e7a65a498684c615682fd6fe8",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_contacts_groups.xml",
+      "start": 18,
+      "end": 18,
+      "sha256": "59497565aa5f90031f9ebd28da60b243d1df9f916ef1e7eba6bbc987e65e06e6",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_contacts_groups.xml",
+      "start": 23,
+      "end": 23,
+      "sha256": "59497565aa5f90031f9ebd28da60b243d1df9f916ef1e7eba6bbc987e65e06e6",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_contacts_groups.xml",
+      "start": 38,
+      "end": 38,
+      "sha256": "59497565aa5f90031f9ebd28da60b243d1df9f916ef1e7eba6bbc987e65e06e6",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_contacts_groups.xml",
+      "start": 55,
+      "end": 55,
+      "sha256": "59497565aa5f90031f9ebd28da60b243d1df9f916ef1e7eba6bbc987e65e06e6",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_contacts_sets.xml",
+      "start": 108,
+      "end": 108,
+      "sha256": "3044011a6e872bd3ed24cffe9d967f4911054cbccd775eae8b829111c67b9038",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/firestorm/xui/en/panel_fs_contacts_friends.xml",
+      "start": 16,
+      "end": 16,
+      "sha256": "73463e1979d959aed4197817491d9d1c90f6fb1bf2fb656610b949981f20f1c4",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/firestorm/xui/en/panel_fs_contacts_friends.xml",
+      "start": 121,
+      "end": 121,
+      "sha256": "73463e1979d959aed4197817491d9d1c90f6fb1bf2fb656610b949981f20f1c4",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/vintage/xui/de/panel_fs_contacts_friends.xml",
+      "start": 3,
+      "end": 3,
+      "sha256": "bac0c8824bcf582e1f2a04cf599e9319dab0d6244165e0471c582141d54de181",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/vintage/xui/de/panel_fs_contacts_friends.xml",
+      "start": 20,
+      "end": 20,
+      "sha256": "bac0c8824bcf582e1f2a04cf599e9319dab0d6244165e0471c582141d54de181",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/vintage/xui/en/panel_fs_contacts_friends.xml",
+      "start": 130,
+      "end": 130,
+      "sha256": "b9b3c9a94bb84f8b0b0cd1de18f21f62b0b9e6a2ad889c8710bd3becb4fa1e19",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Shared Contacts XUI preserves focus-border clearance through right-anchored action columns and matching list spacing across all shipped skins, themes and locales. Restore the earlier default/AnsaStorm Modern Friends correction and retain wider translated labels. Source layout inheritance is checked exhaustively; no backend draw logic or shader changes. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "b77dd55a73111fcd2381bef69cb39bec5332c1ef",
+    "previous_source_commit": "12f37552fed1804f55682711ce37bc036bcda0d4",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Hash-pinned existing witnesses remapped through committed source deltas; R2 geometry/appearance/motion/resource and diagnostic changes reviewed by producer and ownership responsibility; see r2-production-audit.md. Runtime evidence is separate from source classification."
   }
