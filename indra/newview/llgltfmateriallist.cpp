@@ -714,7 +714,7 @@ void LLGLTFMaterialList::flushMaterials()
 
     {
         using namespace LLStatViewer;
-        sample(NUM_MATERIALS, mList.size());
+        sample(NUM_MATERIALS, static_cast<F64>(mList.size()));
     }
 }
 
