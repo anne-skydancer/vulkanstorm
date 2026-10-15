@@ -22,6 +22,7 @@ jobs:
       - run: python3 scripts/tests/test_windows_symbol_archive.py
       - run: python3 scripts/tests/test_version_schema.py
       - run: python3 scripts/tests/test_ndof_cmake.py
+      - run: python3 scripts/tests/test_slua_ui_resources.py
       - run: python3 scripts/tests/test_canary_upstream_review.py
       - name: Check update version parsing
         run: |

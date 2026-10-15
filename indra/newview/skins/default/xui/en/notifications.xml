@@ -15557,4 +15557,22 @@ Folder names cannot contain / or \.
   </notification>
   <!-- </FS:Amy> Favorite Wearables folders -->
 
+  <notification
+   icon="notifytip.tga"
+   name="ExternalEditorServerStarted"
+   type="notifytip">
+External editor server started on port [PORT].
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="ExternalEditorServerFailed"
+   type="notifytip">
+Failed to start external editor server on port [PORT].
+  </notification>
+  <notification
+   icon="notifytip.tga"
+   name="ExternalEditorServerStopped"
+   type="notifytip">
+External editor server stopped.
+  </notification>
 </notifications>
