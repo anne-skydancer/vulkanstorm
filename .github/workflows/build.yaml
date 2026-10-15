@@ -135,6 +135,11 @@ jobs:
           else
             options+=(-DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=OFF)
           fi
+          {
+            echo 'LL_BUILD<<VKSTORM_LL_BUILD'
+            printf '%s\n' "$LL_BUILD"
+            echo 'VKSTORM_LL_BUILD'
+          } >> "$GITHUB_ENV"
           cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
             -DCMAKE_BUILD_TYPE:STRING="$VIEWER_BUILD_TYPE" -DADDRESS_SIZE:STRING=64 \
             -DPACKAGE:BOOL="$VIEWER_PACKAGE" \
