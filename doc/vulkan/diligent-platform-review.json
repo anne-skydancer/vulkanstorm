@@ -1,5 +1,5 @@
 {
-  "source_commit": "114127be659147387a01d88ce75c584c3a28513e",
+  "source_commit": "826e24bdf7eb4125b1977f2662cdbb99ef7a5ed1",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -1717,7 +1717,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2288,
       "end": 2288,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "New vs-owned production IM/group UI and development-only replay sources use existing Autobuild dependencies and Vulkan compile flags; no release baseline dependency or publishing behavior is added. Source review only; no expanded runtime acceptance claim. R1 mesh resource review: mainloop publication rechecks account/region/request/asset revision; same-account region changes retain immutable decoded data and cancel unfinished requests; bounded retries/LRU and last-owner CPU/GPU payload reservations preserve in-flight retirement. Mesh allocation refusal publishes no null packet. No whole R1 or runtime parity acceptance."
@@ -1726,7 +1726,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2302,
       "end": 2302,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "New vs-owned production IM/group UI and development-only replay sources use existing Autobuild dependencies and Vulkan compile flags; no release baseline dependency or publishing behavior is added. Source review only; no expanded runtime acceptance claim."
@@ -21130,7 +21130,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2289,
       "end": 2289,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -22705,7 +22705,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2290,
       "end": 2291,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Builds native avatar/mesh producers with existing Autobuild viewer dependencies; canonical RelWithDebInfo build and full staging passed. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
@@ -23857,7 +23857,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2299,
       "end": 2299,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -24361,7 +24361,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2300,
       "end": 2300,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -25639,7 +25639,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2291,
       "end": 2294,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -25648,7 +25648,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2297,
       "end": 2297,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -29104,7 +29104,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 327,
       "end": 331,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29113,7 +29113,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 1197,
       "end": 1209,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29122,7 +29122,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2291,
       "end": 2293,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29131,16 +29131,16 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2297,
       "end": 2298,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 3260,
-      "end": 3269,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "start": 3262,
+      "end": 3271,
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35341,7 +35341,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 1203,
       "end": 1203,
-      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -36538,7 +36538,7 @@
       "path": "indra/newview/fspanellogin.cpp",
       "start": 469,
       "end": 486,
-      "sha256": "41ebaca4a29293277236bded876e692b5021362e3f760f7f29a2b8912d298f5c",
+      "sha256": "cc38ef00938072ffd19378056c0077653d831f8e38764e3219b579a5cb66c655",
       "record": "I03",
       "disposition": "mapped",
       "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -36951,8 +36951,8 @@
     {
       "path": "scripts/ci_compiler_cache.py",
       "start": 1,
-      "end": 98,
-      "sha256": "6f9d854ce41c9f39e7412b87b92e0ab2b3f709bef7c460524884d57f7a2481b3",
+      "end": 99,
+      "sha256": "327368764034dadbb3301259e5e2dcd43afbd20b2b9bc94704a18b88459ff276",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -36960,15 +36960,105 @@
     {
       "path": "scripts/tests/test_ci_compiler_cache.py",
       "start": 1,
-      "end": 148,
-      "sha256": "0ae74e6275872bc3b953e163c1f33359ed1f8f02406b1e49f188fea0d91d12bf",
+      "end": 161,
+      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/cmake/CompilerCacheHeaders.cmake",
+      "start": 1,
+      "end": 18,
+      "sha256": "6e6ed5a96c7e7cc69d43dbfb7e9c75005a7b742ac898572814fad755b6521e82",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/llwebrtc/CMakeLists.txt",
+      "start": 69,
+      "end": 70,
+      "sha256": "73e704eb4b028975aaed58133ef6f377ff3fa7f376df9ed6f6eb845de9fbdd36",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/CMakeLists.txt",
+      "start": 2321,
+      "end": 2322,
+      "sha256": "a23641da3dca9f898745257e704b8142183f7fb41a60e0696fe30e441fbd834e",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/fspanellogin.cpp",
+      "start": 484,
+      "end": 484,
+      "sha256": "cc38ef00938072ffd19378056c0077653d831f8e38764e3219b579a5cb66c655",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/ci_compiler_cache.py",
+      "start": 90,
+      "end": 91,
+      "sha256": "327368764034dadbb3301259e5e2dcd43afbd20b2b9bc94704a18b88459ff276",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 100,
+      "end": 100,
+      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 103,
+      "end": 106,
+      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 110,
+      "end": 111,
+      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 113,
+      "end": 114,
+      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 116,
+      "end": 122,
+      "sha256": "5a684f87054680956bb5a460091108db03f58b7a0fa344af4e54a6d6fc77ee36",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "21e066b27dac38313feb9254550ed92bf4e6bc6f",
+    "previous_source_commit": "114127be659147387a01d88ce75c584c3a28513e",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Hash-pinned existing witnesses remapped through committed source deltas; R2 geometry/appearance/motion/resource and diagnostic changes reviewed by producer and ownership responsibility; see r2-production-audit.md. Runtime evidence is separate from source classification."
   }
