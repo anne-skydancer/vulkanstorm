@@ -1,0 +1,18 @@
+# Disabling PCH compilation must retain the original implicit header semantics.
+# Cache strict ordinary compilations; do not rely on a precompiled binary header.
+function(vs_target_textual_pch target header)
+  if(NOT CMAKE_DISABLE_PRECOMPILE_HEADERS)
+    return()
+  endif()
+  get_target_property(sources ${target} SOURCES)
+  foreach(source IN LISTS sources)
+    get_source_file_property(skip "${source}" SKIP_PRECOMPILE_HEADERS)
+    if(NOT skip AND source MATCHES "\\.(cpp|cc|cxx)$")
+      if(MSVC)
+        set_property(SOURCE "${source}" APPEND PROPERTY COMPILE_OPTIONS "/FI${header}")
+      else()
+        set_property(SOURCE "${source}" APPEND PROPERTY COMPILE_OPTIONS -include "${header}")
+      endif()
+    endif()
+  endforeach()
+endfunction()
