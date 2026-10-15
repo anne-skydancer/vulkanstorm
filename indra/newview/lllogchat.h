@@ -56,7 +56,7 @@ private:
 class LLLoadHistoryThread : public LLActionThread
 {
 private:
-    const std::string& mFileName;
+    const std::string mFileName;
     std::list<LLSD>* mMessages;
     LLSD mLoadParams;
     bool mNewLoad;

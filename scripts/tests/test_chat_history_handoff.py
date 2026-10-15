@@ -10,6 +10,37 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ChatHistoryHandoffTest(unittest.TestCase):
+    def test_loader_keeps_filename_after_preview_changes_or_closes(self):
+        source = (ROOT/'indra/newview/lllogchat.cpp').read_text()
+        header = (ROOT/'indra/newview/lllogchat.h').read_text()
+        declaration = header.split('class LLLoadHistoryThread : public LLActionThread', 1)[1]
+        members = declaration.split('private:', 1)[1].split('public:', 1)[0]
+        constructor = method(source, 'LLLoadHistoryThread::LLLoadHistoryThread(')
+        self.compile(r'''
+#include <cassert>
+#include <list>
+#include <memory>
+#include <string>
+using LLSD=int;
+struct LLActionThread { explicit LLActionThread(const char*) {} };
+struct LLLoadHistoryThread:LLActionThread {
+MEMBERS
+ void* mLoadEndSignal;
+ LLLoadHistoryThread(const std::string&,std::list<LLSD>*,const LLSD&);
+};
+CONSTRUCTOR
+int main() {
+ std::unique_ptr<LLLoadHistoryThread> worker;
+ {
+  std::string preview_filename="original transcript";
+  worker=std::make_unique<LLLoadHistoryThread>(preview_filename,nullptr,0);
+  preview_filename="another conversation";
+  assert(worker->mFileName=="original transcript");
+ }
+ assert(worker->mFileName=="original transcript");
+}
+'''.replace('MEMBERS', members).replace('CONSTRUCTOR', constructor))
+
     def test_worker_never_accesses_preview_and_retired_results_cannot_reopen_it(self):
         source = (ROOT/'indra/newview/llfloaterconversationpreview.cpp').read_text()
         callback = method(source, '[pending = mPendingHistory]')
