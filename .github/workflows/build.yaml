@@ -20,6 +20,12 @@ on:
 permissions:
   contents: read
 
+# A feature push followed by its PR event must not compile the same source twice.
+# Keep release/development/canary publication runs intact.
+concurrency:
+  group: viewer-build-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/codex/') }}
+
 jobs:
   check-publication:
     runs-on: ubuntu-latest
