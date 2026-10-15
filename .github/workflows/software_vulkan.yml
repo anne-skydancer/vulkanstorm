@@ -100,6 +100,7 @@ jobs:
       - run: python scripts/tests/test_ui_publication_retry.py
       - run: python scripts/tests/test_ci_compiler_cache.py
       - run: python scripts/tests/test_ci_allocation_bounds.py
+      - run: python scripts/tests/test_contacts_layout.py
       - run: python scripts/tests/test_vulkan_menu_callbacks.py
       - run: python scripts/tests/test_vulkan_preferences.py
       - run: python scripts/tests/test_vulkan_friend_status.py
