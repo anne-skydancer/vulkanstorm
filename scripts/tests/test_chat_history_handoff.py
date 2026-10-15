@@ -78,16 +78,19 @@ int main() {
     def test_completion_before_or_during_wait_is_not_lost(self):
         source = (ROOT/'indra/newview/lllogchat.cpp').read_text()
         methods = '\n'.join(method(source, name) for name in
-                            ('void LLActionThread::waitFinished()', 'void LLActionThread::setFinished()'))
+                            ('void LLActionThread::waitFinished()', 'void LLActionThread::setFinished()',
+                             'LLActionThread::~LLActionThread()'))
         self.compile(r'''
 #include <cassert>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <iostream>
-struct LLActionThread {
+#include <atomic>
+struct LLThread { std::thread worker;void shutdown() { if(worker.joinable())worker.join(); } };
+struct LLActionThread:LLThread {
  bool mFinished=false;std::mutex mMutex;std::condition_variable mRunCondition;
- void waitFinished();void setFinished();
+ ~LLActionThread();void waitFinished();void setFinished();
 };
 METHODS
 int main() {
@@ -99,6 +102,12 @@ int main() {
   std::thread second([&]{pending.waitFinished();});
   pending.setFinished();first.join();second.join();
  }
+ std::atomic<bool> retired{false};
+ {
+  LLActionThread owner;
+  owner.worker=std::thread([&]{owner.setFinished();retired=true;});
+ } // Join before the completion mutex and condition variable are destroyed.
+ assert(retired);
 }
 '''.replace('METHODS', methods))
 

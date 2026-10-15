@@ -1270,6 +1270,9 @@ LLActionThread::LLActionThread(const std::string& name)
 
 LLActionThread::~LLActionThread()
 {
+    // The base destructor runs after our completion mutex/condition are gone.
+    // Stop the worker while those members are still available to setFinished().
+    LLThread::shutdown();
 }
 
 void LLActionThread::waitFinished()
