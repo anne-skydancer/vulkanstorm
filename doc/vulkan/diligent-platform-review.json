@@ -1,5 +1,5 @@
 {
-  "source_commit": "046e492c724921f1f307f97bccd7afc1c2cb292f",
+  "source_commit": "11c6480ada6462306d77141cec84d81a96403c12",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -1715,18 +1715,18 @@
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 2287,
-      "end": 2287,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 2288,
+      "end": 2288,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "New vs-owned production IM/group UI and development-only replay sources use existing Autobuild dependencies and Vulkan compile flags; no release baseline dependency or publishing behavior is added. Source review only; no expanded runtime acceptance claim. R1 mesh resource review: mainloop publication rechecks account/region/request/asset revision; same-account region changes retain immutable decoded data and cancel unfinished requests; bounded retries/LRU and last-owner CPU/GPU payload reservations preserve in-flight retirement. Mesh allocation refusal publishes no null packet. No whole R1 or runtime parity acceptance."
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 2301,
-      "end": 2301,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 2302,
+      "end": 2302,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "New vs-owned production IM/group UI and development-only replay sources use existing Autobuild dependencies and Vulkan compile flags; no release baseline dependency or publishing behavior is added. Source review only; no expanded runtime acceptance claim."
@@ -3362,36 +3362,36 @@
     },
     {
       "path": "indra/newview/llfloaterconversationpreview.cpp",
-      "start": 72,
-      "end": 72,
-      "sha256": "4a4219997d1cbe30101f8446601588b7fb5d230c059b0e7e3e7cc752fe7abb55",
+      "start": 73,
+      "end": 73,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterconversationpreview.cpp",
-      "start": 145,
-      "end": 145,
-      "sha256": "4a4219997d1cbe30101f8446601588b7fb5d230c059b0e7e3e7cc752fe7abb55",
+      "start": 142,
+      "end": 142,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterconversationpreview.cpp",
-      "start": 200,
-      "end": 200,
-      "sha256": "4a4219997d1cbe30101f8446601588b7fb5d230c059b0e7e3e7cc752fe7abb55",
+      "start": 202,
+      "end": 202,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloaterconversationpreview.h",
-      "start": 64,
-      "end": 64,
-      "sha256": "35a04d514efabc8d2e9488f27eb375dd82fc0633aaf492d9f1b3fa029d48fcab",
+      "start": 67,
+      "end": 67,
+      "sha256": "912aeae4e4776204e1b428815b096f04e828e6670e25628d42cd3ae1d739f14a",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -21128,9 +21128,9 @@
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 2288,
-      "end": 2288,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 2289,
+      "end": 2289,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -22703,9 +22703,9 @@
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 2289,
-      "end": 2290,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 2290,
+      "end": 2291,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Builds native avatar/mesh producers with existing Autobuild viewer dependencies; canonical RelWithDebInfo build and full staging passed. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
@@ -23855,9 +23855,9 @@
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 2298,
-      "end": 2298,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 2299,
+      "end": 2299,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -24359,9 +24359,9 @@
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 2299,
-      "end": 2299,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 2300,
+      "end": 2300,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -25495,25 +25495,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 54,
       "end": 54,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 354,
-      "end": 368,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "start": 355,
+      "end": 369,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 415,
-      "end": 415,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "start": 416,
+      "end": 416,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -25637,18 +25637,18 @@
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 2290,
-      "end": 2293,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 2291,
+      "end": 2294,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 2296,
-      "end": 2296,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 2297,
+      "end": 2297,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28355,9 +28355,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 107,
-      "end": 110,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "start": 108,
+      "end": 111,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28409,18 +28409,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 359,
-      "end": 364,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "start": 360,
+      "end": 365,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 368,
-      "end": 368,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "start": 369,
+      "end": 369,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28429,25 +28429,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 40,
       "end": 40,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 398,
-      "end": 408,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "start": 399,
+      "end": 409,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 415,
-      "end": 415,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "start": 416,
+      "end": 416,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28474,7 +28474,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 83,
       "end": 83,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28753,7 +28753,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 53,
       "end": 53,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28843,34 +28843,34 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 55,
       "end": 80,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 109,
-      "end": 109,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "start": 110,
+      "end": 110,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 280,
-      "end": 282,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "start": 281,
+      "end": 283,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 369,
-      "end": 381,
-      "sha256": "2e5d57c5b15299538cf13144fec865758b7a464277e8c3c3f56da8eb05c57b4e",
+      "start": 370,
+      "end": 382,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29104,7 +29104,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 327,
       "end": 331,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29112,35 +29112,35 @@
     {
       "path": "indra/newview/CMakeLists.txt",
       "start": 1197,
-      "end": 1208,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "end": 1209,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 2290,
-      "end": 2292,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 2291,
+      "end": 2293,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 2296,
-      "end": 2297,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 2297,
+      "end": 2298,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/CMakeLists.txt",
-      "start": 3259,
-      "end": 3268,
-      "sha256": "d64329ae9d678fa7303ddbd83d90ae5d979ee71c23c9be5f296cc72997a4588b",
+      "start": 3260,
+      "end": 3269,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35327,10 +35327,208 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 95,
+      "end": 95,
+      "sha256": "3a5c4bbfc35c332dd3ea28315551f58136425092a2e960e5489661238e8af35b",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/CMakeLists.txt",
+      "start": 1203,
+      "end": 1203,
+      "sha256": "3734f390f4c88206f38a93785bdf233c52aad6d2f02f468eb8d1dc38788e0983",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.cpp",
+      "start": 61,
+      "end": 61,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.cpp",
+      "start": 71,
+      "end": 72,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.cpp",
+      "start": 129,
+      "end": 130,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.cpp",
+      "start": 147,
+      "end": 152,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.cpp",
+      "start": 180,
+      "end": 182,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.cpp",
+      "start": 202,
+      "end": 204,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.cpp",
+      "start": 209,
+      "end": 209,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.cpp",
+      "start": 216,
+      "end": 217,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.cpp",
+      "start": 219,
+      "end": 222,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.cpp",
+      "start": 235,
+      "end": 235,
+      "sha256": "556dcef6f841fa7db98dd1b381a1abf7c7a2eb2f3024f23dcedd5c026c401f93",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.h",
+      "start": 34,
+      "end": 36,
+      "sha256": "912aeae4e4776204e1b428815b096f04e828e6670e25628d42cd3ae1d739f14a",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/llfloaterconversationpreview.h",
+      "start": 68,
+      "end": 70,
+      "sha256": "912aeae4e4776204e1b428815b096f04e828e6670e25628d42cd3ae1d739f14a",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/lllogchat.cpp",
+      "start": 1267,
+      "end": 1267,
+      "sha256": "11ea4f612f97a56e38468a8b359f75d64117d203893dc2836b66208ad11e0590",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/lllogchat.cpp",
+      "start": 1277,
+      "end": 1278,
+      "sha256": "11ea4f612f97a56e38468a8b359f75d64117d203893dc2836b66208ad11e0590",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/lllogchat.cpp",
+      "start": 1283,
+      "end": 1287,
+      "sha256": "11ea4f612f97a56e38468a8b359f75d64117d203893dc2836b66208ad11e0590",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/lllogchat.h",
+      "start": 30,
+      "end": 31,
+      "sha256": "ba1de801c97defad4fa133123b30826f323bc146d7ac29386556e633aff1da84",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/lllogchat.h",
+      "start": 42,
+      "end": 47,
+      "sha256": "ba1de801c97defad4fa133123b30826f323bc146d7ac29386556e633aff1da84",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/lllogchat.h",
+      "start": 52,
+      "end": 53,
+      "sha256": "ba1de801c97defad4fa133123b30826f323bc146d7ac29386556e633aff1da84",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vschathistoryhandoff.h",
+      "start": 1,
+      "end": 33,
+      "sha256": "5fcee1167a6063e9189cc6993bae0de961fecbd0ee7f843b829f3a8ada4efc2a",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transcript loader publishes through a per-open synchronized mailbox without a UI pointer; controls and publication remain on main, close releases borrowed message references before deletion, and synchronized completion waits preserve worker lifetime. Threaded retired/reopened owner and wait-order regression evidence is separate from runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_chat_history_handoff.py",
+      "start": 1,
+      "end": 120,
+      "sha256": "0b686b7995599d49f69e91b443e6b671c2d4c07e4222e773a2070fbbf128ca7d",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "a7e36b78a0a889af767aec8758666be5bd5b0a0d",
+    "previous_source_commit": "046e492c724921f1f307f97bccd7afc1c2cb292f",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Hash-pinned existing witnesses remapped through committed source deltas; R2 geometry/appearance/motion/resource and diagnostic changes reviewed by producer and ownership responsibility; see r2-production-audit.md. Runtime evidence is separate from source classification."
   }
