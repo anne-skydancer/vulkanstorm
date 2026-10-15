@@ -101,6 +101,8 @@ LLIconDictionary::LLIconDictionary()
 
     addEntry(LLInventoryType::ICONNAME_MATERIAL,                new IconEntry("Inv_Material"));
 
+    addEntry(LLInventoryType::ICONNAME_SCRIPT_LUAU,             new IconEntry("Inv_Script_Luau"));
+
     addEntry(LLInventoryType::ICONNAME_INVALID,                 new IconEntry("Inv_Invalid"));
     addEntry(LLInventoryType::ICONNAME_UNKNOWN,                 new IconEntry("Inv_Unknown"));
 

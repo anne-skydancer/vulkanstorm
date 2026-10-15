@@ -24,6 +24,7 @@
  * $/LicenseInfo$
  */
 
+#include "llscripteditorws.h"
 #include "llviewerprecompiledheaders.h"
 
 #ifdef INCLUDE_VLD
@@ -6259,6 +6260,18 @@ static void derez_objects(EDeRezDestination dest, const LLUUID& dest_id)
     derez_objects(dest, dest_id, first_region, error, NULL);
 }
 
+bool save_object_back_to_contents(LLViewerObject* object, const LLUUID& source_task_id)
+{
+    if (!object || source_task_id.isNull()) return false;
+    LLViewerRegion* region = object->getRegion();
+    if (!region) return false;
+    std::vector<LLViewerObjectPtr> objects;
+    objects.push_back(object);
+    std::string error;
+    derez_objects(DRD_SAVE_INTO_TASK_INVENTORY, source_task_id, region, error, &objects);
+    return error.empty();
+}
+
 static void derez_objects_separate(EDeRezDestination dest, const LLUUID &dest_id)
 {
     std::vector<LLViewerObjectPtr> derez_object_list;
@@ -6965,6 +6978,52 @@ class LLToolsCheckSelectionLODMode : public view_listener_t
     }
 };
 
+
+class LLToolsCheckScriptEditorServer : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        LLScriptEditorWSServer::ptr_t server = LLScriptEditorWSServer::getServer();
+        return server && server->isRunning();
+    }
+};
+
+class LLToolsEnableScriptEditorServer : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        return LLScriptEditorWSServer::isEnabled();
+    }
+};
+
+class LLToolsToggleScriptEditorServer : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        LLScriptEditorWSServer::ptr_t server = LLScriptEditorWSServer::getServer();
+        if (server && server->isRunning())
+        {
+            LLWebsocketMgr::instance().stopServer(LLScriptEditorWSServer::DEFAULT_SERVER_NAME);
+        }
+        else
+        {
+            if (LLScriptEditorWSServer::isTightIntegration())
+            {
+                LLScriptEditorWSServer::launchVSCode();
+            }
+            else
+            {
+                LLScriptEditorWSServer::ensureServerRunning();
+            }
+        }
+
+        if (gFloaterTools)
+        {
+            gFloaterTools->dirty();
+        }
+        return true;
+    }
+};
 
 // Round the position of all root objects to the grid
 class LLToolsSnapObjectXY : public view_listener_t
@@ -9878,6 +9937,12 @@ void handle_selected_script_action(const std::string& action)
         msg = "Recompile";
         title = LLTrans::getString("CompileQueueTitle");
     }
+    else if (action == "compile lua" || action == "compile lsl-luau")
+    {
+        name = "compile_queue";
+        msg = "Recompile";
+        title = LLTrans::getString("CompileQueueTitle");
+    }
     else if (action == "reset")
     {
         name = "reset_queue";
@@ -9909,7 +9974,7 @@ void handle_selected_script_action(const std::string& action)
     LLFloaterScriptQueue* queue = LLFloaterReg::getTypedInstance<LLFloaterScriptQueue>(name, LLSD(id));
     if (queue)
     {
-        queue->setMono(mono);
+        queue->setCompileTarget(action == "compile lua" ? "luau" : action == "compile lsl-luau" ? "lsl-luau" : mono ? "mono" : "lsl2");
         if (queue_actions(queue, msg))
         {
             queue->setTitle(title);
@@ -10567,6 +10632,27 @@ class LLEditableSelectedMono : public view_listener_t
             new_value = is_editable_selected() && have_cap;
         }
         return new_value;
+    }
+};
+
+static bool is_lua_scripts_enabled()
+{
+    LLViewerRegion* region = gAgent.getRegion();
+    if (!region || region->getCapability("UpdateScriptTask").empty() || !region->simulatorFeaturesReceived())
+    {
+        return false;
+    }
+
+    LLSD simulator_features;
+    region->getSimulatorFeatures(simulator_features);
+    return simulator_features["LuaScriptsEnabled"].asBoolean();
+}
+
+class LLEditableSelectedLua : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        return is_editable_selected() && is_lua_scripts_enabled();
     }
 };
 
@@ -13325,6 +13411,7 @@ void initialize_menus()
     view_listener_t::addMenu(new LLSomethingSelectedNoHUD(), "SomethingSelectedNoHUD");
     view_listener_t::addMenu(new LLEditableSelected(), "EditableSelected");
     view_listener_t::addMenu(new LLEditableSelectedMono(), "EditableSelectedMono");
+    view_listener_t::addMenu(new LLEditableSelectedLua(), "EditableSelectedLua");
     view_listener_t::addMenu(new LLToggleUIHints(), "ToggleUIHints");
 
 // [RLVa:KB] - Checked: RLVa-2.0.0
