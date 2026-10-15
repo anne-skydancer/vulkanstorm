@@ -1293,8 +1293,8 @@ void LLActionThread::setFinished()
 
 LLLoadHistoryThread::LLLoadHistoryThread(const std::string& file_name, std::list<LLSD>* messages, const LLSD& load_params)
     : LLActionThread("load chat history"),
-    mMessages(messages),
     mFileName(file_name),
+    mMessages(messages),
     mLoadParams(load_params),
     mNewLoad(true),
     mLoadEndSignal(NULL)

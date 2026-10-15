@@ -83,7 +83,9 @@ High Contrast. Inspection exposed worker-thread mutation of preview widgets and
 an unguarded preview pointer in the completion callback. Transcript results now
 cross a synchronized mailbox scoped to each open preview; the UI thread alone
 updates controls, and close/destruction releases the message pointer before
-starting deletion. History completion uses a synchronized predicate wait to
+starting deletion. The loader owns its filename independently of the preview,
+and workers stop before their synchronization and callback state is destroyed.
+History completion uses a synchronized predicate wait to
 avoid lost notifications. Threaded regression checks cover publication,
 close/reopen/destruction and completion before/during multiple waits. A complete
 runtime rerun remains required; a failed skin case is not waived.
