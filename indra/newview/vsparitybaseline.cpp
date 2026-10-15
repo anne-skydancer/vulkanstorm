@@ -13,6 +13,9 @@
 #include "llframetimer.h"
 #include "llfocusmgr.h"
 #include "llvertexbuffer.h"
+#include "llrootview.h"
+#include "llmediactrl.h"
+#include "llpluginclassmedia.h"
 #pragma push_macro("Bool")
 #pragma push_macro("False")
 #pragma push_macro("True")
@@ -79,6 +82,27 @@ F32SecondsImplicit savedViewerTime,savedViewerInterval;
 double savedClock=0;
 bool frozen=false,worldClock=false;
 bool marked=false;
+bool                    loginPageReady()
+{
+    const auto* expected = std::getenv("VS_PARITY_BASELINE_LOGIN_URL");
+    if (!expected || gSavedSettings.getString("ForceLoginURL") != expected || !gViewerWindow || !gViewerWindow->getRootView())
+        return false;
+    auto* browser = gViewerWindow->getRootView()->findChild<LLMediaCtrl>("login_html");
+    auto* plugin  = browser ? browser->getMediaPlugin() : nullptr;
+    if (!plugin || !plugin->textureValid() || plugin->getDirty() || plugin->getMediaName() != "Vulkanstorm parity login fixture v1" ||
+        plugin->getTextureDepth() != 4 || plugin->getWidth() < 200 || plugin->getHeight() < 200)
+        return false;
+    const auto format = plugin->getTextureFormatPrimary();
+    if (format != GL_RGBA && format != GL_BGRA)
+        return false;
+    const auto* bits = plugin->getBitsData();
+    if (!bits)
+        return false;
+    // Wait for the actual CEF paint, not merely navigation/title completion.
+    // The page centre is a fixed background, away from both coloured witnesses.
+    const auto* pixel = bits + (std::size_t(plugin->getHeight() / 2) * plugin->getBitsWidth() + plugin->getWidth() / 2) * 4;
+    return pixel[format == GL_BGRA ? 2 : 0] == 25 && pixel[1] == 51 && pixel[format == GL_BGRA ? 0 : 2] == 77 && pixel[3] == 255;
+}
 void restoreClock()
 {
     if (frozen)
@@ -119,6 +143,7 @@ void save(const std::vector<U8>& rgb,unsigned width,unsigned height,const std::s
     LLSD report;
     report["scene"]=vs_parity_scene_active()?"static-world-primitives-v1":"normal-startup-login-v1";
     report["backend"]=backend;report["frames"]=samples;
+    report["login_page_fixture_ready"]        = !vs_parity_scene_active() && loginPageReady();
     report["initialization_metrics"]=initializationMetrics;
     report["world_replay_qualified"]=false; // Acceptance belongs to the independent runner.
     report["fixed_clock_qualified"]=false; // Runner must verify identical scene inputs and repeated output.
@@ -143,7 +168,8 @@ void save(const std::vector<U8>& rgb,unsigned width,unsigned height,const std::s
         report["device"]["version"]=reinterpret_cast<const char*>(glGetString(GL_VERSION));
     }
     else report["device"]=gViewerWindow->nativeContext()->rendererInfo();
-    for (const char* name:{"SkinCurrent","SkinCurrentTheme","Language","UIScaleFactor","RenderBackend","RenderVSyncEnable","RenderDebugGLSession"})
+    for (const char* name : { "SkinCurrent", "SkinCurrentTheme", "Language", "UIScaleFactor", "RenderBackend", "RenderVSyncEnable",
+                              "RenderDebugGLSession", "ForceLoginURL" })
         report["settings"][name]=gSavedSettings.getLLSD(name);
 #if LL_WINDOWS
     std::ofstream libraryPaths(out/"loaded-library-paths.txt");
@@ -167,7 +193,8 @@ void save(const std::vector<U8>& rgb,unsigned width,unsigned height,const std::s
     currentReport=report;
     if (samples.size()==5) LLAppViewer::instance()->forceQuit();
 }
-bool capture() { return directory() && frame>=180 && samples.size()<5; }
+bool capture()
+{ return directory() && frame >= 180 && samples.size() < 5 && (vs_parity_scene_active() || loginPageReady()); }
 }
 void vs_parity_baseline_frame_begin()
 {
