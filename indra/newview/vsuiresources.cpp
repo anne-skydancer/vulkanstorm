@@ -51,6 +51,7 @@ struct VSUIResources::Impl
     struct FontPage { LLPointer<LLImageRaw> raw; S32 generation=-1; std::string key; };
     std::map<LLImageRaw*,FontPage> font_pages;
     std::array<float,4> clip{};
+    unsigned                       deferred_draw_batches = 0;
     bool active=false;
     explicit Impl(VSUIRenderer& value) : renderer(value) {}
     void drawRotated(const Asset& a,S32 x,S32 y,S32 width,S32 height,F32 degrees,
@@ -228,7 +229,10 @@ bool VSUIResources::patch(const std::string& key,unsigned x,unsigned y,unsigned 
 void VSUIResources::begin(unsigned width,unsigned height,float dpi)
 {
     check(!mImpl->active && width && height && std::isfinite(dpi) && dpi>0,"Invalid native UI collection begin");
-    mImpl->packets.clear(); mImpl->logical_height=height/dpi;mImpl->logical_width=width/dpi;
+    mImpl->packets.clear();
+    mImpl->deferred_draw_batches = 0;
+    mImpl->logical_height        = height / dpi;
+    mImpl->logical_width         = width / dpi;
     mImpl->dpi=dpi;
     mImpl->clip={0,0,width/dpi,height/dpi}; mImpl->active=true;
 }
@@ -263,11 +267,21 @@ void VSUIResources::fontBatch(LLImageRaw* raw,S32 generation,const LLVector4a* p
     {
         page.raw=raw;page.key="viewer-font-"+std::to_string(c.font_pages.size());
     }
-    if (page.generation!=generation)
+    auto existing = c.assets.find(page.key);
+    if (page.generation != generation || existing == c.assets.end())
     {
-        auto existing=c.assets.find(page.key);
-        if (existing==c.assets.end() || existing->second.asset->width!=unsigned(raw->getWidth()) ||
-            existing->second.asset->height!=unsigned(raw->getHeight())) publish(page.key,*raw);
+        if (existing == c.assets.end() || existing->second.asset->width != unsigned(raw->getWidth()) ||
+            existing->second.asset->height != unsigned(raw->getHeight()))
+        {
+            // Initial publication and atlas resize can be refused just like a
+            // patch. Keep the producer generation pending and retry next draw;
+            // never look up or advertise an atlas that was not published.
+            if (!publish(page.key, *raw))
+            {
+                ++c.deferred_draw_batches;
+                return;
+            }
+        }
         else
         {
             // The upstream atlas exposes a generation but no dirty rectangle.
@@ -298,7 +312,11 @@ void VSUIResources::fontBatch(LLImageRaw* raw,S32 generation,const LLVector4a* p
                     std::copy(p.begin(),p.end(),bytes.begin()+(std::size_t(y-top)*(right-left)+x-left)*4);
                 }
                 if (!patch(page.key,left,top,right-left,bottom-top,bytes))
-                { page.generation=-1;return; } // Retry this generation when residency becomes available.
+                {
+                    page.generation = -1;
+                    ++c.deferred_draw_batches;
+                    return;
+                } // Retry when residency becomes available.
             }
         }
         page.generation=generation;
@@ -328,7 +346,13 @@ void VSUIResources::rectangle(const LLRectf& r,const LLColor4& color)
     const std::string key="native-solid-white";
     if (!c.assets.count(key))
     {
-        LLPointer<LLImageRaw> raw=new LLImageRaw(1,1,4);raw->clear(255,255,255,255);publish(key,*raw);
+        LLPointer<LLImageRaw> raw = new LLImageRaw(1, 1, 4);
+        raw->clear(255, 255, 255, 255);
+        if (!publish(key, *raw))
+        {
+            ++c.deferred_draw_batches;
+            return;
+        }
     }
     VSUIRenderer::Packet p; p.blend=nativeBlend();p.image=c.assets.at(key).asset->image;
     p.bounds={r.mLeft/c.dpi,c.logical_height-r.mTop/c.dpi,r.mRight/c.dpi,c.logical_height-r.mBottom/c.dpi};
@@ -386,6 +410,7 @@ LLSD VSUIResources::evidence() const
 {
     const auto stats=mImpl->renderer.statistics();const auto caps=mImpl->renderer.capabilities();
     LLSD result;result["image_generations"]=S32(mImpl->assets.size());
+    result["deferred_draw_batches"]                                                            = S32(mImpl->deferred_draw_batches);
     result["resident_image_payload_bytes"]=ll_sd_from_U64(stats.residentImageBytes);
     result["image_payload_budget_bytes"]=ll_sd_from_U64(stats.imageBudgetBytes);
     result["image_allocation_refusals"]=ll_sd_from_U64(stats.imageAllocationRefusals);

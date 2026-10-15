@@ -362,7 +362,12 @@ struct VSVulkanContext::Impl
 #if VS_VULKAN_DIAGNOSTICS
         vs_parity_baseline_capture_vk(device,context,target,size.mX,size.mY);
 #endif
-        if (observer) observer(device, context, target, size.mX, size.mY, dpi, packets);
+        // A refused font/fill upload is retried on the next frame. Captures
+        // must wait for complete visible UI, so omitted packets cannot make
+        // a pixel oracle falsely accept an incomplete frame. A persistent
+        // refusal therefore reaches the existing bounded replay timeout.
+        if (observer && resources->evidence()["deferred_draw_batches"].asInteger() == 0)
+            observer(device, context, target, size.mX, size.mY, dpi, packets);
 #if VS_VULKAN_DIAGNOSTICS
         const auto parityPresentStart=std::chrono::steady_clock::now();
 #endif
