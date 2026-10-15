@@ -1,5 +1,5 @@
 {
-  "source_commit": "21e066b27dac38313feb9254550ed92bf4e6bc6f",
+  "source_commit": "114127be659147387a01d88ce75c584c3a28513e",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -25493,27 +25493,27 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 54,
-      "end": 54,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 58,
+      "end": 58,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 357,
-      "end": 371,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 385,
+      "end": 399,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 418,
-      "end": 418,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 446,
+      "end": 446,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28355,9 +28355,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 110,
-      "end": 113,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 115,
+      "end": 118,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28409,45 +28409,45 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 362,
-      "end": 367,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 390,
+      "end": 395,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 371,
-      "end": 371,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 399,
+      "end": 399,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 40,
-      "end": 40,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 44,
+      "end": 44,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 401,
-      "end": 411,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 429,
+      "end": 439,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 418,
-      "end": 418,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 446,
+      "end": 446,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28472,9 +28472,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 83,
-      "end": 83,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 87,
+      "end": 87,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28751,9 +28751,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 53,
-      "end": 53,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 57,
+      "end": 57,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28841,36 +28841,36 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 55,
-      "end": 80,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 59,
+      "end": 84,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 112,
-      "end": 112,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 117,
+      "end": 117,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 283,
-      "end": 285,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 311,
+      "end": 313,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 372,
-      "end": 384,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 400,
+      "end": 412,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35330,9 +35330,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 95,
-      "end": 95,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 99,
+      "end": 99,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35654,9 +35654,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 96,
-      "end": 96,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 100,
+      "end": 100,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -36032,9 +36032,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 97,
-      "end": 97,
-      "sha256": "676dd6f7ceec23de652f7024d17d229d4b9547ba16bc5aa3aa34f189fc401130",
+      "start": 102,
+      "end": 102,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -36380,10 +36380,595 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 5,
+      "end": 9,
+      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 11,
+      "end": 14,
+      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 33,
+      "end": 33,
+      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 107,
+      "end": 107,
+      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 130,
+      "end": 146,
+      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 159,
+      "end": 159,
+      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 163,
+      "end": 163,
+      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 199,
+      "end": 207,
+      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 235,
+      "end": 235,
+      "sha256": "b991dbc4bcb3bd72d85bef6beaed5bf6c9c65ab2e2078356357c87cb68f75c9e",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 12,
+      "end": 15,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 101,
+      "end": 101,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 152,
+      "end": 152,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 188,
+      "end": 188,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 259,
+      "end": 272,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 282,
+      "end": 282,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 286,
+      "end": 286,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 302,
+      "end": 310,
+      "sha256": "fb39a849bec5834855ca293dfef52a71056a3e1ab1313ce84bc764ee7ad173c2",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/fspanellogin.cpp",
+      "start": 469,
+      "end": 486,
+      "sha256": "41ebaca4a29293277236bded876e692b5021362e3f760f7f29a2b8912d298f5c",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/fspanellogin.h",
+      "start": 52,
+      "end": 52,
+      "sha256": "eb2936eeb0d3403cbaffc69f21e89dd6663b5589b7bc8b386d84265c43d8d42f",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/html/en/vulkanstorm/welcome.html",
+      "start": 10,
+      "end": 10,
+      "sha256": "1113204430d17f860a12cedfc99e849d0dd999126b0170b92b32271f3dc81c1c",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 2,
+      "end": 2,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 32,
+      "end": 32,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 34,
+      "end": 34,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 41,
+      "end": 41,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 54,
+      "end": 54,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 83,
+      "end": 83,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 85,
+      "end": 85,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 89,
+      "end": 89,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 91,
+      "end": 91,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 94,
+      "end": 94,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 100,
+      "end": 100,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 127,
+      "end": 127,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 141,
+      "end": 141,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 144,
+      "end": 144,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 157,
+      "end": 157,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 164,
+      "end": 164,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 170,
+      "end": 170,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 177,
+      "end": 177,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 183,
+      "end": 183,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 196,
+      "end": 196,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 203,
+      "end": 203,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 205,
+      "end": 205,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 215,
+      "end": 215,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 226,
+      "end": 226,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 233,
+      "end": 233,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 258,
+      "end": 258,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 280,
+      "end": 280,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 305,
+      "end": 305,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 313,
+      "end": 313,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 333,
+      "end": 333,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 369,
+      "end": 369,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 380,
+      "end": 380,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 383,
+      "end": 383,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 393,
+      "end": 393,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 396,
+      "end": 396,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 406,
+      "end": 406,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 409,
+      "end": 409,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 418,
+      "end": 418,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 424,
+      "end": 424,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/panel_fs_nui_login.xml",
+      "start": 445,
+      "end": 445,
+      "sha256": "20149afd8a1d46a638fa7ea9b74eb3f9638100b66425cca251fd0b484ce0cb31",
+      "record": "I03",
+      "disposition": "mapped",
+      "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/ci_build_requirements.txt",
+      "start": 1,
+      "end": 8,
+      "sha256": "a6d95dba3df77c1988cfebe82fcef3783783f9da886b920101e52e90e68d1af1",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/ci_compiler_cache.cmake",
+      "start": 1,
+      "end": 11,
+      "sha256": "7ab1ae2be31d140c7c84d20aad0aeac091fc96d118027c7077eef0205f6dc70c",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/ci_compiler_cache.json",
+      "start": 1,
+      "end": 13,
+      "sha256": "3abacb1e403c62fdcae46f29dbffec01607289b2fae6f979b2dc206fd1424068",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/ci_compiler_cache.py",
+      "start": 1,
+      "end": 98,
+      "sha256": "6f9d854ce41c9f39e7412b87b92e0ab2b3f709bef7c460524884d57f7a2481b3",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_ci_compiler_cache.py",
+      "start": 1,
+      "end": 148,
+      "sha256": "0ae74e6275872bc3b953e163c1f33359ed1f8f02406b1e49f188fea0d91d12bf",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "e6716e4bcadba4efd916a69294dd81b1985783a0",
+    "previous_source_commit": "21e066b27dac38313feb9254550ed92bf4e6bc6f",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Hash-pinned existing witnesses remapped through committed source deltas; R2 geometry/appearance/motion/resource and diagnostic changes reviewed by producer and ownership responsibility; see r2-production-audit.md. Runtime evidence is separate from source classification."
   }
