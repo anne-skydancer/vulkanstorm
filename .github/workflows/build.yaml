@@ -36,6 +36,7 @@ jobs:
       - run: node --test scripts/tests/ci_publish_latest.test.cjs
       - run: python3 scripts/tests/test_windows_symbol_archive.py
       - run: python3 scripts/tests/test_version_schema.py
+      - run: python3 scripts/tests/test_contacts_layout.py
       - run: python3 scripts/tests/test_ci_compiler_cache.py
       - run: python3 scripts/tests/test_ci_allocation_bounds.py
       - run: python3 scripts/tests/test_ndof_cmake.py
