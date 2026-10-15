@@ -1,5 +1,5 @@
 {
-  "source_commit": "ae47ba9609150501c8cb68f31284c2ef759180ad",
+  "source_commit": "5d74f4a6bd876542e45696c2709dd1f7e8eea1e9",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -401,7 +401,7 @@
       ]
     },
     "indra/newview/vsuirenderer.cpp": {
-      "sha256": "89d4c0ed01a061fe114bb53f9245b3e8890eeb7c7a5f7cc3052f080e3fbdd190",
+      "sha256": "b7ef99fccd48553177c90d27039738413b5e65474f18ee057f8051a7d043da51",
       "anchors": [
         "VSUIRenderer::upload",
         "VSUIRenderer::draw",
@@ -410,7 +410,7 @@
       ]
     },
     "indra/newview/vsuirenderer.h": {
-      "sha256": "872af181396f72b9436d258045a2f0b743ace3904b798afaa407641d232d171e",
+      "sha256": "fc321be50b556e6bd07b0b05c43383ed7bb2bd1d97796b66b8e64f781d7452ef",
       "anchors": [
         "class VSUIRenderer",
         "struct Packet",
@@ -440,7 +440,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "13da743f30ccea4cadf3a227ed1c065b865b31e4cf3d77f58179ea2c611a7144",
+      "sha256": "d9bd87ba6abec5456d839aeb61a82d83b9d4628ee21386317f58be0d4e463bf4",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -701,7 +701,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.cpp": {
-      "sha256": "5f219a5da163e8efb3c8fe7491bc9863c0a122ea9a696ace09b7b2dd8e06c7fe",
+      "sha256": "2d5929ae1841e76b882f0b79877a043efb4f329c99eab2246004bb6eda7e1a03",
       "anchors": [
         "VSVulkanContext::VSVulkanContext",
         "CreateDeviceAndContextsVk",

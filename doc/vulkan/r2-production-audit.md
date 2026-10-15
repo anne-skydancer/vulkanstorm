@@ -113,8 +113,11 @@ conversion, orientation, DPI, repeated glyph additions, one allocation per page,
 coalesced updates, unchanged-page reuse and retained draws across cache reset.
 The software Vulkan harness additionally exercises repeated updates interleaved
 with GPU draws, stable texture identity and charged residency, deterministic
-readback and retirement. These checks and final-source runtime/CI qualification
-must pass before this correction is accepted. The earlier retry/capture guard
+readback and retirement. The production-method regressions pass locally (2/2), and the headless
+SwiftShader harness passes all six modes, including 65 atlas updates with one
+texture generation, constant charged residency, pixel readback and retirement.
+Final-source connected-viewer and three-platform CI qualification remain
+required before this correction is accepted. The earlier retry/capture guard
 alone was insufficient; solid-fill refusal still prevents incomplete captures.
 
 The evidence packager requires complete R2 contracts, all readbacks and their
