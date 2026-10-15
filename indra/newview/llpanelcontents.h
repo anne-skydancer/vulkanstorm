@@ -34,6 +34,7 @@
 #include "llviewerobject.h"
 #include "llvoinventorylistener.h"
 #include "v3math.h"
+#include <boost/signals2/connection.hpp>
 
 class LLButton;
 class LLPanelObjectInventory;
@@ -52,7 +53,19 @@ public:
     void            clearContents();
 
 
-    static void     onClickNewScript(void*);
+    void            onNewScriptFlyoutCommit(LLUICtrl* ctrl);
+    void            onNewNotecardCommit();
+
+    void            onClickPublish();
+
+    void            createTaskInventoryItemHelper(LLViewerObject* object,
+                        LLAssetType::EType asset_type,
+                        LLInventoryType::EType inventory_type,
+                        U8 sub_type,
+                        const std::string& name,
+                        const LLSD& params);
+
+
     static void     onClickPermissions(void*);
     static void     onClickResetScripts(void*); // <FS> Script reset in edit floater
     static void     onClickRefresh(void*);
@@ -71,6 +84,12 @@ public:
 protected:
     void getState(LLViewerObject *object);
     void onFilterEdit();
+    void onSimulatorFeaturesReceived(const LLUUID&);
+    LLUUID mLastScriptObjectID;
+    bool mLastLuaRegion{false};
+    bool mNewScriptIsLua{false};
+    boost::signals2::connection mSimulatorFeaturesConnection;
+    LLButton* mPublishButton{nullptr};
 
     bool mDirtyFilter { false };
 

@@ -1413,4 +1413,8 @@ extern char const* const _PREHASH_RegionSizeY;
 extern char const* const _PREHASH_SizeX;
 extern char const* const _PREHASH_SizeY;
 // <FS:CR> Aurora Sim
+extern char const* const _PREHASH_Mono;
+extern char const* const _PREHASH_Luau;
+extern char const* const _PREHASH_LuauLanguage;
+
 #endif

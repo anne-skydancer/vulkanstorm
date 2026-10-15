@@ -395,6 +395,8 @@ void LLViewerInventoryItem::copyViewerItem(const LLViewerInventoryItem* other)
     LLInventoryItem::copyItem(other);
     mIsComplete = other->mIsComplete;
     mTransactionID = other->mTransactionID;
+    mIsRunning = other->mIsRunning;
+    mIsFaulted = other->mIsFaulted;
 }
 
 // virtual
@@ -546,6 +548,8 @@ void LLViewerInventoryItem::fetchFromServer(void) const
 bool LLViewerInventoryItem::unpackMessage(const LLSD& item)
 {
     bool rv = LLInventoryItem::fromLLSD(item);
+    mIsRunning = item["running"].asBoolean();
+    mIsFaulted = item["faulted"].asBoolean();
 
     LLLocalizedInventoryItemsDictionary::getInstance()->localizeInventoryObjectName(mName);
 
@@ -2052,12 +2056,27 @@ void create_new_item(const std::string& name,
 
     LLPointer<LLBoostFuncInventoryCallback> cb = NULL;
 
+    U8 subtype = NO_INV_SUBTYPE;
     switch (inv_type)
     {
         case LLInventoryType::IT_LSL:
         {
             cb = new LLBoostFuncInventoryCallback(create_script_cb);
             next_owner_perm = LLFloaterPerms::getNextOwnerPerms("Scripts");
+
+            LLViewerRegion* region = gAgent.getRegion();
+            if (region && region->simulatorFeaturesReceived())
+            {
+                // *TODO* Setting the subtype for the script will cause the server to select
+                // either the LSL or Lua default script.  We should perhaps allow the user to
+                // select which type of script they want to create.
+                LLSD simulatorFeatures;
+                region->getSimulatorFeatures(simulatorFeatures);
+                if (simulatorFeatures["LuaScriptsEnabled"].asBoolean())
+                {
+                    subtype = SST_LUA;
+                }
+            }
             break;
         }
 
@@ -2100,7 +2119,7 @@ void create_new_item(const std::string& name,
                           desc,
                           asset_type,
                           inv_type,
-                          NO_INV_SUBTYPE,
+                          subtype,
                           next_owner_perm,
                           cb);
 }
