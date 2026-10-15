@@ -1108,8 +1108,11 @@ bool LLInventoryItem::fromLLSD(const LLSD& sd, bool is_new)
     }
     // </FS:TJ>
 
-    mRuntime = sd.has("script") ? sd["script"]["runtime"].asString()
-                                : sd["metadata"]["script"]["runtime"].asString();
+    if (is_new || sd.has("script") || (sd.has("metadata") && sd["metadata"].has("script")))
+    {
+        mRuntime = sd.has("script") ? sd["script"]["runtime"].asString()
+                                   : sd["metadata"]["script"]["runtime"].asString();
+    }
 
     // iterate as map to avoid making unnecessary temp copies of everything
     LLSD::map_const_iterator i, end;

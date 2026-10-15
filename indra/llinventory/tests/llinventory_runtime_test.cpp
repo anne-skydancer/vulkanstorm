@@ -83,4 +83,22 @@ template<> template<> void script_inventory_test::test<6>()
     ensure_equals("legacy task inventory retains runtime", copy->getRuntime(), std::string("luau"));
     ensure_equals("legacy task inventory retains source language", copy->getInventorySubType(), U8(SST_LUA));
 }
+
+template<> template<> void script_inventory_test::test<7>()
+{
+    item->fromLLSD(metadata(SST_LSL, "luau"));
+    LLSD update;
+    update["name"] = "Renamed script";
+    ensure("partial name accepted", item->fromLLSD(update, false));
+    ensure_equals("partial name keeps runtime", item->getRuntime(), std::string("luau"));
+    update["metadata"]["unrelated"] = true;
+    item->fromLLSD(update, false);
+    ensure_equals("unrelated metadata keeps runtime", item->getRuntime(), std::string("luau"));
+    update["metadata"]["script"]["runtime"] = "mono";
+    item->fromLLSD(update, false);
+    ensure_equals("explicit partial runtime changes VM", item->getRuntime(), std::string("mono"));
+    update.erase("metadata");
+    item->fromLLSD(update, true);
+    ensure("full replacement clears absent runtime", item->getRuntime().empty());
+}
 }
