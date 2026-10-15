@@ -75,6 +75,8 @@ else()
 endif (WINDOWS)
 
 ADD_CUSTOM_COMMAND(TARGET llwebrtc POST_BUILD
+                   BYPRODUCTS "${SHARED_LIB_STAGING_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}llwebrtc${CMAKE_SHARED_LIBRARY_SUFFIX}"
+                   COMMAND ${CMAKE_COMMAND} -E make_directory ${SHARED_LIB_STAGING_DIR}
                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
                        $<TARGET_FILE:llwebrtc>
                                ${SHARED_LIB_STAGING_DIR})
