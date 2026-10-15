@@ -90,6 +90,18 @@ avoid lost notifications. Threaded regression checks cover publication,
 close/reopen/destruction and completion before/during multiple waits. A complete
 runtime rerun remains required; a failed skin case is not waived.
 
+Native Windows exception tracing also identified an uncaught `std::out_of_range`
+in `VSUIResources::fontBatch`: initial font atlas publication could be refused
+by the bounded image pool, but the batch still committed its generation and
+accessed the absent entry. Font publication and resize now retain a pending
+generation and retry after refusal; solid fills handle the same refusal path.
+Queued image generations remain immutable. Each frame records deferred batches,
+and capture observers wait for a complete frame; persistent refusal fails at
+the existing replay deadline instead of accepting missing text. Regression
+checks exercise initial refusal, patch refusal, resize, erased-entry recovery,
+immutable queued images, solid fills and capture admission. No budget or timeout
+has been increased. Final-source runtime qualification remains required.
+
 The evidence packager requires complete R2 contracts, all readbacks and their
 hashes, transport receipts, source revision, build provenance and staged viewer
 hash. It revalidates artifacts without rewriting their manifests. A passing UI
