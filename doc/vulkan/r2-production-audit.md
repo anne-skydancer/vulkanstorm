@@ -143,6 +143,18 @@ allocation now reject invalid or unrepresentable counts before allocation.
 Compiler-backed production-method checks cover their ordinary and extreme
 inputs; Linux LTO warning clearance remains subject to the fresh platform build.
 
+Run `38739799255` passed the complete Windows graphics job. Linux Lavapipe
+built and staged successfully, then failed startup repeatability: the embedded
+login browser changed from blank pixels to a public-DNS error page between the
+five captures. OpenGL's five captures were stable. The baseline now serves a
+hash-pinned static login page on loopback through the existing `ForceLoginURL`
+setting for both renderers. Captures wait for actual CEF paint and publication;
+every GPU frame must also contain the background and two positioned colour
+witnesses. Blank, unpainted or error pages fail. The original one-unit pixel
+tolerance, five consecutive samples, unmasked comparison and deadlines remain.
+HTTP request receipts, fixture bytes/hash and observed URL/readiness are retained.
+Local regression checks pass; fresh platform runtime qualification is required.
+
 The acceptance ledger retains later material, shadow, particle and composition
 obligations. Terrain/vegetation rows span R2/R3/R6; particles/ribbons/beams remain
 R7. No later feature is waived or certified by R2 geometry evidence.

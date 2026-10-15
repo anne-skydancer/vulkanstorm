@@ -5,6 +5,9 @@ import hashlib
 import sys
 import tempfile
 import unittest
+import urllib.request
+import test_ci_allocation_bounds as bounds
+from test_native_simulator_features import method
 import xml.etree.ElementTree as ET
 from test_gl_probe_binding import ProbeBindingTest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -14,6 +17,80 @@ import check_vulkan_parity_r0 as acceptance
 
 
 class BaselineTest(unittest.TestCase):
+    def test_login_page_is_pinned_loopback_input_with_receipts(self):
+        contract=json.loads((baseline.ROOT/'doc/vulkan/parity/baseline-contract.json').read_text())
+        with tempfile.TemporaryDirectory() as directory:
+            with baseline.BaselineLoginPage(directory,contract) as page:
+                opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                with opener.open(page.url+'?lang=en',timeout=5) as response:
+                    self.assertEqual(response.read(),page.content)
+                self.assertIn('<title>'+contract['login_page_fixture']['title']+'</title>',page.content.decode())
+                self.assertEqual(page.requests,['/login-page.html?lang=en'])
+            self.assertFalse(page.thread.is_alive())
+            receipt=json.loads((Path(directory)/'login-page-requests.json').read_text())
+            self.assertEqual(receipt['sha256'],hashlib.sha256(page.content).hexdigest())
+            contract['login_page_fixture']['sha256']='changed'
+            with self.assertRaisesRegex(RuntimeError,'Changed baseline'):
+                baseline.BaselineLoginPage(directory,contract)
+
+    def test_blank_error_and_unpainted_pages_cannot_satisfy_startup(self):
+        spec=json.loads((baseline.ROOT/'doc/vulkan/parity/baseline-contract.json').read_text())['login_page_fixture']
+        with tempfile.TemporaryDirectory() as directory:
+            for color in ([0,0,0],[255,255,255],spec['background']):
+                with self.assertRaisesRegex(ValueError,'Missing painted'):
+                    baseline.startup_page_pixels(self.image(directory,'blank',color*256*240,256,240),spec)
+            pixels=[]
+            for y in range(240):
+                for x in range(256):
+                    color=spec['upper'] if 80<=x<144 and 20<=y<52 else spec['lower'] if 160<=x<224 and 160<=y<192 else spec['background']
+                    pixels.extend(color)
+            counts=baseline.startup_page_pixels(self.image(directory,'painted',pixels,256,240),spec)
+            self.assertEqual(counts['upper'],2048)
+            self.assertEqual(counts['lower'],2048)
+
+    def test_capture_readiness_requires_actual_cef_paint(self):
+        source=(baseline.ROOT/'indra/newview/vsparitybaseline.cpp').read_text()
+        ready=method(source,'bool loginPageReady(').replace('std::getenv(', 'fixtureEnv(')
+        bounds.CIAllocationBoundsTest.compile(self,r'''
+#include <cstdint>
+#include <cstddef>
+#include <string>
+#include <vector>
+#include <cassert>
+constexpr int GL_RGBA=1,GL_BGRA=2;
+const char* expected="http://127.0.0.1:123/login-page.html";
+const char* fixtureEnv(const char*){return expected;}
+struct Settings {std::string url=expected;std::string getString(const char*){return url;}} gSavedSettings;
+struct Plugin {
+ bool valid=true,dirty=false;int format=GL_BGRA,depth=4;std::string title="Vulkanstorm parity login fixture v1";
+ std::vector<uint8_t> pixels=std::vector<uint8_t>(256*256*4);
+ bool textureValid(){return valid;}bool getDirty(){return dirty;}int getWidth(){return 256;}int getHeight(){return 256;}
+ int getBitsWidth(){return 256;}int getTextureDepth(){return depth;}int getTextureFormatPrimary(){return format;}
+ std::string getMediaName(){return title;}uint8_t* getBitsData(){return pixels.data();}
+} plugin;
+struct LLMediaCtrl {Plugin* p=&plugin;Plugin* getMediaPlugin(){return p;}} browser;
+struct Root {template<class T>T* findChild(const char*){return &browser;}} root;
+struct Viewer {Root* getRootView(){return &root;}} viewer;
+Viewer* gViewerWindow=&viewer;
+READY
+int main(){
+ assert(!loginPageReady()); // Correct title without paint is insufficient.
+ auto* pixel=plugin.pixels.data()+(128*256+128)*4;
+ pixel[0]=77;pixel[1]=51;pixel[2]=25;pixel[3]=255;assert(loginPageReady());
+ plugin.title="This site cannot be reached";assert(!loginPageReady());
+ plugin.title="Vulkanstorm parity login fixture v1";
+ plugin.valid=false;assert(!loginPageReady());plugin.valid=true;
+ plugin.dirty=true;assert(!loginPageReady());plugin.dirty=false;
+ plugin.depth=3;assert(!loginPageReady());plugin.depth=4;
+ plugin.format=0;assert(!loginPageReady());plugin.format=GL_RGBA;
+ pixel[0]=25;pixel[2]=77;assert(loginPageReady());
+ gSavedSettings.url="http://external.invalid/";assert(!loginPageReady());gSavedSettings.url=expected;
+ expected=nullptr;assert(!loginPageReady());expected="http://127.0.0.1:123/login-page.html";
+ browser.p=nullptr;assert(!loginPageReady());browser.p=&plugin;
+ gViewerWindow=nullptr;assert(!loginPageReady());
+}
+'''.replace('READY',ready))
+
     def test_device_name_cannot_substitute_for_the_pinned_loaded_icd(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory); folder=root/'staged/icd'; folder.mkdir(parents=True)

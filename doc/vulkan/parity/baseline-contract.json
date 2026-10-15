@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "scene": "normal-startup-login-v1",
-  "scope": "Initial normal viewer login frame; offline production world replay is a separate required R0 witness.",
+  "scope": "Initial normal viewer login frame with pinned loopback browser content; offline production world replay is a separate required R0 witness.",
   "viewport": [
     1024,
     768
@@ -52,5 +52,26 @@
     "minimum_pixels_per_object": 32,
     "projected_regions": "Red in right half, green in left half; middle vertical third.",
     "tint_identity": "Dominant channel at least 40, greater than 1.25 times the other object color channel and more than 8 above blue. Allows reference color transforms; does not relax exact peer/repeatability comparisons."
+  },
+  "login_page_fixture": {
+    "file": "login-page.html",
+    "sha256": "615a869613400f0a25ad54965a80790c59f2edc02d3aad35237f85a8fda0fa3c",
+    "title": "Vulkanstorm parity login fixture v1",
+    "background": [
+      25,
+      51,
+      77
+    ],
+    "upper": [
+      192,
+      48,
+      96
+    ],
+    "lower": [
+      48,
+      192,
+      144
+    ],
+    "scope": "Loopback-only static page through the shared ForceLoginURL setting and actual CEF media path; paint readiness precedes five unmasked consecutive captures."
   }
 }

@@ -10,12 +10,81 @@ import statistics
 import shutil
 import subprocess
 import sys
+import threading
+from itertools import product
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 from run_vulkan_session_replay import isolated_profile_environment, read_llsd, append_llsd
 from vulkan_viewer_process import run_viewer_process, process_isolation_evidence
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class BaselineLoginPage:
+    """Serve identical immutable browser input to the actual peer viewers."""
+    def __init__(self, evidence, contract):
+        self.evidence = Path(evidence)
+        self.spec = contract['login_page_fixture']
+        self.content = (ROOT/'doc/vulkan/parity'/self.spec['file']).read_bytes().replace(b'\r\n', b'\n')
+        if hashlib.sha256(self.content).hexdigest() != self.spec['sha256']:
+            raise RuntimeError('Changed baseline login page fixture')
+        (self.evidence/'login-page.html').write_bytes(self.content)
+        self.requests = []
+        owner = self
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = 'HTTP/1.1'
+            def do_GET(self):
+                if urlsplit(self.path).path != '/login-page.html':
+                    self.send_error(404)
+                    return
+                owner.requests.append(self.path)
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', str(len(owner.content)))
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(owner.content)
+                self.wfile.flush()
+
+            def log_message(self, *args):
+                pass
+
+        self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        self.url = 'http://127.0.0.1:%d/login-page.html' % self.server.server_port
+        self.thread = threading.Thread(target=lambda: self.server.serve_forever(poll_interval=.05), daemon=True)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *args):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+        (self.evidence/'login-page-requests.json').write_text(json.dumps(
+            dict(url=self.url, sha256=self.spec['sha256'], requests=self.requests), indent=2)+'\n')
+        if self.thread.is_alive():
+            raise RuntimeError('Baseline login page server did not stop')
+
+
+def startup_page_pixels(path, spec):
+    """Require the actual browser paint, not a stable blank or error page."""
+    (width, height), pixels = read_ppm(path)
+    counts = dict(background=0, upper=0, lower=0)
+    colors = {bytes(color):name for name in counts for color in
+              product(*(range(max(0,c-1),min(255,c+1)+1) for c in spec[name]))}
+    for y in range(height):
+        for x in range(width//4, width):
+            offset = (y*width+x)*3
+            name = colors.get(pixels[offset:offset+3])
+            if name is not None and not (name == 'upper' and y >= height//2 or name == 'lower' and y < height//2):
+                counts[name] += 1
+    if counts['background'] < 8192 or counts['upper'] < 1024 or counts['lower'] < 1024:
+        raise ValueError('Missing painted baseline login page witnesses: '+str(counts))
+    return counts
 
 
 def read_ppm(path):
@@ -138,107 +207,116 @@ def main():
             for f in (stage/folder).rglob('*') if f.is_file()}
     if not assets: raise RuntimeError('Missing staged baseline assets')
     output['asset_sha256']=assets
-    for backend in ('OpenGL', 'Vulkan'):
-        directory = evidence/backend.lower()
-        directory.mkdir(exist_ok=True)
-        # Reject old evidence rather than accepting it after a failed process.
-        for pattern in ('frame-*.ppm', 'viewer.xml', 'loaded-library-paths.txt','scene-input.json','scene-messages.xml'):
-            for old in directory.glob(pattern): old.unlink()
-        env = {k:v for k,v in os.environ.items() if not k.startswith(('VS_VULKAN_DIAGNOSTIC', 'VS_NATIVE_REPLAY', 'VS_PARITY_'))}
-        env, profile = isolated_profile_environment(env, directory, os.name == 'nt')
-        env['VS_PARITY_BASELINE_DIRECTORY'] = str(directory)
-        if scene_path: env['VS_PARITY_SCENE_FILE']=str(scene_path)
-        if os.name != 'nt':
-            env['LD_LIBRARY_PATH'] = str(stage/'lib') + os.pathsep + env.get('LD_LIBRARY_PATH','')
-            env['SDL_VIDEODRIVER'] = 'x11'
-        if backend == 'OpenGL':
-            env.update(LIBGL_ALWAYS_SOFTWARE='1', GALLIUM_DRIVER='llvmpipe')
-            if gl_runtime:
-                env['LD_LIBRARY_PATH']=gl_runtime['library_directory']+os.pathsep+env.get('LD_LIBRARY_PATH','')
-                env['LIBGL_DRIVERS_PATH']=gl_runtime['dri_directory']
-        else:
-            env.update(VK_DRIVER_FILES=runtime['icd'], VK_LAYER_PATH=runtime['layer_path'],
-                VK_LOADER_LAYERS_DISABLE='~implicit~',VK_LOADER_DEBUG='error,warn,driver,layer')
-            (directory/'vk_layer_settings.txt').write_text('khronos_validation.validate_sync = true\n')
-            env['VK_LAYER_SETTINGS_PATH'] = str(directory)
-        command = [str(executables[0]), '--settings', 'vs_parity_baseline.xml',
-            '--set', 'ClientSettingsFile', str(directory/'settings.xml'),
-            '--set', 'RenderBackend', backend, '--set', 'AutoLogin', 'false',
-            '--set', 'RenderDebugGLSession', 'true',
-            '--set', 'QuitAfterSeconds', '170', '--set', 'RenderVSyncEnable', 'false',
-            '--set', 'UpdaterShowReleaseNotes', '0', '--set', 'FSShowWhitelistReminder', 'false',
-            '--set', 'CacheLocation', str(profile/'cache'), '--set', 'UIScaleFactor', '1.0',
-            '--set', 'WindowWidth', '1024', '--set', 'WindowHeight', '768']
-        selection=ET.Element('llsd')
-        append_llsd(selection,{name:dict(Type='String',Persist=0,Comment='Baseline fixed UI input',Value=value)
-            for name,value in [('SkinCurrent',contract['skin']),('SkinCurrentTheme',contract['theme']),('Language',contract['language'])]})
-        selection_file=directory/'ui-selection.xml'
-        selection_file.write_bytes(ET.tostring(selection,encoding='utf-8'))
-        command.extend(['--sessionsettings',str(selection_file)])
-        case = dict(backend=backend, passed=False)
-        try:
-            process = run_viewer_process(command, cwd=stage, env=env, timeout=contract['timeout_seconds'])
-            case['returncode'] = process.returncode
-            case['process_isolation'] = process_isolation_evidence(process)
-            log = process.stdout.decode('utf-8', errors='replace')
-            (directory/'viewer.log').write_text(log, encoding='utf-8')
-            if process.returncode: raise RuntimeError('Viewer process failed')
-            viewer = read_llsd(ET.parse(directory/'viewer.xml').getroot())
-            if viewer['backend'] != backend: raise RuntimeError('Unexpected viewer backend')
-            if backend=='Vulkan':
-                card=viewer['device']['GRAPHICS_CARD'].lower()
-                expected='swiftshader' if runtime['driver']=='swiftshader' else 'llvmpipe'
-                if expected not in card: raise RuntimeError('Unexpected software Vulkan device')
-                if re.search(r'Validation Error|SYNC-HAZARD|VUID-',log): raise RuntimeError('Vulkan validation failure')
-                paths=(directory/'loaded-library-paths.txt').read_text()
-                verify_vulkan_driver(runtime,paths)
-                if 'VkLayer_khronos_validation' not in paths or not viewer['device'].get('VALIDATION_ENABLED'):
-                    raise RuntimeError('Required validation layer/configuration witness missing')
-                if 'VK_LAYER_KHRONOS_validation' not in log:
-                    raise RuntimeError('Missing loader validation-layer diagnostics')
-            if backend == 'OpenGL' and 'llvmpipe' not in viewer['device']['renderer'].lower():
-                raise RuntimeError('Reference did not use software OpenGL')
-            if backend == 'OpenGL' and gl_runtime:
-                if gl_runtime['mesa_version'] not in viewer['device']['version']:
-                    raise RuntimeError('Unexpected software OpenGL version')
-                paths=(directory/'loaded-library-paths.txt').read_text()
-                if gl_runtime['install'] not in paths: raise RuntimeError('Pinned GL runtime not loaded')
-            frames = viewer['frames']
-            if len(frames) != contract['capture_frames']: raise RuntimeError('Missing baseline frames')
-            if not all('presentation_cpu_ms' in f and 'observed_total_frame_cpu_ms' in f for f in frames):
-                raise RuntimeError('Missing presentation/frame measurements')
-            if scene_path:
-                if viewer['scene']!='static-world-primitives-v1' or not viewer['fixed_world_clock_applied']:
-                    raise RuntimeError('World fixture or fixed clock missing')
-                if viewer['render_clock']!={'elapsed_seconds':1000,'motion_delta_seconds':0,'frame':60,'epoch_seconds':1700000000}:
-                    raise RuntimeError('Observed render clock differs from fixed replay clock')
-                if len(viewer['world_projection'])!=16 or not all(math.isfinite(v) for v in viewer['world_projection']):
-                    raise RuntimeError('Missing observed world projection')
-                applied=viewer['effective_scene_inputs']
-                requested=json.loads(scene_path.read_text())
-                if applied['camera']!=requested['camera'] or applied['object_count']!=requested['simulation']['object_count'] or applied['motion_delta_seconds']!=0:
-                    raise RuntimeError('Effective production scene inputs differ from declared fixture')
-                if (directory/'scene-input.json').read_bytes()!=scene_path.read_bytes():
-                    raise RuntimeError('World input snapshot changed')
-                corpus=read_llsd(ET.parse(directory/'scene-messages.xml').getroot())
-                if len(corpus['objects'])!=2: raise RuntimeError('Missing actual simulator replay objects')
-                case['scene_corpus_sha256']=hashlib.sha256((directory/'scene-messages.xml').read_bytes()).hexdigest()
-                for f in frames:
-                    draws=f['counters']['draw_calls'] if backend=='OpenGL' else f['stages']['draw_calls']
-                    if draws<1: raise RuntimeError('Production viewer issued no scene draws')
-            images = [directory/f['image'] for f in frames]
-            for image in images:
-                if read_ppm(image)[0] != tuple(contract['viewport']): raise RuntimeError('Unexpected viewport')
+    with BaselineLoginPage(evidence, contract) as login_page:
+        for backend in ('OpenGL', 'Vulkan'):
+            directory = evidence/backend.lower()
+            directory.mkdir(exist_ok=True)
+            # Reject old evidence rather than accepting it after a failed process.
+            for pattern in ('frame-*.ppm', 'viewer.xml', 'loaded-library-paths.txt','scene-input.json','scene-messages.xml'):
+                for old in directory.glob(pattern): old.unlink()
+            env = {k:v for k,v in os.environ.items() if not k.startswith(('VS_VULKAN_DIAGNOSTIC', 'VS_NATIVE_REPLAY', 'VS_PARITY_'))}
+            env, profile = isolated_profile_environment(env, directory, os.name == 'nt')
+            env['VS_PARITY_BASELINE_DIRECTORY'] = str(directory)
+            env['VS_PARITY_BASELINE_LOGIN_URL'] = login_page.url
+            page_requests_before = len(login_page.requests)
+            if scene_path: env['VS_PARITY_SCENE_FILE']=str(scene_path)
+            if os.name != 'nt':
+                env['LD_LIBRARY_PATH'] = str(stage/'lib') + os.pathsep + env.get('LD_LIBRARY_PATH','')
+                env['SDL_VIDEODRIVER'] = 'x11'
+            if backend == 'OpenGL':
+                env.update(LIBGL_ALWAYS_SOFTWARE='1', GALLIUM_DRIVER='llvmpipe')
+                if gl_runtime:
+                    env['LD_LIBRARY_PATH']=gl_runtime['library_directory']+os.pathsep+env.get('LD_LIBRARY_PATH','')
+                    env['LIBGL_DRIVERS_PATH']=gl_runtime['dri_directory']
+            else:
+                env.update(VK_DRIVER_FILES=runtime['icd'], VK_LAYER_PATH=runtime['layer_path'],
+                    VK_LOADER_LAYERS_DISABLE='~implicit~',VK_LOADER_DEBUG='error,warn,driver,layer')
+                (directory/'vk_layer_settings.txt').write_text('khronos_validation.validate_sync = true\n')
+                env['VK_LAYER_SETTINGS_PATH'] = str(directory)
+            command = [str(executables[0]), '--settings', 'vs_parity_baseline.xml',
+                '--set', 'ClientSettingsFile', str(directory/'settings.xml'),
+                '--set', 'RenderBackend', backend, '--set', 'AutoLogin', 'false',
+                '--set', 'RenderDebugGLSession', 'true',
+                '--set', 'QuitAfterSeconds', '170', '--set', 'RenderVSyncEnable', 'false',
+                '--set', 'UpdaterShowReleaseNotes', '0', '--set', 'FSShowWhitelistReminder', 'false',
+                '--set', 'CacheLocation', str(profile/'cache'), '--set', 'UIScaleFactor', '1.0',
+                '--set', 'WindowWidth', '1024', '--set', 'WindowHeight', '768']
+            selection=ET.Element('llsd')
+            append_llsd(selection,{name:dict(Type='String',Persist=0,Comment='Baseline fixed UI input',Value=value)
+                for name,value in [('SkinCurrent',contract['skin']),('SkinCurrentTheme',contract['theme']),('Language',contract['language']),('ForceLoginURL',login_page.url)]})
+            selection_file=directory/'ui-selection.xml'
+            selection_file.write_bytes(ET.tostring(selection,encoding='utf-8'))
+            command.extend(['--sessionsettings',str(selection_file)])
+            case = dict(backend=backend, passed=False, login_page_url=login_page.url)
+            try:
+                process = run_viewer_process(command, cwd=stage, env=env, timeout=contract['timeout_seconds'])
+                case['returncode'] = process.returncode
+                case['process_isolation'] = process_isolation_evidence(process)
+                log = process.stdout.decode('utf-8', errors='replace')
+                (directory/'viewer.log').write_text(log, encoding='utf-8')
+                if process.returncode: raise RuntimeError('Viewer process failed')
+                viewer = read_llsd(ET.parse(directory/'viewer.xml').getroot())
+                if viewer['backend'] != backend: raise RuntimeError('Unexpected viewer backend')
+                if backend=='Vulkan':
+                    card=viewer['device']['GRAPHICS_CARD'].lower()
+                    expected='swiftshader' if runtime['driver']=='swiftshader' else 'llvmpipe'
+                    if expected not in card: raise RuntimeError('Unexpected software Vulkan device')
+                    if re.search(r'Validation Error|SYNC-HAZARD|VUID-',log): raise RuntimeError('Vulkan validation failure')
+                    paths=(directory/'loaded-library-paths.txt').read_text()
+                    verify_vulkan_driver(runtime,paths)
+                    if 'VkLayer_khronos_validation' not in paths or not viewer['device'].get('VALIDATION_ENABLED'):
+                        raise RuntimeError('Required validation layer/configuration witness missing')
+                    if 'VK_LAYER_KHRONOS_validation' not in log:
+                        raise RuntimeError('Missing loader validation-layer diagnostics')
+                if backend == 'OpenGL' and 'llvmpipe' not in viewer['device']['renderer'].lower():
+                    raise RuntimeError('Reference did not use software OpenGL')
+                if backend == 'OpenGL' and gl_runtime:
+                    if gl_runtime['mesa_version'] not in viewer['device']['version']:
+                        raise RuntimeError('Unexpected software OpenGL version')
+                    paths=(directory/'loaded-library-paths.txt').read_text()
+                    if gl_runtime['install'] not in paths: raise RuntimeError('Pinned GL runtime not loaded')
+                if not scene_path:
+                    if (not viewer.get('login_page_fixture_ready') or len(login_page.requests) <= page_requests_before
+                            or viewer['settings'].get('ForceLoginURL') != login_page.url):
+                        raise RuntimeError('Missing actual painted loopback login page readiness')
+                frames = viewer['frames']
+                if len(frames) != contract['capture_frames']: raise RuntimeError('Missing baseline frames')
+                if not all('presentation_cpu_ms' in f and 'observed_total_frame_cpu_ms' in f for f in frames):
+                    raise RuntimeError('Missing presentation/frame measurements')
                 if scene_path:
-                    case.setdefault('fixture_pixel_witnesses',{})[image.name]=fixture_pixels(image)
-            comparisons = [compare(images[0], image, contract['comparison']['same_backend_max_channel_error']) for image in images[1:]]
-            case.update(viewer=viewer, metrics=metrics(frames), repeatability=comparisons,
-                image_sha256={f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in images},
-                passed=all(c['matched'] for c in comparisons))
-        except (OSError, RuntimeError, ValueError, KeyError, ET.ParseError, subprocess.TimeoutExpired) as exc:
-            case['failure'] = str(exc)
-        output['cases'].append(case)
-        print(('PASS' if case['passed'] else 'FAIL') + ': actual viewer ' + backend, flush=True)
+                    if viewer['scene']!='static-world-primitives-v1' or not viewer['fixed_world_clock_applied']:
+                        raise RuntimeError('World fixture or fixed clock missing')
+                    if viewer['render_clock']!={'elapsed_seconds':1000,'motion_delta_seconds':0,'frame':60,'epoch_seconds':1700000000}:
+                        raise RuntimeError('Observed render clock differs from fixed replay clock')
+                    if len(viewer['world_projection'])!=16 or not all(math.isfinite(v) for v in viewer['world_projection']):
+                        raise RuntimeError('Missing observed world projection')
+                    applied=viewer['effective_scene_inputs']
+                    requested=json.loads(scene_path.read_text())
+                    if applied['camera']!=requested['camera'] or applied['object_count']!=requested['simulation']['object_count'] or applied['motion_delta_seconds']!=0:
+                        raise RuntimeError('Effective production scene inputs differ from declared fixture')
+                    if (directory/'scene-input.json').read_bytes()!=scene_path.read_bytes():
+                        raise RuntimeError('World input snapshot changed')
+                    corpus=read_llsd(ET.parse(directory/'scene-messages.xml').getroot())
+                    if len(corpus['objects'])!=2: raise RuntimeError('Missing actual simulator replay objects')
+                    case['scene_corpus_sha256']=hashlib.sha256((directory/'scene-messages.xml').read_bytes()).hexdigest()
+                    for f in frames:
+                        draws=f['counters']['draw_calls'] if backend=='OpenGL' else f['stages']['draw_calls']
+                        if draws<1: raise RuntimeError('Production viewer issued no scene draws')
+                images = [directory/f['image'] for f in frames]
+                for image in images:
+                    if read_ppm(image)[0] != tuple(contract['viewport']): raise RuntimeError('Unexpected viewport')
+                    if scene_path:
+                        case.setdefault('fixture_pixel_witnesses',{})[image.name]=fixture_pixels(image)
+                    else:
+                        case.setdefault('login_page_pixel_witnesses',{})[image.name]=startup_page_pixels(image,contract['login_page_fixture'])
+                comparisons = [compare(images[0], image, contract['comparison']['same_backend_max_channel_error']) for image in images[1:]]
+                case.update(viewer=viewer, metrics=metrics(frames), repeatability=comparisons,
+                    image_sha256={f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in images},
+                    passed=all(c['matched'] for c in comparisons))
+            except (OSError, RuntimeError, ValueError, KeyError, ET.ParseError, subprocess.TimeoutExpired) as exc:
+                case['failure'] = str(exc)
+            output['cases'].append(case)
+            print(('PASS' if case['passed'] else 'FAIL') + ': actual viewer ' + backend, flush=True)
     if all(c['passed'] for c in output['cases']):
         if scene_path and output['cases'][0]['scene_corpus_sha256']!=output['cases'][1]['scene_corpus_sha256']:
             output['cases'][1].update(passed=False,failure='Peer renderers received different actual scene data')
