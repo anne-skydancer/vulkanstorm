@@ -407,6 +407,21 @@ def run_staged_viewer(command, stage, env):
     return result
 
 
+def read_session_evidence(directory, returncode):
+    """Report the viewer's failure before attempting to read success evidence."""
+    if returncode != 0:
+        detail = ''
+        failure_path = directory / 'r2/failure.xml'
+        if failure_path.is_file():
+            try:
+                failure = read_llsd(ET.parse(failure_path).getroot())
+                detail = f'; R2 step {failure.get("step", "unknown")}: {failure.get("failure", "unknown failure")}'
+            except (OSError, ValueError, ET.ParseError):
+                detail = f'; unreadable failure evidence: {failure_path}'
+        raise RuntimeError(f'Viewer exited with code {returncode}{detail}')
+    return read_llsd(ET.parse(directory / 'session-replay.xml').getroot())
+
+
 def prepare_native_debugger():
     """Install the CI-only debugger once, before spawning the skin cases."""
     if platform.system() == 'Linux' and os.environ.get('VS_VULKAN_REPLAY_GDB') == '1' and not shutil.which('gdb'):
@@ -1019,7 +1034,7 @@ def main():
             with windows_manifest_registration(runtime, args.register_windows_manifests):
                 process = run_staged_viewer(command, stage, env)
             code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
-            report = read_llsd(ET.parse(directory / 'session-replay.xml').getroot())
+            report = read_session_evidence(directory, code)
             report['process_isolation'] = process_isolation_evidence(process)
             report['native_debugger'] = getattr(process, 'native_debugger', None)
             passed = assess(report, code, log)
@@ -1090,7 +1105,8 @@ def main():
         except Exception as error:
             if isinstance(error, subprocess.TimeoutExpired):
                 log = (error.stdout or b'').decode('utf-8', errors='replace') + '\nVIEWER TIMEOUT\n'
-            log += '\nREPLAY EVIDENCE FAILURE: ' + repr(error)
+            log += '\nREPLAY EVIDENCE FAILURE: ' + str(error)
+            report['failure'] = str(error)
             passed = False
         finally:
             server.shutdown(); worker.join()

@@ -241,6 +241,33 @@ class R2FixtureTest(unittest.TestCase):
         self.assertEqual(first_link['_embedded']['item']['item_id'],first_link['linked_id'])
         self.assertIsNone(fixture.folder(self.server,'unrelated-baseline-folder'))
 
+    def test_early_root_fetch_does_not_publish_empty_appearance_folders(self):
+        root = '70000000-0000-0000-0000-000000000001'
+        body = '70000000-0000-0000-0000-000000000010'
+        self.server.r2_categories = [dict(folder_id=root, parent_id='null', type_default=8, name='Root')]
+        self.server.r2_categories += [dict(folder_id=folder, parent_id=root, type_default=46 if folder == fixture.COF else 13,
+                                           name=folder, version=1) for folder in fixture.APPEARANCE_FOLDERS]
+        manifest_path = self.root / 'inventory.json'
+        manifest = json.loads(manifest_path.read_text())
+        for row in manifest['items']:
+            row['parent_id'] = body
+        manifest_path.unlink()
+        self.assertTrue(fixture.get(self.handler, '/r2-ais/category/' + root + '/children', {'depth': ['50']}))
+        early = copy.deepcopy(self.handler.response)
+        for folder in fixture.APPEARANCE_FOLDERS:
+            metadata = early['_embedded']['categories'][folder]
+            self.assertNotIn('_embedded', metadata)
+            self.assertNotIn('version', metadata)
+        # After the viewer publishes its real fixture, the same route must
+        # return complete contents. A delayed early response has no empty
+        # descendant count or version to replace this populated snapshot.
+        manifest_path.write_text(json.dumps(manifest))
+        self.assertTrue(fixture.get(self.handler, '/r2-ais/category/' + root + '/children', {'depth': ['50']}))
+        populated = self.handler.response['_embedded']['categories']
+        self.assertEqual(len(populated[fixture.COF]['_embedded']['links']), 4)
+        self.assertEqual(len(populated[body]['_embedded']['items']), len(manifest['items']))
+        self.assertEqual(populated[fixture.COF]['version'], 10)
+
     def test_normal_auxiliary_folder_creation_is_not_rejected(self):
         root='70000000-0000-0000-0000-000000000001'
         self.server.r2_categories=[dict(folder_id=root,parent_id='null',type_default=8,name='Root')]
