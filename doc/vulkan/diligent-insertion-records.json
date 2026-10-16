@@ -1,5 +1,5 @@
 {
-  "source_commit": "042e8079f0a0a22d2ea508165ae749997f5c37e1",
+  "source_commit": "bec8c08d4fa589ee0a53d9a82c5732242e10a8f8",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -35788,30 +35788,30 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 58,
-      "end": 58,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 54,
+      "end": 54,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 386,
-      "end": 400,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 358,
+      "end": 372,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 447,
-      "end": 447,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 419,
+      "end": 419,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "indra/llwindow/llwindow.cpp",
@@ -38650,12 +38650,12 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 116,
-      "end": 119,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 111,
+      "end": 114,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
@@ -38704,48 +38704,48 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 391,
-      "end": 396,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 363,
+      "end": 368,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 400,
-      "end": 400,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 372,
+      "end": 372,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 44,
-      "end": 44,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 40,
+      "end": 40,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 430,
-      "end": 440,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 402,
+      "end": 412,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 447,
-      "end": 447,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 419,
+      "end": 419,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
@@ -38767,12 +38767,12 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 87,
-      "end": 87,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 83,
+      "end": 83,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "indra/llcorehttp/_httplibcurl.cpp",
@@ -39046,12 +39046,12 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 57,
-      "end": 57,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 53,
+      "end": 53,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "indra/newview/vsworldrenderer.cpp",
@@ -39136,39 +39136,39 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 59,
-      "end": 84,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 55,
+      "end": 80,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 118,
-      "end": 118,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 113,
+      "end": 113,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 312,
-      "end": 314,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 284,
+      "end": 286,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 401,
-      "end": 413,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 373,
+      "end": 385,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "indra/llappearance/CMakeLists.txt",
@@ -45625,12 +45625,12 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 99,
-      "end": 99,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 95,
+      "end": 95,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "indra/newview/CMakeLists.txt",
@@ -45949,12 +45949,12 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 100,
-      "end": 100,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 96,
+      "end": 96,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
@@ -46327,12 +46327,12 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 102,
-      "end": 102,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 97,
+      "end": 97,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "indra/llcommon/llstringtable.h",
@@ -46679,155 +46679,155 @@
     {
       "path": ".github/workflows/build.yaml",
       "start": 5,
-      "end": 9,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "end": 5,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 11,
-      "end": 14,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 6,
+      "end": 6,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 34,
-      "end": 34,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 30,
+      "end": 30,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 108,
-      "end": 108,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 105,
+      "end": 105,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 131,
-      "end": 147,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 128,
+      "end": 128,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 160,
-      "end": 160,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 140,
+      "end": 140,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 164,
-      "end": 164,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 144,
+      "end": 144,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 200,
-      "end": 208,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 188,
+      "end": 196,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 236,
-      "end": 236,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 237,
+      "end": 237,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
-      "end": 15,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "end": 12,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 101,
-      "end": 101,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 97,
+      "end": 97,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 153,
-      "end": 153,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 148,
+      "end": 148,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 189,
-      "end": 189,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 184,
+      "end": 184,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 260,
-      "end": 273,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 255,
+      "end": 255,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 283,
-      "end": 283,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 264,
+      "end": 264,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 287,
-      "end": 287,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 268,
+      "end": 268,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 303,
-      "end": 311,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 284,
+      "end": 284,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "indra/newview/fspanellogin.cpp",
@@ -47226,42 +47226,6 @@
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
-      "path": "scripts/ci_compiler_cache.cmake",
-      "start": 1,
-      "end": 11,
-      "sha256": "f5ef7b5b844bb685ae437d53e90e15a3d93b50df86e46e8c9795a4c7aeeaae37",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/ci_compiler_cache.json",
-      "start": 1,
-      "end": 13,
-      "sha256": "3abacb1e403c62fdcae46f29dbffec01607289b2fae6f979b2dc206fd1424068",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/ci_compiler_cache.py",
-      "start": 1,
-      "end": 99,
-      "sha256": "327368764034dadbb3301259e5e2dcd43afbd20b2b9bc94704a18b88459ff276",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 1,
-      "end": 177,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
       "path": "indra/cmake/CompilerCacheHeaders.cmake",
       "start": 1,
       "end": 18,
@@ -47298,60 +47262,6 @@
       "reason": "Restore the corrected release login resize handler: settle the two shared layout stacks and cap the centered stage at 1008 pixels. Existing ordinary skin checks preserve alternate layouts; shared OpenGL/Vulkan login widgets remain the same. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
-      "path": "scripts/ci_compiler_cache.py",
-      "start": 90,
-      "end": 91,
-      "sha256": "327368764034dadbb3301259e5e2dcd43afbd20b2b9bc94704a18b88459ff276",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 101,
-      "end": 101,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 104,
-      "end": 107,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 123,
-      "end": 124,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 126,
-      "end": 127,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 129,
-      "end": 138,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
       "path": "indra/newview/llgltfmateriallist.cpp",
       "start": 717,
       "end": 717,
@@ -47371,30 +47281,30 @@
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 160,
-      "end": 160,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 140,
+      "end": 140,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 162,
-      "end": 162,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 142,
+      "end": 142,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 292,
-      "end": 292,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 273,
+      "end": 273,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "indra/cmake/00-Common.cmake",
@@ -47419,60 +47329,6 @@
       "start": 63,
       "end": 63,
       "sha256": "0a82fe7b95720005e509e97fd672bf1687402f3d10f8b384d87a67d2cb48ed33",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/ci_compiler_cache.cmake",
-      "start": 12,
-      "end": 18,
-      "sha256": "f5ef7b5b844bb685ae437d53e90e15a3d93b50df86e46e8c9795a4c7aeeaae37",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 89,
-      "end": 89,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 108,
-      "end": 112,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 115,
-      "end": 121,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 130,
-      "end": 132,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
-      "record": "I23",
-      "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_ci_compiler_cache.py",
-      "start": 138,
-      "end": 138,
-      "sha256": "249935f5d828f0171f3bc673da5980cb491d4fa1a8c6b3b347d6c55c761b2d55",
       "record": "I23",
       "disposition": "mapped",
       "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -47686,21 +47542,21 @@
     },
     {
       "path": ".github/workflows/build.yaml",
-      "start": 33,
-      "end": 33,
-      "sha256": "71060c8db9de9b6a1a027aeea470afa863ad31d372805c1c75d1939daf93e41f",
+      "start": 29,
+      "end": 29,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 103,
-      "end": 103,
-      "sha256": "ad63a25b6308321162330eede383cd4a88a7e7ad2de12b8eab108ba713ada4af",
+      "start": 98,
+      "end": 98,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
       "record": "I23",
       "disposition": "mapped",
-      "reason": "CI-only content-addressed Windows/Linux compilation with checksum-pinned tools, strict preprocessed-input/argument hashes, and per-configuration cache snapshots saved before runtime tests. Ninja Multi-Config enables MSVC launchers; CI PCH is disabled, LTO/features/debug info and existing staging/publication gates remain. Dependency keys follow pins/build recipes/tool requirements, not unrelated workflow edits. Warm runtime timings remain unqualified. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": "indra/newview/skins/default/xui/de/panel_fs_contacts_sets.xml",
@@ -47737,6 +47593,231 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 5,
+      "end": 5,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 6,
+      "end": 6,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 8,
+      "end": 8,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 13,
+      "end": 17,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 30,
+      "end": 30,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 51,
+      "end": 52,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 105,
+      "end": 105,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 128,
+      "end": 128,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 140,
+      "end": 140,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 142,
+      "end": 142,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 144,
+      "end": 151,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 154,
+      "end": 154,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 162,
+      "end": 164,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 185,
+      "end": 186,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 188,
+      "end": 198,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 212,
+      "end": 212,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 221,
+      "end": 230,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/build.yaml",
+      "start": 237,
+      "end": 237,
+      "sha256": "21511396e5687603ba08318c231401e8b3d1618a76a9711386ce7108476c51af",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 12,
+      "end": 12,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 97,
+      "end": 97,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 255,
+      "end": 255,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 259,
+      "end": 259,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 264,
+      "end": 264,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 268,
+      "end": 268,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 284,
+      "end": 284,
+      "sha256": "e535a5d75b88de10d82e6873a790835ddfe25d2b6c27b6473e03131a299126d5",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     }
   ]
 }
