@@ -1,6 +1,7 @@
 """Connected-session evidence must fail for missing stages and corrupt diagnostics."""
 import sys
 import copy
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -19,6 +20,44 @@ import run_vulkan_session_replay as session_runner
 from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_matrix_progress_is_immediate_and_first_failure_stops_cases(self):
+        for outcome in ('pass', 'fail', 'timeout'):
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                evidence = directory / 'evidence'
+                command = ['replay', '--build-directory', str(directory), '--runtime', str(directory / 'runtime.json'),
+                           '--harness-evidence', str(directory / 'harness.json'), '--evidence', str(evidence),
+                           '--all-skins']
+                def execute(child_command, timeout):
+                    # The parent must announce a case before starting its child.
+                    self.assertTrue(output.call_args.args[0].startswith('RUN: connected UI '))
+                    self.assertTrue(output.call_args.kwargs['flush'])
+                    self.assertEqual(timeout, session_runner.CASE_REPLAY_SECONDS)
+                    if outcome == 'timeout':
+                        raise subprocess.TimeoutExpired(child_command, timeout)
+                    child = Path(child_command[child_command.index('--evidence') + 1])
+                    child.mkdir(parents=True)
+                    (child / 'results.json').write_text(json.dumps({'passed': outcome == 'pass'}))
+                    return subprocess.CompletedProcess(child_command, 0 if outcome == 'pass' else 1)
+                with patch.object(sys, 'argv', command), \
+                        patch.object(session_runner, 'prepare_native_debugger'), \
+                        patch.object(session_runner, 'skin_cases', return_value={'skin-default-base': ('default', '', 'en')}), \
+                        patch.object(session_runner.subprocess, 'run', side_effect=execute) as launch, \
+                        patch('builtins.print') as output:
+                    code = session_runner.main()
+                self.assertEqual(code, 0 if outcome == 'pass' else 1)
+                self.assertEqual(launch.call_count, 3 if outcome == 'pass' else 1)
+                summary = json.loads((evidence / 'results.json').read_text())
+                self.assertEqual(summary['passed'], outcome == 'pass')
+                self.assertEqual(summary['complete'], outcome == 'pass')
+                messages = [call.args[0] for call in output.call_args_list]
+                self.assertTrue(all(call.kwargs.get('flush') is True for call in output.call_args_list))
+                self.assertTrue(any(message.startswith(('PASS: connected UI skin-default-base',
+                                                        'FAIL: connected UI skin-default-base'))
+                                    and 's); log:' in message for message in messages))
+                if outcome == 'timeout':
+                    self.assertIn('timed out', '\n'.join(messages))
+
     def test_r1_requires_owner_retirement_and_both_actual_asset_revisions(self):
         keys=('host_ids','object_face_retirement','variable_terrain','asset_replacement',
               'crossing_continuity','circuit_retirement','inventory_scope','inventory_revision','scene_owner_kinds','self_continuity')
