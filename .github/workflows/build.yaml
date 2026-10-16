@@ -2,23 +2,19 @@ name: Build
 
 on:
   workflow_dispatch:
-    inputs:
-      clean_compiler_cache:
-        description: Start with an empty compiled-object cache
-        type: boolean
-        default: false
   workflow_call:
-    inputs:
-      clean_compiler_cache:
-        type: boolean
-        default: false
   pull_request:
   push:
-    branches: ["vkstorm-release", "vkstorm-devel", "codex/**"]
+    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "codex/**"]
     tags: ["Second_Life*"]
 
 permissions:
   contents: read
+
+# Avoid compiling the same feature commit for both push and PR events.
+concurrency:
+  group: viewer-build-${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'codex/') && format('refs/heads/{0}', github.head_ref) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/codex/') }}
 
 jobs:
   check-publication:
@@ -31,7 +27,6 @@ jobs:
       - run: python3 scripts/tests/test_windows_symbol_archive.py
       - run: python3 scripts/tests/test_version_schema.py
       - run: python3 scripts/tests/test_contacts_layout.py
-      - run: python3 scripts/tests/test_ci_compiler_cache.py
       - run: python3 scripts/tests/test_ndof_cmake.py
       - name: Check update version parsing
         run: |
@@ -53,6 +48,8 @@ jobs:
             directory: build-linux-x86_64
     runs-on: ${{ matrix.os }}
     env:
+      VIEWER_BUILD_TYPE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life')) && 'Release' || 'RelWithDebInfo' }}
+      VIEWER_PACKAGE: ${{ (github.ref == 'refs/heads/vkstorm-release' || startsWith(github.ref, 'refs/tags/Second_Life')) && 'ON' || 'OFF' }}
       AUTOBUILD_ADDRSIZE: 64
       AUTOBUILD_CONFIGURATION: ReleaseFS_open
       AUTOBUILD_VSVER: "170"
@@ -105,7 +102,7 @@ jobs:
           persist-credentials: false
 
       - name: Install build dependencies
-        run: python -m pip install -r scripts/ci_build_requirements.txt
+        run: python -m pip install autobuild==3.9.3 llsd
 
       - name: Check installer version and payload
         run: |
@@ -128,24 +125,7 @@ jobs:
           key: ${{ runner.os }}-64-ReleaseFS_open-${{ hashFiles('autobuild.xml') }}
           restore-keys: ${{ runner.os }}-64-ReleaseFS_open-
 
-      - name: Identify runner image for cache compatibility
-        shell: bash
-        run: echo "CI_IMAGE_VERSION=${ImageVersion:?Runner image version missing}" >> "$GITHUB_ENV"
-      - name: Install pinned compiler cache and select native toolchain
-        run: python scripts/ci_compiler_cache.py setup
-      - name: Verify actual compiler cache hits and invalidation
-        env:
-          VS_REQUIRE_COMPILER_CACHE: '1'
-        run: python scripts/tests/test_ci_compiler_cache.py
-      - name: Restore compiled objects
-        id: compiler-cache
-        if: inputs.clean_compiler_cache != true
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .ci/compiler-cache
-          key: viewer-objects-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CI_IMAGE_VERSION }}-Release-${{ hashFiles('scripts/ci_compiler_cache.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: viewer-objects-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CI_IMAGE_VERSION }}-Release-${{ hashFiles('scripts/ci_compiler_cache.json') }}-
-      - name: Configure local Release settings
+      - name: Configure viewer
         shell: bash
         env:
           BUILD_DIRECTORY: ${{ matrix.directory }}
@@ -157,15 +137,21 @@ jobs:
           if [[ "$RUNNER_OS" == Windows ]]; then
             # The flags used by the successful local Release build.
             export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
-            options+=(-G 'Ninja Multi-Config' -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DUSE_MESAZINK:BOOL=ON)
+            options+=(-G 'Visual Studio 17 2022' -A x64 -DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=ON)
           else
-            options+=(-DUSE_MESAZINK:BOOL=ON)
+            options+=(-DUSE_MESAZINK:BOOL=ON -DUSE_INNOSETUP:BOOL=OFF)
           fi
-          cmake -C scripts/ci_compiler_cache.cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
-            -DCMAKE_BUILD_TYPE:STRING=Release -DADDRESS_SIZE:STRING=64 \
+          {
+            echo 'LL_BUILD<<VKSTORM_LL_BUILD'
+            printf '%s\n' "$LL_BUILD"
+            echo 'VKSTORM_LL_BUILD'
+          } >> "$GITHUB_ENV"
+          cmake -S indra -B "$BUILD_DIRECTORY" "${options[@]}" \
+            -DCMAKE_BUILD_TYPE:STRING="$VIEWER_BUILD_TYPE" -DADDRESS_SIZE:STRING=64 \
+            -DPACKAGE:BOOL="$VIEWER_PACKAGE" \
             -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
-            -DPACKAGE:BOOL=ON -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
+            -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
             -DUSE_KDU:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
             -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
             -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
@@ -173,7 +159,9 @@ jobs:
             -DUSE_TRACY:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF \
             -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
             -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
-          python scripts/ci_release_config.py "$BUILD_DIRECTORY/CMakeCache.txt" "$RUNNER_OS"
+          if [[ "$VIEWER_BUILD_TYPE" == Release ]]; then
+            python scripts/ci_release_config.py "$BUILD_DIRECTORY/CMakeCache.txt" "$RUNNER_OS"
+          fi
           python scripts/ci_viewer_version.py "$BUILD_DIRECTORY/newview/viewer_version.txt"
 
       - name: Check Linux Mesa provider selection
@@ -194,18 +182,20 @@ jobs:
             "$GITHUB_WORKSPACE/${{ matrix.directory }}/packages/lib/release/mesa" \
             | tee "${{ matrix.directory }}/zink-loader-test.txt"
 
-      - name: Build Release and installer
-        run: cmake --build ${{ matrix.directory }} --config Release --parallel 3
+      - name: Build viewer and stage runtime
+        run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
 
-      - name: Record compiler cache statistics
-        if: always()
-        run: python scripts/ci_compiler_cache.py report --evidence ${{ matrix.directory }}/cache-evidence
-      - name: Save compiled objects before qualification
-        if: always() && inputs.clean_compiler_cache != true && steps.compiler-cache.outcome == 'success'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .ci/compiler-cache
-          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
+      - name: Keep qualification builds free of installers
+        if: env.VIEWER_PACKAGE != 'ON'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if compgen -G '${{ matrix.directory }}/newview/*.tar.xz' || \
+             compgen -G '${{ matrix.directory }}/newview/RelWithDebInfo/*_Setup.exe'; then
+            echo 'Qualification builds must stage the viewer without producing an installer.' >&2
+            exit 1
+          fi
+
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'
         shell: bash
@@ -219,6 +209,7 @@ jobs:
             | tee "${{ matrix.directory }}/zink-packaged-test.txt"
 
       - name: Upload installer
+        if: env.VIEWER_PACKAGE == 'ON'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ runner.os }}-installer
@@ -227,13 +218,22 @@ jobs:
             ${{ matrix.directory }}/newview/Release/*_Setup.exe
             ${{ matrix.directory }}/newview/*.tar.xz
 
+      - name: Upload qualification viewer
+        if: env.VIEWER_PACKAGE != 'ON'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ runner.os }}-qualification-viewer
+          if-no-files-found: error
+          path: |
+            ${{ matrix.directory }}/newview/RelWithDebInfo/
+            ${{ matrix.directory }}/newview/packaged/
+
       - name: Upload build evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ${{ runner.os }}-build-evidence
           path: |
-            ${{ matrix.directory }}/cache-evidence/compiler-cache.txt
             ${{ matrix.directory }}/CMakeCache.txt
             ${{ matrix.directory }}/CMakeFiles/CMakeConfigureLog.yaml
             ${{ matrix.directory }}/packages/autobuild-package.xml
