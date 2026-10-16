@@ -862,6 +862,12 @@ struct Replay
         {
             if (avatar->evidence()["wearables"].asInteger() != 4 || avatar->localBakes().empty())
                 return false;
+            // Local bakes may finish before the asynchronous inventory fetches.
+            // The normal wear route requires a complete COF and source items.
+            for (const auto folder : { cof, bodyFolder, clothingFolder, objectsFolder })
+                if (!gInventory.isCategoryComplete(folder))
+                    return false;
+            require(session.appearance()->canWear({ item(6) }, true), "R2 initial shape replacement was not admitted");
             initialSize                    = avatar->appearanceOwner().mBodySize;
             evidence["initial_appearance"] = avatar->evidence();
             evidence["initial_body_size"]  = ll_sd_from_vector3(initialSize);
