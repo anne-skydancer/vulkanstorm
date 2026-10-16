@@ -323,6 +323,14 @@ target_include_directories(llcommon PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_dependencies(llcommon stage_third_party_libs)
 
+# Compile real statistics templates before the viewer; no runtime test hooks.
+option(VS_CI_TRACE_COMPILE_CHECK "Compile statistics type coverage" OFF)
+if(VS_CI_TRACE_COMPILE_CHECK)
+  add_library(lltrace_compile_check OBJECT tests/lltrace_compile_test.cpp)
+  target_link_libraries(lltrace_compile_check PRIVATE llcommon)
+endif()
+
+
 if (LL_TESTS)
   include(LLAddBuildTest)
   SET(llcommon_TEST_SOURCE_FILES
