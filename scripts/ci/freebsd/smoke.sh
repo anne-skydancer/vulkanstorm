@@ -36,6 +36,7 @@ add_test(NAME native_thread COMMAND smoke)
 EOF
 cat > "$work/main.cpp" <<'EOF'
 #include <atomic>
+#include <span>
 #include <thread>
 #include <SDL.h>
 #include <png.h>
@@ -45,7 +46,9 @@ int main() {
     SDL_GetVersion(&sdl);
     if (sdl.major != 2 || png_access_version_number() == 0 || !curl_version()) return 2;
     std::atomic<int> value{0};
-    std::jthread worker([&] { value.store(42); });
+    int input[] = {42};
+    std::span<const int> values(input);
+    std::thread worker([&] { value.store(values.front()); });
     worker.join();
     return value.load() == 42 ? 0 : 1;
 }

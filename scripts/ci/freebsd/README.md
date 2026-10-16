@@ -54,8 +54,10 @@ then adds explicit graphics prerequisites and Vulkan tools. It is a starting
 inventory, not a claim that every version/API meets Vulkanstorm's requirements.
 Megapahit documents these additional constraints:
 
-- Its FreeBSD build lacks CEF and WebRTC voice. Those are explicit porting
-  gaps for Vulkanstorm too, until independently implemented and qualified.
+- Its FreeBSD build lacks CEF and WebRTC voice. For Vulkanstorm, address CEF
+  after this BSD runner is operational. WebRTC is outside the initial FreeBSD
+  port's scope; do not require it to qualify the runner or silently advertise
+  voice support.
 - Its instructions select OpenAL, disable FMOD and NDOF, and enable media
   plugins. Vulkanstorm uses SoLoud, so importing those feature choices would
   change viewer behavior and needs separate design and qualification.
