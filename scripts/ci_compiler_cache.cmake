@@ -9,3 +9,10 @@ set(CMAKE_CXX_COMPILER_LAUNCHER "${VS_CI_SCCACHE}" CACHE STRING "CI compiler cac
 set(CMAKE_DISABLE_PRECOMPILE_HEADERS ON CACHE BOOL "Use content-addressed CI objects" FORCE)
 set(CMAKE_POLICY_DEFAULT_CMP0141 NEW CACHE STRING "Cacheable MSVC debug info" FORCE)
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded CACHE STRING "Debug info in objects" FORCE)
+
+# Match the existing Release inlining policy; CMake defaults RelWithDebInfo to
+# /Ob1, which otherwise overrides Autobuild's /Ob2 once for every compilation.
+if(CMAKE_HOST_WIN32)
+  set(CMAKE_C_FLAGS_RELWITHDEBINFO "/O2 /Ob2 /DNDEBUG" CACHE STRING "CI optimized debug flags" FORCE)
+  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/O2 /Ob2 /DNDEBUG" CACHE STRING "CI optimized debug flags" FORCE)
+endif()

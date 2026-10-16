@@ -17,7 +17,13 @@ include_guard()
 include(Variables)
 
 # We go to some trouble to set LL_BUILD to the set of relevant compiler flags.
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} $ENV{LL_BUILD}")
+set(_ll_build_flags "$ENV{LL_BUILD}")
+if(WINDOWS)
+  # CMP0091 (enabled by our minimum CMake version) owns CRT selection through
+  # MSVC_RUNTIME_LIBRARY. A global /MD would conflict with static-CRT targets.
+  string(REGEX REPLACE "(^|[ \t])/M[DT]d?([ \t]|$)" " " _ll_build_flags "${_ll_build_flags}")
+endif()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_ll_build_flags}")
 # Given that, all the flags you see added below are flags NOT present in
 # https://bitbucket.org/lindenlab/viewer-build-variables/src/tip/variables.
 # Before adding new ones here, it's important to ask: can this flag really be
