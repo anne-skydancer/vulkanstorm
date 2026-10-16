@@ -13,7 +13,7 @@ permissions:
 
 # Avoid compiling the same feature commit for both push and PR events.
 concurrency:
-  group: viewer-build-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: viewer-build-${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'codex/') && format('refs/heads/{0}', github.head_ref) || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/codex/') }}
 
 jobs:
