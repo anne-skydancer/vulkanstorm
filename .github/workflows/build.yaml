@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# Avoid compiling the same feature commit for both push and PR events.
+concurrency:
+  group: viewer-build-${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'codex/') && format('refs/heads/{0}', github.head_ref) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/codex/') }}
+
 jobs:
   check-publication:
     runs-on: ubuntu-latest
@@ -203,13 +208,13 @@ jobs:
             exit 1
           fi
 
-      - name: Run script metadata and transport regression tests
+      - name: Run statistics, script metadata and transport regression tests
         shell: bash
         run: |
           set -euo pipefail
           cmake -S indra -B "${{ matrix.directory }}" -DLL_TESTS:BOOL=ON
           cmake --build "${{ matrix.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
-            --target INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver
+            --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver
 
       - name: Check packaged Linux Mesa runtime
         if: runner.os == 'Linux'

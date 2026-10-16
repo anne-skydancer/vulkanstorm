@@ -113,5 +113,57 @@ int main() {
 }
 ''')
 
+    def test_production_frame_and_voice_sample_arguments(self):
+        header = (ROOT / 'indra/llcommon/lltrace.h').read_text()
+        begin = header.index('template<typename T, typename VALUE_T>\nvoid sample(')
+        sample = header[begin:header.index('template <typename T = F64>', begin)]
+        begin = header.index('template<typename T>\nT storage_value(')
+        storage = header[begin:header.index('template<typename UNIT_TYPE', begin)]
+        stats = (ROOT / 'indra/newview/llviewerstats.cpp').read_text().splitlines()
+        def argument(lines, name, last=False):
+            matches = [line.strip() for line in lines if 'sample(LLStatViewer::' + name + ',' in line]
+            line = matches[-1 if last else 0]
+            return line.split(',', 1)[1].strip().removesuffix(');')
+        inputs = ['sample(events, ' + argument(stats, 'FRAMETIME_JITTER_EVENTS_PER_MINUTE') + ');',
+                  'assert(events.data.last==static_cast<F64>(static_cast<U32>(frame_time_events_per_minute)));']
+        for name, variable in [('SCENERY', 'scene_render'), ('AVATAR', 'avatar'), ('HUDS', 'huds'),
+                               ('UI', 'ui'), ('SWAP', 'swap'), ('IDLE', 'idle')]:
+            inputs += ['const F64 pct_' + variable + '_time=37.6;',
+                       'sample(percent, ' + argument(stats, name + '_FRAME_PCT') + ');',
+                       'assert(percent.data.last==38.0);']
+        voice = (ROOT / 'indra/newview/llvoicewebrtc.cpp').read_text().splitlines()
+        if any('sample(LLStatViewer::WEBRTC_' in line for line in voice):
+            for name in ['JITTER_BUFFER', 'JITTER_IN', 'JITTER_OUT', 'LATENCY', 'UPLOAD_BANDWIDTH']:
+                inputs += ['sample(timing, ' + argument(voice, 'WEBRTC_' + name, last=True) + ');',
+                           'assert(timing.data.last==0.0);']
+            for name in ['PACKETS_IN_LOST', 'PACKETS_IN_RECEIVED', 'PACKETS_OUT_SENT', 'PACKETS_OUT_LOST']:
+                inputs += ['sample(events, ' + argument(voice, 'WEBRTC_' + name, last=True) + ');',
+                           'assert(events.data.last==0.0);']
+        self.compile_and_run('''
+#include <cassert>
+#include <cstdint>
+#include <cmath>
+#include <limits>
+using U32=uint32_t; using U64=uint64_t; using F32=float; using F64=double;
+#define LL_TRACE_ENABLED 1
+struct F32Percent {
+ explicit F32Percent(F32 value): data(value) {}
+ operator F32() const { return data; }
+ F32 data;
+};
+struct Accumulator { F64 last=0; void sample(F64 value) { last=value; } };
+template<typename T> struct SampleStatHandle {
+ using storage_t=F64;
+ Accumulator data; Accumulator& getCurrentAccumulator() { return data; }
+};
+''' + storage + sample + '''
+int main() {
+ SampleStatHandle<U32> events;
+ SampleStatHandle<F32Percent> percent;
+ SampleStatHandle<F32> timing;
+ (void)timing;
+ const U64 frame_time_events_per_minute=std::numeric_limits<U64>::max();
+''' + '\n'.join(inputs) + '\n}\n')
+
 if __name__ == '__main__':
     unittest.main()
