@@ -19,8 +19,8 @@ class NumericBoundaryTest(unittest.TestCase):
             root = Path(directory)
             cpp, exe = root / 'probe.cpp', root / 'probe.exe'
             cpp.write_text(source, encoding='utf-8')
-            args = ([compiler, '/nologo', '/std:c++17', '/W3', '/WX', str(cpp), '/Fe' + str(exe)]
-                    if windows else [compiler, '-std=c++17', '-Wall', '-Wextra', '-Wconversion',
+            args = ([compiler, '/nologo', '/std:c++20', '/W3', '/WX', str(cpp), '/Fe' + str(exe)]
+                    if windows else [compiler, '-std=c++20', '-Wall', '-Wextra', '-Wconversion',
                                      '-Werror', str(cpp), '-o', str(exe)])
             result = subprocess.run(args, cwd=root, text=True, capture_output=True, timeout=60)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -57,37 +57,59 @@ int main() {
 }
 ''')
 
-    def test_integer_and_fractional_samples_use_declared_storage(self):
+    def test_all_statistic_handles_preserve_typed_values(self):
         header = (ROOT / 'indra/llcommon/lltrace.h').read_text()
-        begin = header.index('template<typename T, typename VALUE_T>\nvoid sample(')
-        sample = header[begin:header.index('template <typename T = F64>', begin)]
+        begin = header.index('template <typename T = F64>\nclass EventStatHandle')
+        handles = header[begin:header.index('// measures effective memory footprint', begin)]
         begin = header.index('template<typename T>\nT storage_value(')
         storage = header[begin:header.index('template<typename UNIT_TYPE', begin)]
-        begin = header.index('class SampleStatHandle')
-        storage_type = re.search(r'typedef\s+\w+\s+storage_t;', header[begin:]).group(0)
         self.compile_and_run('''
 #include <cassert>
 #include <cstdint>
+#include <cstddef>
 #include <limits>
 #include <initializer_list>
-using U64=uint64_t; using S64=int64_t; using F64=double;
+using S32=int32_t; using U32=uint32_t; using S64=int64_t; using U64=uint64_t;
+using F32=float; using F64=double;
 #define LL_TRACE_ENABLED 1
-struct Accumulator { F64 last=0; unsigned samples=0; void sample(F64 v) { last=v; ++samples; } };
-template<typename T> struct SampleStatHandle {
-''' + storage_type + '''
- Accumulator data; Accumulator& getCurrentAccumulator() { return data; }
+struct Accumulator {
+ F64 last=0, sum=0; unsigned calls=0;
+ void record(F64 v) { last=v; ++calls; }
+ void sample(F64 v) { last=v; ++calls; }
+ void add(F64 v) { sum+=v; ++calls; }
 };
-''' + storage + sample + '''
+using EventAccumulator=Accumulator;
+using SampleAccumulator=Accumulator;
+using CountAccumulator=Accumulator;
+template<typename A> struct StatType {
+ StatType(const char*, const char*) {}
+ A data; A& getCurrentAccumulator() { return data; }
+};
+template<typename T> struct LLGetUnitLabel { static const char* getUnitLabel() { return ""; } };
+''' + storage + handles + '''
+template<typename T> void check(T value) {
+ EventStatHandle<T> event("event");
+ SampleStatHandle<T> sample_handle("sample");
+ CountStatHandle<T> count("count");
+ assert(count.getTotalSamples()==T());
+ assert(count.getTotalSampleCount()==0);
+ record(event,value); sample(sample_handle,value); add(count,value);
+ assert(event.data.last==static_cast<F64>(value));
+ assert(sample_handle.data.last==static_cast<F64>(value));
+ assert(count.data.sum==static_cast<F64>(value));
+ assert(count.getTotalSamples()==value);
+ assert(count.getTotalSampleCount()==1);
+}
 int main() {
- SampleStatHandle<U64> elapsed;
- for (U64 value : {U64(0),U64(14000),U64(1)<<53,std::numeric_limits<U64>::max()}) {
-  sample(elapsed,value); assert(elapsed.data.last==static_cast<F64>(value));
- }
- assert(elapsed.data.samples==4);
- SampleStatHandle<S64> signed_value; sample(signed_value,S64(-17));
- assert(signed_value.data.last==-17.0);
- SampleStatHandle<F64> fraction; sample(fraction,0.125);
- assert(fraction.data.last==0.125);
+ check<S32>(-17); check<U32>(42); check<S64>(-17); check<U64>(42);
+ check<U64>(U64(1)<<53); check<U64>(std::numeric_limits<U64>::max());
+ check<F32>(0.125f); check<F64>(0.125);
+ CountStatHandle<S32> count("signed_count");
+ add(count,S32(7)); add(count,S32(-2));
+ assert(count.getTotalSamples()==5 && count.getTotalSampleCount()==2);
+ CountStatHandle<F64> fractional("fractional_count");
+ add(fractional,0.125); add(fractional,0.25);
+ assert(fractional.getTotalSamples()==0.375 && fractional.getTotalSampleCount()==2);
 }
 ''')
 

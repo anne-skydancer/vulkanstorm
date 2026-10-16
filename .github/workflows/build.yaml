@@ -220,6 +220,11 @@ jobs:
             "$GITHUB_WORKSPACE/${{ matrix.directory }}/packages/lib/release/mesa" \
             | tee "${{ matrix.directory }}/zink-loader-test.txt"
 
+      - name: Compile statistics type coverage before viewer
+        run: |
+          cmake -S indra -B ${{ matrix.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
+          cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
+
       - name: Build viewer and stage runtime
         run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
 
