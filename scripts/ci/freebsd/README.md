@@ -28,6 +28,12 @@ Artifacts expire after 14 days; retain any selected image before that deadline.
 The image includes native Clang from FreeBSD base, CMake, Ninja, Python 3.12,
 Git/LFS, pkgconf, ccache and common build utilities. Python's Autobuild and
 LLSD are isolated in `/opt/vulkanstorm`; `autobuild` is on the default PATH.
+The image applies `patch_autobuild.py` to that pinned Autobuild version to add
+native `freebsd64` detection, 64-bit defaults and FreeBSD build-variable short
+names. Exact source-context checks fail on unexpected upstream changes. The
+fresh-guest tests exercise FreeBSD detection, rejection of Linux selection on
+FreeBSD, and preservation of Windows/Linux/macOS selection. This is a local
+image patch, not upstream Autobuild support or completed viewer integration.
 Package versions are recorded, not frozen: rebuilding against a changed pkg
 repository can produce a different image. Use the exact image checksum for
 qualification and establish a package snapshot before requiring reproducible

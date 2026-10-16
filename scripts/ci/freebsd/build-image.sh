@@ -4,6 +4,7 @@ set -euo pipefail
 builder="$PWD/.freebsd-builder"
 expected=6b1eb482e85a4e9d5bb2cf769412bb053f40c9c0
 test "$(git -C "$builder" rev-parse HEAD)" = "$expected"
+cp scripts/ci/freebsd/patch_autobuild.py "$builder/resources/vulkanstorm-patch-autobuild.py"
 package_names=$(sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' scripts/ci/freebsd/system-packages.txt)
 if grep -Ev '^[A-Za-z0-9_+.-]+$' <<< "$package_names"; then
     echo 'Invalid system package name' >&2

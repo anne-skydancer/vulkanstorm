@@ -12,6 +12,9 @@ mkdir -p "$evidence"
 cp /usr/local/share/vulkanstorm-image/* "$evidence/"
 uname -a > "$evidence/uname.txt"
 autobuild --version > "$evidence/autobuild.txt" 2>&1
+/opt/vulkanstorm/bin/python scripts/ci/freebsd/test_autobuild_platform.py \
+    > "$evidence/autobuild-platform-tests.txt" 2>&1
+/opt/vulkanstorm/bin/python -c 'from autobuild import common; assert common.get_current_platform() == "freebsd64"'
 /opt/vulkanstorm/bin/python -c 'import llsd; assert llsd.parse(llsd.format_xml({"native": True}))["native"]'
 
 work=$(mktemp -d)

@@ -19,6 +19,9 @@ pkg install -y $VKSTORM_SYSTEM_PACKAGES
 python3.12 -m venv /opt/vulkanstorm
 /opt/vulkanstorm/bin/python -m pip install --disable-pip-version-check \
     autobuild==3.9.3 llsd==1.2.4
+fetch -o /tmp/vulkanstorm-patch-autobuild.py \
+    "http://${PACKER_HTTP_ADDR:?}/resources/vulkanstorm-patch-autobuild.py"
+/opt/vulkanstorm/bin/python /tmp/vulkanstorm-patch-autobuild.py
 ln -sf /opt/vulkanstorm/bin/autobuild /usr/local/bin/autobuild
 
 mkdir -p /usr/local/share/vulkanstorm-image
@@ -26,3 +29,5 @@ freebsd-version -ku > /usr/local/share/vulkanstorm-image/freebsd-version.txt
 pkg query '%n %v %o' | sort > /usr/local/share/vulkanstorm-image/packages.txt
 /opt/vulkanstorm/bin/python -m pip freeze > /usr/local/share/vulkanstorm-image/python-packages.txt
 cc --version > /usr/local/share/vulkanstorm-image/compiler.txt
+sha256 /tmp/vulkanstorm-patch-autobuild.py > /usr/local/share/vulkanstorm-image/autobuild-patch.txt
+rm /tmp/vulkanstorm-patch-autobuild.py
