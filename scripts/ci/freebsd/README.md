@@ -64,7 +64,9 @@ Megapahit documents these additional constraints:
   change viewer behavior and needs separate design and qualification.
 - Select Python explicitly; its FreeBSD instructions use Python 3.12. The
   image supplies `/opt/vulkanstorm/bin/python` without replacing system Python.
-- FreeBSD package/port names differ from Linux names (`apr1`, `sdl20`, etc.).
+- FreeBSD ports and binary packages have different names: `devel/apr1`
+  installs `apr`, `devel/sdl20` installs `sdl2`, and `graphics/png` installs
+  `png`. The image manifest uses binary package names verified against pkg.
 - Its packaging instructions temporarily move WindLight assets because names
   containing `%20`/`%21` cause problems. Investigate package manifests before
   enabling FreeBSD packaging; do not remove these assets from staged viewers.
