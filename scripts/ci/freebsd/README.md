@@ -10,7 +10,8 @@ FreeBSD guest; there is no native GitHub runner installed in the image.
 ## Build and qualification
 
 Push this feature branch, open a PR changing these paths, or run the workflow
-manually after it is integrated. The workflow installs QEMU and Packer, builds
+manually after it is integrated. The workflow installs QEMU and Packer, grants
+the disposable runner access to `/dev/kvm` (required for this build), builds
 a 32 GiB virtual disk, checks its structure, and boots the result through a
 pinned cross-platform-actions/action revision. The installer ISO checksum is
 provided by the pinned upstream version configuration.
