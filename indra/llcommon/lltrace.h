@@ -164,7 +164,8 @@ void sample(SampleStatHandle<T>& measurement, VALUE_T value)
 {
 #if LL_TRACE_ENABLED
     T converted_value(value);
-    measurement.getCurrentAccumulator().sample(storage_value(converted_value));
+    measurement.getCurrentAccumulator().sample(
+        static_cast<typename SampleStatHandle<T>::storage_t>(storage_value(converted_value)));
 #endif
 }
 

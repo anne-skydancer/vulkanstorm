@@ -37,6 +37,7 @@ jobs:
       - run: python3 scripts/tests/test_windows_symbol_archive.py
       - run: python3 scripts/tests/test_version_schema.py
       - run: python3 scripts/tests/test_contacts_layout.py
+      - run: python3 scripts/tests/test_ci_numeric_boundaries.py
       - run: python3 scripts/tests/test_ci_compiler_cache.py
       - run: python3 scripts/tests/test_ci_allocation_bounds.py
       - run: python3 scripts/tests/test_ndof_cmake.py
@@ -153,6 +154,8 @@ jobs:
         env:
           VS_REQUIRE_COMPILER_CACHE: '1'
         run: python scripts/tests/test_ci_compiler_cache.py
+      - name: Check numeric boundaries with the platform compiler
+        run: python scripts/tests/test_ci_numeric_boundaries.py
       - name: Restore compiled objects
         id: compiler-cache
         if: inputs.clean_compiler_cache != true
