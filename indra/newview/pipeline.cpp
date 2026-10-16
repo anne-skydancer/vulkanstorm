@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llfocusrenderprobe.h"
 
 #include "pipeline.h"
 #include "llcomputemesh.h"
@@ -704,6 +705,7 @@ LLPipeline::~LLPipeline()
 
 void LLPipeline::cleanup()
 {
+    FocusRenderProbe::cleanup();
     LLComputeMesh::destroyGL();
     assertInitialized();
 
@@ -849,6 +851,10 @@ void LLPipeline::resizeScreenTexture()
         if (gResizeScreenTexture || (scaledResX != mRT->screen.getWidth()) || (scaledResY != mRT->screen.getHeight()))
 // [/SL:KB]
         {
+            static FocusRenderProbe::Probe resize_probe("resize_buffers", true);
+            FocusRenderProbe::Scope resize_measure(resize_probe);
+            LL_INFOS("FocusRender") << "resize old=" << mRT->screen.getWidth() << "x" << mRT->screen.getHeight()
+                << " requested=" << resX << "x" << resY << " forced=" << gResizeScreenTexture << LL_ENDL;
             releaseScreenBuffers();
             releaseSunShadowTargets();
             releaseSpotShadowTargets();
@@ -3336,6 +3342,21 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
         auto* volume = drawablep->getVOVolume();
         if (volume->mComputeLOD)
         {
+            static U64 reasons[4] = {};
+            static LLFrameTimer reason_timer;
+            reasons[0] += (flag & LLDrawable::REBUILD_VOLUME) != 0;
+            reasons[1] += (flag & LLDrawable::REBUILD_POSITION) != 0;
+            reasons[2] += (flag & LLDrawable::REBUILD_TCOORD) != 0;
+            reasons[3] += (flag & LLDrawable::REBUILD_COLOR) != 0;
+            if (reason_timer.getElapsedTimeF32() >= 5.f)
+            {
+                LL_INFOS("FocusRender") << "packed_invalidation volume=" << reasons[0]
+                    << " position=" << reasons[1] << " texcoord=" << reasons[2]
+                    << " color=" << reasons[3] << LL_ENDL;
+                for (auto& count : reasons) count = 0;
+                reason_timer.reset();
+            }
+
             // The fast mesh update writes only the CPU-selected range. Resident
             // objects need all their ranges regenerated after a geometry edit.
             if (auto* group = drawablep->getSpatialGroup()) group->dirtyGeom();
@@ -4325,6 +4346,8 @@ U32 LLPipeline::sCurRenderPoolType = 0 ;
 
 void LLPipeline::renderGeomDeferred(LLCamera& camera, bool do_occlusion)
 {
+    static FocusRenderProbe::Probe probe("deferred");
+    FocusRenderProbe::Scope measure(probe, true);
     LLAppViewer::instance()->pingMainloopTimeout("Pipeline:RenderGeomDeferred");
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL; //LL_RECORD_BLOCK_TIME(FTM_RENDER_GEOMETRY);
     LL_PROFILE_GPU_ZONE("renderGeomDeferred");
@@ -4464,6 +4487,8 @@ void LLPipeline::renderGeomDeferred(LLCamera& camera, bool do_occlusion)
 // This is gonna be stuff like alpha, water, etc.
 void LLPipeline::renderGeomPostDeferred(LLCamera& camera)
 {
+    static FocusRenderProbe::Probe probe("post_deferred");
+    FocusRenderProbe::Scope measure(probe, true);
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
     LL_PROFILE_GPU_ZONE("renderGeomPostDeferred");
 
@@ -8371,6 +8396,8 @@ void LLPipeline::endAlphaOITCapture()
 
 void LLPipeline::compositeAlphaOIT()
 {
+    static FocusRenderProbe::Probe probe("ppll_resolve");
+    FocusRenderProbe::Scope measure(probe, true);
     if (!mAlphaOITHead || !gAlphaOITResolveProgram.mProgramObject)
     {
         return;

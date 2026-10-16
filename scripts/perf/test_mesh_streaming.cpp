@@ -10,6 +10,158 @@ struct Object { int id; bool dead=false; bool isDead() const { return dead; } };
 struct Waiters { std::set<Object*> mVolumes; };
 int main()
 {
+    // A dense High plus a loaded coarse level must converge to the existing
+    // High pack, rather than allocate an identical replacement on every demand.
+    const std::array<unsigned,4> vertices{10000,20000,30000,60000};
+    for (unsigned loaded=1; loaded<16; ++loaded)
+    {
+        auto fits = [&](unsigned mask)
+        {
+            unsigned total=0;
+            for (unsigned i=0; i<4; ++i) if (mask & (1u<<i)) total+=vertices[i];
+            return total<=65535;
+        };
+        const unsigned packed=LLMeshStreaming::fitResidentLevels(loaded,fits);
+        assert(packed && fits(packed) && !(packed & ~loaded));
+        assert(LLMeshStreaming::fitResidentLevels(packed,fits)==packed);
+        unsigned finest=0;
+        for (unsigned i=0; i<4; ++i) if (loaded & (1u<<i)) finest=i;
+        assert(packed & (1u<<finest));
+        if (loaded & 8) assert(packed==8);
+    }
+    // Aliases share storage; they must not be dropped as if duplicated vertices.
+    assert(LLMeshStreaming::fitResidentLevels(15,[](unsigned){return true;})==15);
+    assert(LLMeshStreaming::fitResidentLevels(8,[](unsigned){return false;})==0);
+    assert(LLMeshStreaming::fitResidentLevels(3,[](unsigned){return true;})==3);
+    using Lane = LLMeshStreaming::RequestLane;
+    assert(LLMeshStreaming::requestBefore(0.f, 10.f, 4.f, 1.f));
+    assert(LLMeshStreaming::requestBefore(5.f, 0.f, 0.f, 100.f));
+    assert(LLMeshStreaming::requestBefore(8.f, 0.f, 6.f, 100.f));
+    assert(!LLMeshStreaming::requestBefore(6.f, 100.f, 8.f, 0.f));
+    assert(!LLMeshStreaming::requestBefore(8.f, 10.f, 8.f, 10.f));
+    // Fairness holds across frame boundaries, not just within large batches.
+    for (unsigned mask=1; mask<16; ++mask)
+    {
+        LLMeshStreaming::RequestScheduler scheduler;
+        std::array<bool,4> available{};
+        for (unsigned i=0; i<4; ++i) available[i] = (mask & (1u<<i)) != 0;
+        for (unsigned round=0; round<8; ++round)
+        {
+            unsigned served=0;
+            for (unsigned slot=0; slot<8; ++slot)
+            {
+                unsigned lane=scheduler.select(available);
+                assert(lane<4 && available[lane]);
+                served |= 1u<<lane;
+            }
+            assert(served==mask);
+        }
+    }
+    LLMeshStreaming::RequestScheduler scheduler;
+    assert(scheduler.select({false,false,false,false})==4);
+    std::array<unsigned,4> shares{};
+    for (unsigned i=0; i<80; ++i) ++shares[scheduler.select({true,true,true,true})];
+    assert((shares==std::array<unsigned,4>{30,20,20,10}));
+    // Authored levels can alias, fail, or already be resident. Test every ready
+    // mask and desired LOD with both direct and compute consumers, including HUD.
+    const std::array<std::array<int,4>,5> mappings{{{0,1,2,3},{3,3,3,3},
+        {1,1,1,3},{-1,1,2,3},{-1,-1,-1,-1}}};
+    for (const auto& mapping:mappings)
+        for (unsigned ready=0; ready<16; ++ready)
+            for (int desired=0; desired<4; ++desired)
+                for (bool hud:{false,true})
+                    for (bool residency:{false,true})
+                    {
+                        std::vector<std::pair<int,Lane>> requests;
+                        LLMeshStreaming::planRequests(desired,hud,residency,
+                            [&](int i){return mapping[i];},
+                            [&](int i){return (ready & (1u<<i))!=0;},
+                            [&](int i,Lane lane){requests.emplace_back(i,lane);});
+                        unsigned seen=0;
+                        for (const auto& request:requests)
+                        {
+                            assert(request.first>=0 && request.first<4);
+                            unsigned bit=1u<<request.first;
+                            assert(!(seen & bit) && !(ready & bit));
+                            seen |= bit;
+                            if (hud) assert(request.first==mapping[desired]);
+                            if (!residency || hud) assert(request.second!=Lane::RESIDENCY);
+                        }
+                        if (mapping[desired]>=0 && !(ready & (1u<<mapping[desired])))
+                            assert(seen & (1u<<mapping[desired]));
+                    }
+    std::vector<std::pair<int,Lane>> cold;
+    LLMeshStreaming::planRequests(3,false,true,[](int i){return i;},[](int){return false;},
+        [&](int i,Lane lane){cold.emplace_back(i,lane);});
+    assert((cold==std::vector<std::pair<int,Lane>>{{0,Lane::FIRST_GEOMETRY},
+        {3,Lane::VISIBLE_DETAIL},{1,Lane::RESIDENCY},{2,Lane::RESIDENCY}}));
+    using Admission = LLMeshStreaming::AdmissionController;
+    Admission admission;
+    assert(admission.room(64,0,0,0,0,0.)==64);
+    assert(admission.room(64,0,256,0,0,0.)==32 && admission.throttled);
+    assert(admission.room(64,0,200,0,0,0.)==32 && admission.throttled); // hysteresis
+    assert(admission.room(64,0,128,0,0,0.)>32 && !admission.throttled);
+    assert(admission.room(64,0,768,0,0,0.)==16);
+    assert(admission.room(64,40,256,0,0,0.)==0); // in-flight work exceeds reduced target
+    assert(admission.room(64,30,256,0,0,0.)==2);
+    assert(admission.room(64,32,256,0,0,0.)==0); // no repeated per-frame allowance
+    assert(admission.room(64,32,0,0,0,0.)==32);
+    assert(admission.room(0,0,0,0,0,0.)==0);
+    assert(admission.room(64,0,UINT64_MAX,UINT64_MAX,0,0.)==1);
+    // Regression: observed healthy backlog was reducing 80 slots to 54 even
+    // though admission_throttled was false and drain capacity was ample.
+    Admission healthy;
+    assert(healthy.room(80,0,117,1187408,0,0.)==80 && !healthy.throttled);
+    assert(healthy.room(80,37,117,1187408,588,1.)==43 && !healthy.throttled);
+    assert(healthy.limit==80);
+    assert(healthy.room(80,77,1,6360342,588,1.)==3 && !healthy.throttled);
+    Admission memory;
+    assert(memory.room(64,0,1,Admission::HIGH_BYTES,0,0.)==32 && memory.throttled);
+    assert(memory.room(64,0,1,Admission::LOW_BYTES+1,0,0.)==32 && memory.throttled);
+    assert(memory.room(64,0,1,Admission::LOW_BYTES,0,0.)>32 && !memory.throttled);
+    Admission stalled;
+    stalled.room(64,0,100,0,0,0.);
+    assert(stalled.room(64,0,100,0,0,1.)<32 && stalled.rateKnown && stalled.throttled);
+    assert(stalled.drainPerSecond==0.);
+    assert(stalled.room(64,0,10,0,100,2.)>32 && !stalled.throttled);
+    assert(stalled.room(64,0,0,0,100,3.)==64 && !stalled.rateKnown);
+    Admission fast;
+    fast.room(64,0,100,0,0,0.);
+    assert(fast.room(64,0,100,0,100,1.)>32 && !fast.throttled);
+    assert(fast.rateKnown && fast.drainPerSecond==100.);
+    // A long delay cannot manufacture extra capacity; the measured rate is per second.
+    Admission paused;
+    paused.room(64,0,100,0,0,0.);
+    assert(paused.room(64,0,100,0,10,10.)<32 && paused.drainPerSecond==1.);
+
+    // Cheap completions use the time allowance rather than stopping at eight.
+    unsigned cursor = 0, elapsed = 0;
+    unsigned remaining[3] = {100, 1, 1};
+    std::vector<unsigned> serviced;
+    auto service = [&](unsigned q) {
+        if (!remaining[q]) return false;
+        --remaining[q]; ++elapsed; serviced.push_back(q); return true;
+    };
+    assert(LLMeshStreaming::completionBatch(cursor, 3, service, [&]{return elapsed>=20;}) == 20);
+    assert(serviced[0]==0 && serviced[1]==1 && serviced[2]==2);
+    assert(remaining[0]==82 && remaining[1]==0 && remaining[2]==0);
+    // No work or unavailable locks cannot spin until the deadline.
+    unsigned probes = 0;
+    assert(LLMeshStreaming::completionBatch(cursor, 6, [&](unsigned){++probes;return false;}, []{return false;})==0);
+    assert(probes==6);
+    probes=0;
+    assert(LLMeshStreaming::completionBatch(cursor, 6, [&](unsigned){++probes;return true;}, []{return true;})==0);
+    assert(probes==0);
+    // Expiration preserves round-robin position; slow callbacks get no extra turn.
+    cursor=0; elapsed=0;
+    assert(LLMeshStreaming::completionBatch(cursor,3,[&](unsigned q){assert(q==0);elapsed=10;return true;},[&]{return elapsed>=1;})==1);
+    assert(cursor==1);
+    elapsed=0;
+    assert(LLMeshStreaming::completionBatch(cursor,3,[&](unsigned q){assert(q==1);++elapsed;return true;},[&]{return elapsed>=1;})==1);
+    // Requeued partial notifications can continue, still sharing the time budget.
+    elapsed=0;
+    assert(LLMeshStreaming::completionBatch(cursor,1,[&](unsigned){++elapsed;return true;},[&]{return elapsed>=12;})==12);
+
     // A direct-draw fallback must catch up before a finer rigged generation
     // becomes resident. Later invalidation must not expose the original Lowest.
     unsigned cpu_level = 0;
@@ -37,22 +189,8 @@ int main()
     assert(LLMeshStreaming::retainLoadedLevel(3, 2, 8, 7));
     assert(!LLMeshStreaming::retainLoadedLevel(3, 2, 0, 7));
     assert(LLMeshStreaming::retainLoadedLevel(3, 0, 0, 0));
-    // Cold loads advance one level at a time; no new higher request before its
-    // first missing predecessor. Every availability pattern is exercised.
+    // Display the best available level while concurrent requests complete.
     unsigned checks=0;
-    assert(LLMeshStreaming::firstMissingLevel(3, [](int){return -1;}, [](int){return false;})==-1);
-    for (unsigned ready=0; ready<16; ++ready)
-        for (int desired=0; desired<4; ++desired)
-        {
-            int result=LLMeshStreaming::firstMissingLevel(desired, [](int i){ return i; },
-                [&](int i){ return bool(ready & (1u<<i)); });
-            assert(result>=0 && result<=desired);
-            for (int i=0; i<result; ++i) assert(ready & (1u<<i));
-            if (result<desired) assert(!(ready & (1u<<result)));
-            ++checks;
-        }
-    // An asset with only High: request it directly, never a nonexistent Lowest.
-    assert(LLMeshStreaming::firstMissingLevel(3, [](int){return 3;}, [](int){return false;})==3);
     for (unsigned ready=1; ready<16; ++ready)
         for (unsigned desired=0; desired<4; ++desired)
         {
@@ -114,5 +252,5 @@ int main()
     rebuilds={1};
     assert(LLMeshStreaming::rebuildBatch(rebuilds,[&](int){rebuilds.push_back(2);return true;},[]{return false;})==1);
     assert(rebuilds.front()==2 && rebuilds.size()==1);
-    std::cout << "PASS: " << checks << " progressive/resident cases; bounded fan-out; deletion; callback reentrancy; rebuild time/count limits and fairness\n";
+    std::cout << "PASS: " << checks << " resident cases; 1280 request plans; weighted admission; bounded fan-out; deletion; callback reentrancy; rebuild time/count limits and fairness\n";
 }

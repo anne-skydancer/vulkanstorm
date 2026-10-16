@@ -69,6 +69,12 @@ public:
     {
     }
 
+    ~LLRiggedVolume() override;
+    // Main-thread counters for destination copies only, not shared source weights.
+    inline static U64 sWeightBytes = 0, sWeightPeakBytes = 0, sWeightFaces = 0;
+private:
+    U64 mWeightBytes = 0, mWeightFaces = 0;
+public:
     using FaceIndex = S32;
     static const FaceIndex UPDATE_ALL_FACES = -1;
     static const FaceIndex DO_NOT_UPDATE_FACES = -2;
@@ -113,7 +119,6 @@ protected:
 
 public:
     std::shared_ptr<LLComputeMesh::Object> mComputeLOD;
-    U32 mComputeLODRetryFrame = 0;
     static      void    initClass();
     static      void    cleanupClass();
     static      void    preUpdateGeom();
@@ -518,4 +523,3 @@ protected:
 };
 
 #endif // LL_LLVOVOLUME_H
-

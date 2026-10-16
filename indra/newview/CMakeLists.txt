@@ -1162,6 +1162,7 @@ set(viewer_HEADER_FILES
     lldrawpoolbump.h
     lldrawpoolmaterials.h
     llcomputemesh.h
+    llcomputedependencies.h
     lldrawpoolpbropaque.h
     lldrawpoolsimple.h
     lldrawpoolsky.h

@@ -90,6 +90,7 @@
 #include "llvosurfacepatch.h"
 #include "llvotree.h"
 #include "llvovolume.h"
+#include "llcomputemesh.h"
 #include "llvowater.h"
 #include "llworld.h"
 #include "llui.h"
@@ -5892,7 +5893,9 @@ S32 LLViewerObject::initRenderMaterial(U8 te)
         if (override_material) { render_material->applyOverride(*override_material); }
         render_material->clearFetchedTextures();
     }
-    return tep->setGLTFRenderMaterial(render_material);
+    const S32 changed = tep->setGLTFRenderMaterial(render_material);
+    if (auto* volume = mDrawable ? mDrawable->getVOVolume() : nullptr) LLComputeMesh::notifyLODDependency(*volume, LLComputeMesh::MATERIAL);
+    return changed;
 }
 
 S32 LLViewerObject::setTEGLTFMaterialOverride(U8 te, LLGLTFMaterial* override_mat)
@@ -7755,6 +7758,7 @@ const LLUUID& LLViewerObject::getRenderMaterialID(U8 te) const
 void LLViewerObject::rebuildMaterial()
 {
     llassert(!isDead());
+    if (auto* volume = mDrawable ? mDrawable->getVOVolume() : nullptr) LLComputeMesh::notifyLODDependency(*volume, LLComputeMesh::MATERIAL);
 
     faceMappingChanged();
     gPipeline.markTextured(mDrawable);

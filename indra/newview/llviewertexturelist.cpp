@@ -65,6 +65,8 @@
 #include "llviewerdisplay.h"
 #include "llviewerwindow.h"
 #include "llprogressview.h"
+#include "llfocusmgr.h"
+#include "llmemory.h"
 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -839,6 +841,36 @@ void LLViewerTextureList::deleteImage(LLViewerFetchedTexture *image)
 
 void LLViewerTextureList::updateImages(F32 max_time)
 {
+    static LLFrameTimer focus_memory_timer;
+    static bool previous_focus = gFocusMgr.getAppHasFocus();
+    const bool focused = gFocusMgr.getAppHasFocus();
+    static F64 frame_sum = 0.;
+    static F32 frame_max = 0.f;
+    static U32 frame_samples = 0;
+    const F32 frame_seconds = LLFrameTimer::getFrameDeltaTimeF32();
+    // The startup frame delta may precede initialization of the frame clock.
+    if (frame_seconds > 0.f && frame_seconds < 10.f)
+    {
+        frame_sum += frame_seconds;
+        frame_max = llmax(frame_max, frame_seconds);
+        ++frame_samples;
+    }
+    if (focused != previous_focus || focus_memory_timer.getElapsedTimeF32() >= 5.f)
+    {
+        focus_memory_timer.reset();
+        previous_focus = focused;
+        LL_INFOS("FocusMemory") << "focused=" << focused
+            << " frame_mean_seconds=" << (frame_samples ? frame_sum / frame_samples : 0.)
+            << " frame_max_seconds=" << frame_max
+            << " frame_samples=" << frame_samples
+            << " downscale_pending=" << mDownScaleQueue.size()
+            << " create_pending=" << mCreateTextureList.size()
+            << " discard_bias=" << LLViewerTexture::sDesiredDiscardBias
+            << LL_ENDL;
+        LLMemory::logMemoryInfo(true);
+        frame_sum = 0.; frame_max = 0.f; frame_samples = 0;
+    }
+
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     static bool cleared = false;
     if(gTeleportDisplay)

@@ -1488,6 +1488,7 @@ void LLVOVolume::notifyMeshLoaded()
         cav->notifyAttachmentMeshLoaded();
     }
     updateVisualComplexity();
+    LLComputeMesh::notifyLODDependency(*this, LLComputeMesh::MESH);
 }
 
 void LLVOVolume::notifySkinInfoLoaded(const LLMeshSkinInfo* skin)
@@ -1495,6 +1496,7 @@ void LLVOVolume::notifySkinInfoLoaded(const LLMeshSkinInfo* skin)
     if (mSkinInfo.get() != skin) LLComputeMesh::invalidateLOD(*this);
     mSkinInfoUnavaliable = false;
     mSkinInfo = skin;
+    LLComputeMesh::notifyLODDependency(*this, LLComputeMesh::SKIN);
 
     notifyMeshLoaded();
 }
@@ -5256,6 +5258,13 @@ void LLVOVolume::updateRiggedVolume(bool force_treat_as_rigged, LLRiggedVolume::
     mRiggedVolume->update(skin, avatar, volume, face_index, rebuild_face_octrees);
 }
 
+LLRiggedVolume::~LLRiggedVolume()
+{
+    llassert(sWeightBytes >= mWeightBytes && sWeightFaces >= mWeightFaces);
+    sWeightBytes -= mWeightBytes;
+    sWeightFaces -= mWeightFaces;
+}
+
 void LLRiggedVolume::update(
     const LLMeshSkinInfo* skin,
     LLVOAvatar* avatar,
@@ -5285,6 +5294,20 @@ void LLRiggedVolume::update(
     if (copy)
     {
         copyVolumeFaces(volume);
+        sWeightBytes -= mWeightBytes;
+        sWeightFaces -= mWeightFaces;
+        mWeightBytes = mWeightFaces = 0;
+        for (const auto& face : mVolumeFaces)
+        {
+            if (face.mWeights)
+            {
+                mWeightBytes += U64(face.mNumVertices) * sizeof(LLVector4a);
+                ++mWeightFaces;
+            }
+        }
+        sWeightBytes += mWeightBytes;
+        sWeightFaces += mWeightFaces;
+        sWeightPeakBytes = llmax(sWeightPeakBytes, sWeightBytes);
     }
     else
     {
@@ -6511,6 +6534,8 @@ void LLVolumeGeometryManager::rebuildGeom(LLSpatialGroup* group)
             if(drawablep)
             {
                 drawablep->clearState(LLDrawable::REBUILD_ALL);
+                if (auto* volume = drawablep->getVOVolume())
+                    LLComputeMesh::notifyLODDependency(*volume, LLComputeMesh::DRAWABLE);
             }
         }
     }
@@ -6589,6 +6614,7 @@ void LLVolumeGeometryManager::rebuildMesh(LLSpatialGroup* group)
                     }
 
                     drawablep->clearState(LLDrawable::REBUILD_ALL);
+                    LLComputeMesh::notifyLODDependency(*vobj, LLComputeMesh::DRAWABLE);
                 }
             }
 

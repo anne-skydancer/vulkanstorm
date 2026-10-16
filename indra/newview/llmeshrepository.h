@@ -41,6 +41,7 @@
 #include "httpheaders.h"
 #include "httphandler.h"
 #include "llthread.h"
+#include "llmeshstreaming.h"
 
 #define LLCONVEXDECOMPINTER_STATIC 1
 
@@ -209,14 +210,6 @@ class MeshLoadData;
 class PendingRequestBase
 {
 public:
-    struct CompareScoreGreater
-    {
-        bool operator()(const std::shared_ptr<PendingRequestBase>& lhs, const std::shared_ptr<PendingRequestBase>& rhs)
-        {
-            return lhs->mScore > rhs->mScore; // greatest = first
-        }
-    };
-
     PendingRequestBase() : mScore(0.f), mTrackedData(nullptr), mScoreDirty(true) {};
     virtual ~PendingRequestBase() {}
 
@@ -226,8 +219,12 @@ public:
     }
 
     F32 getScore() const { return mScore; }
+    LLMeshStreaming::RequestLane getLane() const { return mLane; }
+    void promote(LLMeshStreaming::RequestLane lane) { mLane = std::min(mLane, lane); }
+    F32 getAge() const { return mSortAge; }
     void checkScore()
     {
+        mSortAge = mAge.getElapsedTimeF32();
         constexpr F32 EXPIRE_TIME_SECS = 8.f;
         if (mScoreTimer.getElapsedTimeF32() > EXPIRE_TIME_SECS || mScoreDirty)
         {
@@ -244,9 +241,13 @@ public:
     void untrackData() { mTrackedData = nullptr; }
     bool hasTrackedData() { return mTrackedData != nullptr; }
     void setScoreDirty() { mScoreDirty = true; }
+    void markInFlight();
 
 protected:
     void updateScore();
+    LLMeshStreaming::RequestLane mLane = LLMeshStreaming::RequestLane::RESIDENCY;
+    LLTimer mAge;
+    F32 mSortAge = 0.f;
 
     LLUUID mId;
     F32 mScore;
@@ -306,13 +307,18 @@ public:
     }
     void addVolume(LLVOVolume* vol)
     {
-        mVolumes.insert(vol);
+        if (!mVolumes.insert(vol).second) return;
         if (std::shared_ptr<PendingRequestBase> request = mRequest.lock())
         {
             request->setScoreDirty();
         }
     }
     std::unordered_set<LLVOVolume*> mVolumes;
+    bool mInFlight = false;
+    void promote(LLMeshStreaming::RequestLane lane)
+    {
+        if (auto request = mRequest.lock()) request->promote(lane);
+    }
 private:
     std::weak_ptr<PendingRequestBase> mRequest;
 };
@@ -506,6 +512,7 @@ public:
         LLVolumeParams mMeshParams;
         S32 mLOD;
         bool mPublished = false;
+        U64 mRetainedBytes = 0;
 
         LoadedMesh(LLVolume* volume, const LLVolumeParams&  mesh_params, S32 lod)
             : mVolume(volume), mMeshParams(mesh_params), mLOD(lod)
@@ -518,7 +525,15 @@ public:
     std::deque<UUIDBasedRequest> mSkinRequests;
 
     // list of completed skin info requests
-    std::deque<LLPointer<LLMeshSkinInfo>> mSkinInfoQ;
+    struct LoadedSkin
+    {
+        LLPointer<LLMeshSkinInfo> mInfo;
+        U64 mRetainedBytes = 0;
+    };
+    std::deque<LoadedSkin> mSkinInfoQ;
+    // Payload estimates protected by mLoadedMutex; drain count is main-thread only.
+    U64 mCompletionBytes = 0;
+    U64 mAdmissionCompleted = 0;
 
     // list of skin info requests that have failed or are unavailaibe
     std::deque<UUIDBasedRequest> mSkinUnavailableQ;
@@ -901,7 +916,7 @@ public:
     void unregisterMesh(LLVOVolume* vobj, const LLVolumeParams& mesh_params, S32 detail);
     void unregisterSkinInfo(const LLUUID& mesh_id, LLVOVolume* vobj);
     //mesh management functions
-    S32 loadMesh(LLVOVolume* volume, const LLVolumeParams& mesh_params, S32 new_lod = 0, S32 last_lod = -1);
+    S32 loadMesh(LLVOVolume* volume, const LLVolumeParams& mesh_params, S32 new_lod = 0, S32 last_lod = -1, bool residency = false);
 
     void notifyLoadedMeshes();
     bool notifyMeshLoaded(const LLVolumeParams& mesh_params, LLVolume* volume, S32 lod, bool& published);
@@ -958,6 +973,7 @@ public:
 
     typedef std::vector <std::shared_ptr<PendingRequestBase> > pending_requests_vec;
     pending_requests_vec mPendingRequests;
+    LLMeshStreaming::RequestScheduler mRequestScheduler;
 
     //list of mesh ids awaiting skin info
     typedef std::unordered_map<LLUUID, MeshLoadData > skin_load_map;
@@ -1014,4 +1030,3 @@ const F32 ANIMATED_OBJECT_BASE_COST = 15.0f;
 const F32 ANIMATED_OBJECT_COST_PER_KTRI = 1.5f;
 
 #endif
-
