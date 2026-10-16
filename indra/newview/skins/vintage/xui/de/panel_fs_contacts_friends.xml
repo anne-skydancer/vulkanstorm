@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <panel name="friends">
+	<layout_stack name="ls_friend_list" right="-93"/>
 	<fs_scroll_list name="friend_list" right="-90">
 		<fs_scroll_list.column name="icon_online_status" tool_tip="Online-Status"/>
 		<fs_scroll_list.column label="Benutzername" name="user_name" tool_tip="Der Benutzername dieses Freundes."/>
@@ -16,7 +17,7 @@
 	 label="IM/Anruf"
 	 name="im_btn"
 	 tool_tip="Öffnet eine Instant-Message-Sitzung"
-	 right="-1"
+	 right="-5"
 	 width="85" />
 	<button
 	 label="Profil"

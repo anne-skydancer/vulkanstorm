@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <panel name="friends">
-	<layout_stack name="ls_friend_list" right="-90">
+	<layout_stack name="ls_friend_list" right="-93">
 		<layout_panel name="lp_search">
 			<filter_editor label="Freunde filtern" name="friend_filter_input"/>
 		</layout_panel>
@@ -22,7 +22,7 @@
 	 label="IM/Anruf"
 	 name="im_btn"
 	 tool_tip="Öffnet eine Instant-Message-Sitzung"
-	 left_delta="265"
+	 right="-5"
 	 width="85" />
 	<button
 	 label="Profil"
