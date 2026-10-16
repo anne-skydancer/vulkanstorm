@@ -1,5 +1,5 @@
 {
-  "source_commit": "bec8c08d4fa589ee0a53d9a82c5732242e10a8f8",
+  "source_commit": "9f07afc11b9595d5d95c88082e8e5e77408b190c",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "0724b6cd178ab992785233a899afb0afc4d2decc83b0c77fcd2e2a9ffbe93258",
+      "sha256": "dc7d517d87d6cba79dd8873b9bab1de1269ebb08df82f341d09f42870122888c",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -897,7 +897,7 @@
       ]
     },
     "indra/newview/llgroupmgr.cpp": {
-      "sha256": "00836653cbe63b6ac1c7ba0b68281f1dd5a554b7dc2b7eb1d982c15ee822554f",
+      "sha256": "d19d25b1a5c17bc56dd7cf93394ce2ae95ab68a670d3ab00170f8fec26cd544e",
       "anchors": [
         "vs_native_im_guard",
         "sendGroupMemberEjects",
