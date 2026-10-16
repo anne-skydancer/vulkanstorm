@@ -7,6 +7,7 @@ from pathlib import Path
 import platform
 import re
 import subprocess
+import time
 import xml.etree.ElementTree as ET
 
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
@@ -22,6 +23,14 @@ FAILURES = ('before-window', 'after-window', 'after-device', 'after-swapchain',
             'frame', 'shutdown', 'gl-trap', 'bad-clear')
 STARTUP_CASES = ('startup-positive', 'startup-ui', 'startup-frame', 'startup-cleanup')
 UI_CASES = ('ui-positive', 'bad-ui', 'ui-orientation', 'bad-xui', 'ui-construction', 'ui-gl-trap')
+
+
+def report_case(case, started, passed, log_path, log):
+    """Keep CI progress visible while retaining full per-case viewer output."""
+    status = 'PASS' if passed else 'FAIL'
+    print(f'{status}: viewer {case} ({time.monotonic() - started:.1f}s); log: {log_path}', flush=True)
+    if not passed:
+        print('\n'.join(log.splitlines()[-20:]), flush=True)
 
 
 def assess_startup(record, code, log, case):
@@ -54,6 +63,8 @@ def run_normal_login(executable, stage, env, evidence, expected_device):
     """Run ordinary application initialization and startup, without diagnostic dispatch."""
     directory = evidence / 'normal-login'
     directory.mkdir(exist_ok=True)
+    started = time.monotonic()
+    print('RUN: viewer normal-login (timeout 90s)', flush=True)
     child_env = {key: value for key, value in env.items() if not key.startswith('VS_VULKAN_DIAGNOSTIC')}
     command = [str(executable), '--settings', 'vs_native_login_ci.xml',
                '--set', 'ClientSettingsFile', str(directory / 'settings.xml'),
@@ -72,6 +83,8 @@ def run_normal_login(executable, stage, env, evidence, expected_device):
         passed = (code == 0 and all(text in log for text in required)
                   and not any(text in log for text in ('Validation Error', 'VUID-', 'DILIGENT 2:',
                                                        'Forbidden GL path', 'Injected failure')))
+    except subprocess.TimeoutExpired as error:
+        log = (error.stdout or b'').decode('utf-8', errors='replace') + '\nVIEWER TIMEOUT (90s)\n'
     except Exception as error:
         log += '\nRunner: ' + repr(error)
     (directory / 'viewer.log').write_text(log, encoding='utf-8')
@@ -81,6 +94,7 @@ def run_normal_login(executable, stage, env, evidence, expected_device):
               'authentication_qualified': False,
               'connected_session_qualified': False, 'process_isolation': process_isolation_evidence(process)}
     (directory / 'result.json').write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
+    report_case('normal-login', started, passed, directory / 'viewer.log', log)
     return record
 
 
@@ -250,7 +264,11 @@ def main():
     startup_cases = (*STARTUP_CASES, *startup_skins)
     results['skin_cases'] = {name: dict(zip(('skin', 'theme', 'language'), values)) for name, values in skins.items()}
     with windows_manifest_registration(runtime, args.register_windows_manifests):
-        for case in ('positive', *FAILURES, *ui_cases, *startup_cases):
+        cases = ('positive', *FAILURES, *ui_cases, *startup_cases)
+        print(f'Viewer qualification: {len(cases) + 1} cases, timeout 90s per case', flush=True)
+        for index, case in enumerate(cases, 1):
+            started = time.monotonic()
+            print(f'RUN: viewer {case} [{index}/{len(cases) + 1}] (timeout 90s)', flush=True)
             directory = evidence / case; directory.mkdir(exist_ok=True)
             artifact = directory / ('viewer-startup.json' if case in startup_cases else 'viewer-presentation.json'); artifact.unlink(missing_ok=True)
             image = directory / 'viewer-clear.ppm'; image.unlink(missing_ok=True)
@@ -325,14 +343,13 @@ def main():
             (directory / 'viewer.log').write_text(log, encoding='utf-8')
             results['tests'].append(dict(case=case, returncode=code, passed=passed, presentation=record,
                                          loaded_library_sha256=mapped, process_isolation=process_isolation_evidence(process)))
-            print(('PASS' if passed else 'FAIL') + ': viewer ' + case)
+            report_case(case, started, passed, directory / 'viewer.log', log)
         normal = run_normal_login(executable, stage, env, evidence, expected_device)
     results['presentation_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] not in (*ui_cases, *startup_cases))
     results['ui_substrate_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in ui_cases)
     results['skin_fixture_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in skins)
     results['tests'].append(normal)
     results['normal_login_startup_qualified'] = normal['passed']
-    print(('PASS' if normal['passed'] else 'FAIL') + ': viewer normal-login')
     results['startup_window_qualified'] = all(t['passed'] for t in results['tests'] if t['case'] in startup_cases)
     results['v3_controls_qualified'] = results['startup_window_qualified'] and results['ui_substrate_qualified'] and results['normal_login_startup_qualified']
     results['ui_native_dpi_event_qualified'] = results['startup_window_qualified'] and windows

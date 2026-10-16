@@ -24,7 +24,7 @@ from urllib.parse import urlsplit, parse_qs
 import vulkan_r2_fixture as r2_fixture
 
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
-from run_vulkan_viewer_diagnostic import runtime_libraries, skin_cases
+from run_vulkan_viewer_diagnostic import runtime_libraries, skin_cases, report_case
 from vulkan_viewer_process import run_viewer_process, run_headless_viewer_process, process_isolation_evidence
 
 # Vintage's full 396-frame Preferences traversal takes about 200 seconds on
@@ -881,6 +881,7 @@ def main():
     parser.add_argument('--r2-contracts',action='store_true',help='Replay production R2 geometry and connected appearance actions')
     parser.add_argument('--native-backtrace', action='store_true', help='Run Linux replay under GDB; ordinary qualification runs directly')
     args = parser.parse_args()
+    started = time.monotonic()
     if not .75 <= args.ui_scale <= 4:
         parser.error('--ui-scale must be between 0.75 and 4')
     windows = platform.system() == 'Windows'
@@ -898,7 +899,12 @@ def main():
         cases = {name: (*selection, 1.0) for name, selection in skin_cases(stage).items()}
         cases['skin-ansastorm_modern-125percent'] = ('ansastorm_modern', '', 'en', 1.25)
         cases['skin-ansastorm_modern-150percent'] = ('ansastorm_modern', '', 'en', 1.5)
-        for name, (skin, theme, language, ui_scale) in cases.items():
+        print(f'Connected UI qualification: {len(cases)} cases, timeout {CASE_REPLAY_SECONDS}s per case', flush=True)
+        for index, (name, (skin, theme, language, ui_scale)) in enumerate(cases.items(), 1):
+            case_started = time.monotonic()
+            print(f'RUN: connected UI {name} [{index}/{len(cases)}] '
+                  f'(skin={skin}, theme={theme or "base"}, language={language}, scale={ui_scale}; '
+                  f'timeout {CASE_REPLAY_SECONDS}s)', flush=True)
             child = directory / name
             command = [sys.executable, str(Path(__file__).resolve()),
                        '--build-directory', str(build), '--runtime', str(args.runtime.resolve()),
@@ -921,6 +927,9 @@ def main():
                                      exit_code=code, evidence=str(child))
             except (subprocess.TimeoutExpired, OSError, ValueError) as error:
                 results[name] = dict(passed=False, error=str(error), evidence=str(child))
+            status = 'PASS' if results[name]['passed'] else 'FAIL'
+            print(f'{status}: connected UI {name} ({time.monotonic() - case_started:.1f}s); '
+                  f'log: {child / "viewer.log"}', flush=True)
             if not results[name]['passed']:
                 print(f'FAIL: connected UI case {name}: {results[name]}', flush=True)
                 break  # Preserve the first actionable failure instead of repeating it across all skins.
@@ -929,8 +938,12 @@ def main():
         (directory / 'results.json').write_text(json.dumps(dict(passed=passed, cases=results,
                                                                planned_cases=list(cases), complete=complete,
                                                                live_server_qualified=False), indent=2) + '\n')
-        print(('PASS' if passed else 'FAIL') + ': connected UI skin matrix')
+        print(('PASS' if passed else 'FAIL') + f': connected UI skin matrix '
+              f'({len(results)}/{len(cases)} cases completed, {time.monotonic() - started:.1f}s)', flush=True)
         return 0 if passed else 1
+    case_label = (f'connected-session replay (skin={args.skin}, theme={args.theme or "base"}, '
+                  f'language={args.language}, scale={args.ui_scale})')
+    print(f'RUN: viewer {case_label} (timeout {PROCESS_REPLAY_SECONDS}s)', flush=True)
     binaries = list(stage.glob('*-bin.exe')) if windows else list((stage / 'bin').glob('*-bin'))
     if len(binaries) != 1 or 'VS_VULKAN_DIAGNOSTICS:BOOL=ON' not in (build / 'CMakeCache.txt').read_text():
         raise RuntimeError('Expected one diagnostic-enabled fully staged viewer')
@@ -1101,7 +1114,7 @@ def main():
                   execution_budget=dict(viewer=VIEWER_REPLAY_SECONDS, process=PROCESS_REPLAY_SECONDS,
                                         matrix_case=CASE_REPLAY_SECONDS))
     (directory / 'results.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(('PASS' if passed else 'FAIL') + ': viewer connected-session replay')
+    report_case(case_label, started, passed, directory / 'viewer.log', log)
     return 0 if passed else 1
 
 

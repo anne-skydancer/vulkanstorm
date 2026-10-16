@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from render_backend_selector_fixture import SelectorTests
 from test_vulkan_ui_oracle import OracleTest
 from native_statistics_fixture import NativeStatisticsTests
@@ -13,7 +14,7 @@ from native_driver_version_fixture import DriverVersionTests
 from test_windows_dpi_client_extent import DpiClientExtentTest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from run_vulkan_viewer_diagnostic import assess, assess_startup, STAGES, skin_cases
+from run_vulkan_viewer_diagnostic import assess, assess_startup, STAGES, skin_cases, report_case, run_normal_login
 
 
 def record():
@@ -24,6 +25,32 @@ def record():
                 minimized_skips=2, native_minimize_observed=True, resize_events=2,
                 shutdown_complete=True, validation_errors=0, clear_readback_verified=True,
                 passed=True, failure='')
+
+
+class ProgressTests(unittest.TestCase):
+    def test_failure_progress_is_flushed_and_tail_is_bounded(self):
+        log = '\n'.join(f'line {index}' for index in range(30))
+        with patch('run_vulkan_viewer_diagnostic.time.monotonic', return_value=15), \
+                patch('builtins.print') as output:
+            report_case('positive', 10, False, Path('viewer.log'), log)
+        self.assertEqual(output.call_args_list[0].args,
+                         ('FAIL: viewer positive (5.0s); log: viewer.log',))
+        self.assertEqual(output.call_args_list[1].args[0].splitlines(), log.splitlines()[-20:])
+        self.assertTrue(all(call.kwargs.get('flush') is True for call in output.call_args_list))
+
+    def test_normal_login_timeout_retains_viewer_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            evidence = Path(directory)
+            error = subprocess.TimeoutExpired(['viewer'], 90, output=b'audio connected\nstartup stalled\n')
+            with patch('run_vulkan_viewer_diagnostic.run_viewer_process', side_effect=error), \
+                    patch('builtins.print') as output:
+                result = run_normal_login(Path('viewer'), evidence, {}, evidence, {'name': 'test GPU'})
+            self.assertFalse(result['passed'])
+            log = (evidence / 'normal-login/viewer.log').read_text()
+            self.assertIn('audio connected\nstartup stalled', log)
+            self.assertIn('VIEWER TIMEOUT (90s)', log)
+            self.assertIn('RUN: viewer normal-login', output.call_args_list[0].args[0])
+            self.assertTrue(all(call.kwargs.get('flush') is True for call in output.call_args_list))
 
 
 class AcceptanceTests(unittest.TestCase):
