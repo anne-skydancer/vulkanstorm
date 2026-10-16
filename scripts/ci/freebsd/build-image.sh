@@ -21,6 +21,7 @@ build_root=$(mktemp -d /var/tmp/vulkanstorm-freebsd.XXXXXX)
 mv "$builder" "$build_root/builder"
 builder="$build_root/builder"
 image_directory="$build_root/image"
+export PACKER_CACHE_DIR="$build_root/packer-cache"
 if [[ -n "${GITHUB_ENV:-}" ]]; then
     printf 'FREEBSD_IMAGE_DIRECTORY=%s\n' "$image_directory" >> "$GITHUB_ENV"
 fi
