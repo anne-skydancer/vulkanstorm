@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# Avoid compiling the same feature commit for both push and PR events.
+concurrency:
+  group: viewer-build-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/codex/') }}
+
 jobs:
   check-publication:
     runs-on: ubuntu-latest
