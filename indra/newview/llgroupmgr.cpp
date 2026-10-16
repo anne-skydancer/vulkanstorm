@@ -30,8 +30,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
-#if VS_NATIVE_VULKAN
 #include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #endif
 

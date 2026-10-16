@@ -1615,7 +1615,9 @@ bool LLAppViewer::initNativeVulkanLogin()
     LLDirPickerThread::initClass();
     LLViewerEventRecorder::createInstance();
     settings_to_globals();
+#if VS_NATIVE_VULKAN
     if (VSVulkanContext::headlessReplay()) gHeadlessClient = true;
+#endif
     mSerialNumber = generateSerialNumber();
     initSLURLHandler();
     if (!initWindow()) return false;

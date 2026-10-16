@@ -7,6 +7,8 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 import copy
+import shutil
+import subprocess
 import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -30,6 +32,74 @@ class Handler:
         pass
     def end_headers(self):
         pass
+
+
+class R2ReadinessTest(unittest.TestCase):
+    def test_shape_replacement_waits_for_current_outfit_fetch(self):
+        source = (Path(__file__).resolve().parents[2] / 'indra/newview/vsr2replay.cpp').read_text()
+        stage = source.split('        if (step == 1)\n', 1)[1].split('        if (step == 2)\n', 1)[0]
+        fixture_source = r"""
+#include <cassert>
+#include <initializer_list>
+#include <stdexcept>
+struct Value { int value = 0; int asInteger() const { return value; }
+ Value& operator[](const char*) { return *this; } Value& operator=(Value*) { return *this; } };
+struct Size {};
+Value ll_sd_from_vector3(const Size&) { return {}; }
+struct Avatar { int wearables = 4; bool baked = true; Size mBodySize;
+ Value evidence() { return {wearables}; }
+ struct Bakes { bool ready; bool empty() const { return !ready; } };
+ Bakes localBakes() const { return {baked}; }
+ Avatar& appearanceOwner() { return *this; } } avatarOwner;
+struct Inventory { bool complete = false; int pending = 0;
+ bool isCategoryComplete(int folder) const { return complete && folder != pending; } } gInventory;
+struct Appearance { bool admit = true;
+ bool canWear(std::initializer_list<int>, bool replace) const { assert(replace); return admit; } } appearance;
+struct Session { Appearance* appearance() { return &::appearance; } } session;
+struct LLAppearanceMgr { int submissions = 0;
+ static LLAppearanceMgr& instance() { static LLAppearanceMgr owner; return owner; }
+ int getCOF() const { return 17; }
+ void wearItemOnAvatar(int id, bool update, bool replace) {
+  assert(gInventory.complete && id == 6 && update && replace); ++submissions;
+ } };
+void require(bool condition, const char* message) { if (!condition) throw std::runtime_error(message); }
+struct Replay { int step = 1; int cof = 17, bodyFolder = 10, clothingFolder = 7, objectsFolder = 8; Size initialSize; Value evidence; Avatar* avatar = &avatarOwner;
+ int item(int id) const { return id; }
+ bool tick() { if (step == 1) STAGE return true; }
+};
+int main() {
+ Replay replay;
+ // The exact failed order: bakes ready, current outfit still fetching.
+ assert(!replay.tick() && replay.step == 1 && LLAppearanceMgr::instance().submissions == 0);
+ gInventory.complete = true;
+ for (const auto pending : {17, 10, 7, 8}) {
+  gInventory.pending = pending;
+  assert(!replay.tick() && replay.step == 1 && LLAppearanceMgr::instance().submissions == 0);
+ }
+ gInventory.pending = 0;
+ avatarOwner.baked = false;
+ assert(!replay.tick() && replay.step == 1 && LLAppearanceMgr::instance().submissions == 0);
+ avatarOwner.baked = true;
+ appearance.admit = false;
+ bool failed = false;
+ try { replay.tick(); } catch (const std::runtime_error&) { failed = true; }
+ assert(failed && replay.step == 1 && LLAppearanceMgr::instance().submissions == 0);
+ appearance.admit = true;
+ assert(!replay.tick() && replay.step == 2 && LLAppearanceMgr::instance().submissions == 1);
+ assert(replay.tick() && LLAppearanceMgr::instance().submissions == 1);
+}
+""".replace('STAGE', stage)
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler, 'A C++ compiler is required')
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / 'readiness.cpp'
+            executable = Path(directory) / 'readiness.exe'
+            cpp.write_text(fixture_source)
+            built = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(executable)],
+                                   capture_output=True, text=True, timeout=60)
+            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+            run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
 
 class R2FixtureTest(unittest.TestCase):

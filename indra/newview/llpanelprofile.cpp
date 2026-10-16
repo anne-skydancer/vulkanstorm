@@ -25,9 +25,9 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
-#include "vsnativeim.h"
 #endif
 #include "llpanelprofile.h"
 
