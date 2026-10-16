@@ -7,12 +7,16 @@ case "$(freebsd-version -u)" in 15.*) ;; *) exit 1 ;; esac
 
 export ASSUME_ALWAYS_YES=yes
 pkg install -y ca_root_nss git git-lfs bash cmake ninja pkgconf \
-    python311 py311-pip ccache autoconf automake libtool bison gmake \
+    python312 py312-pip ccache autoconf automake libtool bison gmake \
     curl zip unzip zstd
+: "${VKSTORM_SYSTEM_PACKAGES:?Use the generated builder hook}"
+# Deliberate word splitting of package names validated by build-image.sh.
+# shellcheck disable=SC2086
+pkg install -y $VKSTORM_SYSTEM_PACKAGES
 
 # Keep Python tools isolated from pkg-managed Python packages. CMake and Ninja
 # come from pkg: Linux PyPI wheels must never enter this native build image.
-python3.11 -m venv /opt/vulkanstorm
+python3.12 -m venv /opt/vulkanstorm
 /opt/vulkanstorm/bin/python -m pip install --disable-pip-version-check \
     autobuild==3.9.3 llsd==1.2.4
 ln -sf /opt/vulkanstorm/bin/autobuild /usr/local/bin/autobuild

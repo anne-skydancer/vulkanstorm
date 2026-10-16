@@ -4,7 +4,16 @@ set -euo pipefail
 builder="$PWD/.freebsd-builder"
 expected=6b1eb482e85a4e9d5bb2cf769412bb053f40c9c0
 test "$(git -C "$builder" rev-parse HEAD)" = "$expected"
-cp scripts/ci/freebsd/provision.sh "$builder/resources/custom.sh"
+package_names=$(sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' scripts/ci/freebsd/system-packages.txt)
+if grep -Ev '^[A-Za-z0-9_+.-]+$' <<< "$package_names"; then
+    echo 'Invalid system package name' >&2
+    exit 1
+fi
+# Packer transfers only the hook script, so embed the validated package list.
+{
+    printf '#!/bin/sh\nVKSTORM_SYSTEM_PACKAGES="%s"\n' "$package_names"
+    cat scripts/ci/freebsd/provision.sh
+} > "$builder/resources/custom.sh"
 # The VM action synchronizes /home/runner, including RUNNER_TEMP. Keep the
 # installer ISO, Packer cache, and QCOW2 outside that tree.
 build_root=$(mktemp -d /var/tmp/vulkanstorm-freebsd.XXXXXX)

@@ -23,17 +23,27 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
   message(FATAL_ERROR "Expected native FreeBSD")
 endif()
 find_package(Threads REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+pkg_check_modules(PNG REQUIRED IMPORTED_TARGET libpng)
+pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 add_executable(smoke main.cpp)
 target_compile_features(smoke PRIVATE cxx_std_20)
 target_compile_options(smoke PRIVATE -Wall -Wextra -Werror)
-target_link_libraries(smoke PRIVATE Threads::Threads)
+target_link_libraries(smoke PRIVATE Threads::Threads PkgConfig::SDL2 PkgConfig::PNG PkgConfig::CURL)
 enable_testing()
 add_test(NAME native_thread COMMAND smoke)
 EOF
 cat > "$work/main.cpp" <<'EOF'
 #include <atomic>
 #include <thread>
+#include <SDL.h>
+#include <png.h>
+#include <curl/curl.h>
 int main() {
+    SDL_version sdl{};
+    SDL_GetVersion(&sdl);
+    if (sdl.major != 2 || png_access_version_number() == 0 || !curl_version()) return 2;
     std::atomic<int> value{0};
     std::jthread worker([&] { value.store(42); });
     worker.join();
@@ -45,6 +55,8 @@ cmake -S "$work" -B "$work/build" -G Ninja \
 cmake --build "$work/build" > "$evidence/build.txt" 2>&1
 ctest --test-dir "$work/build" --output-on-failure > "$evidence/ctest.txt" 2>&1
 file "$work/build/smoke" > "$evidence/binary.txt"
+ldd "$work/build/smoke" > "$evidence/linked-libraries.txt"
+pkg-config --modversion sdl2 libpng libcurl > "$evidence/system-library-versions.txt"
 
 # Inventory the actual viewer dependency gap without substituting Linux binaries
 # or presenting this toolchain test as a successful viewer build.

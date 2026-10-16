@@ -26,7 +26,8 @@ def audit(path):
         "native_entries": covered,
         "without_native_entries": missing,
         "viewer_qualified": False,
-        "note": "Inventory only; common assets and optional dependencies require port review.",
+        "strategy": "Prefer FreeBSD pkg/ports system libraries; source-build exceptions explicitly.",
+        "note": "Missing archive entries are not a requirement to create FreeBSD archives. Review system library discovery, common assets and optional dependencies individually.",
     }
 
 

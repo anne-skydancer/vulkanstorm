@@ -1,0 +1,37 @@
+# FreeBSD pkg names, based on Megapahit's FreeBSD build prerequisites.
+# Vulkanstorm-specific additions still require viewer-level qualification.
+freealut
+apr1
+boost-libs
+fltk
+glm
+hunspell
+meshoptimizer
+minizip
+nanosvg
+libnghttp2
+openjpeg
+sdl20
+vlc
+libvorbis
+xxhash
+# Explicit direct prerequisites instead of relying on transitive installs.
+curl
+expat
+fontconfig
+freetype2
+jpeg-turbo
+libpng
+libxml2
+libGLU
+mesa-libs
+libXcursor
+libXft
+libXinerama
+libXrandr
+libXrender
+# Vulkan toolchain for Vulkanstorm; not a GPU runtime qualification.
+vulkan-headers
+vulkan-loader
+shaderc
+spirv-tools
