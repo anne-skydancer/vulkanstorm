@@ -22,6 +22,7 @@ jobs:
       - run: python3 scripts/tests/test_windows_symbol_archive.py
       - run: python3 scripts/tests/test_version_schema.py
       - run: python3 scripts/tests/test_contacts_layout.py
+      - run: python3 scripts/tests/test_ci_numeric_boundaries.py
       - run: python3 scripts/tests/test_ndof_cmake.py
       - run: python3 scripts/tests/test_slua_ui_resources.py
       - run: python3 scripts/tests/test_slua_review.py
@@ -182,6 +183,11 @@ jobs:
           xvfb-run -a "$RUNNER_TEMP/linux-zink-loader-test" \
             "$GITHUB_WORKSPACE/${{ matrix.directory }}/packages/lib/release/mesa" \
             | tee "${{ matrix.directory }}/zink-loader-test.txt"
+
+      - name: Compile statistics type coverage before viewer
+        run: |
+          cmake -S indra -B ${{ matrix.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
+          cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
 
       - name: Build viewer and stage runtime
         run: cmake --build ${{ matrix.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
