@@ -9,6 +9,7 @@ import vulkan_r2_geometry_fixture
 from urllib.parse import urlsplit, parse_qs
 
 COF='70000000-0000-0000-0000-000000000017'
+APPEARANCE_FOLDERS = {COF, *(f'70000000-0000-0000-0000-{index:012d}' for index in (7, 8, 10))}
 ANIMATION='c1000000-0000-0000-0000-000000000001'
 MESH='c3000000-0000-0000-0000-000000000001'
 
@@ -158,6 +159,13 @@ def get_category(handler,path,query):
         source=categories[key]
         row=dict(source,category_id=key,agent_id='10000000-0000-0000-0000-000000000001')
         row.pop('folder_id')
+        # The viewer publishes these contents only after connecting. Early root
+        # fetches must not claim the unpublished folders are completely empty:
+        # their delayed replies could overwrite a later populated fetch.
+        if key in APPEARANCE_FOLDERS and state(server) is None:
+            row.pop('version', None)
+            fetched.append(dict(category=key, pending=True))
+            return row
         contents=folder(server,key)
         rows,version=contents if contents is not None else (
             getattr(server,'r2_baseline_items',lambda _:[])(key),server.r2_category_versions.get(key,1))

@@ -20,6 +20,23 @@ import run_vulkan_session_replay as session_runner
 from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_viewer_failure_is_not_masked_by_missing_success_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            with self.assertRaisesRegex(RuntimeError, 'Viewer exited with code -11'):
+                session_runner.read_session_evidence(directory, -11)
+            failure = directory / 'r2/failure.xml'
+            failure.parent.mkdir()
+            root = ET.Element('llsd')
+            append_llsd(root, {'step': 1, 'failure': 'R2 production replay timed out'})
+            failure.write_bytes(ET.tostring(root))
+            with self.assertRaisesRegex(RuntimeError, 'R2 step 1: R2 production replay timed out'):
+                session_runner.read_session_evidence(directory, -11)
+            # A successful exit still requires the actual evidence file.
+            with self.assertRaises(FileNotFoundError) as missing:
+                session_runner.read_session_evidence(directory, 0)
+            self.assertEqual(Path(missing.exception.filename), directory / 'session-replay.xml')
+
     def test_matrix_progress_is_immediate_and_first_failure_stops_cases(self):
         for outcome in ('pass', 'fail', 'timeout'):
             with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as temporary:
