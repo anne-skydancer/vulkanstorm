@@ -30,12 +30,12 @@ printf '%s\n' "$expected" > freebsd-image-evidence/builder-commit.txt
 git rev-parse HEAD > freebsd-image-evidence/source-commit.txt
 (
     cd "$builder"
-    ./build.sh 15.0 x86-64 -var headless=true -var disk_size=32G
+    ./build.sh 15.1 x86-64 -var headless=true -var disk_size=32G
 ) 2>&1 | tee freebsd-image-evidence/packer.txt
 mkdir -p "$image_directory"
-mv "$builder/output/freebsd-15.0-x86-64.qcow2" "$image_directory/"
-qemu-img check "$image_directory/freebsd-15.0-x86-64.qcow2"
-qemu-img info --output=json "$image_directory/freebsd-15.0-x86-64.qcow2" \
+mv "$builder/output/freebsd-15.1-x86-64.qcow2" "$image_directory/"
+qemu-img check "$image_directory/freebsd-15.1-x86-64.qcow2"
+qemu-img info --output=json "$image_directory/freebsd-15.1-x86-64.qcow2" \
     > freebsd-image-evidence/disk.json
-(cd "$image_directory" && sha256sum freebsd-15.0-x86-64.qcow2 > SHA256SUMS)
+(cd "$image_directory" && sha256sum freebsd-15.1-x86-64.qcow2 > SHA256SUMS)
 printf 'Image directory: %s\n' "$image_directory"

@@ -5,7 +5,7 @@ set -eu
 [ "$(uname -s)" = FreeBSD ]
 [ "$(uname -m)" = amd64 ]
 [ "$(id -u)" -ne 0 ]
-case "$(freebsd-version -u)" in 15.0-RELEASE*) ;; *) exit 1 ;; esac
+case "$(freebsd-version -u)" in 15.1-RELEASE*) ;; *) exit 1 ;; esac
 
 evidence="$PWD/freebsd-image-evidence"
 mkdir -p "$evidence"

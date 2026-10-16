@@ -1,9 +1,11 @@
 # FreeBSD 15.x build image
 
-The `FreeBSD runner image` workflow builds a FreeBSD 15.0 RELEASE amd64
+The `FreeBSD runner image` workflow builds a FreeBSD 15.1 RELEASE amd64
 QCOW2 image using Packer and the pinned cross-platform-actions/freebsd-builder.
 Vulkanstorm supplies only the builder's supported `resources/custom.sh` hook;
 upstream installation, SSH setup, runner account, and cleanup remain intact.
+The baseline is 15.1, the supported 15.x release as of 2026-10-16; 15.0 has
+left the [supported-release table](https://www.freebsd.org/security/#sup).
 The GitHub Actions runner runs on Ubuntu. Build commands run natively in the
 FreeBSD guest; there is no native GitHub runner installed in the image.
 
@@ -16,11 +18,11 @@ a 32 GiB virtual disk, checks its structure, and boots the result through a
 pinned cross-platform-actions/action revision. The installer ISO checksum is
 provided by the pinned upstream version configuration.
 
-The fresh guest must report FreeBSD 15.0 RELEASE amd64, execute as a non-root
+The fresh guest must report FreeBSD 15.1 RELEASE amd64, execute as a non-root
 runner, run Autobuild 3.9.3 and LLSD, and configure, compile, link and test a
 C++20 threaded program with CMake/Ninja in RelWithDebInfo, discovering and
 linking system SDL2, PNG and curl through pkg-config. Evidence must return
-to the Linux host. Only then is `freebsd-15.0-x86-64-image` uploaded, containing
+to the Linux host. Only then is `freebsd-15.1-x86-64-image` uploaded, containing
 the QCOW2 and SHA256SUMS. The separate evidence artifact includes source and
 builder commits, Packer logs, package inventories, tool versions and test logs.
 Artifacts expire after 14 days; retain any selected image before that deadline.
@@ -44,7 +46,7 @@ rebuilds.
 Download a successful run's image artifact and check `sha256sum --check
 SHA256SUMS`. For long-term use, attach both files to an explicitly versioned
 image release (separate from the viewer's `latest` tag), then pass the QCOW2
-asset URL as the action's `image_url`. Pin the action commit, version `15.0`,
+asset URL as the action's `image_url`. Pin the action commit, version `15.1`,
 architecture `x86-64`, and image release. On self-hosted Linux, the same image
 can be served locally, as the image qualification workflow demonstrates.
 
