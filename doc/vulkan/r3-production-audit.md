@@ -660,3 +660,13 @@ missing HTTP proof, changed payloads and omitted GPU files. The expanded image
 exercise also accepts the clearer `--r3-image-contracts` alias. Compiler and
 focused evidence/replay regressions pass; actual capability runtime acceptance
 is pending its canonical rebuild. Final BRDF/probe appearance remains R5/R6.
+
+The actual legacy run exposed a production grant-path gap: the primary region
+requested `RenderMaterials` but its capability reply filter discarded it, so no
+regional material request could be sent. That primary filter also omitted
+`ObjectMedia`, `ObjectMediaNavigate` and `ModifyMaterialParams`, which the
+neighboring-region path already retained. All four now pass through the same
+validated web-URL admission as the other requested services. A regression
+executes the actual primary admission loop, proving those fields survive while
+non-web and unrequested capabilities remain rejected. The fix compiles; the
+legacy runtime acceptance must be rerun with it.
