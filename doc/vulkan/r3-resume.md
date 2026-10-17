@@ -180,3 +180,9 @@ submitted terrain packets, and current-region terrain mesh/detail-image counts
 every two seconds. No synthetic replacement ground is introduced. The ignored
 manual capture launcher enables these counters for the next user login; no
 profiling is enabled by default. This is CPU submission timing, not GPU timing.
+
+The first actual replay with the shared fade reached connected UI and correctly
+kept the progress overlay's wait cursor. The old replay immediately attempted
+editor hover underneath that overlay. Update the replay driver to wait for the
+real shared fade/input release on initial login and relogin before exercising
+connected controls; keep the hover assertions and all pixel oracles unchanged.
