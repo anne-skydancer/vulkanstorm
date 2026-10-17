@@ -27,6 +27,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llpaneltopinfobar.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llagent.h"
 #include "llagentui.h"
@@ -220,6 +223,9 @@ boost::signals2::connection LLPanelTopInfoBar::setResizeCallback( const resize_s
 void LLPanelTopInfoBar::draw()
 {
     updateParcelInfoText();
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) updateParcelIcons();
+#endif
     updateHealth();
 
     LLPanel::draw();
@@ -294,6 +300,23 @@ void LLPanelTopInfoBar::updateParcelInfoText()
 
 void LLPanelTopInfoBar::updateParcelIcons()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active())
+    {
+        const auto permissions = native->parcelPermissions();
+        const bool show = permissions.known && gSavedSettings.getBOOL("NavBarShowParcelProperties");
+        mParcelIcon[VOICE_ICON]->setVisible(show && !permissions.voice);
+        mParcelIcon[FLY_ICON]->setVisible(show && !permissions.fly);
+        mParcelIcon[PUSH_ICON]->setVisible(show && !permissions.push);
+        mParcelIcon[BUILD_ICON]->setVisible(show && !permissions.build);
+        mParcelIcon[SCRIPTS_ICON]->setVisible(show && !permissions.scripts);
+        mParcelIcon[DAMAGE_ICON]->setVisible(show && permissions.damage);
+        mParcelIcon[SEE_AVATARS_ICON]->setVisible(show && !permissions.seeAvatars);
+        mDamageText->setVisible(show && permissions.damage);
+        layoutParcelIcons();
+        return;
+    }
+#endif
     LLViewerParcelMgr* vpm = LLViewerParcelMgr::getInstance();
 
     LLViewerRegion* agent_region = gAgent.getRegion();

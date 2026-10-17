@@ -189,6 +189,11 @@ void LLPanelCameraZoom::onCreate()
 // </FS:Chanayane>
 }
 
+bool LLFloaterCamera::isNativeWidgetType(const std::type_info& type)
+{
+    return type == typeid(LLFloaterCamera) || type == typeid(LLPanelCameraZoom) || type == typeid(LLPanelCameraItem);
+}
+
 bool LLPanelCameraZoom::postBuild()
 {
     mPlusBtn  = getChild<LLButton>("zoom_plus_btn");

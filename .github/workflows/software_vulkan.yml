@@ -40,6 +40,8 @@ jobs:
       - run: python scripts/tests/test_vulkan_evidence_package.py
       - run: python scripts/tests/test_vulkan_session_replay.py
       - run: python scripts/tests/test_chat_keyboard_routing.py
+      - run: python scripts/tests/test_native_parcel_permissions.py
+      - run: python scripts/tests/test_native_image_completion.py
       - run: python scripts/tests/test_native_parcel_playback.py
       - run: python scripts/tests/test_native_app_url_routing.py
       - run: python scripts/tests/test_inventory_settings_controller.py

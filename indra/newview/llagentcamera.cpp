@@ -26,6 +26,9 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "llagentcamera.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "pipeline.h"
 
@@ -417,6 +420,9 @@ void LLAgentCamera::resetView(bool reset_camera, bool change_camera, bool moveme
 //-----------------------------------------------------------------------------
 void LLAgentCamera::unlockView()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return;
+#endif
     if (getFocusOnAvatar())
     {
         if (isAgentAvatarValid())
@@ -782,6 +788,9 @@ bool LLAgentCamera::calcCameraMinDistance(F32 &obj_min_distance)
 
 F32 LLAgentCamera::getCameraZoomFraction(bool get_third_person)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) return native->cameraZoomFraction();
+#endif
     // 0.f -> camera zoomed all the way out
     // 1.f -> camera zoomed all the way in
     LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
@@ -831,6 +840,9 @@ F32 LLAgentCamera::getCameraZoomFraction(bool get_third_person)
 
 void LLAgentCamera::setCameraZoomFraction(F32 fraction)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraZoomFraction(fraction); return; }
+#endif
     // 0.f -> camera zoomed all the way out
     // 1.f -> camera zoomed all the way in
     LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
@@ -896,6 +908,9 @@ F32 LLAgentCamera::getAgentHUDTargetZoom()
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cameraOrbitAround(const F32 radians)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraOrbit(radians, 0); return; }
+#endif
     LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
     if (selection->getObjectCount() && selection->getSelectType() == SELECT_TYPE_HUD)
     {
@@ -920,6 +935,9 @@ void LLAgentCamera::cameraOrbitAround(const F32 radians)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cameraOrbitOver(const F32 angle)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraOrbit(0, angle); return; }
+#endif
     LLObjectSelectionHandle selection = LLSelectMgr::getInstance()->getSelection();
     if (selection->getObjectCount() && selection->getSelectType() == SELECT_TYPE_HUD)
     {
@@ -952,16 +970,25 @@ void LLAgentCamera::cameraOrbitOver(const F32 angle)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cameraRollOver(const F32 angle)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraRoll(angle); return; }
+#endif
     mRollAngle += fmodf(angle, F_TWO_PI);
 }
 
 void LLAgentCamera::resetCameraRoll()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraResetRoll(); return; }
+#endif
     mRollAngle = 0.f;
 }
 // </FS:Chanayane>
 void LLAgentCamera::resetCameraOrbit()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraResetOrbit(); return; }
+#endif
     LLVector3 camera_offset_unit(mCameraFocusOffsetTarget);
     camera_offset_unit.normalize();
 
@@ -1138,6 +1165,9 @@ void LLAgentCamera::cameraOrbitIn(const F32 meters)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cameraPanIn(F32 meters)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraPan(LLVector3(meters,0,0)); return; }
+#endif
     LLVector3d at_axis;
     at_axis.setVec(LLViewerCamera::getInstance()->getAtAxis());
 
@@ -1156,6 +1186,9 @@ void LLAgentCamera::cameraPanIn(F32 meters)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cameraPanLeft(F32 meters)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraPan(LLVector3(0,meters,0)); return; }
+#endif
     LLVector3d left_axis;
     left_axis.setVec(LLViewerCamera::getInstance()->getLeftAxis());
 
@@ -1178,6 +1211,9 @@ void LLAgentCamera::cameraPanLeft(F32 meters)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::cameraPanUp(F32 meters)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraPan(LLVector3(0,0,meters)); return; }
+#endif
     LLVector3d up_axis;
     up_axis.setVec(LLViewerCamera::getInstance()->getUpAxis());
 
@@ -1197,6 +1233,9 @@ void LLAgentCamera::cameraPanUp(F32 meters)
 
 void LLAgentCamera::resetCameraPan()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraResetPan(); return; }
+#endif
     mFocusTargetGlobal -= mPanFocusDiff;
 
     mFocusGlobal = mFocusTargetGlobal;
@@ -1212,6 +1251,9 @@ void LLAgentCamera::resetCameraPan()
 
 void LLAgentCamera::resetPanDiff()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraResetPan(); return; }
+#endif
     mPanFocusDiff.clear();
 }
 
@@ -2465,6 +2507,9 @@ void LLAgentCamera::resetCamera()
 //-----------------------------------------------------------------------------
 void LLAgentCamera::changeCameraToMouselook(bool animate)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraFirstPerson(true); mCameraMode = CAMERA_MODE_MOUSELOOK; return; }
+#endif
     if (!gSavedSettings.getBOOL("EnableMouselook")
 // [RLVa:KB] - Checked: RLVa-2.0.0
         || ( (RlvActions::isRlvEnabled()) && (!RlvActions::canChangeToMouselook()) )
@@ -2527,6 +2572,9 @@ void LLAgentCamera::changeCameraToMouselook(bool animate)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::changeCameraToDefault()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraReset(); mCameraMode = CAMERA_MODE_THIRD_PERSON; return; }
+#endif
     if (LLViewerJoystick::getInstance()->getOverrideCamera())
     {
         return;
@@ -2610,6 +2658,9 @@ void LLAgentCamera::changeCameraToFollow(bool animate)
 //-----------------------------------------------------------------------------
 void LLAgentCamera::changeCameraToThirdPerson(bool animate)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraFirstPerson(false); mCameraMode = CAMERA_MODE_THIRD_PERSON; return; }
+#endif
     if (LLViewerJoystick::getInstance()->getOverrideCamera())
     {
         return;
@@ -2792,6 +2843,9 @@ void LLAgentCamera::switchCameraPreset(ECameraPreset preset)
     mFocusOnAvatar = true;
 
     mCameraPreset = preset;
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraReset(); mCameraMode = CAMERA_MODE_THIRD_PERSON; }
+#endif
 
     resetPanDiff();
     resetOrbitDiff();
@@ -3263,6 +3317,9 @@ void LLAgentCamera::rotateToInitSitRot()
 
 void LLAgentCamera::resetCameraZoomFraction()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) native->cameraReset();
+#endif
     mCameraZoomFraction = INITIAL_ZOOM_FRACTION;
 }
 

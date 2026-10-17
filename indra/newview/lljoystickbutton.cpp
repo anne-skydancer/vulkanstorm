@@ -32,6 +32,8 @@
 #include "llcoord.h"
 #include "indra_constants.h"
 #include "llrender.h"
+#include "llrender2dutils.h"
+#include <optional>
 
 // Project includes
 #include "llui.h"
@@ -621,9 +623,11 @@ void LLJoystickCameraRotate::setToggleState( bool left, bool top, bool right, bo
 
 void LLJoystickCameraRotate::draw()
 {
-    LLGLSUIDefault gls_ui;
+    // Native UIImage publication does not require GL state.
+    std::optional<LLGLSUIDefault> gls_ui;
+    if (!LLRender2D::isNativeUI()) gls_ui.emplace();
 
-  getImageUnselected()->draw( getLocalRect() );
+    getImageUnselected()->draw( getLocalRect() );
     LLPointer<LLUIImage> image = getImageSelected();
 
     if (mInCenter)
@@ -657,6 +661,11 @@ void LLJoystickCameraRotate::draw()
 // Draws image rotated by multiples of 90 degrees
 void LLJoystickCameraRotate::drawRotatedImage( LLPointer<LLUIImage> image, S32 rotations )
 {
+    if (LLRender2D::isNativeUI())
+    {
+        image->drawRotated(0, 0, getRect().getWidth(), getRect().getHeight(), -90.f * rotations, UI_VERTEX_COLOR);
+        return;
+    }
     S32 width = image->getWidth();
     S32 height = image->getHeight();
     LLTexture* texture = image->getImage();

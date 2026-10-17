@@ -182,6 +182,15 @@ def collect(root, patterns):
     def visit(path):
         relative = path.relative_to(root).as_posix()
         mode = path.lstat().st_mode
+        # Windows' viewer instance marker uses a mandatory byte-range lock.
+        # It is process coordination, not a cache/readback/qualification witness.
+        # Record this exact profile leaf rather than attempting to archive it
+        # or silently skipping arbitrary unreadable evidence.
+        if (path.name == 'Vulkanstorm.exec_marker' and path.parent.name == 'logs'
+                and path.parent.parent.name == 'Vulkanstorm_x64'
+                and relative.startswith('.ci/')):
+            excluded.append(dict(path=relative, type='viewer-instance-marker'))
+            return
         if stat.S_ISREG(mode):
             files[relative] = path
         elif stat.S_ISDIR(mode):

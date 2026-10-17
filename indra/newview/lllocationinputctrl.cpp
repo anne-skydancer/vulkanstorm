@@ -623,7 +623,11 @@ void LLLocationInputCtrl::draw()
 {
     static LLUICachedControl<bool> show_coords("NavBarShowCoordinates", false);
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active() && !hasFocus()) refreshLocation();
+    if (VSNativeSession::active())
+    {
+        if (!hasFocus()) refreshLocation();
+        refreshParcelIcons();
+    }
     else
 #endif
     if(!hasFocus() && show_coords)
@@ -935,14 +939,36 @@ void LLLocationInputCtrl::refreshParcelIcons()
 #if VS_NATIVE_VULKAN
     if (VSNativeSession::active())
     {
-        // No parcel grant has been received by the CPU session. Unknown
-        // permissions must never appear as affirmative restriction icons.
-        for (S32 i = 0; i < ICON_COUNT; ++i) mParcelIcon[i]->setVisible(false);
-        mForSaleBtn->setVisible(false); mDamageText->setVisible(false);
+        const auto native = VSNativeSession::active();
+        const auto permissions = native->parcelPermissions();
+        const bool show = permissions.known && gSavedSettings.getBOOL("NavBarShowParcelProperties");
+        mParcelIcon[VOICE_ICON]->setVisible(show && !permissions.voice);
+        mParcelIcon[FLY_ICON]->setVisible(show && !permissions.fly);
+        mParcelIcon[PUSH_ICON]->setVisible(show && !permissions.push);
+        mParcelIcon[BUILD_ICON]->setVisible(show && !permissions.build);
+        mParcelIcon[SCRIPTS_ICON]->setVisible(show && !permissions.scripts);
+        mParcelIcon[DAMAGE_ICON]->setVisible(show && permissions.damage);
+        mParcelIcon[SEE_AVATARS_ICON]->setVisible(show && !permissions.seeAvatars);
+        mParcelIcon[PATHFINDING_DIRTY_ICON]->setVisible(false);
+        bool isOpenSim = false;
+#ifdef OPENSIM
+        isOpenSim = LLGridManager::getInstance()->isInOpenSim();
+#endif
+        mParcelIcon[PATHFINDING_DISABLED_ICON]->setVisible(show && !isOpenSim && native->simulatorFeaturesReceived() &&
+            !native->simulatorFeatures()["DynamicPathfindingEnabled"].asBoolean());
+        mForSaleBtn->setVisible(false);
+        mDamageText->setVisible(show && permissions.damage);
+        S32 x = mAddLandmarkBtn->getRect().mLeft - mAddLandmarkHPad;
+        for (S32 i = 0; i < ICON_COUNT; ++i)
+        {
+            x = layout_widget(mParcelIcon[i], x);
+            if (mParcelIcon[i]->getVisible()) x -= mIconHPad;
+        }
+        x = layout_widget(mDamageText, x);
         if (mTextEntry)
         {
             S32 left_pad, right_pad; mTextEntry->getTextPadding(&left_pad, &right_pad);
-            mTextEntry->setTextPadding(left_pad, llmax(0, mTextEntry->getRect().mRight - mButton->getRect().mLeft));
+            mTextEntry->setTextPadding(left_pad, llmax(0, mTextEntry->getRect().mRight - x));
         }
         return;
     }
