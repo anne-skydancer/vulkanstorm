@@ -7,6 +7,7 @@
 #include <tuple>
 #include <map>
 #include "vsresourcebudget.h"
+#include "vsimageusage.h"
 #pragma push_macro("Bool")
 #pragma push_macro("False")
 #pragma push_macro("True")
@@ -49,6 +50,7 @@ struct VSUIRenderer::Texture
     std::vector<std::uint8_t> pixels;
     VSWorldContracts::Image description;
     std::shared_ptr<const VSResourceBudget::Reservation> residency;
+    VSImageUsage::Charge usage;
     bool                                                 fontAtlas = false;
     using SamplerKey=std::tuple<int,int,int,int,bool,bool,unsigned>;
     mutable std::map<SamplerKey,RefCntAutoPtr<ITextureView>> sampledViews;
@@ -72,6 +74,7 @@ struct VSUIRenderer::Impl
     std::deque<Submission> submitted;
     std::vector<Image> pendingUploads;
     Statistics statistics;
+    const std::shared_ptr<VSImageUsage::State> imageUsage=std::make_shared<VSImageUsage::State>();
     VSResourceBudget coreImages{256 * 1024 * 1024},remoteImages{512 * 1024 * 1024};
     // Eleven maximum-size local bakes cost 322 MiB including independent CPU
     // snapshots. Bound three complete generations (published, candidate and
@@ -236,6 +239,7 @@ VSUIRenderer::FontAtlas VSUIRenderer::uploadPreparedTexture(const VSTextureUploa
     image->description.compression=prepared.compressed?VSWorldContracts::ImageCompression::BC3:VSWorldContracts::ImageCompression::None;
     image->description.gpuBytes=gpuBytes;
     image->pixels=rgba;
+    image->usage.attach(mImpl->imageUsage,gpuBytes,rgba.size());
     // A newly uploaded image may be replaced or refused by its producer before
     // its first draw. Keep its charged owner through an upload-completion fence.
     mImpl->pendingUploads.push_back(image);
@@ -305,6 +309,7 @@ VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y
     image->generation=mImpl->next_generation++;
     image->description=old->description;image->description.generation=image->generation;
     image->description.alpha=alphaMode(image->pixels);
+    image->usage.attach(mImpl->imageUsage,image->description.gpuBytes,image->pixels.size());
     submission.completion=mImpl->next_completion++;
     mImpl->context->EnqueueSignal(mImpl->fence,submission.completion);
     return image;
@@ -431,6 +436,8 @@ VSUIRenderer::Statistics VSUIRenderer::statistics() const
     auto result=mImpl->statistics;
     result.residentImageBytes     = mImpl->coreImages.used() + mImpl->remoteImages.used() + mImpl->compositeImages.used();
     result.imageBudgetBytes       = mImpl->coreImages.limit() + mImpl->remoteImages.limit() + mImpl->compositeImages.limit();
+    result.residentGPUImageBytes=mImpl->imageUsage->gpu.load();
+    result.residentImageSnapshotBytes=mImpl->imageUsage->snapshot.load();
     result.imageAllocationRefusals=mImpl->imageAllocationRefusals;return result;
 }
 VSWorldContracts::Image VSUIRenderer::imageDescription(const Image& image)

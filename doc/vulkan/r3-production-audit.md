@@ -407,3 +407,23 @@ validation requires every channel's expected pixels and generation transitions.
 This runtime exercise is staged for the next canonical rebuild; it is not yet a
 runtime qualification claim. Remaining terrain/material transport, settings,
 media and cache-lifecycle acceptance are still open.
+
+
+The canonical `a26275af31` viewer passed the actual local PBR replay in 11.9
+seconds, the complete production R2 replay in 74.7 seconds, and all nine expanded
+cache restart cases in 129.0 seconds. The cold case includes both local bitmap
+and local PBR material file/GPU evidence. These are local software-runtime
+results; full R3 and cross-platform acceptance remain open.
+
+Image evidence now separately reports GPU payload bytes, retained CPU snapshot
+bytes, shared fetch/decode reservations and worker preparation reservations.
+Existing combined admission limits are unchanged. Accounting follows each actual
+image generation through held packets and queued GPU work, rather than counting
+only cache map entries. The six software harness modes pass, including measured
+BC3 GPU-versus-CPU byte deltas. A last-owner regression covers retained and
+replaced generations. Archive checks explicitly require every local material
+readback among the collected files, as well as validating its disk bytes.
+
+The archive validator accepted the actual complete nine-case file set and rejected
+it when a recovered ORM material readback was omitted. Viewer accounting sources
+compile; their staged viewer runtime evidence remains pending the next rebuild.
