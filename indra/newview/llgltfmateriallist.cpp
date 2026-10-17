@@ -55,6 +55,7 @@
 
 #include <unordered_set>
 #include <cmath>
+#include <cerrno>
 
 LLGLTFMaterialList gGLTFMaterialList;
 
@@ -524,6 +525,7 @@ public:
 #if VS_NATIVE_VULKAN
     std::function<bool()> current;
     std::shared_ptr<const VSResourceBudget::Reservation> preparation;
+    bool corrupt=false;
 #endif
 };
 
@@ -563,9 +565,10 @@ bool decodeNativeMaterial(const LLUUID& id,LLAssetType::EType type,AssetLoadUser
     static VSResourceBudget preparation{128*1024*1024};
     LLFileSystem file(id,type,LLFileSystem::READ);
     const S32 size=file.getSize();
-    if (size<=0 || size>1024*1024) return false;
+    if (size<=0 || size>1024*1024) {data.corrupt=true;return false;}
     data.preparation=preparation.reserve(std::size_t(size)*64+65536);
     if (!data.preparation) return false;
+    data.corrupt=true;
     std::vector<char> buffer(size);
     if (!file.read(reinterpret_cast<U8*>(buffer.data()),size)) return false;
     LLSD asset;
@@ -601,6 +604,7 @@ bool decodeNativeMaterial(const LLUUID& id,LLAssetType::EType type,AssetLoadUser
     if (material.extras.IsObject())
         for (const char* key:{"override_alpha_mode","override_double_sided"})
             if (material.extras.Has(key) && !material.extras.Get(key).IsBool()) return false;
+    data.corrupt=false;
     return true;
 }
 }
@@ -617,14 +621,22 @@ void LLGLTFMaterialList::onNativeAssetLoadComplete(const LLUUID& id,LLAssetType:
     const bool posted=main->postTo(general,[id,type,data]()
     {
         try {return decodeNativeMaterial(id,type,*data);}
+        catch (const std::bad_alloc&)
+        {
+            data->corrupt=false;
+            return false;
+        }
         catch (const std::exception& error)
         {
             LL_WARNS("GLTF")<<"Native material decode failed: "<<error.what()<<LL_ENDL;
             return false;
         }
-    },[data](bool result)
+    },[id,type,data](bool result)
     {
         if (!data->current()) return;
+        // Leave valid encoded bytes available after admission/queue refusal.
+        // A genuinely malformed cached asset must not poison every retry.
+        if (!result && data->corrupt) LLFileSystem::removeFile(id,type,ENOENT);
         if (result)
         {
             try {data->mMaterial->setFromModel(data->mModelIn,0);}
@@ -645,25 +657,25 @@ LLFetchedGLTFMaterial* LLGLTFMaterialList::getNativeMaterial(const LLUUID& id)
     auto tracked=mNativeMaterials.find(id);
     // Local material ownership and its file watcher remain in the shared
     // registry. Do not retire or re-fetch a local replacement on account reset.
-    if (found!=mList.end() && (tracked==mNativeMaterials.end() || tracked->second.material!=found->second.get())) return found->second;
+    if (found!=mList.end() && (tracked==mNativeMaterials.end() || tracked->second.material.get()!=found->second.get())) return found->second;
     if (found==mList.end())
     {
         if (tracked!=mNativeMaterials.end()) mNativeMaterials.erase(tracked);
         for (auto iter=mNativeMaterials.begin();mNativeMaterials.size()>=4096 && iter!=mNativeMaterials.end();)
         {
             const auto cached=mList.find(iter->first);
-            if (cached==mList.end() || cached->second.get()!=iter->second.material) iter=mNativeMaterials.erase(iter);
-            else if (!cached->second->isFetching() && cached->second->getNumRefs()==1)
+            if (cached==mList.end() || cached->second.get()!=iter->second.material.get()) iter=mNativeMaterials.erase(iter);
+            else if (!cached->second->isFetching() && cached->second->getNumRefs()==2)
             {mList.erase(cached);iter=mNativeMaterials.erase(iter);}
             else ++iter;
         }
         if (mNativeMaterials.size()>=4096) return nullptr;
         LLPointer<LLFetchedGLTFMaterial> material=new LLFetchedGLTFMaterial;
         found=mList.emplace(id,material).first;
-        tracked=mNativeMaterials.emplace(id,NativeMaterial{material.get()}).first;
+        tracked=mNativeMaterials.emplace(id,NativeMaterial{material}).first;
     }
     auto& entry=tracked->second;
-    auto* material=entry.material;
+    auto* material=entry.material.get();
     const double now=LLTimer::getTotalSeconds();
     if (material->isLoaded() || material->isFetching() || entry.attempts>=3 || now<entry.retryAt || !gAssetStorage) return material;
     const auto owner=VSNativeSession::active();
@@ -679,7 +691,7 @@ LLFetchedGLTFMaterial* LLGLTFMaterialList::getNativeMaterial(const LLUUID& id)
 void LLGLTFMaterialList::resetNativeMaterials()
 {
     for (const auto& [id,entry]:mNativeMaterials)
-        if (const auto found=mList.find(id);found!=mList.end() && found->second.get()==entry.material) mList.erase(found);
+        if (const auto found=mList.find(id);found!=mList.end() && found->second.get()==entry.material.get()) mList.erase(found);
     mNativeMaterials.clear();
 }
 #endif

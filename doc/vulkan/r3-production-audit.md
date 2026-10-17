@@ -603,3 +603,25 @@ malformed and oversized HTTP assets remained unloaded. Object and account
 registry retirement passed. These results qualify this checkpoint on the local
 Windows software device. Recovery of a corrupt material asset-cache entry and
 the remaining R3 obligations still require implementation/qualification.
+
+## Corrupt material asset-cache recovery
+
+Native decode now distinguishes malformed encoded data from temporary
+preparation refusal. Only malformed cached assets are invalidated through the
+existing LLFileSystem cache API; refused work and allocation failure preserve
+valid encoded bytes. The next bounded retry can consequently fetch corrected
+server data instead of repeatedly parsing the same corrupt file.
+
+Native registry markers now retain their material owner rather than keeping a
+raw pointer that an allocator could reuse after a shared-cache removal. Local
+watcher replacements remain protected. Inactive world faces also release their
+parsed PBR asset reference, allowing unreferenced metadata to be reclaimed under
+pressure while CPU topology and material identities remain available.
+
+Production regressions cover corrupt-data invalidation/retry, preparation and
+publication exceptions, cache-owner retention and inactive PBR references. The
+actual viewer replay now includes an asset that initially arrives malformed,
+recovers through a second HTTP response, and replaces all six admitted PBR faces
+with a visibly different material factor. HTTP body hashes and archived input
+files are decisive; success flags alone cannot qualify it. Focused tests and
+viewer compilation pass; actual recovery runtime acceptance is pending rebuild.

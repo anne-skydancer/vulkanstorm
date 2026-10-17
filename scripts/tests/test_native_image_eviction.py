@@ -20,6 +20,7 @@ class NativeImageEvictionTests(unittest.TestCase):
 #include <vector>
 struct Face {
  std::shared_ptr<int> mesh,publishedImage;
+ std::shared_ptr<int> pbrAsset;
  std::array<std::shared_ptr<int>,4> publishedChannels;
  int material=17;
 };
@@ -34,13 +35,14 @@ struct Object {
 int main(){
  Object object;Face face;
  face.mesh=std::make_shared<int>(1);face.publishedImage=std::make_shared<int>(2);
+ face.pbrAsset=std::make_shared<int>(4);
  for(auto& channel:face.publishedChannels)channel=std::make_shared<int>(3);
  object.faces.push_back(face);object.admittedFaces.push_back(face);
  const auto cpu=object.cpuGeometry;
- auto queued=face.publishedImage;std::weak_ptr<int> mesh=face.mesh,base=queued,normal=face.publishedChannels[0];
+ auto queued=face.publishedImage;std::weak_ptr<int> mesh=face.mesh,base=queued,normal=face.publishedChannels[0],material=face.pbrAsset;
  face={};object.releaseRenderingResources();
  assert(object.dirty && object.admittedFaces.empty());
- assert(mesh.expired() && normal.expired() && !base.expired());
+ assert(mesh.expired() && normal.expired() && material.expired() && !base.expired());
  assert(!object.faces[0].mesh && !object.faces[0].publishedImage);
  for(const auto& channel:object.faces[0].publishedChannels)assert(!channel);
  assert(object.faces[0].material==17 && object.cpuGeometry==cpu && *cpu==23);

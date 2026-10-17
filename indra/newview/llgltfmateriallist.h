@@ -142,7 +142,7 @@ protected:
 #if VS_NATIVE_VULKAN
     struct NativeMaterial
     {
-        LLFetchedGLTFMaterial* material=nullptr;
+        LLPointer<LLFetchedGLTFMaterial> material;
         unsigned attempts=0;
         double retryAt=0;
     };
