@@ -81,6 +81,7 @@ jobs:
       - run: python scripts/tests/test_native_camera_transport.py
       - run: python scripts/tests/test_native_world_assets.py
       - run: python scripts/tests/test_native_http_body_limit.py
+      - run: python scripts/tests/test_native_texture_cache.py
       - run: python scripts/vulkan_parity_inventory.py
       - run: python scripts/tests/test_vulkan_parity_baseline.py
       - run: python scripts/tests/test_terrain_packet.py
