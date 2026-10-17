@@ -1,5 +1,5 @@
 {
-  "source_commit": "3e2824b440d36534adcab00d245bce58de472923",
+  "source_commit": "2c74005b6a7f8d7718f1636302428867aba24aa4",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -41388,8 +41388,8 @@
     {
       "path": "indra/newview/vstextureupload.h",
       "start": 1,
-      "end": 94,
-      "sha256": "0e42c2c4b1c34c4dddd05d65368d906c1d1f1664f4149667df383ce9264fae0b",
+      "end": 96,
+      "sha256": "03e96789a15fbaf55010ca5fe61b9839eff7debb79b9d5d58cd49e1b2ea916d0",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45951,8 +45951,8 @@
     {
       "path": "scripts/tests/test_native_platform_headers.py",
       "start": 1,
-      "end": 51,
-      "sha256": "4de430b1ab50b193e53f636b8c82d2d46933f5c075bab9b496e5f8b603adb330",
+      "end": 52,
+      "sha256": "fb7c3881fe52320fcef2c4cfaea53aa2a593564560e32ab5600f7fed06bac448",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46100,10 +46100,28 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "indra/newview/vstextureupload.h",
+      "start": 5,
+      "end": 6,
+      "sha256": "03e96789a15fbaf55010ca5fe61b9839eff7debb79b9d5d58cd49e1b2ea916d0",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "scripts/tests/test_native_platform_headers.py",
+      "start": 40,
+      "end": 40,
+      "sha256": "fb7c3881fe52320fcef2c4cfaea53aa2a593564560e32ab5600f7fed06bac448",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "cb2a50215833ae8bd719e00401254738bc35fc13",
+    "previous_source_commit": "c0f1d0e290d47842c977549edf0cd55a68ffa4ea",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
