@@ -1,5 +1,5 @@
 {
-  "source_commit": "332e6b7d7e45ff5495a487a953d2a7c74e3003bf",
+  "source_commit": "1aacd23e98322c05cdcae1aafdc6eb692c418fcf",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -8315,7 +8315,7 @@
       "path": "indra/newview/llmediactrl.cpp",
       "start": 31,
       "end": 37,
-      "sha256": "82ad4df84371e9d66ce9fdf039445edc0cb4be3accfc1b86fd98140230dc7e0b",
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
       "record": "I04",
       "disposition": "mapped",
       "reason": "Native viewer-window integration review: LLViewerWindow owns its native device/swapchain, required startup root, login holder, popup/dialog owners, progress controllers, skin-aware UI and resource lifetimes. Normal initWindow dispatch has a native branch; normal LLAppViewer login is now wired; connected-region/session admission remains gated. Native input/reshape routes avoid GL. CPU media buffers and progress images publish immutable Diligent resources; live browser and authentication qualification remain open. Shared translation initialization preserves viewer substitution defaults. Registered specialized factories remain closed while ordinary named panels retain their admitted widget path. Native alert shadows and context cones use explicit triangle packets. Linux primary native font faces retain glyph-generation ownership; cross-platform runtime confirmation is pending dedicated CI. Runtime qualification is recorded separately in viewer-ui-substrate.md; none of these source mappings asserts complete V3, connected UI/chat or world parity."
@@ -8324,7 +8324,7 @@
       "path": "indra/newview/llmediactrl.cpp",
       "start": 166,
       "end": 171,
-      "sha256": "82ad4df84371e9d66ce9fdf039445edc0cb4be3accfc1b86fd98140230dc7e0b",
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
       "record": "I04",
       "disposition": "mapped",
       "reason": "Native viewer-window integration review: LLViewerWindow owns its native device/swapchain, required startup root, login holder, popup/dialog owners, progress controllers, skin-aware UI and resource lifetimes. Normal initWindow dispatch has a native branch; normal LLAppViewer login is now wired; connected-region/session admission remains gated. Native input/reshape routes avoid GL. CPU media buffers and progress images publish immutable Diligent resources; live browser and authentication qualification remain open. Shared translation initialization preserves viewer substitution defaults. Registered specialized factories remain closed while ordinary named panels retain their admitted widget path. Native alert shadows and context cones use explicit triangle packets. Linux primary native font faces retain glyph-generation ownership; cross-platform runtime confirmation is pending dedicated CI. Runtime qualification is recorded separately in viewer-ui-substrate.md; none of these source mappings asserts complete V3, connected UI/chat or world parity."
@@ -8332,8 +8332,8 @@
     {
       "path": "indra/newview/llmediactrl.cpp",
       "start": 852,
-      "end": 892,
-      "sha256": "82ad4df84371e9d66ce9fdf039445edc0cb4be3accfc1b86fd98140230dc7e0b",
+      "end": 893,
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
       "record": "I04",
       "disposition": "mapped",
       "reason": "Native viewer-window integration review: LLViewerWindow owns its native device/swapchain, required startup root, login holder, popup/dialog owners, progress controllers, skin-aware UI and resource lifetimes. Normal initWindow dispatch has a native branch; normal LLAppViewer login is now wired; connected-region/session admission remains gated. Native input/reshape routes avoid GL. CPU media buffers and progress images publish immutable Diligent resources; live browser and authentication qualification remain open. Shared translation initialization preserves viewer substitution defaults. Registered specialized factories remain closed while ordinary named panels retain their admitted widget path. Native alert shadows and context cones use explicit triangle packets. Linux primary native font faces retain glyph-generation ownership; cross-platform runtime confirmation is pending dedicated CI. Runtime qualification is recorded separately in viewer-ui-substrate.md; none of these source mappings asserts complete V3, connected UI/chat or world parity."
@@ -10250,7 +10250,7 @@
       "path": "indra/newview/llmediactrl.cpp",
       "start": 867,
       "end": 867,
-      "sha256": "82ad4df84371e9d66ce9fdf039445edc0cb4be3accfc1b86fd98140230dc7e0b",
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
       "record": "I04",
       "disposition": "mapped",
       "reason": "Normal native login integration review: LLAppViewer dispatches ordinary Vulkan configuration into CPU startup services, LLViewerWindow ownership, native frame rendering, browser/event/network pumping and ordered cleanup. The existing idle_startup state machine, FSPanelLogin login_callback, credential handling, required alerts/agreements and LLLoginInstance authentication are retained. Login menus use native-compatible explicit-color primitives. Native startup avoids GL feature recommendation, texture workers and world UI owners. The connected region/chat stage remains explicitly gated before GL world creation with the existing notification/retry path. Windows software qualification covers complete staging, all 44 viewer cases, normal startup, live login browser pixel publication and clean shutdown; real-server authentication, platform-event completeness and connected chat/world parity remain unqualified."
@@ -10259,7 +10259,7 @@
       "path": "indra/newview/llmediactrl.cpp",
       "start": 867,
       "end": 867,
-      "sha256": "82ad4df84371e9d66ce9fdf039445edc0cb4be3accfc1b86fd98140230dc7e0b",
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
       "record": "I04",
       "disposition": "mapped",
       "reason": "Normal native login integration review: LLAppViewer dispatches ordinary Vulkan configuration into CPU startup services, LLViewerWindow ownership, native frame rendering, browser/event/network pumping and ordered cleanup. The existing idle_startup state machine, FSPanelLogin login_callback, credential handling, required alerts/agreements and LLLoginInstance authentication are retained. Login menus use native-compatible explicit-color primitives. Native startup avoids GL feature recommendation, texture workers and world UI owners. The connected region/chat stage remains explicitly gated before GL world creation with the existing notification/retry path. Windows software qualification covers complete staging, all 44 viewer cases, normal startup, live login browser pixel publication and clean shutdown; real-server authentication, platform-event completeness and connected chat/world parity remain unqualified."
@@ -49049,7 +49049,7 @@
       "path": "indra/newview/llmediactrl.cpp",
       "start": 34,
       "end": 34,
-      "sha256": "82ad4df84371e9d66ce9fdf039445edc0cb4be3accfc1b86fd98140230dc7e0b",
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
@@ -49058,7 +49058,7 @@
       "path": "indra/newview/llmediactrl.cpp",
       "start": 865,
       "end": 867,
-      "sha256": "82ad4df84371e9d66ce9fdf039445edc0cb4be3accfc1b86fd98140230dc7e0b",
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
@@ -49067,7 +49067,7 @@
       "path": "indra/newview/llmediactrl.cpp",
       "start": 876,
       "end": 877,
-      "sha256": "82ad4df84371e9d66ce9fdf039445edc0cb4be3accfc1b86fd98140230dc7e0b",
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
@@ -54926,7 +54926,7 @@
       "path": "indra/newview/llmediactrl.cpp",
       "start": 167,
       "end": 168,
-      "sha256": "82ad4df84371e9d66ce9fdf039445edc0cb4be3accfc1b86fd98140230dc7e0b",
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
@@ -54934,8 +54934,8 @@
     {
       "path": "indra/newview/vsr3mediareplay.cpp",
       "start": 1,
-      "end": 141,
-      "sha256": "ce3dead24858393fd1e0afca21fce48b148ff11219065795aee527de98223579",
+      "end": 156,
+      "sha256": "ed841c8b46fe6ff33c93ad8bbfc232330fdf34ce5cb071f4e437a0bf6c78e8db",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only execution of the actual production local file decoder/watcher, immutable native image generations, UI facades and GPU pixel/orientation evidence. Complete R3 acceptance remains open."
@@ -55047,6 +55047,42 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "indra/newview/llmediactrl.cpp",
+      "start": 881,
+      "end": 882,
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
+    },
+    {
+      "path": "indra/newview/llmediactrl.cpp",
+      "start": 884,
+      "end": 884,
+      "sha256": "7683b5a824da7e1361871a1236e4720ff1566f1762e5ad460a84945a827a821d",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
+    },
+    {
+      "path": "indra/newview/vsr3mediareplay.cpp",
+      "start": 28,
+      "end": 29,
+      "sha256": "ed841c8b46fe6ff33c93ad8bbfc232330fdf34ce5cb071f4e437a0bf6c78e8db",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only execution of the actual production local file decoder/watcher, immutable native image generations, UI facades and GPU pixel/orientation evidence. Complete R3 acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsr3mediareplay.cpp",
+      "start": 85,
+      "end": 98,
+      "sha256": "ed841c8b46fe6ff33c93ad8bbfc232330fdf34ce5cb071f4e437a0bf6c78e8db",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only execution of the actual production local file decoder/watcher, immutable native image generations, UI facades and GPU pixel/orientation evidence. Complete R3 acceptance remains open."
     }
   ]
 }
