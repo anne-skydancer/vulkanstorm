@@ -182,6 +182,25 @@ bool vs_avatar_attachment_name(const LLUUID& item, std::string& name)
     return isAgentAvatarValid() && gAgentAvatarp->getAttachedPointName(item, name);
 }
 
+bool vs_avatar_precise_location(const LLUUID& id,LLVector3d& position)
+{
+#if VS_NATIVE_VULKAN
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto owner=VSNativeSession::active();
+        if(!owner || !owner->regionReady() || !gViewerWindow->nativeContext())return false;
+        // Precise object updates refresh tracking timers. Cached coarse samples
+        // retain their original freshness timeout in the shared tracking owner.
+        for(const auto& avatar:gViewerWindow->nativeContext()->world().avatarLocations())
+            if(avatar.id==id){position=avatar.position;return position.isFinite();}
+        return false;
+    }
+#endif
+    const auto object=gObjectList.findObject(id);
+    if(!object || object->isDead() || !object->isAvatar())return false;
+    position=object->getPositionGlobal();return position.isFinite();
+}
+
 std::vector<VSAvatarLocation> vs_avatar_locations(const LLVector3d& relativeTo, F32 radius)
 {
     std::vector<VSAvatarLocation> result;

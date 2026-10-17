@@ -10,6 +10,7 @@
 #include "llimageworker.h"
 #include "lltexturecache.h"
 #include "lltexturefetch.h"
+#include "lluri.h"
 #include "llviewercontrol.h"
 #include "lleventcoro.h"
 #include "llsdutil.h"
@@ -89,6 +90,8 @@ struct VSUIImageProvider::Impl : std::enable_shared_from_this<VSUIImageProvider:
         std::shared_ptr<const VSResourceBudget::Reservation> uploadResidency;
         LLPointer<LLImageRaw> pendingAuxiliary;
         bool local=false;
+        std::string sourceURL;
+        bool missingMapTile=false,mapVisible=false;
         LLUUID redirect;
         boost::signals2::connection redirectLoaded;
     };
@@ -300,6 +303,8 @@ void VSUIImageProvider::pumpImages()
         // decoded result until bounded GPU preparation can accept it.
         if(done && !uploadDeferred)
         {
+            if(!entry.sourceURL.empty() && !raw && (status==LLCore::HttpStatus(404) || status==LLCore::HttpStatus(410)))
+            {entry.missingMapTile=true;entry.attempts=3;}
             fetch->deleteRequest(id,true);entry.fetching=false;
             if(status==LLCore::HttpStatus(LLCore::HttpStatus::LLCORE,LLCore::HE_RESPONSE_TOO_LARGE))
             {entry.failedGeneration=generation;entry.attempts=3;}
@@ -584,6 +589,60 @@ void VSUIImageProvider::cleanUp()
     for(const auto& entry:mImpl->cache) mImpl->resources.erase("skin:"+entry.first);
     mImpl->cache.clear();
 }
+VSMapImage VSUIImageProvider::requestMapImage(const std::string& url,bool load)
+{
+    if(url.size()>4096 || (url.compare(0,8,"https://")!=0 && url.compare(0,7,"http://")!=0) || LLURI(url).hostName().empty())return {};
+    const auto owner=VSNativeSession::active();
+    if(!owner || owner->phase()!=VSNativeSession::Phase::Connected)return {};
+    LLUUID id;id.generate(url); // Same cache identity as LLViewerTextureList::getImageFromUrl.
+    auto found=mImpl->remote.find(id);
+    if(found==mImpl->remote.end())
+    {
+        if(!load)return {};
+        if(mImpl->remote.size()>=16384 && !mImpl->evict(id,true))return {};
+        found=mImpl->remote.emplace(id,Impl::Remote{}).first;
+        found->second.sourceURL=url;found->second.target=256;found->second.exactWorld=true;
+        found->second.fullWidth=found->second.fullHeight=256;
+    }
+    auto& entry=found->second;
+    if(entry.sourceURL!=url)return {}; // Never reinterpret an existing asset subscription.
+    if(entry.generation && entry.generation!=owner->generation())
+    {
+        if(!load)return {};
+        entry.missingMapTile=false;entry.attempts=0;entry.retryAt=0;entry.failedGeneration=0;
+    }
+    if(load)
+    {
+        entry.mapVisible=true;
+        if(auto* fetch=LLAppViewer::getTextureFetch())fetch->updateRequestPriority(id,100000.f);
+    }
+    if(load && !entry.missingMapTile)getUIImageByID(id,-1);
+    return {entry.readyGeneration==owner->generation()?entry.facade:nullptr,entry.missingMapTile && entry.failedGeneration==owner->generation()};
+}
+void VSUIImageProvider::retryMapImage(const std::string& url)
+{
+    LLUUID id;id.generate(url);
+    const auto found=mImpl->remote.find(id);
+    if(found==mImpl->remote.end() || found->second.sourceURL!=url || !found->second.missingMapTile)return;
+    auto& entry=found->second;
+    entry.missingMapTile=false;entry.attempts=0;entry.retryAt=0;entry.failedGeneration=0;
+}
+VSMapImage vs_request_map_image(const std::string& url,bool load)
+{return sActiveProvider?sActiveProvider->requestMapImage(url,load):VSMapImage{};}
+void vs_retry_map_image(const std::string& url)
+{if(sActiveProvider)sActiveProvider->retryMapImage(url);}
+
+void VSUIImageProvider::setMapImageVisible(const std::string& url,bool visible)
+{
+    LLUUID id;id.generate(url);
+    const auto found=mImpl->remote.find(id);
+    if(found==mImpl->remote.end() || found->second.sourceURL!=url)return;
+    found->second.mapVisible=visible;
+    if(auto* fetch=LLAppViewer::getTextureFetch())fetch->updateRequestPriority(id,visible?100000.f:0.f);
+}
+void vs_set_map_image_visible(const std::string& url,bool visible)
+{if(sActiveProvider)sActiveProvider->setMapImageVisible(url,visible);}
+
 LLUIImagePtr VSUIImageProvider::requestWorldImage(const LLUUID& id,unsigned dimension,bool exact)
 {
     if(id.isNull()) return nullptr;
@@ -653,7 +712,7 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
             })) {entry.pendingAuxiliary=entry.auxiliary;entry.pendingDiscard=entry.discard;entry.pendingCacheHit=true;}
         }
     }
-    if(entry.preparing || entry.prepared) return entry.facade;
+    if(entry.preparing || entry.prepared || (!entry.sourceURL.empty() && !entry.mapVisible)) return entry.facade;
     auto* fetch=LLAppViewer::getTextureFetch();
     if(!owner || owner->phase()!=VSNativeSession::Phase::Connected || !owner->regionReady() || !fetch || entry.fetching)
         return entry.facade;
@@ -664,7 +723,7 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
     const bool pressure=!entry.uiDemand && !entry.exactWorld && !fullRes && mImpl->resources.textureMemoryPolicy().bias>1.9;
     const unsigned target=entry.uiDemand?4096u:std::min(limit,mImpl->resources.worldImageDimension(entry.target,MAX_DISCARD_LEVEL,entry.exactWorld||fullRes));
     S32 desired=0;
-    if(!entry.uiDemand && !fullRes)
+    if(!entry.uiDemand && !fullRes && entry.sourceURL.empty())
     {
         if(!entry.fullWidth) desired=MAX_DISCARD_LEVEL;
         else while(desired<MAX_DISCARD_LEVEL && (unsigned(entry.fullWidth>>desired)>target || unsigned(entry.fullHeight>>desired)>target)) ++desired;
@@ -677,7 +736,8 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
     if(entry.attempts>=3 || LLTimer::getTotalSeconds()<entry.retryAt) return entry.facade;
     const std::string capability=owner->capability("ViewerAsset").empty()?owner->capability("GetTexture"):owner->capability("ViewerAsset");
     const std::string url=capability.empty()?std::string():capability+(capability.find('?')==std::string::npos?"?":"&")+"texture_id="+id.asString();
-    const S32 queued=fetch->createRequest(FTT_DEFAULT,url,id,LLHost(),entry.uiDemand?100000.f:float(target*target),
+    const S32 queued=fetch->createRequest(entry.sourceURL.empty()?FTT_DEFAULT:FTT_MAP_TILE,
+        entry.sourceURL.empty()?url:entry.sourceURL,id,LLHost(),entry.sourceURL.empty()?(entry.uiDemand?100000.f:float(target*target)):(entry.mapVisible?100000.f:0.f),
         entry.fullWidth,entry.fullHeight,entry.components,desired,true,true);
     if(queued>=0)
     {

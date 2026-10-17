@@ -9,6 +9,7 @@
 #include "llviewergenericmessage.h"
 #include "vsnativesession.h"
 #include "vsnativeappearance.h"
+#include "vstaskinventory.h"
 #include "aoengine.h"
 #include "fsavatarrenderpersistence.h"
 #include "vsvulkancontext.h"
@@ -74,6 +75,8 @@
 #include "llpluginclassmedia.h"
 #include "llviewermessage.h"
 #include "llworldmap.h"
+#include "lltracker.h"
+#include "llworldmapview.h"
 #include "llworldmapmessage.h"
 #include "fspanellogin.h"
 #include "llprogressview.h"
@@ -151,6 +154,7 @@ const std::set<std::string> session = { "SimStats",
                                         "RegionIDAndHandleReply",
                                         "MapBlockReply",
                                         "MapItemReply",
+                                        "FindAgent",
                                         "RegionHandshake",
                                         "AgentMovementComplete",
                                         "ChatFromSimulator",
@@ -452,6 +456,9 @@ bool VSNativeSession::acceptLogin(const LLSD& response)
     gEventNotifier.load(response["event_notifications"]);
     gAgent.mSecureSessionID = response["secure_session_id"].asUUID();
     gAgent.mMOTD = response["message"].asString();
+    std::string mapServer=response["map-server-url"].asString();
+    if(mapServer.empty())mapServer=gSavedSettings.getString("MapServerURL");
+    gSavedSettings.setString("CurrentMapServerURL",mapServer);
     gAgentUsername = response["first_name"].asString();
     LLStringUtil::replaceChar(gAgentUsername, '"', ' '); LLStringUtil::trim(gAgentUsername);
     std::string last = response["last_name"].asString();
@@ -582,6 +589,7 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
                               "UpdateNotecardAgentInventory",
                               "UpdateNotecardTaskInventory",
                               "UpdateScriptAgent",
+                              "RequestTaskInventory",
                               "UserInfo",
                               "AgentPreferences",
                               "SearchStatRequest",
@@ -680,6 +688,7 @@ void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionE
                               "UpdateNotecardAgentInventory",
                               "UpdateNotecardTaskInventory",
                               "UpdateScriptAgent",
+                              "RequestTaskInventory",
                               "UserInfo",
                               "AgentPreferences",
                               "SearchStatRequest",
@@ -1321,6 +1330,12 @@ void VSNativeSession::receive(LLMessageSystem* msg)
             auto& world = gViewerWindow->nativeContext()->world();
             const auto circuit=mCircuits.find(msg->getSender());
             world.receive(*msg,circuit==mCircuits.end()?mHandle:circuit->second.handle,mAgent);
+            if (name == "ReplyTaskInventory" && mTaskInventory)
+            {
+                const auto current = accountGuard(true);
+                mTaskInventory->receive(*msg);
+                if (!current()) return; // listeners may synchronously retire the scene/account
+            }
             LLVector3 position;
             if (world.agentPosition(position)) updateAgentPosition(position, msg->getSender(), mGeneration, mRegionEpoch);
         }
@@ -1906,6 +1921,12 @@ bool VSNativeSession::requestTaskInventory(const VSWorldScene::ObjectHandle& tok
        !gViewerWindow || !gViewerWindow->nativeContext())return false;
     return gViewerWindow->nativeContext()->world().requestTaskInventory(*static_cast<LLMessageSystem*>(gMessageSystem),token,mAgent,mSession);
 }
+VSTaskInventory* VSNativeSession::taskInventory()
+{
+    if (!regionReady()) return nullptr;
+    if (!mTaskInventory) mTaskInventory = std::make_unique<VSTaskInventory>(shared_from_this());
+    return mTaskInventory.get();
+}
 void VSNativeSession::advanceStartup()
 {
     if (mPhase != Phase::Connected || mChangingRegion)
@@ -2154,6 +2175,7 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
 }
 void VSNativeSession::tick()
 {
+    if (mTaskInventory) mTaskInventory->tick();
     if (mAppearance)
         mAppearance->tick();
     if (mPhase == Phase::Connected && AOEngine::instanceExists())
@@ -2313,10 +2335,15 @@ void VSNativeSession::reset()
     mStartupTime = 0;
     mStartupTimedOut = false;
     if (mShutdown) return;
+    // Retire CPU tracking without sending an untrack on the retiring circuit.
+    // The old account's buddy owner is cleared below, before another login.
+    LLTracker::cleanupInstance();
     LLFloaterReg::destroyInstance("world_map");LLFloaterReg::destroyInstance("mini_map");
+    LLWorldMapView::cleanupClass();
     if(LLWorldMapMessage::instanceExists())LLWorldMapMessage::instance().resetNativeAccount();
     if(LLWorldMap::instanceExists())LLWorldMap::instance().reset();
     gViewerInput.resetNativeGlobalKeys();
+    mTaskInventory.reset();
     mAppearance.reset();
     if (LLGestureMgr::instanceExists()) LLGestureMgr::instance().resetNativeAccount();
     // The AO editor retains set/state pointers into the retiring account.

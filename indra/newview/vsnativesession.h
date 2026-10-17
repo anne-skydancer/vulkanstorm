@@ -24,6 +24,7 @@ class VSPlainChat;
 class LLFloater;
 class LLViewerMediaImpl;
 class VSNativeAppearance;
+class VSTaskInventory;
 
 // Deliberately does not own LLWorld, LLViewerRegion or scene resources.
 // All asynchronous deliveries carry an owner and a session generation.
@@ -65,6 +66,7 @@ public:
     bool current(const InventoryHandle&) const;
     std::function<bool()> interactionGuard(const VSWorldScene::FaceHandle&) const;
     bool requestTaskInventory(const VSWorldScene::ObjectHandle&);
+    VSTaskInventory* taskInventory();
     const LLHost& host() const { return mHost; }
     std::string capability(const std::string&) const;
     std::string capability(const LLHost&, const std::string&) const;
@@ -193,6 +195,7 @@ private:
     U32 mWearablesSerial=0;
     LLSD mWearablesMetadata;
     std::unique_ptr<VSNativeAppearance> mAppearance;
+    std::unique_ptr<VSTaskInventory> mTaskInventory;
     LLHost mPreviousHost;
     struct RegionCircuit
     {

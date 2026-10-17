@@ -248,7 +248,8 @@ bool LLCommandDispatcher::isNativeConnectedCommand(const std::string& cmd, const
     if (cmd == "chat") return params.size() == 2 && params[0].asInteger() > 0 && params[0].asInteger() < CHAT_CHANNEL_DEBUG;
     if (cmd == "event")
     {
-        if (params.size() < 2 || params[0].asInteger() <= 0) return false;
+        if (params.size() < 1 || params[0].asInteger() <= 0) return false;
+        if(params.size()==1)return true; // shared world-map event double-click
         const auto verb = params[1].asString();
         return (params.size() == 2 && verb == "details") ||
             (params.size() == 3 && verb == "notify" &&

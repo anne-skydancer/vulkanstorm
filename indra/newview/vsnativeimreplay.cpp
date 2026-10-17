@@ -616,6 +616,24 @@ struct Replay : public LLAvatarPropertiesObserver
                 else
                 {
                     require(utilityFloater.get() != nullptr, "Shared utility/currency floater retired before drawing");
+                    if (std::string_view(name) == "hud" && gSavedSettings.getString("TutorialURL").empty())
+                    {
+                        // The shared tutorial emits a genuine modal when the grid
+                        // supplies no tutorial URL. Acknowledge it through normal
+                        // window input; never bypass its capture in later checks.
+                        auto* toast = dynamic_cast<LLNotificationsUI::LLToast*>(gFocusMgr.getMouseCapture());
+                        auto notice = toast ? toast->getNotification() : LLNotificationPtr();
+                        require(notice && notice->getName() == "TutorialNotFound", "Missing tutorial did not produce its reference acknowledgement");
+                        auto* panel = dynamic_cast<LLToastAlertPanel*>(toast->getPanel());
+                        auto* close = panel ? panel->findChild<LLButton>("close") : nullptr;
+                        require(close && close->isInVisibleChain() && close->getEnabled(), "Tutorial acknowledgement control unavailable");
+                        const LLRect bounds = close->calcScreenRect();
+                        LLCoordGL point;
+                        LLUI::getInstance()->screenPointToGL(bounds.getCenterX(), bounds.getCenterY(), &point.mX, &point.mY);
+                        require(gViewerWindow->handleMouseDown(gViewerWindow->getWindow(), point, MASK_NONE) && close->hasMouseCapture(), "Tutorial acknowledgement lost mouse down");
+                        require(gViewerWindow->handleMouseUp(gViewerWindow->getWindow(), point, MASK_NONE) && notice->isRespondedTo() && !gFocusMgr.getMouseCapture(), "Tutorial acknowledgement did not retire its modal capture");
+                        evidence["connected_tutorial_unavailable_acknowledgement"] = true;
+                    }
                     const LLSD key = utilityFloater.get()->getKey();
                     require(LLFloaterReg::destroyInstance(name, key),
                         (std::string("Shared utility/currency floater registry retirement failed: ") + name).c_str());

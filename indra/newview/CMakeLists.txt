@@ -2294,6 +2294,7 @@ if(USE_DILIGENTCORE)
           vsworldassets.cpp vsworldassets.h vsworldgltf.cpp vsworldgltf.h vsresourcebudget.h vsnativecamera.h vsparcelpermissions.h vsworldmotion.h
           vswearable.cpp vswearable.h
           vsnativeappearance.cpp vsnativeappearance.h
+          vstaskinventory.cpp vstaskinventory.h
           vsnativecircuits.cpp vsworldcontracts.h)
 endif()
 if(VS_VULKAN_DIAGNOSTICS)
