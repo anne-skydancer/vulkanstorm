@@ -36,11 +36,11 @@ public:
     /*virtual*/ void hide() override {}
     /*virtual*/ void close() override {}
     /*virtual*/ bool getVisible() override {return false;}
-    /*virtual*/ bool getMinimized() override {return false;}
+    /*virtual*/ bool getMinimized() override {return mMinimized;}
     /*virtual*/ bool getMaximized() override {return false;}
     /*virtual*/ bool maximize() override {return false;}
-    /*virtual*/ void minimize() override {}
-    /*virtual*/ void restore() override {}
+    /*virtual*/ void minimize() override {mMinimized=true;}
+    /*virtual*/ void restore() override {mMinimized=false;}
     // TODO: LLWindow::getFullscreen() is (intentionally?) NOT virtual.
     // Apparently the coder of LLWindowHeadless didn't realize that. Is it a
     // mistake to shadow the base-class method with an LLWindowHeadless
@@ -114,6 +114,7 @@ public:
     virtual ~LLWindowHeadless();
 
 private:
+    bool mMinimized=false;
     LLCoordWindow mSize,mCursor;
     LLCoordScreen mPosition;
     LLWString mClipboard; // Process-local clipboard; never touches the desktop.

@@ -332,7 +332,8 @@ struct VSVulkanContext::Impl
         input.systemFactor=LLViewerTexture::getSystemMemoryBudgetFactor();
         input.freeSystemMiB=LLMemory::getAvailableMemKB().valueInUnits<LLUnits::Megabytes>();
         // A headless diagnostic emulates an active view, not a minimized viewer.
-        input.background=!VSVulkanContext::headlessReplay() && (!window.getVisible() || !gFocusMgr.getAppHasFocus());
+        input.background=window.getMinimized() ||
+            (!VSVulkanContext::headlessReplay() && (!window.getVisible() || !gFocusMgr.getAppHasFocus()));
         input.minimized=window.getMinimized() && input.background;
         resources->updateTextureMemory(settings,input);
     }

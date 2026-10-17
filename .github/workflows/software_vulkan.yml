@@ -99,6 +99,7 @@ jobs:
       - run: python scripts/tests/test_vulkan_gltf_image_evidence.py
       - run: python scripts/tests/test_native_local_images.py
       - run: python scripts/tests/test_native_image_eviction.py
+      - run: python scripts/tests/test_native_inactive_images.py
       - run: python scripts/tests/test_native_remote_materials.py
       - run: python scripts/tests/test_vulkan_remote_material_evidence.py
       - run: python scripts/tests/test_vulkan_legacy_material_evidence.py

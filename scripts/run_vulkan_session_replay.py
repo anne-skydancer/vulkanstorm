@@ -729,6 +729,7 @@ class SimulatorHTTP(ThreadingHTTPServer):
         self.profile_updates = {}
         self.upload_requests = {}
         self.upload_directory = None
+        self.replay_finished = threading.Event()
 
     @property
     def url(self):
@@ -795,8 +796,16 @@ class Handler(BaseHTTPRequestHandler):
         if path.rstrip('/') == '/asset':
             query = parse_qs(urlsplit(self.path).query)
             if query.get('texture_id'):
+                if (getattr(self.server,'r3_directory',None) and getattr(self.server,'stream_texture',None) and
+                        query['texture_id']==['a3000000-0000-0000-0000-000000000003']):
+                    self.server.requests.append(dict(path=path,method='GET',query=query,bytes=0,shutdown_pending=True))
+                    (self.server.r3_directory/'pending-cache-read.requested').write_text('HTTP request observed; response intentionally pending\n')
+                    self.server.replay_finished.wait(25)
+                    self.close_connection=True
+                    return
                 stream=getattr(self.server,'stream_texture',None)
-                streaming=bool(stream and query['texture_id']==['a3000000-0000-0000-0000-000000000001'])
+                streaming=bool(stream and query['texture_id'] in
+                    (['a3000000-0000-0000-0000-000000000001'],['a3000000-0000-0000-0000-000000000002']))
                 fixture=stream if streaming else getattr(self.server,'texture_fixture',None)
                 data=(fixture or (Path(__file__).resolve().parents[1]/'indra/newview/skins/default/textures/transparent.j2c')).read_bytes()
                 if streaming and self.headers.get('Range'):
@@ -1218,6 +1227,7 @@ def main():
     parser.add_argument('--cache-size', type=int, help='Texture cache size in MiB for qualification')
     parser.add_argument('--cache-clear', action='store_true', help='Exercise the normal next-startup cache purge setting')
     parser.add_argument('--texture-cache-contracts', action='store_true', help='Exercise native streaming/preferences and archive GPU image readbacks')
+    parser.add_argument('--pending-cache-write-restart',action='store_true',help='Verify the prior process shutdown write through normal fetch/cache and GPU publication')
     parser.add_argument('--local-image-contracts','--r3-image-contracts',dest='local_image_contracts',action='store_true',help='Exercise production R3 local/remote material, image, bump, replacement and retirement contracts')
     parser.add_argument('--texture-cache-read-only', action='store_true', help='Exercise the native sibling texture-cache policy in an isolated headless replay')
     parser.add_argument('--profile-directory', type=Path, help='Dedicated shared credential-free profile for concurrent headless viewer qualification')
@@ -1231,6 +1241,8 @@ def main():
     # Terrain materials must exercise the viewer's received terrain geometry,
     # rather than qualifying only the standalone shader charts.
     args.terrain_contracts = args.terrain_contracts or args.local_image_contracts
+    if args.pending_cache_write_restart and not (args.headless and args.texture_cache_contracts):
+        parser.error('Pending-write restart requires isolated headless cache qualification')
     if args.cache_size is not None and not 256 <= args.cache_size <= 100*1024:
         parser.error('--cache-size must be between 256 and 102400 MiB')
     if args.texture_cache_read_only and not (args.headless and args.texture_cache_contracts):
@@ -1357,6 +1369,7 @@ def main():
     if args.r2_contracts:env['VS_VULKAN_REPLAY_R2']='1'
     else:env.pop('VS_VULKAN_REPLAY_R2',None)
     if args.terrain_contracts:env['VS_VULKAN_REPLAY_TERRAIN']='1'
+    if args.pending_cache_write_restart:env['VS_VULKAN_REPLAY_PENDING_CACHE_WRITE_RESTART']='1'
     else:env.pop('VS_VULKAN_REPLAY_TERRAIN',None)
     if args.r1_contracts:env['VS_VULKAN_REPLAY_R1']='1'
     else:env.pop('VS_VULKAN_REPLAY_R1',None)
@@ -1411,6 +1424,7 @@ def main():
         try:
             with windows_manifest_registration(runtime, args.register_windows_manifests):
                 process = run_staged_viewer(command, stage, env)
+            server.replay_finished.set()
             code = process.returncode; log = process.stdout.decode('utf-8', errors='replace')
             report = read_session_evidence(directory, code)
             report['process_isolation'] = process_isolation_evidence(process)
@@ -1503,6 +1517,7 @@ def main():
             report['failure'] = str(error)
             passed = False
         finally:
+            server.replay_finished.set()
             server.shutdown(); worker.join()
         (directory / 'http-replay.json').write_text(json.dumps(server.requests, indent=2) + '\n')
     (directory / 'viewer.log').write_text(log, encoding='utf-8')

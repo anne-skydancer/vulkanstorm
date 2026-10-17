@@ -981,3 +981,29 @@ UI/exact demand. Picking metadata releases terrain image snapshots. The source
 regressions and native build are checks, not final pressure/runtime acceptance.
 Pending-I/O shutdown, account/grid transitions, full terrain/pressure viewer
 qualification and final three-platform R3 acceptance remain open.
+
+
+The source-qualified canonical viewer at 401498c4ad passed the complete R3
+image replay headlessly on local Windows SwiftShader in 57.9 seconds. This
+includes actual received ground packets with four PBR layers, paintmap changes,
+live scale/transform changes without geometry replacement, paint creation and
+bit-depth/deletion checks, plus the pre-existing material/media/glTF cases.
+This is local software-device evidence; three-platform CI remains decisive.
+
+### Pressure and pending-cache shutdown qualification paths (2026-10-17)
+
+The ordinary headless window API now tracks minimize/restore state. Native
+memory policy treats explicit headless minimization as backgrounding while
+ordinary headless rendering still emulates an active view. No window is opened.
+A required cold-cache replay forces pressure with existing memory-policy
+settings, verifies world-image coarsening, full-resolution preference, actual
+minimized pumping/old scene image retirement, restoration and object retirement.
+
+A separate final-shutdown probe starts an ordinary shared HTTP fetch whose
+loopback response remains pending, queues a real shared LLTextureCache write,
+and exits through ordinary viewer cleanup. Qualification requires the real HTTP
+observation and successful write/completion retirement artifacts. The warm
+process must publish that queued-write UUID to the GPU with the independent
+source pixels and zero texture HTTP requests. Account-retirement and later
+shutdown HTTP counters remain separate time points. These new paths require
+runtime qualification; their presence and compiled fixtures do not accept them.

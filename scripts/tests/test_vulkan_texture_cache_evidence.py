@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import threading
+import time
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -13,6 +14,86 @@ from run_vulkan_session_replay import SimulatorHTTP
 
 
 class TextureCacheEvidenceTests(unittest.TestCase):
+    def test_shutdown_fetch_remains_pending_until_the_viewer_finishes(self):
+        with tempfile.TemporaryDirectory() as temporary,SimulatorHTTP() as server:
+            folder=Path(temporary);server.r3_directory=folder
+            server.stream_texture=folder/'texture.j2c'
+            worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
+            errors=[]
+            def fetch():
+                client=http.client.HTTPConnection(*server.server_address,timeout=4)
+                try:
+                    client.request('GET','/asset?texture_id=a3000000-0000-0000-0000-000000000003')
+                    client.getresponse()
+                    errors.append('Pending HTTP unexpectedly supplied a response')
+                except (http.client.RemoteDisconnected,ConnectionResetError):
+                    pass
+                except Exception as error:
+                    errors.append(str(error))
+                finally:
+                    client.close()
+            reader=threading.Thread(target=fetch,daemon=True);reader.start()
+            try:
+                marker=folder/'pending-cache-read.requested';deadline=time.monotonic()+3
+                while not marker.exists() and time.monotonic()<deadline:time.sleep(.01)
+                self.assertTrue(marker.is_file())
+                self.assertTrue(reader.is_alive())
+                self.assertEqual(len(server.requests),1)
+                self.assertTrue(server.requests[0]['shutdown_pending'])
+            finally:
+                server.replay_finished.set();reader.join(3)
+                server.shutdown();worker.join()
+            self.assertFalse(reader.is_alive());self.assertEqual(errors,[])
+
+    def test_pending_shutdown_requires_real_http_and_completed_retired_write(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder=Path(temporary);(folder/'r3').mkdir()
+            shutdown=dict(http_pending=True,write_queued=True,ordinary_cleanup=True,additional_http_requests=1,
+                          write_id='a3000000-0000-0000-0000-000000000002',
+                          read_id='a3000000-0000-0000-0000-000000000003',
+                          write_completion='r3/pending-cache-write.xml',read_observation='r3/pending-cache-read.requested')
+            record={'r3_shutdown':shutdown}
+            requests=[dict(shutdown_pending=True,query={'texture_id':[shutdown['read_id']]},bytes=0)]
+            observed=folder/shutdown['read_observation'];observed.write_text('HTTP request observed; pending\n')
+            complete=folder/shutdown['write_completion']
+            complete.write_text('<llsd><map><key>completed</key><boolean>true</boolean>'
+                '<key>success</key><boolean>true</boolean><key>writer_retired</key><boolean>true</boolean>'
+                '<key>id</key><uuid>'+shutdown['write_id']+'</uuid></map></llsd>')
+            self.assertEqual(cache.validate_shutdown(record,folder,requests),1)
+            with self.assertRaisesRegex(ValueError,'actual HTTP'):cache.validate_shutdown(record,folder,[])
+            original=complete.read_text();complete.write_text(original.replace('<key>writer_retired</key><boolean>true',
+                                                                            '<key>writer_retired</key><boolean>false'))
+            with self.assertRaisesRegex(ValueError,'retire'):cache.validate_shutdown(record,folder,requests)
+            complete.unlink()
+            with self.assertRaisesRegex(ValueError,'Missing'):cache.validate_shutdown(record,folder,requests)
+
+    def test_pressure_requires_real_generations_retirement_and_full_source_pixels(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder=Path(temporary)
+            full=bytearray()
+            for y in range(1023,-1,-1):
+                for x in range(1024):
+                    full.extend((255*((x//32)&1),255*((y//32)&1),255*(((x//32)+(y//32))&1),255))
+            def image(name,width,discard,data,bias):
+                (folder/name).write_bytes(data)
+                return dict(width=width,height=width,discard=discard,gpu_matches_cpu=True,
+                            gpu_rgba_file=name,gpu_rgba_sha256=hashlib.sha256(data).hexdigest(),bias=bias)
+            pressure=dict(complete=True,object_retired=True)
+            for name,bias in (('initial',1),('full_resolution_preference',4),('restored',1)):
+                pressure[name]=image(name+'.rgba',1024,0,full,bias)
+            pressure['pressure']=image('low.rgba',128,3,bytes((0,255,0,255))*128*128,4)
+            pressure['minimized']=image('mini.rgba',256,2,bytes((0,255,0,255))*256*256,4)
+            pressure['minimized']['previous_scene_images_retired']=True
+            record={'r3_pressure':pressure};cache.validate_pressure(record,folder)
+            pressure['minimized']['previous_scene_images_retired']=False
+            with self.assertRaisesRegex(ValueError,'retained'):cache.validate_pressure(record,folder)
+            pressure['minimized']['previous_scene_images_retired']=True
+            pressure['full_resolution_preference']['bias']=1
+            with self.assertRaisesRegex(ValueError,'controller'):cache.validate_pressure(record,folder)
+            pressure['full_resolution_preference']['bias']=4
+            (folder/'restored.rgba').write_bytes(full[:-1])
+            with self.assertRaisesRegex(ValueError,'Truncated'):cache.validate_pressure(record,folder)
+
     def test_gpu_artifacts_require_matching_bytes_and_confined_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
             folder=Path(temporary)/'evidence';folder.mkdir()

@@ -8,6 +8,8 @@
 #include "vsr2replay.h"
 #include "vsr3replay.h"
 #include "vsr3terrainreplay.h"
+#include "vsr3pressurereplay.h"
+#include "vsr3cachereplay.h"
 #include "vsterrainreplay.h"
 #include "vsnativereplay.h"
 #include "vsnativeimreplay.h"
@@ -528,6 +530,7 @@ struct Replay
 {
     unsigned step = 0;
     bool completionHeld = false;
+    bool shutdownPending = false;
     double completionDeadline = 0;
     unsigned textureCacheStep=0;
     LLSD textureStreaming;
@@ -892,6 +895,7 @@ struct Replay
                     gSavedSettings.setBOOL("TextureLoadFullRes",originalFullRes);
                     textureCacheStep=6;
                 }
+                if(!vs_r3_cache_restart_tick(imEvidence)) return;
                 if(imageWorkPending(vs_ui_texture_cache_evidence())) return;
             }
             if (gViewerWindow->nativeContext()->world().evidence()["objects"].asInteger()<2) return;
@@ -926,6 +930,7 @@ struct Replay
             vs_r3_local_images(imEvidence);
             if(!vs_r3_world_images(imEvidence)) return;
             if(!vs_r3_terrain_replay_tick(imEvidence)) return;
+            if(!vs_r3_pressure_replay_tick(imEvidence)) return;
             if (!vs_native_im_replay_tick(owner, imEvidence)) return;
             if (!imCaptureRequested)
             {
@@ -1280,7 +1285,16 @@ struct Replay
                 completionDeadline=LLFrameTimer::getTotalSeconds()+90;
                 std::filesystem::rename(pending,ready);
             }
+            else if(std::getenv("VS_VULKAN_REPLAY_LOCAL_IMAGES") && std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE"))
+                shutdownPending=true;
             else owner.requestLogout(true);
+        }
+        else if(step==5 && shutdownPending && vs_r3_cache_shutdown_tick(report))
+        {
+            const auto path=std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"))/"session-replay.xml";
+            std::ofstream output(path);LLSDSerialize::toPrettyXML(report,output);
+            require(output.good(),"Cannot archive pending cache shutdown evidence");
+            shutdownPending=false;owner.requestLogout(true);
         }
     }
 };
