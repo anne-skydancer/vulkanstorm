@@ -1,5 +1,5 @@
 {
-  "source_commit": "dcaf0898bb3614ce69b8de99e8d142eef5623e1e",
+  "source_commit": "19fd718f07c3e8135fa034384bcde8f1bd169149",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -632,7 +632,7 @@
       ]
     },
     "indra/newview/vsuiimageprovider.cpp": {
-      "sha256": "bfd97374d60f39b2692ea617f89e85e81982f5bd451c4459a3a2284633e5facf",
+      "sha256": "af99c681a7ceac013373ec2119877c3abb51ca16375da04225dd6829cd3de4f3",
       "anchors": [
         "VSUIImageProvider::getUIImage",
         "VSUIImageProvider::getUIImageByID"
@@ -793,7 +793,7 @@
       ]
     },
     "indra/newview/vsnativereplay.cpp": {
-      "sha256": "86dfcf052b6e1fab16d9cde0e7e7637c790f06ebbdf60b97a07d4742454d87d8",
+      "sha256": "83263889101809a524870c4e34d171b4cb1b614a24cc5a695f41fbe7909981cf",
       "anchors": [
         "vs_native_replay_tick()",
         "inspectOutgoing("
