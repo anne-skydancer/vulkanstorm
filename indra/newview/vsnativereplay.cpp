@@ -556,6 +556,7 @@ struct Replay
     F64 navigationDeadline = 0;
     LLSD report, imEvidence;
     std::set<S32> startupStages;
+    U64 startupWarningGeneration = 0;
     unsigned deniedSettings = 0, allowedSettings = 0;
     static void outgoing(LLMessageSystem* msg, void** data)
     {
@@ -677,6 +678,31 @@ struct Replay
     }
     void tick(VSNativeSession& owner)
     {
+        if (owner.phase() == VSNativeSession::Phase::Connected &&
+            LLStartUp::getStartupState() == STATE_STARTED && !gViewerWindow->getShowProgress() &&
+            startupWarningGeneration != owner.generation())
+        {
+            // The reference clothing timeout is a real modal warning. Acknowledge
+            // it as a user would before exercising unrelated cursor/menu input.
+            std::vector<LLNotificationPtr> warnings;
+            if (auto channel = LLNotifications::instance().getChannel("System"))
+                channel->forEachNotification([&warnings](LLNotificationPtr notification)
+                {
+                    if (notification->getName() == "ClothingLoading") warnings.push_back(notification);
+                });
+            const bool timedOut = owner.evidence()["startup_clothing_timed_out"].asBoolean();
+            require(warnings.size() == (timedOut ? 1u : 0u), "Startup clothing timeout and actual warning disagree");
+            for (const auto& warning : warnings)
+                warning->respond(warning->getResponseTemplate(LLNotification::WITH_DEFAULT_BUTTON));
+            LLSD acknowledgement;
+            acknowledgement["account_generation"] = ll_sd_from_U64(owner.generation());
+            acknowledgement["clothing_timed_out"] = timedOut;
+            acknowledgement["warnings_acknowledged"] = S32(warnings.size());
+            report["startup_warning_acknowledgements"].append(acknowledgement);
+            startupWarningGeneration = owner.generation();
+            // Let the ordinary frame retire modal focus/capture before input checks.
+            return;
+        }
         if (step <= 1 && owner.phase() == VSNativeSession::Phase::Connected)
         {
             const S32 state = S32(LLStartUp::getStartupState());
