@@ -16,6 +16,36 @@ from run_vulkan_texture_cache_tests import snapshot, validate_case, texture_requ
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def require_live_process(pid):
+    if type(pid) is not int or pid<=0:
+        raise ValueError('Invalid viewer process identity')
+    if os.name != 'nt':
+        os.kill(pid, 0)
+        return
+    # Windows signal-zero behavior varies across Python/CRT versions. Query a
+    # read-only process handle instead; this never sends a signal to the viewer.
+    import ctypes
+    from ctypes import wintypes
+    kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+    kernel.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD]
+    kernel.OpenProcess.restype=wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes=[wintypes.HANDLE,wintypes.DWORD]
+    kernel.WaitForSingleObject.restype=wintypes.DWORD
+    kernel.CloseHandle.argtypes=[wintypes.HANDLE]
+    kernel.CloseHandle.restype=wintypes.BOOL
+    handle=kernel.OpenProcess(0x100000,False,pid)  # SYNCHRONIZE only.
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        status=kernel.WaitForSingleObject(handle,0)
+        if status==0:
+            raise RuntimeError('Primary viewer exited during concurrent qualification')
+        if status!=258:  # WAIT_TIMEOUT means the process is still alive.
+            raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def validate_instances(primary, sibling, before, after, held):
     if held is not True:
         raise ValueError('Primary viewer was not held alive during sibling execution')
@@ -79,14 +109,14 @@ def main():
             checkpoint = read_llsd(ET.parse(ready).getroot())
             if type(checkpoint.get('process_id')) is not int or checkpoint['process_id']<=0 or checkpoint.get('second_instance') is not False:
                 raise ValueError('Invalid primary viewer marker checkpoint')
-            os.kill(checkpoint['process_id'], 0)  # A real viewer PID, not merely its launcher.
+            require_live_process(checkpoint['process_id'])
             before = snapshot(cache)
             with (run / 'sibling-launch.log').open('wb') as sibling_log:
                 sibling = subprocess.run(base + ['--evidence', str(run / 'sibling')], timeout=120,
                                          stdout=sibling_log, stderr=subprocess.STDOUT,
                                          creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
             held = primary.poll() is None and not gate.exists()
-            os.kill(checkpoint['process_id'], 0)
+            require_live_process(checkpoint['process_id'])
             after = snapshot(cache)
             gate.touch(); primary_code = primary.wait(timeout=120)
             if primary_code or sibling.returncode:
