@@ -220,4 +220,11 @@ void LLFloaterChatMentionPicker::removeParticipantSource(FSChatParticipants* sou
     if (sParticipantSource == source)
         sParticipantSource = nullptr;
 }
+
+void LLFloaterChatMentionPicker::resetAccount()
+{
+    sSessionID.setNull();
+    sParticipantSource = nullptr;
+    if (LLChatMentionHelper::instanceExists()) LLChatMentionHelper::instance().hideHelper();
+}
 // </FS:Ansariel> [FS communication UI]

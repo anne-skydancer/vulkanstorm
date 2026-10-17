@@ -1667,6 +1667,7 @@ void LLViewerWindow::handleFocus(LLWindow *window)
         gFocusMgr.setAppHasFocus(true);
         LLModalDialog::onAppFocusGained();
         if (gKeyboard) gKeyboard->resetMaskKeys();
+        gForegroundTime.unpause();
         return;
     }
     gFocusMgr.setAppHasFocus(true);
@@ -1692,6 +1693,9 @@ void LLViewerWindow::handleFocusLost(LLWindow *window)
     if (mNativeVulkan)
     {
         gFocusMgr.setAppHasFocus(false);
+        if (gMenuBarView) gMenuBarView->resetMenuTrigger();
+        if (gLoginMenuBarView) gLoginMenuBarView->resetMenuTrigger();
+        gForegroundTime.pause();
         mNativeCameraDrag = false;
 #if VS_NATIVE_VULKAN
         if (auto owner = VSNativeSession::active()) owner->releaseMovement();
@@ -1736,28 +1740,6 @@ void LLViewerWindow::handleFocusLost(LLWindow *window)
 
 bool LLViewerWindow::handleTranslatedKeyDown(KEY key,  MASK mask, bool repeated)
 {
-    if (mNativeVulkan)
-    {
-        if (key == KEY_RETURN && mask == MASK_NONE)
-        {
-            auto* focus = gFocusMgr.getKeyboardFocus();
-            if (focus && !focus->wantsReturnKey()) return false;
-        }
-        auto* focus = gFocusMgr.getKeyboardFocus();
-#if VS_NATIVE_VULKAN
-        if (focus)
-            if (auto owner = VSNativeSession::active()) owner->releaseMovement();
-#endif
-        if (focus && focus->handleKey(key, mask, false)) return true;
-        if (gLoginMenuBarView && gLoginMenuBarView->handleAcceleratorKey(key, mask)) return true;
-        if (mRootView && mRootView->handleKey(key, mask, true)) return true;
-#if VS_NATIVE_VULKAN
-        if (!focus && !gFocusMgr.getKeystrokesOnly())
-            if (auto owner = VSNativeSession::active())
-                return owner->movementAction(key, gViewerInput.nativeBindingAction(key, mask, owner->cameraState().firstPerson), true, repeated);
-#endif
-        return false;
-    }
     // Handle non-consuming global keybindings, like voice
     // Never affects event processing.
     gViewerInput.handleGlobalBindsKeyDown(key, mask);
@@ -1784,20 +1766,18 @@ bool LLViewerWindow::handleTranslatedKeyDown(KEY key,  MASK mask, bool repeated)
             return false;
     }
 
-    // remaps, handles ignored cases and returns back to viewer window.
+    // UI ownership is recorded by the shared dispatcher. Configured world
+    // actions run during scanKeyboard, with their original DOWN/LEVEL/UP semantics.
     return gViewerInput.handleKey(key, mask, repeated);
 }
 
 bool LLViewerWindow::handleTranslatedKeyUp(KEY key,  MASK mask)
 {
-    if (mNativeVulkan)
-    {
-        auto* focus = gFocusMgr.getKeyboardFocus();
-        return focus && focus->handleKeyUp(key, mask, false);
-    }
     // Handle non-consuming global keybindings, like voice
     // Never affects event processing.
     gViewerInput.handleGlobalBindsKeyUp(key, mask);
+
+    if (mNativeVulkan) return gViewerInput.handleKeyUp(key, mask);
 
     // Let the inspect tool code check for ALT key to set LLToolSelectRect active instead LLToolCamera
     LLToolCompInspect * tool_inspectp = LLToolCompInspect::getInstance();
@@ -1811,8 +1791,7 @@ bool LLViewerWindow::handleTranslatedKeyUp(KEY key,  MASK mask)
 
 void LLViewerWindow::handleScanKey(KEY key, bool key_down, bool key_up, bool key_level)
 {
-    if (mNativeVulkan) return;
-    LLViewerJoystick::getInstance()->setCameraNeedsUpdate(true);
+    if (!mNativeVulkan) LLViewerJoystick::getInstance()->setCameraNeedsUpdate(true);
     gViewerInput.scanKey(key, key_down, key_up, key_level);
     return; // Be clear this function returns nothing
 }
@@ -3346,9 +3325,10 @@ void LLViewerWindow::setTitle(const std::string& win_title)
 // Takes a single keyup event, usually when UI is visible
 bool LLViewerWindow::handleKeyUp(KEY key, MASK mask)
 {
+    bool nativeReleased = false;
 #if VS_NATIVE_VULKAN
     if (mNativeVulkan)
-        if (auto owner = VSNativeSession::active(); owner && owner->movementAction(key, {}, false)) return true;
+        if (const auto owner = VSNativeSession::active()) nativeReleased = owner->movementAction(key, {}, false);
 #endif
 
     if (LLSetKeyBindDialog::recordKey(key, mask, false))
@@ -3399,7 +3379,7 @@ bool LLViewerWindow::handleKeyUp(KEY key, MASK mask)
     //Old format gestures do not support this, so no need to implement it.
 
     // don't pass keys on to world when something in ui has focus
-    return gFocusMgr.childHasKeyboardFocus(mRootView)
+    return nativeReleased || gFocusMgr.childHasKeyboardFocus(mRootView)
         || LLMenuGL::getKeyboardMode()
         || (gMenuBarView && gMenuBarView->getHighlightedItem() && gMenuBarView->getHighlightedItem()->isActive());
 }
@@ -3419,6 +3399,15 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
         return true;
     }
 
+    bool keyboardAgentReady = gAgent.isInitialized() &&
+        (gAgent.getTeleportState() == LLAgent::TELEPORT_NONE || gAgent.getTeleportState() == LLAgent::TELEPORT_LOCAL);
+#if VS_NATIVE_VULKAN
+    if (mNativeVulkan)
+    {
+        const auto owner = VSNativeSession::active();
+        keyboardAgentReady = owner && owner->regionReady();
+    }
+#endif
     LLFocusableElement* keyboard_focus = gFocusMgr.getKeyboardFocus();
 
     if (keyboard_focus
@@ -3443,9 +3432,9 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
             // of character handling.
             // Alt Gr can be additionally modified by Shift
             const MASK alt_gr = MASK_CONTROL | MASK_ALT;
-            LLWindowWin32 *window = static_cast<LLWindowWin32*>(mWindow);
-            U32 raw_key = window->getRawWParam();
-            if ((mask & alt_gr) != 0
+            LLWindowWin32 *window = dynamic_cast<LLWindowWin32*>(mWindow);
+            U32 raw_key = window ? window->getRawWParam() : 0;
+            if (window && (mask & alt_gr) != 0
                 && ((raw_key >= 0x30 && raw_key <= 0x5A) //0-9, plus normal chartacters
                     || (raw_key >= 0xBA && raw_key <= 0xE4)) // Misc/OEM characters that can be covered by AltGr, ex: -, =, ~
                 && (GetKeyState(VK_RMENU) & 0x8000) != 0
@@ -3519,8 +3508,7 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
             return true;
         }
 
-        if (gAgent.isInitialized()
-            && (gAgent.getTeleportState() == LLAgent::TELEPORT_NONE || gAgent.getTeleportState() == LLAgent::TELEPORT_LOCAL)
+        if (keyboardAgentReady
             && gMenuBarView
             && gMenuBarView->handleAcceleratorKey(key, mask))
         {
@@ -3641,7 +3629,7 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
         }
     }
 
-    if( LLToolMgr::getInstance()->getCurrentTool()->handleKey(key, mask) )
+    if (!mNativeVulkan && LLToolMgr::getInstance()->getCurrentTool()->handleKey(key, mask))
     {
         LL_DEBUGS() << "LLviewerWindow::handleKey toolbar handling?" << LL_ENDL;
         LLViewerEventRecorder::instance().logKeyEvent(key,mask);
@@ -3718,8 +3706,7 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
     // </FS:Ansariel> [FS Communication UI]
 
     // give menus a chance to handle unmodified accelerator keys
-    if (gAgent.isInitialized()
-        && (gAgent.getTeleportState() == LLAgent::TELEPORT_NONE || gAgent.getTeleportState() == LLAgent::TELEPORT_LOCAL)
+    if (keyboardAgentReady
         && gMenuBarView
         && gMenuBarView->handleAcceleratorKey(key, mask))
     {
@@ -3741,19 +3728,6 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
 
 bool LLViewerWindow::handleUnicodeChar(llwchar uni_char, MASK mask)
 {
-    if (mNativeVulkan)
-    {
-        auto* focus = gFocusMgr.getKeyboardFocus();
-        // Text controls defer Return until the character event, just as on the
-        // GL route, so preceding queued text is committed before submission.
-        if (((uni_char == 13 && mask != MASK_CONTROL) || (uni_char == 3 && mask == MASK_NONE)) && mask != MASK_ALT)
-        {
-            if (focus && focus->wantsReturnKey()) return true; // Already handled on keydown.
-            if (focus && focus->handleKey(KEY_RETURN, mask, false)) return true;
-            return mRootView && mRootView->handleKey(KEY_RETURN, mask, true);
-        }
-        return focus && focus->handleUnicodeChar(uni_char, false);
-    }
     // HACK:  We delay processing of return keys until they arrive as a Unicode char,
     // so that if you're typing chat text at low frame rate, we don't send the chat
     // until all keystrokes have been entered. JC

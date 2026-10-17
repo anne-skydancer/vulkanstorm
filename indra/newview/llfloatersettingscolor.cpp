@@ -68,7 +68,8 @@ bool LLFloaterSettingsColor::postBuild()
 
     updateList();
 
-    gSavedSettings.getControl("ColorSettingsHideDefault")->getCommitSignal()->connect(boost::bind(&LLFloaterSettingsColor::updateList, this, false));
+    mHideDefaultsConnection = gSavedSettings.getControl("ColorSettingsHideDefault")->getCommitSignal()->connect(
+        boost::bind(&LLFloaterSettingsColor::updateList, this, false));
 
     return LLFloater::postBuild();
 }

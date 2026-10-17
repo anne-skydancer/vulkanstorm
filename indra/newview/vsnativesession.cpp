@@ -1,6 +1,7 @@
 // Native CPU session and nearby transport. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "llagentcamera.h"
+#include "llviewerinput.h"
 #include "llfloatercamera.h"
 #include "lljoystickbutton.h"
 #include "lleventnotifier.h"
@@ -1059,7 +1060,12 @@ bool VSNativeSession::movementAction(U32 key, const std::string& action, bool do
     if (handled) mAgentUpdateTime = 0;
     return handled;
 }
-void VSNativeSession::releaseMovement() { mCamera.release(); mAgentUpdateTime = 0; }
+void VSNativeSession::releaseMovement()
+{
+    mCamera.release();
+    gViewerInput.resetNativeKeys();
+    mAgentUpdateTime = 0;
+}
 bool VSNativeSession::canFly() const
 {
     if (!regionReady() || !mParcelPermissionsKnown || (mFlags & REGION_FLAGS_BLOCK_FLY)) return false;
@@ -1110,6 +1116,12 @@ void VSNativeSession::cameraResetRoll() { mCamera.resetRoll(); mAgentUpdateTime 
 void VSNativeSession::cameraFirstPerson(bool first) { mCamera.setFirstPerson(first); mAgentUpdateTime = 0; }
 void VSNativeSession::cameraControls(F32 dt)
 {
+    if (std::isfinite(dt) && dt > 0)
+    {
+        const F32 elapsed = std::min(dt, .1f);
+        if (!gAgent.rotateGrabbed()) mCamera.turnBody(gAgentCamera.getYawKey() * elapsed * 1.57079632679f);
+        mCamera.orbit(0, -gAgentCamera.getPitchKey() * elapsed * 1.57079632679f);
+    }
     mCamera.controls(dt, gAgentCamera.getOrbitLeftKey() - gAgentCamera.getOrbitRightKey(),
         gAgentCamera.getOrbitUpKey() - gAgentCamera.getOrbitDownKey(),
         gAgentCamera.getOrbitInKey() - gAgentCamera.getOrbitOutKey(),
@@ -1122,6 +1134,7 @@ void VSNativeSession::cameraControls(F32 dt)
     // and camera mode selection. Do this before consuming the held UI keys.
     LLFloaterCamera::updateNativeControls();
     // Floater held callbacks republish intent each frame, exactly as in updateCamera.
+    gAgentCamera.clearGeneralKeys();
     gAgentCamera.clearOrbitKeys();
     gAgentCamera.clearPanKeys();
 }

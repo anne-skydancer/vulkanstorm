@@ -1,4 +1,4 @@
-// Required native login/progress/alert controls; optional viewer UI remains gated. LGPL-2.1.
+// Shared UI construction with reviewed native service ownership. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "ao.h"
 #include "llfloaterinventorysettings.h"
@@ -61,6 +61,19 @@
 #include "llfloateravatarpicker.h"
 #include "llfloatergroups.h"
 #include "llpanelemojicomplete.h"
+#include "llfloaterchatmentionpicker.h"
+#include "llfloaterwindowsize.h"
+#include "fsfloaterprotectedfolders.h"
+#include "fsfloaterstreamtitle.h"
+#include "llfloaterpreviewtrash.h"
+#include "llfloaternewfeaturenotification.h"
+#include "fsfloaterwhitelisthelper.h"
+#include "llfloatersettingscolor.h"
+#include "fsfloatersplashscreensettings.h"
+#include "fsfloatervolumecontrols.h"
+#include "llfloaterfonttest.h"
+#include "llfloaterhud.h"
+#include "rlvfloaters.h"
 #include "fsfloatergroup.h"
 #include "fsfloatergrouptitles.h"
 #include "vsgroupsearch.h"
@@ -221,7 +234,17 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
     return std::make_unique<VSUIAdmission>(
         [](const std::type_info& t)
         {
-            const bool admitted = t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
+            const bool admitted =
+                // These existing controllers use shared UI, local settings,
+                // account inventory or the already-owned browser/audio service.
+                t == typeid(LLFloaterWindowSize) || t == typeid(FSFloaterProtectedFolders) ||
+                t == typeid(FSFloaterStreamTitle) || t == typeid(FSFloaterStreamTitleHistory) ||
+                t == typeid(LLFloaterChatMentionPicker) || t == typeid(LLFloaterEmojiComplete) ||
+                t == typeid(LLFloaterPreviewTrash) || t == typeid(LLFloaterNewFeatureNotification) ||
+                t == typeid(FSFloaterWhiteListHelper) || t == typeid(LLFloaterSettingsColor) ||
+                t == typeid(FSFloaterSplashScreenSettings) || t == typeid(FSFloaterVolumeControls) ||
+                t == typeid(LLFloaterFontTest) || t == typeid(LLFloaterHUD) || t == typeid(RlvFloaterStrings) ||
+                t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
                 t == typeid(LLPanelMainInventory) || LLPanelMainInventory::isNativeInternalType(t) ||
                 t == typeid(LLPanelMarketplaceInbox) || t == typeid(LLInboxInventoryPanel) ||
                 t == typeid(LLInboxFolderViewFolder) || t == typeid(LLInboxFolderViewItem) || t == typeid(LLInventoryGallery) || t == typeid(LLInventoryGalleryItem) ||
@@ -327,7 +350,12 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             if (!admitted) LL_WARNS("NativeUI") << "Rejected native widget type: " << t.name() << LL_ENDL;
             return admitted;
         },
-        [](std::string_view name) { return name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
+        [](std::string_view name) { return
+            name == "window_size" || name == "fs_protectedfolders" || name == "fs_streamtitle" || name == "fs_streamtitlehistory" ||
+            name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
+            name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||
+            name == "font_test" || name == "hud" || name == "rlv_strings" ||
+            name == "settings_debug" || name == "help_browser" || name == "guidebook" || name == "inventory_settings" || name == "marketplace_listings" || name == "associate_listing" ||
             name == "marketplace_validation" || name == "linkreplace" || name == "emoji_picker" || name == "event" || name == "experiences" || name == "experience_profile" || name == "experience_search" || name == "marketplace" || name == "grid_status" || name == "destinations" || name == "fs_teleporthistory" || name == "stats" || name == "lagmeter" || name == "inspect_remote_object" || name == "web_content" || name == "search_replace" || name == "fs_nearby_chat" || name == "people" || name == "search" || name == "toybox" || name == "inventory" || name == "secondary_inventory" || name == "sl_about" || name == "message_critical" || name == "message_tos" ||
             name == "fs_impanel" || name == "fs_im_container" || name == "imcontacts" || name == "avatar_picker" ||
             name == "fs_blocklist" || name == "fs_add_contact" || name == "fs_contact_set_config" ||

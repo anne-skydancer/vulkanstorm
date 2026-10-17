@@ -61,6 +61,7 @@ public:
 
     std::string getCurrentStreamTitle() const noexcept { return mCurrentStreamTitle; }
     const history_vec_t& getStreamTitleHistory() const noexcept { return mStreamTitleHistory; }
+    void resetAccount();
 
 protected:
     void initSingleton() override;

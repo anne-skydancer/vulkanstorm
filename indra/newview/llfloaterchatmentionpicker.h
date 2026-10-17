@@ -48,6 +48,7 @@ public:
     // <FS:Ansariel> [FS communication UI]
     static void updateParticipantSource(FSChatParticipants* source);
     static void removeParticipantSource(FSChatParticipants* source);
+    static void resetAccount();
 
 private:
 

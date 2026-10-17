@@ -1,4 +1,4 @@
-"""Compile actual chat key handlers and native routing; no graphics/audio device."""
+"""Compile actual chat key handlers; shared window dispatch is qualified by viewer replay; no graphics/audio device."""
 from pathlib import Path
 import shutil
 import subprocess
@@ -13,9 +13,11 @@ class ChatKeyboardRoutingTest(unittest.TestCase):
         body = chat.split('bool LLChatEntry::handleSpecialKey(const KEY key, const MASK mask)', 1)[1].split('void LLChatEntry::enableSingleLineMode', 1)[0]
         editor = (root / 'indra/llui/lltexteditor.cpp').read_text().split('bool LLTextEditor::handleSpecialKey', 1)[1]
         backspace = editor.split('    case KEY_BACKSPACE:', 1)[1].split('    case KEY_DELETE:', 1)[0]
-        window = (root / 'indra/newview/llviewerwindow.cpp').read_text().split('bool LLViewerWindow::handleTranslatedKeyDown', 1)[1]
-        route = window.split('    if (mNativeVulkan)\n    {', 1)[1].split('    // Handle non-consuming', 1)[0]
-        route = route.rsplit('    }', 1)[0]
+        window = (root / 'indra/newview/llviewerwindow.cpp').read_text()
+        # The shared dispatcher owns focused controls on both backends now.
+        route = 'return gFocusMgr.entry->handleKey(key,mask,false);'
+        self.assertIn('return gViewerInput.handleKey(key, mask, repeated);', window)
+        self.assertNotIn('if (handled) { owner->releaseMovement(); return true; }', window)
         fixture = r"""#include <cassert>
 #include <vector>
 #include <string>

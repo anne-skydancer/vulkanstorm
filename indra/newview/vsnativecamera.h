@@ -77,6 +77,8 @@ public:
         mHeld[token] = name; return true;
     }
     bool firstPerson() const { return mDistance <= .05f; }
+    void turnBody(F32 angle)
+    { if (std::isfinite(angle)) { mBodyYaw = wrap(mBodyYaw + angle); orbit(angle, 0); } }
     void orbit(F32 yaw, F32 pitch)
     {
         if (std::isfinite(yaw) && std::isfinite(pitch))

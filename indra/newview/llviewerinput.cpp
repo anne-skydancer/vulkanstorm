@@ -39,6 +39,7 @@
 #include "lllineeditor.h"
 // </FS:Ansariel> [FS Communication UI]
 #include "llfocusmgr.h"
+#include "llmenugl.h"
 #include "llkeybind.h" // LLKeyData
 #include "llmorphview.h"
 #include "llmoveview.h"
@@ -54,6 +55,7 @@
 #include "llfloaterwebcontent.h"
 #include "fsfloatersearch.h"
 #include "llvoiceclient.h"
+#include "vsnativesession.h"
 
 //
 // Constants
@@ -128,7 +130,7 @@ bool agent_push_down( EKeystate s )
     if( KEYSTATE_UP == s  ) return true;
     // <FS:Ansariel> Chalice Yao's crouch toggle
     //gAgent.moveUp(-1);
-    else if (KEYSTATE_DOWN == s && !gAgent.getFlying() && !gAgentAvatarp->isSitting() && gSavedPerAccountSettings.getBOOL("FSCrouchToggle"))
+    else if (KEYSTATE_DOWN == s && !gAgent.getFlying() && !gAgent.isSitting() && gSavedPerAccountSettings.getBOOL("FSCrouchToggle"))
     {
         if (gSavedPerAccountSettings.getBOOL("FSCrouchToggleStatus"))
         {
@@ -241,7 +243,7 @@ bool agent_push_backward( EKeystate s )
     {
         camera_move_backward(s);
     }
-    else if (!gAgent.backwardGrabbed() && gAgentAvatarp->isSitting() && gSavedSettings.getBOOL("LeaveMouselook"))
+    else if (!gAgent.backwardGrabbed() && gAgent.isSitting() && gSavedSettings.getBOOL("LeaveMouselook"))
     {
         gAgentCamera.changeCameraToThirdPerson();
     }
@@ -298,7 +300,7 @@ bool agent_turn_left(EKeystate s)
 
     if(gAgent.isMovementLocked()) return false;
 
-    if (LLToolCamera::getInstance()->mouseSteerMode())
+    if (!VSNativeSession::active() && LLToolCamera::getInstance()->mouseSteerMode())
     {
         agent_slide_left(s);
     }
@@ -329,7 +331,7 @@ bool agent_turn_right( EKeystate s )
 
     if(gAgent.isMovementLocked()) return false;
 
-    if (LLToolCamera::getInstance()->mouseSteerMode())
+    if (!VSNativeSession::active() && LLToolCamera::getInstance()->mouseSteerMode())
     {
         agent_slide_right(s);
     }
@@ -624,7 +626,7 @@ bool camera_move_backward_fast( EKeystate s )
 bool edit_avatar_spin_ccw( EKeystate s )
 {
     if( KEYSTATE_UP == s  ) return true;
-    gMorphView->setCameraDrivenByKeys( true );
+    if (gMorphView) gMorphView->setCameraDrivenByKeys(true);
     gAgentCamera.setOrbitLeftKey( get_orbit_rate() );
     //gMorphView->orbitLeft( get_orbit_rate() );
     return true;
@@ -634,7 +636,7 @@ bool edit_avatar_spin_ccw( EKeystate s )
 bool edit_avatar_spin_cw( EKeystate s )
 {
     if( KEYSTATE_UP == s  ) return true;
-    gMorphView->setCameraDrivenByKeys( true );
+    if (gMorphView) gMorphView->setCameraDrivenByKeys(true);
     gAgentCamera.setOrbitRightKey( get_orbit_rate() );
     //gMorphView->orbitRight( get_orbit_rate() );
     return true;
@@ -643,7 +645,7 @@ bool edit_avatar_spin_cw( EKeystate s )
 bool edit_avatar_spin_over( EKeystate s )
 {
     if( KEYSTATE_UP == s  ) return true;
-    gMorphView->setCameraDrivenByKeys( true );
+    if (gMorphView) gMorphView->setCameraDrivenByKeys(true);
     gAgentCamera.setOrbitUpKey( get_orbit_rate() );
     //gMorphView->orbitUp( get_orbit_rate() );
     return true;
@@ -653,7 +655,7 @@ bool edit_avatar_spin_over( EKeystate s )
 bool edit_avatar_spin_under( EKeystate s )
 {
     if( KEYSTATE_UP == s  ) return true;
-    gMorphView->setCameraDrivenByKeys( true );
+    if (gMorphView) gMorphView->setCameraDrivenByKeys(true);
     gAgentCamera.setOrbitDownKey( get_orbit_rate() );
     //gMorphView->orbitDown( get_orbit_rate() );
     return true;
@@ -662,7 +664,7 @@ bool edit_avatar_spin_under( EKeystate s )
 bool edit_avatar_move_forward( EKeystate s )
 {
     if( KEYSTATE_UP == s  ) return true;
-    gMorphView->setCameraDrivenByKeys( true );
+    if (gMorphView) gMorphView->setCameraDrivenByKeys(true);
     gAgentCamera.setOrbitInKey( get_orbit_rate() );
     //gMorphView->orbitIn();
     return true;
@@ -672,7 +674,7 @@ bool edit_avatar_move_forward( EKeystate s )
 bool edit_avatar_move_backward( EKeystate s )
 {
     if( KEYSTATE_UP == s  ) return true;
-    gMorphView->setCameraDrivenByKeys( true );
+    if (gMorphView) gMorphView->setCameraDrivenByKeys(true);
     gAgentCamera.setOrbitOutKey( get_orbit_rate() );
     //gMorphView->orbitOut();
     return true;
@@ -1644,17 +1646,6 @@ S32 LLViewerInput::loadBindingMode(const LLViewerInput::KeyMode& keymode, S32 mo
     return binding_count;
 }
 
-std::string LLViewerInput::nativeBindingAction(KEY key, MASK mask, bool first_person) const
-{
-    const auto mode = first_person ? MODE_FIRST_PERSON : MODE_THIRD_PERSON;
-    const auto remap = mRemapKeys[mode].find((mask << 16) | key);
-    if (remap != mRemapKeys[mode].end()) { key = remap->second & 0xff; mask = remap->second >> 16; }
-    // Read configured binding names; never invoke the legacy agent/camera callbacks.
-    for (const auto& binding : mKeyBindings[mode])
-        if (binding.mKey == key && binding.mMask == mask) return binding.mFunctionName;
-    return {};
-}
-
 EKeyboardMode LLViewerInput::getMode() const
 {
     if ( gAgentCamera.cameraMouselook() )
@@ -1665,7 +1656,7 @@ EKeyboardMode LLViewerInput::getMode() const
     {
         return MODE_EDIT_AVATAR;
     }
-    else if (isAgentAvatarValid() && gAgentAvatarp->isSitting())
+    else if (gAgent.isSitting())
     {
         return MODE_SITTING;
     }
@@ -1716,9 +1707,98 @@ bool LLViewerInput::scanKey(const std::vector<LLKeyboardBinding> &binding,
     return false;
 }
 
+void LLViewerInput::resetNativeKeys() const
+{
+    mNativeHeldBindings.clear();
+    mNativeKeyFocus = nullptr;
+    // Cancel only transient locomotion intent. Preserve fly/away/mouselook,
+    // click edges and deliberate pending stand/sit/animation transactions.
+    gAgent.clearControlFlags(AGENT_CONTROL_AT_POS | AGENT_CONTROL_AT_NEG |
+        AGENT_CONTROL_LEFT_POS | AGENT_CONTROL_LEFT_NEG | AGENT_CONTROL_UP_POS | AGENT_CONTROL_UP_NEG |
+        AGENT_CONTROL_PITCH_POS | AGENT_CONTROL_PITCH_NEG | AGENT_CONTROL_YAW_POS | AGENT_CONTROL_YAW_NEG |
+        AGENT_CONTROL_FAST_AT | AGENT_CONTROL_FAST_LEFT | AGENT_CONTROL_FAST_UP |
+        AGENT_CONTROL_NUDGE_AT_POS | AGENT_CONTROL_NUDGE_AT_NEG |
+        AGENT_CONTROL_NUDGE_LEFT_POS | AGENT_CONTROL_NUDGE_LEFT_NEG |
+        AGENT_CONTROL_NUDGE_UP_POS | AGENT_CONTROL_NUDGE_UP_NEG |
+        AGENT_CONTROL_TURN_LEFT | AGENT_CONTROL_TURN_RIGHT);
+    gAgentCamera.clearGeneralKeys();
+    gAgentCamera.clearOrbitKeys();
+    gAgentCamera.clearPanKeys();
+    if (gAgent.getTempRun()) gAgent.clearTempRun();
+}
+
 // Called from scanKeyboard.
 bool LLViewerInput::scanKey(KEY key, bool key_down, bool key_up, bool key_level) const
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow->isNativeVulkan())
+    {
+        const auto owner = VSNativeSession::active();
+        if (!owner || !owner->regionReady() || LLApp::isExiting())
+        {
+            mNativeHeldBindings.clear();
+            return false;
+        }
+        if (!mNativeHeldBindings.empty() &&
+            (mNativeKeyFocus != gFocusMgr.getKeyboardFocus() || gFocusMgr.focusLocked() || LLMenuGL::getKeyboardMode()))
+        {
+            resetNativeKeys();
+            return false;
+        }
+        // Retain the actual selected callback until release. Modifier changes,
+        // camera mode changes and binding edits cannot strand temporary actions.
+        auto held = mNativeHeldBindings.find(key);
+        if (key_up && held != mNativeHeldBindings.end())
+        {
+            const auto binding = held->second;
+            mNativeHeldBindings.erase(held);
+            return binding.mFunction(KEYSTATE_UP);
+        }
+        MASK mask = gKeyboard->currentMask(false);
+        KEY translated = key;
+        const auto mode = getMode();
+        const auto remap = mRemapKeys[mode].find((mask << 16) | key);
+        if (remap != mRemapKeys[mode].end())
+        {
+            translated = remap->second & 0xff;
+            mask = remap->second >> 16;
+        }
+        if (mKeyHandledByUI[translated])
+        {
+            if (held != mNativeHeldBindings.end())
+            {
+                const auto binding = held->second;
+                mNativeHeldBindings.erase(held);
+                // Cancel held movement on focus takeover without firing the
+                // release-only gesture shortcut into a newly focused editor.
+                if (binding.mFunctionName != "start_gesture") binding.mFunction(KEYSTATE_UP);
+            }
+            return false;
+        }
+        if (held != mNativeHeldBindings.end())
+        {
+            const auto callback = held->second.mFunction;
+            return key_level ? callback(KEYSTATE_LEVEL) : false;
+        }
+        if (!key_down || gKeyboard->getKeyRepeated(key)) return false;
+        for (const auto& binding : mKeyBindings[mode])
+        {
+            if (binding.mKey != translated || (binding.mMask & mask) != binding.mMask) continue;
+            mNativeKeyFocus = gFocusMgr.getKeyboardFocus();
+            mNativeHeldBindings.emplace(key, binding);
+            const bool handled = binding.mFunction(KEYSTATE_DOWN);
+            // A quick press/release can arrive within one low-FPS frame.
+            if (key_up)
+            {
+                mNativeHeldBindings.erase(key);
+                return binding.mFunction(KEYSTATE_UP) || handled;
+            }
+            return handled;
+        }
+        return false;
+    }
+#endif
+
     if (LLApp::isExiting())
     {
         return false;

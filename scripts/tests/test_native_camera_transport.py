@@ -50,6 +50,7 @@ struct Agent{LLVector3 position;U32 flags=0;bool flying=false;
  U32 getControlFlags(){return flags;}void resetControlFlags(){flags=0;}}gAgent;
 struct AgentCamera{LLVector3 offset{0,0,-.2f},focus{1,0,.2f};float scale=.75f;
  LLVector3 getCameraOffsetInitial(){return offset;}LLVector3 getFocusOffsetInitial(){return focus;}float getCameraOffsetScale(){return scale;}}gAgentCamera;
+struct ViewerInput{void resetNativeKeys(){}}gViewerInput;
 struct Settings{float getF32(const char*){return 128;}}gSavedSettings;
 template<class T>T llclamp(T v,T a,T b){return std::clamp(v,a,b);}
 struct LLMessageSystem{
@@ -66,50 +67,6 @@ struct LLMessageSystem{
 
 
 class NativeCameraTransportTests(unittest.TestCase):
-    def test_actual_configured_binding_lookup_without_legacy_callbacks(self):
-        source = (ROOT / 'indra/newview/llviewerinput.cpp').read_text()
-        lookup = method(source, 'std::string LLViewerInput::nativeBindingAction(')
-        fixture = r'''
-#include <cassert>
-#include <map>
-#include <vector>
-#include <string>
-using KEY=unsigned;using MASK=unsigned;
-enum{MODE_FIRST_PERSON,MODE_THIRD_PERSON,MODE_COUNT};
-struct Binding{KEY mKey;MASK mMask;std::string mFunctionName;};
-struct LLViewerInput{
- std::map<unsigned,unsigned> mRemapKeys[MODE_COUNT];std::vector<Binding> mKeyBindings[MODE_COUNT];
- std::string nativeBindingAction(KEY,MASK,bool)const;
-};
-LOOKUP
-int main(){
- LLViewerInput input;
- input.mKeyBindings[MODE_THIRD_PERSON]={{'A',0,"turn_left"},{'A',1,"slide_left"},{'A',2,"spin_around_cw"}};
- input.mKeyBindings[MODE_FIRST_PERSON]={{'A',0,"slide_left"}};
- assert(input.nativeBindingAction('A',0,false)=="turn_left");
- assert(input.nativeBindingAction('A',1,false)=="slide_left");
- assert(input.nativeBindingAction('A',2,false)=="spin_around_cw");
- assert(input.nativeBindingAction('A',3,false).empty());
- assert(input.nativeBindingAction('A',0,true)=="slide_left");
- input.mRemapKeys[MODE_THIRD_PERSON][(4<<16)|'Z']=(1<<16)|'A';
- assert(input.nativeBindingAction('Z',4,false)=="slide_left");
- assert(input.nativeBindingAction('Z',4,true).empty());
- // Settings updates must take effect rather than using a hard-coded key table.
- input.mKeyBindings[MODE_THIRD_PERSON][0].mFunctionName="push_forward";
- assert(input.nativeBindingAction('A',0,false)=="push_forward");
-}
-'''.replace('LOOKUP', lookup)
-        compiler = shutil.which('clang++') or shutil.which('g++')
-        self.assertIsNotNone(compiler)
-        with tempfile.TemporaryDirectory() as directory:
-            cpp = Path(directory) / 'configured_input.cpp'
-            exe = cpp.with_suffix('.exe')
-            cpp.write_text(fixture)
-            built = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(exe)], capture_output=True, text=True)
-            self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
-            ran = subprocess.run([str(exe)], capture_output=True, text=True)
-            self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
-
     def test_actual_camera_controls_and_wire_producer(self):
         header = (ROOT / 'indra/newview/vsnativecamera.h').read_text()
         header = re.sub(r'^#(?:include|pragma).*$', '', header, flags=re.M)
@@ -210,9 +167,12 @@ int main(){
 
     def test_production_input_prioritizes_ui_and_resets_lifetime(self):
         viewer = (ROOT / 'indra/newview/llviewerwindow.cpp').read_text()
-        key = method(viewer, 'bool LLViewerWindow::handleTranslatedKeyDown(').split('// Handle non-consuming', 1)[0]
-        self.assertLess(key.index('focus->handleKey'), key.index('owner->movementAction'))
-        self.assertIn('if (!focus && !gFocusMgr.getKeystrokesOnly())', key)
+        key = method(viewer, 'bool LLViewerWindow::handleTranslatedKeyDown(')
+        self.assertIn('return gViewerInput.handleKey(key, mask, repeated)', key)
+        self.assertNotIn('owner->movementAction', key)
+        scan = method(viewer, 'void LLViewerWindow::handleScanKey(')
+        self.assertIn('gViewerInput.scanKey(key, key_down, key_up, key_level)', scan)
+        self.assertNotIn('if (mNativeVulkan) return', scan)
         self.assertIn('releaseMovement()', method(viewer, 'void LLViewerWindow::handleFocusLost('))
         session = (ROOT / 'indra/newview/vsnativesession.cpp').read_text()
         self.assertIn('mCamera.reset()', method(session, 'void VSNativeSession::reset()'))

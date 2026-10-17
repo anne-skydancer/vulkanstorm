@@ -1699,6 +1699,7 @@ bool LLAppViewer::frameNativeVulkanLogin()
     LLDirPickerThread::clearDead();
     gViewerWindow->getWindow()->processMiscNativeEvents();
     gViewerWindow->getWindow()->gatherInput();
+    if (gKeyboard) gKeyboard->scanKeyboard();
     LLEventPumps::instance().obtain("mainloop").post(LLSD());
     llcoro::suspend();
     LLCoros::instance().rethrow();
