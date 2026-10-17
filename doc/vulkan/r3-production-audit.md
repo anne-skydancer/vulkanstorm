@@ -530,3 +530,26 @@ texture demand every visible frame and accepts replacement texture generations
 without rebuilding an unchanged mesh; it no longer requests its texture as a
 full-resolution UI image. Focused regressions and viewer compilation pass;
 canonical runtime qualification of these additional world paths is pending.
+
+The source-qualified `4561ab9138` viewer passed the combined R2 and R3 replay in
+77.7 seconds, including vegetation, attachment/HUD visibility and the actual
+distance-culling image ownership exercise.
+
+## Actual concurrent cache ownership
+
+Qualification now adds two real headless viewer processes sharing a dedicated,
+credential-free profile and the same seeded texture cache. The primary completes
+its ordinary replay but retains its real APR execution-marker lock behind a
+bounded diagnostic completion gate. The sibling must detect the other instance
+through ordinary startup, open the texture cache read-only, publish identical
+GPU pixels from disk without texture network traffic, and leave the cache files
+unchanged while the primary remains alive. No read-only override is passed.
+Releasing the gate lets the primary perform its ordinary shutdown.
+
+Shared profiles are accepted only as dedicated evidence siblings containing the
+replay ownership marker; ordinary user profiles are rejected. Both viewers remain
+headless. The gate is limited to 90 seconds and the existing process deadlines
+remain decisive. The dedicated CI archives both executions, identities, cache
+hash witnesses and image readbacks, and rejects missing or mismatched evidence.
+Ownership/evidence/profile regressions and viewer compilation pass. Actual
+concurrent runtime acceptance remains pending the canonical rebuild.

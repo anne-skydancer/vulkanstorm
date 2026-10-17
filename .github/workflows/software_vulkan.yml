@@ -89,6 +89,7 @@ jobs:
       - run: python scripts/tests/test_native_gltf_image_lifecycle.py
       - run: python scripts/tests/test_native_local_images.py
       - run: python scripts/tests/test_native_image_eviction.py
+      - run: python scripts/tests/test_vulkan_texture_cache_instances.py
       - run: python scripts/tests/test_vulkan_local_image_evidence.py
       - run: python scripts/tests/test_vulkan_texture_cache_evidence.py
       - run: python scripts/vulkan_parity_inventory.py
@@ -408,6 +409,10 @@ jobs:
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence \
             "${manifest_args[@]}"
+          python scripts/run_vulkan_texture_cache_instances.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --cache-evidence .ci/r3-texture-cache-evidence \
+            --evidence .ci/r3-texture-cache-instances "${manifest_args[@]}"
       - name: Record source and build environment
         if: always()
         shell: bash

@@ -451,24 +451,37 @@ def assess(record, returncode, log):
             and not re.search(r'with no handler function received: \w+Reply\b', log))
 
 
-def isolated_profile_environment(environment, evidence, windows):
+def isolated_profile_environment(environment, evidence, windows, shared_profile=None):
     """Use existing LLDir overrides only in the spawned viewer environment."""
     evidence = Path(evidence).resolve()
     evidence.mkdir(parents=True, exist_ok=True)
-    profile = Path(tempfile.mkdtemp(prefix='profile-', dir=evidence)).resolve()
+    if shared_profile is None:
+        profile = Path(tempfile.mkdtemp(prefix='profile-', dir=evidence)).resolve()
+    else:
+        profile = Path(shared_profile).resolve()
+        if profile.parent != evidence.parent or not profile.name.startswith('profile-'):
+            raise ValueError('Shared replay profiles must be dedicated siblings of their evidence')
+        marker = profile / 'native-replay-profile.json'
+        identity = dict(schema=1, credential_free_native_replay=True)
+        if profile.exists():
+            if not marker.is_file() or json.loads(marker.read_text()) != identity:
+                raise ValueError('Refusing to reuse an ordinary viewer profile')
+        else:
+            profile.mkdir()
+            marker.write_text(json.dumps(identity) + '\n')
     result = dict(environment)
     if windows:
         for name, child in [('APPDATA', 'roaming'), ('LOCALAPPDATA', 'local')]:
             target = profile / child
-            target.mkdir()
+            target.mkdir(exist_ok=True)
             result[name] = str(target)
     else:
         target = profile / 'application'
-        target.mkdir()
+        target.mkdir(exist_ok=True)
         # APP_NAME is Vulkanstorm; ADDRESS_SIZE64 initAppDirs appends _x64.
         result['VULKANSTORM_X64_USER_DIR'] = str(target)
         result['VULKANSTORM_USER_DIR'] = str(target)
-    (profile / 'cache').mkdir()
+    (profile / 'cache').mkdir(exist_ok=True)
     return result, profile
 
 
@@ -1011,6 +1024,8 @@ def main():
     parser.add_argument('--texture-cache-contracts', action='store_true', help='Exercise native streaming/preferences and archive GPU image readbacks')
     parser.add_argument('--local-image-contracts', action='store_true', help='Exercise actual local bitmap decode, reload, replacement and retirement')
     parser.add_argument('--texture-cache-read-only', action='store_true', help='Exercise the native sibling texture-cache policy in an isolated headless replay')
+    parser.add_argument('--profile-directory', type=Path, help='Dedicated shared credential-free profile for concurrent headless viewer qualification')
+    parser.add_argument('--completion-gate', type=Path, help='Retain the headless viewer marker lock after replay until this file exists')
     parser.add_argument('--texture-fixture', type=Path, help='Nontransparent local J2C fixture for ordinary replay image requests')
     parser.add_argument('--r1-contracts', action='store_true', help='Replay R1 owner, region, resource and lifecycle contracts through production viewer code')
     parser.add_argument('--r2-contracts',action='store_true',help='Replay production R2 geometry and connected appearance actions')
@@ -1107,7 +1122,16 @@ def main():
                  'im/session-chat.ppm', 'im/session-chat-expected.ppm', 'im/session-chat-expected-products.ppm', 'im/session-chat-packets.txt', 'im/session-chat-scene.ppm', 'im/session-chat-scene.rgba', 'results.json'):
         (directory / name).unlink(missing_ok=True)
     env = {key: value for key, value in os.environ.items() if not key.startswith('VS_VULKAN_DIAGNOSTIC')}
-    env, isolated_profile = isolated_profile_environment(env, directory, windows)
+    if (args.profile_directory or args.completion_gate) and not args.headless:
+        raise ValueError('Concurrent-instance controls require a headless replay')
+    env, isolated_profile = isolated_profile_environment(env, directory, windows, args.profile_directory)
+    if args.completion_gate:
+        gate = args.completion_gate.resolve()
+        if gate.parent != directory.parent or gate.exists():
+            raise ValueError('Completion gate must be a fresh sibling of the replay evidence')
+        env['VS_VULKAN_REPLAY_COMPLETION_GATE'] = str(gate)
+    else:
+        env.pop('VS_VULKAN_REPLAY_COMPLETION_GATE', None)
     (directory / 'profile-isolation.json').write_text(json.dumps(dict(profile=str(isolated_profile),
         platform='windows' if windows else 'linux'), indent=2) + '\n')
     for key in ('VK_ICD_FILENAMES', 'VK_ADD_DRIVER_FILES', 'VK_ADD_LAYER_PATH', 'VK_INSTANCE_LAYERS',
@@ -1155,6 +1179,8 @@ def main():
     # Empty theme strings cannot survive the viewer's command-line tokenizer.
     command.extend(['--sessionsettings', str(selection_file)])
     command.extend(['--set', 'UIScaleFactor', str(args.ui_scale)])
+    if args.profile_directory:
+        command.extend(['--set', 'AllowMultipleViewers', 'true'])
     cache_directory=args.cache_directory.resolve() if args.cache_directory else isolated_profile/'cache'
     cache_directory.mkdir(parents=True,exist_ok=True)
     command.extend(['--set', 'CacheLocation', str(cache_directory),

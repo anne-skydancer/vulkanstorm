@@ -9,11 +9,51 @@ from run_vulkan_geometry_tests import required_checks
 from run_vulkan_session_replay import r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed, world_bump_contracts_passed
 from run_software_vulkan_tests import MATERIAL_READBACKS
 from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests
+from run_vulkan_texture_cache_instances import validate_instances
 
 
 EVIDENCE_DIRECTORIES = ('evidence', 'headless-evidence', 'viewer-evidence',
                         'session-evidence', 'r1-session-evidence', 'r2-session-evidence', 'parity-evidence',
-                        'world-parity-evidence', 'geometry-evidence', 'r3-texture-cache-evidence')
+                        'world-parity-evidence', 'geometry-evidence', 'r3-texture-cache-evidence',
+                        'r3-texture-cache-instances')
+
+
+def concurrent_cache_completeness(files, source, executable_digest):
+    prefix='.ci/r3-texture-cache-instances'
+    try:
+        summary=files.get(prefix+'/results.json')
+        if summary is None:return ['Missing actual concurrent viewer cache evidence']
+        result=json.loads(summary.read_text())
+        if (result.get('passed') is not True or result.get('source_commit')!=source or
+                result.get('viewer_executable_sha256')!=executable_digest):
+            raise ValueError('Unqualified concurrent viewer cache evidence')
+        reports={}
+        for name,readonly in [('primary',False),('sibling',True)]:
+            relative=str(result[name]['evidence']).replace('\\','/')
+            if relative.startswith('/') or ':' in relative or '..' in relative.split('/') or relative.split('/')[-1]!=name:
+                raise ValueError('Unsafe concurrent viewer evidence path')
+            folder=prefix+'/'+relative
+            for required in ('results.json','http-replay.json','session-replay.xml','viewer.log','vk_layer_settings.txt','r3/texture.j2c'):
+                if folder+'/'+required not in files:raise ValueError('Missing concurrent cache artifact: '+folder+'/'+required)
+            report=json.loads(files[folder+'/results.json'].read_text())
+            requests=json.loads(files[folder+'/http-replay.json'].read_text())
+            if report.get('source_commit')!=source or report.get('viewer_executable_sha256')!=executable_digest:
+                raise ValueError('Concurrent cache viewer source/executable differs from build')
+            actual=files[folder+'/results.json'].parent
+            validate_texture_cache_case(report,requests,actual,actual.parent/'shared-cache',readonly)
+            if texture_requests(requests):raise ValueError('Concurrent warm cache used network textures')
+            paths=[row['gpu_rgba_file'] for row in report['texture_cache']['images']]
+            stages=report['r3_texture_streaming']
+            paths.extend(stages[key]['gpu_rgba_file'] for key in ('coarse','full_resolution_preference','coarse_after_preference','resolution_limit','restored'))
+            paths.extend(stages['references'].values())
+            for path in paths:
+                if folder+'/'+str(path).replace('\\','/') not in files:
+                    raise ValueError('Concurrent cache readback omitted from archive: '+str(path))
+            reports[name]=report
+        validate_instances(reports['primary'],reports['sibling'],result['cache_before'],result['cache_after'],result['primary_held'])
+    except (OSError,ValueError,KeyError,TypeError) as error:
+        return ['Invalid concurrent viewer cache evidence: '+str(error)]
+    return []
 
 
 def texture_cache_completeness(files, source, executable_digest):
@@ -148,6 +188,7 @@ def completeness(files, viewer):
     source_file = files.get('.ci/evidence/source.txt')
     source = source_file.read_text().strip() if source_file else ''
     errors.extend(texture_cache_completeness(files,source,provenance.get('executable_sha256')))
+    errors.extend(concurrent_cache_completeness(files,source,provenance.get('executable_sha256')))
     if (provenance.get('complete') is not True or provenance.get('source_commit') != source or not source or
             len(provenance.get('executable_sha256', '')) != 64):
         errors.append('Incomplete or mismatched source/build provenance')

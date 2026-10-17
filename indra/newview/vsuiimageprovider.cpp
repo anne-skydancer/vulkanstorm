@@ -302,6 +302,7 @@ LLSD VSUIImageProvider::textureCacheEvidence(bool includePixels) const
     LLSD result;
     static const LLUUID processInstance=LLUUID::generateNewID();
     result["process_id"]=LLApp::getPid();result["process_instance"]=processInstance;
+    result["second_instance"]=LLAppViewer::instance()->isSecondInstance();
     result["disk_hits"]=ll_sd_from_U64(mImpl->diskHits);result["disk_misses"]=ll_sd_from_U64(mImpl->diskMisses);
     U32 reads=0,writes=0,waits=0;
     if(auto* fetch=LLAppViewer::getTextureFetch())

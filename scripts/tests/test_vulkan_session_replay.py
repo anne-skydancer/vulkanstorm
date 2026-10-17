@@ -20,6 +20,19 @@ import run_vulkan_session_replay as session_runner
 from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_shared_profiles_require_a_dedicated_credential_free_marker(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);profile=root/'profile-shared'
+            first,one=isolated_profile_environment({},root/'primary',True,profile)
+            second,two=isolated_profile_environment({},root/'sibling',True,profile)
+            self.assertEqual(one,two)
+            self.assertEqual(first,second)
+            with self.assertRaisesRegex(ValueError,'dedicated siblings'):
+                isolated_profile_environment({},root/'primary',True,root/'outside'/'profile-shared')
+            (profile/'native-replay-profile.json').unlink()
+            with self.assertRaisesRegex(ValueError,'ordinary viewer profile'):
+                isolated_profile_environment({},root/'sibling',True,profile)
+
     def test_viewer_failure_is_not_masked_by_missing_success_evidence(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
