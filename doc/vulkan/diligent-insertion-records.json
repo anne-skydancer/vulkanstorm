@@ -1,5 +1,5 @@
 {
-  "source_commit": "c6fb8bf324cd0b256ebb6556e1bf88dfbbe1471f",
+  "source_commit": "8bb97497c44ee77ed5652113de0c146850f8fb90",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -67421,7 +67421,7 @@
       "path": "indra/newview/vsobjectinteraction.h",
       "start": 1,
       "end": 11,
-      "sha256": "58b94cd07a22e2532730d51f571a79193bb15066014af363c1b184e6040dba7e",
+      "sha256": "e3219e9adf7dbcca311c6c16218333aea65dc76f5dce542ec5de5b0923914f18",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose the exact shared OpenGL click-action inheritance policy to a backend-neutral byte-value helper, preserving attachment early exit and disabled-parent/child override semantics. Native simulator snapshots retain actual full/compressed material and action bytes for production world controls. Native world-context frontend integration remains open."
@@ -67754,7 +67754,7 @@
       "path": "indra/newview/llviewerobject.cpp",
       "start": 28,
       "end": 28,
-      "sha256": "5c8d3a330f4fdbaa934fecbcce82471ae50a4874b61968528648a0aa31970c39",
+      "sha256": "e45b1663c77801c3c14a49b789f57a4492fa06d5b78db11e2f4d21877af8a803",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Adapt actual reference or native scene objects and ancestry to one shared CPU interaction policy, preserving exact RLVa touch results and lazy legacy getter costs. Scope pending actions to real account/object/root/circuit owners and preserve conditional god-mode owner policy. Complete native world-context/frontend integration remains open."
@@ -67763,7 +67763,7 @@
       "path": "indra/newview/llviewerobject.cpp",
       "start": 7004,
       "end": 7004,
-      "sha256": "5c8d3a330f4fdbaa934fecbcce82471ae50a4874b61968528648a0aa31970c39",
+      "sha256": "e45b1663c77801c3c14a49b789f57a4492fa06d5b78db11e2f4d21877af8a803",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Adapt actual reference or native scene objects and ancestry to one shared CPU interaction policy, preserving exact RLVa touch results and lazy legacy getter costs. Scope pending actions to real account/object/root/circuit owners and preserve conditional god-mode owner policy. Complete native world-context/frontend integration remains open."
@@ -67915,8 +67915,8 @@
     {
       "path": "indra/newview/vsobjectcontext.cpp",
       "start": 1,
-      "end": 92,
-      "sha256": "287d1a69fbfba2a3843f30f2416c4d31a1f258c04b779804d5fc5251b9b4cdc9",
+      "end": 87,
+      "sha256": "418bb6291097589f117c9995231285dc6c4d242ae2a6764e826204ea9578bdaf",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Adapt actual reference or native scene objects and ancestry to one shared CPU interaction policy, preserving exact RLVa touch results and lazy legacy getter costs. Scope pending actions to real account/object/root/circuit owners and preserve conditional god-mode owner policy. Complete native world-context/frontend integration remains open."
@@ -67997,7 +67997,7 @@
       "path": "scripts/tests/object_context_fixture.cpp",
       "start": 1,
       "end": 94,
-      "sha256": "90ef423522f9b073700a3070903134b5de45cd8d67ae161a3c3fd24d13a80a9c",
+      "sha256": "940ae413d62cf58383b999fcb17d33dc5c7a202be96fc483cf664766a753b87a",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare actual shared RLVa touch logic and reference wrapper with the original OpenGL function across restrictions, exceptions, attachment/ownership/HUD and exact distance boundaries; compare getter counts too. Execute actual peer context resolution and account, object, ancestor, circuit and reparenting retirement guards under all ownership policy build variants. No complete UI runtime acceptance claim."
@@ -68014,8 +68014,8 @@
     {
       "path": "scripts/tests/test_object_context.py",
       "start": 1,
-      "end": 37,
-      "sha256": "73d7fb6b1ca3312bcbc850b0ec752bbc80ee53f9fe5f228f82d53a240bdcff9e",
+      "end": 38,
+      "sha256": "bd2c24890e353ac580b87ffb33a400eef8c7e8a63463d6994ef2d68a90e4a469",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare actual shared RLVa touch logic and reference wrapper with the original OpenGL function across restrictions, exceptions, attachment/ownership/HUD and exact distance boundaries; compare getter counts too. Execute actual peer context resolution and account, object, ancestor, circuit and reparenting retirement guards under all ownership policy build variants. No complete UI runtime acceptance claim."
@@ -68034,6 +68034,60 @@
       "start": 1,
       "end": 83,
       "sha256": "c486a80e31cca592be911fb5b68349f789e40bfd0f6a112951c68bf04cfedaa5",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Compare actual shared RLVa touch logic and reference wrapper with the original OpenGL function across restrictions, exceptions, attachment/ownership/HUD and exact distance boundaries; compare getter counts too. Execute actual peer context resolution and account, object, ancestor, circuit and reparenting retirement guards under all ownership policy build variants. No complete UI runtime acceptance claim."
+    },
+    {
+      "path": "indra/newview/llviewerobject.cpp",
+      "start": 28,
+      "end": 28,
+      "sha256": "e45b1663c77801c3c14a49b789f57a4492fa06d5b78db11e2f4d21877af8a803",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Adapt actual reference or native scene objects and ancestry to one shared CPU interaction policy, preserving exact RLVa touch results and lazy legacy getter costs. Scope pending actions to real account/object/root/circuit owners and preserve conditional god-mode owner policy. Complete native world-context/frontend integration remains open."
+    },
+    {
+      "path": "indra/newview/llviewerobject.cpp",
+      "start": 7004,
+      "end": 7007,
+      "sha256": "e45b1663c77801c3c14a49b789f57a4492fa06d5b78db11e2f4d21877af8a803",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Adapt actual reference or native scene objects and ancestry to one shared CPU interaction policy, preserving exact RLVa touch results and lazy legacy getter costs. Scope pending actions to real account/object/root/circuit owners and preserve conditional god-mode owner policy. Complete native world-context/frontend integration remains open."
+    },
+    {
+      "path": "indra/newview/vsobjectcontext.cpp",
+      "start": 19,
+      "end": 22,
+      "sha256": "418bb6291097589f117c9995231285dc6c4d242ae2a6764e826204ea9578bdaf",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Adapt actual reference or native scene objects and ancestry to one shared CPU interaction policy, preserving exact RLVa touch results and lazy legacy getter costs. Scope pending actions to real account/object/root/circuit owners and preserve conditional god-mode owner policy. Complete native world-context/frontend integration remains open."
+    },
+    {
+      "path": "indra/newview/vsobjectinteraction.h",
+      "start": 12,
+      "end": 28,
+      "sha256": "e3219e9adf7dbcca311c6c16218333aea65dc76f5dce542ec5de5b0923914f18",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Transpose the exact shared OpenGL click-action inheritance policy to a backend-neutral byte-value helper, preserving attachment early exit and disabled-parent/child override semantics. Native simulator snapshots retain actual full/compressed material and action bytes for production world controls. Native world-context frontend integration remains open."
+    },
+    {
+      "path": "scripts/tests/object_context_fixture.cpp",
+      "start": 10,
+      "end": 11,
+      "sha256": "940ae413d62cf58383b999fcb17d33dc5c7a202be96fc483cf664766a753b87a",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Compare actual shared RLVa touch logic and reference wrapper with the original OpenGL function across restrictions, exceptions, attachment/ownership/HUD and exact distance boundaries; compare getter counts too. Execute actual peer context resolution and account, object, ancestor, circuit and reparenting retirement guards under all ownership policy build variants. No complete UI runtime acceptance claim."
+    },
+    {
+      "path": "scripts/tests/test_object_context.py",
+      "start": 20,
+      "end": 20,
+      "sha256": "bd2c24890e353ac580b87ffb33a400eef8c7e8a63463d6994ef2d68a90e4a469",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare actual shared RLVa touch logic and reference wrapper with the original OpenGL function across restrictions, exceptions, attachment/ownership/HUD and exact distance boundaries; compare getter counts too. Execute actual peer context resolution and account, object, ancestor, circuit and reparenting retirement guards under all ownership policy build variants. No complete UI runtime acceptance claim."
