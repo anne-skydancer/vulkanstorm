@@ -20,6 +20,30 @@ import run_vulkan_session_replay as session_runner
 from run_vulkan_session_replay import assess, read_llsd, REQUIRED, SimulatorHTTP, append_llsd, INVENTORY_ROOT, favorites_fetch_observed, isolated_profile_environment, conference_start_observed
 
 class SessionEvidenceTests(unittest.TestCase):
+    def test_headless_viewer_retains_xvfb_for_real_cef_without_enabling_presentation(self):
+        env = {'DISPLAY': ':99', 'WAYLAND_DISPLAY': 'wayland-0', 'XDG_SESSION_TYPE': 'wayland'}
+        session_runner.configure_replay_window_environment(env, headless=True, windows=False, require_media=True)
+        self.assertEqual(env['DISPLAY'], ':99')
+        self.assertEqual(env['XDG_SESSION_TYPE'], 'x11')
+        self.assertNotIn('WAYLAND_DISPLAY', env)
+        self.assertEqual(env['VS_VULKAN_DIAGNOSTIC_HEADLESS'], '1')
+        self.assertFalse(session_runner.harness_prerequisite_passed({'passed': True}, False))
+
+    def test_headless_cef_qualification_fails_early_without_its_display_service(self):
+        with self.assertRaisesRegex(ValueError, 'xvfb-run'):
+            session_runner.configure_replay_window_environment({}, headless=True, windows=False, require_media=True)
+        env = {}
+        session_runner.configure_replay_window_environment(env, headless=True, windows=False, require_media=False)
+        self.assertEqual(env, {'VS_VULKAN_DIAGNOSTIC_HEADLESS': '1'})
+
+    def test_headless_windows_and_native_presentation_keep_their_distinct_window_paths(self):
+        env = {'DISPLAY': ':99', 'WAYLAND_DISPLAY': 'wayland-0'}
+        session_runner.configure_replay_window_environment(env, headless=True, windows=True, require_media=True)
+        self.assertEqual(env, {'VS_VULKAN_DIAGNOSTIC_HEADLESS': '1'})
+        env = {'DISPLAY': ':99', 'VS_VULKAN_DIAGNOSTIC_HEADLESS': '1'}
+        session_runner.configure_replay_window_environment(env, headless=False, windows=False, require_media=True)
+        self.assertEqual(env, {'DISPLAY': ':99'})
+
     def test_shared_profiles_require_a_dedicated_credential_free_marker(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);profile=root/'profile-shared'
