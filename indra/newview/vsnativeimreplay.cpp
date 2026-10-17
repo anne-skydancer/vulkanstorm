@@ -125,6 +125,7 @@
 #include "llinventoryobserver.h"
 #include "message.h"
 #include "llsdutil.h"
+#include "llsdutil_math.h"
 #include <stdexcept>
 #include <fstream>
 #include <filesystem>
@@ -198,6 +199,86 @@ bool contains(const LLUUID& id, const std::string& text)
         if (entry["message"].asString().find(text) != std::string::npos) return true;
     return false;
 }
+// Complete deprecated-UDP schema carried by the real LLSD message bridge.
+// The native receiver runs LLViewerParcelMgr::processParcelProperties and the
+// existing LLParcel::unpackMessage, not the reduced diagnostic deliver() path.
+void publishReplayParcel(VSNativeSession& owner,U32 flags,bool seeAvatars)
+{
+    const auto region=vs_current_region_context();
+    require(region && region->current(),"Parcel replay has no authenticated current circuit");
+    LLSD body;auto& data=body["ParcelData"][0];
+    data["RequestResult"]=0;
+    data["SequenceID"]=0;
+    data["SnapSelection"]=false;
+    data["SelfCount"]=0;
+    data["OtherCount"]=0;
+    data["PublicCount"]=0;
+    data["LocalID"]=0;
+    data["OwnerID"]=LLUUID::null;
+    data["IsGroupOwned"]=false;
+    data["AuctionID"]=0;
+    data["ClaimDate"]=0;
+    data["ClaimPrice"]=0;
+    data["RentPrice"]=0;
+    data["AABBMin"]=ll_sd_from_vector3(LLVector3::zero);
+    data["AABBMax"]=ll_sd_from_vector3(LLVector3::zero);
+    data["Bitmap"]=std::string();
+    data["Area"]=0;
+    data["Status"]=0;
+    data["SimWideMaxPrims"]=0;
+    data["SimWideTotalPrims"]=0;
+    data["MaxPrims"]=0;
+    data["TotalPrims"]=0;
+    data["OwnerPrims"]=0;
+    data["GroupPrims"]=0;
+    data["OtherPrims"]=0;
+    data["SelectedPrims"]=0;
+    data["ParcelPrimBonus"]=0.0;
+    data["OtherCleanTime"]=0;
+    data["ParcelFlags"]=0;
+    data["SalePrice"]=0;
+    data["Name"]=std::string();
+    data["Desc"]=std::string();
+    data["MusicURL"]=std::string();
+    data["MediaURL"]=std::string();
+    data["MediaID"]=LLUUID::null;
+    data["MediaAutoScale"]=0;
+    data["GroupID"]=LLUUID::null;
+    data["PassPrice"]=0;
+    data["PassHours"]=0.0;
+    data["Category"]=0;
+    data["AuthBuyerID"]=LLUUID::null;
+    data["SnapshotID"]=LLUUID::null;
+    data["UserLocation"]=ll_sd_from_vector3(LLVector3::zero);
+    data["UserLookAt"]=ll_sd_from_vector3(LLVector3::zero);
+    data["LandingType"]=0;
+    data["RegionPushOverride"]=false;
+    data["RegionDenyAnonymous"]=false;
+    data["RegionDenyIdentified"]=false;
+    data["RegionDenyTransacted"]=false;
+    const S32 columns=S32(region->getWidth()/PARCEL_GRID_STEP_METERS);
+    const S32 rows=S32(region->getHeight()/PARCEL_GRID_STEP_METERS);
+    data["RequestResult"]=PARCEL_RESULT_SUCCESS;data["SequenceID"]=0;
+    data["LocalID"]=31;data["OwnerID"]=peer;data["Name"]="Replay parcel";
+    data["AABBMax"]=ll_sd_from_vector3(LLVector3(region->getWidth(),region->getHeight(),20.f));
+    data["Bitmap"]=LLSD::Binary(std::size_t(columns)*rows/8,U8(255));
+    data["Area"]=S32(region->getWidth()*region->getHeight());data["Status"]=S32(LLParcel::OS_LEASED);
+    data["SimWideMaxPrims"]=15000;data["MaxPrims"]=15000;data["ParcelPrimBonus"]=1.0;
+    data["ParcelFlags"]=LLSD::Integer(flags);
+    data["SeeAVs"]=seeAvatars;data["AnyAVSounds"]=true;data["GroupAVSounds"]=true;
+    auto& media=body["MediaData"][0];
+    media["MediaDesc"]="";media["MediaType"]="";media["MediaWidth"]=0;media["MediaHeight"]=0;media["MediaLoop"]=0;
+    body["AgeVerificationBlock"][0]["RegionDenyAgeUnverified"]=false;
+    body["RegionAllowAccessBlock"][0]["RegionAllowAccessOverride"]=true;
+    body["ParcelEnvironmentBlock"][0]["ParcelEnvironmentVersion"]=0;
+    body["ParcelEnvironmentBlock"][0]["RegionAllowEnvironmentOverride"]=true;
+    event(owner,"ParcelProperties",body);
+    const auto* parcel=LLViewerParcelMgr::instance().getAgentParcel();
+    require(parcel && parcel->getLocalID()==31 && parcel->getRegionID()==region->getRegionID() &&
+        parcel->getParcelFlags()==flags && parcel->getHaveNewParcelLimitData() && parcel->getSeeAVs()==seeAvatars,
+        "Complete authenticated parcel did not reach the shared LLParcel model");
+}
+
 void finishServerIM()
 {
     // The server-to-viewer template extends the historical client IM block.
@@ -814,15 +895,15 @@ struct Replay : public LLAvatarPropertiesObserver
             {
                 if (!landCheck) savedLandIndicators = gSavedSettings.getBOOL("NavBarShowParcelProperties");
                 gSavedSettings.setBOOL("NavBarShowParcelProperties", true);
-                LLSD parcel;
-                parcel["result"] = PARCEL_RESULT_SUCCESS; parcel["sequence"] = 0; parcel["id"] = 31;
-                parcel["name"] = "Replay parcel"; parcel["music"] = ""; parcel["media"] = "";
-                parcel["parcel_flags"] = LLSD::Integer(landCheck == 1 ?
-                    PF_ALLOW_FLY | PF_ALLOW_VOICE_CHAT | PF_CREATE_OBJECTS | PF_ALLOW_OTHER_SCRIPTS : PF_RESTRICT_PUSHOBJECT | PF_ALLOW_DAMAGE);
-                parcel["see_avatars"] = landCheck == 1;
-                require(owner.deliver("ParcelProperties", parcel, owner.host(), owner.generation()), "Authenticated parcel permission update was rejected");
-                const auto rights = owner.parcelPermissions();
-                require(rights.known, "Parcel permissions remained unknown after delivery");
+                const U32 flags=landCheck==1 ?
+                    PF_ALLOW_FLY|PF_ALLOW_VOICE_CHAT|PF_CREATE_OBJECTS|PF_ALLOW_OTHER_SCRIPTS : PF_RESTRICT_PUSHOBJECT|PF_ALLOW_DAMAGE;
+                publishReplayParcel(owner,flags,landCheck==1);
+                auto& manager=LLViewerParcelMgr::instance();
+                const auto region=vs_current_region_context();const auto* parcel=manager.getAgentParcel();
+                require(region && parcel,"Shared parcel permission owners missing");
+                struct Rights{bool fly,build,scripts,voice,damage;};
+                const Rights rights{manager.allowAgentFly(&*region,parcel),manager.allowAgentBuild(parcel),
+                    manager.allowAgentScripts(&*region,parcel),manager.allowAgentVoice(&*region,parcel),manager.allowAgentDamage(&*region,parcel)};
                 auto* location = gViewerWindow->getRootView()->findChild<LLLocationInputCtrl>("location_combo");
                 require(gStatusBar && location, "Connected land permission consumers were not constructed");
                 gStatusBar->updateParcelIcons(); location->refresh();
