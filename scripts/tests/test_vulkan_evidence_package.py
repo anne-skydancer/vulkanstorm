@@ -10,7 +10,7 @@ from unittest.mock import patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from package_vulkan_evidence import package, completeness, texture_cache_completeness
+from package_vulkan_evidence import package, completeness, texture_cache_completeness, require_r3_extended_artifacts
 from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES
 from run_vulkan_geometry_tests import required_checks
 
@@ -57,6 +57,30 @@ class EvidencePackageTest(unittest.TestCase):
             driver=files.pop(folder+'/driver-output.log')
             self.assertIn('Missing R3 cache artifact',texture_cache_completeness(files,'revision','digest')[0])
             files[folder+'/driver-output.log']=driver
+
+    def test_new_r3_outputs_must_independently_enter_the_archive(self):
+        folder='.ci/r3-texture-cache-evidence/run/cold'
+        pressure={name:dict(gpu_rgba_file='r3/'+name+'.rgba') for name in
+                  ('initial','pressure','full_resolution_preference','minimized','restored')}
+        child=dict(r3_terrain=dict(layers=[dict(file='r3/terrain/paint-layer-'+str(i)+'.rgba') for i in range(4)],
+                    regional_override=dict(file='r3/terrain/regional-override.rgba')),
+                   terrain_publication={name:dict(file='terrain/'+name+'.rgba') for name in ('pending','published','retired')},
+                   r3_pressure=pressure,r3_shutdown=dict(write_completion='r3/pending-cache-write.xml',
+                   read_observation='r3/pending-cache-read.requested'))
+        paths=['r3/terrain/paint-layer-'+str(i)+'.rgba' for i in range(4)]
+        paths+=['r3/terrain/regional-override.rgba','r3/terrain/regional-material-ids.txt','terrain/detail.j2c']
+        paths+=['r3/terrain/'+str(i)+ext for i in range(4) for ext in ('.gltf','.png')]
+        paths+=['terrain/'+name+'.rgba' for name in ('pending','published','retired')]
+        paths+=[row['gpu_rgba_file'] for row in pressure.values()]
+        paths+=list(child['r3_shutdown'].values())
+        files={folder+'/'+path:Path(path) for path in paths}
+        require_r3_extended_artifacts(files,folder,child,'cold')
+        for path in paths:
+            with self.subTest(path=path),self.assertRaisesRegex(ValueError,'omitted'):
+                require_r3_extended_artifacts({key:value for key,value in files.items() if key!=folder+'/'+path},folder,child,'cold')
+        warm=dict(r3_shutdown_restart=dict(gpu_rgba_file='r3/restart.rgba'))
+        with self.assertRaisesRegex(ValueError,'omitted'):require_r3_extended_artifacts({},folder,warm,'warm')
+        require_r3_extended_artifacts({folder+'/r3/restart.rgba':Path('restart')},folder,warm,'warm')
 
     def test_regular_bytes_and_hashes_round_trip(self):
         with tempfile.TemporaryDirectory() as temp:

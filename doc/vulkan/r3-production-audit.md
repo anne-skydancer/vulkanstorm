@@ -1047,3 +1047,49 @@ local overrides, and imported-image minimize/restore readbacks. Warm cache reuse
 must change both synthetic account and built-in grid identities while retaining
 the shared UUID/version cache policy, exact pixels and zero texture HTTP.
 These expanded viewer cases and final three-platform qualification remain open.
+
+
+### Final evidence and retirement audit corrections (2026-10-17)
+
+The ordinary normal-login acceptance check was still requiring the first native
+browser-publication receipt removed during the shared media-controller refactor.
+LLMediaCtrl now emits that receipt only after its image publication succeeds.
+Ordinary init/frame/cleanup passes locally headlessly in 30.5 seconds, without
+entering diagnostic dispatch. Native presentation still requires hosted CI.
+
+The imported-image diagnostic now restores its temporary resolution/compression/
+anisotropy/minimize settings when its object and queued generations retire,
+before subsequent contracts execute. A compiled regression executes the actual
+completion branch and restoration method. Account image retirement is captured
+while genuinely logged out, before relogin; a separate final snapshot must also
+be empty. Process identities and all observed HTTP requests remain decisive.
+
+The terrain shader generator explicitly reads UTF-8 and splits literals by UTF-8
+byte length, preserving complete characters. Its output is unchanged. Regression
+checks run both Python encoding modes; hosted Linux passed the formerly failing
+stale-header check. This is a portability fix, not a shader-logic relaxation.
+
+The expanded development matrix passed all nine cache cases in 483.9 seconds,
+then actual concurrent primary/sibling cache ownership passed, with the primary
+held alive and the sibling completing in 54.7 seconds. Warm reuse changed both
+synthetic account and built-in grid and required zero texture HTTP. Those runs
+used a development-only normalization of terrain HTTP receipt metadata and are
+not final committed-runner qualification. The canonical source now records that
+same terrain GET in the ordinary typed query receipt format, so the independent
+worker/HTTP count includes it rather than omitting the request.
+
+A long local evidence path also exposed Windows' path-length ceiling in the
+readback writer. Content-addressed filenames now contain the full SHA-256 alone;
+UUID, discard, dimensions and other identities remain in each record. This
+shortens paths and deduplicates equal pixels without reducing digest verification.
+
+Archive acceptance now independently requires terrain material/local inputs,
+regional override and paint readbacks, pressure readbacks, pending-I/O receipts,
+and the warm restart write readback, and repeats the live validators. Missing
+archive members fail even if a source file still exists locally. Coarse pressure
+pixels additionally compare to independently decoded reference-codec discard
+images from the original lossless fixture. R3 settings registration coverage now
+rejects any R3 listener left open or assigned to a later owner.
+
+The canonical rebuild, complete committed-runner matrix, independent archive
+validation, and all three graphics jobs on the final source remain required.

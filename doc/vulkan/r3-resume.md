@@ -1,11 +1,94 @@
-# R3 reboot checkpoint â€” 17 October 2026
+# R3 continuation state � 2026-10-17
+
+The active task is gapless R3 with Windows SwiftShader, Linux SwiftShader and
+Linux Lavapipe all passing on the final source. Checkpoints are committed and
+pushed; they are not handoffs or milestone completion. Continue until the full
+runtime and artifact acceptance succeeds. R4/R5/R6 remain separate stages.
+
+## Canonical workspace
+
+- Branch/check-out: `vkstorm-vulkan`, `C:\Dev\vulkanstorm\worktrees\vkstorm-vulkan`.
+- Build/stage: `build-vc170-64/newview/RelWithDebInfo`.
+- Use the existing Autobuild/CMake RelWithDebInfo workflow, full runtime/assets
+  staging, no installer and no duplicate viewer build tree.
+- Keep all automatic UI tests headless/background. Preserve a user-run viewer.
+- Commit/push completed checkpoints and keep working. Never claim partial tests
+  or diagnostic-only integration as full acceptance.
+
+## Production scope
+
+The implementation now includes legacy/PBR material and image owners, per-channel
+UV/sampling and tangent conventions, TE/texture animation, local bitmap/material
+reload, imported glTF images, progressive shared LLTextureFetch/LLTextureCache,
+compression/mip/residency policy, dynamic media generations and native R3 settings.
+Terrain now has four legacy/PBR layers, shared reference sampling, regional
+ModifyRegion overrides, local transforms/paint baking and immutable snapshots.
+Minimized views continue image pumping and rebind admitted generations while
+preserving geometry. Account/circuit guards and worker teardown remain decisive.
+
+See `r3-production-audit.md` for measured checkpoints and the full survey. The
+settings CSV accounts for every registration and rejects unresolved R3 owners.
+Final BRDF/probe/HDR appearance belongs to the later roadmap stages.
+
+## Latest local findings
+
+- Shared world demand retains the previous frame's peak while current consumers
+  enumerate; compiled request-order/reduction regressions pass.
+- Actual local viewer pressure/full-resolution/minimize/restore and pending HTTP
+  plus cache-write shutdown execute. Warm restart proves cache-written pixels.
+- The regional override, imported-image minimize/restore, and account/grid change
+  paths execute through actual production owners.
+- A development cache matrix passed 9/9 in 483.9 seconds (`.tmp/c8`), followed by
+  real concurrent primary/sibling ownership (`.tmp/cc8`). It used an ignored
+  terrain-receipt adapter; this is not final committed-runner qualification.
+- Ordinary normal-login passes headlessly in 30.5 seconds after restoring the
+  successful browser publication receipt (`.tmp/r3-ordinary-login-headless`).
+- All six production-renderer GPU/negative modes pass, including independent
+  planar/triplanar terrain sharpness charts (`.tmp/r3-terrain-triplanar-gpu-v1`).
+- 100 local source scripts passed. The local token denies CreateWindowStationW;
+  no foreground fallback is permitted. Hosted Windows retains that check.
+- The current edits normalize terrain HTTP receipts, shorten readback filenames
+  without shortening hashes, add independent pressure-codec references and
+  require all new evidence in the final archive. Test these before acceptance.
+
+## Required completion
+
+1. Commit source and refresh insertion/platform/boundary/parity inventory pins;
+   push and rebuild/stage the canonical executable with provenance.
+2. Run the complete nine-case matrix and concurrent ownership from the committed
+   runner; repeat archive completeness with actual collected files. Fix every
+   discovered issue and retain failed evidence.
+3. Qualify all three graphics jobs at the final source revision and inspect the
+   uploaded qualification archive/manifest. No skipped or missing evidence passes.
+4. Report the completed scope, exact qualified commit, executable, tests and
+   qualification limits. Do not stop at another passing subset.
+
+## Local helpers and privacy
+
+Ignored headless diagnostic launchers in `.tmp` use the native debugger only
+because this local token cannot create the private window station. They enforce
+headless viewer creation and do not qualify native presentation. The receipt
+adapter has been removed: new runs must exercise the committed runner.
+
+The user's `.tmp/capture-vulkan-login.cmd` and `.tmp/live-login-capture` are
+private live-login diagnostic tools/evidence. Preserve them. Never symbolize an
+old unmatched crash RVA with a newly rebuilt PDB or upload private dumps/logs.
+
+## Historical resume notes
+
+The following earlier checkpoint notes are retained for crash evidence and
+startup/camera context. Their R3 open-work statements are superseded by the
+current state above. Startup UI, snapshots and full camera parity must still be
+assessed against their own roadmap stages; R3 qualification does not close them.
+
+## R3 reboot checkpoint — 17 October 2026
 
 Work continues on `vkstorm-vulkan` in
 `C:\Dev\vulkanstorm\worktrees\vkstorm-vulkan`. R3 is **not complete**.
 Commit and push completed checkpoints, then continue. Keep all viewer tests
 headless/background. Preserve any user-run viewer and its profile.
 
-## Saved work
+### Saved work
 
 All production changes and source pins are committed and pushed through
 `fcc79d27f9` (imported-scene qualification). Relevant checkpoints:
@@ -23,7 +106,7 @@ All production changes and source pins are committed and pushed through
 
 `r3-production-audit.md` records implementation and qualification limits.
 
-## Passed evidence
+### Passed evidence
 
 Canonical staged source `a3ddce4148` passed all nine cache cases in 170.1 s:
 `.tmp/r3-pressure-cache-matrix/results.json`. Warm, read-only and resize
@@ -45,7 +128,7 @@ actual asynchronous glTF decode/preparation retirement and index reuse,
 imported-image evidence rejection, session replay (30), evidence packaging (10).
 Changed viewer translation units compiled. This is not platform qualification.
 
-## Interrupted operation and immediate next action
+### Interrupted operation and immediate next action
 
 The canonical `RelWithDebInfo` rebuild for `fcc79d27f9` was interrupted for the
 requested reboot. Its compilation/link had progressed into asset staging;
@@ -76,7 +159,7 @@ five independent 1024x512 PNG channels at 512x256, forced full resolution,
 limited again and replaced assets, with full GPU readbacks, material/sampler
 contracts and object/account retirement. This runtime path remains untested.
 
-## Required remaining R3 work
+### Required remaining R3 work
 
 - Complete native four-layer legacy/PBR terrain material acquisition, blending,
   UV/detail/triplanar/paint inputs and their settings controllers. Current
@@ -96,7 +179,7 @@ The exact OpenGL reference implementation remains the engineering guide.
 Keep BRDF/probe-dependent final appearance assigned to R5/R6 as documented;
 source pins or passing subsets do not certify full runtime parity.
 
-## Local helpers
+### Local helpers
 
 Ignored `.tmp/repin_r3_materials.py` remaps only `HEAD^` to `HEAD`. After a new
 source commit, run it, then `check_diligent_insertions.py --write --accept` and
@@ -106,7 +189,7 @@ Do not rerun older `.tmp/apply_*` scripts: several contain superseded candidates
 Standalone harness evidence `.tmp/r3-bump-gpu-contracts/results.json` remains
 usable for image-only changes; shader/ABI changes need fresh harness evidence.
 
-## Live-login crash reported 2026-10-17
+### Live-login crash reported 2026-10-17
 
 The user reports the local staged Vulkan viewer crashes immediately after live
 login. Windows Application event 1000 at 02:25:33 records an access violation
@@ -134,7 +217,7 @@ The latest Linux source gate also detected stale discovery references in the
 R0 ledger after recent R3 changes. Regeneration updates only source-reference
 metadata; all runtime/authenticated qualification flags remain false.
 
-### Captured live-login failure and correction
+#### Captured live-login failure and correction
 
 The user's manual capture at 12:10 local time produced a matching stack and
 minidump in .tmp/live-login-capture. VSWorldScene::Impl::textureCost queried
@@ -153,7 +236,7 @@ for embedded image limits. Matching live-login acceptance still needs a user
 retry of the rebuilt canonical executable; a headless replay alone cannot
 prove the real account no longer crashes. Preserve private dump/log evidence.
 
-## Startup/shutdown reference audit and terrain regression report
+### Startup/shutdown reference audit and terrain regression report
 
 The user confirms live login now succeeds, but reports ground appearing before
 the null-image fix and absent afterward, plus low FPS. Treat this as an open
@@ -187,7 +270,7 @@ editor hover underneath that overlay. Update the replay driver to wait for the
 real shared fade/input release on initial login and relogin before exercising
 connected controls; keep the hover assertions and all pixel oracles unchanged.
 
-## Missing-ground production correction
+### Missing-ground production correction
 
 The terrain surface producer discarded each received/published patch whenever
 its detail image was absent. This differs from LLDrawPoolTerrain using
@@ -212,7 +295,7 @@ pixels. CI's existing R2 replay enables this focused regression with
 --terrain-contracts; it is not a substitute for completing R3 terrain materials.
 
 
-### Rear-view defaults and logout presentation (17 October)
+#### Rear-view defaults and logout presentation (17 October)
 
 Native rear view now uses the reference camera/focus offset settings and scale,
 instead of a fixed three-metre orbit and 1.5-metre pivot. The default camera offset

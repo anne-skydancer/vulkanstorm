@@ -6,10 +6,10 @@ from pathlib import Path
 import stat
 import zipfile
 from run_vulkan_geometry_tests import required_checks
-from run_vulkan_session_replay import terrain_contracts_passed, r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed, world_bump_contracts_passed, remote_material_contracts_passed, legacy_material_contracts_passed, media_contracts_passed, shared_settings_contracts_passed
+from run_vulkan_session_replay import terrain_contracts_passed, r3_terrain_contracts_passed, r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed, world_bump_contracts_passed, remote_material_contracts_passed, legacy_material_contracts_passed, media_contracts_passed, shared_settings_contracts_passed
 import vulkan_r3_gltf_fixture as r3_gltf_fixture
 from run_software_vulkan_tests import MATERIAL_READBACKS
-from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests, validate_driver
+from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests, validate_driver, validate_pressure, validate_shutdown, validate_restart, validate_identity_transition
 from run_vulkan_texture_cache_instances import validate_instances
 
 
@@ -57,11 +57,30 @@ def concurrent_cache_completeness(files, source, executable_digest):
     return []
 
 
+def require_r3_extended_artifacts(files,folder,child,case):
+    paths=[]
+    if case=='cold':
+        paths.extend(row['file'] for row in child['r3_terrain']['layers'])
+        paths.append(child['r3_terrain']['regional_override']['file'])
+        paths.extend('r3/terrain/'+str(layer)+extension for layer in range(4) for extension in ('.gltf','.png'))
+        paths.append('r3/terrain/regional-material-ids.txt')
+        paths.extend(child['terrain_publication'][stage]['file'] for stage in ('pending','published','retired'))
+        paths.append('terrain/detail.j2c')
+        paths.extend(child['r3_pressure'][stage]['gpu_rgba_file'] for stage in
+                     ('initial','pressure','full_resolution_preference','minimized','restored'))
+        paths.extend(child['r3_shutdown'][key] for key in ('write_completion','read_observation'))
+    elif case=='warm':paths.append(child['r3_shutdown_restart']['gpu_rgba_file'])
+    for path in paths:
+        relative=str(path).replace('\\','/')
+        if relative.startswith('/') or ':' in relative or '..' in relative.split('/') or folder+'/'+relative not in files:
+            raise ValueError('Extended R3 artifact omitted from archive: '+relative)
+
+
 def texture_cache_completeness(files, source, executable_digest):
     prefix='.ci/r3-texture-cache-evidence'
     summary=files.get(prefix+'/results.json')
     if summary is None:return ['Missing R3 texture-cache restart evidence']
-    errors=[];processes=set()
+    errors=[];processes=set();cold_report=None
     try:
         matrix=json.loads(summary.read_text())
         if not isinstance(matrix,dict):raise ValueError('Invalid R3 matrix record')
@@ -103,7 +122,16 @@ def texture_cache_completeness(files, source, executable_digest):
             paths.extend(stages['references'].values())
             for path in paths:
                 if folder+'/'+str(path).replace('\\','/') not in files:raise ValueError('R3 readback omitted from archive: '+str(path))
+            require_r3_extended_artifacts(files,folder,child,case)
+            if case=='warm':
+                validate_restart(child,actual)
+                validate_identity_transition(cold_report,child)
             if case=='cold':
+                cold_report=child
+                validate_pressure(child,actual)
+                validate_shutdown(child,actual,traffic)
+                if not terrain_contracts_passed(child,actual) or not r3_terrain_contracts_passed(child,actual,traffic):
+                    raise ValueError('Missing actual terrain material/GPU evidence')
                 if not local_image_contracts_passed(child,actual) or not local_material_contracts_passed(child,actual) or not world_bump_contracts_passed(child,actual):raise ValueError('Missing R3 local file/GPU evidence')
                 if not remote_material_contracts_passed(child,traffic,actual):raise ValueError('Missing actual remote PBR asset evidence')
                 if not r3_gltf_fixture.contracts_passed(child,actual):raise ValueError('Missing imported glTF image evidence')

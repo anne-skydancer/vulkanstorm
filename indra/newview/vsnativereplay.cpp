@@ -865,6 +865,9 @@ struct Replay
                     textureReference(*encoded,folder,"coarse-partial",5,600,textureStreaming["references"]);
                     textureReference(*encoded,folder,"coarse-complete",5,encoded->getDataSize(),textureStreaming["references"]);
                     textureReference(*encoded,folder,"resolution-limit",1,encoded->getDataSize(),textureStreaming["references"]);
+                    if(std::getenv("VS_VULKAN_REPLAY_LOCAL_IMAGES"))
+                        for(S8 level=1;level<=MAX_DISCARD_LEVEL;++level)
+                            textureReference(*encoded,folder,"pressure-discard-"+std::to_string(level),level,encoded->getDataSize(),textureStreaming["references"]);
                     textureCacheStep=1;
                 }
                 if(textureCacheStep==1)
