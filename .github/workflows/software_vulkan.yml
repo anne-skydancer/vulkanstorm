@@ -422,14 +422,30 @@ jobs:
         run: |
           set -euo pipefail
           manifest_args=()
+          display_args=()
           if [[ "$RUNNER_OS" == Windows ]]; then
             manifest_args+=(--register-windows-manifests)
+          else
+            # The Vulkan viewer stays headless; its real CEF child needs X11.
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
           fi
-          python scripts/run_vulkan_texture_cache_tests.py \
+          "${display_args[@]}" python scripts/run_vulkan_texture_cache_tests.py \
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence \
             "${manifest_args[@]}"
-          python scripts/run_vulkan_texture_cache_instances.py \
+      - name: Production R3 concurrent texture-cache instances
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          display_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          else
+            display_args+=(xvfb-run -a -s '-screen 0 1024x768x24')
+          fi
+          "${display_args[@]}" python scripts/run_vulkan_texture_cache_instances.py \
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --harness-evidence .ci/evidence/results.json --cache-evidence .ci/r3-texture-cache-evidence \
             --evidence .ci/r3-texture-cache-instances "${manifest_args[@]}"
