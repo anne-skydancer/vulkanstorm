@@ -862,7 +862,11 @@ void LLMediaCtrl::draw()
         if (ready)
         {
             const S32 width = plugin->getWidth(), height = plugin->getHeight();
+            const bool firstPublication = !mNativeMediaImage;
             mNativeMediaImage = vs_update_media_image(*resources, "media:" + mMediaTextureID.asString(), *plugin);
+            if (firstPublication && mNativeMediaImage)
+                LL_INFOS("NativeMedia") << "Native media pixels: " << getName()
+                    << " " << width << "x" << height << LL_ENDL;
             mNativeMediaWidth = width; mNativeMediaHeight = height;
             ready = bool(mNativeMediaImage);
             const F32 scale = LLUI::getScaleFactor().mV[VX];

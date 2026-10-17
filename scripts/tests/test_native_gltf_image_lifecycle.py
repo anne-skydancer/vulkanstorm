@@ -10,6 +10,49 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class NativeGLTFImageLifecycleTests(unittest.TestCase):
+    def test_completed_probe_restores_settings_before_other_contracts(self):
+        text=(ROOT/'indra/newview/vsr3gltfreplay.cpp').read_text()
+        restore=method(text,'void restoreSettings()')
+        complete=method(text,'if(s.step==8)')
+        source=r"""
+#include <cassert>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+struct LLSD {std::map<std::string,LLSD> children;bool value=false;
+ LLSD& operator[](const char* key){return children[key];}LLSD& operator=(bool v){value=v;return *this;}};
+struct Settings {std::map<std::string,double> values;
+ void setF32(const char* k,double v){values[k]=v;}void setU32(const char* k,unsigned v){values[k]=v;}
+ void setBOOL(const char* k,bool v){values[k]=v;}}gSavedSettings;
+struct Window{bool minimized=true;void restore(){minimized=false;}};
+struct Viewer{Window win;Window* getWindow(){return &win;}}viewer,*gViewerWindow=&viewer;
+struct State {unsigned step=8,limit=2048;double minimizedTime=10;bool full=false,compression=true,anisotropy=false;
+ std::vector<std::weak_ptr<int>> images;LLSD evidence;RESTORE};
+struct World{bool present=true;bool object(int){return present;}};
+void require(bool ok,const char*){assert(ok);}
+bool completed(State& s,World& world,LLSD& report){const int objectID=1;COMPLETE;return false;}
+int main(){State state;World world;LLSD report;
+ gSavedSettings.values["RenderMaxTextureResolution"]=512;
+ assert(!completed(state,world,report));assert(gSavedSettings.values["RenderMaxTextureResolution"]==512);
+ world.present=false;auto queued=std::make_shared<int>(1);state.images.push_back(queued);
+ assert(!completed(state,world,report));assert(gSavedSettings.values["RenderMaxTextureResolution"]==512);
+ queued.reset();assert(completed(state,world,report));
+ assert(gSavedSettings.values["RenderMaxTextureResolution"]==2048 && !viewer.win.minimized);
+ assert(gSavedSettings.values["TextureDiscardMinimizedTime"]==10);
+ assert(gSavedSettings.values["RenderCompressTextures"]==1 && gSavedSettings.values["RenderAnisotropic"]==0);
+ assert(report["r3_gltf_images"]["object_retired"].value);
+}
+""".replace('RESTORE',restore).replace('COMPLETE',complete)
+        compiler=shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'completion.cpp';path.write_text(source);exe=Path(temp)/'completion.exe'
+            built=subprocess.run([compiler,'-std=c++17','-Wall','-Wextra','-Werror',str(path),'-o',str(exe)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            ran=subprocess.run([str(exe)],capture_output=True,text=True)
+            self.assertEqual(ran.returncode,0,ran.stdout+ran.stderr)
+
     def test_inactive_images_release_and_late_work_cannot_replace_new_preparation(self):
         text = (ROOT / 'indra/newview/vsworldgltf.cpp').read_text()
         prepare = method(text, 'bool prepareImage(unsigned index,')

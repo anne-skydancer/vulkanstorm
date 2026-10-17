@@ -40,9 +40,10 @@ struct State {
  std::vector<VSUIRenderer::Image> retained;
  std::vector<std::vector<U8>> retainedPixels;
  std::vector<std::weak_ptr<const VSUIRenderer::Texture>> images;
- ~State(){if(gViewerWindow && gViewerWindow->getWindow())gViewerWindow->getWindow()->restore();
+ void restoreSettings(){if(gViewerWindow && gViewerWindow->getWindow())gViewerWindow->getWindow()->restore();
   gSavedSettings.setF32("TextureDiscardMinimizedTime",minimizedTime);gSavedSettings.setU32("RenderMaxTextureResolution",limit);gSavedSettings.setBOOL("TextureLoadFullRes",full);
   gSavedSettings.setBOOL("RenderCompressTextures",compression);gSavedSettings.setBOOL("RenderAnisotropic",anisotropy);}
+ ~State(){restoreSettings();}
 };
 std::unique_ptr<State> state;
 void createObject(VSNativeSession& session){
@@ -116,6 +117,7 @@ bool vs_r3_gltf_images(LLSD& report){
   require(world.loadGLTF(*object,(folder/"embedded.gltf").string()),"R3 embedded glTF scene load failed");++s.step;return false;}
  if(s.step==8){if(world.object(objectID))return false;
   for(const auto& image:s.images)if(!image.expired())return false;
+  s.restoreSettings();
   s.evidence["object_retired"]=true;s.evidence["immutable_generations"]=true;report["r3_gltf_images"]=s.evidence;return true;}
  if(s.step==5) {
   world.packets(session->position(),128,768,768);
