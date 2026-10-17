@@ -1,6 +1,7 @@
 # Vulkanstorm development conventions
 
 - Prefer correct, performant, maintainable code. Report measured results and qualification limits accurately.
+- At each completed checkpoint, commit and push the work, then continue toward the authorized outcome. Give a detailed completion report rather than handing off partial checkpoints.
 - Carry authorized work through to the requested outcome. Milestones, diagnostic checkpoints and passing subsets of tests guide the work; they are not reasons to stop while requirements remain open.
 - Provide the outcome and qualification recap at completion. Avoid mid-flight recaps or permission requests that turn internal checkpoints into handoffs; interrupt only for a concrete blocker requiring user input. Follow any higher-priority communication requirements without stopping the work.
 - When asked to finish a roadmap stage, implement its entire scope and qualify its acceptance criteria. Distinguish implementation, runtime evidence and explicit qualification limits; do not substitute a diagnostic-only slice for required viewer integration.

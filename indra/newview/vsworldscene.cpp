@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsworldscene.h"
 #include "vsmaterialassets.h"
+#include "vsobjectmedia.h"
 #include "llgltfmateriallist.h"
 #include "llviewertextureanim.h"
 #include "vsterrainpacket.h"
@@ -214,6 +215,8 @@ struct VSWorldScene::Impl
     {
         LLUUID id;U32 parent=0;U8 pcode=LL_PCODE_VOLUME,attachment=0;LLVector3 position,scale,velocity,acceleration,angularVelocity;LLQuaternion rotation;
         LLUUID inventoryItem;
+        std::string mediaVersion;
+        std::shared_ptr<VSObjectMedia> media;
         LLRenderMaterialParams renderMaterials;
         std::shared_ptr<LLViewerTextureAnim> animation;
         S32 textureAnimMode=0;
@@ -879,6 +882,7 @@ struct VSWorldScene::Impl
         object.revision=nextRevision++;
         if (sameOwner)
         {
+            object.media=std::move(previous->second.media);
             // Identity guards/revision still advance immediately; the admitted
             // GPU generation survives until its replacement can be published.
             if (object.renderable && previous->second.renderable &&
@@ -980,7 +984,11 @@ struct VSWorldScene::Impl
         if (pcode == LL_PCODE_LEGACY_GRASS)
             object.species = state;
         if (flags&4) if (!string("Text") || !dp.unpackBinaryDataFixed(scratch,4,"Color")) return false;
-        if (flags&0x200) if (!string("MediaURL")) return false;
+        if (flags&0x200)
+        {
+            if (!string("MediaURL")) return false;
+            object.mediaVersion=text;
+        }
         if (flags & 8)
         {
             if (!dp.unpackBinaryDataFixed(scratch, 86, "LegacyParticles"))
@@ -1878,6 +1886,9 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
         object.rotation.unpackFromVector3(vectorAt(bytes.data()+offset+36));
         msg.getVector3("ObjectData","Scale",object.scale,i);msg.getUUID("ObjectData","FullID",object.id,i);
         msg.getU32("ObjectData","ParentID",object.parent,i);
+        const S32 mediaSize=msg.getSize("ObjectData",i,"MediaURL");
+        if(mediaSize<0 || mediaSize>4096) {++state.rejected;continue;}
+        if(mediaSize) msg.getString("ObjectData","MediaURL",object.mediaVersion,i);
         const S32 namesSize = msg.getSize("ObjectData", i, "NameValue");
         if (namesSize < 0 || namesSize > 4096)
         {
@@ -1936,6 +1947,7 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
         const char* objectBlock=LLMessageStringTable::getInstance()->getString("ObjectData");
         if (!LLVolumeMessage::unpackVolumeParams(&params,&msg,objectBlock,i)) { ++state.rejected;continue; }
         if (!ownerExtras(extra,object.extendedMeshFlags)) {++state.rejected;continue;}
+        bool materialDataValid=true;
         for (std::size_t cursor = extra.empty() ? 0 : 1; cursor + 6 <= extra.size();)
         {
             const U16 type   = U16(extra[cursor]) | U16(extra[cursor + 1]) << 8;
@@ -1944,11 +1956,12 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
             if (length > extra.size() - cursor)
                 break;
             if(type==LLNetworkData::PARAMS_RENDER_MATERIAL && !renderMaterialData(extra.data()+cursor,length,object.renderMaterials))
-                object.renderable=false;
+                materialDataValid=false;
             if (type == LLNetworkData::PARAMS_LIGHT && length == 16)
                 object.light = extra[cursor + 3] != 0;
             cursor += length;
         }
+        if(!materialDataValid) {++state.rejected;continue;}
         const S32 particleSize = msg.getSize("ObjectData", i, "PSBlock");
         if (particleSize < 0 || particleSize > 4096)
         {
@@ -2834,6 +2847,20 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         bool      uploadDeferred = producerDeferred;
         const S32 count=std::min(S32(o.faces.size()),o.volume->getNumVolumeFaces());
         auto      candidates     = o.faces;
+        const bool hasMedia=std::any_of(o.faces.begin(),o.faces.end(),[](const auto& face){return face.material.hasMedia();});
+        if(hasMedia)
+        {
+            if(!o.media)
+            {
+                const auto token=this->object(mImpl->host,id);
+                if(token) o.media=std::make_shared<VSObjectMedia>(mImpl->host,o.id,guard(*token));
+            }
+            const double distance=std::max(double((position-eye).length()),1.0);
+            const double radius=double(o.scale.length())*.5;
+            const double projected=radius*std::max(viewportHeight,1u)/distance;
+            if(o.media) o.media->update(o.mediaVersion,projected*projected,distance);
+        }
+        else o.media.reset();
         for (S32 f=0;f<count;++f)
         {
             if (producerDeferred)
@@ -2885,6 +2912,21 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 LLUI::getUIImageByID(texture);
                 channelImages[channel]=mImpl->resources.image("remote:"+texture.asString());
                 if(!channelImages[channel]) channelsReady=false;
+            }
+            if(o.media && face.material.hasMedia())
+            {
+                const auto mediaID=o.media->texture(unsigned(f));
+                const auto mediaImage=mImpl->resources.image("media:"+mediaID.asString());
+                if(mediaID.notNull() && mediaImage)
+                {
+                    channelImages[0]=mediaImage;
+                    // The reference fetched PBR material replaces both base
+                    // color and emissive images with the active media texture.
+                    if(surface.pbr) channelImages[3]=mediaImage;
+                    channelsReady=true;
+                    for(unsigned channel=1;channel<4;++channel)
+                        if(surface.textures[channel]!=std::array<std::uint8_t,16>{} && !channelImages[channel]) channelsReady=false;
+                }
             }
             if(!channelsReady) {uploadDeferred=true;continue;}
             auto image=channelImages[0];

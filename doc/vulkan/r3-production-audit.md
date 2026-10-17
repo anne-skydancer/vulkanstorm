@@ -113,3 +113,29 @@ region/orientation fixtures. All changed viewer translation units compile in
 the canonical RelWithDebInfo build. This supplies image publication to world
 consumers; ObjectMedia acquisition, native media interest and actual world-face
 binding are still required before world media can be qualified.
+
+## Object media production checkpoint
+
+Native object faces now acquire ObjectMedia metadata on their own simulator
+circuit and retain the reference LLTextureEntry/LLMediaEntry identities and
+LLViewerMedia::updateMediaImpl policy. Metadata refresh preserves plugin identity
+and the previous URL, while removal retires the instance's surface interest.
+Responses require current account, circuit, object generation and requested
+media version. Requests, response size, face count and retained metadata are
+bounded. Losing an object/region cancels its metadata owner.
+
+Visible native surfaces supply projected interest and distance to the existing
+media scheduler; instance/CPU limits, autoplay, enabled, focus and minimize policy
+remain shared. Object mute and expired visibility remove interest. Active media
+image generations replace the base channel (and PBR emissive channel), while
+other material channels keep their own publication requirements. An unavailable
+plugin leaves the reference static face texture available. Media pixels use the
+shared publication controller above.
+
+Compiled production-block regressions cover metadata identity preservation,
+invalid multi-face response rejection, removal and re-addition, and native
+interest expiry/muting/proximity. The native sources and existing R2/cache/asset
+regressions pass. Actual staged-viewer plugin/world-media replay and complete R3
+cross-platform qualification remain open. This is not a claim of R3 completion.
+The uncompressed object parser also now rejects malformed render-material data
+instead of allowing a later independent geometry result to overwrite failure.

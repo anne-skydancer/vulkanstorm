@@ -82,6 +82,7 @@
 
 #include "llfloaterwebcontent.h"    // for handling window close requests and geometry change requests in media browser windows.
 
+#include <limits>
 #include <boost/bind.hpp>   // for SkinFolder listener
 #include <boost/signals2.hpp>
 
@@ -3885,6 +3886,29 @@ static LLTrace::BlockTimerStatHandle FTM_MEDIA_CALCULATE_INTEREST("Calculate Int
 
 void LLViewerMediaImpl::calculateInterest()
 {
+#if VS_NATIVE_VULKAN
+    if (!mNativeSurfaces.empty())
+    {
+        mInterest=0;mProximityDistance=std::numeric_limits<F64>::max();mProximityCamera=0;mIsMuted=false;
+        const F64 now=LLFrameTimer::getTotalSeconds();
+        bool active=false, unmuted=false;
+        for(const auto& [object,surface]:mNativeSurfaces)
+        {
+            if(now-surface.updated>1.0) continue;
+            active=true;
+            if(LLMuteList::getInstance()->isMuted(object)) continue;
+            unmuted=true;
+            mInterest=std::max(mInterest,surface.pixels);
+            mProximityDistance=std::min(mProximityDistance,surface.distance*surface.distance);
+        }
+        mIsMuted=active && !unmuted;
+        if(unmuted) mProximityCamera=std::sqrt(mProximityDistance);
+        // The shared scheduler still enforces enabled, autoplay, user mute,
+        // instance/CPU limits and focus/minimize policies using these inputs.
+        mNeedsMuteCheck=false;
+        return;
+    }
+#endif
     LL_PROFILE_ZONE_SCOPED_CATEGORY_MEDIA; //LL_RECORD_BLOCK_TIME(FTM_MEDIA_CALCULATE_INTEREST);
     LLViewerMediaTexture* texture = LLViewerTextureManager::findMediaTexture( mTextureId );
 
@@ -3990,6 +4014,19 @@ F64 LLViewerMediaImpl::getApproximateTextureInterest()
 
     return result;
 }
+
+#if VS_NATIVE_VULKAN
+void LLViewerMediaImpl::setNativeSurface(const LLUUID& object,F64 pixels,F64 distance)
+{
+    if(!std::isfinite(pixels) || !std::isfinite(distance) || pixels<0 || distance<0) return;
+    mNativeSurfaces.insert_or_assign(object,NativeSurface{pixels,distance,LLFrameTimer::getTotalSeconds()});
+}
+void LLViewerMediaImpl::removeNativeSurface(const LLUUID& object)
+{
+    mNativeSurfaces.erase(object);
+    if(mNativeSurfaces.empty()) mInterest=0;
+}
+#endif
 
 void LLViewerMediaImpl::setUsedInUI(bool used_in_ui)
 {
