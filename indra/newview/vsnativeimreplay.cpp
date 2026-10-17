@@ -605,7 +605,7 @@ struct Replay : public LLAvatarPropertiesObserver
                     require(gAgentCamera.getOrbitLeftKey() == 0, "Native camera held intent remained stuck");
                     require(cameraFloater.get() != nullptr, "Actual camera floater retired before drawing");
                     cameraFloater.get()->closeFloater();
-                    owner.cameraReset();
+                    LLFloaterCamera::onClickCameraItem(LLSD("reset_view"));
                 }
                 ++cameraCheck;
                 return false;

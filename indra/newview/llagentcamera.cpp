@@ -2320,16 +2320,33 @@ bool LLAgentCamera::clampCameraPosition(LLVector3d& posCamGlobal, const LLVector
 
 LLVector3 LLAgentCamera::getCurrentCameraOffset()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active())
+    {
+        const auto camera = native->cameraState();
+        return ((camera.center - native->position() - LLVector3(0,0,1)) * ~camera.bodyRotation) * (1.f / llmax(getCameraOffsetScale(), .001f));
+    }
+#endif
     return (LLViewerCamera::getInstance()->getOrigin() - getAvatarRootPosition() - mThirdPersonHeadOffset) * ~getCurrentAvatarRotation();
 }
 
 LLVector3d LLAgentCamera::getCurrentFocusOffset()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active())
+    {
+        const auto camera = native->cameraState();
+        return LLVector3d((camera.focus - native->position()) * ~camera.bodyRotation);
+    }
+#endif
     return (mFocusTargetGlobal - gAgent.getPositionGlobal()) * ~getCurrentAvatarRotation();
 }
 
 LLQuaternion LLAgentCamera::getCurrentAvatarRotation()
 {
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) return native->cameraState().bodyRotation;
+#endif
     LLViewerObject* sit_object = (LLViewerObject*)gAgentAvatarp->getParent();
 
     LLQuaternion av_rot = gAgent.getFrameAgent().getQuaternion();
@@ -2339,6 +2356,9 @@ LLQuaternion LLAgentCamera::getCurrentAvatarRotation()
 
 bool LLAgentCamera::isJoystickCameraUsed()
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return true; // Presets capture the actual native eye and focus, including pan/zoom.
+#endif
     return ((mOrbitAroundRadians != 0) || (mOrbitOverAngle != 0) || !mPanFocusDiff.isNull());
 }
 
@@ -3122,6 +3142,9 @@ void LLAgentCamera::setSitCamera(const LLUUID &object_id, const LLVector3 &camer
 //-----------------------------------------------------------------------------
 void LLAgentCamera::setFocusOnAvatar(bool focus_on_avatar, bool animate, bool reset_axes)
 {
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { mFocusOnAvatar = focus_on_avatar; return; }
+#endif
     if (focus_on_avatar != mFocusOnAvatar)
     {
         if (animate)
