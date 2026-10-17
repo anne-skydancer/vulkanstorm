@@ -733,3 +733,21 @@ settings-file round trip. Independent evidence validation checks the persisted
 types and values; missing files, unchanged values or missing effects fail. The
 archive must retain the settings file. Translation-unit compilation and focused
 regressions pass; this new runtime check remains pending a canonical rebuild.
+
+Actual shared-settings replay at `0666377b6b` passed in 29.6 seconds
+(`.tmp/r3-settings-registration-qualified`). The first runtime attempt at
+`81c36d2300` correctly failed because the native startup omitted listener
+registration entirely. Native startup now registers the reviewed shared
+callbacks after their owners exist; deferred callbacks are omitted at
+registration rather than becoming admissible after account teardown.
+
+The subsequent cache matrix passed cold execution but rejected warm execution:
+one default-object texture performed HTTP despite its saved cold cache body.
+The full matrix is consequently not qualified at this checkpoint. Dedicated
+worker tracing then reproduced successful zero-network warm reads, including
+a fresh cold/restart pair whose saved headers and bodies were retained in
+`.tmp/r3-cache-restart-trace`. This does not explain or waive the original
+failure. Native-only miss/header-rejection diagnostics now record the actual
+cached, desired and known byte sizes at the failed transition, without global
+DEBUG logging that could mask a timing problem. Pending investigation retains
+the existing zero-network, pixel and archive requirements.

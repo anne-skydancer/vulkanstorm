@@ -1363,6 +1363,10 @@ bool LLTextureFetchWorker::doWork(S32 param)
             else
             {
                 LL_DEBUGS(LOG_TXT) << mID << ": Not in Cache" << LL_ENDL;
+                if (mFetcher->mNativeConsumer)
+                    LL_INFOS("NativeTextureCache") << mID << " cache miss: cached_bytes=" << mCachedSize
+                        << " desired_bytes=" << mDesiredSize << " known_size=" << mFileSize
+                        << " all_data=" << mHaveAllData << " cache_allowed=" << mFetcher->canLoadFromCache() << LL_ENDL;
                 setState(LOAD_FROM_NETWORK);
             }
             record(LLTextureFetch::sCacheHitRate, LLUnits::Ratio::fromValue(0));
@@ -2022,6 +2026,9 @@ bool LLTextureFetchWorker::doWork(S32 param)
             {
                 if(mCachedSize>0 && mRetryAttempt==0)
                 {
+                    LL_INFOS("NativeTextureCache") << mID << " cached header rejected: bytes=" << mCachedSize
+                        << " codec=" << mFormattedImage->getCodec() << " extent=" << mFormattedImage->getWidth()
+                        << "x" << mFormattedImage->getHeight() << " components=" << mFormattedImage->getComponents() << LL_ENDL;
                     mFetcher->mTextureCache->removeFromCache(mID);
                     mFormattedImage=NULL;++mRetryAttempt;setState(INIT);
                     return false;
