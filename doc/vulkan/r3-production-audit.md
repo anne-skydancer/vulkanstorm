@@ -709,3 +709,27 @@ control's temporary-invalid-buffer path still erased source-owned publication.
 That erase is now removed as well. Stage diagnostics record actual plugin,
 stride and publication dimensions rather than extending deadlines or relaxing
 pixel checks. This local result does not certify all R3 work or platform CI.
+
+## Settings registration inventory and shared CPU effects
+
+`r3-settings-listeners.csv` records every one of the 208 source registration
+sites, including both dynamically expanded local-terrain registration sites;
+those loop sites represent multiple runtime listeners. The inventory separates
+56 reviewed shared callback registrations (53 setting names), ten directly
+polled native owners, ten open R3 terrain/pressure controllers and 132 later
+phase callback registrations. A recorded later owner is not a claim that its
+effect is implemented. Velocity interpolation's native polling does not certify
+its separately noted simulator preference notification.
+
+Both setting wrappers now admit the reviewed CPU/UI/audio/voice callbacks while
+preserving the block on legacy rendering/scene callbacks and unknown settings.
+Their actual C++ wrappers are executed by a regression proving both overloads
+route shared effects, suppress native GL cascades and preserve OpenGL callbacks.
+An inventory regression requires every source registration to have a disposition.
+
+The actual viewer replay also checks navbar internal visibility changes, debug
+rectangle state, both chat-font change/restoration notifications and a real
+settings-file round trip. Independent evidence validation checks the persisted
+types and values; missing files, unchanged values or missing effects fail. The
+archive must retain the settings file. Translation-unit compilation and focused
+regressions pass; this new runtime check remains pending a canonical rebuild.

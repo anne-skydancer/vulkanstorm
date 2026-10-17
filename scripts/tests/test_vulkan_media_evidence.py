@@ -6,7 +6,8 @@ import sys
 import tempfile
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from run_vulkan_session_replay import MEDIA_PAGE,media_contracts_passed
+from run_vulkan_session_replay import MEDIA_PAGE,media_contracts_passed,shared_settings_contracts_passed,append_llsd
+import xml.etree.ElementTree as ET
 class MediaEvidence(unittest.TestCase):
     def test_publication_pixels_lifecycle_and_missing_files(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -23,4 +24,18 @@ class MediaEvidence(unittest.TestCase):
             wrong=copy.deepcopy(report);wrong['r3_media']['resized']['generation']=2;self.assertFalse(media_contracts_passed(wrong,requests,root))
             path=root/data['updated']['file'];original=path.read_bytes();path.write_bytes(original[::-1]);self.assertFalse(media_contracts_passed(report,requests,root))
             path.write_bytes(original);path.unlink();self.assertFalse(media_contracts_passed(report,requests,root))
+    def test_preferences_need_real_saved_values(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'r3').mkdir()
+            row=dict(navbar_callback=True,debug_callback=True,persisted=True,font_callbacks=2,file='r3/settings-roundtrip.xml',navigation=True,favorites=False,debug=True,font=2)
+            report={'r3_shared_settings':row}
+            self.assertFalse(shared_settings_contracts_passed(report,root))
+            saved={setting:dict(Type='Boolean',Value=row[key]) for setting,key in (('ShowNavbarNavigationPanel','navigation'),('ShowNavbarFavoritesPanel','favorites'),('DebugViews','debug'))}
+            saved['ChatFontSize']=dict(Type='S32',Value=2)
+            def write():
+                node=ET.Element('llsd');append_llsd(node,saved);(root/row['file']).write_bytes(ET.tostring(node))
+            write();self.assertTrue(shared_settings_contracts_passed(report,root))
+            saved['ChatFontSize']['Value']=1;write();self.assertFalse(shared_settings_contracts_passed(report,root))
+            saved['ChatFontSize']['Value']=2;saved['ShowNavbarNavigationPanel']['Value']=False;write();self.assertFalse(shared_settings_contracts_passed(report,root))
+
 if __name__=='__main__':unittest.main()

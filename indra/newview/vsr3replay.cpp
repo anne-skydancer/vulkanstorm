@@ -16,6 +16,8 @@
 #include "llimagepng.h"
 #include "llui.h"
 #include "llviewercontrol.h"
+#include "llviewerchat.h"
+#include "llview.h"
 #include "llviewerwindow.h"
 #include "vsvulkancontext.h"
 #include "vsuiresources.h"
@@ -143,11 +145,54 @@ LLSD localMaterial(VSUIResources& resources,const std::filesystem::path& root)
     return result;
 }
 }
+namespace
+{
+LLSD sharedSettings(const std::filesystem::path& root)
+{
+    const bool navigation=gSavedSettings.getBOOL("ShowNavbarNavigationPanel");
+    const bool favorites=gSavedSettings.getBOOL("ShowNavbarFavoritesPanel");
+    const bool debug=gSavedSettings.getBOOL("DebugViews");
+    const S32 font=gSavedSettings.getS32("ChatFontSize"),changedFont=(font+1)%4;
+    struct Restore
+    {
+        bool navigation,favorites,debug;S32 font;
+        ~Restore() {
+            gSavedSettings.setBOOL("ShowNavbarNavigationPanel",navigation);
+            gSavedSettings.setBOOL("ShowNavbarFavoritesPanel",favorites);
+            gSavedSettings.setBOOL("DebugViews",debug);gSavedSettings.setS32("ChatFontSize",font);
+        }
+    } restore{navigation,favorites,debug,font};
+    unsigned fontEvents=0;
+    boost::signals2::scoped_connection connection(LLViewerChat::setFontChangedCallback(
+        [&](LLFontGL* changed) {require(changed!=nullptr,"Shared chat font callback lost its font");++fontEvents;}));
+    gSavedSettings.setBOOL("ShowNavbarNavigationPanel",!navigation);
+    gSavedSettings.setBOOL("ShowNavbarFavoritesPanel",!favorites);
+    gSavedSettings.setBOOL("DebugViews",!debug);gSavedSettings.setS32("ChatFontSize",changedFont);
+    require(gSavedSettings.getBOOL("FSInternalShowNavbarNavigationPanel")==!navigation &&
+            gSavedSettings.getBOOL("FSInternalShowNavbarFavoritesPanel")==!favorites,
+            "Native preferences did not reach shared navbar visibility owners");
+    require(LLView::sDebugRects==!debug && fontEvents==1,"Native preferences bypassed shared UI/font callbacks");
+    const auto file=root/"r3/settings-roundtrip.xml";
+    require(gSavedSettings.saveToFile(file.string(),false)>0,"Native preferences did not persist");
+    LLSD saved;std::ifstream input(file);
+    require(LLSDSerialize::fromXML(saved,input)>0 && saved["ChatFontSize"]["Value"].asInteger()==changedFont &&
+        saved["ShowNavbarNavigationPanel"]["Value"].asBoolean()==!navigation &&
+        saved["ShowNavbarFavoritesPanel"]["Value"].asBoolean()==!favorites &&
+        saved["DebugViews"]["Value"].asBoolean()==!debug,"Persisted native preferences differ from live values");
+    gSavedSettings.setS32("ChatFontSize",font);
+    require(fontEvents==2,"Restored native chat font did not notify shared consumers");
+    LLSD row;row["navbar_callback"]=true;row["debug_callback"]=true;row["font_callbacks"]=S32(fontEvents);
+    row["persisted"]=true;row["file"]="r3/settings-roundtrip.xml";
+    row["navigation"]=!navigation;row["favorites"]=!favorites;row["debug"]=!debug;row["font"]=changedFont;
+    return row;
+}
+}
 void vs_r3_local_images(LLSD& evidence)
 {
     if(!std::getenv("VS_VULKAN_REPLAY_LOCAL_IMAGES") || evidence.has("r3_local_images")) return;
     const auto root=std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));
     const auto folder=root/"r3"/"local-images";std::filesystem::create_directories(folder);
+    evidence["r3_shared_settings"]=sharedSettings(root);
     const auto file=folder/"watch.png";
     const bool compression=gSavedSettings.getBOOL("RenderCompressTextures");
     struct Restore {bool value;~Restore(){gSavedSettings.setBOOL("RenderCompressTextures",value);}} restore{compression};
