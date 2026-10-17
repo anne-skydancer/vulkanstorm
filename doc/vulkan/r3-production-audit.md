@@ -950,3 +950,34 @@ seams and live scale changes; every chart is mandatory runner evidence.
 Ground admission/refusal and prior-publication ownership regressions pass.
 This checkpoint does not close terrain PBR, cache lifecycle, pressure runtime
 qualification or final three-platform R3 acceptance.
+
+
+### Terrain material and inactive-image production checkpoint (2026-10-17)
+
+Native terrain now owns four complete PBR material/channel snapshots, regional
+ModifyRegion override acquisition and local terrain assets/transforms. The
+native shader embeds the current reference pbrterrainUtilF sampler with its
+license and attribution, changing only binding/coordinate adapters. A permanent
+source check rejects a stale embedding. Detail levels compile distinct shader
+variants and omit disabled normal/emissive channels. Separate sampled-image and
+sampler descriptors avoid multiplying sampler ownership per terrain image.
+
+Local paint create/delete routes use admitted terrain triangles, the same alpha
+ramp, reference mix threshold and requested bake bit depth/resolution. A native
+R3 replay now requires real received terrain geometry before exercising all
+four local material layers, paint publication and live scale/transform changes.
+Its validator requires every pixel artifact and rejects omitted evidence.
+
+Headless production-renderer charts pass for four legacy/PBR layers and blend
+seams, linear factors, normal rotation, occlusion, emissive, detail omissions,
+paintmap selection and completed-submission image retirement. The actual-viewer
+replay exposed a winding mismatch when material-backed terrain first enabled
+culling; the terrain pipeline now preserves its shared producer's front face.
+The refreshed viewer replay remains required to accept that correction.
+
+Minimized views now continue shared-policy world image pumping, imported image
+rebinding and GPU upload/submission completion while preserving geometry and
+UI/exact demand. Picking metadata releases terrain image snapshots. The source
+regressions and native build are checks, not final pressure/runtime acceptance.
+Pending-I/O shutdown, account/grid transitions, full terrain/pressure viewer
+qualification and final three-platform R3 acceptance remain open.

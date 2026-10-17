@@ -7,6 +7,7 @@
 #include "vsr1replay.h"
 #include "vsr2replay.h"
 #include "vsr3replay.h"
+#include "vsr3terrainreplay.h"
 #include "vsterrainreplay.h"
 #include "vsnativereplay.h"
 #include "vsnativeimreplay.h"
@@ -924,6 +925,7 @@ struct Replay
             if (!*readback) return;
             vs_r3_local_images(imEvidence);
             if(!vs_r3_world_images(imEvidence)) return;
+            if(!vs_r3_terrain_replay_tick(imEvidence)) return;
             if (!vs_native_im_replay_tick(owner, imEvidence)) return;
             if (!imCaptureRequested)
             {

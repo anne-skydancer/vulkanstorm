@@ -15,6 +15,7 @@
 #include "vsvegetation.h"
 #include "vsterraingeometry.h"
 #include "vsterrainmaterial.h"
+#include "vsterrainassets.h"
 #include "vsrendercomplexity.h"
 #include "vsvolumelod.h"
 #include "vsvegetationlod.h"
@@ -278,6 +279,7 @@ struct VSWorldScene::Impl
     VSWorldRenderer& renderer;VSUIResources& resources;
     std::shared_ptr<VSWorldAssets> assets;
     std::unique_ptr<VSMaterialAssets> materialAssets;
+    std::unique_ptr<VSTerrainAssets> terrainAssets;
     std::map<U32,LLSD> pendingMaterialOverrides;
     std::shared_ptr<Budgets> budgets;
     LLHost host;U64 handle=0,incarnation=0,nextObjectGeneration=1,nextRevision=1;
@@ -786,6 +788,12 @@ struct VSWorldScene::Impl
         resources.publish(key,*raw);
         return resources.image(key);
     }
+    std::shared_ptr<const VSWorldRenderer::Terrain> terrainMaterial(unsigned demand)
+    {
+        if(!host.isOk() || !VSNativeSession::active()) return {};
+        if(!terrainAssets) terrainAssets=std::make_unique<VSTerrainAssets>(host);
+        return terrainAssets->snapshot(terrainTextures,demand,width,resources,terrainRamp());
+    }
     void surfaces(std::vector<VSWorldRenderer::Packet>& packets,const LLVector3& eye,unsigned viewportHeight=768)
     {
         if (!sky)
@@ -800,32 +808,42 @@ struct VSWorldScene::Impl
             background.fullbright = true;
             packets.push_back(background);
         }
+        auto surface=std::make_shared<VSMaterial::State>();
+        const F32 scale=1.f/std::max(gSavedSettings.getF32("RenderTerrainScale"),.001f);
+        const auto origin=from_region_handle(handle);
+        surface->uv[0].matrix={scale,0,0,scale};
+        surface->uv[0].offset={F32(std::fmod(origin.mdV[0],1.0/scale)*scale),F32(std::fmod(origin.mdV[1],1.0/scale)*scale)};
+        surface->samplers[VSMaterial::Occlusion].u=surface->samplers[VSMaterial::Occlusion].v=VSWorldContracts::AddressMode::Clamp;
+        for(unsigned channel=0;channel<4;++channel) {surface->samplers[channel].mipmaps=true;surface->samplers[channel].anisotropy=gSavedSettings.getBOOL("RenderAnisotropic")?16u:1u;}
+        unsigned demand=1;
+        bool received=false;
+        for(const auto& [key,g]:ground) if(g.mesh)
+        {
+            received=true;
+            const unsigned x=unsigned(key>>32),y=U32(key),n=g.size;
+            const LLVector3 center(F32(x)+F32(n)*.5f,F32(y)+F32(n)*.5f,height(x+n/2,y+n/2,0));
+            demand=std::max(demand,unsigned(std::clamp(F32(n)*std::max(viewportHeight,1u)/std::max((center-eye).length(),1.f),1.f,4096.f)));
+        }
+        const auto fallback=received?resources.defaultWorldImage():VSUIRenderer::Image{};
+        std::array<VSUIRenderer::Image,4> layers;
+        if(received) for(unsigned layer=0;layer<4;++layer)
+        {
+            const auto& texture=terrainTextures[layer];
+            if(texture.notNull()) vs_request_world_image(texture,demand);
+            layers[layer]=texture.notNull()?resources.image("remote:"+vs_native_image_id(texture).asString()):VSUIRenderer::Image{};
+            if(!layers[layer]) layers[layer]=fallback;
+        }
+        const auto ramp=received?terrainRamp():VSUIRenderer::Image{};
+        const auto pbr=received?terrainMaterial(demand):nullptr;
         for (auto& [key, g] : ground)
         {
-            const unsigned x0 = unsigned(key >> 32), y0 = U32(key), n = g.size;
             if (!g.mesh) continue;
             VSWorldRenderer::Packet p;
             p.mesh=g.mesh;p.terrain=true;p.terrainKey=key;p.objectGeneration=incarnation;
-            auto surface=std::make_shared<VSMaterial::State>();
-            const F32 scale=1.f/std::max(gSavedSettings.getF32("RenderTerrainScale"),.001f);
-            const auto origin=from_region_handle(handle);
-            surface->uv[0].matrix={scale,0,0,scale};
-            surface->uv[0].offset={F32(std::fmod(origin.mdV[0],1.0/scale)*scale),F32(std::fmod(origin.mdV[1],1.0/scale)*scale)};
-            surface->samplers[VSMaterial::Occlusion].u=surface->samplers[VSMaterial::Occlusion].v=VSWorldContracts::AddressMode::Clamp;
-            const LLVector3 center(F32(x0)+F32(n)*.5f,F32(y0)+F32(n)*.5f,height(x0+n/2,y0+n/2,0));
-            const unsigned demand=unsigned(std::clamp(F32(n)*std::max(viewportHeight,1u)/std::max((center-eye).length(),1.f),1.f,4096.f));
-            const auto fallback=resources.defaultWorldImage();
-            for(unsigned layer=0;layer<4;++layer)
-            {
-                const auto& texture=terrainTextures[layer];
-                if(texture.notNull()) vs_request_world_image(texture,demand);
-                auto image=texture.notNull()?resources.image("remote:"+vs_native_image_id(texture).asString()):VSUIRenderer::Image{};
-                if(!image) image=fallback;
-                if(!layer) p.image=std::move(image);else p.channels[layer-1]=std::move(image);
-            }
-            p.channels[3]=terrainRamp();
+            p.image=layers[0];p.channels={layers[1],layers[2],layers[3],ramp};
+            p.terrainMaterial=pbr;
             if(!p.image && !fallback) p.color={127.f/255,127.f/255,127.f/255,1};
-            p.surface=std::move(surface);
+            p.surface=surface;
             packets.push_back(std::move(p));
         }
         if (waterKnown)
@@ -1258,6 +1276,8 @@ void VSWorldScene::reset(bool preserveAssets)
     mImpl->patchSize                      = 0;
     mImpl->water.reset();mImpl->waterKnown=false;mImpl->terrainTextures={};
     mImpl->materialAssets.reset();mImpl->pendingMaterialOverrides.clear();
+    mImpl->terrainAssets.reset();
+    if(mRoot && !preserveAssets) mImpl->resources.erase("terrain:local-paint");
     mImpl->objects.clear();mImpl->pending.clear();mImpl->nextRequest=0;
     mImpl->pendingAnimations.clear();
     mImpl->visiblePackets.clear();
@@ -1579,6 +1599,97 @@ bool VSWorldScene::freeze(const ObjectHandle& token,bool selected)
     for(const auto local:family)mImpl->objects.at(local).motion.freeze(selected);
     return true;
 }
+void VSWorldScene::deleteTerrainPaintMap()
+{
+    gSavedSettings.setBOOL("LocalTerrainPaintEnabled",false);
+    mImpl->resources.erase("terrain:local-paint");
+}
+bool VSWorldScene::createTerrainPaintMap()
+{
+    // Orthographic CPU transposition of the reference paint bake. Interpolate
+    // the admitted terrain triangles' composition UVs, sample the same ramp,
+    // and apply pbrTerrainBakeF's requested quantization. No GL owners are made.
+    if(mImpl->ground.empty() || !mImpl->terrainRamp()) return false;
+    const auto ramp=mImpl->resources.rawImage("terrain:alpha-ramp");
+    if(!ramp || ramp->getComponents()!=4) return false;
+    unsigned dimension=llclamp(gSavedSettings.getU32("TerrainPaintResolution"),16u,
+        llclamp(gSavedSettings.getU32("RenderMaxTextureResolution"),512u,4096u));
+    unsigned rounded=16;while(rounded<dimension) rounded*=2;dimension=rounded;
+    auto working=mImpl->budgets->terrainBytes.reserve(std::size_t(dimension)*dimension*4);
+    if(!working) return false;
+    LLPointer<LLImageRaw> pixels=new LLImageRaw(dimension,dimension,4);pixels->clear(0,0,0,255);
+    const float precision=float((1u<<llclamp(gSavedSettings.getU32("TerrainPaintBitDepth"),1u,8u))-1);
+    auto alpha=[&](float u,float v)
+    {
+        const float x=std::clamp(u,0.f,1.f)*ramp->getWidth()-.5f;
+        const float y=std::clamp(v,0.f,1.f)*ramp->getHeight()-.5f;
+        const S32 x0=llfloor(x),y0=llfloor(y);
+        auto sample=[&](S32 xx,S32 yy) {
+            return float(ramp->getData()[(std::size_t(llclamp(yy,0,ramp->getHeight()-1))*ramp->getWidth()+
+                llclamp(xx,0,ramp->getWidth()-1))*4+3])/255.f;
+        };
+        return VSTerrainMaterial::bilinear(sample(x0,y0),sample(x0,y0+1),sample(x0+1,y0),sample(x0+1,y0+1),x-x0,y-y0);
+    };
+    const float scaleX=float(dimension)/mImpl->width,scaleY=float(dimension)/mImpl->regionHeight;
+    for(const auto& [key,patch]:mImpl->ground)
+    {
+        if(!patch.mesh) continue;
+        const auto& vertices=VSWorldRenderer::geometryVertices(patch.mesh);
+        const auto& indices=VSWorldRenderer::geometryIndices(patch.mesh);
+        for(std::size_t index=0;index+2<indices.size();index+=3)
+        {
+            const auto& a=vertices[indices[index]];
+            const auto& b=vertices[indices[index+1]];
+            const auto& c=vertices[indices[index+2]];
+            const float area=(b.y-c.y)*(a.x-c.x)+(c.x-b.x)*(a.y-c.y);
+            if(std::abs(area)<1.e-12f) continue;
+            const S32 left=llclamp(llfloor(std::min({a.x,b.x,c.x})*scaleX),0,S32(dimension)-1);
+            const S32 right=llclamp(S32(std::ceil(std::max({a.x,b.x,c.x})*scaleX)),0,S32(dimension));
+            const S32 bottom=llclamp(llfloor(std::min({a.y,b.y,c.y})*scaleY),0,S32(dimension)-1);
+            const S32 top=llclamp(S32(std::ceil(std::max({a.y,b.y,c.y})*scaleY)),0,S32(dimension));
+            for(S32 y=bottom;y<top;++y) for(S32 x=left;x<right;++x)
+            {
+                const float px=(x+.5f)/scaleX,py=(y+.5f)/scaleY;
+                const float wa=((b.y-c.y)*(px-c.x)+(c.x-b.x)*(py-c.y))/area;
+                const float wb=((c.y-a.y)*(px-c.x)+(a.x-c.x)*(py-c.y))/area;
+                const float wc=1-wa-wb;
+                if(wa<-.00001f || wb<-.00001f || wc<-.00001f) continue;
+                const float u=wa*a.u1+wb*b.u1+wc*c.u1,v=wa*a.v1+wb*b.v1+wc*c.v1;
+                const auto weights=VSTerrainMaterial::weights(alpha(u,v),alpha(u-2,v),alpha(u-1,v));
+                auto* pixel=pixels->getData()+(std::size_t(y)*dimension+x)*4;
+                for(unsigned channel=0;channel<3;++channel)
+                    pixel[channel]=U8(std::round(std::round(weights[channel+1]*precision)/precision*255.f));
+            }
+        }
+    }
+    if(!mImpl->resources.publish("terrain:local-paint",*pixels)) return false;
+    gSavedSettings.setBOOL("LocalTerrainPaintEnabled",true);
+    return true;
+}
+void VSWorldScene::refreshInactiveImages()
+{
+    if(mImpl->terrainAssets) mImpl->terrainAssets->releaseImages();
+    auto refresh=[&](Impl::Face& face)
+    {
+        if(!face.surface) return;
+        for(unsigned channel=0;channel<VSMaterial::ChannelCount;++channel)
+        {
+            LLUUID id;std::copy_n(face.surface->textures[channel].begin(),UUID_BYTES,id.mData);
+            if(id.isNull()) continue;
+            const auto image=mImpl->resources.image("remote:"+vs_native_image_id(id).asString());
+            if(!image) continue;
+            if(!channel) face.publishedImage=image;else face.publishedChannels[channel-1]=image;
+        }
+    };
+    for(auto& [local,object]:mImpl->objects)
+    {
+        for(auto& face:object.faces) refresh(face);
+        for(auto& face:object.admittedFaces) refresh(face);
+        if(object.gltf) object.gltf->refreshInactiveImages();
+        if(object.pendingGLTF) object.pendingGLTF->refreshInactiveImages();
+    }
+    for(const auto& [host,region]:mNeighbours) region->refreshInactiveImages();
+}
 void VSWorldScene::derenderAnimatedObjects()
 {
     mImpl->eraseAnimated();
@@ -1624,6 +1735,7 @@ void VSWorldScene::configureRegion(const LLSD& h)
         const float start=float(h["terrain_starts"][i].asReal()),range=float(h["terrain_ranges"][i].asReal());
         state.terrainStarts[i]=std::isfinite(start)?start:0;state.terrainRanges[i]=std::isfinite(range)?range:1;
     }
+    state.terrainAssets.reset();
     for(auto& [key,patch]:state.ground) patch.dirty=true;
 }
 bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& agent)
@@ -3162,6 +3274,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         visible.packet.mesh.reset();
         visible.packet.image.reset();
         visible.packet.channels={};
+        visible.packet.terrainMaterial.reset();
         mImpl->visiblePackets.push_back(std::move(visible));
     }
     return packets;

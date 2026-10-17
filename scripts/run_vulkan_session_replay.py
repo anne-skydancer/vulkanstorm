@@ -540,6 +540,29 @@ REQUIRED = ('connected_native_statistics', 'connected_script_notification_contro
             'partial_init_cleanup', 'connection_timeout', 'encoded_chat', 'encoded_typing', 'ui_gate', 'logout_timeout', 'native_people_account_ui', 'native_navigation_request', 'native_navigation_transition', 'native_navigation_epoch', 'native_navigation_identity', 'native_navigation_local', 'native_location_lookup', 'native_landmark_v2', 'encoded_channels', 'queued_http_chat', 'mute_request', 'mute_transfer_cleanup', 'input_history', 'status_messages', 'connected_timeout', 'reliable_failure')
 
 
+def r3_terrain_contracts_passed(report,directory):
+    try:
+        record=report['r3_terrain']
+        if any(record.get(key) is not True for key in ('complete','live_scale_transform','paint_bake','paint_deleted')):
+            return False
+        if record.get('paint_bit_depth')!=1 or len(record['layers'])!=4:
+            return False
+        colors=((255,0,0,255),(0,255,0,255),(0,0,255,255),(255,255,255,255))
+        for index,row in enumerate(record['layers']):
+            relative=f'r3/terrain/paint-layer-{index}.rgba'
+            if row.get('layer')!=index or row.get('file')!=relative or row.get('pixels_verified') is not True:
+                return False
+            path=Path(directory)/relative
+            if path.is_symlink() or not path.resolve().is_relative_to(Path(directory).resolve()):
+                return False
+            data=path.read_bytes()
+            if len(data)!=64*64*4 or any(abs(value-colors[index][offset%4])>1 for offset,value in enumerate(data)):
+                return False
+        return True
+    except (KeyError,TypeError,ValueError,OSError):
+        return False
+
+
 def terrain_contracts_passed(report,directory):
     try:
         terrain=report['terrain_publication']
@@ -1205,6 +1228,9 @@ def main():
     parser.add_argument('--r2-contracts',action='store_true',help='Replay production R2 geometry and connected appearance actions')
     parser.add_argument('--native-backtrace', action='store_true', help='Run Linux replay under GDB; ordinary qualification runs directly')
     args = parser.parse_args()
+    # Terrain materials must exercise the viewer's received terrain geometry,
+    # rather than qualifying only the standalone shader charts.
+    args.terrain_contracts = args.terrain_contracts or args.local_image_contracts
     if args.cache_size is not None and not 256 <= args.cache_size <= 100*1024:
         parser.error('--cache-size must be between 256 and 102400 MiB')
     if args.texture_cache_read_only and not (args.headless and args.texture_cache_contracts):
@@ -1404,6 +1430,8 @@ def main():
                 raise RuntimeError('Missing actual shared preference effects and persisted values')
             if args.local_image_contracts and not r3_gltf_fixture.contracts_passed(report,directory):
                 raise RuntimeError('Missing actual imported glTF image contracts')
+            if args.local_image_contracts and not r3_terrain_contracts_passed(report,directory):
+                raise RuntimeError('Missing actual production terrain material, paint or settings evidence')
             if args.local_image_contracts and not media_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing actual media plugin publication, shared ownership or GPU evidence')
             if args.local_image_contracts and not legacy_material_contracts_passed(report,server.requests,directory):

@@ -19,6 +19,9 @@ public:
     VSWorldScene(VSWorldRenderer&, VSUIResources&);
     ~VSWorldScene();
     void reset(bool preserveAssets = false);
+    bool createTerrainPaintMap();
+    void deleteTerrainPaintMap();
+    void refreshInactiveImages();
     void configureRegion(const LLSD& handshake);
     bool openRegion(const LLHost&, U64 handle, U32 width, U32 height, U64 incarnation);
     bool activateRegion(const LLHost&, U64 handle, U32 width, U32 height, U64 incarnation);

@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsworldrenderer.h"
 #include "vsresourcebudget.h"
+#include "vsterrainshader.h"
 #pragma push_macro("Bool")
 #pragma push_macro("True")
 #pragma push_macro("False")
@@ -37,6 +38,14 @@ struct alignas(16) Constants
     std::array<float,4> channelSets{}, normalOcclusion{}, normalTangent{};
     std::array<std::array<float,4>,VSMaterial::ChannelCount*2> uv{};
 };
+struct alignas(16) TerrainConstants
+{
+    std::array<std::array<float,4>,4> base{},factors{},emission{};
+    std::array<std::array<float,4>,8> transform{};
+    std::array<std::array<float,4>,4> tangent{};
+    std::array<float,4> settings{},paint{};
+};
+static_assert(sizeof(TerrainConstants)==416);
 static_assert(sizeof(Constants)==416);
 static_assert(sizeof(VSWorldRenderer::Vertex)==72);
 void checkWorldABI(IShader& shader)
@@ -78,13 +87,15 @@ struct VSWorldRenderer::Impl
     RefCntAutoPtr<IRenderDevice> device;
     RefCntAutoPtr<IDeviceContext> context;
     RefCntAutoPtr<IShader> vertex, fragment;
-    RefCntAutoPtr<IPipelineState> pipelines[2][3][3][2];
-    RefCntAutoPtr<ITexture> depth, white;
+    RefCntAutoPtr<IShader> terrainFragments[4];
+    RefCntAutoPtr<IPipelineState> pipelines[2][3][3][2][2][5];
+    RefCntAutoPtr<ITexture> depth, white, flatNormal;
+    RefCntAutoPtr<ISampler> terrainClamp;
     RefCntAutoPtr<IFence> fence;
     Uint64 next = 1,nextGeometryGeneration=1;
     struct DrawResources
     {
-        RefCntAutoPtr<IBuffer> constants;
+        RefCntAutoPtr<IBuffer> constants, terrainConstants;
         RefCntAutoPtr<IShaderResourceBinding> binding;
         IPipelineState* pipeline=nullptr; // Owned by this renderer's pipeline table.
     };
@@ -122,11 +133,18 @@ struct VSWorldRenderer::Impl
         sampler.AddressU=sampler.AddressV=sampler.AddressW=TEXTURE_ADDRESS_WRAP;
         RefCntAutoPtr<ISampler> whiteSampler;device->CreateSampler(sampler,&whiteSampler);
         requireWorld(whiteSampler!=nullptr,"World fallback sampler creation failed");white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(whiteSampler);
+        const Uint32 normalPixel=0xffff8080;
+        sr.pData=&normalPixel;device->CreateTexture(td,&data,&flatNormal);
+        requireWorld(flatNormal!=nullptr,"World flat normal creation failed");
+        flatNormal->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(whiteSampler);
+        sampler.AddressU=sampler.AddressV=sampler.AddressW=TEXTURE_ADDRESS_CLAMP;
+        device->CreateSampler(sampler,&terrainClamp);
+        requireWorld(terrainClamp!=nullptr,"Terrain clamp sampler creation failed");
     }
-    IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology, bool doubleSided)
+    IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology, bool doubleSided, bool terrain, unsigned terrainProgram)
     {
         requireWorld(format==TEX_FORMAT_RGBA8_UNORM || format==TEX_FORMAT_BGRA8_UNORM,"Unsupported world target format");
-        auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM][background ? 2 : unsigned(alpha)][unsigned(topology)][doubleSided];
+        auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM][background ? 2 : unsigned(alpha)][unsigned(topology)][doubleSided][terrain][terrainProgram];
         if (result) return result;
         const char* vs = R"(
 layout(location=0) in vec3 position;
@@ -251,14 +269,38 @@ void main() {
             requireWorld(vertex && fragment,"World shader creation failed");
             checkWorldABI(*vertex);checkWorldABI(*fragment);
         }
+        auto& terrainFragment=terrainFragments[terrainProgram?terrainProgram-1:0];
+        if(terrainProgram && !terrainFragment)
+        {
+            ShaderCreateInfo shader{};shader.SourceLanguage=SHADER_SOURCE_LANGUAGE_GLSL;
+            shader.LoadConstantBufferReflection=true;shader.GLSLVersion={4,5};shader.EntryPoint="main";
+            shader.Desc.UseCombinedTextureSamplers=false;
+            shader.Desc.Name="Native terrain PBR fragment";shader.Desc.ShaderType=SHADER_TYPE_PIXEL;
+            const auto source=VSTerrainShader::source(int(terrainProgram)-4);shader.Source=source.c_str();
+            device->CreateShader(shader,&terrainFragment);
+            requireWorld(terrainFragment!=nullptr,"Terrain PBR shader creation failed");checkWorldABI(*terrainFragment);
+            bool reflected=false;
+            for(Uint32 i=0;i<terrainFragment->GetResourceCount();++i)
+            {
+                ShaderResourceDesc resource{};terrainFragment->GetResourceDesc(i,resource);
+                if(!resource.Name || std::strcmp(resource.Name,"TerrainView")) continue;
+                const auto* buffer=terrainFragment->GetConstantBufferDesc(i);
+                requireWorld(buffer && buffer->Size==sizeof(TerrainConstants),"Terrain uniform block ABI mismatch");
+                reflected=true;
+            }
+            requireWorld(reflected,"Terrain material constants reflection missing");
+        }
         GraphicsPipelineStateCreateInfo ci{};ci.PSODesc.Name="Native world geometry";
-        ci.PSODesc.PipelineType=PIPELINE_TYPE_GRAPHICS;ci.pVS=vertex;ci.pPS=fragment;
+        ci.PSODesc.PipelineType=PIPELINE_TYPE_GRAPHICS;ci.pVS=vertex;ci.pPS=terrainProgram?terrainFragment:fragment;
         auto& gp=ci.GraphicsPipeline;gp.NumRenderTargets=1;gp.RTVFormats[0]=format;
         gp.DSVFormat                                                       = TEX_FORMAT_D32_FLOAT;
         gp.PrimitiveTopology           = topology == Topology::Triangles ? PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
                                          : topology == Topology::Lines   ? PRIMITIVE_TOPOLOGY_LINE_LIST
                                                                          : PRIMITIVE_TOPOLOGY_POINT_LIST;
         gp.RasterizerDesc.CullMode=doubleSided ? CULL_MODE_NONE : CULL_MODE_BACK;
+        // The shared terrain strip producer uses the opposite winding from
+        // LLVolume faces. Preserve its indices and front-face normal semantics.
+        gp.RasterizerDesc.FrontCounterClockwise=terrain;
         gp.DepthStencilDesc.DepthEnable=!background;gp.DepthStencilDesc.DepthWriteEnable=!alpha && !background;
         gp.DepthStencilDesc.DepthFunc=COMPARISON_FUNC_LESS_EQUAL;
         const LayoutElement layout[]={{0,0,3,VT_FLOAT32,false},{1,0,3,VT_FLOAT32,false},{2,0,2,VT_FLOAT32,false},
@@ -357,9 +399,20 @@ void VSWorldRenderer::retire()
                 for(const char* name:{"g_Texture","g_Normal","g_ORM","g_Emissive","g_Occlusion"})
                 {
                     auto* texture=draw.binding->GetVariableByName(SHADER_TYPE_PIXEL,name);
-                    requireWorld(texture!=nullptr,"Retired world texture binding missing");
+                    if(!texture) continue;
                     texture->Set(mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
                                  SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+                }
+                if(auto* blend=draw.binding->GetVariableByName(SHADER_TYPE_PIXEL,"terrainBlend"))
+                {
+                    blend->Set(mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+                    IDeviceObject* empty[4];std::fill_n(empty,4,mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+                    for(const char* channel:{"terrainColor","terrainNormal","terrainORM","terrainEmissive"})
+                    {
+                        auto* textures=draw.binding->GetVariableByName(SHADER_TYPE_PIXEL,channel);
+                        if(!textures) continue;
+                        textures->SetArray(empty,0,4,SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+                    }
                 }
                 mImpl->available[draw.pipeline].push_back(std::move(draw));
                 ++mImpl->availableCount;
@@ -585,7 +638,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         requireWorld(p.mesh && p.mesh->owner.RawPtr()==mImpl->device.RawPtr(),"World mesh belongs to another device");
         requireWorld(!p.image || VSUIRenderer::imageOwnedBy(p.image,mImpl->device),"World image belongs to another device");
         for (float f:p.color) requireWorld(std::isfinite(f),"Non-finite world material");
-        auto* pipeline = mImpl->pipeline(target->GetTexture()->GetDesc().Format, p.alpha, p.background, p.mesh->topology, !p.surface || p.doubleSided || p.background);
+        auto* pipeline = mImpl->pipeline(target->GetTexture()->GetDesc().Format, p.alpha, p.background, p.mesh->topology, !p.surface || p.doubleSided || p.background, p.terrain, p.terrainMaterial?unsigned(std::clamp(int(p.terrainMaterial->detail),-3,0)+4):0u);
         for (float f:p.regionOffset) requireWorld(std::isfinite(f),"Non-finite world region translation");
         requireWorld(std::isfinite(p.alphaCutoff) && p.alphaCutoff >= 0 && p.alphaCutoff <= 1, "Invalid world alpha cutoff");
         Constants constants{ view.projection,
@@ -645,6 +698,62 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
                 requireWorld(variable!=nullptr,"World constants binding missing");variable->Set(resources.constants);
             }
         }
+        if(p.terrainMaterial)
+        {
+            const auto& terrain=*p.terrainMaterial;
+            TerrainConstants values;
+            values.settings={terrain.detail,terrain.planar,terrain.sharpness,0};
+            values.paint={terrain.paint?1.f:0.f,terrain.regionWidth,0,0};
+            for(unsigned layer=0;layer<4;++layer)
+            {
+                const auto& state=terrain.layers[layer];values.base[layer]=state.base;
+                values.factors[layer]={1,state.roughness,state.metallic,
+                    state.alpha==VSWorldContracts::AlphaMode::Mask?state.cutoff/std::max(state.base[3],.000001f):0};
+                std::copy(state.emissive.begin(),state.emissive.end(),values.emission[layer].begin());
+                values.transform[2*layer]=state.uv[0].matrix;
+                values.transform[2*layer+1]={state.uv[0].offset[0],state.uv[0].offset[1],0,0};
+                values.tangent[layer]=state.normalTangent;
+            }
+            if(!resources.terrainConstants)
+            {
+                BufferDesc bd{};bd.Name="Native terrain material constants";bd.Size=sizeof(values);
+                bd.Usage=USAGE_DEFAULT;bd.BindFlags=BIND_UNIFORM_BUFFER;
+                mImpl->device->CreateBuffer(bd,nullptr,&resources.terrainConstants);
+                requireWorld(resources.terrainConstants!=nullptr,"Terrain constants allocation failed");
+                ++mImpl->statistics.constantBuffersCreated;
+            }
+            context->UpdateBuffer(resources.terrainConstants,0,sizeof(values),&values,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            mImpl->statistics.constantUploadBytes+=sizeof(values);
+            auto* uniforms=resources.binding->GetVariableByName(SHADER_TYPE_PIXEL,"TerrainView");
+            requireWorld(uniforms!=nullptr,"Terrain uniforms missing");uniforms->Set(resources.terrainConstants,SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+            const char* names[]{"terrainColor","terrainNormal","terrainORM","terrainEmissive"};
+            ISampler* sampler=mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->GetSampler();
+            for(unsigned channel=0;channel<4;++channel)
+            {
+                IDeviceObject* views[4];
+                for(unsigned layer=0;layer<4;++layer)
+                {
+                    const auto& image=terrain.images[layer][channel];
+                    requireWorld(!image || VSUIRenderer::imageOwnedBy(image,mImpl->device),"Terrain image belongs to another device");
+                    auto* view=image?VSUIRenderer::imageView(image,terrain.layers[layer].samplers[channel]):
+                        (channel==VSMaterial::Normal?mImpl->flatNormal:mImpl->white)->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+                    views[layer]=view;if(image && !channel) sampler=view->GetSampler();
+                }
+                auto* variable=resources.binding->GetVariableByName(SHADER_TYPE_PIXEL,names[channel]);
+                if(!variable) continue;
+                variable->SetArray(views,0,4,SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+            }
+            requireWorld(!terrain.blend || VSUIRenderer::imageOwnedBy(terrain.blend,mImpl->device),"Terrain blend belongs to another device");
+            for(const auto& item:{std::pair<const char*,IDeviceObject*>{"terrainBlend",terrain.blend?VSUIRenderer::imageView(terrain.blend):mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)},
+                {"terrainSampler",sampler},{"terrainClamp",mImpl->terrainClamp.RawPtr()}})
+            {
+                auto* variable=resources.binding->GetVariableByName(SHADER_TYPE_PIXEL,item.first);
+                requireWorld(variable!=nullptr,"Terrain sampler/blend binding missing");
+                variable->Set(item.second,SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+            }
+        }
+        else
+        {
         auto* texture=resources.binding->GetVariableByName(SHADER_TYPE_PIXEL,"g_Texture");
         requireWorld(texture!=nullptr,"World texture binding missing");
         texture->Set(p.image ? VSUIRenderer::imageView(p.image,p.surface?p.surface->samplers[0]:VSWorldContracts::Sampler{}) : mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
@@ -658,6 +767,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
                          "World material image belongs to another device");
             variable->Set(p.channels[channel] ? VSUIRenderer::imageView(p.channels[channel],p.surface?p.surface->samplers[channel+1]:VSWorldContracts::Sampler{}) :
                 mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+        }
         }
         context->SetPipelineState(pipeline);
         IBuffer* vertex=p.mesh->vertices.RawPtr();Uint64 offset=0;

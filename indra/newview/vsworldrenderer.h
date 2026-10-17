@@ -25,6 +25,14 @@ public:
     };
     struct Geometry;
     using Mesh = std::shared_ptr<const Geometry>;
+    struct Terrain
+    {
+        std::array<VSMaterial::State,4> layers;
+        std::array<std::array<VSUIRenderer::Image,4>,4> images;
+        VSUIRenderer::Image blend;
+        float detail=0,planar=3,sharpness=8,regionWidth=256;
+        bool paint=false;
+    };
     struct Packet
     {
         Mesh mesh;
@@ -40,6 +48,7 @@ public:
         bool background = false; // Clip-space sky, drawn before depth-tested geometry.
         bool                hud             = false;
         bool                terrain         = false;
+        std::shared_ptr<const Terrain> terrainMaterial;
         std::uint64_t       terrainKey      = 0;
         float distanceSquared = 0;
         // Region-local vertices never contain large grid coordinates. Apply the

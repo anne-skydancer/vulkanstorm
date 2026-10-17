@@ -17,6 +17,7 @@ public:
     bool ready() const;
     bool hasPublication() const;
     void releaseRenderingResources();
+    void refreshInactiveImages();
     ~VSWorldGLTF();
     void append(std::vector<VSWorldRenderer::Packet>&, const LLVector3&, const LLQuaternion&, const LLVector3& scale, const LLVector3& eye,unsigned viewportHeight=1024);
     LLSD evidence() const;

@@ -1673,6 +1673,11 @@ class LLAdvancedTerrainCreateLocalPaintMap : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if(VSNativeSession::active())
+            return gViewerWindow && gViewerWindow->nativeContext() &&
+                gViewerWindow->nativeContext()->world().createTerrainPaintMap();
+#endif
         LLViewerRegion* region = gAgent.getRegion();
         if (!region)
         {
@@ -1703,6 +1708,14 @@ class LLAdvancedTerrainDeleteLocalPaintMap : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+#if VS_NATIVE_VULKAN
+        if(VSNativeSession::active())
+        {
+            if(gViewerWindow && gViewerWindow->nativeContext())
+                gViewerWindow->nativeContext()->world().deleteTerrainPaintMap();
+            return true;
+        }
+#endif
         // This calls gLocalTerrainMaterials.setPaintType
         gSavedSettings.setBOOL("LocalTerrainPaintEnabled", false);
         gLocalTerrainMaterials.setPaintMap(nullptr);
