@@ -628,7 +628,7 @@ bool LLFloaterCamera::postBuild()
     if (mPresetCombo)
     {
         mPresetCombo->setCommitCallback(boost::bind(&LLFloaterCamera::onCustomPresetSelected, this));
-        LLPresetsManager::getInstance()->setPresetListChangeCameraCallback(boost::bind(&LLFloaterCamera::populatePresetCombo, this));
+        mPresetChanges = LLPresetsManager::getInstance()->setPresetListChangeCameraCallback(boost::bind(&LLFloaterCamera::populatePresetCombo, this));
     }
     // </FS:Ansariel>
 

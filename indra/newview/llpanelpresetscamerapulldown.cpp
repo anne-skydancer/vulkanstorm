@@ -65,7 +65,7 @@ bool LLPanelPresetsCameraPulldown::postBuild()
         // <FS:Ansariel> Done in LLPresetsManager ctor
         //presetsMgr->startWatching(PRESETS_CAMERA);
 
-        presetsMgr->setPresetListChangeCameraCallback(boost::bind(&LLPanelPresetsCameraPulldown::populatePanel, this));
+        mPresetChanges = presetsMgr->setPresetListChangeCameraCallback(boost::bind(&LLPanelPresetsCameraPulldown::populatePanel, this));
     }
 
     populatePanel();

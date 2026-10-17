@@ -28,6 +28,7 @@
 #ifndef LL_LLFLOATERSAVECAMERAPRESET_H
 #define LL_LLFLOATERSAVECAMERAPRESET_H
 
+#include <boost/signals2/connection.hpp>
 #include "llmodaldialog.h"
 
 class LLComboBox;
@@ -51,6 +52,7 @@ private:
     LLRadioGroup*   mSaveRadioGroup;
     LLLineEditor*   mNameEditor;
     LLComboBox*     mPresetCombo;
+    boost::signals2::scoped_connection mPresetChanges;
     LLButton*       mSaveButton;
 
     void onPresetsListChange();
