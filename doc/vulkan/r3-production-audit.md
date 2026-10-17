@@ -205,3 +205,27 @@ header (five channels only). The compiled production-block regression explicitly
 checks both RGBA and five-channel mask requests, alongside the existing bounds,
 budget and corrupt-header cases. The stalled automated replay was ended after
 its cause was established; its evidence remains a failure, not a qualification.
+
+The auxiliary-channel correction was rebuilt and staged at `0989c8061c`.
+Actual-viewer connected-session replay passed headlessly in 18.8 seconds with
+source-qualified evidence. This closes that particular runtime failure.
+
+## Persistent-cache qualification checkpoint
+
+The viewer now exposes diagnostic-only GPU readbacks for resident image
+generations, actual shared-cache startup policy/capacity and a fresh process
+identity. A replay exercises projected discard demand, full-resolution preference
+changes and maximum-resolution changes against a locally encoded, lossless
+1024-square pattern. The loopback transport supplies real partial HTTP ranges;
+the independent validator checks original expected pixels, readback files,
+checksums, network traffic and process identities.
+
+The bounded restart runner covers cold/warm reuse, read-only access, truncated
+body recovery, corrupted cached-header recovery, clear, resize, cache-version
+and codec-version changes. Read-only injection exercises the existing shared
+sibling cache policy in an isolated headless process; it does not qualify
+concurrent live-viewer arbitration. These are qualification paths, not substitute
+cache implementations. Selected viewer sources compile, and range/artifact/
+mutation regressions pass. Actual restart acceptance requires the committed,
+rebuilt and staged viewer; no restart result is claimed yet. The remaining R3
+production requirements listed above remain open.

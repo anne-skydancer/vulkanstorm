@@ -5,7 +5,7 @@
 class VSUIResources;
 class LLImageRaw;
 class LLSD;
-LLSD vs_ui_texture_cache_evidence();
+LLSD vs_ui_texture_cache_evidence(bool includePixels=false);
 void vs_pump_ui_images();
 LLPointer<LLUIImage> vs_request_world_image(const LLUUID&,unsigned dimension);
 void vs_refresh_ui_image(const LLUUID&);
@@ -15,6 +15,7 @@ LLPointer<LLImageRaw> vs_ui_image_raw(const LLUUID&);
 LLPointer<LLImageRaw> vs_ui_image_aux(const LLUUID&);
 bool vs_ui_image_ready(const LLUUID&);
 bool vs_ui_image_failed(const LLUUID&);
+S32 vs_ui_image_discard(const LLUUID&);
 class VSUIImageProvider : public LLImageProviderInterface
 {
   public:
@@ -33,7 +34,8 @@ class VSUIImageProvider : public LLImageProviderInterface
     LLPointer<LLImageRaw> auxiliaryImage(const LLUUID&) const;
     bool imageReady(const LLUUID&) const;
     bool imageFailed(const LLUUID&) const;
-    LLSD textureCacheEvidence() const;
+    S32 imageDiscard(const LLUUID&) const;
+    LLSD textureCacheEvidence(bool includePixels=false) const;
 
   private:
     struct Impl;

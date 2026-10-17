@@ -5,6 +5,9 @@
 #include "vsnativereplay.h"
 #include "vsnativeimreplay.h"
 #include "vsnativesession.h"
+#include "vsuiimageprovider.h"
+#include "llimagej2c.h"
+#include "llsdutil.h"
 #include "vsplainchat.h"
 #include "fsnearbychatvoicemonitor.h"
 #include "fsfloaternearbychat.h"
@@ -437,9 +440,19 @@ void udpChat(const LLHost& host)
     msg->addU8("Audible", CHAT_AUDIBLE_FULLY); msg->addVector3("Position", LLVector3(10, 20, 30));
     msg->addString("Message", "Native nearby: \xCE\xA9 \xE6\x97\xA5\xE6\x9C\xAC"); msg->sendReliable(host);
 }
+LLSD cachedImageEvidence(const LLUUID& id)
+{
+    const auto evidence=vs_ui_texture_cache_evidence(true);
+    for(const auto& row:llsd::inArray(evidence["images"])) if(row["id"].asUUID()==id) return row;
+    throw std::runtime_error("R3 cached image has no GPU evidence");
+}
 struct Replay
 {
     unsigned step = 0;
+    unsigned textureCacheStep=0;
+    LLSD textureStreaming;
+    bool originalFullRes=false;
+    U32 originalTextureLimit=2048;
     unsigned loggedStep = ~0u;
     bool accountSetupStarted = false;
     bool challengeAcknowledged = false;
@@ -680,6 +693,66 @@ struct Replay
             // owner replay before the initial-region chat/scene prerequisites.
             if (r1Started && (!vs_r1_replay_tick(owner, imEvidence) || !vs_r2_replay_tick(owner, imEvidence)))
                 return;
+            if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE"))
+            {
+                const LLUUID texture("a3000000-0000-0000-0000-000000000001");
+                if(textureCacheStep==0)
+                {
+                    originalFullRes=gSavedSettings.getBOOL("TextureLoadFullRes");
+                    originalTextureLimit=gSavedSettings.getU32("RenderMaxTextureResolution");
+                    gSavedSettings.setBOOL("TextureLoadFullRes",false);
+                    gSavedSettings.setU32("RenderMaxTextureResolution",2048);
+                    LLPointer<LLImageRaw> raw=new LLImageRaw(1024,1024,4);
+                    for(unsigned y=0;y<1024;++y) for(unsigned x=0;x<1024;++x)
+                    {
+                        auto* pixel=raw->getData()+(y*1024+x)*4;
+                        pixel[0]=((x/32)&1)?255:0;pixel[1]=((y/32)&1)?255:0;
+                        pixel[2]=(((x/32)+(y/32))&1)?255:0;pixel[3]=255;
+                    }
+                    LLPointer<LLImageJ2C> encoded=new LLImageJ2C;encoded->setReversible(true);
+                    const auto folder=std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"))/"r3";
+                    std::filesystem::create_directories(folder);
+                    require(encoded->encode(raw,0.f) && encoded->save((folder/"texture.j2c").string()),"R3 lossless texture fixture encode failed");
+                    textureCacheStep=1;
+                }
+                if(textureCacheStep==1)
+                {
+                    vs_request_world_image(texture,16);
+                    if(vs_ui_image_discard(texture)<0) return;
+                    require(vs_ui_image_discard(texture)>0,"R3 projected demand did not publish a coarse image");
+                    textureStreaming["coarse"]=cachedImageEvidence(texture);textureCacheStep=2;
+                }
+                if(textureCacheStep==2)
+                {
+                    gSavedSettings.setBOOL("TextureLoadFullRes",true);vs_request_world_image(texture,16);
+                    if(vs_ui_image_discard(texture)!=0) return;
+                    textureStreaming["full_resolution_preference"]=cachedImageEvidence(texture);textureCacheStep=3;
+                }
+                if(textureCacheStep==3)
+                {
+                    gSavedSettings.setBOOL("TextureLoadFullRes",false);vs_request_world_image(texture,16);
+                    if(vs_ui_image_discard(texture)<=0) return;
+                    textureStreaming["coarse_after_preference"]=cachedImageEvidence(texture);textureCacheStep=4;
+                }
+                if(textureCacheStep==4)
+                {
+                    gSavedSettings.setU32("RenderMaxTextureResolution",512);vs_request_world_image(texture,4096);
+                    if(vs_ui_image_discard(texture)!=1) return;
+                    textureStreaming["resolution_limit"]=cachedImageEvidence(texture);textureCacheStep=5;
+                }
+                if(textureCacheStep==5)
+                {
+                    gSavedSettings.setU32("RenderMaxTextureResolution",2048);vs_request_world_image(texture,4096);
+                    if(vs_ui_image_discard(texture)!=0) return;
+                    textureStreaming["restored"]=cachedImageEvidence(texture);
+                    textureStreaming["image"]=texture;
+                    imEvidence["r3_texture_streaming"]=textureStreaming;
+                    gSavedSettings.setU32("RenderMaxTextureResolution",originalTextureLimit);
+                    gSavedSettings.setBOOL("TextureLoadFullRes",originalFullRes);
+                    textureCacheStep=6;
+                }
+                if(vs_ui_texture_cache_evidence()["pending_fetches"].asInteger()) return;
+            }
             if (gViewerWindow->nativeContext()->world().evidence()["objects"].asInteger()<2) return;
             auto* chat = gViewerWindow->nativeChat();
             auto* nearby = FSFloaterNearbyChat::findInstance();
@@ -717,6 +790,7 @@ struct Replay
                 imCaptureRequested = true; return;
             }
             if (!*imReadback) return;
+            if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE") && vs_ui_texture_cache_evidence()["pending_fetches"].asInteger()) return;
             imEvidence["im_readback"] = true;
             if (!submitted)
             {
@@ -874,6 +948,7 @@ struct Replay
                 }
 
                 report = owner.evidence(); report["schema"] = 1; report["mode"] = "viewer-native-session-replay";
+                report["texture_cache"]=vs_ui_texture_cache_evidence(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE")!=nullptr);
                 // Snapshot transport evidence before appending verified fixture witnesses.
                 report["native_location_lookup"] = locationResolved;
                 report["native_landmark_v2"] = handleResolved;

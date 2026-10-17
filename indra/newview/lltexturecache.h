@@ -117,6 +117,7 @@ public:
 
     void purgeCache(ELLPath location, bool remove_dir = true);
     void setReadOnly(bool read_only) ;
+    bool isReadOnly() const { return mReadOnly; }
     S64 initCache(ELLPath location, S64 maxsize, bool texture_cache_mismatch);
 
     handle_t readFromCache(const std::string& local_filename, const LLUUID& id, S32 offset, S32 size,

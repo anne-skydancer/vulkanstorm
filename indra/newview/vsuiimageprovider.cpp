@@ -24,9 +24,11 @@
 #include "lltimer.h"
 #include "lluiimage.h"
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <stdexcept>
 #include <utility>
+#include <openssl/evp.h>
 namespace
 {
 VSUIImageProvider* sActiveProvider = nullptr;
@@ -195,9 +197,11 @@ void VSUIImageProvider::pumpImages()
             pending.push_back(id);
     for(const auto& id:pending) getUIImageByID(id,-2);
 }
-LLSD VSUIImageProvider::textureCacheEvidence() const
+LLSD VSUIImageProvider::textureCacheEvidence(bool includePixels) const
 {
     LLSD result;
+    static const LLUUID processInstance=LLUUID::generateNewID();
+    result["process_id"]=LLApp::getPid();result["process_instance"]=processInstance;
     result["disk_hits"]=ll_sd_from_U64(mImpl->diskHits);result["disk_misses"]=ll_sd_from_U64(mImpl->diskMisses);
     U32 reads=0,writes=0,waits=0;
     if(auto* fetch=LLAppViewer::getTextureFetch())
@@ -209,10 +213,56 @@ LLSD VSUIImageProvider::textureCacheEvidence() const
     result["disk_read_attempts"]=ll_sd_from_U64(reads);
     result["disk_writes_started"]=ll_sd_from_U64(writes);
     result["cache_policy"]="shared_LLTextureFetch";
+    result["cache_path"]=gDirUtilp->getExpandedFilename(LL_PATH_CACHE,"");
+    result["startup_policy"]["LocalCacheVersion"]=gSavedSettings.getS32("LocalCacheVersion");
+    result["startup_policy"]["DiskCacheVersion"]=gSavedSettings.getS32("DiskCacheVersion");
+    result["startup_policy"]["LastJ2CVersion"]=gSavedSettings.getString("LastJ2CVersion");
+    result["configured_cache_size_mb"]=S32(gSavedSettings.getU32("CacheSize"));
+    if(auto* cache=LLAppViewer::getTextureCache())
+    {
+        result["read_only"]=cache->isReadOnly();
+        result["maximum_body_bytes"]=ll_sd_from_U64(U64(cache->getMaxUsage().value()));
+        result["maximum_entries"]=S32(cache->getMaxEntries());
+    }
+#if defined(VS_VULKAN_DIAGNOSTICS) && VS_VULKAN_DIAGNOSTICS
+    if(includePixels)
+    {
+        result["images"]=LLSD::emptyArray();
+        const auto owner=VSNativeSession::active();
+        for(const auto& [id,entry]:mImpl->remote)
+        {
+            if(!owner || entry.readyGeneration!=owner->generation()) continue;
+            const auto image=mImpl->resources.image("remote:"+id.asString());
+            if(!image) continue;
+            const auto gpu=mImpl->resources.readbackImage("remote:"+id.asString());
+            if(gpu!=VSUIRenderer::imagePixels(image)) throw std::runtime_error("Cached texture GPU bytes differ from decoded publication");
+            unsigned char digest[EVP_MAX_MD_SIZE];unsigned digestSize=0;
+            if(EVP_Digest(gpu.data(),gpu.size(),digest,&digestSize,EVP_sha256(),nullptr)!=1 || digestSize!=32)
+                throw std::runtime_error("Cached texture digest failed");
+            std::string hex;hex.reserve(64);
+            for(unsigned i=0;i<digestSize;++i) {hex+="0123456789abcdef"[digest[i]>>4];hex+="0123456789abcdef"[digest[i]&15];}
+            const auto extent=VSUIRenderer::imageExtent(image);
+            LLSD row;row["id"]=id;row["width"]=S32(extent[0]);row["height"]=S32(extent[1]);
+            row["discard"]=entry.discard;row["gpu_rgba_sha256"]=hex;row["gpu_matches_cpu"]=true;
+            const auto* destination=std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY");
+            if(!destination) throw std::runtime_error("Missing cached texture evidence destination");
+            const auto root=std::filesystem::path(destination);
+            const auto relative=std::filesystem::path("r3")/"readbacks"/(id.asString()+"-"+std::to_string(entry.discard)+"-"+hex+".rgba");
+            std::filesystem::create_directories((root/relative).parent_path());
+            std::ofstream artifact(root/relative,std::ios::binary);
+            artifact.write(reinterpret_cast<const char*>(gpu.data()),std::streamsize(gpu.size()));
+            if(!artifact.good()) throw std::runtime_error("Cached texture readback artifact write failed");
+            row["gpu_rgba_file"]=relative.generic_string();
+            result["images"].append(row);
+        }
+    }
+#else
+    (void)includePixels;
+#endif
     return result;
 }
-LLSD vs_ui_texture_cache_evidence()
-{ return sActiveProvider ? sActiveProvider->textureCacheEvidence() : LLSD(); }
+LLSD vs_ui_texture_cache_evidence(bool includePixels)
+{ return sActiveProvider ? sActiveProvider->textureCacheEvidence(includePixels) : LLSD(); }
 void vs_refresh_ui_image(const LLUUID& id)
 {
     if (sActiveProvider) sActiveProvider->refreshImage(id);
@@ -243,6 +293,12 @@ LLPointer<LLImageRaw> VSUIImageProvider::rawImage(const LLUUID& id) const
 { return imageReady(id) ? mImpl->resources.rawImage("remote:" + id.asString()) : nullptr; }
 bool vs_ui_image_ready(const LLUUID& id) { return sActiveProvider && sActiveProvider->imageReady(id); }
 bool vs_ui_image_failed(const LLUUID& id) { return sActiveProvider && sActiveProvider->imageFailed(id); }
+S32 vs_ui_image_discard(const LLUUID& id) {return sActiveProvider?sActiveProvider->imageDiscard(id):-1;}
+S32 VSUIImageProvider::imageDiscard(const LLUUID& id) const
+{
+    const auto found=mImpl->remote.find(id);
+    return found!=mImpl->remote.end() && imageReady(id)?found->second.discard:-1;
+}
 bool VSUIImageProvider::imageFailed(const LLUUID& id) const
 {
     const auto owner = VSNativeSession::active();
