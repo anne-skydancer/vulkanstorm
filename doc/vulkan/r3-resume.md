@@ -105,3 +105,31 @@ New `vstexturememory.h` is classified I05; `vsr3gltfreplay.*` is I25.
 Do not rerun older `.tmp/apply_*` scripts: several contain superseded candidates.
 Standalone harness evidence `.tmp/r3-bump-gpu-contracts/results.json` remains
 usable for image-only changes; shader/ABI changes need fresh harness evidence.
+
+## Live-login crash reported 2026-10-17
+
+The user reports the local staged Vulkan viewer crashes immediately after live
+login. Windows Application event 1000 at 02:25:33 records an access violation
+(0xc0000005), module RVA 0x150f867, in the canonical build-vc170-64 executable.
+The matching binary/PDB were subsequently rebuilt; this RVA must not be
+symbolized against the new PDB as if it identified the old crash. No matching
+minidump or retained login log was found. The standard log was rotated by the
+Release viewer, which remains running and must be preserved.
+
+The current canonical stage, rebuilt at 10:57 from c0f1d0e290, passes the
+headless connected-session replay using AnsaStorm Modern in 16.7 seconds
+(.tmp/user-login-crash-headless). This is diagnostic evidence, not proof of
+authenticated login or of fixing the reported crash. Current source differs
+from that binary by the Linux codec include correction and inventory pins.
+
+Ignored .tmp/capture-vulkan-login.cmd provides a manual next-live-test launcher,
+using .tmp/debug_live_login.exe. It captures symbolized unhandled exception
+stacks and login-crash.dmp in .tmp/live-login-capture. A deliberate standalone
+exception verified both stack capture and MiniDumpWriteDump. It has not been
+used to launch or log in the user's viewer. Dumps/logs are private diagnostic
+files and must not be uploaded automatically. Do not mistake the separate
+R3 imported-glTF diagnostic fixture rejection for this live-login failure.
+
+The latest Linux source gate also detected stale discovery references in the
+R0 ledger after recent R3 changes. Regeneration updates only source-reference
+metadata; all runtime/authenticated qualification flags remain false.
