@@ -257,7 +257,7 @@ void startRemoteMaterials(WorldImages& state,VSNativeSession& session)
             std::ofstream output(file,std::ios::binary);
             if(index==2) output<<std::string(1024*1024+1,' ');
             else {LLSD asset;asset["version"]=LLGLTFMaterial::ASSET_VERSION;asset["type"]=LLGLTFMaterial::ASSET_TYPE;
-                asset["data"]=index==0?material.asJSON():"invalid native material fixture";LLSDSerialize::toPrettyXML(asset,output);}
+                asset["data"]=index==1?"invalid native material fixture":material.asJSON();LLSDSerialize::toPrettyXML(asset,output);}
             require(output.good(),"R3 remote material fixture write failed");
         }
         state.remote[index]=gGLTFMaterialList.getMaterial(remoteAssets[index]);
