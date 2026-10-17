@@ -1,5 +1,5 @@
 {
-  "source_commit": "78441d6c4568feeb25a13204bf86cbf9462c1c98",
+  "source_commit": "9273a72e4ede3c054e2c7c92769aeffbb396c893",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -25495,25 +25495,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 54,
       "end": 54,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 383,
-      "end": 397,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 384,
+      "end": 398,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 461,
-      "end": 461,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 462,
+      "end": 462,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28355,9 +28355,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 136,
-      "end": 139,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 137,
+      "end": 140,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28409,18 +28409,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 388,
-      "end": 393,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 389,
+      "end": 394,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 397,
-      "end": 397,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 398,
+      "end": 398,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28429,25 +28429,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 40,
       "end": 40,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 444,
-      "end": 454,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 445,
+      "end": 455,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 461,
-      "end": 461,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 462,
+      "end": 462,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28474,7 +28474,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 83,
       "end": 83,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28753,7 +28753,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 53,
       "end": 53,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28843,34 +28843,34 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 55,
       "end": 80,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 138,
-      "end": 138,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 139,
+      "end": 139,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 309,
-      "end": 311,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 310,
+      "end": 312,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 398,
-      "end": 410,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 399,
+      "end": 411,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -32901,8 +32901,8 @@
     {
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1,
-      "end": 1205,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "end": 1271,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Shared CPU glTF decoding and owned scene/buffer/image admission; typed metadata/bounds checked before allocation, prepared source topologies, TRS/STEP/cubic/skin animation and last-owner publication reviewed. CPU mode avoids GL resources. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35330,9 +35330,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 114,
-      "end": 114,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 115,
+      "end": 115,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -35654,9 +35654,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 115,
-      "end": 115,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 116,
+      "end": 116,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36032,9 +36032,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 116,
-      "end": 116,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 117,
+      "end": 117,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36466,70 +36466,70 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 116,
-      "end": 116,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 117,
+      "end": 117,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 173,
-      "end": 173,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 174,
+      "end": 174,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 209,
-      "end": 209,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 210,
+      "end": 210,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 280,
-      "end": 280,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 281,
+      "end": 281,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 289,
-      "end": 289,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 290,
+      "end": 290,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 293,
-      "end": 293,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 294,
+      "end": 294,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 309,
-      "end": 309,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 310,
+      "end": 310,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37004,9 +37004,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 298,
-      "end": 298,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 299,
+      "end": 299,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37256,9 +37256,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 117,
-      "end": 117,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 118,
+      "end": 118,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37465,61 +37465,61 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 116,
-      "end": 116,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 117,
+      "end": 117,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 280,
-      "end": 280,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 281,
+      "end": 281,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 284,
-      "end": 284,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 285,
+      "end": 285,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 289,
-      "end": 289,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 290,
+      "end": 290,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 293,
-      "end": 293,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 294,
+      "end": 294,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 309,
-      "end": 309,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 310,
+      "end": 310,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37609,7 +37609,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 84,
       "end": 84,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and run actual native cache bridge against controlled complete/partial/corrupt/timeout/shutdown and late-callback states; retain encoded writer memory/budget until retirement. Add to existing source-evidence job. This fixture does not qualify real disk restart reuse or R3 as a whole."
@@ -37940,45 +37940,45 @@
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1028,
-      "end": 1043,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1092,
+      "end": 1107,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1128,
-      "end": 1139,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1192,
+      "end": 1203,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1141,
-      "end": 1164,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1205,
+      "end": 1228,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1166,
-      "end": 1173,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1230,
+      "end": 1237,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1176,
-      "end": 1177,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1240,
+      "end": 1241,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -38662,16 +38662,16 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 3,
       "end": 3,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1148,
-      "end": 1159,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1212,
+      "end": 1223,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -38732,9 +38732,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 123,
-      "end": 123,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 124,
+      "end": 124,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -38885,9 +38885,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 127,
-      "end": 128,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 128,
+      "end": 129,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -39749,9 +39749,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 102,
-      "end": 102,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 103,
+      "end": 103,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40075,7 +40075,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 89,
       "end": 89,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40210,70 +40210,70 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 5,
       "end": 5,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 161,
-      "end": 177,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 162,
+      "end": 178,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1099,
-      "end": 1103,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1163,
+      "end": 1167,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1133,
-      "end": 1133,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1197,
+      "end": 1197,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1137,
-      "end": 1137,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1201,
+      "end": 1201,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1139,
-      "end": 1139,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1203,
+      "end": 1203,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1142,
-      "end": 1143,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1206,
+      "end": 1207,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1145,
-      "end": 1145,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1209,
+      "end": 1209,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -40721,9 +40721,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 411,
-      "end": 423,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 412,
+      "end": 424,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40802,9 +40802,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 94,
-      "end": 101,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 95,
+      "end": 102,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -41092,16 +41092,16 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 9,
       "end": 9,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 638,
-      "end": 638,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 755,
+      "end": 755,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41317,7 +41317,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 90,
       "end": 90,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -41938,88 +41938,88 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 7,
       "end": 8,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 470,
-      "end": 497,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 471,
+      "end": 503,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 631,
-      "end": 631,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 748,
+      "end": 748,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 637,
-      "end": 637,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 754,
+      "end": 754,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 640,
-      "end": 670,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 757,
+      "end": 796,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 738,
-      "end": 739,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 803,
+      "end": 803,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 908,
-      "end": 908,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 972,
+      "end": 972,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 922,
-      "end": 922,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 986,
+      "end": 986,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1166,
-      "end": 1171,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1230,
+      "end": 1235,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 1198,
-      "end": 1200,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 1262,
+      "end": 1264,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -42109,7 +42109,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 91,
       "end": 91,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -42460,7 +42460,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 92,
       "end": 92,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43009,7 +43009,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 93,
       "end": 93,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43088,36 +43088,36 @@
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 477,
-      "end": 477,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 483,
+      "end": 483,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 484,
-      "end": 484,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
-      "record": "I13",
-      "disposition": "mapped",
-      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
-    },
-    {
-      "path": "indra/newview/vsworldgltf.cpp",
-      "start": 489,
+      "start": 490,
       "end": 490,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
     },
     {
       "path": "indra/newview/vsworldgltf.cpp",
-      "start": 912,
-      "end": 919,
-      "sha256": "d8219abeab9827e081fb30b3e6ec979488d66e8a58b6ebcc363edf7fcae05d3d",
+      "start": 495,
+      "end": 496,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 976,
+      "end": 983,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -43196,9 +43196,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 95,
-      "end": 95,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 96,
+      "end": 96,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43448,18 +43448,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 100,
-      "end": 100,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 101,
+      "end": 101,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 424,
-      "end": 427,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 425,
+      "end": 428,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43682,9 +43682,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 96,
-      "end": 96,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 97,
+      "end": 97,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43952,9 +43952,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 97,
-      "end": 97,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 98,
+      "end": 98,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44384,9 +44384,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 98,
-      "end": 98,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 99,
+      "end": 99,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44582,9 +44582,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 99,
-      "end": 99,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 100,
+      "end": 100,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44609,9 +44609,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 124,
-      "end": 126,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 125,
+      "end": 127,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44789,9 +44789,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 125,
-      "end": 125,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "start": 126,
+      "end": 126,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44998,7 +44998,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 85,
       "end": 88,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45367,7 +45367,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 86,
       "end": 86,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45412,7 +45412,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 87,
       "end": 87,
-      "sha256": "3418117a2b4e65a6cd7e14498ff28c7af0e23b9080429d9c97fcf95a17c6a066",
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45596,10 +45596,172 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 94,
+      "end": 94,
+      "sha256": "35df527b7b93c987be5437d47b22c76dc6c72db7b9be9c926023bd8485c47dd5",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 33,
+      "end": 33,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 473,
+      "end": 473,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 475,
+      "end": 480,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 637,
+      "end": 747,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 750,
+      "end": 752,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 755,
+      "end": 755,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 760,
+      "end": 761,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 763,
+      "end": 771,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 774,
+      "end": 774,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 777,
+      "end": 777,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 780,
+      "end": 782,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 784,
+      "end": 784,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 786,
+      "end": 795,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 797,
+      "end": 803,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 1263,
+      "end": 1263,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 1265,
+      "end": 1266,
+      "sha256": "99912d88a05543c7cb3c156299f4f19ed6fbe124c6e572779da122915e80017a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "scripts/tests/test_native_gltf_decode.py",
+      "start": 1,
+      "end": 130,
+      "sha256": "7324427061152c6858b65d70d4ead0c43ed031d3ec3e4ff34e1f3981d01c2210",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "24dc6ba22d029dac03660fcaf0e9ed4562693a60",
+    "previous_source_commit": "a3ddce4148765f079b8ef8dd3e82680d7e884434",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
