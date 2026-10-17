@@ -1,5 +1,5 @@
 {
-  "source_commit": "05b90feefa9d39793f2a789952615a6b79d4644b",
+  "source_commit": "58599f7b01ae98a799f366ab14eb0acd21764e94",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -401,7 +401,7 @@
       ]
     },
     "indra/newview/vsuirenderer.cpp": {
-      "sha256": "b7ef99fccd48553177c90d27039738413b5e65474f18ee057f8051a7d043da51",
+      "sha256": "0bf0422f467d327701230e9b1bb81de1c82383c617a2a3af280c316da742794d",
       "anchors": [
         "VSUIRenderer::upload",
         "VSUIRenderer::draw",
@@ -410,7 +410,7 @@
       ]
     },
     "indra/newview/vsuirenderer.h": {
-      "sha256": "fc321be50b556e6bd07b0b05c43383ed7bb2bd1d97796b66b8e64f781d7452ef",
+      "sha256": "a490c7c2321e1765bd1afa314d603a0cd042ee747f26bb2fef53ff9fbc2c4172",
       "anchors": [
         "class VSUIRenderer",
         "struct Packet",
