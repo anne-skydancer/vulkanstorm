@@ -397,6 +397,8 @@ std::vector<VSUIRenderer::Packet> VSUIResources::finish()
 }
 void VSUIResources::erase(const std::string& key) { mImpl->assets.erase(key); }
 #if defined(VS_VULKAN_DIAGNOSTICS) && VS_VULKAN_DIAGNOSTICS
+std::vector<std::uint8_t> VSUIResources::readbackImage(const VSUIRenderer::Image& image)
+{return mImpl->renderer.readbackImage(image);}
 std::vector<std::uint8_t> VSUIResources::readbackImage(const std::string& key)
 {
     return mImpl->renderer.readbackImage(image(key));

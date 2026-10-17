@@ -40,6 +40,7 @@ public:
     LLUIImagePtr facade(const std::string& key) const;
 #if defined(VS_VULKAN_DIAGNOSTICS) && VS_VULKAN_DIAGNOSTICS
     std::vector<std::uint8_t> readbackImage(const std::string& key);
+    std::vector<std::uint8_t> readbackImage(const VSUIRenderer::Image&);
 #endif
     LLSD evidence() const;
     void fontBatch(LLImageRaw*,S32,const LLVector4a*,const LLVector2*,const LLColor4U*,S32);

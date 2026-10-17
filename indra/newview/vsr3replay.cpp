@@ -3,6 +3,15 @@
 #include "vsr3replay.h"
 #include "lllocalbitmaps.h"
 #include "lllocalgltfmaterials.h"
+#include "vsnativesession.h"
+#include "vsworldscene.h"
+#include "llprimitive.h"
+#include "llvolumemessage.h"
+#include "llregionhandle.h"
+#include "llframetimer.h"
+#include "message.h"
+#include <map>
+#include <cmath>
 #include "llimagepng.h"
 #include "llui.h"
 #include "llviewercontrol.h"
@@ -174,4 +183,149 @@ void vs_r3_local_images(LLSD& evidence)
     result["stable_facade"]=true;result["retained_generation_unchanged"]=true;result["default_alias"]=true;
     evidence["r3_local_material"]=localMaterial(resources,root);
     evidence["r3_local_images"]=result;
+}
+
+namespace
+{
+const LLUUID bumpObject("b3000000-0000-0000-0000-000000000001");
+const LLUUID bumpSource("b3000000-0000-0000-0000-000000000002");
+struct WorldImages
+{
+    unsigned step=0;
+    float originalScale=0;
+    double deadline=0;
+    bool source=false;
+    LLSD evidence;
+    std::vector<std::weak_ptr<const VSUIRenderer::Texture>> images;
+};
+std::unique_ptr<WorldImages> worldImages;
+void bumpObjectPacket(VSNativeSession& session)
+{
+    LLMessageSystem* msg=gMessageSystem;msg->newMessage("ObjectUpdate");msg->nextBlock("RegionData");
+    msg->addU64("RegionHandle",to_region_handle(256,512));msg->addU16("TimeDilation",65535);
+    msg->nextBlock("ObjectData");msg->addU32("ID",990);msg->addU8("State",0);msg->addUUID("FullID",bumpObject);
+    msg->addU32("CRC",0);msg->addU8("PCode",LL_PCODE_VOLUME);msg->addU8("Material",0);msg->addU8("ClickAction",0);
+    msg->addVector3("Scale",LLVector3(1,1,1));
+    const auto position=session.position()+LLVector3(3,4,0);
+    const F32 pose[15]={position.mV[0],position.mV[1],position.mV[2],0,0,0,0,0,0,0,0,0,0,0,0};
+    msg->addBinaryData("ObjectData",pose,sizeof(pose));msg->addU32("ParentID",0);msg->addU32("UpdateFlags",0);
+    LLVolumeParams params;LLVolumeMessage::packVolumeParams(&params,msg);
+    LLPrimitive material;material.setNumTEs(6);
+    for(unsigned face=0;face<6;++face) {material.setTETexture(U8(face),bumpSource);material.setTEBumpmap(U8(face),U8(face%3+1));}
+    material.packTEMessage(msg);
+    for(const char* field:{"TextureAnim","NameValue","Data","Text","MediaURL","PSBlock","ExtraParams"}) msg->addBinaryData(field,nullptr,0);
+    const U8 white[4]={255,255,255,255};msg->addBinaryData("TextColor",white,4);
+    msg->addUUID("Sound",LLUUID::null);msg->addUUID("OwnerID",LLUUID::null);
+    msg->addF32("Gain",0);msg->addU8("Flags",0);msg->addF32("Radius",0);msg->addU8("JointType",0);
+    msg->addVector3("JointPivot",LLVector3::zero);msg->addVector3("JointAxisOrAnchor",LLVector3::zero);
+    require(msg->sendReliable(session.host())>0,"R3 bump ObjectUpdate transport failed");
+}
+LLPointer<LLImageRaw> bumpPixels(unsigned phase)
+{
+    auto raw=pattern(16,16,0);
+    if(phase) for(unsigned pixel=0;pixel<256;++pixel) {raw->getData()[pixel*4]=255-raw->getData()[pixel*4];raw->getData()[pixel*4+1]=255-raw->getData()[pixel*4+1];}
+    return raw;
+}
+LLSD bumpReadback(WorldImages& state,VSUIResources& resources,const VSUIRenderer::Image& image,unsigned code,const std::string& stage)
+{
+    const auto sourceID=code<=2?bumpSource:resources.standardBumpSource(code);
+    const auto source=resources.image("remote:"+sourceID.asString());require(bool(source),"R3 bump source was lost");
+    const auto extent=VSUIRenderer::imageExtent(source);const auto width=extent[0],height=extent[1];
+    const auto& pixels=VSUIRenderer::imagePixels(source);
+    const auto actual=resources.readbackImage(image);
+    std::vector<U8> expectedPixels(actual.size());
+    require(VSUIRenderer::imageExtent(image)==extent && pixels.size()==std::size_t(width)*height*4 && actual.size()==pixels.size(),"R3 bump publication/readback dimensions differ");
+    const auto components=vs_ui_image_components(sourceID);const unsigned last=components==1?0:components==3?2:3;
+    auto h=[&](unsigned x,unsigned y) {
+        const auto offset=(std::size_t(y)*width+x)*4;
+        if(code>=3) return double(pixels[offset+last]);
+        const auto value=(.2995*pixels[offset]+.5875*pixels[offset+1]+.1145*pixels[offset+2])/255.;
+        return code==2?1.-value:value;
+    };
+    const double scale=gSavedSettings.getF32("RenderNormalMapScale"),factor=code>=3?1.:512.;
+    for(unsigned y=0;y<height;++y) for(unsigned x=0;x<width;++x)
+    {
+        const double nx=2*scale*(h((x+width-1)%width,y)-h((x+1)%width,y))*factor;
+        const double ny=2*scale*(h(x,(y+1)%height)-h(x,(y+height-1)%height))*factor,nz=4*scale*scale;
+        const double length=std::sqrt(nx*nx+ny*ny+nz*nz);const std::array<double,3> normal{nx/length,ny/length,nz/length};
+        for(unsigned channel=0;channel<4;++channel)
+        {
+            double value=channel==3?(code>=3?h(x,y)/255.:h(x,y)):normal[channel]*.5+.5;
+            value=std::clamp(value,0.,1.)*255.;
+            const int expected=code>=3 && channel<3?int(std::floor(value)):int(std::lround(value));
+            expectedPixels[(std::size_t(y)*width+x)*4+channel]=U8(expected);
+            require(std::abs(int(actual[(std::size_t(y)*width+x)*4+channel])-expected)<=1,"R3 actual face bump differs from reference pixels");
+        }
+    }
+    const auto root=std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));
+    const auto folder=std::filesystem::path("r3")/"world-bumps";std::filesystem::create_directories(root/folder);
+    const auto name=stage+"-"+std::to_string(code);
+    const auto write=[&](const std::string& suffix,const auto& bytes) {
+        const auto relative=folder/(name+suffix);std::ofstream output(root/relative,std::ios::binary);
+        output.write(reinterpret_cast<const char*>(bytes.data()),bytes.size());require(output.good(),"R3 bump evidence write failed");return relative.generic_string();
+    };
+    LLSD row;row["code"]=S32(code);row["width"]=S32(width);row["height"]=S32(height);row["components"]=components;
+    row["scale"]=scale;row["generation"]=ll_sd_from_U64(VSUIRenderer::generation(image));
+    row["source_generation"]=ll_sd_from_U64(VSUIRenderer::generation(source));
+    row["gpu_file"]=write(".rgba",actual);row["source_file"]=write("-source.rgba",pixels);
+    row["expected_file"]=write("-expected.rgba",expectedPixels);row["source_id"]=sourceID;
+    state.images.push_back(image);return row;
+}
+}
+bool vs_r3_world_images(LLSD& report)
+{
+    if(!std::getenv("VS_VULKAN_REPLAY_LOCAL_IMAGES") || report.has("r3_world_bumps")) return true;
+    const auto session=VSNativeSession::active();require(session && session->phase()==VSNativeSession::Phase::Connected,"R3 world image owner is not connected");
+    auto& resources=gViewerWindow->nativeContext()->resources();auto& world=gViewerWindow->nativeContext()->world();
+    if(!worldImages)
+    {
+        worldImages=std::make_unique<WorldImages>();auto& state=*worldImages;
+        state.deadline=LLFrameTimer::getTotalSeconds()+30;state.originalScale=gSavedSettings.getF32("RenderNormalMapScale");
+        gSavedSettings.setF32("RenderNormalMapScale",128);
+        require(vs_publish_local_image(bumpSource,*bumpPixels(0)),"R3 world bump source publication failed");state.source=true;
+        bumpObjectPacket(*session);return false;
+    }
+    auto& state=*worldImages;require(LLFrameTimer::getTotalSeconds()<state.deadline,"R3 actual world bump publication timed out");
+    if(state.step==3)
+    {
+        if(world.object(bumpObject)) return false;
+        gSavedSettings.setF32("RenderNormalMapScale",state.originalScale);
+        vs_retire_local_image(bumpSource);state.source=false;
+        state.evidence["udp_object_update"]=true;state.evidence["stable_cached_generations"]=true;state.evidence["object_retired"]=true;
+        report["r3_world_bumps"]=state.evidence;return true;
+    }
+    const auto packets=world.packets(session->position()+LLVector3(0,-4,1),128,480,640);
+    std::map<unsigned,VSUIRenderer::Image> images;unsigned faces=0;
+    for(const auto& packet:packets) if(std::equal(packet.objectIdentity.begin(),packet.objectIdentity.end(),bumpObject.mData))
+    {
+        if(!packet.surface || !packet.channels[0]) return false;
+        const auto code=packet.surface->bump;const auto image=packet.channels[0];
+        if(const auto found=images.find(code);found!=images.end()) require(found->second==image,"R3 repeated face bypassed generation cache");
+        images[code]=image;++faces;
+    }
+    if(faces!=6 || images.size()!=3 || vs_ui_image_discard(resources.standardBumpSource(3))!=0) return false;
+    const char* stage=state.step==0?"initial":state.step==1?"source_replaced":"scale_changed";
+    for(const auto& [code,image]:images) state.evidence[stage].append(bumpReadback(state,resources,image,code,stage));
+    if(state.step==0) require(vs_publish_local_image(bumpSource,*bumpPixels(1)),"R3 bump source replacement failed");
+    else if(state.step==1) gSavedSettings.setF32("RenderNormalMapScale",64);
+    else {
+        LLMessageSystem* msg=gMessageSystem;msg->newMessage("KillObject");msg->nextBlock("ObjectData");msg->addU32("ID",990);
+        require(msg->sendReliable(session->host())>0,"R3 bump KillObject transport failed");
+    }
+    ++state.step;return false;
+}
+void vs_r3_replay_retired(LLSD& report)
+{
+    if(!worldImages) return;
+    for(const auto& image:worldImages->images) require(image.expired(),"R3 derived world image survived account retirement");
+    require(gViewerWindow->nativeContext()->resources().evidence()["cached_bump_generations"].asInteger()==0,"R3 world bump cache survived account reset");
+    report["r3_world_bumps"]["account_retired"]=true;
+}
+void vs_r3_replay_cleanup()
+{
+    if(worldImages) {
+        gSavedSettings.setF32("RenderNormalMapScale",worldImages->originalScale);
+        if(worldImages->source) vs_retire_local_image(bumpSource);
+        worldImages.reset();
+    }
 }

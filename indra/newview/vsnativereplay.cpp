@@ -808,6 +808,7 @@ struct Replay
             }
             if (!*readback) return;
             vs_r3_local_images(imEvidence);
+            if(!vs_r3_world_images(imEvidence)) return;
             if (!vs_native_im_replay_tick(owner, imEvidence)) return;
             if (!imCaptureRequested)
             {
@@ -860,6 +861,7 @@ struct Replay
             require(vs_native_im_replay_expired(), "Logout retained a live IM callback generation");
             vs_r1_replay_retired(owner,imEvidence);
             vs_r2_replay_retired(owner, imEvidence);
+            vs_r3_replay_retired(imEvidence);
             imEvidence["im_callback_expired"] = true;
             chat->input()->handleKeyHere(KEY_UP, MASK_CONTROL);
             require(chat->input()->getText().empty(), "Logout retained input history from the previous identity");
