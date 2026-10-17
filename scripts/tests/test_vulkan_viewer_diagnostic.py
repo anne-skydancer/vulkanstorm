@@ -430,6 +430,8 @@ int main(){LLMenuItemCallGL::Params p;
 #include <cmath>
 using S32=int;using MASK=int;using F32=float;
 enum {VX,VY,UI_CURSOR_ARROW=10,UI_CURSOR_IBEAM=11};
+constexpr MASK MASK_SHIFT=4;
+struct LLVector3{float mV[3];LLVector3(float x,float y,float z):mV{x,y,z}{}};
 int ll_round(float v){return int(std::lround(v));}
 struct LLCoordGL{int mX,mY;};
 struct Window{bool hidden=true;int cursor=UI_CURSOR_IBEAM;int calls=0;
@@ -440,9 +442,10 @@ struct View{Window* window;bool editor=false;int x=-1,y=-1,mask=-1;
  bool pointInView(int x,int y){return x>=0&&y>=0;}
  bool handleHover(int sx,int sy,int m){x=sx;y=sy;mask=m;if(editor)window->setCursor(UI_CURSOR_IBEAM);return true;}};
 struct Focus{View* capture=nullptr;View* top=nullptr;View* getMouseCapture(){return capture;} View* getTopCtrl(){return top;}}gFocusMgr;
-struct VSNativeSession{float yaw=0,pitch=0;int orbits=0;
+struct VSNativeSession{float yaw=0,pitch=0;int orbits=0,pans=0;LLVector3 pan{0,0,0};
  static VSNativeSession*active(){static VSNativeSession s;return &s;}
- void cameraOrbit(float y,float p){yaw=y;pitch=p;++orbits;}};
+ void cameraOrbit(float y,float p){yaw=y;pitch=p;++orbits;}
+ void cameraPan(const LLVector3& value){pan=value;++pans;}};
 struct LLViewerWindow{Window* mWindow;View* mRootView;
  struct{float mV[2]={2,2};}mDisplayScale;
  LLCoordGL mCurrentMousePoint{0,0};bool mMouseInWindow=false,mNativeCameraDrag=false;
@@ -462,6 +465,10 @@ int main(){Window window;View root{&window},editor{&window,true};
  viewer.mNativeCameraDrag=true;viewer.nativeHover({24,34},0);
  assert(VSNativeSession::active()->orbits==1);
  assert(std::abs(VSNativeSession::active()->yaw+.01f)<.0001f&&std::abs(VSNativeSession::active()->pitch-.01f)<.0001f);
+ viewer.nativeHover({28,30},MASK_SHIFT);
+ assert(VSNativeSession::active()->pans==1&&VSNativeSession::active()->orbits==1);
+ assert(std::abs(VSNativeSession::active()->pan.mV[1]-.02f)<.0001f);
+ assert(std::abs(VSNativeSession::active()->pan.mV[2]-.02f)<.0001f);
  viewer.mNativeCameraDrag=false;
  gFocusMgr.top=&editor;viewer.nativeHover({24,34},2);
  assert(editor.x==9&&editor.y==13&&editor.mask==2&&window.cursor==UI_CURSOR_IBEAM);
