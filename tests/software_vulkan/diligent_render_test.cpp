@@ -532,6 +532,31 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     auto clipped=quad(-2.f);farPacket.mesh=clipped;farPacket.color={0,0,1,1};
     renderer.draw(rtv,8,8,view,{nearPacket,farPacket});
     capture("near-clip.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
+    // Production material/UV/color-space charts, independently specified pixels.
+    VSWorldRenderer::Packet materialPacket=textured;
+    auto surface=std::make_shared<VSMaterial::State>();
+    materialPacket.surface=surface;materialPacket.doubleSided=true;
+    materialPacket.image=images.upload(1,1,{128,128,128,0});
+    materialPacket.mesh=quad(0);materialPacket.fullbright=true;
+    renderer.draw(rtv,8,8,view,{materialPacket});
+    capture("material-opaque.ppm",[](unsigned,unsigned){return Pixel{128,128,128,255};});
+    surface=std::make_shared<VSMaterial::State>(*surface);surface->pbr=true;
+    materialPacket.surface=surface;materialPacket.color={.5f,.5f,.5f,1};
+    renderer.draw(rtv,8,8,view,{materialPacket});
+    capture("material-linear-factor.ppm",[](unsigned,unsigned){return Pixel{92,92,92,255};});
+    // Emissive is a linear factor times an sRGB texture, independent of lighting.
+    surface=std::make_shared<VSMaterial::State>(*surface);surface->emissive={1,0,0};
+    materialPacket.surface=surface;materialPacket.color={0,0,0,1};
+    materialPacket.channels[2]=images.upload(1,1,{128,0,0,255});
+    renderer.draw(rtv,8,8,view,{materialPacket});
+    capture("material-emissive.ppm",[](unsigned,unsigned){return Pixel{128,0,0,255};});
+    surface=std::make_shared<VSMaterial::State>();surface->uv[0].offset={.5f,0};
+    materialPacket.surface=surface;materialPacket.channels={};materialPacket.color={1,1,1,1};
+    materialPacket.image=images.upload(2,2,texels);
+    materialPacket.mesh=renderer.upload({{-1,1,0,0,0,1,.25f,.25f},{1,1,0,0,0,1,.25f,.25f},
+        {-1,-1,0,0,0,1,.25f,.25f},{1,-1,0,0,0,1,.25f,.25f}},{0,2,1,1,2,3});
+    renderer.draw(rtv,8,8,view,{materialPacket});
+    capture("material-transform.ppm",[](unsigned,unsigned){return Pixel{0,255,0,255};});
     VSWorldRenderer::Packet sky;sky.background=true;sky.fullbright=true;
     sky.mesh=renderer.upload({{-1,-1,0,0,0,1,0,0},{1,-1,0,0,0,1,1,0},
         {1,1,0,0,0,1,1,1},{-1,1,0,0,0,1,0,1}},{0,1,2,0,2,3});

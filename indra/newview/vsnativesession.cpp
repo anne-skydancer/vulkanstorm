@@ -110,7 +110,7 @@ const std::set<std::string> transport = {"StartPingCheck", "CompletePingCheck", 
 const std::set<std::string>    worldMessages = {
     "ObjectUpdate",      "ObjectUpdateCompressed", "ObjectUpdateCached", "ImprovedTerseObjectUpdate", "KillObject",
     "LayerData",         "AvatarAppearance",       "AvatarAnimation",    "ObjectAnimation",           "ViewerEffect",
-    "ReplyTaskInventory"
+    "ReplyTaskInventory", "GenericStreamingMessage"
 };
 const std::set<std::string> session = { "SimStats",
                                         "ParcelProperties",
@@ -514,6 +514,8 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
                               "GetMesh2",
                               "UpdateAvatarAppearance",
                               "UploadBakedTexture",
+                              "RenderMaterials",
+                              "ModifyMaterialParams",
                               "AvatarPickerSearch",
                               "GroupAPIv1",
                               "GroupMemberData",

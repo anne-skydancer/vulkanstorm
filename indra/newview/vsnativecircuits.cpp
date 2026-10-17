@@ -131,7 +131,7 @@ void VSNativeSession::neighbourSeedCoro(LLHost host,std::string seed,U64 account
     options->setTransferTimeout(15);options->setRetries(2);
     LLSD wanted = LLSD::emptyArray();
     for (const char* name :
-         { "EventQueueGet", "GetMesh", "GetMesh2", "GetTexture", "ViewerAsset", "UpdateAvatarAppearance", "UntrustedSimulatorMessage" })
+         { "EventQueueGet", "GetMesh", "GetMesh2", "GetTexture", "ViewerAsset", "RenderMaterials", "ModifyMaterialParams", "UpdateAvatarAppearance", "UntrustedSimulatorMessage" })
         wanted.append(name);
     const LLSD result=adapter->postAndSuspend(request,seed,wanted,options);
     const auto weak=weak_from_this();
@@ -145,8 +145,15 @@ void VSNativeSession::neighbourSeedCoro(LLHost host,std::string seed,U64 account
         if (region.seedFailed) return;
         region.capabilities=LLSD::emptyMap();
         for (const char* name :
-             { "EventQueueGet", "GetMesh", "GetMesh2", "GetTexture", "ViewerAsset", "UpdateAvatarAppearance", "UntrustedSimulatorMessage" })
+             { "EventQueueGet", "GetMesh", "GetMesh2", "GetTexture", "ViewerAsset", "RenderMaterials", "ModifyMaterialParams", "UpdateAvatarAppearance", "UntrustedSimulatorMessage" })
             if (circuitURL(result[name].asString())) region.capabilities[name]=result[name];
         if (circuitURL(region.capabilities["EventQueueGet"].asString())) region.poll=std::make_unique<LLEventPoll>(region.capabilities["EventQueueGet"].asString(),host);
     });
+}
+
+std::string VSNativeSession::capability(const LLHost& host,const std::string& name) const
+{
+    if(host==mHost) return capability(name);
+    const auto found=mCircuits.find(host);
+    return found!=mCircuits.end() && found->second.acknowledged ? found->second.capabilities[name].asString() : std::string();
 }

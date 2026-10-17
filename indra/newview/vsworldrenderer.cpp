@@ -33,9 +33,12 @@ struct alignas(16) Constants
 {
     std::array<float,16> projection;
     std::array<float,4> sun,ambient,color,material,regionOffset;
+    std::array<float,4> surfaceFlags{}, surfaceParams{}, emissive{}, specular{};
+    std::array<float,4> channelSets{}, normalOcclusion{};
+    std::array<std::array<float,4>,8> uv{};
 };
-static_assert(sizeof(Constants)==144);
-static_assert(sizeof(VSWorldRenderer::Vertex)==32);
+static_assert(sizeof(Constants)==368);
+static_assert(sizeof(VSWorldRenderer::Vertex)==72);
 void checkWorldABI(IShader& shader)
 {
     bool found=false;
@@ -44,10 +47,10 @@ void checkWorldABI(IShader& shader)
         ShaderResourceDesc resource{};shader.GetResourceDesc(i,resource);
         if (!resource.Name || std::strcmp(resource.Name,"WorldView")) continue;
         const auto* buffer=shader.GetConstantBufferDesc(i);
-        requireWorld(buffer && buffer->Size==sizeof(Constants) && buffer->NumVariables==6,"World uniform block ABI mismatch");
-        const char* names[]{"projection","sun","ambient","tint","material","regionOffset"};
-        const std::size_t offsets[]{offsetof(Constants,projection),offsetof(Constants,sun),offsetof(Constants,ambient),offsetof(Constants,color),offsetof(Constants,material),offsetof(Constants,regionOffset)};
-        for (unsigned v=0;v<6;++v)
+        requireWorld(buffer && buffer->Size==sizeof(Constants) && buffer->NumVariables==13,"World uniform block ABI mismatch");
+        const char* names[]{"projection","sun","ambient","tint","material","regionOffset","surfaceFlags","surfaceParams","emissive","specular","channelSets","normalOcclusion","uvTransform"};
+        const std::size_t offsets[]{offsetof(Constants,projection),offsetof(Constants,sun),offsetof(Constants,ambient),offsetof(Constants,color),offsetof(Constants,material),offsetof(Constants,regionOffset),offsetof(Constants,surfaceFlags),offsetof(Constants,surfaceParams),offsetof(Constants,emissive),offsetof(Constants,specular),offsetof(Constants,channelSets),offsetof(Constants,normalOcclusion),offsetof(Constants,uv)};
+        for (unsigned v=0;v<13;++v)
         {
             const auto& variable=buffer->pVariables[v];
             requireWorld(variable.Name && !std::strcmp(variable.Name,names[v]) && variable.Offset==offsets[v],"World uniform member ABI mismatch");
@@ -75,7 +78,7 @@ struct VSWorldRenderer::Impl
     RefCntAutoPtr<IRenderDevice> device;
     RefCntAutoPtr<IDeviceContext> context;
     RefCntAutoPtr<IShader> vertex, fragment;
-    RefCntAutoPtr<IPipelineState> pipelines[2][3][3];
+    RefCntAutoPtr<IPipelineState> pipelines[2][3][3][2];
     RefCntAutoPtr<ITexture> depth, white;
     RefCntAutoPtr<IFence> fence;
     Uint64 next = 1,nextGeometryGeneration=1;
@@ -116,22 +119,30 @@ struct VSWorldRenderer::Impl
         TextureSubResData sr{};sr.pData=&pixel;sr.Stride=4;TextureData data{&sr,1};
         device->CreateTexture(td,&data,&white);requireWorld(white!=nullptr,"World fallback texture failed");
     }
-    IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology)
+    IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology, bool doubleSided)
     {
         requireWorld(format==TEX_FORMAT_RGBA8_UNORM || format==TEX_FORMAT_BGRA8_UNORM,"Unsupported world target format");
-        auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM][background ? 2 : unsigned(alpha)][unsigned(topology)];
+        auto& result = pipelines[format == TEX_FORMAT_BGRA8_UNORM][background ? 2 : unsigned(alpha)][unsigned(topology)][doubleSided];
         if (result) return result;
         const char* vs = R"(
 layout(location=0) in vec3 position;
 layout(location=1) in vec3 normal;
 layout(location=2) in vec2 uv;
-layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; };
+layout(location=3) in vec2 uv1;
+layout(location=4) in vec4 tangent;
+layout(location=5) in vec4 vertexColor;
+layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; vec4 surfaceFlags; vec4 surfaceParams; vec4 emissive; vec4 specular; vec4 channelSets; vec4 normalOcclusion; vec4 uvTransform[8]; };
 layout(location=0) out vec2 texUV;
 layout(location=1) out vec3 light;
+layout(location=2) out vec3 worldNormal;
+layout(location=3) out vec3 worldPosition;
+layout(location=4) out vec2 texUV1;
+layout(location=5) out vec4 worldTangent;
+layout(location=6) out vec4 faceColor;
 void main() {
     vec4 p=material.w>0.5 ? vec4(position,1) : projection*vec4(position+regionOffset.xyz,1);
     p.z=(p.z+p.w)*0.5;
-    gl_Position=p; texUV=uv;
+    gl_Position=p; texUV=uv; texUV1=uv1; worldTangent=tangent; faceColor=vertexColor; worldNormal=normal; worldPosition=position+regionOffset.xyz;
     gl_PointSize=1.0;
     light=material.x>0.5 ? vec3(1) : ambient.rgb+(vec3(1)-ambient.rgb)*max(dot(normalize(normal),normalize(sun.xyz)),0.0);
 }
@@ -139,17 +150,63 @@ void main() {
         const char* fs=R"(
 layout(location=0) in vec2 texUV;
 layout(location=1) in vec3 light;
+layout(location=2) in vec3 worldNormal;
+layout(location=3) in vec3 worldPosition;
+layout(location=4) in vec2 texUV1;
+layout(location=5) in vec4 worldTangent;
+layout(location=6) in vec4 faceColor;
 layout(location=0) out vec4 result;
-layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; };
+layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; vec4 surfaceFlags; vec4 surfaceParams; vec4 emissive; vec4 specular; vec4 channelSets; vec4 normalOcclusion; vec4 uvTransform[8]; };
 uniform sampler2D g_Texture;
+uniform sampler2D g_Normal;
+uniform sampler2D g_ORM;
+uniform sampler2D g_Emissive;
+vec2 channelUV(int i) {
+    vec2 rawUV=channelSets[i]>.5?texUV1:texUV;
+    vec2 uv=vec2(rawUV.x,1.0-rawUV.y);
+    vec4 m=uvTransform[2*i];
+    vec2 p=vec2(m.x*uv.x+m.z*uv.y,m.y*uv.x+m.w*uv.y)+uvTransform[2*i+1].xy;
+    return vec2(p.x,1.0-p.y);
+}
+vec3 toLinear(vec3 c) { return mix(c/12.92,pow((c+0.055)/1.055,vec3(2.4)),greaterThan(c,vec3(0.04045))); }
+vec3 toSRGB(vec3 c) { c=max(c,vec3(0)); return mix(c*12.92,1.055*pow(c,vec3(1.0/2.4))-0.055,greaterThan(c,vec3(0.0031308))); }
+vec3 mappedNormal(vec2 uv) {
+    vec3 n=normalize(worldNormal);
+    if (surfaceFlags.z<0.5) return n;
+    vec3 dp1=dFdx(worldPosition),dp2=dFdy(worldPosition);
+    vec2 duv1=dFdx(uv),duv2=dFdy(uv);
+    vec3 p2=cross(dp2,n),p1=cross(n,dp1);
+    vec3 t=p2*duv1.x+p1*duv2.x,b=p2*duv1.y+p1*duv2.y;
+    float scale=max(dot(t,t),dot(b,b));
+    if (scale<1e-20) return n;
+    // Sampling coordinates are top-left, whereas tangent-space Y is +V.
+    vec3 value=texture(g_Normal,uv).xyz*2.0-1.0;
+    value.xy*=normalOcclusion.x;
+    // Derivatives include per-channel UV rotation and mirror handedness, as
+    // textureUtilV.glsl's tangent-space transform does in the reference path.
+    return normalize(mat3(t*inversesqrt(scale),-b*inversesqrt(scale),n)*value);
+}
 void main() {
     if (material.w>0.5) {
         result=vec4(mix(vec3(0.65,0.8,0.95),vec3(0.08,0.22,0.48),clamp(texUV.y,0.0,1.0)),1);
         return;
     }
-    vec4 c=texture(g_Texture,texUV)*tint;
+    vec2 baseUV=surfaceFlags.x>0.5 ? channelUV(0) : texUV;
+    vec4 sampleColor=texture(g_Texture,baseUV);
+    vec4 c=sampleColor*tint*faceColor;
+    if (surfaceFlags.x>0.5 && surfaceFlags.w<0.5) c.a=tint.a*faceColor.a;
     if (material.y>0.5 && c.a<material.z) discard;
-    result=vec4(c.rgb*light,c.a);
+    if (surfaceFlags.x<0.5) { result=vec4(c.rgb*light,c.a); return; }
+    vec3 n=mappedNormal(channelUV(1));
+    if (!gl_FrontFacing) n=-n;
+    vec3 illumination=material.x>0.5 ? vec3(1) : ambient.rgb+(vec3(1)-ambient.rgb)*max(dot(n,normalize(sun.xyz)),0.0);
+    vec3 base=toLinear(sampleColor.rgb)*(surfaceFlags.y>0.5 ? tint.rgb : toLinear(tint.rgb))*faceColor.rgb;
+    vec3 emission=emissive.rgb*toLinear(texture(g_Emissive,channelUV(3)).rgb);
+    if (surfaceParams.w>0.5) emission+=base*sampleColor.a;
+    // ORM channels and legacy specular/gloss remain material inputs for R5/R6,
+    // rather than inventing a replacement BRDF in this forward foundation.
+    float occlusion=surfaceFlags.y>0.5 ? mix(1.0,texture(g_ORM,channelUV(2)).r,normalOcclusion.y) : 1.0;
+    result=vec4(toSRGB(base*illumination*occlusion+emission),c.a);
 }
 )";
         if (!vertex)
@@ -171,11 +228,12 @@ void main() {
         gp.PrimitiveTopology           = topology == Topology::Triangles ? PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
                                          : topology == Topology::Lines   ? PRIMITIVE_TOPOLOGY_LINE_LIST
                                                                          : PRIMITIVE_TOPOLOGY_POINT_LIST;
-        gp.RasterizerDesc.CullMode=CULL_MODE_NONE;
+        gp.RasterizerDesc.CullMode=doubleSided ? CULL_MODE_NONE : CULL_MODE_BACK;
         gp.DepthStencilDesc.DepthEnable=!background;gp.DepthStencilDesc.DepthWriteEnable=!alpha && !background;
         gp.DepthStencilDesc.DepthFunc=COMPARISON_FUNC_LESS_EQUAL;
-        const LayoutElement layout[]={{0,0,3,VT_FLOAT32,false},{1,0,3,VT_FLOAT32,false},{2,0,2,VT_FLOAT32,false}};
-        gp.InputLayout.LayoutElements=layout;gp.InputLayout.NumElements=3;
+        const LayoutElement layout[]={{0,0,3,VT_FLOAT32,false},{1,0,3,VT_FLOAT32,false},{2,0,2,VT_FLOAT32,false},
+            {3,0,2,VT_FLOAT32,false},{4,0,4,VT_FLOAT32,false},{5,0,4,VT_FLOAT32,false}};
+        gp.InputLayout.LayoutElements=layout;gp.InputLayout.NumElements=6;
         auto& blend=gp.BlendDesc.RenderTargets[0];blend.BlendEnable=alpha;
         blend.SrcBlend=BLEND_FACTOR_SRC_ALPHA;blend.DestBlend=BLEND_FACTOR_INV_SRC_ALPHA;
         blend.SrcBlendAlpha=BLEND_FACTOR_ONE;blend.DestBlendAlpha=BLEND_FACTOR_INV_SRC_ALPHA;
@@ -183,8 +241,9 @@ void main() {
         SamplerDesc sampler{};sampler.MinFilter=sampler.MagFilter=FILTER_TYPE_LINEAR;
         sampler.MipFilter=FILTER_TYPE_POINT;
         sampler.AddressU=sampler.AddressV=sampler.AddressW=TEXTURE_ADDRESS_WRAP;
-        ImmutableSamplerDesc immutable{SHADER_TYPE_PIXEL,"g_Texture",sampler};
-        ci.PSODesc.ResourceLayout.NumImmutableSamplers=1;ci.PSODesc.ResourceLayout.ImmutableSamplers=&immutable;
+        const ImmutableSamplerDesc immutable[]={{SHADER_TYPE_PIXEL,"g_Texture",sampler}, {SHADER_TYPE_PIXEL,"g_Normal",sampler},
+            {SHADER_TYPE_PIXEL,"g_ORM",sampler}, {SHADER_TYPE_PIXEL,"g_Emissive",sampler}};
+        ci.PSODesc.ResourceLayout.NumImmutableSamplers=4;ci.PSODesc.ResourceLayout.ImmutableSamplers=immutable;
         device->CreateGraphicsPipelineState(ci,&result);requireWorld(result!=nullptr,"World pipeline creation failed");
         return result;
     }
@@ -202,7 +261,7 @@ VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertice
     if (vertices.empty() || vertices.size() > 1048576 || indices.empty() || indices.size() > 3145728 || indices.size() % group)
         return reject();
     for (const auto& v:vertices)
-        for (float f : { v.x, v.y, v.z, v.nx, v.ny, v.nz, v.u, v.v })
+        for (float f : { v.x, v.y, v.z, v.nx, v.ny, v.nz, v.u, v.v, v.u1, v.v1, v.tx, v.ty, v.tz, v.tw, v.r, v.g, v.b, v.a })
             if (!std::isfinite(f))
                 return reject();
     for (auto i : indices)
@@ -220,6 +279,7 @@ VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertice
     mesh->topology                                                              = topology;
     mesh->description.vertices=vertices.size();mesh->description.indices=indices.size();
     mesh->description.generation=mImpl->nextGeometryGeneration++;
+    mesh->description.stride=sizeof(Vertex);
     mesh->residency=std::move(residency);
     mesh->snapshotResidency                                             = std::move(snapshotResidency);
     mesh->cpuVertices                                                   = vertices;
@@ -493,7 +553,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         requireWorld(p.mesh && p.mesh->owner.RawPtr()==mImpl->device.RawPtr(),"World mesh belongs to another device");
         requireWorld(!p.image || VSUIRenderer::imageOwnedBy(p.image,mImpl->device),"World image belongs to another device");
         for (float f:p.color) requireWorld(std::isfinite(f),"Non-finite world material");
-        auto* pipeline = mImpl->pipeline(target->GetTexture()->GetDesc().Format, p.alpha, p.background, p.mesh->topology);
+        auto* pipeline = mImpl->pipeline(target->GetTexture()->GetDesc().Format, p.alpha, p.background, p.mesh->topology, !p.surface || p.doubleSided || p.background);
         for (float f:p.regionOffset) requireWorld(std::isfinite(f),"Non-finite world region translation");
         requireWorld(std::isfinite(p.alphaCutoff) && p.alphaCutoff >= 0 && p.alphaCutoff <= 1, "Invalid world alpha cutoff");
         Constants constants{ view.projection,
@@ -502,6 +562,22 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
                              p.color,
                              { p.fullbright ? 1.f : 0.f, p.masked ? 1.f : 0.f, p.alphaCutoff, p.background ? 1.f : 0.f },
                              p.regionOffset };
+        if (p.surface)
+        {
+            const auto& surface=*p.surface;
+            constants.surfaceFlags={1, surface.pbr?1.f:0.f, p.channels[0]?1.f:0.f,
+                surface.alpha!=VSWorldContracts::AlphaMode::Opaque?1.f:0.f};
+            constants.surfaceParams={surface.metallic,surface.roughness,surface.glow,surface.emissiveAlpha?1.f:0.f};
+            std::copy(surface.emissive.begin(),surface.emissive.end(),constants.emissive.begin());
+            constants.specular=surface.specular;
+            for(unsigned i=0;i<4;++i) constants.channelSets[i]=float(surface.uvSet[i]);
+            constants.normalOcclusion={surface.normalScale,surface.occlusionStrength,0,0};
+            for (unsigned i=0;i<4;++i)
+            {
+                constants.uv[2*i]=surface.uv[i].matrix;
+                constants.uv[2*i+1]={surface.uv[i].offset[0],surface.uv[i].offset[1],0,0};
+            }
+        }
         if (p.hud)
         {
             if (!drawingHud)
@@ -539,6 +615,16 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         requireWorld(texture!=nullptr,"World texture binding missing");
         texture->Set(p.image ? VSUIRenderer::imageView(p.image) : mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
                      SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+        const char* channels[]{"g_Normal","g_ORM","g_Emissive"};
+        for (unsigned channel=0;channel<3;++channel)
+        {
+            auto* variable=resources.binding->GetVariableByName(SHADER_TYPE_PIXEL,channels[channel]);
+            requireWorld(variable!=nullptr,"World material channel binding missing");
+            requireWorld(!p.channels[channel] || VSUIRenderer::imageOwnedBy(p.channels[channel],mImpl->device),
+                         "World material image belongs to another device");
+            variable->Set(p.channels[channel] ? VSUIRenderer::imageView(p.channels[channel]) :
+                mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+        }
         context->SetPipelineState(pipeline);
         IBuffer* vertex=p.mesh->vertices.RawPtr();Uint64 offset=0;
         context->SetVertexBuffers(0,1,&vertex,&offset,RESOURCE_STATE_TRANSITION_MODE_TRANSITION,SET_VERTEX_BUFFERS_FLAG_RESET);
