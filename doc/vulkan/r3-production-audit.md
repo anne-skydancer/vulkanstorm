@@ -1007,3 +1007,14 @@ process must publish that queued-write UUID to the GPU with the independent
 source pixels and zero texture HTTP requests. Account-retirement and later
 shutdown HTTP counters remain separate time points. These new paths require
 runtime qualification; their presence and compiled fixtures do not accept them.
+
+
+The first expanded cold-cache replay exposed a launcher defect: an else branch
+for the new pending-write restart flag cleared VS_VULKAN_REPLAY_TERRAIN. The
+terrain material replay consequently had no received ground to observe. The
+contract flags now use one independent mapping; a permanent regression covers
+all 128 combinations, including stale inherited values. The terrain material
+observer also has its own 30-second deadline, so missing prerequisites cannot
+wait for the viewer's global lifetime. The failed run is retained and is not
+qualification evidence. No viewer rendering assertion or pixel tolerance was
+relaxed for this repair.

@@ -540,6 +540,21 @@ REQUIRED = ('connected_native_statistics', 'connected_script_notification_contro
             'partial_init_cleanup', 'connection_timeout', 'encoded_chat', 'encoded_typing', 'ui_gate', 'logout_timeout', 'native_people_account_ui', 'native_navigation_request', 'native_navigation_transition', 'native_navigation_epoch', 'native_navigation_identity', 'native_navigation_local', 'native_location_lookup', 'native_landmark_v2', 'encoded_channels', 'queued_http_chat', 'mute_request', 'mute_transfer_cleanup', 'input_history', 'status_messages', 'connected_timeout', 'reliable_failure')
 
 
+def configure_replay_contract_environment(env,args):
+    flags={
+        'VS_VULKAN_REPLAY_LOCAL_IMAGES':args.local_image_contracts,
+        'VS_VULKAN_REPLAY_TEXTURE_CACHE':args.texture_cache_contracts,
+        'VS_VULKAN_REPLAY_TEXTURE_CACHE_READ_ONLY':args.texture_cache_read_only,
+        'VS_VULKAN_REPLAY_R1':args.r1_contracts,
+        'VS_VULKAN_REPLAY_R2':args.r2_contracts,
+        'VS_VULKAN_REPLAY_TERRAIN':args.terrain_contracts,
+        'VS_VULKAN_REPLAY_PENDING_CACHE_WRITE_RESTART':args.pending_cache_write_restart,
+    }
+    for key,enabled in flags.items():
+        if enabled:env[key]='1'
+        else:env.pop(key,None)
+
+
 def r3_terrain_contracts_passed(report,directory):
     try:
         record=report['r3_terrain']
@@ -1361,18 +1376,7 @@ def main():
         env.pop('DISPLAY', None); env.pop('WAYLAND_DISPLAY', None)
     else:
         env.pop('VS_VULKAN_DIAGNOSTIC_HEADLESS', None)
-    for key, enabled in [('VS_VULKAN_REPLAY_LOCAL_IMAGES', args.local_image_contracts),
-                         ('VS_VULKAN_REPLAY_TEXTURE_CACHE', args.texture_cache_contracts),
-                         ('VS_VULKAN_REPLAY_TEXTURE_CACHE_READ_ONLY', args.texture_cache_read_only)]:
-        if enabled:env[key]='1'
-        else:env.pop(key,None)
-    if args.r2_contracts:env['VS_VULKAN_REPLAY_R2']='1'
-    else:env.pop('VS_VULKAN_REPLAY_R2',None)
-    if args.terrain_contracts:env['VS_VULKAN_REPLAY_TERRAIN']='1'
-    if args.pending_cache_write_restart:env['VS_VULKAN_REPLAY_PENDING_CACHE_WRITE_RESTART']='1'
-    else:env.pop('VS_VULKAN_REPLAY_TERRAIN',None)
-    if args.r1_contracts:env['VS_VULKAN_REPLAY_R1']='1'
-    else:env.pop('VS_VULKAN_REPLAY_R1',None)
+    configure_replay_contract_environment(env,args)
     layer = directory / 'vk_layer_settings.txt'; layer.write_text('khronos_validation.validate_sync = true\n')
     env['VK_LAYER_SETTINGS_PATH'] = str(layer)
     command = [str(executable), '--settings', 'vs_native_session_ci.xml', '--set', 'ClientSettingsFile',
