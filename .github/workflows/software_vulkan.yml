@@ -101,6 +101,7 @@ jobs:
       - run: python scripts/tests/test_vulkan_friend_status.py
       - run: python scripts/tests/test_vulkan_ui_oracle.py
       - run: python scripts/tests/test_vulkan_media_pixels.py
+      - run: python scripts/tests/test_native_media_publication.py
       - run: python scripts/tests/test_vulkan_font_registry.py
       - run: python scripts/tests/test_vulkan_ci_staging.py
       - run: python scripts/tests/test_vulkan_dependency_overlay.py

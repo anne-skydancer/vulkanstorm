@@ -2304,7 +2304,7 @@ list(APPEND viewer_HEADER_FILES vsrenderbackend.h)
 list(APPEND viewer_SOURCE_FILES ${viewer_HEADER_FILES})
 if(USE_DILIGENTCORE)
     list(APPEND viewer_SOURCE_FILES vsuirenderer.cpp vsuirenderer.h vsuifont.cpp vsuifont.h
-         vsuiresources.cpp vsuiresources.h vsuifontcache.cpp vsuifontcache.h
+         vsuiresources.cpp vsuiresources.h vsmediaimage.cpp vsmediaimage.h vsuifontcache.cpp vsuifontcache.h
           vsuifontbridge.cpp vsuifontbridge.h
           vsuidrawbridge.cpp vsuidrawbridge.h vsuiimageprovider.cpp vsuiimageprovider.h
           vsuicontext.cpp vsuicontext.h vsvulkancontext.cpp vsvulkancontext.h vsstartupui.cpp vsstartupui.h vsviewerwindow.cpp

@@ -190,6 +190,7 @@ LLUIImagePtr VSUIResources::publish(const std::string& key,const LLImageRaw& raw
     const auto role = key.compare(0, 17, "avatar-composite:") == 0 ? VSWorldContracts::ImageRole::AvatarComposite
                       : (key.compare(0, 7, "remote:") == 0 || key.compare(0, 17, "gltf-scene-image:") == 0)
                           ? VSWorldContracts::ImageRole::RemoteAsset
+                          : key.compare(0, 6, "media:") == 0 ? VSWorldContracts::ImageRole::Media
                           : VSWorldContracts::ImageRole::CoreUI;
     asset->image    = mImpl->renderer.upload(width, height, bytes, role);
     if (!asset->image) return nullptr;
@@ -285,6 +286,11 @@ std::vector<VSUIRenderer::Packet> VSUIResources::finish()
     return std::move(mImpl->packets);
 }
 void VSUIResources::erase(const std::string& key) { mImpl->assets.erase(key); }
+LLUIImagePtr VSUIResources::facade(const std::string& key) const
+{
+    const auto found = mImpl->assets.find(key);
+    return found == mImpl->assets.end() ? LLUIImagePtr{} : found->second.facade;
+}
 VSUIRenderer::Image VSUIResources::image(const std::string& key) const
 {
     const auto found=mImpl->assets.find(key);

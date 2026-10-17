@@ -94,3 +94,22 @@ pass repeat/clamp/mirror and minification charts, plus descriptor checks for the
 actual device anisotropy limit. The affected native viewer sources compile.
 Progressive fetch/discard, compression, settings inventory and the remaining R3
 acceptance cases above remain open; this checkpoint does not qualify R3.
+
+## Shared media image publication checkpoint
+
+LLMediaCtrl and LLViewerMediaImpl now use one native publication controller.
+Initial and resized plugin frames publish complete immutable generations;
+subsequent updates copy only the clamped dirty rectangle, respecting padded
+stride, RGBA/BGRA order, opaque RGB and plugin coordinate origin. A refused
+initial/resize/patch upload preserves the previous generation and plugin dirty
+state for retry. Controls tolerate an initial refusal without dereferencing a
+missing image. Plugin destruction retires its named native resource; packets
+already submitted retain their own generation. Media uses the remote-image
+budget and a single mip level, matching the reference media policy.
+
+Compiled regressions execute the production controller for refusal, retry,
+shared-consumer reuse, resizing and unsupported formats, plus independent dirty
+region/orientation fixtures. All changed viewer translation units compile in
+the canonical RelWithDebInfo build. This supplies image publication to world
+consumers; ObjectMedia acquisition, native media interest and actual world-face
+binding are still required before world media can be qualified.

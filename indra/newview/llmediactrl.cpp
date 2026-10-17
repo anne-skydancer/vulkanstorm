@@ -31,7 +31,7 @@
 #if VS_NATIVE_VULKAN
 #include "vsuidrawbridge.h"
 #include "vsuiresources.h"
-#include "vsmediapixels.h"
+#include "vsmediaimage.h"
 #include "llimage.h"
 #endif
 
@@ -861,25 +861,9 @@ void LLMediaCtrl::draw()
         if (ready)
         {
             const S32 width = plugin->getWidth(), height = plugin->getHeight();
-            if (!mNativeMediaImage || width != mNativeMediaWidth || height != mNativeMediaHeight || plugin->getDirty())
-            {
-                if (plugin->getTextureDepth() != 4 || plugin->getTextureFormatType() != GL_UNSIGNED_BYTE ||
-                    plugin->getTextureFormatSwapBytes() ||
-                    (plugin->getTextureFormatInternal() != GL_RGB && plugin->getTextureFormatInternal() != GL_RGBA) ||
-                    (plugin->getTextureFormatPrimary() != GL_RGBA && plugin->getTextureFormatPrimary() != GL_BGRA))
-                    throw std::runtime_error("Unsupported native media pixel format");
-                auto pixels = vs_media_pixels(plugin->getBitsData(), width, height, plugin->getBitsWidth(),
-                    plugin->getBitsHeight(), plugin->getTextureFormatPrimary() == GL_BGRA, plugin->getTextureCoordsOpenGL(),
-                    plugin->getTextureFormatInternal() == GL_RGB);
-                LLPointer<LLImageRaw> raw = new LLImageRaw(width, height, 4);
-                memcpy(raw->getData(), pixels.data(), pixels.size());
-                const bool first_image = !mNativeMediaImage;
-                mNativeMediaImage = resources->publish("media:" + mMediaTextureID.asString(), *raw);
-                if (first_image)
-                    LL_INFOS("NativeUI") << "Native media pixels: " << getName() << " " << width << "x" << height << LL_ENDL;
-                mNativeMediaWidth = width; mNativeMediaHeight = height;
-                plugin->resetDirty();
-            }
+            mNativeMediaImage = vs_update_media_image(*resources, "media:" + mMediaTextureID.asString(), *plugin);
+            mNativeMediaWidth = width; mNativeMediaHeight = height;
+            ready = bool(mNativeMediaImage);
             const F32 scale = LLUI::getScaleFactor().mV[VX];
             if (scale != mMediaSource->getPageZoomFactor())
             {
@@ -888,7 +872,8 @@ void LLMediaCtrl::draw()
             }
             S32 x, y, draw_width, draw_height;
             calcOffsetsAndSize(&x, &y, &draw_width, &draw_height);
-            mNativeMediaImage->draw(x, y, draw_width, draw_height, LLColor4::white % getDrawContext().mAlpha);
+            if (mNativeMediaImage)
+                mNativeMediaImage->draw(x, y, draw_width, draw_height, LLColor4::white % getDrawContext().mAlpha);
         }
         else
         {
