@@ -1,6 +1,7 @@
 // Native simulator circuit/region ownership. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "vsnativesession.h"
+#include "vscapabilities.h"
 #include "vsvulkancontext.h"
 #include "vsworldscene.h"
 #include "llviewerwindow.h"
@@ -36,12 +37,21 @@ std::vector<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshots() 
         row.width=region.width;row.height=region.height;row.id=region.id;row.owner=region.owner;
         row.name=region.name;row.flags=region.flags;row.access=region.access;
         row.estateManager=region.estateManager;row.estateManagerKnown=region.estateManagerKnown;
+        row.metadata=region.metadata;
         row.objectCapacity=region.objectCapacity;row.objectCapacityKnown=region.objectCapacityKnown;
         row.waterHeight=region.waterHeight;row.waterKnown=region.waterKnown;row.current=host==mHost;
         row.coarse=region.coarse.avatars;row.parcelOverlay=region.parcelOverlay;
         result.push_back(std::move(row));
     }
     return result;
+}
+bool VSNativeSession::current(const RegionSnapshot& snapshot) const
+{
+    if(mShutdown || mPhase!=Phase::Connected || !current(snapshot.account))return false;
+    const auto found=mCircuits.find(snapshot.host);
+    return found!=mCircuits.end() && found->second.acknowledged && found->second.handshake &&
+        found->second.incarnation==snapshot.circuit && found->second.handle==snapshot.handle &&
+        found->second.id==snapshot.id;
 }
 std::vector<VSCoarseSample<LLUUID>> VSNativeSession::coarseAvatarLocations() const
 {
@@ -218,13 +228,10 @@ void VSNativeSession::neighbourSeedCoro(LLHost host,std::string seed,U64 account
         { if (auto request=weak.lock()) request->cancelSuspendedOperation(); };
     auto request=std::make_shared<LLCore::HttpRequest>();auto options=std::make_shared<LLCore::HttpOptions>();
     options->setTransferTimeout(15);options->setRetries(2);
-    LLSD wanted = LLSD::emptyArray();
-    for (const char* name :
-         { "EventQueueGet", "GetMesh", "GetMesh2", "GetTexture", "ViewerAsset", "RenderMaterials", "ModifyMaterialParams", "ObjectMedia", "ObjectMediaNavigate", "UpdateAvatarAppearance", "UntrustedSimulatorMessage" })
-        wanted.append(name);
+    const LLSD wanted=vs_native_capability_names();
     const LLSD result=adapter->postAndSuspend(request,seed,wanted,options);
     const auto weak=weak_from_this();
-    LL::WorkQueue::getInstance("mainloop")->post([weak,host,account,incarnation,requestRevision,result,adapter]()
+    LL::WorkQueue::getInstance("mainloop")->post([weak,host,account,incarnation,requestRevision,result,adapter,wanted]()
     {
         auto owner=weak.lock();
         if (!owner || owner->mShutdown || (owner->mPhase!=Phase::Connecting && owner->mPhase!=Phase::Connected) ||
@@ -233,9 +240,12 @@ void VSNativeSession::neighbourSeedCoro(LLHost host,std::string seed,U64 account
         region.seedFailed=!LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]) || !result.isMap();
         if (region.seedFailed) return;
         region.capabilities=LLSD::emptyMap();
-        for (const char* name :
-             { "EventQueueGet", "GetMesh", "GetMesh2", "GetTexture", "ViewerAsset", "RenderMaterials", "ModifyMaterialParams", "ObjectMedia", "ObjectMediaNavigate", "UpdateAvatarAppearance", "UntrustedSimulatorMessage" })
+        const LLSD& requestedCapabilities=wanted;
+        for (auto requested=requestedCapabilities.beginArray();requested!=requestedCapabilities.endArray();++requested)
+        {
+            const std::string name=requested->asString();
             if (circuitURL(result[name].asString())) region.capabilities[name]=result[name];
+        }
         if (circuitURL(region.capabilities["EventQueueGet"].asString())) region.poll=std::make_unique<LLEventPoll>(region.capabilities["EventQueueGet"].asString(),host);
     });
 }

@@ -857,6 +857,7 @@ set(viewer_SOURCE_FILES
     llviewerparceloverlay.cpp
     llviewerpartsim.cpp
     llviewerpartsource.cpp
+    vscapabilities.cpp
     llviewerregion.cpp
     llviewershadermgr.cpp
     llviewerstats.cpp
@@ -1744,6 +1745,7 @@ set(viewer_HEADER_FILES
     llviewerpartsim.h
     llviewerpartsource.h
     llviewerprecompiledheaders.h
+    vscapabilities.h
     llviewerregion.h
     llviewershadermgr.h
     llviewerstats.h

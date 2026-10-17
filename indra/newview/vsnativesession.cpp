@@ -8,6 +8,7 @@
 #include "lfsimfeaturehandler.h"
 #include "llviewergenericmessage.h"
 #include "vsnativesession.h"
+#include "vscapabilities.h"
 #include "vsnativeappearance.h"
 #include "vstaskinventory.h"
 #include "aoengine.h"
@@ -546,68 +547,7 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
     mCancelSeed = [requestOwner]() { if (auto request = requestOwner.lock()) request->cancelSuspendedOperation(); };
     auto request = std::make_shared<LLCore::HttpRequest>();
     auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(15); options->setRetries(0);
-    LLSD wanted = LLSD::emptyArray();
-    for (const char* name : { "EventQueueGet",
-                              "SimulatorFeatures",
-                              "UntrustedSimulatorMessage",
-                              "GetDisplayNames",
-                              "ChatSessionRequest",
-                              "GetTexture",
-                              "GetMesh",
-                              "GetMesh2",
-                              "UpdateAvatarAppearance",
-                              "UploadBakedTexture",
-                              "RenderMaterials",
-                              "ModifyRegion",
-                              "VETPBR",
-                              "ObjectMedia",
-                              "ObjectMediaNavigate",
-                              "ModifyMaterialParams",
-                              "AvatarPickerSearch",
-                              "GroupAPIv1",
-                              "GroupMemberData",
-                              "AgentProfile",
-                              "UploadAgentProfileImage",
-                              "NewFileAgentInventory",
-                              "InventoryThumbnailUpload",
-                              "SetDisplayName",
-                              "RemoteParcelRequest",
-                              "AcceptFriendship",
-                              "DeclineFriendship",
-                              "AcceptGroupInvite",
-                              "DeclineGroupInvite",
-                              "FetchInventory2",
-                              "FetchLib2",
-                              "FetchInventoryDescendents2",
-                              "FetchLibDescendents2",
-                              "InventoryAPIv3",
-                              "LibraryAPIv3",
-                              "CreateInventoryCategory",
-                              "ViewerAsset",
-                              "CopyInventoryFromNotecard",
-                              "UpdateAgentLanguage",
-                              "UpdateAgentInformation",
-                              "UpdateNotecardAgentInventory",
-                              "UpdateNotecardTaskInventory",
-                              "UpdateScriptAgent",
-                              "RequestTaskInventory",
-                              "UserInfo",
-                              "AgentPreferences",
-                              "SearchStatRequest",
-                              "Tracking",
-                              "GetExperiences",
-                              "GetExperienceInfo",
-                              "GroupExperiences",
-                              "GetMetadata",
-                              "DirectDelivery",
-                              "GetAdminExperiences",
-                              "GetCreatorExperiences",
-                              "AgentExperiences",
-                              "UpdateExperience",
-                              "ExperiencePreferences",
-                              "IsExperienceAdmin",
-                              "FindExperienceByName" })
-        wanted.append(name);
+    const LLSD wanted = vs_native_capability_names();
     for (unsigned attempt = 0; attempt < 3; ++attempt)
     {
         LLSD result = adapter->postAndSuspend(request, url, wanted, options);
@@ -618,14 +558,14 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
             // Capability admission can finish login and construct ordinary UI.
             // HTTP continuations run in a coroutine, not the main-loop owner.
             const auto weak = weak_from_this();
-            LL::WorkQueue::getInstance("mainloop")->post([weak, result, generation, regionEpoch]()
+            LL::WorkQueue::getInstance("mainloop")->post([weak, result, generation, regionEpoch, wanted]()
             {
                 auto owner = weak.lock();
                 if (!owner || owner->mShutdown || generation != owner->mGeneration ||
                     regionEpoch != owner->mRegionEpoch ||
                     (owner->mPhase != Phase::Connecting && !owner->mChangingRegion)) return;
                 owner->mCancelSeed = {};
-                owner->capabilities(result, generation, regionEpoch);
+                owner->capabilities(result, generation, regionEpoch, wanted);
             });
             return;
         }
@@ -640,73 +580,18 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
         owner->disconnect(LLTrans::getString("NativeSessionConnectionTimeout"));
     });
 }
-void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionEpoch)
+void VSNativeSession::capabilities(const LLSD& caps, U64 generation, U64 regionEpoch, const LLSD& requested)
 {
     if (generation != mGeneration || (regionEpoch && regionEpoch != mRegionEpoch) || (mPhase != Phase::Connecting && !mChangingRegion)) { ++mExpired; return; }
     if (!caps.isMap() || !webURL(caps["EventQueueGet"].asString())) { disconnect(LLTrans::getString("NativeSessionInvalidCapabilities")); return; }
     clearSimulatorFeatures();
     mCapabilities = LLSD::emptyMap();
-    for (const char* name : { "EventQueueGet",
-                              "SimulatorFeatures",
-                              "UntrustedSimulatorMessage",
-                              "GetDisplayNames",
-                              "ChatSessionRequest",
-                              "GetTexture",
-                              "GetMesh",
-                              "GetMesh2",
-                              "UpdateAvatarAppearance",
-                              "UploadBakedTexture",
-                              "RenderMaterials",
-                              "ModifyRegion",
-                              "VETPBR",
-                              "ObjectMedia",
-                              "ObjectMediaNavigate",
-                              "ModifyMaterialParams",
-                              "AvatarPickerSearch",
-                              "GroupAPIv1",
-                              "GroupMemberData",
-                              "AgentProfile",
-                              "UploadAgentProfileImage",
-                              "NewFileAgentInventory",
-                              "InventoryThumbnailUpload",
-                              "SetDisplayName",
-                              "RemoteParcelRequest",
-                              "AcceptFriendship",
-                              "DeclineFriendship",
-                              "AcceptGroupInvite",
-                              "DeclineGroupInvite",
-                              "FetchInventory2",
-                              "FetchLib2",
-                              "FetchInventoryDescendents2",
-                              "FetchLibDescendents2",
-                              "InventoryAPIv3",
-                              "LibraryAPIv3",
-                              "CreateInventoryCategory",
-                              "ViewerAsset",
-                              "CopyInventoryFromNotecard",
-                              "UpdateAgentLanguage",
-                              "UpdateAgentInformation",
-                              "UpdateNotecardAgentInventory",
-                              "UpdateNotecardTaskInventory",
-                              "UpdateScriptAgent",
-                              "RequestTaskInventory",
-                              "UserInfo",
-                              "AgentPreferences",
-                              "SearchStatRequest",
-                              "Tracking",
-                              "GetExperiences",
-                              "GetExperienceInfo",
-                              "GroupExperiences",
-                              "GetMetadata",
-                              "DirectDelivery",
-                              "GetAdminExperiences",
-                              "GetCreatorExperiences",
-                              "AgentExperiences",
-                              "UpdateExperience",
-                              "ExperiencePreferences",
-                              "IsExperienceAdmin",
-                              "FindExperienceByName" })
-        if (webURL(caps[name].asString())) mCapabilities[name] = caps[name];
+    const LLSD requestedCapabilities=requested.isArray() ? requested : vs_native_capability_names();
+    for (auto requested=requestedCapabilities.beginArray();requested!=requestedCapabilities.endArray();++requested)
+    {
+        const std::string name=requested->asString();
+        if (webURL(caps[name].asString())) mCapabilities[name]=caps[name];
+    }
     // LLSD messages are sent through the host's granted HTTP transport.
     // LLAgent, cache-name and asset services retain copies of this host.
     mHost.setUntrustedSimulatorCap(capability("UntrustedSimulatorMessage"));
@@ -1515,6 +1400,22 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         body["flags64"] = ll_sd_from_U64(extended);
         bool estateManager;msg->getBOOL("RegionInfo","IsEstateManager",estateManager);
         body["estate_manager"]=estateManager;
+        F32 billable;msg->getF32("RegionInfo","BillableFactor",billable);body["billable_factor"]=billable;
+        if(msg->getNumberOfBlocks("RegionInfo4")>0)
+        {
+            U64 protocols;msg->getU64("RegionInfo4","RegionProtocols",protocols);
+            body["region_protocols"]=ll_sd_from_U64(protocols);
+        }
+        if(msg->getSize("RegionInfo3","ColoName")>0 || msg->getSize("RegionInfo3","ProductSKU")>0 ||
+           msg->getSize("RegionInfo3","ProductName")>0)
+        {
+            S32 cpuClass,cpuRatio;std::string colo,sku,product;
+            msg->getS32("RegionInfo3","CPUClassID",cpuClass);msg->getS32("RegionInfo3","CPURatio",cpuRatio);
+            msg->getString("RegionInfo3","ColoName",colo);msg->getString("RegionInfo3","ProductSKU",sku);
+            msg->getString("RegionInfo3","ProductName",product);
+            body["product"]["cpu_class"]=cpuClass;body["product"]["cpu_ratio"]=cpuRatio;
+            body["product"]["colo"]=colo;body["product"]["sku"]=sku;body["product"]["name"]=product;
+        }
         F32 water; msg->getF32("RegionInfo", "WaterHeight", water); body["water_height"] = water;
         const char* details[]={"TerrainDetail0","TerrainDetail1","TerrainDetail2","TerrainDetail3"};
         const char* starts[]={"TerrainStartHeight00","TerrainStartHeight01","TerrainStartHeight10","TerrainStartHeight11"};
@@ -1589,10 +1490,48 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         else if(name=="MapItemReply")LLWorldMapMessage::processMapItemReply(msg,nullptr);
     }
 }
+namespace
+{
+std::optional<VSNativeSession::RegionMetadata> nativeRegionMetadata(
+    const LLSD& body,const VSNativeSession::RegionMetadata& previous)
+{
+    auto result=previous;
+    if(body.has("billable_factor"))
+    {
+        if(!body["billable_factor"].isReal() || !std::isfinite(body["billable_factor"].asReal()) ||
+           !std::isfinite(F32(body["billable_factor"].asReal())))return {};
+        result.billableFactor=F32(body["billable_factor"].asReal());result.billableKnown=true;
+    }
+    if(body.has("region_protocols"))
+    {
+        if(!body["region_protocols"].isBinary() || body["region_protocols"].asBinary().size()!=8)return {};
+        result.protocols=ll_U64_from_sd(body["region_protocols"]);result.protocolsKnown=true;
+    }
+    if(body.has("product"))
+    {
+        const auto& product=body["product"];
+        if(!product.isMap() || !product["cpu_class"].isInteger() || !product["cpu_ratio"].isInteger())return {};
+        for(const char* name:{"colo","sku","name"})
+            if(!product[name].isString() || product[name].asString().size()>255)return {};
+        result.cpuClass=product["cpu_class"].asInteger();result.cpuRatio=product["cpu_ratio"].asInteger();
+        result.coloName=product["colo"].asString();result.productSKU=product["sku"].asString();
+        result.productName=product["name"].asString();result.productKnown=true;
+    }
+    return result;
+}
+}
 bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const LLHost& sender, U64 generation)
 {
     if (generation != mGeneration) { ++mExpired; return false; }
     if (!body.isMap() || !admit(name, sender)) return false;
+    std::optional<RegionMetadata> handshakeMetadata;
+    if(name=="RegionHandshake")
+    {
+        const auto circuit=mCircuits.find(sender);
+        if(circuit==mCircuits.end())return false;
+        handshakeMetadata=nativeRegionMetadata(body,circuit->second.metadata);
+        if(!handshakeMetadata)return false;
+    }
     if(name=="RegionHandshake" && body.has("estate_manager") && !body["estate_manager"].isBoolean())return false;
     if (name=="EnableSimulator")
     {
@@ -1615,6 +1554,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         region->second.access=U8(body["access"].asInteger());
         region->second.waterHeight=F32(body["water_height"].asReal());
         region->second.waterKnown=body["water_height"].isReal()&&std::isfinite(region->second.waterHeight);
+        region->second.metadata=*handshakeMetadata;
         region->second.estateManagerKnown=body["estate_manager"].isBoolean();
         region->second.estateManager=region->second.estateManagerKnown && body["estate_manager"].asBoolean();
         region->second.handshake=true;if (region->second.acknowledged) region->second.deadline=0;
@@ -1697,6 +1637,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         region->second.access=U8(body["access"].asInteger());
         region->second.waterHeight=F32(body["water_height"].asReal());
         region->second.waterKnown=body["water_height"].isReal()&&std::isfinite(region->second.waterHeight);
+        region->second.metadata=*handshakeMetadata;
         region->second.estateManagerKnown=body["estate_manager"].isBoolean();
         region->second.estateManager=region->second.estateManagerKnown && body["estate_manager"].asBoolean();
             region->second.handshake=true;
@@ -1857,9 +1798,15 @@ void VSNativeSession::connected()
     if (gViewerWindow)
     {
         // Same startup order as STATE_AGENT_SEND: aspect affects FOV limits.
+        // LLViewerCamera is an explicit simple singleton: circuit completion
+        // can precede the first connected frame that normally creates it.
+        if (!LLViewerCamera::instanceExists()) LLViewerCamera::createInstance();
         auto* camera = LLViewerCamera::getInstance();
-        camera->setViewHeightInPixels(gViewerWindow->getWorldViewHeightRaw());
-        camera->setAspect(gViewerWindow->getWorldViewAspectRatio());
+        if (gViewerWindow->getWorldViewHeightRaw() > 0 && gViewerWindow->getWorldViewWidthRaw() > 0)
+        {
+            camera->setViewHeightInPixels(gViewerWindow->getWorldViewHeightRaw());
+            camera->setAspect(gViewerWindow->getWorldViewAspectRatio());
+        }
         camera->setDefaultFOV(gSavedSettings.getF32("CameraAngle"));
     }
     if (!mAppearance)
