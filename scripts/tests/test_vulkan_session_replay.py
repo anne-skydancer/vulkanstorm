@@ -177,7 +177,7 @@ class SessionEvidenceTests(unittest.TestCase):
     def test_actual_script_notification_widget_admission(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / 'indra/newview/vsstartupui.cpp').read_text(encoding='utf-8')
-        expression = source.split('const bool admitted = ', 1)[1].split(';', 1)[0]
+        expression = re.search(r'const bool admitted\s*=\s*([\s\S]*?);', source)[1]
         types = set(re.findall(r'typeid\(([\w:]+)\)', expression))
         calls = re.findall(r'(\w+)::(\w+)\(t\)', expression)
         declarations = {name: set() for name in types}

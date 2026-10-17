@@ -25,6 +25,8 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#include <memory>
 
 #include "lluictrlfactory.h"
 #include "lltextbox.h"
@@ -59,6 +61,8 @@ public:
     virtual ~Impl();
 
     LLPanel&        mPanel;
+    std::function<bool()> mCurrent = vs_native_im_guard();
+    std::shared_ptr<int> mLifetime = std::make_shared<int>(0);
 
     bool            mHidden;
 
@@ -146,11 +150,13 @@ LLCurrencyUIManager::Impl::Impl(LLPanel& dialog)
 
 LLCurrencyUIManager::Impl::~Impl()
 {
+    mLifetime.reset();
     delete mTransaction;
 }
 
 void LLCurrencyUIManager::Impl::updateCurrencyInfo()
 {
+    if (!mCurrent()) return;
     clearEstimate();
     mBought = false;
     mCurrencyChanged = false;
@@ -222,6 +228,7 @@ void LLCurrencyUIManager::Impl::finishCurrencyInfo()
 
 void LLCurrencyUIManager::Impl::startCurrencyBuy(const std::string& password)
 {
+    if (!mCurrent()) return;
     const LLVersionInfo& vi(LLVersionInfo::instance());
 
     LLSD params = LLSD::emptyMap();
@@ -282,6 +289,7 @@ void LLCurrencyUIManager::Impl::finishCurrencyBuy()
 void LLCurrencyUIManager::Impl::startTransaction(TransactionType type,
         const char* method, const LLSD& params)
 {
+    if (!mCurrent()) return;
     // <COLOSI opensim multi-currency support>
     //static std::string transactionURI;
     //if (transactionURI.empty())
@@ -565,6 +573,7 @@ void LLCurrencyUIManager::updateUI(bool show)
 
 bool LLCurrencyUIManager::process()
 {
+    if (!impl.mCurrent()) return false;
     bool changed = false;
     changed |= impl.checkTransaction();
     changed |= impl.considerUpdateCurrency();
@@ -581,10 +590,28 @@ void LLCurrencyUIManager::buy(const std::string& buy_msg)
     LLUIString msg = buy_msg;
     msg.setArg("[LINDENS]", llformat("%d", impl.mUserCurrencyBuy));
     msg.setArg("[LOCALAMOUNT]", getLocalEstimate());
-    LLConfirmationManager::confirm(impl.mSiteConfirm,
-                                   msg,
-                                   impl,
-                                   &LLCurrencyUIManager::Impl::startCurrencyBuy);
+    // A confirmation may outlive the owning floater or login. Retain neither
+    // the implementation nor credentials beyond their existing owner lifetime.
+    class Confirmation final : public LLConfirmationManager::ListenerBase
+    {
+    public:
+        explicit Confirmation(Impl& owner)
+            : mOwner(owner), mLifetime(owner.mLifetime), mCurrent(owner.mCurrent),
+              mAmount(owner.mUserCurrencyBuy), mConfirmation(owner.mSiteConfirm), mEstimate(owner.getLocalEstimate()) {}
+        void confirmed(const std::string& password) override
+        {
+            if (!mLifetime.expired() && mCurrent() && mOwner.mUserCurrencyBuy == mAmount &&
+                mOwner.mSiteConfirm == mConfirmation && mOwner.hasEstimate() && mOwner.getLocalEstimate() == mEstimate)
+                mOwner.startCurrencyBuy(password);
+        }
+    private:
+        Impl& mOwner;
+        std::weak_ptr<int> mLifetime;
+        std::function<bool()> mCurrent;
+        S32 mAmount;
+        std::string mConfirmation, mEstimate;
+    };
+    LLConfirmationManager::confirm(impl.mSiteConfirm, msg, new Confirmation(impl));
 }
 
 
@@ -600,7 +627,7 @@ bool LLCurrencyUIManager::canCancel()
 
 bool LLCurrencyUIManager::canBuy()
 {
-    return !inProcess() && impl.hasEstimate() && impl.mUserCurrencyBuy > 0;
+    return impl.mCurrent() && !inProcess() && impl.hasEstimate() && impl.mUserCurrencyBuy > 0;
 }
 
 bool LLCurrencyUIManager::buying()

@@ -1503,7 +1503,8 @@ void VSNativeSession::receive(LLMessageSystem* msg)
     }
     else if (name == "Error")
     { std::string text; msg->getString("Data", "Message", text); body["text"] = text; }
-    deliver(name, body, msg->getSender(), mGeneration);
+    if (deliver(name, body, msg->getSender(), mGeneration) && name == "MoneyBalanceReply")
+        process_money_balance_reply(msg, nullptr);
 }
 bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const LLHost& sender, U64 generation)
 {
@@ -2258,6 +2259,7 @@ void VSNativeSession::reset()
     mStartupTime = 0;
     mStartupTimedOut = false;
     if (mShutdown) return;
+    gViewerInput.resetNativeGlobalKeys();
     mAppearance.reset();
     if (LLGestureMgr::instanceExists()) LLGestureMgr::instance().resetNativeAccount();
     // The AO editor retains set/state pointers into the retiring account.

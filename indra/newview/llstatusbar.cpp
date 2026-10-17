@@ -1038,7 +1038,6 @@ S32 LLStatusBar::getSquareMetersLeft() const
 
 void LLStatusBar::onClickBuyCurrency()
 {
-    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     // open a currency floater - actual one open depends on
     // value specified in settings.xml
     LLBuyCurrencyHTML::openCurrencyFloater();

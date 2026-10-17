@@ -38,6 +38,7 @@
 #include "llfloatercamera.h"
 #include "llagent.h"
 #include "llbutton.h"
+#include "lltoolpipette.h"
 #include "llimview.h"
 #include "llconsole.h"
 #include "llchannelmanager.h"
@@ -418,6 +419,9 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
     S32 x, y;
     target->screenPointToLocal(pos.mX, pos.mY, &x, &y);
     if (target->handleAnyMouseClick(x, y, mask, type, down)) return true;
+    if (LLToolPipette::instanceExists() && LLToolPipette::instance().nativeActive())
+        if (type == CLICK_LEFT || type == CLICK_DOUBLELEFT)
+            return LLToolPipette::instance().handleAnyMouseClick(pos.mX, pos.mY, mask, type, down);
     if (auto owner = VSNativeSession::active(); owner && owner->phase() == VSNativeSession::Phase::Connected)
     {
         gFocusMgr.setKeyboardFocus(nullptr);
@@ -472,6 +476,8 @@ void LLViewerWindow::nativeHoverUpdate(MASK mask)
         S32 local_x, local_y;
         captor->screenPointToLocal(x, y, &local_x, &local_y);
         captor->handleHover(local_x, local_y, mask);
+        if (LLToolPipette::instanceExists() && LLToolPipette::instance().hasMouseCapture())
+            LLToolPipette::instance().handleToolTip(local_x, local_y, mask);
         return;
     }
     if (auto* top = gFocusMgr.getTopCtrl())
@@ -480,7 +486,11 @@ void LLViewerWindow::nativeHoverUpdate(MASK mask)
         top->screenPointToLocal(x, y, &local_x, &local_y);
         if (top->pointInView(local_x, local_y) && top->handleHover(local_x, local_y, mask)) return;
     }
-    mRootView->handleHover(x, y, mask);
+    if (!mRootView->handleHover(x, y, mask) && LLToolPipette::instanceExists() && LLToolPipette::instance().nativeActive())
+    {
+        LLToolPipette::instance().handleHover(x, y, mask);
+        LLToolPipette::instance().handleToolTip(x, y, mask);
+    }
 }
 void LLViewerWindow::nativeScroll(S32 clicks, bool horizontal)
 {
@@ -502,6 +512,7 @@ void LLViewerWindow::setNativeConnected(bool connected)
 {
     if (!mRootView || mNativeConnectedUI == connected) return;
     mNativeConnectedUI = connected;
+    if (!connected && LLToolPipette::instanceExists()) LLToolPipette::instance().setNativeActive(false);
     if (gConsole)
     {
         if (!connected) { gConsole->clear(); gConsole->clearSessions(); }

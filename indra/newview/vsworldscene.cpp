@@ -1469,6 +1469,19 @@ bool VSWorldScene::current(const FaceHandle& token) const
     const auto owned=face(token.object,token.face);
     return owned && owned->generation==token.generation;
 }
+bool VSWorldScene::copyTextureEntry(const FaceHandle& token, LLTextureEntry& result) const
+{
+    if (!current(token)) return false;
+    if (token.object.host != mImpl->host) return mNeighbours.at(token.object.host)->copyTextureEntry(token, result);
+    const auto& object = mImpl->objects.at(token.object.local);
+    if (object.pcode != LL_PCODE_VOLUME) return false;
+    const auto& faces = object.admittedFaces.empty() ? object.faces : object.admittedFaces;
+    if (token.face >= faces.size()) return false;
+    const auto& face = faces.at(token.face);
+    result = face.published ? face.publishedMaterial : face.material;
+    return true;
+}
+
 std::optional<VSWorldContracts::Material> VSWorldScene::material(const FaceHandle& token) const
 {
     if(!current(token))return std::nullopt;

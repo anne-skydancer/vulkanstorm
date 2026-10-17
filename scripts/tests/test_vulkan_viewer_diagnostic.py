@@ -442,6 +442,7 @@ struct View{Window* window;bool editor=false;int x=-1,y=-1,mask=-1;
  bool pointInView(int x,int y){return x>=0&&y>=0;}
  bool handleHover(int sx,int sy,int m){x=sx;y=sy;mask=m;if(editor)window->setCursor(UI_CURSOR_IBEAM);return true;}};
 struct Focus{View* capture=nullptr;View* top=nullptr;View* getMouseCapture(){return capture;} View* getTopCtrl(){return top;}}gFocusMgr;
+struct LLToolPipette{static bool instanceExists(){return false;}static LLToolPipette&instance(){static LLToolPipette tool;return tool;}bool nativeActive(){return false;}bool hasMouseCapture(){return false;}bool handleHover(int,int,int){return false;}bool handleToolTip(int,int,int){return false;}};
 struct VSNativeSession{float yaw=0,pitch=0;int orbits=0,pans=0;LLVector3 pan{0,0,0};
  static VSNativeSession*active(){static VSNativeSession s;return &s;}
  void cameraOrbit(float y,float p){yaw=y;pitch=p;++orbits;}
@@ -698,9 +699,12 @@ int main(){
         root = Path(__file__).resolve().parents[2]
         source = (root / 'indra/newview/llviewerwindow.cpp').read_text(encoding='utf-8')
         start = source.index('bool LLViewerWindow::handleUnicodeChar(')
-        start = source.index('    if (mNativeVulkan)', start)
-        end = source.index('    // HACK:', start)
-        body = source[start:end]
+        opening = source.index('{', start)
+        end, depth = opening + 1, 1
+        while depth:
+            depth += (source[end] == '{') - (source[end] == '}')
+            end += 1
+        body = source[opening + 1:end - 1]
         fixture = r"""
 #include <cassert>
 #include <string>
@@ -713,7 +717,11 @@ struct Focus {
     bool handleUnicodeChar(llwchar c,bool){if(c<32)return false;text+=char(c);return true;}
     bool handleKey(int key,MASK,bool){assert(key==KEY_RETURN);if(consume)++submits;return consume;}
 };
+using LLFocusableElement=Focus;
 struct FocusManager {Focus* focus=nullptr;Focus* getKeyboardFocus(){return focus;}}gFocusMgr;
+struct Keyboard{bool getKeyRepeated(int){return false;}}keyboard,*gKeyboard=&keyboard;
+struct Menu{bool handleUnicodeChar(llwchar,bool){return false;}};Menu*gMenuBarView=nullptr;
+struct ViewerInput{bool handleKey(int key,MASK mask,bool){if(auto*f=gFocusMgr.getKeyboardFocus()){f->handleKey(key,mask,false);return true;}return true;}}gViewerInput;
 struct Root {int submits=0;bool handleKey(int key,MASK,bool){assert(key==KEY_RETURN);++submits;return true;}};
 struct LLViewerWindow {
     bool mNativeVulkan=true;Root* mRootView=nullptr;
@@ -727,12 +735,13 @@ int main(){
     assert(window.handleUnicodeChar('a',0));assert(window.handleUnicodeChar('b',0));
     assert(edit.text=="ab" && edit.submits==0);
     assert(window.handleUnicodeChar(13,0) && edit.submits==1 && edit.text=="ab");
-    edit.wants=true;assert(window.handleUnicodeChar(13,0) && edit.submits==1);
+    edit.wants=true;edit.handleKey(KEY_RETURN,0,false);
+    assert(window.handleUnicodeChar(13,0) && edit.submits==2);
     edit.wants=false;edit.consume=false;
-    assert(window.handleUnicodeChar(3,0) && root.submits==1);
-    assert(!window.handleUnicodeChar(13,MASK_CONTROL) && root.submits==1);
-    assert(!window.handleUnicodeChar(13,MASK_ALT) && root.submits==1);
-    gFocusMgr.focus=nullptr;assert(window.handleUnicodeChar(13,0) && root.submits==2);
+    assert(window.handleUnicodeChar(3,0) && root.submits==0 && edit.submits==2);
+    assert(window.handleUnicodeChar(13,MASK_CONTROL) && root.submits==0);
+    assert(window.handleUnicodeChar(13,MASK_ALT) && root.submits==0);
+    gFocusMgr.focus=nullptr;assert(window.handleUnicodeChar(13,0) && root.submits==0);
 }
 """
         compiler = shutil.which('clang++') or shutil.which('g++')

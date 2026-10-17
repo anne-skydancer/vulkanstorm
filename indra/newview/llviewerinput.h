@@ -122,6 +122,7 @@ public:
     S32             loadBindingsXML(const std::string& filename);                                       // returns number bound, 0 on error
     EKeyboardMode   getMode() const;
     void resetNativeKeys() const;
+    void resetNativeGlobalKeys() const;
 
     static bool     modeFromString(const std::string& string, S32 *mode);           // False on failure
     static bool     mouseFromString(const std::string& string, EMouseClickType *mode);// False on failure
@@ -189,6 +190,7 @@ private:
     key_remap_t     mRemapKeys[MODE_COUNT];
     std::set<KEY>   mKeysSkippedByUI;
     mutable std::map<KEY, LLKeyboardBinding> mNativeHeldBindings;
+    mutable std::map<KEY, LLKeyboardBinding> mNativeHeldGlobalBindings;
     mutable LLFocusableElement* mNativeKeyFocus = nullptr;
     bool            mKeyHandledByUI[KEY_COUNT];     // key processed successfully by UI
 

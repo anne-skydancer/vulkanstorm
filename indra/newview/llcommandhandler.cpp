@@ -231,6 +231,13 @@ bool LLCommandDispatcher::isNativeConnectedCommand(const std::string& cmd, const
 {
     // This is a service-ownership gate, not a replacement for handler validation
     // or the registry's trusted-browser, click-only and throttling policies.
+    if (cmd == "buycurrencyhtml")
+    {
+        if (params.size() < 1 || params.size() > 3) return false;
+        const auto action = params[0].asString();
+        const auto next = params.size() > 1 ? params[1].asString() : std::string();
+        return (action.empty() || action == "close") && (next.empty() || next == "open_legacy");
+    }
     if (cmd == "teleport") return true;
     if (cmd == "help") return params.size() <= 1;
     if (cmd == "search") return params.size() <= 2;

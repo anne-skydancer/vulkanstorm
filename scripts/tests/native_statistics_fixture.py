@@ -277,7 +277,8 @@ HELPER
 int main(){LLControlVariable safe{"PlainTextChatHistory"},scene{"RenderDeferred"},filter{"DebugSettingsHideDefault"};
  assert(!native_debug_setting_editable(nullptr));assert(native_debug_setting_editable(&scene));
  window.native=true;assert(native_debug_setting_editable(&safe));assert(native_debug_setting_editable(&filter));
- assert(!native_debug_setting_editable(&scene));gViewerWindow=nullptr;assert(native_debug_setting_editable(&scene));}
+ // Editing a saved value is permitted; renderer observers own its application.
+ assert(native_debug_setting_editable(&scene));gViewerWindow=nullptr;assert(native_debug_setting_editable(&scene));}
 '''.replace('HELPER',helper)
         self.compile(fixture)
         for signature in ['void LLFloaterSettingsDebug::onCommitSettings()',

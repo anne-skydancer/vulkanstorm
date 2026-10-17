@@ -484,11 +484,6 @@ void give_money(const LLUUID& uuid, LLViewerRegion* region, S32 amount, bool is_
             LLNotificationsUtil::add("NativePaymentBalanceUnavailable");
             return;
         }
-        if (!can_afford_transaction(amount))
-        {
-            LLNotificationsUtil::add("NativePaymentInsufficientFunds");
-            return;
-        }
         destination = owner->host();
     }
 #endif
@@ -5869,6 +5864,12 @@ void process_money_balance_reply( LLMessageSystem* msg, void** )
 
     // Suppress duplicate messages about the same transaction
     static std::deque<LLUUID> recent;
+    static LLUUID recent_agent, recent_session;
+    if (recent_agent != gAgentID || recent_session != gAgentSessionID)
+    {
+        recent.clear();
+        recent_agent = gAgentID; recent_session = gAgentSessionID;
+    }
     if (std::find(recent.rbegin(), recent.rend(), tid) != recent.rend())
     {
         return;
@@ -6256,12 +6257,13 @@ static void process_money_balance_reply_extended(LLMessageSystem* msg)
         // </FS:AO>
     }
 
+    vs_native_im_stamp_notification(payload);
     payload["payment_is_group"] = is_name_group;
     payload["payment_message"] = message_notification_well;
 
     // <FS:Ansariel> TipTracker Support
     FSMoneyTracker* tipTracker = LLFloaterReg::getTypedInstance<FSMoneyTracker>("money_tracker");
-    if (success && ((tipTracker->isShown() || tipTracker->isMinimized()) || gSavedSettings.getBOOL("FSAlwaysTrackPayments")))
+    if (tipTracker && success && ((tipTracker->isShown() || tipTracker->isMinimized()) || gSavedSettings.getBOOL("FSAlwaysTrackPayments")))
     {
         tipTracker->addPayment(name_id, is_name_group, amount, !you_paid_someone);
     }
@@ -6273,13 +6275,13 @@ static void process_money_balance_reply_extended(LLMessageSystem* msg)
     if (is_name_group)
     {
         gCacheName->getGroup(name_id,
-                        boost::bind(&money_balance_group_notify,
+                        vs_native_im_account_callback(boost::bind(&money_balance_group_notify,
                                     _1, _2, _3,
-                                    notification, final_args, payload));
+                                    notification, final_args, payload)));
     }
     else
     {
-        LLAvatarNameCache::get(name_id, boost::bind(&money_balance_avatar_notify, _1, _2, notification, final_args, payload));
+        LLAvatarNameCache::get(name_id, vs_native_im_account_callback(boost::bind(&money_balance_avatar_notify, _1, _2, notification, final_args, payload)));
     }
 }
 

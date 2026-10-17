@@ -29,6 +29,8 @@
 
 #include "llavatarpropertiesprocessor.h"
 #include "stdtypes.h"
+#include <functional>
+#include <typeinfo>
 #include "llagent.h"
 class LLFloater;
 
@@ -41,6 +43,7 @@ public:
     void processProperties(void* data, EAvatarProcessorType type);
 
 private:
+    std::function<bool()> mCurrent;
     LLUUID mAvatarID;
     bool mHasTarget;
     std::string mName;
@@ -51,6 +54,8 @@ private:
 class LLFloaterBuyCurrency
 {
 public:
+    static bool isNativeInternalType(const std::type_info&);
+    static void resetAccountRequests();
     static void buyCurrency();
     static void buyCurrency(const std::string& name, S32 price);
 

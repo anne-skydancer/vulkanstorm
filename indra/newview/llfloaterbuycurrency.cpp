@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llfloaterbuycurrency.h"
 
@@ -63,7 +67,10 @@ public:
 
     bool        mHasTarget;
     S32         mTargetPrice;
-    S32         mRequiredAmount;
+    S32         mRequiredAmount = 0;
+    bool mNativeBalanceKnown = false;
+    S32 mLastNativeBalance = 0;
+    std::function<bool()> mCurrent = vs_native_im_guard();
 
 public:
     void noTarget();
@@ -80,6 +87,11 @@ public:
     void onClickBuy();
     void onClickCancel();
 };
+
+bool LLFloaterBuyCurrency::isNativeInternalType(const std::type_info& type)
+{
+    return type == typeid(LLFloaterBuyCurrencyUI);
+}
 
 LLFloater* LLFloaterBuyCurrency::buildFloater(const LLSD& key)
 {
@@ -125,7 +137,16 @@ void LLFloaterBuyCurrencyUI::target(const std::string& name, S32 price)
         getChild<LLUICtrl>("target_price_label")->setValue(name);
     }
 
-    S32 balance = gStatusBar->getBalance();
+    mRequiredAmount = 0;
+    mManager.setAmount(0);
+    S32 balance = gStatusBar ? gStatusBar->getBalance() : 0;
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (!owner->balanceKnown()) return;
+        balance = owner->balance();
+    }
+#endif
     S32 need = price - balance;
     if (need < 0)
     {
@@ -133,7 +154,6 @@ void LLFloaterBuyCurrencyUI::target(const std::string& name, S32 price)
     }
 
     mRequiredAmount = need + MINIMUM_BALANCE_AMOUNT;
-    mManager.setAmount(0);
 }
 
 
@@ -161,6 +181,17 @@ bool LLFloaterBuyCurrencyUI::postBuild()
 
 void LLFloaterBuyCurrencyUI::draw()
 {
+    if (!mCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active(); owner && owner->balanceKnown() &&
+        (!mNativeBalanceKnown || mLastNativeBalance != owner->balance()))
+    {
+        mNativeBalanceKnown = true;
+        mLastNativeBalance = owner->balance();
+        if (mHasTarget) mRequiredAmount = llmax(0, mTargetPrice - mLastNativeBalance) + MINIMUM_BALANCE_AMOUNT;
+        updateUI();
+    }
+#endif
     if (mManager.process())
     {
         if (mManager.bought())
@@ -240,13 +271,25 @@ void LLFloaterBuyCurrencyUI::updateUI()
             {
                 getChild<LLUICtrl>("target_price")->setTextArg("[AMT]", llformat("%d", mTargetPrice));
                 getChild<LLUICtrl>("required_amount")->setTextArg("[AMT]", llformat("%d", mRequiredAmount));
+#if VS_NATIVE_VULKAN
+                if (auto owner = VSNativeSession::active(); owner && !owner->balanceKnown())
+                    getChild<LLUICtrl>("required_amount")->setTextArg("[AMT]", "--");
+#endif
             }
         }
 
-        S32 balance = gStatusBar->getBalance();
+        S32 balance = gStatusBar ? gStatusBar->getBalance() : 0;
+        bool balance_known = true;
+#if VS_NATIVE_VULKAN
+        if (auto owner = VSNativeSession::active())
+        {
+            balance_known = owner->balanceKnown();
+            if (balance_known) balance = owner->balance();
+        }
+#endif
         getChildView("balance_label")->setVisible(true);
         getChildView("balance_amount")->setVisible(true);
-        getChild<LLUICtrl>("balance_amount")->setTextArg("[AMT]", llformat("%d", balance));
+        getChild<LLUICtrl>("balance_amount")->setTextArg("[AMT]", balance_known ? llformat("%d", balance) : "--");
 
         S32 buying = mManager.getAmount();
         getChildView("buying_label")->setVisible(true);
@@ -256,7 +299,7 @@ void LLFloaterBuyCurrencyUI::updateUI()
         S32 total = balance + buying;
         getChildView("total_label")->setVisible(true);
         getChildView("total_amount")->setVisible(true);
-        getChild<LLUICtrl>("total_amount")->setTextArg("[AMT]", llformat("%d", total));
+        getChild<LLUICtrl>("total_amount")->setTextArg("[AMT]", balance_known ? llformat("%d", total) : "--");
 
         if (mHasTarget)
         {
@@ -318,9 +361,16 @@ void LLFloaterBuyCurrencyUI::onClickCancel()
 
 LLFetchAvatarPaymentInfo* LLFloaterBuyCurrency::sPropertiesRequest = NULL;
 
+void LLFloaterBuyCurrency::resetAccountRequests()
+{
+    delete sPropertiesRequest;
+    sPropertiesRequest = nullptr;
+}
+
 // static
 void LLFloaterBuyCurrency::buyCurrency()
 {
+    if (!vs_native_im_guard()()) return;
     // <FS:Ansariel> OpenSim support
     //delete sPropertiesRequest;
     //sPropertiesRequest = new LLFetchAvatarPaymentInfo(false);
@@ -328,6 +378,7 @@ void LLFloaterBuyCurrency::buyCurrency()
     if (LLGridManager::instance().isInOpenSim())
     {
         LLFloaterBuyCurrencyUI* ui = LLFloaterReg::showTypedInstance<LLFloaterBuyCurrencyUI>("buy_currency");
+        if (!ui) return;
         ui->noTarget();
         ui->updateUI();
     }
@@ -343,6 +394,7 @@ void LLFloaterBuyCurrency::buyCurrency()
 // static
 void LLFloaterBuyCurrency::buyCurrency(const std::string& name, S32 price)
 {
+    if (!vs_native_im_guard()()) return;
     // <FS:Ansariel> OpenSim support
     //delete sPropertiesRequest;
     //sPropertiesRequest = new LLFetchAvatarPaymentInfo(true, name, price);
@@ -350,6 +402,7 @@ void LLFloaterBuyCurrency::buyCurrency(const std::string& name, S32 price)
     if (LLGridManager::instance().isInOpenSim())
     {
         LLFloaterBuyCurrencyUI* ui = LLFloaterReg::showTypedInstance<LLFloaterBuyCurrencyUI>("buy_currency");
+        if (!ui) return;
         // <COLOSI opensim multi-currency support>
         // Not wrapping name here because according to llfloaterbuycurrency.h
         // name should not include currency symbols as the price will be appended to the string.
@@ -376,6 +429,7 @@ void LLFloaterBuyCurrency::handleBuyCurrency(bool has_piof, bool has_target, con
     if (has_piof)
     {
         LLFloaterBuyCurrencyUI* ui = LLFloaterReg::showTypedInstance<LLFloaterBuyCurrencyUI>("buy_currency");
+        if (!ui) return;
         if (has_target)
         {
             ui->target(name, price);
@@ -394,7 +448,8 @@ void LLFloaterBuyCurrency::handleBuyCurrency(bool has_piof, bool has_target, con
 }
 
 LLFetchAvatarPaymentInfo::LLFetchAvatarPaymentInfo(bool has_target, const std::string& name, S32 price)
-:   mAvatarID(gAgent.getID()),
+:   mCurrent(vs_native_im_guard()),
+    mAvatarID(gAgent.getID()),
     mHasTarget(has_target),
     mPrice(price),
     mName(name)
@@ -420,14 +475,17 @@ LLFetchAvatarPaymentInfo::~LLFetchAvatarPaymentInfo()
 
 void LLFetchAvatarPaymentInfo::processProperties(void* data, EAvatarProcessorType type)
 {
+    if (!mCurrent() || LLFloaterBuyCurrency::sPropertiesRequest != this) return;
     if (data && type == APT_PROPERTIES)
     {
         LLAvatarData* avatar_data = static_cast<LLAvatarData*>(data);
+        if (avatar_data->avatar_id != mAvatarID) return;
         LLFloaterBuyCurrency::handleBuyCurrency(LLAvatarPropertiesProcessor::hasPaymentInfoOnFile(avatar_data), mHasTarget, mName, mPrice);
     }
     else if (data && type == APT_PROPERTIES_LEGACY)
     {
         LLAvatarData avatar_data(*static_cast<LLAvatarLegacyData*>(data));
+        if (avatar_data.avatar_id != mAvatarID) return;
         LLFloaterBuyCurrency::handleBuyCurrency(LLAvatarPropertiesProcessor::hasPaymentInfoOnFile(&avatar_data), mHasTarget, mName, mPrice);
     }
 }

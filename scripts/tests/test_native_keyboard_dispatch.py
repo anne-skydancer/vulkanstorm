@@ -114,5 +114,54 @@ int main(){
             result = subprocess.run([str(exe)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_global_push_to_talk_owns_original_callback_until_release(self):
+        source = (ROOT / 'indra/newview/llviewerinput.cpp').read_text()
+        methods = '\n'.join(method(source, signature) for signature in (
+            'bool LLViewerInput::handleGlobalBindsKeyDown(',
+            'bool LLViewerInput::handleGlobalBindsKeyUp(',
+            'void LLViewerInput::resetNativeGlobalKeys() const'))
+        fixture = r'''
+#include <cassert>
+#include <functional>
+#include <map>
+#include <string>
+#include <utility>
+#include <vector>
+#define VS_NATIVE_VULKAN 1
+using KEY=unsigned;using MASK=unsigned;using S32=int;
+enum EKeystate{KEYSTATE_DOWN,KEYSTATE_UP,KEYSTATE_LEVEL};
+struct LLKeyboardBinding{KEY mKey;MASK mMask;std::function<bool(EKeystate)>mFunction;std::string mFunctionName;};
+struct LLSetKeyBindDialog{static bool recording;static bool isRecording(){return recording;}};bool LLSetKeyBindDialog::recording=false;
+struct Window{bool isNativeVulkan(){return true;}}window,*gViewerWindow=&window;
+struct LLViewerInput{int mode=0;int getMode(){return mode;}std::vector<LLKeyboardBinding>mGlobalKeyBindings[2];
+ mutable std::map<KEY,LLKeyboardBinding>mNativeHeldGlobalBindings;
+ bool handleGlobalBindsKeyDown(KEY,MASK);bool handleGlobalBindsKeyUp(KEY,MASK);void resetNativeGlobalKeys()const;
+ bool scanKey(const std::vector<LLKeyboardBinding>&,S32,KEY,MASK,bool,bool,bool,bool){return false;}
+};
+METHODS
+int main(){
+ LLViewerInput input;std::vector<EKeystate>original,replacement;
+ input.mGlobalKeyBindings[0]={{'V',1,[&](EKeystate s){original.push_back(s);return true;},"voice_follow_key"}};
+ input.mGlobalKeyBindings[1]={{'V',0,[&](EKeystate s){replacement.push_back(s);return true;},"toggle_voice"}};
+ assert(input.handleGlobalBindsKeyDown('V',1));assert(input.handleGlobalBindsKeyDown('V',1));assert(original.size()==1);
+ input.mode=1;LLSetKeyBindDialog::recording=true;
+ assert(input.handleGlobalBindsKeyUp('V',0));assert(original.size()==2&&original.back()==KEYSTATE_UP);assert(replacement.empty());
+ assert(!input.handleGlobalBindsKeyDown('V',0));LLSetKeyBindDialog::recording=false;
+ input.mode=0;assert(input.handleGlobalBindsKeyDown('V',1));input.resetNativeGlobalKeys();
+ assert(original.size()==4&&original.back()==KEYSTATE_UP);assert(input.mNativeHeldGlobalBindings.empty());
+ input.resetNativeGlobalKeys();assert(original.size()==4);
+}
+'''.replace('METHODS', methods)
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / 'native_global_keyboard.cpp'
+            exe = cpp.with_suffix('.exe')
+            cpp.write_text(fixture)
+            result = subprocess.run([compiler, '-std=c++17', str(cpp), '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            result = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 if __name__ == '__main__':
     unittest.main()

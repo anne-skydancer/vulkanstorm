@@ -1,6 +1,10 @@
 // Shared UI construction with reviewed native service ownership. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "ao.h"
+#include "llfloaterbuycurrency.h"
+#include "llfloaterbuycurrencyhtml.h"
+#include "llfloateraddpaymentmethod.h"
+#include "fsmoneytracker.h"
 #include "llfloaterinventorysettings.h"
 #include "llfloatermarketplacelistings.h"
 #include "llfloaterlinkreplace.h"
@@ -237,7 +241,8 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             const bool admitted =
                 // These existing controllers use shared UI, local settings,
                 // account inventory or the already-owned browser/audio service.
-                t == typeid(LLFloaterWindowSize) || t == typeid(FSFloaterProtectedFolders) ||
+                LLFloaterBuyCurrency::isNativeInternalType(t) || t == typeid(LLFloaterBuyCurrencyHTML) ||
+                t == typeid(LLFloaterAddPaymentMethod) || t == typeid(FSMoneyTracker) || t == typeid(LLFloaterWindowSize) || t == typeid(FSFloaterProtectedFolders) ||
                 t == typeid(FSFloaterStreamTitle) || t == typeid(FSFloaterStreamTitleHistory) ||
                 t == typeid(LLFloaterChatMentionPicker) || t == typeid(LLFloaterEmojiComplete) ||
                 t == typeid(LLFloaterPreviewTrash) || t == typeid(LLFloaterNewFeatureNotification) ||
@@ -351,6 +356,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             return admitted;
         },
         [](std::string_view name) { return
+            name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
             name == "window_size" || name == "fs_protectedfolders" || name == "fs_streamtitle" || name == "fs_streamtitlehistory" ||
             name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
             name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||
@@ -397,6 +403,9 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         {
             if (LLPanelMainInventory::isNativeCallback(name, parameter) ||
                 LLPanelPeople::isNativeCallback(std::string(name), parameter) || FSChatHistory::isNativeCallback(std::string(name), parameter)) return true;
+            if (name == "BuyCurrency") return true;
+            if (name == "MoneyTrackerList.Action") return parameter.asString() == "copy" || parameter.asString() == "delete";
+            if (name == "MoneyTrackerList.Enable") return parameter.asString() == "can_copy" || parameter.asString() == "can_delete";
             if (name == "Profile.Commit" || name == "Profile.EnableItem")
             {
                 // Existing profile callbacks own ordinary account/text/image
