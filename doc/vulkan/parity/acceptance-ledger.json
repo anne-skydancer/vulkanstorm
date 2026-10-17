@@ -34661,7 +34661,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llviewermenu.cpp"
+        "indra/newview/llviewermenu.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -48419,7 +48420,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fsmoneytracker.cpp"
+        "indra/newview/fsmoneytracker.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -48451,7 +48453,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/fsmoneytracker.cpp"
+        "indra/newview/fsmoneytracker.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
