@@ -472,6 +472,8 @@ void textureReference(LLImageJ2C& source,const std::filesystem::path& folder,
 struct Replay
 {
     unsigned step = 0;
+    bool completionHeld = false;
+    double completionDeadline = 0;
     unsigned textureCacheStep=0;
     LLSD textureStreaming;
     bool originalFullRes=false;
@@ -620,6 +622,16 @@ struct Replay
     }
     void tick(VSNativeSession& owner)
     {
+        if (completionHeld)
+        {
+            require(LLFrameTimer::getTotalSeconds()<completionDeadline,"Concurrent viewer completion gate timed out");
+            if (std::filesystem::exists(std::getenv("VS_VULKAN_REPLAY_COMPLETION_GATE")))
+            {
+                completionHeld=false;
+                owner.requestLogout(true);
+            }
+            return;
+        }
         if (loggedStep != step)
         {
             loggedStep = step;
@@ -1127,7 +1139,26 @@ struct Replay
             std::filesystem::create_directories(path);
             std::ofstream output(path / "session-replay.xml"); LLSDSerialize::toPrettyXML(report, output);
             require(output.good(), "Cannot write session replay evidence");
-            owner.requestLogout(true); ++step;
+            ++step;
+            const char* gate=std::getenv("VS_VULKAN_REPLAY_COMPLETION_GATE");
+            if (gate && VSVulkanContext::headlessReplay())
+            {
+                // Keep the actual primary viewer and its ordinary APR marker
+                // lock alive while another headless viewer opens this profile.
+                const auto ready=std::filesystem::path(std::string(gate)+".ready");
+                const auto pending=std::filesystem::path(std::string(gate)+".pending");
+                LLSD checkpoint;checkpoint["process_id"]=LLApp::getPid();
+                checkpoint["second_instance"]=LLAppViewer::instance()->isSecondInstance();
+                {
+                    std::ofstream signal(pending);
+                    LLSDSerialize::toPrettyXML(checkpoint,signal);
+                    require(signal.good(),"Cannot write concurrent viewer checkpoint");
+                }
+                completionHeld=true;
+                completionDeadline=LLFrameTimer::getTotalSeconds()+90;
+                std::filesystem::rename(pending,ready);
+            }
+            else owner.requestLogout(true);
         }
     }
 };
