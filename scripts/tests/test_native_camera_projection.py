@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil,subprocess,tempfile,unittest,os
+from test_world_scene_contracts import camera_far_constants
 ROOT=Path(__file__).resolve().parents[2];HERE=Path(__file__).resolve().parent
 def method(source,signature):
  begin=source.index(signature);start=source.index('{',begin);n=0
@@ -22,7 +23,7 @@ class CameraProjection(unittest.TestCase):
   render=read('llrender/llrender.h');a=render.index('const F32 OGL_TO_CFR_ROTATION');b=render.index(';',a)+1;constants=render[a:b]
   projection='\n'.join(method(camera,signature) for signature in ['glm::mat4 uiCameraModelview(', 'glm::mat4 uiCameraProjection('])+'\n'+'\n'.join(method(proposed,s) for s in ['void LLViewerCamera::projectScreenToPosAgent(', 'bool LLViewerCamera::projectPosAgentToScreen(', 'bool LLViewerCamera::projectPosAgentToScreenEdge('])
   fixture=(HERE/'native_camera_projection_fixture.cpp').read_text(encoding='utf-8-sig')
-  for key,value in {'MATRIX_METHODS':matrix,'CAMERA_METHODS':methods,'CONSTANTS':constants,'NATIVE_VIEW':method(read('newview/vsworldscene.cpp'),'VSWorldRenderer::View VSWorldScene::cameraView('),'PROJECTION_METHODS':projection}.items():fixture=fixture.replace(key,value)
+  for key,value in {'MATRIX_METHODS':matrix,'CAMERA_METHODS':methods,'CONSTANTS':constants,'NATIVE_VIEW':camera_far_constants()+method(read('newview/vsworldscene.cpp'),'VSWorldRenderer::View VSWorldScene::cameraView('),'PROJECTION_METHODS':projection}.items():fixture=fixture.replace(key,value)
   with tempfile.TemporaryDirectory() as tmp:
    cpp=Path(tmp)/'projection.cpp';exe=Path(tmp)/'projection.exe';cpp.write_text(fixture)
    result=subprocess.run([compiler,'-std=c++17','-I',str(glm),str(cpp),'-o',str(exe)],capture_output=True,text=True);self.assertEqual(result.returncode,0,result.stdout+result.stderr)

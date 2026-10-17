@@ -1,6 +1,7 @@
 // Native CPU primitive scene, independent of GL drawables. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsworldscene.h"
+#include "llcamera.h"
 #include "vsmaterialassets.h"
 #include "vsobjectmedia.h"
 #include "llgltfmateriallist.h"
@@ -2498,7 +2499,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             }
             child = &parent->second;
         }
-        const float limit = llclamp(farClip, 16.f, 1024.f) + object.scale.length() * 2.f;
+        const float limit = llclamp(farClip, MIN_FAR_PLANE, MAX_FAR_PLANE) + object.scale.length() * 2.f;
         if (!hud && (position - eye).lengthSquared() > limit * limit)
             continue;
         const auto lod = volumeLOD(object, position, hud);
@@ -2809,7 +2810,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             o.geometryPoseKnown = true;
             o.dirty             = true;
         }
-        const float limit=llclamp(farClip,16.f,1024.f)+o.scale.length()*2.f;
+        const float limit=llclamp(farClip,MIN_FAR_PLANE,MAX_FAR_PLANE)+o.scale.length()*2.f;
         if (!hud && (position - eye).lengthSquared() > limit * limit)
         {
             o.releaseRenderingResources();
@@ -3592,7 +3593,7 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pickHUD(float x, float y, float 
 VSWorldRenderer::View VSWorldScene::view(const LLVector3& eye,unsigned width,unsigned height,float farClip)
 {
     VSWorldRenderer::View result;if (!width || !height || !finiteVector(eye) || !std::isfinite(farClip)) return result;
-    const float nearClip=.1f,farDistance=llclamp(farClip,16.f,1024.f),cot=1/std::tan(F_PI/6);
+    const float nearClip=.1f,farDistance=llclamp(farClip,MIN_FAR_PLANE,MAX_FAR_PLANE),cot=1/std::tan(F_PI/6);
     const float x=cot*height/width,y=cot,a=(farDistance+nearClip)/(farDistance-nearClip),b=-2*farDistance*nearClip/(farDistance-nearClip);
     result.projection={0,0,a,1, -x,0,0,0, 0,y,0,0, x*eye.mV[1],-y*eye.mV[2],b-a*eye.mV[0],-eye.mV[0]};return result;
 }
@@ -3606,7 +3607,7 @@ VSWorldRenderer::View VSWorldScene::cameraView(const LLVector3& eye,const LLVect
     if (at.normalize()<1.e-6f || up.normalize()<1.e-6f) return result;
     LLVector3 left=up%at;if (left.normalize()<1.e-6f) return result;
     up=at%left;up.normalize();
-    const float nearClip=.1f,farDistance=llclamp(farClip,16.f,1024.f),cot=1/std::tan(verticalFov*.5f);
+    const float nearClip=.1f,farDistance=llclamp(farClip,MIN_FAR_PLANE,MAX_FAR_PLANE),cot=1/std::tan(verticalFov*.5f);
     const float x=cot*height/width,y=cot,a=(farDistance+nearClip)/(farDistance-nearClip),b=-2*farDistance*nearClip/(farDistance-nearClip);
     for (unsigned column=0;column<3;++column)
     {

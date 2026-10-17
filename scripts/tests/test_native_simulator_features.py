@@ -147,6 +147,7 @@ struct LLViewerCamera {static inline bool created=false;int heights=0,aspects=0,
  static LLViewerCamera* getInstance(){assert(created);static LLViewerCamera camera;return &camera;}
  void setViewHeightInPixels(int n){assert(n==600);++heights;}void setAspect(float f){assert(f==800.f/600);++aspects;}
  void setDefaultFOV(float f){assert(f==1.1f);++views;}};
+struct AgentCamera {int inits=0;void init(){assert(LLViewerCamera::instanceExists());++inits;}}gAgentCamera;
 struct LLTeleportHistory {static LLTeleportHistory& instance(){static LLTeleportHistory h;return h;}
  void updateNativeLocation(int){}};
 double now(){return 5;}
@@ -158,7 +159,7 @@ struct VSNativeAppearance {explicit VSNativeAppearance(int){} void fallback(int)
 struct VSNativeSession {
  enum class Phase {Connecting,Connected,Logout};Phase mPhase=Phase::Connecting;
  enum class Startup {Precache,Complete};Startup mStartup=Startup::Precache;
- bool mChangingRegion=false,mHandshake=false,mMovement=false,mSeedReady=false,mCircuitAck=false;
+ bool mChangingRegion=false,mInterestListArriving=true,mHandshake=false,mMovement=false,mSeedReady=false,mCircuitAck=false;
  double mNavigationDeadline=0,mDeadline=0;Host mPreviousHost,mHost;
  struct Circuit {double deadline=60;};std::map<Host,Circuit> mCircuits;
  std::unique_ptr<VSNativeAppearance> mAppearance;int mWearablesMetadata=0;
@@ -178,11 +179,11 @@ int main(){
  s.mStartup=VSNativeSession::Startup::Complete;s.mChangingRegion=true;s.connected();
  assert(fetch.starts==1&&!s.mChangingRegion&&window.hides==1);
  s.mPhase=VSNativeSession::Phase::Logout;s.connected();assert(fetch.starts==1);
- assert(FSLSLBridge::instance().starts==2);
+ assert(FSLSLBridge::instance().starts==2 && gAgentCamera.inits==0);
  VSNativeSession fresh;fresh.mHandshake=fresh.mMovement=fresh.mSeedReady=fresh.mCircuitAck=true;
  fresh.connected();assert(fetch.starts==2 && LLViewerCamera::instanceExists());
  auto* camera=LLViewerCamera::getInstance();assert(camera->heights==1 && camera->aspects==1 && camera->views==1);
- fresh.connected();assert(fetch.starts==2 && camera->views==1);
+ fresh.connected();assert(fetch.starts==2 && camera->views==1 && gAgentCamera.inits==1);
 
 }
 '''.replace('CONNECTED', prefix)

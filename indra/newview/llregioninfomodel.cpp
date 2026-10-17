@@ -35,6 +35,7 @@
 // viewer
 #include "llagent.h"
 #include "llviewerregion.h"
+#include "vsregioncontext.h"
 
 void LLRegionInfoModel::reset()
 {
@@ -135,7 +136,7 @@ void LLRegionInfoModel::setUseFixedSun(bool fixed)
     }
 }
 
-void LLRegionInfoModel::update(LLMessageSystem* msg)
+void LLRegionInfoModel::update(LLMessageSystem* msg,bool notify)
 {
     reset();
 
@@ -205,7 +206,7 @@ void LLRegionInfoModel::update(LLMessageSystem* msg)
     }
 
     // Let interested parties know that region info has been updated.
-    mUpdateSignal();
+    if(notify)mUpdateSignal();
 }
 
 // static
@@ -215,7 +216,7 @@ void LLRegionInfoModel::sendEstateOwnerMessage(
     const LLUUID& invoice,
     const std::vector<std::string>& strings)
 {
-    LLViewerRegion* cur_region = gAgent.getRegion();
+    const auto cur_region = vs_current_region_context();
 
     if (!cur_region)
     {

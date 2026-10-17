@@ -16,6 +16,8 @@
 #include "message.h"
 #include "llcallingcard.h"
 #include "llregionhandle.h"
+#include "llregioninfomodel.h"
+#include "llagent.h"
 #include <utility>
 namespace
 {
@@ -25,13 +27,18 @@ bool circuitURL(const std::string& url)
 }
 }
 // Native CPU spatial snapshots; no legacy region or scene ownership.
-std::vector<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshots() const
+VSParcelOverlay::Snapshot VSNativeSession::parcelOverlay(const LLHost& host) const
 {
-    std::vector<RegionSnapshot> result;
-    if(mShutdown || mPhase!=Phase::Connected)return result;
-    for(const auto& [host,region]:mCircuits)
-    {
-        if(!region.acknowledged || !region.handshake)continue;
+    if(mShutdown || mPhase!=Phase::Connected)return {};
+    const auto found=mCircuits.find(host);
+    return found!=mCircuits.end() && found->second.acknowledged && found->second.handshake ? found->second.parcelOverlay : nullptr;
+}
+std::optional<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshot(const LLHost& host,bool includeSpatial) const
+{
+    if(mShutdown || mPhase!=Phase::Connected)return {};
+    const auto found=mCircuits.find(host);
+    if(found==mCircuits.end() || !found->second.acknowledged || !found->second.handshake)return {};
+    const auto& region=found->second;
         RegionSnapshot row;
         row.account=account();row.host=host;row.handle=region.handle;row.circuit=region.incarnation;
         row.width=region.width;row.height=region.height;row.id=region.id;row.owner=region.owner;
@@ -40,9 +47,16 @@ std::vector<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshots() 
         row.metadata=region.metadata;
         row.objectCapacity=region.objectCapacity;row.objectCapacityKnown=region.objectCapacityKnown;
         row.waterHeight=region.waterHeight;row.waterKnown=region.waterKnown;row.current=host==mHost;
-        row.coarse=region.coarse.avatars;row.parcelOverlay=region.parcelOverlay;
-        result.push_back(std::move(row));
-    }
+        if(includeSpatial){row.coarse=region.coarse.avatars;row.parcelOverlay=region.parcelOverlay;}
+    return row;
+}
+std::vector<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshots(bool includeSpatial) const
+{
+    std::vector<RegionSnapshot> result;
+    if(mShutdown || mPhase!=Phase::Connected)return result;
+    result.reserve(mCircuits.size());
+    for(const auto& [host,region]:mCircuits)
+        if(auto row=regionSnapshot(host,includeSpatial))result.push_back(std::move(*row));
     return result;
 }
 bool VSNativeSession::current(const RegionSnapshot& snapshot) const
@@ -255,4 +269,38 @@ std::string VSNativeSession::capability(const LLHost& host,const std::string& na
     if(host==mHost) return capability(name);
     const auto found=mCircuits.find(host);
     return found!=mCircuits.end() && found->second.acknowledged ? found->second.capabilities[name].asString() : std::string();
+}
+
+// Existing shared RegionInfo parser, authenticated by the actual native account/circuit.
+bool VSNativeSession::applyRegionInfo(LLMessageSystem& message)
+{
+    if(message.getMessageName()!=std::string("RegionInfo") || !regionReady() || message.getSender()!=mHost)return false;
+    const auto region=mCircuits.find(mHost);
+    if(region==mCircuits.end() || !region->second.acknowledged || !region->second.handshake)return false;
+    LLUUID agent,session;
+    message.getUUID("AgentData","AgentID",agent);message.getUUID("AgentData","SessionID",session);
+    if(agent!=mAgent || session!=mSession)return false;
+    F32 billable,water;
+    message.getF32("RegionInfo","BillableFactor",billable);message.getF32("RegionInfo","WaterHeight",water);
+    if(!std::isfinite(billable) || !std::isfinite(water))return false;
+    const LLHost sender=message.getSender();
+    const U64 epoch=mRegionEpoch;
+    const auto accountCurrent=accountGuard();
+    const U64 incarnation=region->second.incarnation;
+    auto& model=LLRegionInfoModel::instance();
+    model.update(&message,false);
+    // Publish actual CPU region values before model observers inspect permissions.
+    const bool wasFlying=gAgent.getFlying();
+    mName=model.mSimName;mAccess=model.mSimAccess;mFlags=model.mRegionFlags;
+    mWaterHeight=model.mWaterHeight;mWaterKnown=true;
+    auto& circuit=region->second;
+    circuit.name=mName;circuit.access=mAccess;circuit.flags=mFlags;
+    circuit.waterHeight=mWaterHeight;circuit.waterKnown=true;
+    circuit.metadata.billableFactor=model.mBillableFactor;circuit.metadata.billableKnown=true;
+    if(!model.mSimType.empty()){circuit.metadata.productName=model.mSimType;circuit.metadata.productKnown=true;}
+    if(wasFlying)gAgent.setFlying(gAgent.canFly());
+    if(!accountCurrent() || mRegionEpoch!=epoch || mHost!=sender || circuitGeneration(sender)!=incarnation)return false;
+    model.mUpdateSignal();
+    // An observer may synchronously change account/region or close the session.
+    return accountCurrent() && mRegionEpoch==epoch && mHost==sender && regionReady() && circuitGeneration(sender)==incarnation;
 }

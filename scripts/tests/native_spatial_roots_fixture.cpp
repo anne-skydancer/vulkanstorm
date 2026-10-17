@@ -34,7 +34,8 @@ struct VSNativeSession {
     struct Region {U64 handle=2000,incarnation=9,flags=0;U32 width=512,height=256;LLUUID id{10},owner{11};std::string name="region";U8 access=13;F32 waterHeight=20;bool waterKnown=true,acknowledged=true,handshake=true;VSCoarseSnapshot<LLUUID> coarse;VSParcelOverlay::Snapshot parcelOverlay;bool estateManager=false,estateManagerKnown=false;RegionMetadata metadata;U32 objectCapacity=0;bool objectCapacityKnown=false;};
     std::map<LLHost,Region> mCircuits;
     struct RegionSnapshot {AccountHandle account;LLHost host;U64 handle=0,circuit=0,flags=0;U32 width=256,height=256;LLUUID id,owner;std::string name;U8 access=0;F32 waterHeight=0;bool waterKnown=false,current=false;std::vector<VSCoarseSample<LLUUID>> coarse;VSParcelOverlay::Snapshot parcelOverlay;bool estateManager=false,estateManagerKnown=false;RegionMetadata metadata;U32 objectCapacity=0;bool objectCapacityKnown=false;};
-    std::vector<RegionSnapshot> regionSnapshots()const;
+    std::optional<RegionSnapshot> regionSnapshot(const LLHost&,bool includeSpatial=true)const;
+    std::vector<RegionSnapshot> regionSnapshots(bool includeSpatial=true)const;
     std::vector<VSCoarseSample<LLUUID>> coarseAvatarLocations()const;
     bool receiveCoarse(const LLSD&,const LLHost&,U64,U64,bool legacyUDP=false);
 };

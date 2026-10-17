@@ -400,7 +400,7 @@ struct VSVulkanContext::Impl
         if (const auto session=VSNativeSession::active(); session && session->phase()==VSNativeSession::Phase::Connected)
         {
             const auto camera=session->cameraState();const LLVector3 eye=camera.center;
-            const float distance=gSavedSettings.getF32("RenderFarClip");
+            const float distance=LLViewerCamera::getInstance()->getFar();
             auto view    = VSWorldScene::cameraView(eye, camera.at, camera.up, size.mX, size.mY, distance,
                 LLViewerCamera::getInstance()->getView());
             view.hudZoom = gAgentCamera.mHUDCurZoom;

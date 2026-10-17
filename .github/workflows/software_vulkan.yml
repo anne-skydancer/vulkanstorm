@@ -95,6 +95,9 @@ jobs:
       - run: python scripts/tests/test_native_spatial_services.py
       - run: python scripts/tests/test_native_capability_catalogue.py
       - run: python scripts/tests/test_native_region_metadata.py
+      - run: python scripts/tests/test_native_region_limits.py
+      - run: python scripts/tests/test_native_region_context.py
+      - run: python scripts/tests/test_native_region_info.py
       - run: python scripts/tests/test_shared_object_properties.py
       - run: python scripts/tests/test_connected_utility_xui.py
       - run: python scripts/tests/test_native_object_selection.py
@@ -102,6 +105,7 @@ jobs:
       - run: python scripts/tests/test_shared_object_touch.py
       - run: python scripts/tests/test_object_context.py
       - run: python scripts/tests/test_native_camera_publication.py
+      - run: python scripts/tests/test_shared_camera_distance.py
       - run: python scripts/tests/test_native_task_inventory.py
       - run: python scripts/tests/test_native_bridge_lifecycle.py
       - run: python scripts/tests/test_native_world_assets.py

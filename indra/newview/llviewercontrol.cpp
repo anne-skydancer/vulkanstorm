@@ -201,6 +201,10 @@ static bool handleRenderFarClipChanged(const LLSD& newvalue)
     {
         F32 draw_distance = (F32)newvalue.asReal();
     gAgentCamera.mDrawDistance = draw_distance;
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow ? gViewerWindow->isNativeVulkan() :
+        (LLAppViewer::instance() && LLAppViewer::instance()->isNativeVulkanLogin())) return true;
+#endif
     LLWorld::getInstance()->setLandFarClip(draw_distance);
     return true;
     }
@@ -1293,6 +1297,7 @@ bool native_shared_setting_callback(const std::string& setting)
     // Reviewed shared CPU/UI/audio owners. Rendering and scene callbacks remain
     // with their native controller; never enter legacy GL through a cascade.
     static const char* const shared[] = {
+        "RenderFarClip",
         "UseLSLBridge",
         "UseLSLFlightAssist",
         "UseMoveLock",

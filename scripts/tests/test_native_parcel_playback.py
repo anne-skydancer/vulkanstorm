@@ -47,7 +47,9 @@ class NativeParcelPlaybackTests(unittest.TestCase):
         declaration = re.search(r'const\s+std::set<std::string>\s+worldMessages\s*=\s*\{.*?\};', source, re.S)
         self.assertIsNotNone(declaration, 'The real world-message admission set must be present')
         world_messages = declaration.group(0)
-        fixture = STUBS + world_messages + '\n' + definitions + CHECKS
+        ready=method((ROOT/'indra/newview/vsnativesession.h').read_text(encoding='utf-8'),'bool regionReady() const')
+        stubs=STUBS.replace(' bool admit(const std::string&,const LLHost&);',ready+'\n bool admit(const std::string&,const LLHost&);',1)
+        fixture = stubs + world_messages + '\n' + definitions + CHECKS
         with tempfile.TemporaryDirectory() as directory:
             cpp = Path(directory) / 'native_parcel_playback.cpp'
             executable = Path(directory) / 'native_parcel_playback.exe'
@@ -174,6 +176,7 @@ void* gAudiop=reinterpret_cast<void*>(1);
 struct VSNativeSession {
  enum class Phase{Login,Connecting,Connected,Logout,Disconnected};Phase mPhase=Phase::Connected;
  LLHost mHost;bool mChangingRegion=false;Vector mPosition;U32 mWidth=256,mHeight=256;
+ bool mSeedReady=true,mHandshake=true,mCircuitAck=true;
  struct Circuit {bool acknowledged=false,handshake=false;};std::map<LLHost,Circuit> mCircuits;
  U64 mGeneration=7,mRegionEpoch=3,mParcelRevision=1,mMusicRequest=1,mMediaRequest=1,mSent=0,mRejected=0,mExpired=0;
  struct UUID {int id=0;UUID& operator=(int value){id=value;return *this;}void setNull(){id=0;}}mParcelOwner;
@@ -197,6 +200,11 @@ CHECKS = r"""
 LLSD parcel(){LLSD p;p["parcel_flags"]=123;p["see_avatars"]=0;p["result"]=0;p["sequence"]=11;p["id"]=31;p["name"]="CPU parcel";p["music"]="http://127.0.0.1/music";p["media"]="http://127.0.0.1/video";p["type"]="video/mp4";return p;}
 int main(){
  VSNativeSession owner;auto p=parcel();
+ assert(owner.admit("RegionInfo",LLHost{1}));assert(!owner.admit("RegionInfo",LLHost{2}));
+ owner.mSeedReady=false;assert(!owner.admit("RegionInfo",LLHost{1}));owner.mSeedReady=true;
+ owner.mHandshake=false;assert(!owner.admit("RegionInfo",LLHost{1}));owner.mHandshake=true;
+ owner.mCircuitAck=false;assert(!owner.admit("RegionInfo",LLHost{1}));owner.mCircuitAck=true;
+ owner.mChangingRegion=true;assert(!owner.admit("RegionInfo",LLHost{1}));owner.mChangingRegion=false;
  assert(!owner.deliver("ParcelProperties",p,LLHost{2},7));assert(owner.mMusicURL.empty());
  assert(!owner.deliver("ParcelProperties",p,LLHost{1},6));assert(owner.mExpired==1);
  auto bad=p;bad["sequence"]=-50000;assert(!owner.deliver("ParcelProperties",bad,LLHost{1},7));
