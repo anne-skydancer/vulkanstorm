@@ -279,6 +279,27 @@ void LLTextureCacheWorker::startWork(S32 param)
 // - the whole data are in a raw form, will be stored at mReadData
 // - the size of this raw data is mDataSize and can be smaller than TEXTURE_CACHE_ENTRY_SIZE (the size of a record in the header cache)
 // - the code supports offset reading but this is actually never exercised in the viewer
+namespace
+{
+struct ScopedTextureBody
+{
+    S64 bytes=0;
+    apr_status_t status=APR_SUCCESS;
+    apr_int32_t valid=0;
+};
+ScopedTextureBody queryScopedTextureBody(const std::string& filename,LLVolatileAPRPool* pool)
+{
+    // The reference APR query, retaining its error and 64-bit result so native
+    // bounded consumers can distinguish unavailable and invalid body files.
+    ScopedTextureBody result;
+    LLAPRFile file;
+    result.status=file.open(filename,APR_READ,pool);
+    if(result.status!=APR_SUCCESS || !file.getFileHandle()) return result;
+    apr_finfo_t info{};result.status=apr_file_info_get(&info,APR_FINFO_SIZE,file.getFileHandle());
+    result.bytes=info.size;result.valid=info.valid;
+    return result;
+}
+}
 bool LLTextureCacheRemoteWorker::doRead()
 {
     LL_PROFILE_ZONE_SCOPED;
@@ -446,7 +467,32 @@ bool LLTextureCacheRemoteWorker::doRead()
     if (!done && (mState == BODY))
     {
         std::string filename = mCache->getTextureFileName(mID);
-        S32 filesize = LLAPRFile::size(filename, mCache->getLocalAPRFilePool());
+        S32 filesize=0;
+        const bool scoped=mResponder.notNull() && mResponder->scopedTextureRead();
+        ScopedTextureBody body;
+        if(scoped)
+        {
+            body=queryScopedTextureBody(filename,mCache->getLocalAPRFilePool());
+            if(body.status==APR_SUCCESS && (body.bytes<0 || body.bytes>16*1024*1024))
+            {
+                // Match the native encoded-image cap before narrowing a file
+                // size or allocating/copying a cached header and body.
+                mDataSize=-1;return true;
+            }
+            if(body.status==APR_SUCCESS) filesize=S32(body.bytes);
+        }
+        else filesize=LLAPRFile::size(filename,mCache->getLocalAPRFilePool());
+#if VS_VULKAN_DIAGNOSTICS
+        if(scoped && (!filesize || (filesize+TEXTURE_CACHE_ENTRY_SIZE)<=mOffset))
+        {
+            llstat stat{};const int found=LLFile::stat(filename,&stat);char message[256]{};
+            apr_strerror(body.status,message,sizeof(message));
+            LL_INFOS("NativeTextureCache")<<mID<<" body unavailable: apr_status="<<body.status<<" ("<<message
+                <<") reported_bytes="<<body.bytes<<" valid="<<body.valid<<" offset="<<mOffset
+                <<" expected_size="<<mImageSize<<" stat="<<found<<" stat_bytes="<<(found?0:S64(stat.st_size))
+                <<" path="<<filename<<LL_ENDL;
+        }
+#endif
 
         if (filesize && (filesize + TEXTURE_CACHE_ENTRY_SIZE) > mOffset)
         {

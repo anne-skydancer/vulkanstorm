@@ -23,7 +23,7 @@ struct LLMutexLock {LLMutexLock(int*){}};
 struct LLImageFormatted {int getCodec(){return 1;}int getDataSize(){return 1206;}};
 struct LLTextureCache {
  struct ReadResponder {LLImageFormatted* mFormattedImage=nullptr;int mImageSize=1206;bool mImageLocal=false;
-  virtual ~ReadResponder()=default;virtual void completed(bool)=0;void setImage(LLImageFormatted* value){mFormattedImage=value;}};
+  virtual ~ReadResponder()=default;virtual bool scopedTextureRead()const{return false;}virtual void completed(bool)=0;void setImage(LLImageFormatted* value){mFormattedImage=value;}};
  struct WriteResponder {virtual ~WriteResponder()=default;virtual void completed(bool)=0;};
 };
 class LLTextureFetchWorker;

@@ -87,6 +87,7 @@ public:
     class Responder : public LLResponder
     {
     public:
+        virtual bool scopedTextureRead() const { return false; }
         virtual void setData(U8* data, S32 datasize, S32 imagesize, S32 imageformat, bool imagelocal) = 0;
     };
 
