@@ -319,3 +319,12 @@ case runs this production reload exercise, and archive acceptance requires its
 pixel artifacts. Selected production/replay sources compile and publication/
 artifact regressions pass. Rebuilt-viewer runtime acceptance remains pending.
 Local glTF material-file reload is a separate remaining production path.
+
+The canonical rebuild/stage at `d39a2fcff7` passed the expanded nine-case matrix
+in 132.1 seconds. Its cold run executed the real local PNG reload/refusal/
+recovery/deletion checks and independent GPU pixels in 16.2 seconds. All restart
+cases remained source-qualified, and the archive's independent R3 completeness
+validator accepted the collected case files with no errors. Read-only before/
+after cache hashes are present. This qualifies the local bitmap/resource and
+restart subset on the local pinned software runtime; it does not qualify local
+PBR file reload, all production material/terrain paths, or cross-platform R3.
