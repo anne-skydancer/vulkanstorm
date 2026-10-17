@@ -543,6 +543,22 @@ REQUIRED = ('connected_utility_floaters', 'connected_keyboard_window_dispatch', 
             'partial_init_cleanup', 'connection_timeout', 'encoded_chat', 'encoded_typing', 'ui_gate', 'logout_timeout', 'native_people_account_ui', 'native_navigation_request', 'native_navigation_transition', 'native_navigation_epoch', 'native_navigation_identity', 'native_navigation_local', 'native_location_lookup', 'native_landmark_v2', 'encoded_channels', 'queued_http_chat', 'mute_request', 'mute_transfer_cleanup', 'input_history', 'status_messages', 'connected_timeout', 'reliable_failure')
 
 
+def configure_replay_window_environment(env, *, headless, windows, require_media):
+    if not headless:
+        env.pop('VS_VULKAN_DIAGNOSTIC_HEADLESS', None)
+        return
+    env['VS_VULKAN_DIAGNOSTIC_HEADLESS'] = '1'
+    env.pop('WAYLAND_DISPLAY', None)
+    if windows:
+        env.pop('DISPLAY', None)
+    elif env.get('DISPLAY'):
+        # The native viewer uses its explicit offscreen window implementation.
+        # CEF's offscreen browser still needs the X11 service supplied by Xvfb.
+        env['XDG_SESSION_TYPE'] = 'x11'
+    elif require_media:
+        raise ValueError('Headless CEF qualification requires X11; run under xvfb-run')
+
+
 def configure_replay_contract_environment(env,args):
     flags={
         'VS_VULKAN_REPLAY_LOCAL_IMAGES':args.local_image_contracts,
@@ -1404,11 +1420,8 @@ def main():
     env.update(VK_DRIVER_FILES=runtime['icd'], VK_LAYER_PATH=runtime['layer_path'],
                VK_LOADER_LAYERS_DISABLE='~implicit~', VK_LOADER_DEBUG='error,warn,driver,layer',
                VS_VULKAN_DIAGNOSTIC_REPLAY=str(directory))
-    if args.headless:
-        env['VS_VULKAN_DIAGNOSTIC_HEADLESS'] = '1'
-        env.pop('DISPLAY', None); env.pop('WAYLAND_DISPLAY', None)
-    else:
-        env.pop('VS_VULKAN_DIAGNOSTIC_HEADLESS', None)
+    configure_replay_window_environment(env, headless=args.headless, windows=windows,
+                                        require_media=args.local_image_contracts)
     configure_replay_contract_environment(env,args)
     layer = directory / 'vk_layer_settings.txt'; layer.write_text('khronos_validation.validate_sync = true\n')
     env['VK_LAYER_SETTINGS_PATH'] = str(layer)
