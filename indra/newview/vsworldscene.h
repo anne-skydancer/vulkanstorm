@@ -56,6 +56,7 @@ public:
         std::string nameValues,mediaVersion;
         U32 updateFlags=0,rootUpdateFlags=0;
         U8 pcode=0;
+        U8 material=0,clickAction=0,rootClickAction=0;
         LLVector3d position;
         LLVector3 scale;
         bool attachment=false;

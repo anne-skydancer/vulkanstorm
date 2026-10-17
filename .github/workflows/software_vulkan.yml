@@ -98,6 +98,7 @@ jobs:
       - run: python scripts/tests/test_shared_object_properties.py
       - run: python scripts/tests/test_connected_utility_xui.py
       - run: python scripts/tests/test_native_object_selection.py
+      - run: python scripts/tests/test_shared_click_action.py
       - run: python scripts/tests/test_native_camera_publication.py
       - run: python scripts/tests/test_native_task_inventory.py
       - run: python scripts/tests/test_native_bridge_lifecycle.py

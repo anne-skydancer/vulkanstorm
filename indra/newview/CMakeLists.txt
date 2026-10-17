@@ -1678,6 +1678,7 @@ set(viewer_HEADER_FILES
     lltoolmorph.h
     lltoolobjpicker.h
     lltoolpie.h
+    vsobjectinteraction.h
     lltoolpipette.h
     lltoolplacer.h
     lltoolselect.h

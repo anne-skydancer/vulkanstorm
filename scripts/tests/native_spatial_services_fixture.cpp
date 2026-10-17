@@ -15,10 +15,10 @@ struct LLQuaternion{};
 LLVector3d from_region_handle(U64 handle){return {double(handle),double(handle),0};}
 struct VSWorldScene {
  struct ObjectHandle {int host=10,id=1;U32 local=1;U64 region=4,generation=8;int account=9;U64 accountGeneration=2;};
- struct ObjectSnapshot {ObjectHandle object;int owner=0;bool ownerKnown=false;std::string nameValues,mediaVersion;U32 updateFlags=0,rootUpdateFlags=0;U8 pcode=0;LLVector3d position;LLVector3 scale;bool attachment=false;};
+ struct ObjectSnapshot {ObjectHandle object;int owner=0;bool ownerKnown=false;std::string nameValues,mediaVersion;U32 updateFlags=0,rootUpdateFlags=0;U8 pcode=0,material=0,clickAction=0,rootClickAction=0;LLVector3d position;LLVector3 scale;bool attachment=false;};
  struct Budget {VSResourceBudget terrainBytes{100000};};
  struct Impl {
-  struct Object {int id=1;U32 parent=0;U8 pcode=9;LLVector3 position{1,2,3},scale{2,3,4};int reportedOwner=0;bool reportedOwnerKnown=false;std::string nameValues="AttachItemID STRING RW SV asset",mediaVersion="media-version";U32 updateFlags=128;bool linked=true;};
+  struct Object {int id=1;U32 parent=0;U8 pcode=9,material=3,clickAction=7;LLVector3 position{1,2,3},scale{2,3,4};int reportedOwner=0;bool reportedOwnerKnown=false;std::string nameValues="AttachItemID STRING RW SV asset",mediaVersion="media-version";U32 updateFlags=128;bool linked=true;};
   bool retired=false;int host=10;U64 handle=256;std::map<U32,Object> objects;std::shared_ptr<Budget> budgets=std::make_shared<Budget>();
   bool linksCurrent(const Object& o)const{return o.linked;}
   bool transform(U32 local,LLVector3& out,LLQuaternion&,std::set<U32>&)const{auto it=objects.find(local);if(it==objects.end()||!it->second.linked)return false;out=it->second.position;return true;}
@@ -37,11 +37,12 @@ FOOTPRINTS
 int main(){
  VSWorldScene world;world.mImpl->objects[1]={};auto handle=*world.object(10,1);auto a=world.objectSnapshot(handle);assert(a);
  assert(a->updateFlags==128 && a->rootUpdateFlags==128 && !a->ownerKnown && a->owner==0);
+ assert(a->material==3 && a->clickAction==7 && a->rootClickAction==7);
  assert(a->position.x==257 && a->scale.z==4 && !a->attachment);
  world.mImpl->objects.at(1).updateFlags=256;world.mImpl->objects.at(1).nameValues="changed";
  assert(a->updateFlags==128 && a->nameValues!="changed");auto b=world.objectSnapshot(handle);assert(b->updateFlags==256 && b->nameValues=="changed");
- world.mImpl->objects[2]={};world.mImpl->objects.at(2).id=2;world.mImpl->objects.at(2).parent=1;
- auto child=*world.object(10,2);assert(world.objectSnapshot(child)->rootUpdateFlags==256);assert(world.mapObjectSnapshots().size()==2 && world.mapObjectSnapshots().at(1).rootUpdateFlags==256);
+ world.mImpl->objects[2]={};world.mImpl->objects.at(2).id=2;world.mImpl->objects.at(2).parent=1;world.mImpl->objects.at(2).clickAction=0;world.mImpl->objects.at(2).material=4;
+ auto child=*world.object(10,2);assert(world.objectSnapshot(child)->rootUpdateFlags==256);assert(world.objectSnapshot(child)->clickAction==0 && world.objectSnapshot(child)->rootClickAction==7 && world.objectSnapshot(child)->material==4);assert(world.mapObjectSnapshots().size()==2 && world.mapObjectSnapshots().at(1).rootUpdateFlags==256);
  world.mImpl->objects[3]={};world.mImpl->objects.at(3).id=3;world.mImpl->objects.at(3).pcode=LL_PCODE_LEGACY_AVATAR;
  world.mImpl->objects.at(1).parent=3;assert(world.objectSnapshot(child)->attachment);assert(world.mapObjectSnapshots().empty());
  auto stale=handle;stale.accountGeneration=1;assert(!world.objectSnapshot(stale));stale=handle;stale.id=100;assert(!world.objectSnapshot(stale));

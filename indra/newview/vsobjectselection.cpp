@@ -60,6 +60,7 @@ struct VSObjectSelection::Impl
     };
     std::vector<Highlight> highlights;
     std::function<bool()> highlightCurrent;
+    U64 highlightRevision=1;
     boost::signals2::signal<void()> changed;
     U64 revision=1;
     explicit Impl(std::weak_ptr<VSNativeSession> value):session(std::move(value)){}
@@ -137,10 +138,20 @@ bool VSObjectSelection::select(const std::vector<VSWorldScene::ObjectHandle>& ob
             removed.push_back(old.object);
     for(const auto& node:next)
         if(std::none_of(state->nodes.begin(),state->nodes.end(),[&](const auto& old){return sameObject(old.object,node.object);}))added.push_back(node.object);
+    // Check the actual linked-family freeze before committing selection. A
+    // current local object may still have a retired or cyclic parent chain.
+    for(const auto& node:next)
+        if(!world->freeze(node.object,true))
+        {
+            for(const auto& candidate:next)world->freeze(candidate.object,false);
+            for(const auto& previous:state->nodes)world->freeze(previous.object,true);
+            return false;
+        }
+    for(const auto& object:removed)world->freeze(object,false);
+    // Removing one member can thaw another selected member's linked family.
+    for(const auto& node:next)world->freeze(node.object,true);
     state->nodes=std::move(next);
     ++state->revision;
-    for(const auto& object:removed)world->freeze(object,false);
-    for(const auto& node:state->nodes)world->freeze(node.object,true);
     state->sendSelection("ObjectDeselect",removed);
     state->sendSelection("ObjectSelect",added);
     state->changed();
@@ -205,18 +216,25 @@ bool VSObjectSelection::beginHighlightRequest(std::function<bool()> current)
 {
     const auto state=mImpl;
     const auto owner=state->session.lock();
-    if(!owner || owner->phase()!=VSNativeSession::Phase::Connected || !current || !current())return false;
+    if(!owner || owner->phase()!=VSNativeSession::Phase::Connected || !current)return false;
     const auto account=owner->accountGuard();
+    const auto previous=state->highlightRevision;
+    if(!account() || !current() || state->highlightRevision!=previous)return false;
     state->highlights.clear();
     state->highlightCurrent=[account,current=std::move(current)]{return account() && current();};
+    const auto request=state->highlightCurrent;
+    const auto revision=++state->highlightRevision;
     state->changed();
-    return state->highlightCurrent && state->highlightCurrent();
+    return state->highlightRevision==revision && request() && state->highlightRevision==revision;
 }
+
 bool VSObjectSelection::highlight(const std::vector<VSWorldScene::ObjectHandle>& objects,bool replace)
 {
     const auto state=mImpl;
     auto* world=scene();
-    if(!world || !state->highlightCurrent || !state->highlightCurrent())return false;
+    const auto request=state->highlightCurrent;
+    const auto revision=state->highlightRevision;
+    if(!world || !request || !request() || state->highlightRevision!=revision)return false;
     std::vector<Impl::Highlight> next=replace ? std::vector<Impl::Highlight>() : state->highlights;
     for(const auto& object:objects)
     {
@@ -234,14 +252,16 @@ std::vector<VSWorldScene::ObjectHandle> VSObjectSelection::highlights()const
 {
     const auto state=mImpl;
     std::vector<VSWorldScene::ObjectHandle> result;
-    if(state->highlightCurrent && state->highlightCurrent())
+    const auto request=state->highlightCurrent;
+    const auto revision=state->highlightRevision;
+    if(request && request() && state->highlightRevision==revision)
         for(const auto& node:state->highlights)if(state->current(node.object))result.push_back(node.object);
     return result;
 }
 void VSObjectSelection::clearHighlights()
 {
     const auto state=mImpl;
-    state->highlights.clear();state->highlightCurrent={};
+    state->highlights.clear();state->highlightCurrent={};++state->highlightRevision;
     state->changed();
 }
 void VSObjectSelection::receive(LLMessageSystem& message)
@@ -254,7 +274,9 @@ void VSObjectSelection::receive(LLMessageSystem& message)
     if(name=="ForceObjectSelect")
     {
         auto* world=scene();
-        if(!world || !state->highlightCurrent || !state->highlightCurrent())return;
+        const auto request=state->highlightCurrent;
+        const auto revision=state->highlightRevision;
+        if(!world || !request || !request() || state->highlightRevision!=revision)return;
         bool replace=false;message.getBOOL("Header","ResetList",replace);
         const S32 count=message.getNumberOfBlocks("Data");
         if(count<0 || count>255)return;
@@ -312,10 +334,14 @@ void VSObjectSelection::tick()
     state->nodes.erase(std::remove_if(state->nodes.begin(),state->nodes.end(),[&](const auto& node)
         {return !state->current(node.object);}),state->nodes.end());
     bool highlightsChanged=false;
-    if(!state->highlightCurrent || !state->highlightCurrent())
+    const auto highlightRequest=state->highlightCurrent;
+    const auto highlightRevision=state->highlightRevision;
+    const bool highlightActive=highlightRequest && highlightRequest();
+    if(state->highlightRevision!=highlightRevision)return;
+    if(!highlightActive)
     {
         highlightsChanged=!state->highlights.empty();
-        state->highlights.clear();state->highlightCurrent={};
+        state->highlights.clear();state->highlightCurrent={};++state->highlightRevision;
     }
     else
     {
@@ -343,5 +369,5 @@ void VSObjectSelection::reset()
 {
     const auto state=mImpl;
     if(auto* world=scene())for(const auto& node:state->nodes)world->freeze(node.object,false);
-    state->nodes.clear();state->families.clear();state->highlights.clear();state->highlightCurrent={};++state->revision;
+    state->nodes.clear();state->families.clear();state->highlights.clear();state->highlightCurrent={};++state->highlightRevision;++state->revision;
 }

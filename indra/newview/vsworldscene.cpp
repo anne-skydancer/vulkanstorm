@@ -221,6 +221,7 @@ struct VSWorldScene::Impl
         LLUUID inventoryItem,reportedOwner;
         bool reportedOwnerKnown=false;
         U32 updateFlags=0;
+        U8 material=0,clickAction=0;
         std::string nameValues;
         bool nameValuesPresent=false;
         std::shared_ptr<const VSResourceBudget::Reservation> metadataResidency;
@@ -941,7 +942,7 @@ struct VSWorldScene::Impl
             previous->second.pcode==object.pcode && kind(previous->second)==kind(object);
         if(sameOwner && !object.nameValuesPresent)
         {object.nameValues=previous->second.nameValues;object.inventoryItem=previous->second.inventoryItem;}
-        object.metadataResidency=budgets->primitiveBytes.reserve(sizeof(U32)+sizeof(LLUUID)+object.nameValues.size()+1);
+        object.metadataResidency=budgets->primitiveBytes.reserve(sizeof(U32)+sizeof(LLUUID)+sizeof(U8)*2+object.nameValues.size()+1);
         if(!object.metadataResidency){request(id);return false;}
         object.slot=previous!=objects.end()?previous->second.slot:budgets->objects.reserve(1);
         if (!object.slot) {request(id);return false;}
@@ -1033,7 +1034,7 @@ struct VSWorldScene::Impl
         if (!dp.unpackUUID(object.id,"ID") || !dp.unpackU32(id,"LocalID") || !dp.unpackU8(pcode,"PCode") ||
             !dp.unpackU8(state,"State")) return false;
         object.pcode=pcode;
-        if (!dp.unpackU32(ignored,"CRC") || !dp.unpackU8(value,"Material") || !dp.unpackU8(value,"ClickAction") ||
+        if (!dp.unpackU32(ignored,"CRC") || !dp.unpackU8(object.material,"Material") || !dp.unpackU8(object.clickAction,"ClickAction") ||
             !dp.unpackVector3(object.scale,"Scale") || !dp.unpackVector3(object.position,"Pos") ||
             !dp.unpackVector3(rotation,"Rot") || !dp.unpackU32(flags,"SpecialCode") || !dp.unpackUUID(owner,"Owner")) return false;
         object.rotation.unpackFromVector3(rotation);object.attachment=state;
@@ -1437,6 +1438,7 @@ std::optional<VSWorldScene::ObjectSnapshot> VSWorldScene::objectSnapshot(const O
     ObjectSnapshot row;
     row.object=token;row.owner=source.reportedOwner;row.ownerKnown=source.reportedOwnerKnown;
     row.nameValues=source.nameValues;row.mediaVersion=source.mediaVersion;row.updateFlags=source.updateFlags;row.rootUpdateFlags=source.updateFlags;
+    row.material=source.material;row.clickAction=source.clickAction;row.rootClickAction=source.clickAction;
     row.pcode=source.pcode;row.position=from_region_handle(mImpl->handle)+LLVector3d(position);row.scale=source.scale;
     const Impl::Object* ancestor=&source;
     std::set<U32> ancestors;
@@ -1445,7 +1447,7 @@ std::optional<VSWorldScene::ObjectSnapshot> VSWorldScene::objectSnapshot(const O
         const auto parent=mImpl->objects.find(ancestor->parent);
         if(parent==mImpl->objects.end())break;
         if(parent->second.pcode==LL_PCODE_LEGACY_AVATAR){row.attachment=true;break;}
-        ancestor=&parent->second;row.rootUpdateFlags=ancestor->updateFlags;
+        ancestor=&parent->second;row.rootUpdateFlags=ancestor->updateFlags;row.rootClickAction=ancestor->clickAction;
     }
     return row;
 }
@@ -2191,6 +2193,8 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
         msg.getVector3("ObjectData","Scale",object.scale,i);msg.getUUID("ObjectData","FullID",object.id,i);
         msg.getU32("ObjectData","ParentID",object.parent,i);
         msg.getU32("ObjectData","UpdateFlags",object.updateFlags,i);
+        msg.getU8("ObjectData","Material",object.material,i);
+        msg.getU8("ObjectData","ClickAction",object.clickAction,i);
         // The full message's OwnerID is only guaranteed for sounding objects;
         // a null value is unknown ownership, never evidence of public/edit rights.
         msg.getUUID("ObjectData","OwnerID",object.reportedOwner,i);
