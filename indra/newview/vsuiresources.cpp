@@ -274,7 +274,17 @@ VSUIRenderer::Image VSUIResources::legacyBump(const LLUUID& id,unsigned code,flo
         if(victim==mImpl->bumps.end()) return {};
         mImpl->bumps.erase(victim);
     }
-    const auto generated=mImpl->renderer.generateBump(source,code,scale,channel);
+    auto generated=mImpl->renderer.generateBump(source,code,scale,channel);
+    while(!generated)
+    {
+        auto victim=mImpl->bumps.end();
+        for(auto item=mImpl->bumps.begin();item!=mImpl->bumps.end();++item)
+            if(item->second.image.use_count()==1 &&
+               (victim==mImpl->bumps.end() || item->second.touched<victim->second.touched)) victim=item;
+        if(victim!=mImpl->bumps.end()) mImpl->bumps.erase(victim);
+        else if(!vs_evict_world_image(id)) return {};
+        generated=mImpl->renderer.generateBump(source,code,scale,channel);
+    }
     if(!generated) return {}; // Keep the complete prior face publication on refusal.
     mImpl->bumps.insert_or_assign(key,Impl::BumpEntry{generated,generation,++mImpl->bumpClock,scale,channel});
     return generated;

@@ -420,6 +420,8 @@ bool VSUIImageProvider::publishLocalImages(const std::vector<std::pair<LLUUID,LL
     for(const auto& [id,raw]:inputs) mImpl->remote.at(id).facade->onImageLoaded();
     return true;
 }
+bool VSUIImageProvider::evictWorldImage(const LLUUID& preserve) {return mImpl->evict(preserve);}
+bool vs_evict_world_image(const LLUUID& preserve) {return sActiveProvider && sActiveProvider->evictWorldImage(preserve);}
 void VSUIImageProvider::retireLocalImage(const LLUUID& id)
 {
     const auto found=mImpl->remote.find(id);

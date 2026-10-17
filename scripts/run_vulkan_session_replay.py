@@ -164,7 +164,7 @@ def world_bump_contracts_passed(record,directory):
     try:
         data=record['r3_world_bumps'];root=Path(directory).resolve();stages=[]
         standard_source=(Path(__file__).resolve().parents[1]/'indra/newview/app_settings/std_bump.ini').read_text().split()[4]
-        if any(data.get(key) is not True for key in ('udp_object_update','stable_cached_generations','object_retired','account_retired')):return False
+        if any(data.get(key) is not True for key in ('udp_object_update','stable_cached_generations','object_retired','account_retired','inactive_faces_release_images')):return False
         for name,scale in (('initial',128),('source_replaced',128),('scale_changed',64)):
             rows=data[name]
             if not isinstance(rows,list) or [row['code'] for row in rows]!=[1,2,3]:return False

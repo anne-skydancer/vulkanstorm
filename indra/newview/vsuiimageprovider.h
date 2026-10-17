@@ -12,6 +12,7 @@ void vs_refresh_ui_image(const LLUUID&);
 bool vs_publish_local_image(const LLUUID&,const LLImageRaw&);
 bool vs_publish_local_images(const std::vector<std::pair<LLUUID,LLPointer<LLImageRaw>>>&);
 void vs_retire_local_image(const LLUUID&);
+bool vs_evict_world_image(const LLUUID& preserve);
 LLUUID vs_native_image_id(const LLUUID&);
 LLPointer<LLUIImage> vs_publish_ui_image(const std::string&, const LLImageRaw&);
 void vs_erase_ui_image(const std::string&);
@@ -36,6 +37,7 @@ class VSUIImageProvider : public LLImageProviderInterface
     bool publishLocalImage(const LLUUID&,const LLImageRaw&);
     bool publishLocalImages(const std::vector<std::pair<LLUUID,LLPointer<LLImageRaw>>>&);
     void retireLocalImage(const LLUUID&);
+    bool evictWorldImage(const LLUUID& preserve);
     LLUUID imageID(const LLUUID&) const;
     LLPointer<LLUIImage> publishImage(const std::string&, const LLImageRaw&);
     void eraseImage(const std::string&);

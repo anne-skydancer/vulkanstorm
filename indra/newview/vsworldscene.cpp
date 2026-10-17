@@ -2490,8 +2490,12 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         const float limit=llclamp(farClip,16.f,1024.f)+o.scale.length()*2.f;
         if (!hud && (position - eye).lengthSquared() > limit * limit)
         {
-            for (auto& face:o.faces) face.mesh.reset();
+            for (auto& face:o.faces) {
+                face.mesh.reset();face.publishedImage.reset();face.publishedChannels={};
+            }
             o.admittedFaces.clear();
+            if(o.gltf) o.gltf->releaseRenderingResources();
+            if(o.pendingGLTF) o.pendingGLTF->releaseRenderingResources();
             o.dirty=true;continue;
         }
         if (o.pcode == LL_PCODE_LEGACY_TREE || o.pcode == LL_PCODE_TREE_NEW || o.pcode == LL_PCODE_LEGACY_GRASS)

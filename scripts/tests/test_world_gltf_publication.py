@@ -30,14 +30,14 @@ struct VSWorldGLTF {
  bool current()const{return live;}};
  std::shared_ptr<Impl> mImpl=std::make_shared<Impl>();
  bool hasPublication()const;
- void append(std::vector<int>& output,int,int,int,int){auto& owner=*mImpl;
+ void append(std::vector<int>& output,int,int,int,int,unsigned){auto& owner=*mImpl;
  auto candidates=owner.publications;auto candidatePackets=owner.assetPackets;bool deferred=owner.refused;
 COMMIT
  output.insert(output.end(),owner.publishedPackets.begin(),owner.publishedPackets.end());}
 };
 HAS_PUBLICATION
 struct Object {std::shared_ptr<VSWorldGLTF> gltf,pendingGLTF;int scale=1;};
-void promote(Object& o){int position=0,rotation=0,eye=0;
+void promote(Object& o){int position=0,rotation=0,eye=0;unsigned viewportHeight=480;
 PROMOTE
 }
 int main(){Object o;auto old=std::make_shared<VSWorldGLTF>();old->mImpl->publicationKnown=true;
