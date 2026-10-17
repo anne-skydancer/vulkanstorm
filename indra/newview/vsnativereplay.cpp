@@ -1088,12 +1088,18 @@ struct Replay
                     { require(name == "Native variable destination" && x == 376 && y == 188 && z == 25, "CPU variable-region coordinate lookup changed location"); locationResolved = true; });
                 LLSD locationReply; locationReply["AgentData"][0]["AgentID"] = LLUUID::generateNewID();
                 locationReply["AgentData"][0]["Flags"] = 0x10000;
+                locationReply["Data"][0]["RegionFlags"] = 0;
+                locationReply["Data"][0]["MapImageID"] = LLUUID::generateNewID();
                 locationReply["Data"][0]["Name"] = "Native variable destination";
                 locationReply["Data"][0]["X"] = 4; locationReply["Data"][0]["Y"] = 2; locationReply["Data"][0]["Access"] = 13;
                 locationReply["Size"][0]["SizeX"] = 512; locationReply["Size"][0]["SizeY"] = 512;
                 http("MapBlockReply", locationReply, owner.host()); require(!locationResolved, "Forged location lookup identity admitted");
                 locationReply["AgentData"][0]["AgentID"] = gAgentID; http("MapBlockReply", locationReply, owner.host());
-                require(locationResolved && !LLWorldMap::instanceExists(), "Native location lookup did not resolve without world map");
+                require(locationResolved, "Native location lookup did not resolve");
+                const auto* mapped = LLWorldMap::instance().simInfoFromHandle(to_region_handle(1024, 512));
+                require(mapped && mapped->getName() == "Native variable destination" &&
+                    mapped->getSizeX() == 512 && mapped->getSizeY() == 512,
+                    "Authenticated location reply did not update the shared variable-region map model");
                 // A real v2 landmark resolves its local position through the same
                 // authenticated RegionIDAndHandleReply adapter as ordinary favorites.
                 const std::string v2 = "Landmark version 2\nregion_id 40000000-0000-0000-0000-000000000099\nlocal_pos 17 29 31\n";
