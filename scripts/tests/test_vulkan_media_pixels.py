@@ -25,6 +25,16 @@ int main() {
     assert(opaque[3]==255 && opaque[7]==255 && opaque[11]==255 && opaque[15]==255);
     assert(opaque[0]==30 && opaque[1]==20 && opaque[2]==10);
     assert(rgba==preserved); // Replacement cannot mutate an earlier publication.
+    auto patch=vs_media_patch(padded,2,2,3,2,false,true,false,1,0,2,1);
+    assert(patch.x==1 && patch.y==1 && patch.width==1 && patch.height==1);
+    assert((patch.pixels==std::vector<std::uint8_t>{50,60,70,80}));
+    patch=vs_media_patch(padded,2,2,3,2,true,false,true,0,1,2,2);
+    assert(patch.x==0 && patch.y==1 && patch.width==2 && patch.height==1);
+    assert((patch.pixels==std::vector<std::uint8_t>{31,21,11,255,71,61,51,255}));
+    patch=vs_media_patch(padded,2,2,3,2,false,true,false,-9,-9,1,1);
+    assert(patch.x==0 && patch.y==1 && patch.width==1 && patch.height==1);
+    assert((patch.pixels==std::vector<std::uint8_t>{10,20,30,40}));
+    assert(vs_media_patch(padded,2,2,3,2,false,true,false,3,0,4,2).pixels.empty());
     for(unsigned i=0;i<5;++i) {
         bool failed=false;
         try { vs_media_pixels(i==0?nullptr:padded,i==1?0:2,2,i==2?1:i==4?16385:3,i==3?1:2,false,false); }
