@@ -57,6 +57,7 @@
 #include "llfocusmgr.h"
 #include "lldraghandle.h"
 #include "llwindow.h"
+#include "llviewerwindow.h"
 
 #include "llnotificationsutil.h"        // <FS:Zi> Add float LSL color entry widgets
 #include "llregex.h"

@@ -273,7 +273,7 @@ void LLFloaterBuyCurrencyUI::updateUI()
                 getChild<LLUICtrl>("required_amount")->setTextArg("[AMT]", llformat("%d", mRequiredAmount));
 #if VS_NATIVE_VULKAN
                 if (auto owner = VSNativeSession::active(); owner && !owner->balanceKnown())
-                    getChild<LLUICtrl>("required_amount")->setTextArg("[AMT]", "--");
+                    getChild<LLUICtrl>("required_amount")->setTextArg("[AMT]", LLStringExplicit("--"));
 #endif
             }
         }
