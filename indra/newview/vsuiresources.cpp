@@ -257,7 +257,7 @@ VSUIRenderer::Image VSUIResources::legacyBump(const LLUUID& id,unsigned code,flo
 {
     if(id.isNull() || !code || code>=32) return {};
     const auto source=image("remote:"+vs_native_image_id(id).asString());
-    if(!source || (code>=3 && VSUIRenderer::imageDescription(source).compression!=VSWorldContracts::ImageCompression::None)) return {};
+    if(!source || (code>=3 && VSUIRenderer::imageDescription(source).compression!=VSWorldContracts::ImageCompression::Uncompressed)) return {};
     const auto generation=VSUIRenderer::generation(source);
     const unsigned components=unsigned(vs_ui_image_components(id));
     const unsigned channel=components==1?0:components==3?2:3;

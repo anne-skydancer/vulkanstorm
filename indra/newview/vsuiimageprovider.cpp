@@ -529,7 +529,7 @@ bool VSUIImageProvider::imageReady(const LLUUID& id) const
     const auto image = mImpl->remote.find(imageID(id));
     return image!=mImpl->remote.end() && (image->second.local ||
         (owner && owner->phase()==VSNativeSession::Phase::Connected && image->second.readyGeneration==owner->generation() &&
-         (!image->second.uiDemand || VSUIRenderer::imageDescription(mImpl->resources.image("remote:"+imageID(id).asString())).compression==VSWorldContracts::ImageCompression::None)));
+         (!image->second.uiDemand || VSUIRenderer::imageDescription(mImpl->resources.image("remote:"+imageID(id).asString())).compression==VSWorldContracts::ImageCompression::Uncompressed)));
 }
 void VSUIImageProvider::refreshImage(const LLUUID& id)
 {

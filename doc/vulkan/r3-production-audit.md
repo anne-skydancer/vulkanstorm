@@ -886,3 +886,20 @@ readbacks are mandatory archive evidence. Missing/corrupt pixels, changed inputs
 and reused generations fail the independent validator. Compilation and focused
 replay/archive regressions pass; canonical runtime execution follows this
 checkpoint and is not yet claimed here.
+
+
+## Linux public-header macro collision
+
+Linux viewer compilation exposed `ImageCompression::None` to the `None` macro
+from Xlib, included by the existing GLX/precompiled headers. The macro expands
+to `0L`, breaking the enum declaration and causing downstream native contract
+and renderer types to appear missing. The compression member is now named
+`Uncompressed` throughout the viewer and standalone harness; its value remains
+zero, BC3 remains one, and compression selection is unchanged.
+
+A permanent source-CI regression compiles the actual public rendering headers
+with platform headers before and after them. It uses Xlib when available on
+Linux and reproduces its exact macro otherwise. Both include orders reproduce
+the pre-fix failure and pass after the rename, without undefining platform
+macros. Native texture preparation and material-basis regressions also pass.
+The full Linux CI rebuild remains the platform qualification step.
