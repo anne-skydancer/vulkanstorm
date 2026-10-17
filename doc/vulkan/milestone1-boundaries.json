@@ -1,5 +1,5 @@
 {
-  "source_commit": "46f49f3651053afc72c1e26017a27d4eb8574231",
+  "source_commit": "117598d5daf64b4a34141f7d81165b07b217224f",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -632,7 +632,7 @@
       ]
     },
     "indra/newview/vsuiimageprovider.cpp": {
-      "sha256": "bbd1e651f9407335cc9c8a1cd1245edb0bcbfd3faed5c0cf928d05635ff4fc4f",
+      "sha256": "bfd97374d60f39b2692ea617f89e85e81982f5bd451c4459a3a2284633e5facf",
       "anchors": [
         "VSUIImageProvider::getUIImage",
         "VSUIImageProvider::getUIImageByID"
@@ -701,7 +701,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.cpp": {
-      "sha256": "ee93e79e047306c656c8f0a84d2634c2e8c1317e4f61b74d7e0db9a7ec7b5f16",
+      "sha256": "c5dd69996fecce497d39904ab10fc5c58c7425bc2b009fe71173c11768509f0a",
       "anchors": [
         "VSVulkanContext::VSVulkanContext",
         "CreateDeviceAndContextsVk",
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "4485fcc310f237a235a140aee73ee8adf1d2cd0d26f14d9281f4931de65e220b",
+      "sha256": "505b2be0214f52c81ed77ddebffc4126e61f4b8a553c8accb8f09674aa594f91",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
@@ -793,7 +793,7 @@
       ]
     },
     "indra/newview/vsnativereplay.cpp": {
-      "sha256": "407d4210d14d066ab2f9da669711b8e11456fa4c5d4d8d1f68e9236602484f55",
+      "sha256": "389e3502e3756d7e367cd215d6adf955f36463b3026d25f4b1c158e42749a3df",
       "anchors": [
         "vs_native_replay_tick()",
         "inspectOutgoing("

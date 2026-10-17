@@ -18093,13 +18093,17 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleLocalTerrainChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsr3terrainreplay.cpp",
+        "indra/newview/vsterrainassets.cpp",
+        "indra/newview/vsworldscene.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -18122,13 +18126,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Qualify the actual local terrain replacement/transform effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsr3terrainreplay.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -20164,6 +20170,7 @@
       "remaining_gap": "Review reference callback handleAnisotropicChanged; saving a value is not applying its effect.",
       "native_source_references": [
         "indra/newview/vsr3gltfreplay.cpp",
+        "indra/newview/vsterrainassets.cpp",
         "indra/newview/vsworldgltf.cpp",
         "indra/newview/vsworldscene.cpp"
       ],
@@ -21607,13 +21614,16 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleSetShaderChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsr3terrainreplay.cpp",
+        "indra/newview/vsterrainassets.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -21635,13 +21645,16 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleSetShaderChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsr3terrainreplay.cpp",
+        "indra/newview/vsterrainassets.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -21663,13 +21676,16 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handlePBRTerrainScaleChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsr3terrainreplay.cpp",
+        "indra/newview/vsterrainassets.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -21691,13 +21707,16 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleSetShaderChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsr3terrainreplay.cpp",
+        "indra/newview/vsterrainassets.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
@@ -22313,13 +22332,16 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleSetShaderChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsr3terrainreplay.cpp",
+        "indra/newview/vsworldscene.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
