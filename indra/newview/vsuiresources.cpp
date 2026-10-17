@@ -1,6 +1,7 @@
 // Viewer UI CPU assets, immutable publication and ordered facade draws. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsuiresources.h"
+#include "vstextureupload.h"
 #include "vsuiimageprovider.h"
 #include "llimage.h"
 #include "llfontgl.h"
@@ -17,6 +18,12 @@
 namespace
 {
 void check(bool condition,const char* text) { if (!condition) throw std::runtime_error(text); }
+VSWorldContracts::ImageRole imageRole(const std::string& key)
+{ return key.compare(0, 17, "avatar-composite:") == 0 ? VSWorldContracts::ImageRole::AvatarComposite
+                      : (key.compare(0, 7, "remote:") == 0 || key.compare(0, 17, "gltf-scene-image:") == 0)
+                          ? VSWorldContracts::ImageRole::RemoteAsset
+                          : key.compare(0, 6, "media:") == 0 ? VSWorldContracts::ImageRole::Media
+                          : VSWorldContracts::ImageRole::CoreUI; }
 float nativeVertexColor(float value)
 {
     // LLRender::color4f stores a normalized U8 vertex channel, truncating
@@ -44,6 +51,7 @@ struct VSUIResources::Impl
     };
     struct Entry { std::shared_ptr<Asset> asset; LLUIImagePtr facade; };
     VSUIRenderer& renderer;
+    VSResourceBudget imagePreparationBytes{640 * 1024 * 1024};
     std::map<std::string,Entry> assets;
     std::vector<VSUIRenderer::Packet> packets;
     VSUIRenderer::Sampling sampling=VSUIRenderer::Sampling::Linear;
@@ -173,27 +181,37 @@ struct VSUIResources::Impl
 };
 VSUIResources::VSUIResources(VSUIRenderer& r) : mImpl(std::make_shared<Impl>(r)) {}
 VSUIResources::~VSUIResources() = default;
-LLUIImagePtr VSUIResources::publish(const std::string& key,const LLImageRaw& raw)
+VSUIResources::PreparedImage VSUIResources::prepareImage(const LLImageRaw& raw,VSWorldContracts::ImageRole role,bool compress)
 {
-    const auto width=raw.getWidth(); const auto height=raw.getHeight(); const auto components=raw.getComponents();
-    check(!key.empty() && width>0 && height>0 && width<=16384 && height<=16384 &&
+    const auto width=raw.getWidth();const auto height=raw.getHeight();const auto components=raw.getComponents();
+    check(width>0 && height>0 && width<=16384 && height<=16384 &&
           components>=1 && components<=4 && raw.getData(),"Invalid native UI CPU image");
-    auto asset=std::make_shared<Impl::Asset>(); asset->width=width; asset->height=height;
     std::vector<std::uint8_t> bytes(std::size_t(width)*height*4);
-    for (unsigned y=0;y<asset->height;++y) for (unsigned x=0;x<asset->width;++x)
+    for(unsigned y=0;y<unsigned(height);++y) for(unsigned x=0;x<unsigned(width);++x)
     {
         const auto* s=raw.getData()+((std::size_t(height)-1-y)*width+x)*components;
         auto* d=bytes.data()+(std::size_t(y)*width+x)*4;
         d[0]=s[0]; d[1]=components<3?s[0]:s[1]; d[2]=components<3?s[0]:s[2];
         d[3]=components==2?s[1]:components==4?s[3]:255;
     }
-    const auto role = key.compare(0, 17, "avatar-composite:") == 0 ? VSWorldContracts::ImageRole::AvatarComposite
-                      : (key.compare(0, 7, "remote:") == 0 || key.compare(0, 17, "gltf-scene-image:") == 0)
-                          ? VSWorldContracts::ImageRole::RemoteAsset
-                          : key.compare(0, 6, "media:") == 0 ? VSWorldContracts::ImageRole::Media
-                          : VSWorldContracts::ImageRole::CoreUI;
-    asset->image    = mImpl->renderer.upload(width, height, bytes, role);
-    if (!asset->image) return nullptr;
+    return VSTextureUpload::prepare(width,height,std::move(bytes),role,compress);
+}
+bool VSUIResources::supportsCompression() const { return mImpl->renderer.supportsCompression(); }
+std::shared_ptr<const VSResourceBudget::Reservation> VSUIResources::reserveImagePreparation(std::size_t bytes)
+{ return mImpl->imagePreparationBytes.reserve(bytes); }
+LLUIImagePtr VSUIResources::publish(const std::string& key,const LLImageRaw& raw)
+{
+    const auto role=imageRole(key);
+    return publishPrepared(key,prepareImage(raw,role,false));
+}
+LLUIImagePtr VSUIResources::publishPrepared(const std::string& key,const PreparedImage& prepared)
+{
+    check(!key.empty() && prepared && VSTextureUpload::valid(*prepared),"Invalid prepared UI image publication");
+    check(imageRole(key)==prepared->role,"Prepared native image has the wrong resource role");
+    const auto width=prepared->width,height=prepared->height;
+    auto asset=std::make_shared<Impl::Asset>();asset->width=width;asset->height=height;
+    asset->image=mImpl->renderer.uploadPrepared(prepared);
+    if(!asset->image) return nullptr;
     std::weak_ptr<Impl> owner=mImpl;
     LLUIImagePtr facade=new LLUIImage(key,width,height,
         [owner,asset](S32 x,S32 y,S32 w,S32 h,const LLColor4& color,bool solid,
@@ -424,6 +442,8 @@ LLSD VSUIResources::evidence() const
     result["resident_image_payload_bytes"]=ll_sd_from_U64(stats.residentImageBytes);
     result["image_payload_budget_bytes"]=ll_sd_from_U64(stats.imageBudgetBytes);
     result["image_allocation_refusals"]=ll_sd_from_U64(stats.imageAllocationRefusals);
+    result["image_preparation_bytes"]=ll_sd_from_U64(mImpl->imagePreparationBytes.used());
+    result["image_preparation_budget_bytes"]=ll_sd_from_U64(mImpl->imagePreparationBytes.limit());
     result["maximum_image_dimension"]=S32(caps.maximumImageDimension);
     result["rgba8"]=caps.rgba8;result["bgra8"]=caps.bgra8;result["depth32"]=caps.depth32;
     return result;

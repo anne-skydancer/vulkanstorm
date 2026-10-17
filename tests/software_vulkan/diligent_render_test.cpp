@@ -478,6 +478,7 @@ static void compare(IDeviceContext* context, ITexture* texture, const Image& ima
 static void worldContract(IRenderDevice* device, IDeviceContext* context, ITexture* target, ITexture* readback)
 {
     VSWorldRenderer renderer(device,context);
+    VSUIRenderer images(device,context);
     auto quad=[&](float z) {
         std::vector<VSWorldRenderer::Vertex> vertices{{-1,1,z,0,0,1,0,0},{1,1,z,0,0,1,1,0},
             {-1,-1,z,0,0,1,0,1},{1,-1,z,0,0,1,1,1}};
@@ -488,11 +489,13 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     VSWorldRenderer::Packet nearPacket;nearPacket.mesh=nearGeometry;nearPacket.fullbright=true;nearPacket.color={1,0,0,1};
     VSWorldRenderer::Packet farPacket;farPacket.mesh=farGeometry;farPacket.fullbright=true;farPacket.color={0,0,1,1};
     auto* rtv=target->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
-    auto capture=[&](const char* file,const std::function<Pixel(unsigned,unsigned)>& oracle) {
+    auto capture=[&](const char* file,const std::function<Pixel(unsigned,unsigned)>& oracle,unsigned maximumError=1) {
+        images.flushUploads();
         context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         CopyTextureAttribs copy{};copy.pSrcTexture=target;copy.pDstTexture=readback;
         copy.SrcTextureTransitionMode=copy.DstTextureTransitionMode=RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
         context->CopyTexture(copy);context->Flush();context->WaitForIdle();
+        images.retire();
         MappedTextureSubresource mapped{};context->MapTextureSubresource(readback,0,0,MAP_READ,MAP_FLAG_NONE,nullptr,mapped);
         require(mapped.pData!=nullptr,"World readback failed");
         std::ofstream artifact(file,std::ios::binary);artifact<<"P6\n8 8\n255\n";
@@ -501,7 +504,7 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
             const auto* pixel=static_cast<const unsigned char*>(mapped.pData)+y*mapped.Stride+x*4;
             artifact.write(reinterpret_cast<const char*>(pixel),3);
             const auto expected=oracle(x,y);
-            for(unsigned c=0;c<4;++c) if(std::abs(int(pixel[c])-int(expected[c]))>1) ++mismatches;
+            for(unsigned c=0;c<4;++c) if(std::abs(int(pixel[c])-int(expected[c]))>int(maximumError)) ++mismatches;
         }
         context->UnmapTextureSubresource(readback,0,0);
         require(artifact.good(),"World artifact write failed");require(!mismatches,"World pixel oracle mismatch");
@@ -512,7 +515,6 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     VSWorldRenderer::Packet alpha;alpha.mesh=quad(-.75f);alpha.fullbright=true;
     alpha.alpha=true;alpha.color={0,1,0,128.f/255};alpha.distanceSquared=1;
     renderer.draw(rtv,8,8,view,{nearPacket,farPacket,alpha});capture("replacement.ppm",[](unsigned,unsigned){return Pixel{127,128,0,255};});
-    VSUIRenderer images(device,context);
     const std::vector<std::uint8_t> texels{255,0,0,255,0,255,0,255,0,0,255,255,255,255,0,255};
     VSWorldRenderer::Packet textured; textured.mesh=quad(0);textured.fullbright=true;
     textured.image=images.upload(2,2,texels);
@@ -619,6 +621,32 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     materialPacket.surface=surface;materialPacket.mesh=quad(0);
     renderer.draw(rtv,8,8,view,{materialPacket});
     capture("sampler-mipmaps.ppm",[](unsigned,unsigned){return Pixel{128,128,128,255};});
+    // Lossy RGB565 endpoint quantization is bounded separately from the
+    // unchanged one-unit uncompressed oracles above. Uniform 4x4 blocks need
+    // no palette approximation; eight code values cover five-bit quantization.
+    std::vector<std::uint8_t> compressionPixels(8*8*4);
+    for(unsigned i=0;i<64;++i) {compressionPixels[i*4]=73;compressionPixels[i*4+1]=121;compressionPixels[i*4+2]=199;compressionPixels[i*4+3]=255;}
+    auto compressed=images.upload(8,8,compressionPixels,VSWorldContracts::ImageRole::RemoteAsset,true);
+    const auto compressionInfo=VSUIRenderer::imageDescription(compressed);
+    require((compressionInfo.compression==VSWorldContracts::ImageCompression::BC3)==images.supportsCompression(),
+        "Compressed texture selection ignored device capabilities");
+    require(!images.supportsCompression() || compressionInfo.gpuBytes==112,"Compressed mip payload byte accounting is wrong");
+    auto compressionPacket=textured;compressionPacket.mesh=quad(0);compressionPacket.image=compressed;
+    renderer.draw(rtv,8,8,view,{compressionPacket});
+    capture("compression-policy.ppm",[](unsigned,unsigned){return Pixel{73,121,199,255};},8);
+    std::vector<std::uint8_t> replacementPixels(8*8*4);
+    for(unsigned i=0;i<64;++i) {replacementPixels[i*4+2]=255;replacementPixels[i*4+3]=255;}
+    compressionPacket.image=images.replace(compressed,0,0,8,8,replacementPixels);
+    require(compressionPacket.image && VSUIRenderer::generation(compressionPacket.image)!=VSUIRenderer::generation(compressed) &&
+        VSUIRenderer::imagePixels(compressed)==compressionPixels,"Compressed replacement mutated the old generation");
+    require(VSUIRenderer::imageDescription(compressionPacket.image).compression==compressionInfo.compression,
+        "Compressed replacement lost its selected format policy");
+    renderer.draw(rtv,8,8,view,{compressionPacket});
+    capture("compression-replacement.ppm",[](unsigned,unsigned){return Pixel{0,0,255,255};});
+    for(const auto role:{VSWorldContracts::ImageRole::CoreUI,VSWorldContracts::ImageRole::Media,VSWorldContracts::ImageRole::AvatarComposite})
+        require(VSUIRenderer::imageDescription(images.upload(8,8,compressionPixels,role,true)).compression==VSWorldContracts::ImageCompression::None,
+            "An exact-pixel image role was compressed");
+    std::cout<<"TEXTURE_BC3_SUPPORTED="<<images.supportsCompression()<<"\nTEXTURE_COMPRESSED_GPU_BYTES="<<compressionInfo.gpuBytes<<'\n';
     auto anisotropic=surface->samplers[0];anisotropic.anisotropy=16;
     auto* anisotropicView=VSUIRenderer::imageView(materialPacket.image,anisotropic);
     require(anisotropicView && anisotropicView->GetSampler()->GetDesc().MaxAnisotropy==
@@ -854,6 +882,7 @@ int main(int argc, char** argv)
             RefCntAutoPtr<IRenderDevice> device; RefCntAutoPtr<IDeviceContext> context;
             const char* layer = "VK_LAYER_KHRONOS_validation";
             EngineVkCreateInfo ci{}; ci.EnableValidation = true;
+            ci.Features.TextureCompressionBC=DEVICE_FEATURE_STATE_OPTIONAL;
             ci.InstanceLayerCount = 1; ci.ppInstanceLayerNames = &layer;
             Uint32 adapterCount = 0;
             factory->EnumerateAdapters({1,1}, adapterCount, nullptr);

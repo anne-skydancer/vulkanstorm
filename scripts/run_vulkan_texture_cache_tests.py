@@ -62,7 +62,7 @@ def validate_case(record,requests,folder,cache_directory,readonly=False):
     if cache.get('cache_policy')!='shared_LLTextureFetch' or Path(cache['cache_path']).resolve()!=cache_directory.resolve():
         raise ValueError('Viewer did not use the intended shared cache')
     if cache.get('read_only') is not readonly:raise ValueError('Unexpected texture cache read-only policy')
-    if cache.get('pending_fetches')!=0:raise ValueError('Unfinished texture fetches at capture')
+    if cache.get('pending_fetches')!=0 or cache.get('pending_uploads')!=0:raise ValueError('Unfinished texture fetches at capture')
     if u64(cache['maximum_body_bytes'])<=0 or cache['maximum_entries']<=0:raise ValueError('Missing effective cache capacity')
     if not isinstance(cache['process_instance'],str):raise ValueError('Invalid cache process identity')
     UUID(cache['process_instance'])
@@ -93,7 +93,7 @@ def validate_case(record,requests,folder,cache_directory,readonly=False):
     if (limited['width'],limited['height'],limited['discard'])!=(512,512,1):raise ValueError('Native maximum-resolution preference was inert')
     if rows[STREAM]['gpu_rgba_sha256']!=full_pattern_sha256():raise ValueError('Final resident texture differs from the expected full-resolution pixels')
     retired=record['retired_texture_cache']
-    if retired['images'] or retired['pending_fetches']!=0:raise ValueError('Retired account retained cached GPU images or fetches')
+    if retired['images'] or retired['pending_fetches']!=0 or retired.get('pending_uploads')!=0:raise ValueError('Retired account retained cached GPU images or fetches')
     if retired['process_instance']!=cache['process_instance']:raise ValueError('Cache lifecycle evidence changed process identity')
     if u64(retired['network_requests'])!=len(texture_requests(requests)):raise ValueError('Texture HTTP evidence disagrees with the worker counter')
     return rows

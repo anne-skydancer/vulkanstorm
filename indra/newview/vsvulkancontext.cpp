@@ -172,6 +172,7 @@ struct VSVulkanContext::Impl
             std::vector<GraphicsAdapterInfo> adapters(count);
             factory->EnumerateAdapters({ 1, 1 }, count, adapters.data());
             EngineVkCreateInfo info{};
+            info.Features.TextureCompressionBC=DEVICE_FEATURE_STATE_OPTIONAL;
             info.EnableValidation = validation;
             info.AdapterId        = 0;
             const char* layer     = "VK_LAYER_KHRONOS_validation";

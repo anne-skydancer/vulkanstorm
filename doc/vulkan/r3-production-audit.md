@@ -328,3 +328,29 @@ validator accepted the collected case files with no errors. Read-only before/
 after cache hashes are present. This qualifies the local bitmap/resource and
 restart subset on the local pinned software runtime; it does not qualify local
 PBR file reload, all production material/terrain paths, or cross-platform R3.
+
+## Worker-side texture compression checkpoint
+
+World remote images can request BC3 when the device advertises usable BC
+textures; unsupported devices keep RGBA. The CPU codec is stb_dxt v1.12 at an
+immutable revision and SHA256, with its MIT license staged among application
+settings. Mip generation and compression run on the existing General work queue;
+GPU creation and publication remain on the rendering thread. Scope, generation
+and serial checks reject late account/region results. Preparation has a shared
+640 MiB reservation pool, with usage reported in resource evidence.
+
+Core UI, font, media and avatar-composite resources remain exact. A world image
+subsequently requested by UI is republished from its local CPU snapshot without
+another network fetch. Small images stay uncompressed when BC3 would cost more.
+Preference changes retain the last valid generation until replacement succeeds.
+New GPU uploads retain charged owners through a completion fence even if their
+producer drops them before the first draw; eviction skips externally held images.
+
+All six software harness modes passed; BC3 was supported and used by the new
+compression chart. Its separately declared eight-unit bound accounts for RGB565
+endpoint quantization; existing charts retain their one-unit bound. Replacement
+and protected-role checks passed. An independent CPU BC3 decoder verified color,
+alpha and padded edge blocks, and malformed preparation payloads were rejected.
+Focused cache/replay regressions passed. Actual viewer worker-path replay is
+pending the canonical rebuild. Embedded glTF image preparation, local PBR reload,
+terrain and the other remaining R3 acceptance requirements are still open.

@@ -18,6 +18,7 @@ enum class OwnerKind { Account, Region, Object, Face, Avatar, ControlAvatar, Att
 enum class ImageOrigin { TopLeft, BottomLeft };
 enum class ColorEncoding { EncodedSRGB, Linear, Data };
 enum class AlphaMode { Opaque, Mask, Blend };
+enum class ImageCompression { None, BC3 };
 enum class ImageRole
 {
     CoreUI,
@@ -44,6 +45,8 @@ struct Image
     ImageRole role=ImageRole::CoreUI;
     std::uint64_t generation=0;
     unsigned mipLevels=1;
+    ImageCompression compression=ImageCompression::None;
+    std::size_t gpuBytes=0;
 };
 // Existing producers publish indexed region-local position/normal/UV0.
 // Optional channels are explicit schema requirements for later producers;
