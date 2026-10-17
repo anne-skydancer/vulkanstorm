@@ -466,3 +466,27 @@ retained derived generation. The cold cache CI case requires this evidence and
 its actual archived source/oracle/readback files. Source compilation and evidence
 failure regressions pass; runtime acceptance of this added world-face exercise
 remains pending its canonical rebuild.
+
+
+The source-qualified `3d4a3fe532` viewer passed the real world-bump exercise in
+12.9 seconds, including all six ObjectUpdate faces, independent GPU pixels,
+source replacement, the normal-scale setting, KillObject and account retirement.
+
+## Inactive rendering resource reclamation
+
+The audit found that distance culling dropped primitive meshes while retaining
+face image/channel references. Those references are now released with the culled
+publication. Inactive glTF scenes release their GPU meshes and embedded images
+while preserving the CPU asset; returning to view rebuilds them. An image epoch
+rejects late preparation completions, including when an image index is reused
+on return. A regression executes the actual preparation/release methods through
+that race, preserving externally retained generations and balancing work leases.
+
+Derived bump allocation now reclaims unused derived images and eligible shared
+world images under budget pressure, without raising existing limits or releasing
+queued/held image owners. The real viewer replay moves its live test object out
+of range and must observe that only the cache and its observer retain the source
+before deleting it. Compilation and focused regressions pass; runtime acceptance
+of the new reclamation check is pending the next canonical build. The glTF
+publication fixture also now supplies the actual viewport argument introduced by
+the projected-demand integration.

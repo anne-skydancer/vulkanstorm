@@ -60,7 +60,7 @@ class LocalImageEvidenceTests(unittest.TestCase):
     def test_world_bumps_require_real_face_lifetimes_sources_and_pixel_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)
-            data=dict(udp_object_update=True,stable_cached_generations=True,object_retired=True,account_retired=True)
+            data=dict(udp_object_update=True,stable_cached_generations=True,object_retired=True,account_retired=True,inactive_faces_release_images=True)
             encode=lambda value:base64.b64encode(value.to_bytes(8,'big')).decode()
             for stage,index in (('initial',0),('source_replaced',1),('scale_changed',2)):
                 rows=[]

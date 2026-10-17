@@ -16,6 +16,7 @@ public:
     VSWorldGLTF(const std::string& filename, VSWorldRenderer&, VSUIResources&, VSResourceBudget, std::function<bool()> current);
     bool ready() const;
     bool hasPublication() const;
+    void releaseRenderingResources();
     ~VSWorldGLTF();
     void append(std::vector<VSWorldRenderer::Packet>&, const LLVector3&, const LLQuaternion&, const LLVector3& scale, const LLVector3& eye,unsigned viewportHeight=1024);
     LLSD evidence() const;

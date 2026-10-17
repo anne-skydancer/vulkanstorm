@@ -199,14 +199,14 @@ struct WorldImages
     std::vector<std::weak_ptr<const VSUIRenderer::Texture>> images;
 };
 std::unique_ptr<WorldImages> worldImages;
-void bumpObjectPacket(VSNativeSession& session)
+void bumpObjectPacket(VSNativeSession& session,bool distant=false)
 {
     LLMessageSystem* msg=gMessageSystem;msg->newMessage("ObjectUpdate");msg->nextBlock("RegionData");
     msg->addU64("RegionHandle",to_region_handle(256,512));msg->addU16("TimeDilation",65535);
     msg->nextBlock("ObjectData");msg->addU32("ID",990);msg->addU8("State",0);msg->addUUID("FullID",bumpObject);
     msg->addU32("CRC",0);msg->addU8("PCode",LL_PCODE_VOLUME);msg->addU8("Material",0);msg->addU8("ClickAction",0);
     msg->addVector3("Scale",LLVector3(1,1,1));
-    const auto position=session.position()+LLVector3(3,4,0);
+    const auto position=session.position()+(distant?LLVector3(5000,5000,5000):LLVector3(3,4,0));
     const F32 pose[15]={position.mV[0],position.mV[1],position.mV[2],0,0,0,0,0,0,0,0,0,0,0,0};
     msg->addBinaryData("ObjectData",pose,sizeof(pose));msg->addU32("ParentID",0);msg->addU32("UpdateFlags",0);
     LLVolumeParams params;LLVolumeMessage::packVolumeParams(&params,msg);
@@ -288,6 +288,17 @@ bool vs_r3_world_images(LLSD& report)
     auto& state=*worldImages;require(LLFrameTimer::getTotalSeconds()<state.deadline,"R3 actual world bump publication timed out");
     if(state.step==3)
     {
+        require(world.object(bumpObject).has_value(),"R3 inactive bump object disappeared before its retirement test");
+        const auto source=resources.image("remote:"+bumpSource.asString());
+        require(bool(source),"R3 inactive source was lost from its cache");
+        if(source.use_count()!=2) return false; // Cache + this observer; queued work must retire first.
+        state.evidence["inactive_faces_release_images"]=true;
+        LLMessageSystem* msg=gMessageSystem;msg->newMessage("KillObject");msg->nextBlock("ObjectData");msg->addU32("ID",990);
+        require(msg->sendReliable(session->host())>0,"R3 bump KillObject transport failed");
+        state.step=4;return false;
+    }
+    if(state.step==4)
+    {
         if(world.object(bumpObject)) return false;
         gSavedSettings.setF32("RenderNormalMapScale",state.originalScale);
         vs_retire_local_image(bumpSource);state.source=false;
@@ -308,10 +319,7 @@ bool vs_r3_world_images(LLSD& report)
     for(const auto& [code,image]:images) state.evidence[stage].append(bumpReadback(state,resources,image,code,stage));
     if(state.step==0) require(vs_publish_local_image(bumpSource,*bumpPixels(1)),"R3 bump source replacement failed");
     else if(state.step==1) gSavedSettings.setF32("RenderNormalMapScale",64);
-    else {
-        LLMessageSystem* msg=gMessageSystem;msg->newMessage("KillObject");msg->nextBlock("ObjectData");msg->addU32("ID",990);
-        require(msg->sendReliable(session->host())>0,"R3 bump KillObject transport failed");
-    }
+    else bumpObjectPacket(*session,true);
     ++state.step;return false;
 }
 void vs_r3_replay_retired(LLSD& report)

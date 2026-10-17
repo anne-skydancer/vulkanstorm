@@ -474,19 +474,20 @@ struct VSWorldGLTF::Impl : std::enable_shared_from_this<Impl>
         std::shared_ptr<const VSResourceBudget::Reservation> residency;
     };
     std::map<unsigned,ImageUpdate> imageUpdates;
+    U64 imageEpoch=1;
     bool prepareImage(unsigned index,const LLPointer<LLImageRaw>& raw,bool wanted)
     {
         auto& update=imageUpdates[index];
         auto lease=resources.reserveImagePreparation(std::size_t(raw->getWidth())*raw->getHeight()*32+16384);
         if(!lease) return false;
         LL::WorkQueue::ptr_t main=LL::WorkQueue::getInstance("mainloop"),general=LL::WorkQueue::getInstance("General");
-        const auto weak=weak_from_this();update.preparing=true;
+        const auto weak=weak_from_this();const auto epoch=imageEpoch;update.preparing=true;
         const bool posted=main->postTo(general,[raw,wanted,lease] {
             using Result=std::pair<VSUIResources::PreparedImage,std::string>;
             try {return Result{VSUIResources::prepareImage(*raw,VSWorldContracts::ImageRole::RemoteAsset,wanted),{}};}
             catch(const std::exception& failure) {return Result{{},failure.what()};}
-        },[weak,index,lease](std::pair<VSUIResources::PreparedImage,std::string> result) {
-            const auto owner=weak.lock();if(!owner || !owner->current() || !owner->error.empty()) return;
+        },[weak,index,lease,epoch](std::pair<VSUIResources::PreparedImage,std::string> result) {
+            const auto owner=weak.lock();if(!owner || !owner->current() || !owner->error.empty() || owner->imageEpoch!=epoch) return;
             auto& state=owner->imageUpdates[index];state.preparing=false;
             if(!result.first) {owner->error="glTF image preparation failed: "+result.second;return;}
             state.prepared=std::move(result.first);state.residency=lease;
@@ -907,6 +908,14 @@ bool VSWorldGLTF::ready() const
         mImpl->imageUpdates.clear();
     }
     return mImpl->ready && mImpl->error.empty();
+}
+void VSWorldGLTF::releaseRenderingResources()
+{
+    if(mImpl->images.empty() && mImpl->imageUpdates.empty() && mImpl->publishedPackets.empty() && mImpl->publications.empty()) return;
+    ++mImpl->imageEpoch; // Reject preparation callbacks from the inactive view.
+    mImpl->publishedPackets.clear();mImpl->publications.clear();mImpl->publicationKnown=false;
+    for(const auto& [index,key]:mImpl->images) mImpl->resources.erase(key);
+    mImpl->images.clear();mImpl->imageUpdates.clear();
 }
 VSWorldGLTF::~VSWorldGLTF() = default;
 void VSWorldGLTF::append(std::vector<VSWorldRenderer::Packet>& packets, const LLVector3& position, const LLQuaternion& rotation,

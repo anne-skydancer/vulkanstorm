@@ -86,6 +86,7 @@ jobs:
       - run: python scripts/tests/test_native_texture_upload.py
       - run: python scripts/tests/test_native_image_batch.py
       - run: python scripts/tests/test_native_image_usage.py
+      - run: python scripts/tests/test_native_gltf_image_lifecycle.py
       - run: python scripts/tests/test_native_local_images.py
       - run: python scripts/tests/test_vulkan_local_image_evidence.py
       - run: python scripts/tests/test_vulkan_texture_cache_evidence.py
