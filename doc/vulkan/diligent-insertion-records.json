@@ -1,5 +1,5 @@
 {
-  "source_commit": "4b73cd5584953554ed1023e8ef4dc722c3949b7e",
+  "source_commit": "0dfd59ac53dc4a2403c84343f3c54d717a457db1",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -13979,70 +13979,70 @@
       "path": "indra/newview/llfloatercolorpicker.cpp",
       "start": 30,
       "end": 33,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 157,
-      "end": 171,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 158,
+      "end": 172,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 265,
-      "end": 265,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 266,
+      "end": 266,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 295,
-      "end": 303,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 296,
+      "end": 304,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 462,
-      "end": 469,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 463,
+      "end": 470,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 539,
-      "end": 547,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 540,
+      "end": 548,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 557,
-      "end": 563,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 558,
+      "end": 564,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 1210,
-      "end": 1216,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 1211,
+      "end": 1217,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Existing skinned connected controls use CPU-native UI resources and exact factory admission; account observers and asynchronous callbacks are retired before account caches. Scene-only actions are guarded. Source review does not establish runtime or live-server acceptance."
@@ -62543,7 +62543,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 28,
       "end": 31,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62552,7 +62552,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 70,
       "end": 73,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62561,7 +62561,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 90,
       "end": 94,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62570,7 +62570,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 140,
       "end": 149,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62579,7 +62579,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 157,
       "end": 157,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62588,7 +62588,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 184,
       "end": 194,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62597,7 +62597,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 274,
       "end": 277,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62606,7 +62606,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 281,
       "end": 289,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62615,7 +62615,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 292,
       "end": 292,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62624,7 +62624,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 302,
       "end": 302,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62633,7 +62633,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 364,
       "end": 369,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62642,7 +62642,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 373,
       "end": 373,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62651,7 +62651,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 381,
       "end": 381,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62660,7 +62660,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 397,
       "end": 397,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62669,7 +62669,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 405,
       "end": 405,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62678,7 +62678,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 432,
       "end": 432,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62687,7 +62687,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 451,
       "end": 452,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62696,7 +62696,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 478,
       "end": 478,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62705,7 +62705,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 482,
       "end": 482,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62714,7 +62714,7 @@
       "path": "indra/newview/llfloaterbuycurrency.cpp",
       "start": 488,
       "end": 488,
-      "sha256": "0da3a3955ff1f33319efa53c6ff372113f0855f8624f7a0a1acaadb97f039552",
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -62847,36 +62847,36 @@
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 265,
-      "end": 265,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 266,
+      "end": 266,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native scene pipette samples the current generation-bearing published primitive face texture entry, feeds existing picker callbacks and inventory permissions, and owns transient mouse/cursor/account state. Shared OpenGL tool remains its peer path. Native selection outline and full tools/connected UI qualification remain open."
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 463,
-      "end": 468,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 464,
+      "end": 469,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native scene pipette samples the current generation-bearing published primitive face texture entry, feeds existing picker callbacks and inventory permissions, and owns transient mouse/cursor/account state. Shared OpenGL tool remains its peer path. Native selection outline and full tools/connected UI qualification remain open."
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 542,
-      "end": 543,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 543,
+      "end": 544,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native scene pipette samples the current generation-bearing published primitive face texture entry, feeds existing picker callbacks and inventory permissions, and owns transient mouse/cursor/account state. Shared OpenGL tool remains its peer path. Native selection outline and full tools/connected UI qualification remain open."
     },
     {
       "path": "indra/newview/llfloatercolorpicker.cpp",
-      "start": 1211,
-      "end": 1215,
-      "sha256": "05febe7057e74e250259e56222122468bf92a8e1b7b5dafe8fe2835c25039764",
+      "start": 1212,
+      "end": 1216,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Native scene pipette samples the current generation-bearing published primitive face texture entry, feeds existing picker callbacks and inventory permissions, and owns transient mouse/cursor/account state. Shared OpenGL tool remains its peer path. Native selection outline and full tools/connected UI qualification remain open."
@@ -63492,6 +63492,24 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "indra/newview/llfloaterbuycurrency.cpp",
+      "start": 276,
+      "end": 276,
+      "sha256": "70e9ce4f2e74fa38b46f43e9c035499a113b9071e5fe6d0f8ebd03d1d7b9e1f4",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
+    },
+    {
+      "path": "indra/newview/llfloatercolorpicker.cpp",
+      "start": 64,
+      "end": 64,
+      "sha256": "ccce1747b0a4e8b937eba1c3b79d68169bf92e96ba41de999a326e4c5c8dff70",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Native scene pipette samples the current generation-bearing published primitive face texture entry, feeds existing picker callbacks and inventory permissions, and owns transient mouse/cursor/account state. Shared OpenGL tool remains its peer path. Native selection outline and full tools/connected UI qualification remain open."
     }
   ]
 }
