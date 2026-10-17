@@ -1303,6 +1303,7 @@ bool vs_native_replay_tick()
 {
     if (!std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY")) return false;
     vs_r1_replay_pump();
+    vs_r3_pressure_replay_pump();
     static Replay replay;
     if (auto owner = VSNativeSession::active()) replay.tick(*owner);
     return true;

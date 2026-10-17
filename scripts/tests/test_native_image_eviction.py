@@ -10,6 +10,45 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class NativeImageEvictionTests(unittest.TestCase):
+    def test_shared_world_demand_keeps_peak_until_consumers_finish(self):
+        text = (ROOT / 'indra/newview/vsuiimageprovider.cpp').read_text()
+        request = method(text, 'LLUIImagePtr VSUIImageProvider::requestWorldImage(const LLUUID& id,unsigned dimension,bool exact)')
+        request = request.replace('VSUIImageProvider::', '')
+        source = r"""
+#include <algorithm>
+#include <cassert>
+#include <map>
+#include <memory>
+#include <vector>
+struct LLUUID {int id;bool isNull()const{return !id;}bool operator<(LLUUID rhs)const{return id<rhs.id;}};
+using LLUIImagePtr=std::shared_ptr<int>;
+struct Remote {bool exactWorld=false;unsigned target=64,previousTarget=0,frameTarget=0;unsigned long long demandFrame=0;};
+struct Impl {std::map<LLUUID,Remote> remote;unsigned long long demandFrame=0;bool evict(LLUUID,bool){return false;}};
+struct Provider {
+ std::shared_ptr<Impl> mImpl=std::make_shared<Impl>();std::vector<unsigned> submitted;
+ LLUIImagePtr getUIImageByID(LLUUID id,int){submitted.push_back(mImpl->remote[id].target);return {};}
+ REQUEST
+};
+int main(){
+ Provider p;LLUUID id{1};
+ p.requestWorldImage(id,1024,false);assert(p.submitted.back()==1024);
+ ++p.mImpl->demandFrame;
+ p.requestWorldImage(id,32,false);assert(p.submitted.back()==1024);
+ p.requestWorldImage(id,256,false);assert(p.submitted.back()==1024);
+ p.requestWorldImage(id,1024,false);assert(p.submitted.back()==1024);
+ ++p.mImpl->demandFrame;
+ p.requestWorldImage(id,32,false);assert(p.submitted.back()==1024);
+ ++p.mImpl->demandFrame;
+ p.requestWorldImage(id,32,false);assert(p.submitted.back()==32);
+ p.requestWorldImage(id,256,true);assert(p.submitted.back()==256 && p.mImpl->remote[id].exactWorld);
+ p.requestWorldImage(id,1,false);assert(p.submitted.back()==256 && p.mImpl->remote[id].exactWorld);
+ p.requestWorldImage({2},0,false);assert(p.submitted.back()==1);
+ p.requestWorldImage({3},9000,false);assert(p.submitted.back()==4096);
+ auto size=p.submitted.size();p.requestWorldImage({0},64,false);assert(p.submitted.size()==size);
+}
+""".replace('REQUEST', request)
+        self.compile_and_run(source)
+
     def test_inactive_world_publications_release_all_image_owners(self):
         text = (ROOT / 'indra/newview/vsworldscene.cpp').read_text()
         release = method(text, 'void releaseRenderingResources()')
