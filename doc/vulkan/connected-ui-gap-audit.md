@@ -397,3 +397,53 @@ No foreground UI was launched. This batch has no new live-account, graphics
 readback, all-skin screenshot, external media or vendor-driver runtime evidence.
 The staged executable is available for user qualification; pending runtime
 checks and the concrete residual services above remain open.
+
+
+## First-world rendering admission reconciliation (17 October 2026)
+
+The text-only stage is no longer a valid blanket reason to disable connected UI.
+Native construction remains a closed set because the native scene is not an
+LLWorld/LLViewerObject scene. First geometry does not make controllers that
+explicitly depend on those reference owners safe to construct. Each remaining
+restriction must be justified by its actual missing service and ported to the
+native equivalent; it is an implementation gap, not completed UI parity.
+
+This checkpoint restores the existing Animation Overrider floater, its toolbar
+command, selected-skin XUI, full/compact controls, set selection and activation.
+The actual AO engine, inventory link operations and animation transport were
+already integrated in R2; their UI admission was obsolete. No replacement AO
+frontend or animation engine is introduced. The editor retires before account
+sets are destroyed, owns its engine signal connections, and uses weak floater
+handles for asynchronous set creation and confirmation. Removal confirmation
+also checks the original inventory set identity and current selection.
+
+The Online Status menu now admits the existing Do Not Disturb, autorespond,
+non-friend autorespond, reject teleport offers, reject friendship requests and
+reject group invitations controllers and state checks. The ad-hoc conference
+settings use their ordinary saved controls. These are shared account policies,
+not graphics capabilities; their old exclusion was unjustified.
+
+The connected replay constructs/draws the actual AO editor in both layouts and
+commits each of the six status menu items twice, requiring the actual LLAgent
+state to toggle and restore. The R2 replay selects and activates its real
+inventory-backed AO set through the shared editor controls before verifying
+simulator animation transport. These run within existing headless replays and
+skin selection; no foreground test windows are introduced.
+
+Concrete remaining integration dependencies found during this pass:
+
+| UI route | Missing production integration, rather than a text-only exemption |
+| --- | --- |
+| Movement controls | Shared joystick drawing still constructs GL state; button movement/yaw and capture release must reach the native movement/camera owner. |
+| Camera controls | Joysticks and presets target LLAgentCamera, whereas native presentation uses VSNativeCamera; both actions and displayed state need transposition. |
+| Away status | LLAgent::setAFK rejects a connected native session because it requires LLViewerRegion; native account/region readiness and sit-on-away need integration. |
+| World map, minimap, Place Details and history/profile map actions | Map/parcel controllers require their own data and presentation owners; rendered terrain alone does not supply them. |
+| Nearby People/radar | Spatial list/model feed and native object/avatar identity resolution must replace LLWorld lookups. |
+| Build/edit, object and land context menus | Picking, selection, permission and parcel services must resolve the native scene, not uninitialized reference globals. |
+| Asset Blacklist and Sound Explorer | Mixed CPU browsing/persistence/audition and native scene derender/source/camera operations still require integration. |
+| Gestures frontend/editor | Engine and wire path exist; frontend admission, save capability routing and account-scoped asynchronous callbacks remain to be integrated. |
+| Environment/graphics controls | Controls must target implemented native render state; enabling a GL-only shader/pipeline callback is not integration. |
+
+This list records concrete observed dependencies, not an exhaustive declaration
+that every remaining UI route has been qualified. No full connected-UI parity
+claim follows from first-world rendering or this checkpoint.

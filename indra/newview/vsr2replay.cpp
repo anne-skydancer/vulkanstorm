@@ -38,6 +38,10 @@
 #include "llgesturemgr.h"
 #include "lldatapacker.h"
 #include "aoengine.h"
+#include "ao.h"
+#include "llfloaterreg.h"
+#include "llcombobox.h"
+#include "llbutton.h"
 #include "aoset.h"
 #include "llanimationstates.h"
 #include "llsdserialize.h"
@@ -1465,7 +1469,16 @@ struct Replay
             if (linked == links.end())
                 return false;
             require((*linked)->getAssetUUID() == animationID, "R2 AO inventory link resolved to a different animation asset");
-            AOEngine::instance().selectSet(set);
+            auto* editor = LLFloaterReg::showTypedInstance<FloaterAO>("animation_overrider");
+            require(editor, "R2 shared AO editor is not wired");
+            editor->updateList();
+            auto* selector = editor->getChild<LLComboBox>("ao_set_selection_combo");
+            selector->setSimple(LLStringExplicit("R2 production replay"));
+            selector->onCommit();
+            editor->getChild<LLButton>("ao_activate")->onCommit();
+            require(AOEngine::instance().getCurrentSet() == set, "R2 AO editor did not activate the selected inventory set");
+            editor->closeFloater();
+            evidence["ao_editor_activation"] = true;
             AOEngine::instance().enable(true);
             require(session.requestAnimations({ ANIM_AGENT_STAND }, true), "R2 ordinary stand animation request failed");
             ++step;
