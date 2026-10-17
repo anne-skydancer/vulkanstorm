@@ -2890,6 +2890,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             auto image=channelImages[0];
             if(!explicitAlpha && image && surface.alpha==VSWorldContracts::AlphaMode::Opaque)
                 surface.alpha=VSUIRenderer::imageDescription(image).alpha;
+            for(auto& sampler:surface.samplers) sampler.anisotropy=gSavedSettings.getBOOL("RenderAnisotropic")?16u:1u;
             if(!face.surface || !(*face.surface==surface)) face.surface=std::make_shared<VSMaterial::State>(surface);
             std::copy_n(channelImages.begin()+1,3,face.publishedChannels.begin());
             const U64 poseGeneration = riggedOwner ? riggedOwner->poseGeneration() : 0;

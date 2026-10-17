@@ -1,6 +1,9 @@
 // Vulkanstorm native UI substrate. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "vsuirenderer.h"
+#include "vsimagemips.h"
+#include <tuple>
+#include <map>
 #include "vsresourcebudget.h"
 #pragma push_macro("Bool")
 #pragma push_macro("False")
@@ -45,6 +48,8 @@ struct VSUIRenderer::Texture
     VSWorldContracts::Image description;
     std::shared_ptr<const VSResourceBudget::Reservation> residency;
     bool                                                 fontAtlas = false;
+    using SamplerKey=std::tuple<int,int,int,int,bool,bool,unsigned>;
+    mutable std::map<SamplerKey,RefCntAutoPtr<ITextureView>> sampledViews;
 };
 struct VSUIRenderer::Impl
 {
@@ -73,7 +78,7 @@ struct VSUIRenderer::Impl
     {
         if (role == VSWorldContracts::ImageRole::AvatarComposite)
             return compositeImages;
-        if (role == VSWorldContracts::ImageRole::RemoteAsset)
+        if (role == VSWorldContracts::ImageRole::RemoteAsset || role == VSWorldContracts::ImageRole::Media)
             return remoteImages;
         return coreImages;
     }
@@ -176,7 +181,9 @@ VSUIRenderer::FontAtlas VSUIRenderer::uploadTexture(unsigned width, unsigned hei
     if (width>maximum || height>maximum) {++mImpl->imageAllocationRefusals;return {};}
     auto& budget = mImpl->imageBudget(role);
     // Charge both the GPU payload and the retained independent CPU snapshot.
-    auto residency=budget.reserve(rgba.size()*2);
+    const bool mipmaps=!fontAtlas && (role==VSWorldContracts::ImageRole::RemoteAsset || role==VSWorldContracts::ImageRole::AvatarComposite);
+    const auto gpuBytes=VSImageMips::bytes(width,height,mipmaps);
+    auto residency=budget.reserve(rgba.size()+gpuBytes);
     if (!residency) {++mImpl->imageAllocationRefusals;return {};}
     auto image = std::make_shared<Texture>();
     image->residency=std::move(residency);
@@ -187,13 +194,17 @@ VSUIRenderer::FontAtlas VSUIRenderer::uploadTexture(unsigned width, unsigned hei
     desc.Usage                                                       = fontAtlas ? USAGE_DEFAULT : USAGE_IMMUTABLE;
     desc.BindFlags                                                   = BIND_SHADER_RESOURCE;
     image->fontAtlas                                                 = fontAtlas;
-    TextureSubResData sub{}; sub.pData = rgba.data(); sub.Stride = std::uint64_t(width) * 4;
-    TextureData data{&sub, 1}; mImpl->device->CreateTexture(desc, &data, &image->resource);
+    const auto levels=VSImageMips::build(width,height,rgba,mipmaps);
+    desc.MipLevels=static_cast<Uint32>(levels.size());
+    std::vector<TextureSubResData> subresources;
+    for(const auto& level:levels) {TextureSubResData sub{};sub.pData=level.pixels.data();sub.Stride=Uint64(level.width)*4;subresources.push_back(sub);}
+    TextureData data{subresources.data(),static_cast<Uint32>(subresources.size())};mImpl->device->CreateTexture(desc,&data,&image->resource);
     check(image->resource != nullptr, "Native UI texture upload failed");
     image->generation = mImpl->next_generation++;
     image->description={width,height,4,VSWorldContracts::ImageOrigin::TopLeft,
         VSWorldContracts::ColorEncoding::EncodedSRGB,VSWorldContracts::AlphaMode::Blend,role,image->generation};
     image->description.alpha=alphaMode(rgba);
+    image->description.mipLevels=desc.MipLevels;
     image->pixels=rgba;
     return image;
 }
@@ -229,6 +240,13 @@ VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y
     auto desc=old->resource->GetDesc();
     check(width && height && x<=desc.Width && y<=desc.Height && width<=desc.Width-x && height<=desc.Height-y &&
           rgba.size()==std::size_t(width)*height*4,"Invalid native UI replacement patch");
+    if(desc.MipLevels>1)
+    {
+        auto replacement=old->pixels;
+        for(unsigned row=0;row<height;++row)
+            std::copy_n(rgba.data()+std::size_t(row)*width*4,width*4,replacement.data()+(std::size_t(y+row)*desc.Width+x)*4);
+        return upload(desc.Width,desc.Height,replacement,old->description.role);
+    }
     auto& budget   = mImpl->imageBudget(old->description.role);
     auto residency=budget.reserve(old->pixels.size()*2);
     if (!residency) {++mImpl->imageAllocationRefusals;return {};}
@@ -383,6 +401,33 @@ VSUIRenderer::Statistics VSUIRenderer::statistics() const
 }
 VSWorldContracts::Image VSUIRenderer::imageDescription(const Image& image)
 { return image?image->description:VSWorldContracts::Image{}; }
+Diligent::ITextureView* VSUIRenderer::imageView(const Image& image,const VSWorldContracts::Sampler& input)
+{
+    if(!image) return nullptr;
+    const auto& capabilities=image->owner->GetAdapterInfo().Sampler;
+    const bool aniso=capabilities.MaxAnisotropy>1;
+    const unsigned anisotropy=aniso?std::clamp(input.anisotropy,1u,unsigned(capabilities.MaxAnisotropy)):1u;
+    const Texture::SamplerKey key{int(input.minification),int(input.magnification),int(input.u),int(input.v),input.mipmaps,input.trilinear,anisotropy};
+    if(const auto found=image->sampledViews.find(key);found!=image->sampledViews.end()) return found->second;
+    SamplerDesc sampler{};
+    sampler.MinFilter=input.minification==VSWorldContracts::Filter::Nearest?FILTER_TYPE_POINT:FILTER_TYPE_LINEAR;
+    sampler.MagFilter=input.magnification==VSWorldContracts::Filter::Nearest?FILTER_TYPE_POINT:FILTER_TYPE_LINEAR;
+    sampler.MipFilter=input.trilinear?FILTER_TYPE_LINEAR:FILTER_TYPE_POINT;
+    if(anisotropy>1) sampler.MinFilter=sampler.MagFilter=sampler.MipFilter=FILTER_TYPE_ANISOTROPIC;
+    sampler.MaxAnisotropy=anisotropy;
+    sampler.MaxLOD=input.mipmaps?float(image->description.mipLevels-1):0;
+    const auto address=[](VSWorldContracts::AddressMode mode) {return mode==VSWorldContracts::AddressMode::Clamp?TEXTURE_ADDRESS_CLAMP:
+        mode==VSWorldContracts::AddressMode::Mirror?TEXTURE_ADDRESS_MIRROR:TEXTURE_ADDRESS_WRAP;};
+    sampler.AddressU=address(input.u);sampler.AddressV=address(input.v);sampler.AddressW=TEXTURE_ADDRESS_CLAMP;
+    RefCntAutoPtr<ISampler> state;image->owner->CreateSampler(sampler,&state);check(state!=nullptr,"Native image sampler creation failed");
+    auto description=image->resource->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->GetDesc();
+    RefCntAutoPtr<ITextureView> view;image->resource->CreateView(description,&view);check(view!=nullptr,"Native sampled image view creation failed");
+    view->SetSampler(state);
+    // A finite sampler lattice is owned by the image generation itself. It
+    // cannot keep an evicted image's residency alive through a global cache.
+    check(image->sampledViews.size()<512,"Native image sampler variant bound exceeded");
+    auto inserted=image->sampledViews.emplace(key,std::move(view));return inserted.first->second;
+}
 bool VSUIRenderer::imageOwnedBy(const Image& image,const IRenderDevice* device)
 { return image && image->owner.RawPtr()==device; }
 VSWorldContracts::Capabilities VSUIRenderer::capabilities() const

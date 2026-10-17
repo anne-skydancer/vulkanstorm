@@ -61,6 +61,7 @@ public:
     static std::array<unsigned,2> imageExtent(const Image&);
     // Borrowed view; callers retain the exact Image generation through completion.
     static Diligent::ITextureView* imageView(const Image&);
+    static Diligent::ITextureView* imageView(const Image&,const VSWorldContracts::Sampler&);
     static VSWorldContracts::Image imageDescription(const Image&);
     static bool imageOwnedBy(const Image&, const Diligent::IRenderDevice*);
     VSWorldContracts::Capabilities capabilities() const;

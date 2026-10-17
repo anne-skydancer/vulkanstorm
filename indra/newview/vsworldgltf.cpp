@@ -1,5 +1,6 @@
 // Native glTF scene ownership and CPU animation. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "llviewercontrol.h"
 #include "vsworldgltf.h"
 #include "vsuiresources.h"
 #include "gltf/asset.h"
@@ -1056,6 +1057,18 @@ void VSWorldGLTF::append(std::vector<VSWorldRenderer::Packet>& packets, const LL
                     if(set<0 || set>1 || (set==1 && primitive.mTexCoords1.size()!=primitive.mPositions.size()))
                     {owner.error="glTF material requests an absent UV channel";return;}
                     surface->uvSet[channel]=unsigned(set);
+                    auto& sampling=surface->samplers[channel];sampling.mipmaps=true;
+                    sampling.anisotropy=gSavedSettings.getBOOL("RenderAnisotropic")?16u:1u;
+                    if(index(texture,asset.mTextures) && index(asset.mTextures[texture].mSampler,asset.mSamplers))
+                    {
+                        const auto& sampler=asset.mSamplers[asset.mTextures[texture].mSampler];
+                        sampling.minification=(sampler.mMinFilter==9728 || sampler.mMinFilter==9984 || sampler.mMinFilter==9986)?VSWorldContracts::Filter::Nearest:VSWorldContracts::Filter::Linear;
+                        sampling.magnification=sampler.mMagFilter==9728?VSWorldContracts::Filter::Nearest:VSWorldContracts::Filter::Linear;
+                        sampling.mipmaps=sampler.mMinFilter>=9984;sampling.trilinear=sampler.mMinFilter>=9986;
+                        const auto wrap=[](S32 value) {return value==33071?VSWorldContracts::AddressMode::Clamp:
+                            value==33648?VSWorldContracts::AddressMode::Mirror:VSWorldContracts::AddressMode::Repeat;};
+                        sampling.u=wrap(sampler.mWrapS);sampling.v=wrap(sampler.mWrapT);
+                    }
                     const auto& source=info.mTextureTransform;
                     const float c=std::cos(source.mRotation),r=std::sin(source.mRotation);
                     surface->uv[channel].matrix={c*source.mScale.x,r*source.mScale.x,-r*source.mScale.y,c*source.mScale.y};

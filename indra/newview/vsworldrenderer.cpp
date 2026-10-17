@@ -118,6 +118,10 @@ struct VSWorldRenderer::Impl
         const Uint32 pixel=0xffffffff;
         TextureSubResData sr{};sr.pData=&pixel;sr.Stride=4;TextureData data{&sr,1};
         device->CreateTexture(td,&data,&white);requireWorld(white!=nullptr,"World fallback texture failed");
+        SamplerDesc sampler{};sampler.MinFilter=sampler.MagFilter=FILTER_TYPE_LINEAR;sampler.MipFilter=FILTER_TYPE_POINT;
+        sampler.AddressU=sampler.AddressV=sampler.AddressW=TEXTURE_ADDRESS_WRAP;
+        RefCntAutoPtr<ISampler> whiteSampler;device->CreateSampler(sampler,&whiteSampler);
+        requireWorld(whiteSampler!=nullptr,"World fallback sampler creation failed");white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)->SetSampler(whiteSampler);
     }
     IPipelineState* pipeline(TEXTURE_FORMAT format, bool alpha, bool background, Topology topology, bool doubleSided)
     {
@@ -238,12 +242,6 @@ void main() {
         blend.SrcBlend=BLEND_FACTOR_SRC_ALPHA;blend.DestBlend=BLEND_FACTOR_INV_SRC_ALPHA;
         blend.SrcBlendAlpha=BLEND_FACTOR_ONE;blend.DestBlendAlpha=BLEND_FACTOR_INV_SRC_ALPHA;
         ci.PSODesc.ResourceLayout.DefaultVariableType=SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
-        SamplerDesc sampler{};sampler.MinFilter=sampler.MagFilter=FILTER_TYPE_LINEAR;
-        sampler.MipFilter=FILTER_TYPE_POINT;
-        sampler.AddressU=sampler.AddressV=sampler.AddressW=TEXTURE_ADDRESS_WRAP;
-        const ImmutableSamplerDesc immutable[]={{SHADER_TYPE_PIXEL,"g_Texture",sampler}, {SHADER_TYPE_PIXEL,"g_Normal",sampler},
-            {SHADER_TYPE_PIXEL,"g_ORM",sampler}, {SHADER_TYPE_PIXEL,"g_Emissive",sampler}};
-        ci.PSODesc.ResourceLayout.NumImmutableSamplers=4;ci.PSODesc.ResourceLayout.ImmutableSamplers=immutable;
         device->CreateGraphicsPipelineState(ci,&result);requireWorld(result!=nullptr,"World pipeline creation failed");
         return result;
     }
@@ -613,7 +611,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         }
         auto* texture=resources.binding->GetVariableByName(SHADER_TYPE_PIXEL,"g_Texture");
         requireWorld(texture!=nullptr,"World texture binding missing");
-        texture->Set(p.image ? VSUIRenderer::imageView(p.image) : mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
+        texture->Set(p.image ? VSUIRenderer::imageView(p.image,p.surface?p.surface->samplers[0]:VSWorldContracts::Sampler{}) : mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
                      SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
         const char* channels[]{"g_Normal","g_ORM","g_Emissive"};
         for (unsigned channel=0;channel<3;++channel)
@@ -622,7 +620,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
             requireWorld(variable!=nullptr,"World material channel binding missing");
             requireWorld(!p.channels[channel] || VSUIRenderer::imageOwnedBy(p.channels[channel],mImpl->device),
                          "World material image belongs to another device");
-            variable->Set(p.channels[channel] ? VSUIRenderer::imageView(p.channels[channel]) :
+            variable->Set(p.channels[channel] ? VSUIRenderer::imageView(p.channels[channel],p.surface?p.surface->samplers[channel+1]:VSWorldContracts::Sampler{}) :
                 mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
         }
         context->SetPipelineState(pipeline);

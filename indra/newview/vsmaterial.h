@@ -22,6 +22,7 @@ struct State
     std::array<std::array<std::uint8_t, 16>, ChannelCount> textures{};
     std::array<Transform, ChannelCount> uv;
     std::array<unsigned, ChannelCount> uvSet{};
+    std::array<VSWorldContracts::Sampler, ChannelCount> samplers;
     float normalScale=1, occlusionStrength=1;
     std::array<float, 4> base{1, 1, 1, 1}, specular{1, 1, 1, 0};
     std::array<float, 3> emissive{};
@@ -31,8 +32,8 @@ struct State
     bool pbr = false, fullbright = false, doubleSided = false, emissiveAlpha = false;
     bool operator==(const State& rhs) const
     {
-        return std::tie(textures,uv,uvSet,normalScale,occlusionStrength,base,specular,emissive,metallic,roughness,cutoff,glow,bump,shiny,alpha,pbr,fullbright,doubleSided,emissiveAlpha)==
-            std::tie(rhs.textures,rhs.uv,rhs.uvSet,rhs.normalScale,rhs.occlusionStrength,rhs.base,rhs.specular,rhs.emissive,rhs.metallic,rhs.roughness,rhs.cutoff,rhs.glow,rhs.bump,rhs.shiny,rhs.alpha,rhs.pbr,rhs.fullbright,rhs.doubleSided,rhs.emissiveAlpha);
+        return std::tie(textures,uv,uvSet,samplers,normalScale,occlusionStrength,base,specular,emissive,metallic,roughness,cutoff,glow,bump,shiny,alpha,pbr,fullbright,doubleSided,emissiveAlpha)==
+            std::tie(rhs.textures,rhs.uv,rhs.uvSet,rhs.samplers,rhs.normalScale,rhs.occlusionStrength,rhs.base,rhs.specular,rhs.emissive,rhs.metallic,rhs.roughness,rhs.cutoff,rhs.glow,rhs.bump,rhs.shiny,rhs.alpha,rhs.pbr,rhs.fullbright,rhs.doubleSided,rhs.emissiveAlpha);
     }
 };
 Transform legacyUV(float scaleS, float scaleT, float offsetS, float offsetT, float rotation);
