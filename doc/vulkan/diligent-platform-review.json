@@ -1,5 +1,5 @@
 {
-  "source_commit": "8bd5649c5ae737071def53d3a5b0bfa9868a9889",
+  "source_commit": "0f1c4acf97396cb079c5227ed8681c7297e24af1",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -37833,8 +37833,8 @@
     {
       "path": "scripts/tests/test_native_texture_cache.py",
       "start": 1,
-      "end": 126,
-      "sha256": "34211e72f1a4666d688f2af63c5af1d6a72c88614dd00cf94b46d7e9a22e3db5",
+      "end": 128,
+      "sha256": "8a4097a43465cdefcff68bf48e1776160f5549aab9abd2747144d8249c7e90a9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and run actual native cache bridge against controlled complete/partial/corrupt/timeout/shutdown and late-callback states; retain encoded writer memory/budget until retirement. Add to existing source-evidence job. This fixture does not qualify real disk restart reuse or R3 as a whole."
@@ -39166,7 +39166,7 @@
       "path": "indra/newview/lltexturefetch.cpp",
       "start": 555,
       "end": 555,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -39175,7 +39175,7 @@
       "path": "indra/newview/lltexturefetch.cpp",
       "start": 1287,
       "end": 1287,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -39184,7 +39184,7 @@
       "path": "indra/newview/lltexturefetch.cpp",
       "start": 1375,
       "end": 1381,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -39193,7 +39193,7 @@
       "path": "indra/newview/lltexturefetch.cpp",
       "start": 1457,
       "end": 1457,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -39202,7 +39202,7 @@
       "path": "indra/newview/lltexturefetch.cpp",
       "start": 1715,
       "end": 1721,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -39211,7 +39211,7 @@
       "path": "indra/newview/lltexturefetch.cpp",
       "start": 1833,
       "end": 1833,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -39220,7 +39220,7 @@
       "path": "indra/newview/lltexturefetch.cpp",
       "start": 1879,
       "end": 1885,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -39228,71 +39228,71 @@
     {
       "path": "indra/newview/lltexturefetch.cpp",
       "start": 2015,
-      "end": 2039,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "end": 2040,
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2753,
-      "end": 2753,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "start": 2754,
+      "end": 2754,
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2755,
-      "end": 2755,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "start": 2756,
+      "end": 2756,
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2789,
-      "end": 2797,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "start": 2790,
+      "end": 2798,
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2865,
-      "end": 2866,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "start": 2866,
+      "end": 2867,
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2911,
-      "end": 2912,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "start": 2912,
+      "end": 2913,
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 3243,
-      "end": 3257,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "start": 3244,
+      "end": 3258,
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 3383,
-      "end": 3383,
-      "sha256": "f88431582a029ebc08cd516a4ceb36acd8a840ede6b79e87e9726771ca62e337",
+      "start": 3384,
+      "end": 3384,
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -39616,7 +39616,7 @@
       "path": "scripts/tests/test_native_texture_cache.py",
       "start": 1,
       "end": 1,
-      "sha256": "34211e72f1a4666d688f2af63c5af1d6a72c88614dd00cf94b46d7e9a22e3db5",
+      "sha256": "8a4097a43465cdefcff68bf48e1776160f5549aab9abd2747144d8249c7e90a9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -39625,7 +39625,7 @@
       "path": "scripts/tests/test_native_texture_cache.py",
       "start": 3,
       "end": 5,
-      "sha256": "34211e72f1a4666d688f2af63c5af1d6a72c88614dd00cf94b46d7e9a22e3db5",
+      "sha256": "8a4097a43465cdefcff68bf48e1776160f5549aab9abd2747144d8249c7e90a9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -39634,7 +39634,7 @@
       "path": "scripts/tests/test_native_texture_cache.py",
       "start": 7,
       "end": 11,
-      "sha256": "34211e72f1a4666d688f2af63c5af1d6a72c88614dd00cf94b46d7e9a22e3db5",
+      "sha256": "8a4097a43465cdefcff68bf48e1776160f5549aab9abd2747144d8249c7e90a9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -39643,7 +39643,7 @@
       "path": "scripts/tests/test_native_texture_cache.py",
       "start": 13,
       "end": 83,
-      "sha256": "34211e72f1a4666d688f2af63c5af1d6a72c88614dd00cf94b46d7e9a22e3db5",
+      "sha256": "8a4097a43465cdefcff68bf48e1776160f5549aab9abd2747144d8249c7e90a9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -39652,25 +39652,25 @@
       "path": "scripts/tests/test_native_texture_cache.py",
       "start": 85,
       "end": 114,
-      "sha256": "34211e72f1a4666d688f2af63c5af1d6a72c88614dd00cf94b46d7e9a22e3db5",
+      "sha256": "8a4097a43465cdefcff68bf48e1776160f5549aab9abd2747144d8249c7e90a9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/tests/test_native_texture_cache.py",
-      "start": 116,
-      "end": 117,
-      "sha256": "34211e72f1a4666d688f2af63c5af1d6a72c88614dd00cf94b46d7e9a22e3db5",
+      "start": 118,
+      "end": 119,
+      "sha256": "8a4097a43465cdefcff68bf48e1776160f5549aab9abd2747144d8249c7e90a9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/tests/test_native_texture_cache.py",
-      "start": 119,
-      "end": 126,
-      "sha256": "34211e72f1a4666d688f2af63c5af1d6a72c88614dd00cf94b46d7e9a22e3db5",
+      "start": 121,
+      "end": 128,
+      "sha256": "8a4097a43465cdefcff68bf48e1776160f5549aab9abd2747144d8249c7e90a9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -39719,10 +39719,37 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute production material shaders with independent opaque, linear-factor, emissive and UV pixel charts; retain existing strict validation and negative controls. This does not qualify all R3 production paths."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 2033,
+      "end": 2033,
+      "sha256": "6aa490c4f378666ea7b6825e283b177a5ccacdec6b448c56550cbfaf21a9143e",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "scripts/tests/test_native_texture_cache.py",
+      "start": 89,
+      "end": 89,
+      "sha256": "8a4097a43465cdefcff68bf48e1776160f5549aab9abd2747144d8249c7e90a9",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_native_texture_cache.py",
+      "start": 116,
+      "end": 117,
+      "sha256": "8a4097a43465cdefcff68bf48e1776160f5549aab9abd2747144d8249c7e90a9",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "f15a16ccec4653bd6e21f16eb3c4827a882734f3",
+    "previous_source_commit": "625cfa194e00b9734677cb6e93dd2d7689803649",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
