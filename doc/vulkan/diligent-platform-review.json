@@ -1,5 +1,5 @@
 {
-  "source_commit": "dab1a4c422e69f35fab3784d87e974fd103b4920",
+  "source_commit": "3e2824b440d36534adcab00d245bce58de472923",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -28168,43 +28168,43 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 80,
       "end": 83,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 115,
-      "end": 115,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
+      "start": 131,
+      "end": 131,
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 118,
-      "end": 118,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
+      "start": 134,
+      "end": 134,
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 124,
-      "end": 124,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
-    },
-    {
-      "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 137,
+      "start": 140,
       "end": 140,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
+    },
+    {
+      "path": "scripts/tests/test_native_simulator_features.py",
+      "start": 153,
+      "end": 156,
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -28366,7 +28366,7 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 40,
       "end": 40,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -28815,8 +28815,8 @@
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
       "start": 1,
-      "end": 224,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "end": 251,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -34629,8 +34629,8 @@
     {
       "path": "scripts/tests/test_avatar_bake_signature.py",
       "start": 1,
-      "end": 80,
-      "sha256": "09c2f203ea1fea2a7b42a6124496d15ed816b236cfce7b9fd624a934d07088c7",
+      "end": 87,
+      "sha256": "d4b25d47ad0ee2e1bd4b6328100ca2a2e7c59b7a18b102eb4f965e25233328bf",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34656,8 +34656,8 @@
     {
       "path": "scripts/tests/test_avatar_image_pool.py",
       "start": 1,
-      "end": 62,
-      "sha256": "47bfe921a50382a5658a2bc83b74b122c2022eae4b5e41738876d3a94c563a76",
+      "end": 63,
+      "sha256": "678e48d4cee11a80ade07761a6aeecf029a7e012534cba6394db11532e31db1d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34783,7 +34783,7 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 7,
       "end": 7,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34792,16 +34792,7 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 13,
       "end": 20,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 116,
-      "end": 116,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34810,16 +34801,25 @@
       "path": "scripts/tests/test_native_simulator_features.py",
       "start": 132,
       "end": 132,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_native_simulator_features.py",
-      "start": 138,
-      "end": 139,
-      "sha256": "0deb5fc3bd03b492ff3c0beac50bfee5074b0a0ed4a91a9f95ab18383d572966",
+      "start": 148,
+      "end": 148,
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_native_simulator_features.py",
+      "start": 154,
+      "end": 155,
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35008,106 +35008,70 @@
       "path": "scripts/tests/test_world_scene_replacement.py",
       "start": 32,
       "end": 32,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 38,
-      "end": 38,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 39,
+      "end": 39,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 56,
-      "end": 58,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 57,
+      "end": 59,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 69,
-      "end": 70,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 76,
+      "end": 79,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 73,
-      "end": 75,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 82,
+      "end": 84,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 80,
-      "end": 81,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 89,
+      "end": 90,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 85,
-      "end": 85,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 96,
+      "start": 97,
       "end": 97,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 99,
-      "end": 100,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 103,
-      "end": 103,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 106,
-      "end": 107,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 111,
-      "end": 111,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 108,
+      "end": 109,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35116,7 +35080,34 @@
       "path": "scripts/tests/test_world_scene_replacement.py",
       "start": 116,
       "end": 117,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 120,
+      "end": 120,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 123,
+      "end": 124,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 130,
+      "end": 130,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35124,62 +35115,71 @@
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
       "start": 135,
-      "end": 143,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "end": 136,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 165,
-      "end": 165,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 162,
+      "end": 170,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 184,
-      "end": 185,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 192,
+      "end": 192,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 187,
-      "end": 187,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 211,
+      "end": 212,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 189,
-      "end": 189,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 214,
+      "end": 214,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 195,
-      "end": 198,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 216,
+      "end": 216,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_world_scene_replacement.py",
-      "start": 200,
-      "end": 200,
-      "sha256": "e140e98a6bd7dc53561f4777846483c77bcbaee8333ef8efef5b1036836062ba",
+      "start": 222,
+      "end": 225,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 227,
+      "end": 227,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45965,10 +45965,145 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute production material shaders with independent opaque, linear-factor, emissive and UV pixel charts; retain existing strict validation and negative controls. This does not qualify all R3 production paths."
+    },
+    {
+      "path": "scripts/tests/test_avatar_bake_signature.py",
+      "start": 32,
+      "end": 34,
+      "sha256": "d4b25d47ad0ee2e1bd4b6328100ca2a2e7c59b7a18b102eb4f965e25233328bf",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_avatar_bake_signature.py",
+      "start": 70,
+      "end": 73,
+      "sha256": "d4b25d47ad0ee2e1bd4b6328100ca2a2e7c59b7a18b102eb4f965e25233328bf",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_avatar_image_pool.py",
+      "start": 38,
+      "end": 38,
+      "sha256": "678e48d4cee11a80ade07761a6aeecf029a7e012534cba6394db11532e31db1d",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_avatar_image_pool.py",
+      "start": 53,
+      "end": 53,
+      "sha256": "678e48d4cee11a80ade07761a6aeecf029a7e012534cba6394db11532e31db1d",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_native_simulator_features.py",
+      "start": 80,
+      "end": 98,
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_native_simulator_features.py",
+      "start": 104,
+      "end": 104,
+      "sha256": "1f558730c7d6031b0194fbe78d653d0adce330b6e269972755d2f1bb2eedfe68",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 35,
+      "end": 35,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 43,
+      "end": 43,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 65,
+      "end": 70,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 76,
+      "end": 78,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 93,
+      "end": 95,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 110,
+      "end": 114,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 120,
+      "end": 120,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 125,
+      "end": 126,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_world_scene_replacement.py",
+      "start": 154,
+      "end": 161,
+      "sha256": "aeb8c0925486e896a06c30fe0103b273f2d514163a16f515a5b90396d6284b54",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "0316e0d3368a84febc5b3ec3d77a0a4a0cf4a046",
+    "previous_source_commit": "cb2a50215833ae8bd719e00401254738bc35fc13",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
