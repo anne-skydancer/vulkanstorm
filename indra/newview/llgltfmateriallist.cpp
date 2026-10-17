@@ -26,6 +26,10 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llgltfmateriallist.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsresourcebudget.h"
+#endif
 
 #include "llagent.h"
 #include "llassetstorage.h"
@@ -50,6 +54,7 @@
 #include <boost/iostreams/stream.hpp>
 
 #include <unordered_set>
+#include <cmath>
 
 LLGLTFMaterialList gGLTFMaterialList;
 
@@ -516,12 +521,180 @@ public:
     AssetLoadUserData() {}
     tinygltf::Model mModelIn;
     LLPointer<LLFetchedGLTFMaterial> mMaterial;
+#if VS_NATIVE_VULKAN
+    std::function<bool()> current;
+    std::shared_ptr<const VSResourceBudget::Reservation> preparation;
+#endif
 };
+
+#if VS_NATIVE_VULKAN
+namespace
+{
+bool boundedNativeMaterialJSON(const std::string& json)
+{
+    if (json.empty() || json.size()>1024*1024) return false;
+    unsigned depth=0;
+    bool quoted=false,escaped=false;
+    for (const char value:json)
+    {
+        if (quoted)
+        {
+            if (escaped) escaped=false;
+            else if (value=='\\') escaped=true;
+            else if (value=='"') quoted=false;
+        }
+        else if (value=='"') quoted=true;
+        else if (value=='[' || value=='{')
+        {
+            if (++depth>64) return false;
+        }
+        else if (value==']' || value=='}')
+        {
+            if (!depth) return false;
+            --depth;
+        }
+    }
+    // TinyGLTF still performs all syntax and material interpretation. This is
+    // only an input/depth admission bound before entering its shared parser.
+    return !quoted && !depth;
+}
+bool decodeNativeMaterial(const LLUUID& id,LLAssetType::EType type,AssetLoadUserData& data)
+{
+    static VSResourceBudget preparation{128*1024*1024};
+    LLFileSystem file(id,type,LLFileSystem::READ);
+    const S32 size=file.getSize();
+    if (size<=0 || size>1024*1024) return false;
+    data.preparation=preparation.reserve(std::size_t(size)*64+65536);
+    if (!data.preparation) return false;
+    std::vector<char> buffer(size);
+    if (!file.read(reinterpret_cast<U8*>(buffer.data()),size)) return false;
+    LLSD asset;
+    boost::iostreams::stream<boost::iostreams::array_source> stream(buffer.data(),buffer.size());
+    if (!LLSDSerialize::deserialize(asset,stream,buffer.size()) ||
+        !LLGLTFMaterial::isAcceptedVersion(asset["version"].asString()) ||
+        asset["type"].asString()!=LLGLTFMaterial::ASSET_TYPE || !asset["data"].isString()) return false;
+    const std::string json=asset["data"].asString();
+    if (!boundedNativeMaterialJSON(json)) return false;
+    tinygltf::TinyGLTF loader;
+    // Simulator material channels name texture UUIDs. Remote material parsing
+    // must not interpret those names as access to the local filesystem or
+    // decode embedded image data; image subscribers own their shared fetches.
+    tinygltf::FsCallbacks fs{
+        [](const std::string&,void*) {return false;},
+        [](const std::string& path,void*) {return path;},
+        [](std::vector<unsigned char>*,std::string*,const std::string&,void*) {return false;},
+        [](std::string*,const std::string&,const std::vector<unsigned char>&,void*) {return false;},
+        [](std::size_t*,std::string*,const std::string&,void*) {return false;},nullptr};
+    if (!loader.SetFsCallbacks(std::move(fs))) return false;
+    loader.SetImageLoader([](tinygltf::Image*,int,std::string*,std::string*,int,int,const unsigned char*,int,void*) {return false;},nullptr);
+    std::string error,warning;
+    if (!loader.LoadASCIIFromString(&data.mModelIn,&error,&warning,json.data(),unsigned(json.size()),"")) return false;
+    const auto& model=data.mModelIn;
+    if (model.materials.size()!=1 || model.images.size()>16 || model.textures.size()>16 || model.samplers.size()>16 ||
+        !model.buffers.empty() || !model.bufferViews.empty() || !model.meshes.empty() || !model.nodes.empty() ||
+        !model.skins.empty() || !model.animations.empty() || !model.accessors.empty()) return false;
+    for (const auto& image:model.images) if (!LLUUID::validate(image.uri)) return false;
+    const auto& material=model.materials.front();
+    if (material.pbrMetallicRoughness.baseColorFactor.size()!=4 || material.emissiveFactor.size()!=3) return false;
+    for (const double value:material.pbrMetallicRoughness.baseColorFactor) if (!std::isfinite(value)) return false;
+    for (const double value:material.emissiveFactor) if (!std::isfinite(value)) return false;
+    if (material.extras.IsObject())
+        for (const char* key:{"override_alpha_mode","override_double_sided"})
+            if (material.extras.Has(key) && !material.extras.Get(key).IsBool()) return false;
+    return true;
+}
+}
+void LLGLTFMaterialList::onNativeAssetLoadComplete(const LLUUID& id,LLAssetType::EType type,void* input,S32 status)
+{
+    const auto data=std::shared_ptr<AssetLoadUserData>(static_cast<AssetLoadUserData*>(input));
+    if (!data->current()) return;
+    if (status!=LL_ERR_NOERR)
+    {
+        data->mMaterial->materialComplete(false);
+        return;
+    }
+    const auto main=LL::WorkQueue::getInstance("mainloop"),general=LL::WorkQueue::getInstance("General");
+    const bool posted=main->postTo(general,[id,type,data]()
+    {
+        try {return decodeNativeMaterial(id,type,*data);}
+        catch (const std::exception& error)
+        {
+            LL_WARNS("GLTF")<<"Native material decode failed: "<<error.what()<<LL_ENDL;
+            return false;
+        }
+    },[data](bool result)
+    {
+        if (!data->current()) return;
+        if (result)
+        {
+            try {data->mMaterial->setFromModel(data->mModelIn,0);}
+            catch (const std::exception& error)
+            {
+                LL_WARNS("GLTF")<<"Native material publication failed: "<<error.what()<<LL_ENDL;
+                result=false;
+            }
+        }
+        data->mMaterial->materialComplete(result);
+    });
+    if (!posted) data->mMaterial->materialComplete(false);
+}
+
+LLFetchedGLTFMaterial* LLGLTFMaterialList::getNativeMaterial(const LLUUID& id)
+{
+    auto found=mList.find(id);
+    auto tracked=mNativeMaterials.find(id);
+    // Local material ownership and its file watcher remain in the shared
+    // registry. Do not retire or re-fetch a local replacement on account reset.
+    if (found!=mList.end() && (tracked==mNativeMaterials.end() || tracked->second.material!=found->second.get())) return found->second;
+    if (found==mList.end())
+    {
+        if (tracked!=mNativeMaterials.end()) mNativeMaterials.erase(tracked);
+        for (auto iter=mNativeMaterials.begin();mNativeMaterials.size()>=4096 && iter!=mNativeMaterials.end();)
+        {
+            const auto cached=mList.find(iter->first);
+            if (cached==mList.end() || cached->second.get()!=iter->second.material) iter=mNativeMaterials.erase(iter);
+            else if (!cached->second->isFetching() && cached->second->getNumRefs()==1)
+            {mList.erase(cached);iter=mNativeMaterials.erase(iter);}
+            else ++iter;
+        }
+        if (mNativeMaterials.size()>=4096) return nullptr;
+        LLPointer<LLFetchedGLTFMaterial> material=new LLFetchedGLTFMaterial;
+        found=mList.emplace(id,material).first;
+        tracked=mNativeMaterials.emplace(id,NativeMaterial{material.get()}).first;
+    }
+    auto& entry=tracked->second;
+    auto* material=entry.material;
+    const double now=LLTimer::getTotalSeconds();
+    if (material->isLoaded() || material->isFetching() || entry.attempts>=3 || now<entry.retryAt || !gAssetStorage) return material;
+    const auto owner=VSNativeSession::active();
+    if (!owner || (owner->phase()!=VSNativeSession::Phase::Connected && owner->phase()!=VSNativeSession::Phase::Connecting)) return material;
+    auto* request=new AssetLoadUserData;
+    request->mMaterial=material;
+    request->current=owner->accountGuard(true);
+    material->materialBegin();
+    ++entry.attempts;entry.retryAt=now+5*entry.attempts;
+    gAssetStorage->getAssetData(id,LLAssetType::AT_MATERIAL,onAssetLoadComplete,request);
+    return material;
+}
+void LLGLTFMaterialList::resetNativeMaterials()
+{
+    for (const auto& [id,entry]:mNativeMaterials)
+        if (const auto found=mList.find(id);found!=mList.end() && found->second.get()==entry.material) mList.erase(found);
+    mNativeMaterials.clear();
+}
+#endif
 
 void LLGLTFMaterialList::onAssetLoadComplete(const LLUUID& id, LLAssetType::EType asset_type, void* user_data, S32 status, LLExtStat ext_status)
 {
     LL_PROFILE_ZONE_NAMED("gltf asset callback");
     AssetLoadUserData* asset_data = (AssetLoadUserData*)user_data;
+#if VS_NATIVE_VULKAN
+    if (asset_data->current)
+    {
+        onNativeAssetLoadComplete(id,asset_type,asset_data,status);
+        return;
+    }
+#endif
 
     if (status != LL_ERR_NOERR)
     {
@@ -620,6 +793,9 @@ void LLGLTFMaterialList::onAssetLoadComplete(const LLUUID& id, LLAssetType::ETyp
 LLFetchedGLTFMaterial* LLGLTFMaterialList::getMaterial(const LLUUID& id)
 {
     LL_PROFILE_ZONE_SCOPED;
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) return getNativeMaterial(id);
+#endif
     uuid_mat_map_t::iterator iter = mList.find(id);
     if (iter == mList.end())
     {

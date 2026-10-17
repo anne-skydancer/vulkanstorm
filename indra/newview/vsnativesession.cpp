@@ -22,6 +22,7 @@
 #include "llinventorymodel.h"
 #include "llinventorymodelbackgroundfetch.h"
 #include "llviewerassetstorage.h"
+#include "llgltfmateriallist.h"
 #include "llviewerinventory.h"
 #include "lllandmarklist.h"
 #include "llexperiencecache.h"
@@ -2041,6 +2042,7 @@ void VSNativeSession::reset()
     mMusicUserStopped = mMediaUserStopped = false;
     if (LLViewerParcelMedia::instanceExists()) LLViewerParcelMedia::deleteSingleton();
     ++mGeneration; ++mRegionEpoch; clearSimulatorFeatures(); mLocationRequests.clear(); mChangingRegion = false; mRequestedRegion.clear(); mNavigationDeadline = 0; unbind();
+    gGLTFMaterialList.resetNativeMaterials();
     if (LLNotifications::instanceExists())
     {
         std::vector<LLNotificationPtr> retired;

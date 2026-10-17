@@ -20,6 +20,11 @@
 #include "vsuiresources.h"
 #include "vsuiimageprovider.h"
 #include "llsdutil.h"
+#include "llsdserialize.h"
+#include "llgltfmateriallist.h"
+#include "llfetchedgltfmaterial.h"
+#include "lldatapacker.h"
+#include "vsmaterial.h"
 #include "indra_constants.h"
 #include <filesystem>
 #include <fstream>
@@ -189,6 +194,9 @@ namespace
 {
 const LLUUID bumpObject("b3000000-0000-0000-0000-000000000001");
 const LLUUID bumpSource("b3000000-0000-0000-0000-000000000002");
+const LLUUID remoteObject("b3200000-0000-0000-0000-000000000001");
+const std::array<LLUUID,3> remoteAssets{
+    LLUUID("b3100000-0000-0000-0000-000000000001"),LLUUID("b3100000-0000-0000-0000-000000000002"),LLUUID("b3100000-0000-0000-0000-000000000003")};
 struct WorldImages
 {
     unsigned step=0;
@@ -197,13 +205,15 @@ struct WorldImages
     bool source=false;
     LLSD evidence;
     std::vector<std::weak_ptr<const VSUIRenderer::Texture>> images;
+    std::array<LLPointer<LLFetchedGLTFMaterial>,3> remote;
+    bool remoteRetiring=false;
 };
 std::unique_ptr<WorldImages> worldImages;
-void bumpObjectPacket(VSNativeSession& session,bool distant=false)
+void bumpObjectPacket(VSNativeSession& session,bool distant=false,bool pbr=false)
 {
     LLMessageSystem* msg=gMessageSystem;msg->newMessage("ObjectUpdate");msg->nextBlock("RegionData");
     msg->addU64("RegionHandle",to_region_handle(256,512));msg->addU16("TimeDilation",65535);
-    msg->nextBlock("ObjectData");msg->addU32("ID",990);msg->addU8("State",0);msg->addUUID("FullID",bumpObject);
+    msg->nextBlock("ObjectData");msg->addU32("ID",pbr?991:990);msg->addU8("State",0);msg->addUUID("FullID",pbr?remoteObject:bumpObject);
     msg->addU32("CRC",0);msg->addU8("PCode",LL_PCODE_VOLUME);msg->addU8("Material",0);msg->addU8("ClickAction",0);
     msg->addVector3("Scale",LLVector3(1,1,1));
     const auto position=session.position()+(distant?LLVector3(5000,5000,5000):LLVector3(3,4,0));
@@ -211,14 +221,78 @@ void bumpObjectPacket(VSNativeSession& session,bool distant=false)
     msg->addBinaryData("ObjectData",pose,sizeof(pose));msg->addU32("ParentID",0);msg->addU32("UpdateFlags",0);
     LLVolumeParams params;LLVolumeMessage::packVolumeParams(&params,msg);
     LLPrimitive material;material.setNumTEs(6);
-    for(unsigned face=0;face<6;++face) {material.setTETexture(U8(face),bumpSource);material.setTEBumpmap(U8(face),U8(face%3+1));}
+    for(unsigned face=0;face<6;++face) {material.setTETexture(U8(face),bumpSource);material.setTEBumpmap(U8(face),pbr?0:U8(face%3+1));}
     material.packTEMessage(msg);
-    for(const char* field:{"TextureAnim","NameValue","Data","Text","MediaURL","PSBlock","ExtraParams"}) msg->addBinaryData(field,nullptr,0);
+    for(const char* field:{"TextureAnim","NameValue","Data","Text","MediaURL","PSBlock"}) msg->addBinaryData(field,nullptr,0);
+    if(pbr)
+    {
+        LLRenderMaterialParams params;for(unsigned face=0;face<6;++face) params.setMaterial(U8(face),remoteAssets[0]);
+        U8 packed[1024];LLDataPackerBinaryBuffer packer(packed,sizeof(packed));require(params.pack(packer),"R3 PBR extra parameters failed to pack");
+        const U32 size=packer.getCurrentSize();const U16 type=LLNetworkData::PARAMS_RENDER_MATERIAL;
+        std::vector<U8> extra{1,U8(type),U8(type>>8),U8(size),U8(size>>8),U8(size>>16),U8(size>>24)};
+        extra.insert(extra.end(),packed,packed+size);msg->addBinaryData("ExtraParams",extra.data(),S32(extra.size()));
+    }
+    else msg->addBinaryData("ExtraParams",nullptr,0);
     const U8 white[4]={255,255,255,255};msg->addBinaryData("TextColor",white,4);
     msg->addUUID("Sound",LLUUID::null);msg->addUUID("OwnerID",LLUUID::null);
     msg->addF32("Gain",0);msg->addU8("Flags",0);msg->addF32("Radius",0);msg->addU8("JointType",0);
     msg->addVector3("JointPivot",LLVector3::zero);msg->addVector3("JointAxisOrAnchor",LLVector3::zero);
     require(msg->sendReliable(session.host())>0,"R3 bump ObjectUpdate transport failed");
+}
+void startRemoteMaterials(WorldImages& state,VSNativeSession& session)
+{
+    const auto root=std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"))/"r3"/"remote-materials";
+    std::filesystem::create_directories(root);
+    LLGLTFMaterial material;material.mTextureId.fill(bumpSource);
+    material.mBaseColor=LLColor4(.25f,.5f,.75f,.625f);material.mEmissiveColor=LLColor3(.125f,.25f,.375f);
+    material.mMetallicFactor=.3f;material.mRoughnessFactor=.6f;material.mDoubleSided=true;
+    material.mAlphaMode=LLGLTFMaterial::ALPHA_MODE_MASK;material.mAlphaCutoff=.25f;
+    for(auto& transform:material.mTextureTransform) {transform.mOffset.set(.1f,.2f);transform.mScale.set(2,3);transform.mRotation=.25f;}
+    for(unsigned index=0;index<remoteAssets.size();++index)
+    {
+        const auto file=root/(remoteAssets[index].asString()+".asset");
+        {
+            std::ofstream output(file,std::ios::binary);
+            if(index==2) output<<std::string(1024*1024+1,' ');
+            else {LLSD asset;asset["version"]=LLGLTFMaterial::ASSET_VERSION;asset["type"]=LLGLTFMaterial::ASSET_TYPE;
+                asset["data"]=index==0?material.asJSON():"invalid native material fixture";LLSDSerialize::toPrettyXML(asset,output);}
+            require(output.good(),"R3 remote material fixture write failed");
+        }
+        state.remote[index]=gGLTFMaterialList.getMaterial(remoteAssets[index]);
+        require(state.remote[index].notNull(),"R3 remote material request was not admitted");
+    }
+    bumpObjectPacket(session,false,true);
+}
+bool remoteMaterials(WorldImages& state,VSNativeSession& session,VSWorldScene& world,LLSD& report)
+{
+    if(report.has("r3_remote_materials")) return true;
+    for(const auto& material:state.remote) if(material->isFetching()) return false;
+    require(state.remote[0]->isLoaded() && !state.remote[1]->isLoaded() && !state.remote[2]->isLoaded(),"R3 valid/invalid/oversized remote material admission differs from policy");
+    if(state.remoteRetiring)
+    {
+        if(world.object(remoteObject)) return false;
+        LLSD result;result["actual_object_faces"]=6;result["object_retired"]=true;
+        result["native_only"]=!state.remote[0]->mBaseColorTexture && !state.remote[0]->mNormalTexture && !state.remote[0]->mMetallicRoughnessTexture && !state.remote[0]->mEmissiveTexture;
+        result["shared_parser_factors"]=true;
+        for(unsigned index=0;index<remoteAssets.size();++index)
+        {LLSD row;row["id"]=remoteAssets[index];row["loaded"]=state.remote[index]->isLoaded();row["file"]="r3/remote-materials/"+remoteAssets[index].asString()+".asset";result["assets"].append(row);}
+        report["r3_remote_materials"]=result;return true;
+    }
+    unsigned faces=0;
+    for(const auto& packet:world.packets(session.position()+LLVector3(0,-4,1),128,480,640))
+        if(std::equal(packet.objectIdentity.begin(),packet.objectIdentity.end(),remoteObject.mData))
+        {
+            const auto& surface=packet.surface;
+            require(surface && surface->pbr && surface->doubleSided && surface->alpha==VSWorldContracts::AlphaMode::Mask,"R3 actual remote PBR face flags differ");
+            require(std::abs(surface->base[0]-.25f)<1.e-6f && std::abs(surface->base[3]-.625f)<1.e-6f &&
+                std::abs(surface->metallic-.3f)<1.e-6f && std::abs(surface->roughness-.6f)<1.e-6f && std::abs(surface->cutoff-.25f)<1.e-6f,
+                "R3 actual remote PBR factors differ from the shared parser");
+            if(!packet.image || !packet.channels[0] || !packet.channels[1] || !packet.channels[2]) return false;
+            ++faces;
+        }
+    if(faces!=6) return false;
+    LLMessageSystem* msg=gMessageSystem;msg->newMessage("KillObject");msg->nextBlock("ObjectData");msg->addU32("ID",991);
+    require(msg->sendReliable(session.host())>0,"R3 PBR KillObject transport failed");state.remoteRetiring=true;return false;
 }
 LLPointer<LLImageRaw> bumpPixels(unsigned phase)
 {
@@ -283,9 +357,11 @@ bool vs_r3_world_images(LLSD& report)
         state.deadline=LLFrameTimer::getTotalSeconds()+30;state.originalScale=gSavedSettings.getF32("RenderNormalMapScale");
         gSavedSettings.setF32("RenderNormalMapScale",128);
         require(vs_publish_local_image(bumpSource,*bumpPixels(0)),"R3 world bump source publication failed");state.source=true;
+        startRemoteMaterials(state,*session);
         bumpObjectPacket(*session);return false;
     }
     auto& state=*worldImages;require(LLFrameTimer::getTotalSeconds()<state.deadline,"R3 actual world bump publication timed out");
+    if(!remoteMaterials(state,*session,world,report)) return false;
     if(state.step==3)
     {
         require(world.object(bumpObject).has_value(),"R3 inactive bump object disappeared before its retirement test");
@@ -328,6 +404,9 @@ void vs_r3_replay_retired(LLSD& report)
     for(const auto& image:worldImages->images) require(image.expired(),"R3 derived world image survived account retirement");
     require(gViewerWindow->nativeContext()->resources().evidence()["cached_bump_generations"].asInteger()==0,"R3 world bump cache survived account reset");
     report["r3_world_bumps"]["account_retired"]=true;
+    const auto replacement=gGLTFMaterialList.getMaterial(remoteAssets[0]);
+    require(replacement && replacement!=worldImages->remote[0].get() && !replacement->isLoaded() && !replacement->isFetching(),"R3 remote material registry survived account retirement or fetched outside connection ownership");
+    report["r3_remote_materials"]["account_retired"]=true;
 }
 void vs_r3_replay_cleanup()
 {
