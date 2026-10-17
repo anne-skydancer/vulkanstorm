@@ -1,5 +1,5 @@
 {
-  "source_commit": "36faf72069818188e96eec2575f2a0b2ea6c96de",
+  "source_commit": "1ab1d5df54b583f5ed40a160886fe41e92eab9a3",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -115,7 +115,7 @@
       ]
     },
     "indra/newview/llviewermessage.cpp": {
-      "sha256": "42fbdc07b1035ec0d8d6198d0ade4344dbde561516c6edf8eb82fe53def1f9b7",
+      "sha256": "9af9ef6d5def321a41c3b5a4f14ab1f05256e898b967a61084eb284f84d33451",
       "anchors": [
         "process_chat_from_simulator",
         "process_agent_movement_complete",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "ba215d9d75f89dc4781555205eed8a26b85c3eaac82e90b6f941ca8bd78ba791",
+      "sha256": "9ad522bcd0e7b165076ca76e2250ace778e3c80a33a1f981372eee61dcc0c722",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "17d8c592ef9cac7074d1105f9fc38129192ddd998e89452260448957f28f1368",
+      "sha256": "30a1c1c38814ecfd5a49c55f10d09d436bbe2ae150a7b90e50109e1b90dfaa8c",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
