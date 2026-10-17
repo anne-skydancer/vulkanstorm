@@ -1,6 +1,7 @@
 // Native CPU session and nearby transport. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "vscameraview.h"
+#include "vsteleportpolicy.h"
 #include "llagentcamera.h"
 #include "llviewerinput.h"
 #include "llfloatercamera.h"
@@ -1117,25 +1118,28 @@ bool VSNativeSession::resolveLocation(const LLVector3d& global, LocationCallback
     if (msg->sendReliable(mHost) <= 0) return false;
     mLocationRequests.push_back({global, std::move(callback), now() + 30}); ++mSent; return true;
 }
-bool VSNativeSession::teleportRequest(U64 handle, const LLVector3& pos)
+bool VSNativeSession::teleportRequest(U64 handle, const LLVector3& pos, const LLVector3* lookAt)
 {
     if (mPhase != Phase::Connected || mChangingRegion || !gMessageSystem || !pos.isFinite() || pos.mV[VX] < 0 || pos.mV[VY] < 0 || pos.mV[VX] > 65536 || pos.mV[VY] > 65536) return false;
+    if ((lookAt && !lookAt->isFinite()) || !vs_teleport_location_allowed(from_region_handle(handle) + LLVector3d(pos))) return false;
+    LLVector3 direction = lookAt ? *lookAt : pos + LLVector3::x_axis;
     typing(false); mRequestedRegion.clear();
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessage("TeleportLocationRequest"); msg->nextBlock("AgentData");
     msg->addUUID("AgentID", mAgent); msg->addUUID("SessionID", mSession);
-    msg->nextBlock("Info"); msg->addU64("RegionHandle", handle); msg->addVector3("Position", pos); msg->addVector3("LookAt", LLVector3::x_axis);
+    msg->nextBlock("Info"); msg->addU64("RegionHandle", handle); msg->addVector3("Position", pos); msg->addVector3("LookAt", direction);
     if (msg->sendReliable(mHost) <= 0) return false;
+    mTeleportFlags = 0;
     ++mSent; mNavigationDeadline = now() + 60; return true;
 }
-bool VSNativeSession::teleportToLocation(const LLVector3d& global)
+bool VSNativeSession::teleportToLocation(const LLVector3d& global, const LLVector3* lookAt)
 {
     if (!global.isFinite() || global.mdV[VX] < 0 || global.mdV[VY] < 0 || global.mdV[VX] >= std::numeric_limits<U32>::max() || global.mdV[VY] >= std::numeric_limits<U32>::max()) return false;
     const auto origin = from_region_handle(mHandle);
     const bool local = global.mdV[VX] >= origin.mdV[VX] && global.mdV[VX] < origin.mdV[VX] + mWidth && global.mdV[VY] >= origin.mdV[VY] && global.mdV[VY] < origin.mdV[VY] + mHeight;
     const U64 handle = local ? mHandle : to_region_handle(global);
     const auto destinationOrigin = from_region_handle(handle);
-    return teleportRequest(handle, LLVector3(global - destinationOrigin));
+    return teleportRequest(handle, LLVector3(global - destinationOrigin), lookAt);
 }
 bool VSNativeSession::teleportToRegion(const std::string& input, const LLVector3& pos)
 {
@@ -1143,6 +1147,7 @@ bool VSNativeSession::teleportToRegion(const std::string& input, const LLVector3
     if (mPhase != Phase::Connected || mChangingRegion || !gMessageSystem || region.empty() || region.size() > 255 || !pos.isFinite()) return false;
     for (unsigned char c : region) if (c < 32 || c == 127) return false;
     if (LLStringUtil::compareInsensitive(region, mName) == 0) return teleportRequest(mHandle, pos);
+    mTeleportFlags = 0;
     mRequestedRegion = region; mRequestedPosition = pos;
     LLMessageSystem* msg = gMessageSystem; msg->newMessage("MapNameRequest"); msg->nextBlock("AgentData");
     msg->addUUID("AgentID", mAgent); msg->addUUID("SessionID", mSession); msg->addU32("Flags", 0); msg->addU32("EstateID", 0); msg->addBOOL("Godlike", false);
@@ -1153,10 +1158,13 @@ bool VSNativeSession::teleportToRegion(const std::string& input, const LLVector3
 bool VSNativeSession::teleportToLandmark(const LLUUID& asset)
 {
     if (mPhase != Phase::Connected || mChangingRegion || !gMessageSystem) return false;
+    if (!vs_teleport_landmark_allowed(asset)) return false;
+    if (asset.isNull()) gAgentCamera.resetView();
     typing(false); mRequestedRegion.clear();
     LLMessageSystem* msg = gMessageSystem; msg->newMessage("TeleportLandmarkRequest"); msg->nextBlock("Info");
     msg->addUUID("AgentID", mAgent); msg->addUUID("SessionID", mSession); msg->addUUID("LandmarkID", asset);
     if (msg->sendReliable(mHost) <= 0) return false;
+    mTeleportFlags = 0;
     ++mSent; mNavigationDeadline = now() + 60; return true;
 }
 bool VSNativeSession::teleportToLure(const LLUUID& lure, bool godlike)
@@ -1164,8 +1172,10 @@ bool VSNativeSession::teleportToLure(const LLUUID& lure, bool godlike)
     if (mPhase != Phase::Connected || mChangingRegion || !gMessageSystem || lure.isNull()) return false;
     LLMessageSystem* msg = gMessageSystem; msg->newMessage("TeleportLureRequest"); msg->nextBlock("Info");
     msg->addUUID("AgentID", mAgent); msg->addUUID("SessionID", mSession); msg->addUUID("LureID", lure);
-    msg->addU32("TeleportFlags", godlike ? TELEPORT_FLAGS_VIA_GODLIKE_LURE : TELEPORT_FLAGS_VIA_LURE);
+    const U32 flags = godlike ? TELEPORT_FLAGS_VIA_GODLIKE_LURE | TELEPORT_FLAGS_DISABLE_CANCEL : TELEPORT_FLAGS_VIA_LURE;
+    msg->addU32("TeleportFlags", flags);
     if (msg->sendReliable(mHost) <= 0) return false;
+    mTeleportFlags = flags;
     ++mSent; mNavigationDeadline = now() + 60; return true;
 }
 bool VSNativeSession::changeRegion(const LLSD& body)
@@ -1209,6 +1219,7 @@ bool VSNativeSession::changeRegion(const LLSD& body)
         mPreviousHost=LLHost();
     }
     mWidth = body.has("width") ? U32(body["width"].asInteger()) : 256; mHeight = body.has("height") ? U32(body["height"].asInteger()) : 256;
+    mTeleportArrival = body["teleport"].asBoolean();
     mChangingRegion = true; mInterestListArriving = true; mNavigationDeadline = now() + 60;
     mHandshake = mMovement = mCircuitAck = mSeedReady = false;
     auto cancel = std::move(mCancelSeed); if (cancel) cancel();
@@ -1228,7 +1239,7 @@ bool VSNativeSession::changeRegion(const LLSD& body)
 }
 bool VSNativeSession::cancelTeleport()
 {
-    if(mPhase!=Phase::Connected || mChangingRegion || !mNavigationDeadline || !gMessageSystem)return false;
+    if(mPhase!=Phase::Connected || mChangingRegion || !mNavigationDeadline || !gMessageSystem || !vs_teleport_cancel_allowed(mTeleportFlags))return false;
     gMessageSystem->newMessage("TeleportCancel");gMessageSystem->nextBlock("Info");
     gMessageSystem->addUUID("AgentID",mAgent);gMessageSystem->addUUID("SessionID",mSession);
     if(gMessageSystem->sendReliable(mHost)<=0)return false;
@@ -1809,18 +1820,26 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         mPosition = pos; gAgent.setPositionAgent(pos); releaseMovement(); mNavigationDeadline = 0;
         if(gViewerWindow && mStartup == Startup::Complete)gViewerWindow->setShowProgress(false,true);
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
+        const U64 accountGeneration=mGeneration;
+        LLViewerParcelMgr::instance().onTeleportFinished(true,gAgent.getPositionGlobal());
+        if(mGeneration!=accountGeneration || mPhase!=Phase::Connected)return false;
+        mTeleportFlags=0;
         requestParcel();
     }
     else if (name == "TeleportFailed" && mPhase == Phase::Connected)
     {
         if (body["agent"].asUUID() != mAgent) return false;
-        mRequestedRegion.clear(); mNavigationDeadline = 0;
+        mRequestedRegion.clear(); mNavigationDeadline = 0;mTeleportFlags=0;
+        const U64 accountGeneration=mGeneration;
+        LLViewerParcelMgr::instance().onTeleportFailed();
+        if(mGeneration!=accountGeneration || mPhase!=Phase::Connected)return false;
         if(gViewerWindow && mStartup == Startup::Complete)gViewerWindow->setShowProgress(false,true);
         LLSD args; args["ERROR_MESSAGE"] = body["text"].asString().substr(0, 4096); LLNotificationsUtil::add("ErrorMessage", args);
     }
     else if ((name == "TeleportStart" || name == "TeleportProgress") && mPhase==Phase::Connected)
     {
         if(name=="TeleportProgress" && body["agent"].asUUID()!=mAgent)return false;
+        mTeleportFlags = ll_U32_from_sd(body["flags"]);
         mNavigationDeadline=now()+60;
         const std::string text=body["text"].asString().substr(0,4096);
         const auto translated=LLAgent::sTeleportProgressMessages.find(text);
@@ -1830,7 +1849,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         {
             gViewerWindow->setShowProgress(true,!gSavedSettings.getBOOL("FSDisableTeleportScreens"));
             gViewerWindow->setProgressString(message);
-            gViewerWindow->setProgressCancelButtonVisible(!(ll_U32_from_sd(body["flags"])&TELEPORT_FLAGS_DISABLE_CANCEL),LLTrans::getString("Cancel"));
+            gViewerWindow->setProgressCancelButtonVisible(vs_teleport_cancel_allowed(mTeleportFlags),LLTrans::getString("Cancel"));
         }
         publishProgress();
     }
@@ -1838,6 +1857,17 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         disconnect(LLTrans::getString("NativeSessionConnectionTimeout"));
     else return false;
     ++mReceived; return true;
+}
+void VSNativeSession::initializeEnvironment()
+{
+    // LLEnvironment is an explicit LLSimpleton. Match the reference create +
+    // seed-granted initialization before any connected callback uses its CPU
+    // settings or region state, including crossings before inventory is ready.
+    if (!LLEnvironment::instanceExists())
+    {
+        LLEnvironment::createInstance();
+        LLEnvironment::instance().initSingleton();
+    }
 }
 void VSNativeSession::connected()
 {
@@ -1847,18 +1877,27 @@ void VSNativeSession::connected()
     if (mChangingRegion)
     {
         mChangingRegion = false; mInterestListArriving = true; mNavigationDeadline = 0; mDeadline = now() + 1;
+        initializeEnvironment();
         if(gViewerWindow && mStartup == Startup::Complete)gViewerWindow->setShowProgress(false,true);
         // The former current simulator remains an independently owned neighbour.
         // DisableSimulator or circuit retirement, not crossing, removes its scene.
         mPreviousHost = LLHost();
         publishProgress();
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
+        if(std::exchange(mTeleportArrival,false))
+        {
+            const U64 accountGeneration=mGeneration;
+            LLViewerParcelMgr::instance().onTeleportFinished(false,gAgent.getPositionGlobal());
+            if(mGeneration!=accountGeneration || mPhase!=Phase::Connected)return;
+        }
+        mTeleportFlags=0;
         requestParcel();
         LLEnvironment::instance().onRegionChange();
         if (gSavedSettings.getBOOL("UseLSLBridge")) FSLSLBridge::instance().initBridge();
         return;
     }
     mPhase = Phase::Connected; mDeadline = now() + 1;
+    initializeEnvironment();
     if (gViewerWindow)
     {
         // Same startup order as STATE_AGENT_SEND: aspect affects FOV limits.
@@ -2011,7 +2050,6 @@ void VSNativeSession::advanceStartup()
         LLStartUp::setStartupState(STATE_MISC);
         return;
     case Startup::Misc:
-        LLEnvironment::instance();
         init_audio();
         LLStartUp::initActiveGestures();
         FSGroupTitleRegionMgr::getInstance()->loadFromDisk();
@@ -2413,13 +2451,6 @@ void VSNativeSession::reset()
     if (mShutdown) return;
     // Retire CPU tracking without sending an untrack on the retiring circuit.
     // The old account's buddy owner is cleared below, before another login.
-    mRegionLimits.reset();
-    if(LLRegionInfoModel::instanceExists())LLRegionInfoModel::instance().reset();
-    LLEnvironment::deleteSingleton();
-    vs_reset_covenants();
-    if(LLViewerParcelMgr::instanceExists())LLViewerParcelMgr::instance().resetNativeAccount();
-    if(LLEstateInfoModel::instanceExists())LLEstateInfoModel::instance().reset();
-    LLFloaterRegionInfo::nextInvoice();
     LLTracker::cleanupInstance();
     LLFloaterReg::destroyInstance("world_map");LLFloaterReg::destroyInstance("mini_map");
     LLWorldMapView::cleanupClass();
@@ -2438,6 +2469,7 @@ void VSNativeSession::reset()
     gAgent.clearScriptControlState();
     gAgent.clearControlFlags(std::numeric_limits<U32>::max());
     mCamera.reset(); mCameraTime = mAgentUpdateTime = 0; mInterestListArriving=true;
+    mTeleportFlags=0;mTeleportArrival=false;
     mLogoutPresented = mLogoutReply = false;
     if (mAgent.notNull() && (mPhase == Phase::Connected || mPhase == Phase::Logout || mPhase == Phase::Disconnected))
     {
@@ -2482,7 +2514,15 @@ void VSNativeSession::reset()
     // Availability is temporary account state; release its notification mute
     // while the retiring account's IM/storage owners still exist.
     if (gAgent.isDoNotDisturb()) gAgent.setDoNotDisturb(false);
-    vs_native_im_reset(); clearBalance();
+    vs_native_im_reset();
+    mRegionLimits.reset();
+    if(LLRegionInfoModel::instanceExists())LLRegionInfoModel::instance().reset();
+    LLEnvironment::deleteSingleton();
+    vs_reset_covenants();
+    if(LLViewerParcelMgr::instanceExists())LLViewerParcelMgr::instance().resetNativeAccount();
+    if(LLEstateInfoModel::instanceExists())LLEstateInfoModel::instance().reset();
+    LLFloaterRegionInfo::nextInvoice();
+    clearBalance();
     if (LLTeleportHistory::instanceExists()) LLTeleportHistory::instance().resetNativeSession();
     LLAgentBenefitsMgr::resetAccountBenefits();
     if (LLGlobalEconomy::instanceExists())

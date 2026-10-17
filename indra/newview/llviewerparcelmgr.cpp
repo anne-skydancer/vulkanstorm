@@ -2130,14 +2130,20 @@ void LLViewerParcelMgr::processParcelProperties(LLMessageSystem *msg, void **use
         if (parcel == parcel_mgr.mAgentParcel)
         {
             // new agent parcel
-            S32 bitmap_size =   parcel_mgr.mParcelsPerEdge
-                                * (parcel_mgr.mNativeCpu?parcel_mgr.mNativeParcelRows:parcel_mgr.mParcelsPerEdge)
-                                / 8;
-            U8* bitmap = new U8[ bitmap_size ];
-            msg->getBinaryDataFast(_PREHASH_ParcelData, _PREHASH_Bitmap, bitmap, bitmap_size);
+            // Native membership already owns its validated immutable packed
+            // bitmap above. Preserve the reference expanded-map update for GL.
+            if(!parcel_mgr.mNativeCpu)
+            {
+                S32 bitmap_size =   parcel_mgr.mParcelsPerEdge
+                                    * (parcel_mgr.mNativeCpu?parcel_mgr.mNativeParcelRows:parcel_mgr.mParcelsPerEdge)
+                                    / 8;
+                U8* bitmap = new U8[ bitmap_size ];
+                msg->getBinaryDataFast(_PREHASH_ParcelData, _PREHASH_Bitmap, bitmap, bitmap_size);
 
-            parcel_mgr.writeAgentParcelFromBitmap(bitmap);
-            delete[] bitmap;
+                parcel_mgr.writeAgentParcelFromBitmap(bitmap);
+                delete[] bitmap;
+
+            }
 
             // Let interesting parties know about agent parcel change.
             LLViewerParcelMgr* instance = LLViewerParcelMgr::getInstance();

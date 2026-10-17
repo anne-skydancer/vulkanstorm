@@ -41,6 +41,7 @@ class NativeSimulatorFeaturesTest(unittest.TestCase):
 #include <functional>
 #include <map>
 #include <memory>
+#include <utility>
 #include <string>
 #include <utility>
 #include <vector>
@@ -155,12 +156,15 @@ struct LLInventoryModelBackgroundFetch {
  int starts=0;static LLInventoryModelBackgroundFetch& instance(){static LLInventoryModelBackgroundFetch f;return f;}
  void start(){++starts;}
 };
+struct LLViewerParcelMgr {int finishes=0;static LLViewerParcelMgr& instance(){static LLViewerParcelMgr value;return value;}void onTeleportFinished(bool local,int){assert(!local);++finishes;}};
 struct VSNativeAppearance {explicit VSNativeAppearance(int){} void fallback(int){}};
 struct LLEnvironment {int changes=0;static LLEnvironment& instance(){static LLEnvironment value;return value;}void onRegionChange(){++changes;}};
 struct VSNativeSession {
  enum class Phase {Connecting,Connected,Logout};Phase mPhase=Phase::Connecting;
  enum class Startup {Precache,Complete};Startup mStartup=Startup::Precache;
  bool mChangingRegion=false,mInterestListArriving=true,mHandshake=false,mMovement=false,mSeedReady=false,mCircuitAck=false;
+ using U64=unsigned long long;U64 mGeneration=1;bool mTeleportArrival=false;unsigned mTeleportFlags=0;int environmentStarts=0;
+ void initializeEnvironment(){assert(mPhase==Phase::Connected && !mChangingRegion);++environmentStarts;}
  double mNavigationDeadline=0,mDeadline=0;Host mPreviousHost,mHost;
  struct Circuit {double deadline=60;};std::map<Host,Circuit> mCircuits;
  std::unique_ptr<VSNativeAppearance> mAppearance;int mWearablesMetadata=0;
@@ -176,12 +180,13 @@ int main(){
  s.mSeedReady=true;s.connected();assert(fetch.starts==1&&s.mPhase==VSNativeSession::Phase::Connected);
  s.connected();assert(fetch.starts==1);
  Window window;gViewerWindow=&window;
- s.mChangingRegion=true;s.connected();assert(fetch.starts==1&&!s.mChangingRegion&&window.hides==0);
+ s.mChangingRegion=true;s.mTeleportArrival=true;s.connected();assert(fetch.starts==1&&!s.mChangingRegion&&window.hides==0 && !s.mTeleportArrival && LLViewerParcelMgr::instance().finishes==1);
  s.mStartup=VSNativeSession::Startup::Complete;s.mChangingRegion=true;s.connected();
  assert(fetch.starts==1&&!s.mChangingRegion&&window.hides==1);
  s.mPhase=VSNativeSession::Phase::Logout;s.connected();assert(fetch.starts==1);
  assert(FSLSLBridge::instance().starts==2 && gAgentCamera.inits==0);
  assert(LLEnvironment::instance().changes==2);
+ assert(s.environmentStarts==3 && LLViewerParcelMgr::instance().finishes==1);
  VSNativeSession fresh;fresh.mHandshake=fresh.mMovement=fresh.mSeedReady=fresh.mCircuitAck=true;
  fresh.connected();assert(fetch.starts==2 && LLViewerCamera::instanceExists());
  auto* camera=LLViewerCamera::getInstance();assert(camera->heights==1 && camera->aspects==1 && camera->views==1);
