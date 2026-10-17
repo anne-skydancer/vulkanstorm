@@ -7,6 +7,7 @@ import stat
 import zipfile
 from run_vulkan_geometry_tests import required_checks
 from run_vulkan_session_replay import r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed, world_bump_contracts_passed, remote_material_contracts_passed, legacy_material_contracts_passed, media_contracts_passed, shared_settings_contracts_passed
+import vulkan_r3_gltf_fixture as r3_gltf_fixture
 from run_software_vulkan_tests import MATERIAL_READBACKS
 from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests, validate_driver
 from run_vulkan_texture_cache_instances import validate_instances
@@ -105,6 +106,9 @@ def texture_cache_completeness(files, source, executable_digest):
             if case=='cold':
                 if not local_image_contracts_passed(child,actual) or not local_material_contracts_passed(child,actual) or not world_bump_contracts_passed(child,actual):raise ValueError('Missing R3 local file/GPU evidence')
                 if not remote_material_contracts_passed(child,traffic,actual):raise ValueError('Missing actual remote PBR asset evidence')
+                if not r3_gltf_fixture.contracts_passed(child,actual):raise ValueError('Missing imported glTF image evidence')
+                for path in r3_gltf_fixture.required_files(child):
+                    if folder+'/'+path not in files:raise ValueError('Imported glTF artifact omitted from archive: '+path)
                 if not shared_settings_contracts_passed(child,actual):raise ValueError('Missing actual shared preference effects')
                 if folder+'/'+child['r3_shared_settings']['file'] not in files:raise ValueError('Persisted native settings omitted from archive')
                 if not media_contracts_passed(child,traffic,actual):raise ValueError('Missing actual media plugin evidence')

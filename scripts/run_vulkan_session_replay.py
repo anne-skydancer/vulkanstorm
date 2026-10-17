@@ -23,6 +23,7 @@ from uuid import UUID
 from urllib.parse import urlsplit, parse_qs
 
 import vulkan_r2_fixture as r2_fixture
+import vulkan_r3_gltf_fixture as r3_gltf_fixture
 
 from run_software_vulkan_tests import windows_manifest_registration, loaded_library_hashes
 from run_vulkan_viewer_diagnostic import runtime_libraries, skin_cases, report_case
@@ -1268,6 +1269,7 @@ def main():
     if not harness_prerequisite_passed(harness, args.headless):
         raise RuntimeError('Missing prerequisite native graphics evidence for the selected replay mode')
     directory = args.evidence.resolve(); directory.mkdir(parents=True, exist_ok=True)
+    if args.local_image_contracts:r3_gltf_fixture.write(directory/'r3/gltf-images')
     for name in ('session-replay.xml', 'session-chat.ppm', 'session-chat-expected.ppm', 'session-chat-expected-products.ppm', 'session-chat-packets.txt', 'session-chat-scene.ppm', 'session-chat-scene.rgba',
                  'im/session-chat.ppm', 'im/session-chat-expected.ppm', 'im/session-chat-expected-products.ppm', 'im/session-chat-packets.txt', 'im/session-chat-scene.ppm', 'im/session-chat-scene.rgba', 'results.json'):
         (directory / name).unlink(missing_ok=True)
@@ -1372,6 +1374,8 @@ def main():
                 raise RuntimeError('Missing production remote PBR transport, parse failure or account retirement evidence')
             if args.local_image_contracts and not shared_settings_contracts_passed(report,directory):
                 raise RuntimeError('Missing actual shared preference effects and persisted values')
+            if args.local_image_contracts and not r3_gltf_fixture.contracts_passed(report,directory):
+                raise RuntimeError('Missing actual imported glTF image contracts')
             if args.local_image_contracts and not media_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing actual media plugin publication, shared ownership or GPU evidence')
             if args.local_image_contracts and not legacy_material_contracts_passed(report,server.requests,directory):

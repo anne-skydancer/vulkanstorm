@@ -872,3 +872,17 @@ retirement methods pass regressions covering discard, queued retirement/reuse,
 refused decoded admission and oversized headers, alongside the previous
 preparation-lifecycle test. Viewer translation-unit compilation passes. Actual
 five-channel imported-scene GPU qualification is the next required checkpoint.
+
+
+The actual-scene replay now imports a deterministic skinned, animated glTF
+through `VSWorldScene::loadGLTF` after a real object update. Its five independent
+PNG channels exercise base color, normal, ORM, emissive and separate occlusion;
+material factors, UV0/UV1 selection, transforms and sampler policy accompany
+that same production path. It requires limited, forced-full-resolution,
+limited-again and asset-replacement generations, with complete independent GPU
+pixel oracles and retained-generation immutability. Object/account retirement
+must release the recorded image owners. Both exact input glTF files and all 20
+readbacks are mandatory archive evidence. Missing/corrupt pixels, changed inputs
+and reused generations fail the independent validator. Compilation and focused
+replay/archive regressions pass; canonical runtime execution follows this
+checkpoint and is not yet claimed here.

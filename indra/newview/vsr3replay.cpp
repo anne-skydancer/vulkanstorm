@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsr3replay.h"
 #include "vsr3mediareplay.h"
+#include "vsr3gltfreplay.h"
 #include "lllocalbitmaps.h"
 #include "lllocalgltfmaterials.h"
 #include "vsnativesession.h"
@@ -506,7 +507,7 @@ LLSD bumpReadback(WorldImages& state,VSUIResources& resources,const VSUIRenderer
 }
 bool vs_r3_world_images(LLSD& report)
 {
-    if(!vs_r3_media_replay(report)) return false;
+    if(!vs_r3_media_replay(report) || !vs_r3_gltf_images(report)) return false;
     if(!std::getenv("VS_VULKAN_REPLAY_LOCAL_IMAGES") || report.has("r3_world_bumps")) return true;
     const auto session=VSNativeSession::active();require(session && session->phase()==VSNativeSession::Phase::Connected,"R3 world image owner is not connected");
     auto& resources=gViewerWindow->nativeContext()->resources();auto& world=gViewerWindow->nativeContext()->world();
@@ -562,6 +563,7 @@ bool vs_r3_world_images(LLSD& report)
 void vs_r3_replay_retired(LLSD& report)
 {
     vs_r3_media_retired(report);
+    vs_r3_gltf_retired(report);
     if(!worldImages) return;
     for(const auto& image:worldImages->images) require(image.expired(),"R3 derived world image survived account retirement");
     require(gViewerWindow->nativeContext()->resources().evidence()["cached_bump_generations"].asInteger()==0,"R3 world bump cache survived account reset");
@@ -577,6 +579,7 @@ void vs_r3_replay_retired(LLSD& report)
 void vs_r3_replay_cleanup()
 {
     vs_r3_media_cleanup();
+    vs_r3_gltf_cleanup();
     if(worldImages) {
         gSavedSettings.setF32("RenderNormalMapScale",worldImages->originalScale);
         if(worldImages->source) vs_retire_local_image(bumpSource);
