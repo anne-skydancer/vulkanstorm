@@ -1,5 +1,5 @@
 {
-  "source_commit": "bc9363a393fbde97d1d6d8187f5620aafb4c93b8",
+  "source_commit": "45478529b0d5c5ded1b3a34aa536034f89592ff2",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -35792,25 +35792,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 54,
       "end": 54,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 379,
-      "end": 393,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 381,
+      "end": 395,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 457,
-      "end": 457,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 459,
+      "end": 459,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -38652,9 +38652,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 132,
-      "end": 135,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 134,
+      "end": 137,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -38706,18 +38706,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 384,
-      "end": 389,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 386,
+      "end": 391,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 393,
-      "end": 393,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 395,
+      "end": 395,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -38726,25 +38726,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 40,
       "end": 40,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 440,
-      "end": 450,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 442,
+      "end": 452,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 457,
-      "end": 457,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 459,
+      "end": 459,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -38752,8 +38752,8 @@
     {
       "path": "scripts/package_vulkan_evidence.py",
       "start": 1,
-      "end": 375,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "end": 376,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38761,8 +38761,8 @@
     {
       "path": "scripts/tests/test_vulkan_evidence_package.py",
       "start": 1,
-      "end": 219,
-      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
+      "end": 224,
+      "sha256": "4d0c4461d368d8076a17bc74dd6587e2d3a60f8f7a7a66863452e42f3a89e408",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -38771,7 +38771,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 83,
       "end": 83,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -38958,9 +38958,9 @@
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 233,
-      "end": 246,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 234,
+      "end": 247,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -38978,16 +38978,16 @@
       "path": "scripts/tests/test_vulkan_evidence_package.py",
       "start": 13,
       "end": 13,
-      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
+      "sha256": "4d0c4461d368d8076a17bc74dd6587e2d3a60f8f7a7a66863452e42f3a89e408",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_vulkan_evidence_package.py",
-      "start": 105,
-      "end": 130,
-      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
+      "start": 110,
+      "end": 135,
+      "sha256": "4d0c4461d368d8076a17bc74dd6587e2d3a60f8f7a7a66863452e42f3a89e408",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -39050,7 +39050,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 53,
       "end": 53,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -39140,34 +39140,34 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 55,
       "end": 80,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 134,
-      "end": 134,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 136,
+      "end": 136,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 305,
-      "end": 307,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 307,
+      "end": 309,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 394,
-      "end": 406,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 396,
+      "end": 408,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -44630,7 +44630,7 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 8,
       "end": 9,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -44639,52 +44639,52 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 16,
       "end": 17,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 142,
-      "end": 142,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 143,
+      "end": 143,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 199,
-      "end": 228,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 200,
+      "end": 229,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 280,
-      "end": 280,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 281,
+      "end": 281,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 286,
-      "end": 288,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 287,
+      "end": 289,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 301,
-      "end": 324,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 302,
+      "end": 325,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45179,25 +45179,25 @@
       "path": "scripts/tests/test_vulkan_evidence_package.py",
       "start": 15,
       "end": 15,
-      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
+      "sha256": "4d0c4461d368d8076a17bc74dd6587e2d3a60f8f7a7a66863452e42f3a89e408",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_vulkan_evidence_package.py",
-      "start": 131,
-      "end": 157,
-      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
+      "start": 136,
+      "end": 162,
+      "sha256": "4d0c4461d368d8076a17bc74dd6587e2d3a60f8f7a7a66863452e42f3a89e408",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_vulkan_evidence_package.py",
-      "start": 165,
-      "end": 216,
-      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
+      "start": 170,
+      "end": 221,
+      "sha256": "4d0c4461d368d8076a17bc74dd6587e2d3a60f8f7a7a66863452e42f3a89e408",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45627,9 +45627,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 110,
-      "end": 110,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 112,
+      "end": 112,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -45951,9 +45951,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 111,
-      "end": 111,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 113,
+      "end": 113,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -46329,9 +46329,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 112,
-      "end": 112,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 114,
+      "end": 114,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -46763,70 +46763,70 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 112,
-      "end": 112,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 114,
+      "end": 114,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 169,
-      "end": 169,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 171,
+      "end": 171,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 205,
-      "end": 205,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 207,
+      "end": 207,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 276,
-      "end": 276,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 278,
+      "end": 278,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 285,
-      "end": 285,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 287,
+      "end": 287,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 289,
-      "end": 289,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 291,
+      "end": 291,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 305,
-      "end": 305,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 307,
+      "end": 307,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -47301,9 +47301,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 294,
-      "end": 294,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 296,
+      "end": 296,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -47553,9 +47553,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 113,
-      "end": 113,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 115,
+      "end": 115,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -47762,61 +47762,61 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 112,
-      "end": 112,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 114,
+      "end": 114,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 276,
-      "end": 276,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 278,
+      "end": 278,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 280,
-      "end": 280,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 282,
+      "end": 282,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 285,
-      "end": 285,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 287,
+      "end": 287,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 289,
-      "end": 289,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 291,
+      "end": 291,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 305,
-      "end": 305,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 307,
+      "end": 307,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -47906,7 +47906,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 84,
       "end": 84,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and run actual native cache bridge against controlled complete/partial/corrupt/timeout/shutdown and late-callback states; retain encoded writer memory/budget until retirement. Add to existing source-evidence job. This fixture does not qualify real disk restart reuse or R3 as a whole."
@@ -49029,9 +49029,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 119,
-      "end": 119,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 121,
+      "end": 121,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -49182,9 +49182,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 123,
-      "end": 124,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 125,
+      "end": 126,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -49461,135 +49461,135 @@
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 555,
-      "end": 555,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 560,
+      "end": 560,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 1287,
-      "end": 1287,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 1293,
+      "end": 1293,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 1379,
-      "end": 1385,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 1385,
+      "end": 1391,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 1461,
-      "end": 1461,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 1467,
+      "end": 1467,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 1719,
-      "end": 1725,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 1725,
+      "end": 1731,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 1837,
-      "end": 1837,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 1843,
+      "end": 1843,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 1883,
-      "end": 1889,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 1889,
+      "end": 1895,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2019,
-      "end": 2047,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 2025,
+      "end": 2053,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2761,
-      "end": 2761,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 2780,
+      "end": 2780,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2763,
-      "end": 2763,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 2782,
+      "end": 2782,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2797,
-      "end": 2805,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 2816,
+      "end": 2824,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2873,
-      "end": 2874,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 2892,
+      "end": 2893,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2930,
-      "end": 2931,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 2949,
+      "end": 2950,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 3262,
-      "end": 3276,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 3281,
+      "end": 3295,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 3402,
-      "end": 3402,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 3421,
+      "end": 3421,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -50019,9 +50019,9 @@
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2040,
-      "end": 2040,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 2046,
+      "end": 2046,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -50046,9 +50046,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 98,
-      "end": 98,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 100,
+      "end": 100,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -50326,8 +50326,8 @@
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 1,
-      "end": 215,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "end": 256,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -50343,9 +50343,9 @@
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2876,
-      "end": 2887,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 2895,
+      "end": 2906,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -50370,9 +50370,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 85,
-      "end": 85,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 87,
+      "end": 87,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -50919,27 +50919,27 @@
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 78,
-      "end": 78,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 79,
+      "end": 79,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 80,
-      "end": 87,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 81,
+      "end": 88,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 95,
-      "end": 98,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 96,
+      "end": 99,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -51018,9 +51018,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 407,
-      "end": 419,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 409,
+      "end": 421,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -51029,7 +51029,7 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 10,
       "end": 11,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -51037,44 +51037,44 @@
     {
       "path": "scripts/package_vulkan_evidence.py",
       "start": 17,
-      "end": 132,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "end": 133,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 202,
-      "end": 202,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 203,
+      "end": 203,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 261,
-      "end": 262,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 262,
+      "end": 263,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 148,
-      "end": 148,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 185,
+      "end": 185,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 160,
-      "end": 160,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 197,
+      "end": 197,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -51083,7 +51083,7 @@
       "path": "scripts/tests/test_vulkan_evidence_package.py",
       "start": 13,
       "end": 14,
-      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
+      "sha256": "4d0c4461d368d8076a17bc74dd6587e2d3a60f8f7a7a66863452e42f3a89e408",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -51091,17 +51091,17 @@
     {
       "path": "scripts/tests/test_vulkan_evidence_package.py",
       "start": 19,
-      "end": 55,
-      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
+      "end": 60,
+      "sha256": "4d0c4461d368d8076a17bc74dd6587e2d3a60f8f7a7a66863452e42f3a89e408",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 90,
-      "end": 97,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 92,
+      "end": 99,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -51461,7 +51461,7 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 9,
       "end": 9,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -51470,7 +51470,7 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 66,
       "end": 66,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -51479,7 +51479,7 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 72,
       "end": 72,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -51488,16 +51488,16 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 83,
       "end": 84,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 104,
-      "end": 120,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 105,
+      "end": 121,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -51540,45 +51540,45 @@
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 41,
-      "end": 41,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 42,
+      "end": 42,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 53,
-      "end": 56,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 54,
+      "end": 57,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 59,
-      "end": 59,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 60,
+      "end": 60,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 67,
-      "end": 67,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 68,
+      "end": 68,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 167,
-      "end": 167,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 204,
+      "end": 204,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -51612,9 +51612,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 86,
-      "end": 86,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 88,
+      "end": 88,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -52134,18 +52134,18 @@
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 65,
-      "end": 65,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 66,
+      "end": 66,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 96,
-      "end": 96,
-      "sha256": "3b62206265f4d18544d460f1c3d33908ee2b2e60ee5fe08dd4103807b2593f36",
+      "start": 97,
+      "end": 97,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -52404,9 +52404,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 87,
-      "end": 87,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 89,
+      "end": 89,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -52685,16 +52685,16 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 9,
       "end": 9,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 105,
-      "end": 105,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 106,
+      "end": 106,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -52755,9 +52755,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 88,
-      "end": 88,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 90,
+      "end": 90,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -52863,9 +52863,9 @@
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 121,
-      "end": 124,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 122,
+      "end": 125,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -53243,25 +53243,25 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 9,
       "end": 9,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 105,
-      "end": 105,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 106,
+      "end": 106,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 125,
-      "end": 129,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 126,
+      "end": 130,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -53304,9 +53304,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 89,
-      "end": 89,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 91,
+      "end": 91,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -53493,9 +53493,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 91,
-      "end": 91,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 93,
+      "end": 93,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -53745,18 +53745,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 96,
-      "end": 96,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 98,
+      "end": 98,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 420,
-      "end": 423,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 422,
+      "end": 425,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -53801,7 +53801,7 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 12,
       "end": 12,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -53810,16 +53810,16 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 17,
       "end": 56,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 203,
-      "end": 203,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 204,
+      "end": 204,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -53979,9 +53979,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 92,
-      "end": 92,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 94,
+      "end": 94,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -54179,16 +54179,16 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 9,
       "end": 9,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 106,
-      "end": 117,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 107,
+      "end": 118,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -54249,9 +54249,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 93,
-      "end": 93,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 95,
+      "end": 95,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -54681,9 +54681,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 94,
-      "end": 94,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 96,
+      "end": 96,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -54800,16 +54800,16 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 9,
       "end": 9,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 113,
-      "end": 115,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 114,
+      "end": 116,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -54879,9 +54879,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 95,
-      "end": 95,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 97,
+      "end": 97,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -54906,9 +54906,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 120,
-      "end": 122,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 122,
+      "end": 124,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -54989,16 +54989,16 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 9,
       "end": 9,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 109,
-      "end": 112,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 110,
+      "end": 113,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -55086,9 +55086,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 121,
-      "end": 121,
-      "sha256": "479ea1c85a91b10d3abce741e07b44d8a278c48f8db493f5f5bff85378e62402",
+      "start": 123,
+      "end": 123,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -55151,16 +55151,16 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 9,
       "end": 9,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 107,
-      "end": 108,
-      "sha256": "d47b2d558643565e6ea23ac7aecc3ee5877d8dc8a2a3c75b9ebaee52403f1225",
+      "start": 108,
+      "end": 109,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -55266,18 +55266,18 @@
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 1366,
-      "end": 1369,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 1372,
+      "end": 1375,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/lltexturefetch.cpp",
-      "start": 2029,
-      "end": 2031,
-      "sha256": "37ee3efc82b4757e1b62cbb3afa304c1999bf18cb494d13c93a168df7a64b104",
+      "start": 2035,
+      "end": 2037,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -55287,6 +55287,267 @@
       "start": 97,
       "end": 100,
       "sha256": "4cdfbe4a92093e7f79c2a7b448359041759d1f48310821180cf47ba4a2e7ff83",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 85,
+      "end": 86,
+      "sha256": "eb213205419f2a12dcf7c865c51348f5bdd99caceef166c891427fa462cb8d45",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 288,
+      "end": 289,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 302,
+      "end": 303,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 315,
+      "end": 315,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 321,
+      "end": 321,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 329,
+      "end": 330,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 341,
+      "end": 341,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 347,
+      "end": 347,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 405,
+      "end": 405,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 408,
+      "end": 408,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 558,
+      "end": 558,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 1281,
+      "end": 1281,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 1288,
+      "end": 1288,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 1296,
+      "end": 1296,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 2154,
+      "end": 2155,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 2612,
+      "end": 2612,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 2616,
+      "end": 2621,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 2643,
+      "end": 2643,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/lltexturefetch.cpp",
+      "start": 2646,
+      "end": 2651,
+      "sha256": "e5cd6ada8cdefc3ab30b12e91b493d249166ae08ea423dd8f5179e099209e586",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "scripts/package_vulkan_evidence.py",
+      "start": 11,
+      "end": 11,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/package_vulkan_evidence.py",
+      "start": 79,
+      "end": 79,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/package_vulkan_evidence.py",
+      "start": 88,
+      "end": 88,
+      "sha256": "f30538b7fe702f6944c76ca34f57fca6b82eebf737526ca212870f4aa01e5591",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/run_vulkan_texture_cache_tests.py",
+      "start": 13,
+      "end": 13,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/run_vulkan_texture_cache_tests.py",
+      "start": 135,
+      "end": 170,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/run_vulkan_texture_cache_tests.py",
+      "start": 212,
+      "end": 216,
+      "sha256": "742a68599a4be4629d7a4136b9cd85b206541524dc16675b99d6ec989dc20493",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_native_cache_operations.py",
+      "start": 1,
+      "end": 69,
+      "sha256": "d722db6fc2bbdc730db3a050e94eb287cc49a643358bc3fb0268cc5d9f73ad9d",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_cache_driver.py",
+      "start": 1,
+      "end": 25,
+      "sha256": "ee9929f506877a9ac0c45e12a1f830ab2b9d0673307cc5e275ff8fc4153146ea",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_evidence_package.py",
+      "start": 50,
+      "end": 51,
+      "sha256": "4d0c4461d368d8076a17bc74dd6587e2d3a60f8f7a7a66863452e42f3a89e408",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_evidence_package.py",
+      "start": 57,
+      "end": 59,
+      "sha256": "4d0c4461d368d8076a17bc74dd6587e2d3a60f8f7a7a66863452e42f3a89e408",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
