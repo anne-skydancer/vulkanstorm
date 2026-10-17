@@ -6,6 +6,7 @@
 #include "llviewercontrol.h"
 #include "llimagepng.h"
 #include "llsdutil.h"
+#include "llframetimer.h"
 #include <map>
 #include "vsnativesession.h"
 #include "vsvulkancontext.h"
@@ -48,6 +49,7 @@ void requireTerrain(bool ok,const char* message) {if(!ok) throw std::runtime_err
 constexpr U8 colors[4][4]={{255,0,0,255},{0,255,0,255},{0,0,255,255},{255,255,255,255}};
 struct TerrainReplay {
  unsigned phase=0;bool complete=false;LLSD evidence;
+ double deadline=LLFrameTimer::getTotalSeconds()+30;
  std::map<std::string,LLSD> saved;
  std::array<LLPointer<LLLocalGLTFMaterial>,4> assets;
  std::unique_ptr<VSWorldRenderer> renderer;
@@ -86,6 +88,7 @@ struct TerrainReplay {
               Diligent::ITextureView* windowTarget,unsigned width,unsigned height) {
   using namespace Diligent;
   if(complete) return;
+  requireTerrain(LLFrameTimer::getTotalSeconds()<deadline,"R3 terrain material publication timed out");
   auto& world=owner.world();auto& resources=owner.resources();
   const LLVector3 eye(8,8,10);
   auto packets=world.packets(eye,64,64,64);

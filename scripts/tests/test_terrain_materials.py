@@ -10,6 +10,27 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class TerrainMaterials(unittest.TestCase):
+    def test_replay_contract_flags_are_independent_and_clear_stale_values(self):
+        import sys
+        import itertools
+        from types import SimpleNamespace
+        sys.path.insert(0,str(ROOT/'scripts'))
+        from run_vulkan_session_replay import configure_replay_contract_environment
+        pairs=(
+            ('local_image_contracts','VS_VULKAN_REPLAY_LOCAL_IMAGES'),
+            ('texture_cache_contracts','VS_VULKAN_REPLAY_TEXTURE_CACHE'),
+            ('texture_cache_read_only','VS_VULKAN_REPLAY_TEXTURE_CACHE_READ_ONLY'),
+            ('r1_contracts','VS_VULKAN_REPLAY_R1'),('r2_contracts','VS_VULKAN_REPLAY_R2'),
+            ('terrain_contracts','VS_VULKAN_REPLAY_TERRAIN'),
+            ('pending_cache_write_restart','VS_VULKAN_REPLAY_PENDING_CACHE_WRITE_RESTART'))
+        for values in itertools.product((False,True),repeat=len(pairs)):
+            args=SimpleNamespace(**dict(zip((pair[0] for pair in pairs),values)))
+            env={key:'stale' for _,key in pairs};env['PATH']='preserved'
+            configure_replay_contract_environment(env,args)
+            for (_,key),enabled in zip(pairs,values):
+                self.assertEqual(env.get(key),'1' if enabled else None)
+            self.assertEqual(env['PATH'],'preserved')
+
     def test_terrain_qualification_requires_every_layer_and_pixels(self):
         import sys
         sys.path.insert(0, str(ROOT / 'scripts'))
