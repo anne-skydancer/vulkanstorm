@@ -137,7 +137,7 @@ struct Message {struct Circuit {void removeCircuitData(Host){}} mCircuitInfo;
  void disableCircuit(Host){}};
 Message* gMessageSystem=nullptr;
 struct Agent {int getPositionGlobal(){return 0;}} gAgent;
-struct Window {void setShowProgress(bool show,bool){assert(!show);}};Window* gViewerWindow=nullptr;
+struct Window {int hides=0;void setShowProgress(bool show,bool){assert(!show);++hides;}};Window* gViewerWindow=nullptr;
 struct LLTeleportHistory {static LLTeleportHistory& instance(){static LLTeleportHistory h;return h;}
  void updateNativeLocation(int){}};
 double now(){return 5;}
@@ -148,6 +148,7 @@ struct LLInventoryModelBackgroundFetch {
 struct VSNativeAppearance {explicit VSNativeAppearance(int){} void fallback(int){}};
 struct VSNativeSession {
  enum class Phase {Connecting,Connected,Logout};Phase mPhase=Phase::Connecting;
+ enum class Startup {Precache,Complete};Startup mStartup=Startup::Precache;
  bool mChangingRegion=false,mHandshake=false,mMovement=false,mSeedReady=false,mCircuitAck=false;
  double mNavigationDeadline=0,mDeadline=0;Host mPreviousHost,mHost;
  struct Circuit {double deadline=60;};std::map<Host,Circuit> mCircuits;
@@ -163,7 +164,10 @@ int main(){
  s.mHandshake=s.mMovement=s.mCircuitAck=true;s.connected();assert(fetch.starts==0);
  s.mSeedReady=true;s.connected();assert(fetch.starts==1&&s.mPhase==VSNativeSession::Phase::Connected);
  s.connected();assert(fetch.starts==1);
- s.mChangingRegion=true;s.connected();assert(fetch.starts==1&&!s.mChangingRegion);
+ Window window;gViewerWindow=&window;
+ s.mChangingRegion=true;s.connected();assert(fetch.starts==1&&!s.mChangingRegion&&window.hides==0);
+ s.mStartup=VSNativeSession::Startup::Complete;s.mChangingRegion=true;s.connected();
+ assert(fetch.starts==1&&!s.mChangingRegion&&window.hides==1);
  s.mPhase=VSNativeSession::Phase::Logout;s.connected();assert(fetch.starts==1);
 }
 '''.replace('CONNECTED', prefix)

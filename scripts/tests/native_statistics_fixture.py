@@ -76,6 +76,7 @@ struct Timer {void reset(){}}gRenderStartTime,gForegroundTime;
 int audioCalls=0;void init_audio(){++audioCalls;}
 struct LLTrans {static std::string getString(const char* s){return s;}};
 struct LLNotificationsUtil {static inline int clothing=0;static void add(const char*){++clothing;}};
+void notify_native_startup(const char* name){LLNotificationsUtil::add(name);}
 struct FSLSLBridge {SINGLETON(FSLSLBridge) bool getBridgeCreating(){return false;}void initBridge(){}};
 struct FSFloaterWearableFavorites {static void initCategory(){}};
 struct LLFriendCardsManager {static void createAgentCallingCard(){}};
