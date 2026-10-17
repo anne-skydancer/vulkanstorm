@@ -1107,7 +1107,14 @@ struct Replay
                 LLFloaterReg::hideInstance("people");
                 }
 
+                const LLSD startupWork = report["startup_work"];
+                const LLSD startupWarnings = report["startup_warning_acknowledgements"];
+                require(startupWork.isArray() && startupWork.size() >= 4 &&
+                        startupWarnings.isArray() && startupWarnings.size() >= 2,
+                        "Native startup stage/relogin evidence is missing");
                 report = owner.evidence(); report["schema"] = 1; report["mode"] = "viewer-native-session-replay";
+                report["startup_work"] = startupWork;
+                report["startup_warning_acknowledgements"] = startupWarnings;
                 report["texture_cache"]=vs_ui_texture_cache_evidence(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE")!=nullptr);
                 if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE")) report["retired_texture_cache"]=report["texture_cache"];
                 // Snapshot transport evidence before appending verified fixture witnesses.
