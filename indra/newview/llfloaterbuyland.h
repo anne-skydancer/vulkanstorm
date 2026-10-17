@@ -1,3 +1,4 @@
+#include <typeinfo>
 /**
  * @file llfloaterbuyland.h
  * @brief LLFloaterBuyLand class definition
@@ -30,6 +31,7 @@
 class LLTextBase;
 class LLFloater;
 class LLViewerRegion;
+class VSRegionContext;
 class LLParcelSelection;
 
 class LLFloaterBuyLand
@@ -44,6 +46,8 @@ public:
     static void updateLastModified(const std::string& text);
     static void updateEstateOwnerName(const std::string& name);
 
+    static void buyLand(const VSRegionContext&, LLSafeHandle<LLParcelSelection>, bool is_for_group);
+    static bool isNativeInternalType(const std::type_info&);
     static LLFloater* buildFloater(const LLSD& key);
 };
 

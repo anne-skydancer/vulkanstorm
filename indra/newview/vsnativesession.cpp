@@ -71,8 +71,14 @@
 #include "llaudioengine.h"
 #include "llviewerparcelmedia.h"
 #include "llregioninfomodel.h"
+#include "llestateinfomodel.h"
+#include "llfloaterregioninfo.h"
 #include "llagent.h"
 #include "llparcel.h"
+#include "llviewerparcelmgr.h"
+#include "vsestatecovenant.h"
+#include "llenvironment.h"
+#include "llfloaterland.h"
 #include "indra_constants.h"
 #include "llfloaterwebcontent.h"
 #include "llfloaterreg.h"
@@ -155,7 +161,7 @@ const std::set<std::string>    worldMessages = {
     "ReplyTaskInventory", "GenericStreamingMessage"
 };
 const std::set<std::string> session = { "SimStats",
-                                        "RegionInfo",
+                                        "RegionInfo", "EstateOwnerMessage",
                                         "ParcelProperties",
                                         "ParcelMediaUpdate",
                                         "ParcelMediaCommandMessage",
@@ -365,7 +371,7 @@ void VSNativeSession::install(LLMessageSystem& msg)
     for (const auto& name : worldMessages) msg.setHandlerFunc(name.c_str(), receiveMessage);
     msg.setHandlerFunc("AgentWearablesUpdate",receiveMessage);
     msg.setHandlerFunc("EnableSimulator",receiveMessage);
-    for (const char* name : {"SimStats", "RegionInfo", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "ParcelOverlay", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
+    for (const char* name : {"SimStats", "RegionInfo", "EstateOwnerMessage", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "ParcelOverlay", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
          "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
     msg.setHandlerFunc("ObjectProperties", receiveMessage);
@@ -962,6 +968,7 @@ void VSNativeSession::parcelMediaCommand(U32 flags, U32 command, F32 time)
 bool VSNativeSession::publishCamera()
 {
     if(mShutdown || mPhase!=Phase::Connected || mChangingRegion || !gViewerWindow)return false;
+    synchronizeCameraMode();
     const auto state=cameraState();
     const auto viewport=gViewerWindow->getWindowRectRaw();
     if(viewport.getWidth()<=0 || viewport.getHeight()<=0 || !state.center.isFinite() ||
@@ -1027,8 +1034,13 @@ void VSNativeSession::mouseButton(bool down)
 }
 void VSNativeSession::cameraOrbit(F32 yaw, F32 pitch)
 { if (mPhase == Phase::Connected && !mChangingRegion) { mCamera.orbit(yaw, pitch); mAgentUpdateTime = 0; } }
+void VSNativeSession::synchronizeCameraMode(bool reset_mode)
+{
+    if (!gAgentCamera.completeNativeCameraMode(mCamera.firstPerson(), reset_mode))
+        mCamera.setZoomFraction(1.f); // Remain at the nearest third-person zoom.
+}
 void VSNativeSession::cameraZoom(S32 clicks)
-{ if (mPhase == Phase::Connected && !mChangingRegion) { mCamera.zoom(clicks); mAgentUpdateTime = 0; } }
+{ if (mPhase == Phase::Connected && !mChangingRegion) { mCamera.zoom(clicks); synchronizeCameraMode(); mAgentUpdateTime = 0; } }
 void VSNativeSession::cameraPan(const LLVector3& displacement)
 {
     if (!regionReady()) return;
@@ -1046,11 +1058,11 @@ bool VSNativeSession::cameraLookAt(const LLVector3d& eye, const LLVector3d& targ
     mAgentUpdateTime = 0;
     return true;
 }
-void VSNativeSession::cameraReset() { mCamera.resetView(); mAgentUpdateTime = 0; }
+void VSNativeSession::cameraReset() { mCamera.resetView(); synchronizeCameraMode(true); mAgentUpdateTime = 0; }
 void VSNativeSession::cameraResetOrbit() { mCamera.resetOrbit(); mAgentUpdateTime = 0; }
 void VSNativeSession::cameraResetPan() { mCamera.resetPan(); mAgentUpdateTime = 0; }
 void VSNativeSession::cameraResetRoll() { mCamera.resetRoll(); mAgentUpdateTime = 0; }
-void VSNativeSession::cameraFirstPerson(bool first) { mCamera.setFirstPerson(first); mAgentUpdateTime = 0; }
+void VSNativeSession::cameraFirstPerson(bool first) { mCamera.setFirstPerson(first); synchronizeCameraMode(true); mAgentUpdateTime = 0; }
 void VSNativeSession::cameraControls(F32 dt)
 {
     if (std::isfinite(dt) && dt > 0)
@@ -1069,6 +1081,7 @@ void VSNativeSession::cameraControls(F32 dt)
         gAgentCamera.getCameraOffsetInitial(), LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
     // The reference updateCamera also publishes input to the joystick artwork
     // and camera mode selection. Do this before consuming the held UI keys.
+    synchronizeCameraMode();
     LLFloaterCamera::updateNativeControls();
     // Floater held callbacks republish intent each frame, exactly as in updateCamera.
     gAgentCamera.clearGeneralKeys();
@@ -1186,7 +1199,7 @@ bool VSNativeSession::changeRegion(const LLSD& body)
     auto cancelNeighbour=std::exchange(destinationCircuit.cancel,{});if (cancelNeighbour) cancelNeighbour();
     destinationCircuit.poll.reset();
     if (FSLSLBridge::instanceExists()) FSLSLBridge::instance().resetNativeAccount();
-    ++mRegionEpoch; clearSimulatorFeatures(); mPreviousHost = mHost; mHost = destination;
+    ++mRegionEpoch; mRegionLimits.reset(); clearSimulatorFeatures(); mPreviousHost = mHost; mHost = destination;
     mHandle = ll_U64_from_sd(body["handle"]); mSeed = seed; mName.clear();
     if(body["teleport"].asBoolean())
     {
@@ -1229,8 +1242,11 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
     const auto peer=mCircuits.find(sender);
     const bool known=sender==mHost || peer!=mCircuits.end();
     if (transport.count(name)) return mHost.isOk() && known && mPhase != Phase::Disconnected;
-    if(name=="RegionInfo")return regionReady() && sender==mHost;
+    if(name=="RegionInfo" || name=="EstateOwnerMessage")return regionReady() && sender==mHost;
     if (name=="LayerData") return mHost.isOk() && known && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
+    if(name=="ParcelProperties" || name=="ParcelAccessListReply" || name=="ParcelDwellReply" || name=="ParcelObjectOwnersReply" || name=="EstateCovenantReply")
+        return mPhase==Phase::Connected && !mChangingRegion && peer!=mCircuits.end() &&
+            peer->second.acknowledged && peer->second.handshake;
     if (name=="ParcelOverlay" || name=="CoarseLocationUpdate") return mPhase==Phase::Connected && peer!=mCircuits.end() &&
         peer->second.acknowledged && peer->second.handshake;
     if (name=="ObjectProperties" || name=="ObjectPropertiesFamily" || name=="ForceObjectSelect")
@@ -1250,6 +1266,12 @@ void VSNativeSession::receive(LLMessageSystem* msg)
 {
     const std::string name = msg->getMessageName();
     if(name=="RegionInfo"){if(!applyRegionInfo(*msg))++mRejected;return;}
+    if(name=="EstateOwnerMessage")
+    {
+        if(admit(name,msg->getSender()))LLFloaterRegionInfo::processEstateOwnerRequest(msg,nullptr);
+        else ++mRejected;
+        return;
+    }
     if (name=="ObjectProperties" || name=="ObjectPropertiesFamily" || name=="ForceObjectSelect")
     {
         if (mObjectSelection && admit(name,msg->getSender()))mObjectSelection->receive(*msg);
@@ -1273,6 +1295,20 @@ void VSNativeSession::receive(LLMessageSystem* msg)
             LLVector3 position;
             if (world.agentPosition(position)) updateAgentPosition(position, msg->getSender(), mGeneration, mRegionEpoch);
         }
+        return;
+    }
+    if(name=="ParcelAccessListReply" || name=="ParcelDwellReply" || name=="ParcelObjectOwnersReply" || name=="EstateCovenantReply")
+    {
+        if(!admit(name,msg->getSender()))return;
+        if(name=="ParcelAccessListReply")LLViewerParcelMgr::processParcelAccessListReply(msg,nullptr);
+        else if(name=="ParcelDwellReply")LLViewerParcelMgr::processParcelDwellReply(msg,nullptr);
+        else if(name=="ParcelObjectOwnersReply")LLPanelLandObjects::processParcelObjectOwnersReply(msg,nullptr);
+        else vs_receive_covenant(msg);
+        return;
+    }
+    if(name=="ParcelProperties")
+    {
+        if(admit(name,msg->getSender()) && regionReady())LLViewerParcelMgr::processParcelProperties(msg,nullptr);
         return;
     }
     LLSD body = LLSD::emptyMap();
@@ -1818,6 +1854,7 @@ void VSNativeSession::connected()
         publishProgress();
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
         requestParcel();
+        LLEnvironment::instance().onRegionChange();
         if (gSavedSettings.getBOOL("UseLSLBridge")) FSLSLBridge::instance().initBridge();
         return;
     }
@@ -1974,6 +2011,7 @@ void VSNativeSession::advanceStartup()
         LLStartUp::setStartupState(STATE_MISC);
         return;
     case Startup::Misc:
+        LLEnvironment::instance();
         init_audio();
         LLStartUp::initActiveGestures();
         FSGroupTitleRegionMgr::getInstance()->loadFromDisk();
@@ -2314,6 +2352,8 @@ void VSNativeSession::tick()
         if (LLInventoryModelBackgroundFetch::instanceExists()) LLInventoryModelBackgroundFetch::instance().pumpAccountFetch();
     }
     advanceStartup();
+    if(LLEnvironment::instanceExists() && LLViewerCamera::instanceExists())
+        LLEnvironment::instance().update(LLViewerCamera::getInstance());
 }
 void VSNativeSession::unbind()
 {
@@ -2375,6 +2415,11 @@ void VSNativeSession::reset()
     // The old account's buddy owner is cleared below, before another login.
     mRegionLimits.reset();
     if(LLRegionInfoModel::instanceExists())LLRegionInfoModel::instance().reset();
+    LLEnvironment::deleteSingleton();
+    vs_reset_covenants();
+    if(LLViewerParcelMgr::instanceExists())LLViewerParcelMgr::instance().resetNativeAccount();
+    if(LLEstateInfoModel::instanceExists())LLEstateInfoModel::instance().reset();
+    LLFloaterRegionInfo::nextInvoice();
     LLTracker::cleanupInstance();
     LLFloaterReg::destroyInstance("world_map");LLFloaterReg::destroyInstance("mini_map");
     LLWorldMapView::cleanupClass();
@@ -2541,4 +2586,35 @@ LLSD VSNativeSession::evidence() const
     result["frozen"] = mFrozen;
     result["region_epoch"] = LLSD::Integer(mRegionEpoch); result["changing_region"] = mChangingRegion;
     result["location_url"] = locationURL(); result["world_owners"] = 0; return result;
+}
+
+// Playback and capability presentation consume the existing fully unpacked LLParcel.
+void VSNativeSession::publishAgentParcel(const LLParcel& parcel)
+{
+    if(!regionReady() || parcel.getRegionID()!=mRegionID || parcel.getLocalID()<0)return;
+    const auto currentAccount=accountGuard();const auto epoch=mRegionEpoch;
+    std::string music=parcel.getMusicURL(),media=parcel.getMediaURL();
+    LLStringUtil::trim(music);LLStringUtil::trim(media);
+    // Invalid stream URLs stop that playback, as on the reference path. They do
+    // not discard valid parcel ownership, permissions, names or progress updates.
+    if(!music.empty() && !webURL(music))music.clear();
+    if(!media.empty() && !webURL(media))media.clear();
+    const bool changed=mParcelID!=parcel.getLocalID() || mMusicURL!=music || mMediaURL!=media || mMediaType!=parcel.getMediaType();
+    const bool resumeMusic=mMusicRequested,resumeMedia=mMediaRequested,pausedMedia=mMediaPaused;
+    if(changed)clearParcelPlayback();
+    if(!currentAccount() || mRegionEpoch!=epoch)return;
+    mParcelID=parcel.getLocalID();mParcelName=parcel.getName();
+    mParcelPermissionsKnown=true;mParcelFlags=parcel.getParcelFlags();mParcelOwner=parcel.getOwnerID();mParcelSeeAvatars=parcel.getSeeAVs();
+    mMusicURL=music;mMediaURL=media;mMediaType=parcel.getMediaType();
+    LLSD metadata;metadata["loop"]=S32(parcel.getMediaLoop());metadata["autoscale"]=S32(parcel.getMediaAutoScale());
+    metadata["width"]=parcel.getMediaWidth();metadata["height"]=parcel.getMediaHeight();
+    const bool validMedia=updateParcelMediaMetadata(metadata);
+    if(!validMedia)LL_WARNS("NativeSession")<<"Parcel media parameters exceed the native media endpoint contract"<<LL_ENDL;
+    if(changed && (resumeMusic || (!mMusicUserStopped && gSavedSettings.getBOOL("FSParcelMusicAutoPlay") && gSavedSettings.getBOOL("MediaTentativeAutoPlay"))))setMusicEnabled(true);
+    if(!currentAccount() || mRegionEpoch!=epoch)return;
+    if(changed && validMedia && (resumeMedia || (!mMediaUserStopped && gSavedSettings.getS32("ParcelMediaAutoPlayEnable")==1 && gSavedSettings.getBOOL("MediaTentativeAutoPlay"))))
+    {
+        setMediaEnabled(true);
+        if(currentAccount() && mRegionEpoch==epoch && resumeMedia)setMediaPaused(pausedMedia);
+    }
 }

@@ -26,6 +26,7 @@
 
 #ifndef LL_LLPANELPLACEPROFILE_H
 #define LL_LLPANELPLACEPROFILE_H
+class VSRegionContext;
 
 #include "llpanelplaceinfo.h"
 
@@ -58,6 +59,7 @@ public:
                                    const LLVector3d& pos_global,
                                    bool is_current_parcel);
 
+    void displaySelectedParcelInfo(LLParcel*,const VSRegionContext&,const LLVector3d&,bool);
     void updateEstateName(const std::string& name);
     void updateEstateOwnerName(const std::string& name);
     void updateCovenantText(const std::string &text);

@@ -75,6 +75,7 @@ std::optional<VSRegionContext> VSRegionContext::legacy(LLViewerRegion* region)
     result.mAccess=region->getSimAccess();result.mWaterHeight=region->getWaterHeight();result.mWaterKnown=true;
     result.mBillableFactor=region->getBillableFactor();result.mBillableKnown=true;
     result.mObjectCapacity=region->getMaxTasks();result.mObjectCapacityKnown=true;
+    result.mDynamicPathfinding=region->dynamicPathfindingEnabled();
     result.mEstateManager=region->isEstateManager();result.mEstateManagerKnown=true;
     result.mProductName=region->getLocalizedSimProductName();result.mProductKnown=true;
     const auto host=result.mHost;
@@ -120,6 +121,8 @@ std::optional<VSRegionContext> VSRegionContext::native(const LLHost& host)
         result.mBillableFactor=region.metadata.billableFactor;result.mBillableKnown=region.metadata.billableKnown;
         // LLViewerRegion starts at 15000 until SimStats supplies the simulator limit.
         result.mObjectCapacity=region.objectCapacityKnown?region.objectCapacity:15000;result.mObjectCapacityKnown=region.objectCapacityKnown;
+        result.mDynamicPathfinding=host==owner->host() &&
+            owner->simulatorFeatures()["DynamicPathfindingEnabled"].asBoolean();
         result.mEstateManager=region.estateManager;result.mEstateManagerKnown=region.estateManagerKnown;
         result.mProductName=region.metadata.productName;result.mProductKnown=region.metadata.productKnown;
         const auto weak=std::weak_ptr<VSNativeSession>(owner);
@@ -185,4 +188,20 @@ std::optional<VSRegionContext> vs_current_region_context()
 #endif
     const auto* region=gAgent.getRegion();
     return region ? vs_region_context(region->getHost()) : std::nullopt;
+}
+
+bool vs_publish_region_owner(const VSRegionContext& context,const LLUUID& owner)
+{
+    if(!context.current())return false;
+#if VS_NATIVE_VULKAN
+    if(nativeRegions())
+    {
+        const auto session=VSNativeSession::active();
+        return session && session->publishRegionOwner(context.getHost(),session->circuitGeneration(context.getHost()),owner);
+    }
+#endif
+    auto* region=LLWorld::instance().getRegion(context.getHost());
+    if(!region || region->getRegionID()!=context.getRegionID())return false;
+    region->setOwner(owner);
+    return true;
 }

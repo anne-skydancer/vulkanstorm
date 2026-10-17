@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
 #include "llfloaterscriptlimits.h"
 
 // library includes
@@ -680,11 +681,13 @@ bool LLPanelScriptLimitsRegionMemory::StartRequestChain()
         return false;
     }
     LLParcel* parcel = instance->getCurrentSelectedParcel();
-    LLViewerRegion* region = LLViewerParcelMgr::getInstance()->getSelectionRegion();
+    const auto region=LLViewerParcelMgr::getInstance()->getSelectionRegionContext();
 
     if ((region) && (parcel))
     {
-        LLUUID current_region_id = gAgent.getRegion()->getRegionID();
+        const auto current=vs_current_region_context();
+        if(!current)return false;
+        LLUUID current_region_id=current->getRegionID();
         LLVector3 parcel_center = parcel->getCenterpoint();
 
         region_id = region->getRegionID();

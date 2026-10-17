@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
 #include "llfloaterauction.h"
 
 #include "llgl.h"
@@ -104,7 +105,7 @@ void LLFloaterAuction::initialize()
     mParcelUpdateCapUrl.clear();
 
     mParcelp = LLViewerParcelMgr::getInstance()->getParcelSelection();
-    LLViewerRegion* region = LLViewerParcelMgr::getInstance()->getSelectionRegion();
+    const auto region=LLViewerParcelMgr::getInstance()->getSelectionRegionContext();
     LLParcel* parcelp = mParcelp->getParcel();
     if(parcelp && region && !parcelp->getForSale())
     {
@@ -302,7 +303,7 @@ void LLFloaterAuction::onClickResetParcel(void* data)
 void LLFloaterAuction::doResetParcel()
 {
     LLParcel* parcelp = mParcelp->getParcel();
-    LLViewerRegion* region = LLViewerParcelMgr::getInstance()->getSelectionRegion();
+    const auto region=LLViewerParcelMgr::getInstance()->getSelectionRegionContext();
 
     if (parcelp
         && region
@@ -393,18 +394,18 @@ void LLFloaterAuction::doResetParcel()
         msg->sendReliable(region->getHost());
 
         // Clear the access lists
-        clearParcelAccessList(parcelp, region, AL_ACCESS);
-        clearParcelAccessList(parcelp, region, AL_BAN);
-        clearParcelAccessList(parcelp, region, AL_ALLOW_EXPERIENCE);
-        clearParcelAccessList(parcelp, region, AL_BLOCK_EXPERIENCE);
+        clearParcelAccessList(parcelp, *region, AL_ACCESS);
+        clearParcelAccessList(parcelp, *region, AL_BAN);
+        clearParcelAccessList(parcelp, *region, AL_ALLOW_EXPERIENCE);
+        clearParcelAccessList(parcelp, *region, AL_BLOCK_EXPERIENCE);
     }
 }
 
 
 
-void LLFloaterAuction::clearParcelAccessList(LLParcel* parcel, LLViewerRegion* region, U32 list)
+void LLFloaterAuction::clearParcelAccessList(LLParcel* parcel, const VSRegionContext& region, U32 list)
 {
-    if (!region || !parcel) return;
+    if (!region.current() || !parcel) return;
 
     LLUUID transactionUUID;
     transactionUUID.generate();
@@ -428,7 +429,7 @@ void LLFloaterAuction::clearParcelAccessList(LLParcel* parcel, LLViewerRegion* r
     msg->addS32Fast(_PREHASH_Time, 0 );
     msg->addU32Fast(_PREHASH_Flags, 0 );
 
-    msg->sendReliable( region->getHost() );
+    msg->sendReliable( region.getHost() );
 }
 
 
@@ -480,7 +481,7 @@ bool LLFloaterAuction::onSellToAnyoneConfirmed(const LLSD& notification, const L
 void LLFloaterAuction::doSellToAnyone()
 {
     LLParcel* parcelp = mParcelp->getParcel();
-    LLViewerRegion* region = LLViewerParcelMgr::getInstance()->getSelectionRegion();
+    const auto region=LLViewerParcelMgr::getInstance()->getSelectionRegionContext();
 
     if (parcelp
         && region

@@ -2,6 +2,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "ao.h"
 #include "llfloaterbuycurrency.h"
+#include "llfloaterbuyland.h"
+#include "llfloatersellland.h"
 #include "llfloaterbuycurrencyhtml.h"
 #include "llfloateraddpaymentmethod.h"
 #include "fsmoneytracker.h"
@@ -241,7 +243,8 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             const bool admitted =
                 // These existing controllers use shared UI, local settings,
                 // account inventory or the already-owned browser/audio service.
-                LLFloaterBuyCurrency::isNativeInternalType(t) || t == typeid(LLFloaterBuyCurrencyHTML) ||
+                LLFloaterBuyCurrency::isNativeInternalType(t) ||
+                LLFloaterBuyLand::isNativeInternalType(t) || LLFloaterSellLand::isNativeInternalType(t) || t == typeid(LLFloaterBuyCurrencyHTML) ||
                 t == typeid(LLFloaterAddPaymentMethod) || t == typeid(FSMoneyTracker) || t == typeid(LLFloaterWindowSize) || t == typeid(FSFloaterProtectedFolders) ||
                 t == typeid(FSFloaterStreamTitle) || t == typeid(FSFloaterStreamTitleHistory) ||
                 t == typeid(LLFloaterChatMentionPicker) || t == typeid(LLFloaterEmojiComplete) ||
@@ -356,7 +359,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             return admitted;
         },
         [](std::string_view name) { return
-            name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
+            name == "buy_land" || name == "sell_land" || name == "buy_currency" || name == "buy_currency_html" || name == "add_payment_method" || name == "money_tracker" ||
             name == "window_size" || name == "fs_protectedfolders" || name == "fs_streamtitle" || name == "fs_streamtitlehistory" ||
             name == "chat_mention_picker" || name == "emoji_complete" || name == "preview_trash" || name == "new_feature_notification" ||
             name == "fs_whitelist_floater" || name == "settings_color" || name == "fs_splash_screen_settings" || name == "fs_volume_controls" ||
@@ -404,7 +407,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             if (name == "RecreateLSLBridge") return true;
             if (LLPanelMainInventory::isNativeCallback(name, parameter) ||
                 LLPanelPeople::isNativeCallback(std::string(name), parameter) || FSChatHistory::isNativeCallback(std::string(name), parameter)) return true;
-            if (name == "BuyCurrency") return true;
+            if (name == "BuyCurrency" || name == "Land.Buy" || name == "World.EnableBuyLand") return true;
             if (name == "MoneyTrackerList.Action") return parameter.asString() == "copy" || parameter.asString() == "delete";
             if (name == "MoneyTrackerList.Enable") return parameter.asString() == "can_copy" || parameter.asString() == "can_delete";
             if (name == "Profile.Commit" || name == "Profile.EnableItem")

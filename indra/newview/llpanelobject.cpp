@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 // file include
 #include "llpanelobject.h"
@@ -375,7 +376,7 @@ LLPanelObject::~LLPanelObject()
 void LLPanelObject::updateLimits(bool attachment)
 {
 // <FS:CR> Aurora Sim
-    //mRegionMaxHeight = LLWorld::getInstance()->getRegionMaxHeight();
+    //mRegionMaxHeight = vs_region_limits().getRegionMaxHeight();
     //mCtrlPosZ->setMaxValue(mRegionMaxHeight);
 //<FS:TS> FIRE-8205: Unable to edit attachments to negative coordinates
 //  Only apply region size limits to position spinners if editing something
@@ -391,17 +392,17 @@ void LLPanelObject::updateLimits(bool attachment)
     }
     else
     {
-        mCtrlPosX->setMinValue(LLWorld::getInstance()->getMinPrimXPos());
-        mCtrlPosX->setMaxValue(LLWorld::getInstance()->getMaxPrimXPos());
-        mCtrlPosY->setMinValue(LLWorld::getInstance()->getMinPrimYPos());
-        mCtrlPosY->setMaxValue(LLWorld::getInstance()->getMaxPrimYPos());
-        mCtrlPosZ->setMinValue(LLWorld::getInstance()->getMinPrimZPos());
-        mCtrlPosZ->setMaxValue(LLWorld::getInstance()->getMaxPrimZPos());
+        mCtrlPosX->setMinValue(vs_region_limits().getMinPrimXPos());
+        mCtrlPosX->setMaxValue(vs_region_limits().getMaxPrimXPos());
+        mCtrlPosY->setMinValue(vs_region_limits().getMinPrimYPos());
+        mCtrlPosY->setMaxValue(vs_region_limits().getMaxPrimYPos());
+        mCtrlPosZ->setMinValue(vs_region_limits().getMinPrimZPos());
+        mCtrlPosZ->setMaxValue(vs_region_limits().getMaxPrimZPos());
     }
 //</FS:TS> FIRE-8205: Unable to edit attachments to negative coordinates
 // </FS:CR> Aurora Sim
-    mMinScale = LLWorld::getInstance()->getRegionMinPrimScale();
-    mMaxScale = LLWorld::getInstance()->getRegionMaxPrimScale();
+    mMinScale = vs_region_limits().getRegionMinPrimScale();
+    mMaxScale = vs_region_limits().getRegionMaxPrimScale();
     mCtrlScaleX->setMinValue(mMinScale);
     mCtrlScaleX->setMaxValue(mMaxScale);
     mCtrlScaleY->setMinValue(mMinScale);
@@ -409,14 +410,14 @@ void LLPanelObject::updateLimits(bool attachment)
     mCtrlScaleZ->setMinValue(mMinScale);
     mCtrlScaleZ->setMaxValue(mMaxScale);
 
-    mMaxHollowSize = LLWorld::getInstance()->getRegionMaxHollowSize();
+    mMaxHollowSize = vs_region_limits().getRegionMaxHollowSize();
     mSpinHollow->setMaxValue(mMaxHollowSize);
 
-    mMinHoleSize = LLWorld::getInstance()->getRegionMinHoleSize();
+    mMinHoleSize = vs_region_limits().getRegionMinHoleSize();
     mSpinScaleX->setMinValue(mMinHoleSize);
     mSpinScaleY->setMinValue(mMinHoleSize);
 // <FS:CR> Aurora Sim
-    mCheckPhysics->setEnabled(LLWorld::getInstance()->getAllowPhysicalPrims());
+    mCheckPhysics->setEnabled(vs_region_limits().getAllowPhysicalPrims());
 // </FS:CR> Aurora Sim
 }
 // </AW: opensim-limits>
@@ -2196,7 +2197,7 @@ F32 llpanelobject_max_prim_scale()
 //  if(gAgent.getRegion()->getCapability("GetMesh").empty())
 //      return DEFAULT_MAX_PRIM_SCALE;
 //  return 64.f;
-    return LLWorld::getInstance()->getRegionMaxPrimScale();
+    return vs_region_limits().getRegionMaxPrimScale();
 // </AW: opensim-limits>
 }
 
@@ -2272,7 +2273,7 @@ void LLPanelObject::sendPosition(bool btn_down)
         }
         const F32 min_height = LLWorld::getInstance()->getMinAllowedZ(mObject, height_check_pos);
         // </FS:Ansariel>
-        const F32 max_height = LLWorld::getInstance()->getRegionMaxHeight();
+        const F32 max_height = vs_region_limits().getRegionMaxHeight();
 
         if ( height < min_height)
         {

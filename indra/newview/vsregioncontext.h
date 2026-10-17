@@ -44,6 +44,7 @@ public:
     bool isEstateManager() const { return mEstateManagerKnown && mEstateManager; }
     bool estateManagerKnown() const { return mEstateManagerKnown; }
     bool canManageEstate() const;
+    bool dynamicPathfindingEnabled() const { return mDynamicPathfinding; }
     bool getAllowDamage() const;
     bool getBlockFly() const;
     bool isVoiceEnabled() const;
@@ -68,6 +69,7 @@ private:
     U32 mObjectCapacity=0;
     U8 mAccess=0;
     std::string mName,mProductName="unknown";
+    bool mDynamicPathfinding=false;
     bool mWaterKnown=false,mBillableKnown=false,mProtocolsKnown=false,mObjectCapacityKnown=false;
     bool mEstateManager=false,mEstateManagerKnown=false,mProductKnown=false;
     std::function<bool()> mCurrent;
@@ -78,3 +80,5 @@ std::optional<VSRegionContext> vs_region_context(const LLHost&);
 std::optional<VSRegionContext> vs_region_context(const LLVector3d&);
 std::optional<VSRegionContext> vs_region_context(const LLUUID&);
 std::optional<VSRegionContext> vs_current_region_context();
+
+bool vs_publish_region_owner(const VSRegionContext&,const LLUUID&);

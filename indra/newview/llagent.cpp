@@ -26,6 +26,7 @@
 
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 #include "vsavatarservices.h"
 #include "llcharacter.h"
 #include "vsnativeim.h"
@@ -37,6 +38,7 @@
 #endif
 
 #include "llagent.h"
+#include "vsregioncontext.h"
 
 #include "pipeline.h"
 
@@ -1408,7 +1410,8 @@ void LLAgent::resetGroups()
 
 bool LLAgent::canManageEstate() const
 {
-    return mRegionp && mRegionp->canManageEstate();
+    const auto region=vs_current_region_context();
+    return region && region->canManageEstate();
 }
 
 //-----------------------------------------------------------------------------
@@ -3205,7 +3208,7 @@ void LLAgent::setStartPosition( U32 location_id )
     // Don't let them go below ground, or too high.
     agent_pos.mV[VZ] = llclamp( agent_pos.mV[VZ],
                                 mRegionp->getLandHeightRegion( agent_pos ),
-                                LLWorld::getInstance()->getRegionMaxHeight() );
+                                vs_region_limits().getRegionMaxHeight() );
     // Send the CapReq
     LLSD request;
     LLSD body;

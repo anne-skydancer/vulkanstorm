@@ -25,8 +25,12 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsestatecovenant.h"
 
 #include "llfloaterbuyland.h"
+#include "llviewerregion.h"
+#include "vsregioncontext.h"
+#include "vsnativeim.h"
 
 // viewer includes
 #include "llagent.h"
@@ -90,7 +94,9 @@ private:
 
 private:
     SelectionObserver mParcelSelectionObserver;
-    LLViewerRegion* mRegion;
+    std::optional<VSRegionContext> mRegion;
+    std::function<bool()> mAccountCurrent=vs_native_im_guard();
+    std::function<bool()> mSelectionCurrent=[] { return false; };
     LLParcelSelectionHandle mParcel;
     bool            mIsClaim;
     bool            mIsForGroup;
@@ -151,13 +157,14 @@ private:
         TransactionBuy
     };
     LLXMLRPCTransaction* mTransaction;
-    TransactionType      mTransactionType;
+    TransactionType      mTransactionType=TransactionPreflight;
 
     LLViewerParcelMgr::ParcelBuyInfo*   mParcelBuyInfo;
+    boost::signals2::scoped_connection mVisibilityConnection;
 
 public:
     void setForGroup(bool is_for_group);
-    void setParcel(LLViewerRegion* region, LLParcelSelectionHandle parcel);
+    void setParcel(const VSRegionContext& region, LLParcelSelectionHandle parcel);
 
     void updateAgentInfo();
     void updateParcelInfo();
@@ -210,17 +217,26 @@ private:
 void LLFloaterBuyLand::buyLand(
     LLViewerRegion* region, LLParcelSelectionHandle parcel, bool is_for_group)
 {
+    if(!region)return;
+    const auto context=vs_region_context(region->getHost());
+    if(context)buyLand(*context,parcel,is_for_group);
+}
+
+void LLFloaterBuyLand::buyLand(
+    const VSRegionContext& region, LLParcelSelectionHandle parcel, bool is_for_group)
+{
     if(is_for_group && !gAgent.hasPowerInActiveGroup(GP_LAND_DEED))
     {
         LLNotificationsUtil::add("OnlyOfficerCanBuyLand");
         return;
     }
 
-    LLFloaterBuyLandUI* ui = LLFloaterReg::showTypedInstance<LLFloaterBuyLandUI>("buy_land");
+    LLFloaterBuyLandUI* ui = LLFloaterReg::getTypedInstance<LLFloaterBuyLandUI>("buy_land");
     if (ui)
     {
         ui->setForGroup(is_for_group);
         ui->setParcel(region, parcel);
+        ui->openFloater();
     }
 }
 
@@ -306,8 +322,10 @@ LLFloaterBuyLandUI::LLFloaterBuyLandUI(const LLSD& key)
 
 LLFloaterBuyLandUI::~LLFloaterBuyLandUI()
 {
-    LLViewerParcelMgr::getInstance()->removeObserver(&mParcelSelectionObserver);
-    LLViewerParcelMgr::getInstance()->deleteParcelBuy(&mParcelBuyInfo);
+    mVisibilityConnection.disconnect();
+    if(LLViewerParcelMgr::instanceExists())
+        LLViewerParcelMgr::instance().removeObserver(&mParcelSelectionObserver);
+    LLViewerParcelMgr::deleteParcelBuy(&mParcelBuyInfo);
 
     delete mTransaction;
 }
@@ -324,13 +342,14 @@ void LLFloaterBuyLandUI::onClose(bool app_quitting)
 
 void LLFloaterBuyLandUI::SelectionObserver::changed()
 {
-    if (LLViewerParcelMgr::getInstance()->selectionEmpty())
+    if (!mFloater->mAccountCurrent() || LLViewerParcelMgr::getInstance()->selectionEmpty() ||
+        !LLViewerParcelMgr::getInstance()->getSelectionRegionContext())
     {
         mFloater->closeFloater();
     }
     else
     {
-        mFloater->setParcel(LLViewerParcelMgr::getInstance()->getSelectionRegion(),
+        mFloater->setParcel(*LLViewerParcelMgr::getInstance()->getSelectionRegionContext(),
                             LLViewerParcelMgr::getInstance()->getParcelSelection());
     }
 }
@@ -407,7 +426,7 @@ void LLFloaterBuyLandUI::updateParcelInfo()
         parcel->getMaxPrimCapacity() * parcel->getParcelPrimBonus());
     // Can't have more than region max tasks, regardless of parcel
     // object bonus factor.
-    LLViewerRegion* region = LLViewerParcelMgr::getInstance()->getSelectionRegion();
+    const auto region = LLViewerParcelMgr::getInstance()->getSelectionRegionContext();
     if (region)
     {
         S32 max_tasks_per_region = (S32)region->getMaxTasks();
@@ -502,7 +521,7 @@ void LLFloaterBuyLandUI::updateParcelInfo()
 
 void LLFloaterBuyLandUI::updateCovenantInfo()
 {
-    LLViewerRegion* region = LLViewerParcelMgr::getInstance()->getSelectionRegion();
+    const auto region = LLViewerParcelMgr::getInstance()->getSelectionRegionContext();
     if (!region)
         return;
 
@@ -555,12 +574,14 @@ void LLFloaterBuyLandUI::updateCovenantInfo()
     box->setVisible(false);
 
     // send EstateCovenantInfo message
-    LLMessageSystem *msg = gMessageSystem;
-    msg->newMessage("EstateCovenantRequest");
-    msg->nextBlockFast(_PREHASH_AgentData);
-    msg->addUUIDFast(_PREHASH_AgentID,  gAgent.getID());
-    msg->addUUIDFast(_PREHASH_SessionID,gAgent.getSessionID());
-    msg->sendReliable(region->getHost());
+    VSCovenantCallbacks callbacks;
+    callbacks.estateName=[this](const std::string& value){updateFloaterEstateName(value);};
+    callbacks.ownerName=[this](const std::string& value){updateFloaterEstateOwnerName(value);};
+    callbacks.lastModified=[this](const std::string& value){updateFloaterLastModified(value);};
+    callbacks.content=[this](const LLTextBase* text,const LLUUID& id){updateFloaterCovenant(text,id);};
+    callbacks.text=[this](const std::string& text,const LLUUID& id){updateFloaterCovenantText(text,id);};
+    vs_request_covenant(*region,*this,std::move(callbacks),[this,id=region->getRegionID()]
+        {return mRegion && mRegion->getRegionID()==id;});
 }
 
 // static
@@ -810,9 +831,15 @@ void LLFloaterBuyLandUI::updateNames()
     }
     else if (parcelp->getIsGroupOwned())
     {
+        const auto weak=getHandle();
+        const auto current=mSelectionCurrent;
+        const auto account=mAccountCurrent;
         gCacheName->getGroup(parcelp->getGroupID(),
-            boost::bind(&LLFloaterBuyLandUI::updateGroupName, this,
-                _1, _2, _3));
+            [weak,current,account](const LLUUID& id,const std::string& name,bool group)
+            {
+                if(account() && current())
+                    if(auto* view=dynamic_cast<LLFloaterBuyLandUI*>(weak.get()))view->updateGroupName(id,name,group);
+            });
     }
     else
     {
@@ -918,7 +945,7 @@ void LLFloaterBuyLandUI::tellUserError(
 // virtual
 bool LLFloaterBuyLandUI::postBuild()
 {
-    setVisibleCallback(boost::bind(&LLFloaterBuyLandUI::onVisibilityChanged, this, _2));
+    mVisibilityConnection=setVisibleCallback(boost::bind(&LLFloaterBuyLandUI::onVisibilityChanged,this,_2));
 
     mCurrency.prepare();
 
@@ -931,7 +958,7 @@ bool LLFloaterBuyLandUI::postBuild()
     return true;
 }
 
-void LLFloaterBuyLandUI::setParcel(LLViewerRegion* region, LLParcelSelectionHandle parcel)
+void LLFloaterBuyLandUI::setParcel(const VSRegionContext& region, LLParcelSelectionHandle parcel)
 {
     if (mTransaction &&  mTransactionType == TransactionBuy)
     {
@@ -939,7 +966,9 @@ void LLFloaterBuyLandUI::setParcel(LLViewerRegion* region, LLParcelSelectionHand
         return;
     }
 
+    if(!mAccountCurrent() || !region.current())return;
     mRegion = region;
+    mSelectionCurrent=LLViewerParcelMgr::instance().selectionGuard();
     mParcel = parcel;
 
     updateAgentInfo();
@@ -959,6 +988,7 @@ void LLFloaterBuyLandUI::setForGroup(bool forGroup)
 
 void LLFloaterBuyLandUI::draw()
 {
+    if(!mAccountCurrent()) { closeFloater();return; }
     LLFloater::draw();
 
     bool needsUpdate = false;
@@ -1279,7 +1309,7 @@ void LLFloaterBuyLandUI::refreshUI()
         getChildView("purchase_action")->setVisible(false);
         getChildView("currency_reason")->setVisible(false);
         getChildView("currency_balance")->setVisible(false);
-        getChildView("remove_group_donation")->setVisible(false);
+        getChildView("remove_contribution")->setVisible(false);
     }
 
 
@@ -1330,14 +1360,43 @@ void LLFloaterBuyLandUI::startBuyPreConfirm()
     action += getString("pay_to_for_land", string_args);
 
 
-    LLConfirmationManager::confirm(mSiteConfirm,
-        action,
-        *this,
-        &LLFloaterBuyLandUI::startBuyPostConfirm);
+    // Confirmation belongs to the visible parcel, account, price and web estimate.
+    // Do not keep a raw floater reference in a modal that can outlive it.
+    class Confirmation final : public LLConfirmationManager::ListenerBase
+    {
+    public:
+        explicit Confirmation(LLFloaterBuyLandUI& owner)
+            : mView(owner.getHandle()),mAccount(owner.mAccountCurrent),mSelection(owner.mSelectionCurrent),
+              mPrice(owner.mParcelPrice),mArea(owner.mParcelBillableArea),mCurrency(owner.mCurrency.getAmount()),
+              mGroup(owner.mIsForGroup),mActiveGroup(gAgent.getGroupID()),mConfirm(owner.mSiteConfirm),
+              mEstimate(owner.mCurrency.getLocalEstimate()),mPlan(owner.getChild<LLComboBox>("account_level")->getCurrentIndex()) {}
+        void confirmed(const std::string& password) override
+        {
+            if(!mAccount() || !mSelection())return;
+            auto* owner=dynamic_cast<LLFloaterBuyLandUI*>(mView.get());
+            if(!owner || !owner->mCanBuy || !owner->mSiteValid || owner->mTransaction ||
+               owner->mParcelPrice!=mPrice || owner->mParcelBillableArea!=mArea ||
+               owner->mCurrency.getAmount()!=mCurrency || owner->mIsForGroup!=mGroup ||
+               (mGroup && gAgent.getGroupID()!=mActiveGroup) || owner->mSiteConfirm!=mConfirm ||
+               owner->mCurrency.getLocalEstimate()!=mEstimate ||
+               owner->getChild<LLComboBox>("account_level")->getCurrentIndex()!=mPlan)return;
+            owner->startBuyPostConfirm(password);
+        }
+    private:
+        LLHandle<LLView> mView;
+        std::function<bool()> mAccount,mSelection;
+        S32 mPrice,mArea,mCurrency;
+        bool mGroup;
+        LLUUID mActiveGroup;
+        std::string mConfirm,mEstimate;
+        S32 mPlan;
+    };
+    LLConfirmationManager::confirm(mSiteConfirm,action,new Confirmation(*this));
 }
 
 void LLFloaterBuyLandUI::startBuyPostConfirm(const std::string& password)
 {
+    if(!mAccountCurrent() || !mSelectionCurrent())return;
     runWebSitePrep(password);
 
     mCanBuy = false;
@@ -1364,3 +1423,8 @@ void LLFloaterBuyLandUI::onClickErrorWeb()
 
 
 
+
+bool LLFloaterBuyLand::isNativeInternalType(const std::type_info& type)
+{
+    return type==typeid(LLFloaterBuyLandUI);
+}

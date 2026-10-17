@@ -64,6 +64,7 @@ struct Inventory {bool usable=false;int notices=0;bool isInventoryUsable(){retur
 struct LLInventoryModel {static inline bool ready=false;static bool isSysFoldersReady(){return ready;}};
 #define SINGLETON(T) static T& instance(){static T value;return value;}
 struct LLAppearanceMgr {SINGLETON(LLAppearanceMgr) int calls=0;void initCOFID(){++calls;}};
+struct LLEnvironment {SINGLETON(LLEnvironment)};
 struct LLInventoryModelBackgroundFetch {SINGLETON(LLInventoryModelBackgroundFetch) int lost=0;void findLostItems(){++lost;}};
 struct FSGroupTitleRegionMgr {static FSGroupTitleRegionMgr* getInstance(){static FSGroupTitleRegionMgr v;return &v;}void loadFromDisk(){}};
 struct FSFavoriteGroups {static FSFavoriteGroups* getInstance(){static FSFavoriteGroups v;return &v;}void loadFavorites(){}};

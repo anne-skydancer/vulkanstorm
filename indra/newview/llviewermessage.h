@@ -207,9 +207,6 @@ void process_script_dialog(LLMessageSystem* msg, void**);
 void process_load_url(LLMessageSystem* msg, void**);
 void process_script_teleport_request(LLMessageSystem* msg, void**);
 void process_covenant_reply(LLMessageSystem* msg, void**);
-void onCovenantLoadComplete(const LLUUID& asset_uuid,
-                            LLAssetType::EType type,
-                            void* user_data, S32 status, LLExtStat ext_status);
 
 // calling cards
 void process_offer_callingcard(LLMessageSystem* msg, void**);

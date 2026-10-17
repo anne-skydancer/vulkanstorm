@@ -86,7 +86,7 @@ struct VSNativeSession{
  LLHost mHost;LLUUID mAgent,mSession;U32 mCircuit=99,mMouseControls=0;U64 mGeneration=3,mRegionEpoch=7,mSent=0;
  VSNativeCamera mCamera;LLVector3 mPosition{100,100,20};double mAgentUpdateTime=1;
  VSNativeCamera::State cameraState()const;
- bool movementAction(U32,const std::string&,bool,bool=false);void releaseMovement();void cameraOrbit(F32,F32);void cameraZoom(S32);
+ bool movementAction(U32,const std::string&,bool,bool=false);void releaseMovement();void cameraOrbit(F32,F32);void cameraZoom(S32);void synchronizeCameraMode(bool=false){};
  bool updateAgentPosition(const LLVector3&,const LLHost&,U64,U64);bool send(const std::string&,const LLSD&);
 };
 FUNCTIONS

@@ -30,6 +30,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 #include "llviewercontrol.h"
 
@@ -554,7 +555,7 @@ void LLViewerParcelMgr::renderHighlightSegments(const U8* segments, LLViewerRegi
     LLGLDisable cull(GL_CULL_FACE);
 
     static LLCachedControl<bool> fsRenderParcelSelectionToMaxBuildHeight(gSavedSettings, "FSRenderParcelSelectionToMaxBuildHeight");
-    F32 height = fsRenderParcelSelectionToMaxBuildHeight ? LLWorld::instance().getMaxPrimZPos() + PARCEL_POST_HEIGHT : PARCEL_POST_HEIGHT;
+    F32 height = fsRenderParcelSelectionToMaxBuildHeight ? vs_region_limits().getMaxPrimZPos() + PARCEL_POST_HEIGHT : PARCEL_POST_HEIGHT;
     // </FS:Ansariel>
 
     gGL.color4f(1.f, 1.f, 0.f, 0.2f);

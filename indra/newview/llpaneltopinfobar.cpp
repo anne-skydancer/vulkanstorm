@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregioncontext.h"
 
 #include "llpaneltopinfobar.h"
 #if VS_NATIVE_VULKAN
@@ -300,26 +301,9 @@ void LLPanelTopInfoBar::updateParcelInfoText()
 
 void LLPanelTopInfoBar::updateParcelIcons()
 {
-#if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active())
-    {
-        const auto permissions = native->parcelPermissions();
-        const bool show = permissions.known && gSavedSettings.getBOOL("NavBarShowParcelProperties");
-        mParcelIcon[VOICE_ICON]->setVisible(show && !permissions.voice);
-        mParcelIcon[FLY_ICON]->setVisible(show && !permissions.fly);
-        mParcelIcon[PUSH_ICON]->setVisible(show && !permissions.push);
-        mParcelIcon[BUILD_ICON]->setVisible(show && !permissions.build);
-        mParcelIcon[SCRIPTS_ICON]->setVisible(show && !permissions.scripts);
-        mParcelIcon[DAMAGE_ICON]->setVisible(show && permissions.damage);
-        mParcelIcon[SEE_AVATARS_ICON]->setVisible(show && !permissions.seeAvatars);
-        mDamageText->setVisible(show && permissions.damage);
-        layoutParcelIcons();
-        return;
-    }
-#endif
     LLViewerParcelMgr* vpm = LLViewerParcelMgr::getInstance();
 
-    LLViewerRegion* agent_region = gAgent.getRegion();
+    const auto agent_region=vs_current_region_context();
     LLParcel* agent_parcel = vpm->getAgentParcel();
     if (!agent_region || !agent_parcel)
         return;
@@ -327,7 +311,7 @@ void LLPanelTopInfoBar::updateParcelIcons()
     if (gSavedSettings.getBOOL("NavBarShowParcelProperties"))
     {
         LLParcel* current_parcel;
-        LLViewerRegion* selection_region = vpm->getSelectionRegion();
+        const auto selection_region=vpm->getSelectionRegionContext();
         LLParcel* selected_parcel = vpm->getParcelSelection()->getParcel();
 
         // If agent is in selected parcel we use its properties because
@@ -336,7 +320,7 @@ void LLPanelTopInfoBar::updateParcelIcons()
         // This is needed to reflect parcel restrictions changes without having to leave
         // the parcel and then enter it again. See EXT-2987
         if (selected_parcel && selected_parcel->getLocalID() == agent_parcel->getLocalID()
-                && selection_region == agent_region)
+                && selection_region && *selection_region==*agent_region)
         {
             current_parcel = selected_parcel;
         }
@@ -345,12 +329,12 @@ void LLPanelTopInfoBar::updateParcelIcons()
             current_parcel = agent_parcel;
         }
 
-        bool allow_voice    = vpm->allowAgentVoice(agent_region, current_parcel);
-        bool allow_fly      = vpm->allowAgentFly(agent_region, current_parcel);
-        bool allow_push     = vpm->allowAgentPush(agent_region, current_parcel);
+        bool allow_voice    = vpm->allowAgentVoice(&*agent_region,current_parcel);
+        bool allow_fly      = vpm->allowAgentFly(&*agent_region,current_parcel);
+        bool allow_push     = vpm->allowAgentPush(&*agent_region,current_parcel);
         bool allow_build    = vpm->allowAgentBuild(current_parcel); // true when anyone is allowed to build. See EXT-4610.
-        bool allow_scripts  = vpm->allowAgentScripts(agent_region, current_parcel);
-        bool allow_damage   = vpm->allowAgentDamage(agent_region, current_parcel);
+        bool allow_scripts  = vpm->allowAgentScripts(&*agent_region,current_parcel);
+        bool allow_damage   = vpm->allowAgentDamage(&*agent_region,current_parcel);
         bool see_avs        = current_parcel->getSeeAVs();
 
         // Most icons are "block this ability"

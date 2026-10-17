@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsregionlimits.h"
 
 #include "lltoolgrab.h"
 
@@ -678,9 +679,9 @@ void LLToolGrabBase::handleHoverActive(S32 x, S32 y, MASK mask)
 //              {
 //              grab_point_global.mdV[VZ] = MAX_OBJECT_Z;
 //              }
-            if (grab_point_global.mdV[VZ] > LLWorld::getInstance()->getRegionMaxHeight())
+            if (grab_point_global.mdV[VZ] > vs_region_limits().getRegionMaxHeight())
             {
-                grab_point_global.mdV[VZ] = LLWorld::getInstance()->getRegionMaxHeight();
+                grab_point_global.mdV[VZ] = vs_region_limits().getRegionMaxHeight();
             }
 // </AW: opensim-limits>
             grab_point_global = LLWorld::getInstance()->clipToVisibleRegions(mDragStartPointGlobal, grab_point_global);

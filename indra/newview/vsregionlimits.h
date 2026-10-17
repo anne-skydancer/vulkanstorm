@@ -107,3 +107,5 @@ protected:
 // <FS:CR> Aurora Sim
 };
 VSRegionLimits& vs_region_limits();
+
+void vs_apply_region_limits();
