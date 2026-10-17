@@ -1,6 +1,9 @@
 // Replay ordinary login and native session dispatch against a loopback fixture. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "ao.h"
+#include "llprogressview.h"
+#include "lltextbox.h"
+#include "lltrans.h"
 #include "vsr1replay.h"
 #include "vsr2replay.h"
 #include "vsr3replay.h"
@@ -245,6 +248,15 @@ void qualifyConnectedSkinGeometry(LLSD& report)
         require((gAgent.*state)() == original, "Account policy menu did not restore shared state");
         report["account_policy_menus"][name] = true;
     }
+    std::vector<LLNotificationPtr> modeAlerts;
+    LLNotificationChannel::getInstance("Alerts")->forEachNotification([&](LLNotificationPtr notification)
+    {
+        const auto name = notification->getName();
+        if (name == "DoNotDisturbModeSet" || name == "AutorespondModeSet" || name == "AutorespondNonFriendsModeSet" ||
+            name == "RejectTeleportOffersModeSet" || name == "RejectFriendshipRequestsModeSet" || name == "RejectAllGroupInvitesModeSet")
+            modeAlerts.push_back(notification);
+    });
+    for (const auto& alert : modeAlerts) LLNotifications::instance().cancel(alert);
     // Building every instantiated menu label evaluates the real enabled/check/visible routes,
     // including nested menus, without committing destructive or server actions.
     auto labels = [&](auto&& self, LLView* view) -> void
@@ -910,12 +922,19 @@ struct Replay
                 if (auto current = weak.lock()) queuedExpired = !current->deliver("ChatFromSimulator", LLSD::emptyMap(), current->host(), generation);
             });
             owner.requestLogout(false);
+            auto* progress = gViewerWindow->getProgressView();
+            require(progress && progress->getVisible() &&
+                progress->getChild<LLTextBox>("progress_text")->getValue().asString() == LLTrans::getString("LoggingOut"),
+                "Native logout did not show its shared progress text");
             LLSD reply; reply["AgentData"][0]["AgentID"] = LLUUID(response()["agent_id"].asString());
             reply["AgentData"][0]["SessionID"] = LLUUID(response()["session_id"].asString());
             http("LogoutReply", reply, owner.host());
+            require(owner.phase() == VSNativeSession::Phase::Logout, "Fast logout reply bypassed the progress frame");
+            gViewerWindow->drawNativeUI();
             require(owner.phase() == VSNativeSession::Phase::Login && !chat->getVisible() &&
                     (!FSFloaterNearbyChat::findInstance() || !FSFloaterNearbyChat::findInstance()->isInVisibleChain()),
                 "Logout did not detach both shared and diagnostic nearby frontends");
+            require(!LLFloaterReg::findInstance("animation_overrider"), "Logout retained the old account AO editor");
             require(vs_native_im_replay_expired(), "Logout retained a live IM callback generation");
             vs_r1_replay_retired(owner,imEvidence);
             vs_r2_replay_retired(owner, imEvidence);

@@ -387,6 +387,23 @@ int main(){window.top.rect={0,500,800,468};window.bottom.rect={0,64,800,32};LLSc
         bottom=function(source,'void LLScreenChannel::showToastsBottom(')
         self.assertIn('if (gViewerWindow->isNativeVulkan())\n        bottom =',bottom)
 
+    def test_fast_logout_reply_waits_for_a_presented_frame(self):
+        source=(ROOT/'indra/newview/vsnativesession.cpp').read_text()
+        presented=function(source,'void VSNativeSession::logoutFramePresented(')
+        fixture=r'''#include <cassert>
+struct VSNativeSession {enum class Phase{Login,Connected,Logout};Phase mPhase=Phase::Connected;
+ bool mLogoutPresented=false,mLogoutReply=false;int finishes=0;
+ void finishLogout(){++finishes;mPhase=Phase::Login;}void logoutFramePresented();};
+BODY
+int main(){VSNativeSession s;s.logoutFramePresented();assert(!s.mLogoutPresented && !s.finishes);
+ s.mPhase=VSNativeSession::Phase::Logout;s.mLogoutReply=true;
+ s.logoutFramePresented();assert(s.mLogoutPresented && s.finishes==1);
+ s.logoutFramePresented();assert(s.finishes==1);
+ VSNativeSession slow;slow.mPhase=VSNativeSession::Phase::Logout;
+ slow.logoutFramePresented();assert(slow.mLogoutPresented && !slow.finishes);}
+'''.replace('BODY',presented)
+        self.compile(fixture)
+
     def test_actual_native_logout_uses_shared_skinned_progress_policy(self):
         source=(ROOT/'indra/newview/vsnativesession.cpp').read_text()
         body=function(source,'void VSNativeSession::requestLogout(')
@@ -404,7 +421,7 @@ struct LLAppViewer{bool quit=false;static LLAppViewer*instance(){static LLAppVie
 float gLogoutMaxTime=6;
 double now(){return 10;}
 struct VSNativeSession{enum class Phase{Connected,Connecting,Logout,Login};Phase mPhase=Phase::Connected;
- bool mQuit=false;double mDeadline=0;int sent=0,released=0;
+ bool mQuit=false,mLogoutPresented=true,mLogoutReply=true;double mDeadline=0;int sent=0,released=0;
  struct Poll{void reset(){}}mPoll;
  struct Circuit {std::function<void()> cancel;Poll poll;};std::map<int,Circuit> mCircuits;
  void typing(bool){}void releaseMovement(){++released;}void clearParcelPlayback(){}void unbind(){}
@@ -412,6 +429,7 @@ struct VSNativeSession{enum class Phase{Connected,Connecting,Logout,Login};Phase
  void requestLogout(bool);};
 BODY
 int main(){VSNativeSession s;s.requestLogout(false);assert(s.mPhase==VSNativeSession::Phase::Logout);
+ assert(!s.mLogoutPresented && !s.mLogoutReply);
  assert(s.sent==2 && s.released==1 && s.mDeadline==16 && viewer.shown==1 && viewer.full && viewer.percent==100 && viewer.text=="LoggingOut");
  s.requestLogout(true);assert(s.mQuit && s.sent==2 && s.released==1 && viewer.shown==1);
  s.mPhase=VSNativeSession::Phase::Connected;gSavedSettings.disable=true;s.requestLogout(false);assert(!viewer.full && viewer.shown==2);

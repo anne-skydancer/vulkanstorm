@@ -17,7 +17,7 @@ public:
         LLQuaternion bodyRotation, headRotation;
         bool firstPerson = false;
     };
-    void reset() { mHeld.clear(); mYaw = mBodyYaw = mRoll = 0; mPitch = -.15f; mDistance = 3.f; mPan.clear(); mFlying = false; }
+    void reset() { mHeld.clear(); mYaw = mBodyYaw = mRoll = mPitch = 0; mDistance = 1.f; mPan.clear(); mFlying = false; }
     void release() { mHeld.clear(); }
     void setFlying(bool flying) { mFlying = flying; }
     void face(const LLVector3& direction)
@@ -40,7 +40,9 @@ public:
         mDistance = std::clamp(mDistance + F32(clicks) * std::max(.2f, mDistance * .15f), 0.f, 128.f);
         if (firstPerson()) { mPan.clear(); mBodyYaw = mYaw; }
     }
-    void step(F32 dt, bool rotationCaptured = false)
+    void step(F32 dt, bool rotationCaptured = false,
+              const LLVector3& cameraOffset = LLVector3(0,0,-.2f),
+              const LLVector3& focusOffset = LLVector3(1,0,.2f), F32 scale = .75f)
     {
         if (!std::isfinite(dt) || dt <= 0) return;
         dt = std::min(dt, .1f); // A stalled frame cannot produce an unbounded turn.
@@ -51,7 +53,7 @@ public:
         const F32 zoomDelta = axis("move_backward", "move_forward") * dt * std::max(1.f, mDistance);
         mDistance = std::clamp(mDistance + zoomDelta, 0.f, 128.f);
         if (firstPerson()) { mPan.clear(); mBodyYaw = mYaw; return; }
-        auto view = state(LLVector3::zero);
+        auto view = state(LLVector3::zero, cameraOffset, focusOffset, scale);
         mPan += (view.left * axis("pan_left", "pan_right") + view.up * axis("pan_up", "pan_down")) * dt * std::max(1.f, mDistance);
         if (mPan.magVecSquared() > 128.f * 128.f) { mPan.normalize(); mPan *= 128.f; }
     }
@@ -70,17 +72,29 @@ public:
         if (firstPerson()) value |= AGENT_CONTROL_MOUSELOOK;
         return value;
     }
-    State state(const LLVector3& agent) const
+    State state(const LLVector3& agent,
+                const LLVector3& cameraOffset = LLVector3(0,0,-.2f),
+                const LLVector3& focusOffset = LLVector3(1,0,.2f), F32 scale = .75f) const
     {
-        const F32 c = std::cos(mPitch), s = std::sin(mPitch), cy = std::cos(mYaw), sy = std::sin(mYaw);
+        // Reference rear view: eye offset is relative to the avatar/head frame,
+        // and focus offset is relative to the avatar root, with X forward.
+        const LLVector3 radial = LLVector3(0,0,1) + cameraOffset * scale - focusOffset;
+        const F32 yaw = std::atan2(-radial.mV[VY], -radial.mV[VX]) + mYaw;
+        const F32 pitch = std::clamp(std::atan2(-radial.mV[VZ],
+            std::hypot(radial.mV[VX], radial.mV[VY])) + mPitch, -1.45f, 1.45f);
+        const F32 c = std::cos(pitch), s = std::sin(pitch), cy = std::cos(yaw), sy = std::sin(yaw);
         State result;
         result.at = LLVector3(c * cy, c * sy, s);
         LLVector3 left(-sy, cy, 0), up(-s * cy, -s * sy, c);
         result.left = left * std::cos(mRoll) + up * std::sin(mRoll);
         result.up = up * std::cos(mRoll) - left * std::sin(mRoll);
-        result.center = agent + LLVector3(0, 0, 1.5f) + mPan - result.at * mDistance;
+        const F32 bodyCos = std::cos(mBodyYaw), bodySin = std::sin(mBodyYaw);
+        const LLVector3 focus(focusOffset.mV[VX] * bodyCos - focusOffset.mV[VY] * bodySin,
+                             focusOffset.mV[VX] * bodySin + focusOffset.mV[VY] * bodyCos, focusOffset.mV[VZ]);
+        const F32 distance = std::clamp(std::sqrt(radial.magVecSquared()) * mDistance, .1f, 128.f);
+        result.center = firstPerson() ? agent + LLVector3(0,0,1) : agent + focus + mPan - result.at * distance;
         result.bodyRotation = LLQuaternion(mBodyYaw, LLVector3::z_axis);
-        result.headRotation = LLQuaternion(-mPitch, LLVector3::y_axis) * LLQuaternion(mYaw, LLVector3::z_axis);
+        result.headRotation = LLQuaternion(-pitch, LLVector3::y_axis) * LLQuaternion(yaw, LLVector3::z_axis);
         result.firstPerson = firstPerson(); return result;
     }
 private:
@@ -96,7 +110,7 @@ private:
     F32 axis(const char* positive, const char* negative) const { return F32(held(positive)) - F32(held(negative)); }
     static F32 wrap(F32 angle) { return std::remainder(angle, 6.28318530718f); }
     std::map<U32, std::string> mHeld;
-    F32 mYaw = 0, mBodyYaw = 0, mPitch = -.15f, mRoll = 0, mDistance = 3.f;
+    F32 mYaw = 0, mBodyYaw = 0, mPitch = 0, mRoll = 0, mDistance = 1.f;
     LLVector3 mPan;
     bool mFlying = false;
 };

@@ -12222,6 +12222,10 @@ class LLViewStatusDoNotDisturb : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
+        #if VS_NATIVE_VULKAN
+        if (const auto session = VSNativeSession::active())
+            return session->phase() == VSNativeSession::Phase::Connected && gAgent.isDoNotDisturb();
+#endif
         return (gAgent.isInitialized() && gAgent.isDoNotDisturb());
     }
 };
