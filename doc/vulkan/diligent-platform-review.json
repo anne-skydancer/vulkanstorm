@@ -1,5 +1,5 @@
 {
-  "source_commit": "e5a5860b4bb463bc80019fdf654ea070378b0307",
+  "source_commit": "e97280e6c1aee4907d4ed0bc485b9f979b5591b7",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -41290,7 +41290,7 @@
       "path": "scripts/tests/test_native_local_images.py",
       "start": 1,
       "end": 74,
-      "sha256": "8b9ead5d1b5d9cf4bcb3d2bb720547a36e42452fed0912a4905f77d7cd585da0",
+      "sha256": "bc4e732456907e88749a90a0acacf8aad76ffb31b102414d95473ba5e47ea735",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -41303,10 +41303,19 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_native_local_images.py",
+      "start": 36,
+      "end": 36,
+      "sha256": "bc4e732456907e88749a90a0acacf8aad76ffb31b102414d95473ba5e47ea735",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "751e9d13038e05fafe4d814ce05d3d1032b2e058",
+    "previous_source_commit": "d39a2fcff71961d0cd8ff4b6b5ae1a3de5bc1d07",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }

@@ -1,5 +1,5 @@
 {
-  "source_commit": "e5a5860b4bb463bc80019fdf654ea070378b0307",
+  "source_commit": "e97280e6c1aee4907d4ed0bc485b9f979b5591b7",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -51586,7 +51586,7 @@
       "path": "scripts/tests/test_native_local_images.py",
       "start": 1,
       "end": 74,
-      "sha256": "8b9ead5d1b5d9cf4bcb3d2bb720547a36e42452fed0912a4905f77d7cd585da0",
+      "sha256": "bc4e732456907e88749a90a0acacf8aad76ffb31b102414d95473ba5e47ea735",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -51596,6 +51596,15 @@
       "start": 1,
       "end": 37,
       "sha256": "f5a5e6beca8c39b165d2be70fc8505d92090b3e250e110dce58901f934a4b4a6",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_native_local_images.py",
+      "start": 36,
+      "end": 36,
+      "sha256": "bc4e732456907e88749a90a0acacf8aad76ffb31b102414d95473ba5e47ea735",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
