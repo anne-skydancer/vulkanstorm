@@ -55,6 +55,7 @@ jobs:
       - run: python scripts/tests/test_world_surface_picking.py
       - run: python scripts/tests/test_terrain_geometry.py
       - run: python scripts/tests/test_terrain_publication.py
+      - run: python scripts/tests/test_terrain_materials.py
       - run: python scripts/tests/test_world_gltf_ownership.py
       - run: python scripts/tests/test_world_gltf_publication.py
       - run: python scripts/tests/test_world_gltf_topology.py

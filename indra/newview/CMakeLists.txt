@@ -1196,6 +1196,7 @@ set(viewer_HEADER_FILES
     llflexibleobject.h
     vsflexiblepath.h
     vsterraingeometry.h
+    vsterrainmaterial.h
     vsrendercomplexity.h
     vscontrolconstraints.h
     vsavatarcloth.h

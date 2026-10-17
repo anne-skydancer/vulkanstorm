@@ -535,6 +535,46 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     auto clipped=quad(-2.f);farPacket.mesh=clipped;farPacket.color={0,0,1,1};
     renderer.draw(rtv,8,8,view,{nearPacket,farPacket});
     capture("near-clip.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
+    // Four terrain swatches share the production shader and sampler path. The
+    // synthetic ramp has known endpoint texels, making every layer and seam
+    // independently observable without depending on the composition producer.
+    VSWorldRenderer::Packet terrain;
+    terrain.terrain=true;terrain.fullbright=true;terrain.doubleSided=true;
+    auto terrainSurface=std::make_shared<VSMaterial::State>();
+    terrainSurface->samplers[VSMaterial::Occlusion].u=VSWorldContracts::AddressMode::Clamp;
+    terrainSurface->samplers[VSMaterial::Occlusion].v=VSWorldContracts::AddressMode::Clamp;
+    terrain.surface=terrainSurface;
+    terrain.image=images.upload(1,1,{255,0,0,255});
+    terrain.channels[0]=images.upload(1,1,{0,255,0,255});
+    terrain.channels[1]=images.upload(1,1,{0,0,255,255});
+    terrain.channels[2]=images.upload(1,1,{255,255,255,255});
+    terrain.channels[3]=images.upload(2,1,{255,255,255,255,255,255,255,0});
+    const std::array<Pixel,7> terrainExpected{{{255,0,0,255},{128,128,0,255},{0,255,0,255},
+        {0,128,128,255},{0,0,255,255},{128,128,255,255},{255,255,255,255}}};
+    const float compositions[]{.25f,.5f,1.25f,1.5f,2.25f,2.5f,2.75f};
+    for(unsigned swatch=0;swatch<7;++swatch) {
+        std::vector<VSWorldRenderer::Vertex> vertices{{-1,1,0,0,0,1,1.25f,.25f},
+            {1,1,0,0,0,1,1.25f,.25f},{-1,-1,0,0,0,1,1.25f,.25f},{1,-1,0,0,0,1,1.25f,.25f}};
+        for(auto& vertex:vertices){vertex.u1=compositions[swatch];vertex.v1=.5f;}
+        terrain.mesh=renderer.upload(vertices,{0,2,1,1,2,3},VSWorldRenderer::Topology::Triangles,
+            VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0|VSWorldContracts::UV1);
+        renderer.draw(rtv,8,8,view,{terrain});
+        const auto name="terrain-layer-"+std::to_string(swatch)+".ppm";
+        const auto expected=terrainExpected[swatch];
+        capture(name.c_str(),[expected](unsigned,unsigned){return expected;});
+    }
+    // Live terrain scale changes update constants, retaining the mesh generation.
+    auto scaleVertices=VSWorldRenderer::geometryVertices(terrain.mesh);
+    for(auto& vertex:scaleVertices)vertex.u1=.25f;
+    terrain.mesh=renderer.upload(scaleVertices,{0,2,1,1,2,3});
+    terrain.image=images.upload(2,1,{255,0,0,255,0,255,0,255});
+    terrainSurface->samplers[0].minification=terrainSurface->samplers[0].magnification=VSWorldContracts::Filter::Nearest;
+    renderer.draw(rtv,8,8,view,{terrain});
+    capture("terrain-scale-before.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
+    terrainSurface=std::make_shared<VSMaterial::State>(*terrainSurface);
+    terrainSurface->uv[0].matrix={.5f,0,0,.5f};terrain.surface=terrainSurface;
+    renderer.draw(rtv,8,8,view,{terrain});
+    capture("terrain-scale-after.ppm",[](unsigned,unsigned){return Pixel{0,255,0,255};});
     // Production material/UV/color-space charts, independently specified pixels.
     VSWorldRenderer::Packet materialPacket=textured;
     auto surface=std::make_shared<VSMaterial::State>();

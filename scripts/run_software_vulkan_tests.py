@@ -17,7 +17,9 @@ MATERIAL_READBACKS=('material-opaque.ppm','material-linear-factor.ppm','material
     'material-independent-occlusion.ppm','material-occlusion-transform.ppm','sampler-repeat.ppm',
     'sampler-clamp.ppm','sampler-mirror.ppm','sampler-mipmaps.ppm','ui-base-level.ppm',
     'compression-policy.ppm','compression-replacement.ppm','legacy-bump-brightness.ppm',
-    'legacy-bump-darkness.ppm','legacy-bump-standard.ppm','legacy-bump-gray.ppm')
+    'legacy-bump-darkness.ppm','legacy-bump-standard.ppm','legacy-bump-gray.ppm',
+    *(f'terrain-layer-{index}.ppm' for index in range(7)),
+    'terrain-scale-before.ppm','terrain-scale-after.ppm')
 
 
 @contextmanager
