@@ -85,6 +85,7 @@ class ViewerManifest(LLManifest,FSViewerManifest):
                 self.path('DiligentCore')
                 self.path('Vulkan-Headers-*.txt')
                 self.path('Vulkan-Loader-*')
+            self.path(src='app_settings/stb_dxt-license.txt', dst='licenses/vulkan-ghi/stb_dxt.txt')
         super(ViewerManifest, self).construct()
         self.path(src="../../scripts/messages/message_template.msg", dst="app_settings/message_template.msg")
         
