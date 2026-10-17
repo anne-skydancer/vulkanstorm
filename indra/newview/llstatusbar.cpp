@@ -437,13 +437,12 @@ bool LLStatusBar::postBuild()
     mSGPacketLoss = LLUICtrlFactory::create<LLStatGraph>(pgp);
     addChild(mSGPacketLoss);
 
+    mPanelPresetsCameraPulldown = new LLPanelPresetsCameraPulldown();
+    addChild(mPanelPresetsCameraPulldown);
+    mPanelPresetsCameraPulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
+    mPanelPresetsCameraPulldown->setVisible(false);
     if (!native_status_bar())
     {
-        mPanelPresetsCameraPulldown = new LLPanelPresetsCameraPulldown();
-        addChild(mPanelPresetsCameraPulldown);
-        mPanelPresetsCameraPulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
-        if (mPanelPresetsCameraPulldown) mPanelPresetsCameraPulldown->setVisible(false);
-
         mPanelPresetsPulldown = new LLPanelPresetsPulldown();
         addChild(mPanelPresetsPulldown);
         mPanelPresetsPulldown->setFollows(FOLLOWS_TOP|FOLLOWS_RIGHT);
@@ -576,7 +575,7 @@ bool LLStatusBar::postBuild()
 
     if (native_status_bar())
     {
-        mIconPresetsCamera->setEnabled(false);
+        mIconPresetsCamera->setEnabled(true);
         mIconPresetsGraphic->setEnabled(false);
         mMediaToggle->setEnabled(false);
         mStreamToggle->setEnabled(false);
@@ -812,6 +811,8 @@ void LLStatusBar::refresh()
 #if VS_NATIVE_VULKAN
         auto owner = VSNativeSession::active();
         const bool connected = owner && owner->phase() == VSNativeSession::Phase::Connected;
+        updateParcelIcons();
+        updateHealth();
         mMediaToggle->setEnabled(connected && !owner->mediaURL().empty() && gSavedSettings.getBOOL("AudioStreamingMedia"));
         mStreamToggle->setEnabled(connected && gAudiop && !owner->musicURL().empty() && gSavedSettings.getBOOL("AudioStreamingMusic"));
         mMediaToggle->setValue(!connected || !owner->mediaEnabled());
@@ -1044,7 +1045,6 @@ void LLStatusBar::onClickShop()
 
 void LLStatusBar::onMouseEnterPresetsCamera()
 {
-    if (native_status_bar()) { LLNotificationsUtil::add("NativeWorldUnavailable"); return; }
     LLView* popup_holder = gViewerWindow->getRootView()->getChildView("popup_holder");
     // <FS:Ansariel> Changed presets icon to LLButton
     //LLIconCtrl* icon =  getChild<LLIconCtrl>( "presets_icon_camera" );
@@ -1586,6 +1586,34 @@ void LLStatusBar::updateParcelInfoText()
 
 void LLStatusBar::updateParcelIcons()
 {
+#if VS_NATIVE_VULKAN
+    if (native_status_bar())
+    {
+        const auto native = VSNativeSession::active();
+        const auto permissions = native ? native->parcelPermissions() : VSParcelPermissions{};
+        const bool show = mShowParcelIcons && permissions.known;
+        mParcelIcon[VOICE_ICON]->setVisible(show && !permissions.voice);
+        mParcelIcon[FLY_ICON]->setVisible(show && !permissions.fly);
+        mParcelIcon[PUSH_ICON]->setVisible(show && !permissions.push);
+        mParcelIcon[BUILD_ICON]->setVisible(show && !permissions.build);
+        mParcelIcon[SCRIPTS_ICON]->setVisible(show && !permissions.scripts);
+        mParcelIcon[DAMAGE_ICON]->setVisible(show && permissions.damage);
+        mParcelIcon[SEE_AVATARS_ICON]->setVisible(show && !permissions.seeAvatars);
+        bool isOpenSim = false;
+#ifdef OPENSIM
+        isOpenSim = LLGridManager::getInstance()->isInOpenSim();
+#endif
+        mParcelIcon[PATHFINDING_DIRTY_ICON]->setVisible(false);
+        mParcelIcon[PATHFINDING_DISABLED_ICON]->setVisible(show && !isOpenSim && native->simulatorFeaturesReceived() &&
+            !native->simulatorFeatures()["DynamicPathfindingEnabled"].asBoolean());
+        mDamageText->setVisible(show && permissions.damage);
+        mBuyParcelBtn->setVisible(false);
+        mScriptOut->setVisible(false);
+        layoutParcelIcons();
+        return;
+    }
+#endif
+
     LLViewerParcelMgr* vpm = LLViewerParcelMgr::getInstance();
 
     LLViewerRegion* agent_region = gAgent.getRegion();
@@ -1747,6 +1775,14 @@ void LLStatusBar::onParcelIconClick(EParcelIcon icon)
         break;
     case SCRIPTS_ICON:
     {
+#if VS_NATIVE_VULKAN
+        if (const auto native = VSNativeSession::active())
+        {
+            LLNotificationsUtil::add((native->regionFlags() & REGION_FLAGS_ESTATE_SKIP_SCRIPTS) ? "ScriptsStopped" :
+                (native->regionFlags() & REGION_FLAGS_SKIP_SCRIPTS) ? "ScriptsNotRunning" : "NoOutsideScripts");
+            break;
+        }
+#endif
         LLViewerRegion* region = gAgent.getRegion();
         if(region && region->getRegionFlags() & REGION_FLAGS_ESTATE_SKIP_SCRIPTS)
         {

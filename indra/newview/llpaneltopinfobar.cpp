@@ -456,6 +456,14 @@ void LLPanelTopInfoBar::onParcelIconClick(EParcelIcon icon)
         break;
     case SCRIPTS_ICON:
     {
+#if VS_NATIVE_VULKAN
+        if (const auto native = VSNativeSession::active())
+        {
+            LLNotificationsUtil::add((native->regionFlags() & REGION_FLAGS_ESTATE_SKIP_SCRIPTS) ? "ScriptsStopped" :
+                (native->regionFlags() & REGION_FLAGS_SKIP_SCRIPTS) ? "ScriptsNotRunning" : "NoOutsideScripts");
+            break;
+        }
+#endif
         LLViewerRegion* region = gAgent.getRegion();
         if(region && region->getRegionFlag(REGION_FLAGS_ESTATE_SKIP_SCRIPTS))
         {

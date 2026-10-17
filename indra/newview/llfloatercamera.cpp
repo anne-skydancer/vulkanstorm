@@ -439,6 +439,8 @@ void LLFloaterCamera::onDebugCameraToggled()
 
 void LLFloaterCamera::showDebugInfo(bool show)
 {
+    // Compact/phototools XUI variants may omit the optional debug panels.
+    if (!mAgentCameraInfo || !mViewerCameraInfo) return;
     // Initially LLPanel contains 1 child "view_border"
     if (show && mViewerCameraInfo->getChildCount() < 2)
     {
@@ -587,9 +589,9 @@ LLFloaterCamera::LLFloaterCamera(const LLSD& val)
 // virtual
 bool LLFloaterCamera::postBuild()
 {
-    mControls = getChild<LLPanel>("controls");
-    mAgentCameraInfo = getChild<LLPanel>("agent_camera_info");
-    mViewerCameraInfo = getChild<LLPanel>("viewer_camera_info");
+    mControls = findChild<LLPanel>("controls");
+    mAgentCameraInfo = findChild<LLPanel>("agent_camera_info");
+    mViewerCameraInfo = findChild<LLPanel>("viewer_camera_info");
     mRotate = getChild<LLJoystickCameraRotate>(ORBIT);
     mZoom = getChild<LLPanelCameraZoom>(ZOOM);
     mTrack = getChild<LLJoystickCameraTrack>(PAN);
