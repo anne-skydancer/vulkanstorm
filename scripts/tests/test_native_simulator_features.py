@@ -137,7 +137,16 @@ struct Message {struct Circuit {void removeCircuitData(Host){}} mCircuitInfo;
  void disableCircuit(Host){}};
 Message* gMessageSystem=nullptr;
 struct Agent {int getPositionGlobal(){return 0;}} gAgent;
-struct Window {int hides=0;void setShowProgress(bool show,bool){assert(!show);++hides;}};Window* gViewerWindow=nullptr;
+struct Window {int hides=0;void setShowProgress(bool show,bool){assert(!show);++hides;}
+ int getWorldViewHeightRaw()const{return 600;}int getWorldViewWidthRaw()const{return 800;}
+ float getWorldViewAspectRatio()const{return 800.f/600;}};Window* gViewerWindow=nullptr;
+struct Settings {bool getBOOL(const char*)const{return true;}float getF32(const char*)const{return 1.1f;}}gSavedSettings;
+struct FSLSLBridge {int starts=0;static FSLSLBridge& instance(){static FSLSLBridge b;return b;}void initBridge(){++starts;}};
+struct LLViewerCamera {static inline bool created=false;int heights=0,aspects=0,views=0;
+ static bool instanceExists(){return created;}static void createInstance(){assert(!created);created=true;}
+ static LLViewerCamera* getInstance(){assert(created);static LLViewerCamera camera;return &camera;}
+ void setViewHeightInPixels(int n){assert(n==600);++heights;}void setAspect(float f){assert(f==800.f/600);++aspects;}
+ void setDefaultFOV(float f){assert(f==1.1f);++views;}};
 struct LLTeleportHistory {static LLTeleportHistory& instance(){static LLTeleportHistory h;return h;}
  void updateNativeLocation(int){}};
 double now(){return 5;}
@@ -169,6 +178,12 @@ int main(){
  s.mStartup=VSNativeSession::Startup::Complete;s.mChangingRegion=true;s.connected();
  assert(fetch.starts==1&&!s.mChangingRegion&&window.hides==1);
  s.mPhase=VSNativeSession::Phase::Logout;s.connected();assert(fetch.starts==1);
+ assert(FSLSLBridge::instance().starts==2);
+ VSNativeSession fresh;fresh.mHandshake=fresh.mMovement=fresh.mSeedReady=fresh.mCircuitAck=true;
+ fresh.connected();assert(fetch.starts==2 && LLViewerCamera::instanceExists());
+ auto* camera=LLViewerCamera::getInstance();assert(camera->heights==1 && camera->aspects==1 && camera->views==1);
+ fresh.connected();assert(fetch.starts==2 && camera->views==1);
+
 }
 '''.replace('CONNECTED', prefix)
         with tempfile.TemporaryDirectory() as directory:
@@ -205,7 +220,7 @@ int main(){
 #include <string>
 #include <vector>
 using U64=unsigned long long;
-struct LLSD{};
+struct LLSD{int requestedPolicy=0;};
 namespace LLTrans { std::string getString(const char*) { return "timeout"; } }
 bool main_loop=false;
 namespace LL { struct WorkQueue {
@@ -222,13 +237,14 @@ struct Session {
  Phase mPhase=Phase::Connecting;
  std::function<void()> mCancelSeed,mCancelSimulatorFeatures;
  int admitted=0,disconnected=0,features=0;
- void capabilities(const LLSD&,U64,U64){assert(main_loop);++admitted;}
+ void capabilities(const LLSD&,U64,U64,const LLSD& requested){assert(main_loop && requested.requestedPolicy==4);++admitted;}
  void disconnect(const std::string&){assert(main_loop);++disconnected;}
  void applySimulatorFeatures(const LLSD&,U64,U64){assert(main_loop);++features;}
 };
 void enqueue(std::weak_ptr<Session> weak,U64 generation,U64 regionEpoch) {
- LLSD result;
+ LLSD result;LLSD wanted{4};
 COMPLETIONS
+ wanted.requestedPolicy=9; // Mutable policy after dispatch must not alter the captured request.
 }
 int main(){
  auto queue=LL::WorkQueue::getInstance("mainloop");
@@ -413,7 +429,10 @@ int main(){
         source = (ROOT / 'indra/newview/vsnativesession.cpp').read_text(encoding='utf-8')
         seed = method(source, 'void VSNativeSession::seedCoro(')
         caps = method(source, 'void VSNativeSession::capabilities(')
-        self.assertIn('"SimulatorFeatures"', seed)
+        catalogue=(ROOT/'indra/newview/vscapabilities.cpp').read_text(encoding='utf-8-sig')
+        self.assertIn('vs_native_capability_names()',seed)
+        self.assertIn('capabilityNames.append("SimulatorFeatures")',catalogue)
+        self.assertIn('owner->capabilities(result, generation, regionEpoch, wanted)',seed)
         self.assertIn('"SimulatorFeatures"', caps)
         coroutine = method(source, 'void VSNativeSession::simulatorFeaturesCoro(')
         self.assertIn('std::weak_ptr<VSNativeSession>', coroutine)

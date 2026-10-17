@@ -53,7 +53,7 @@ public:
     void typing(bool active);
     void receive(LLMessageSystem*);
     bool deliver(const std::string&, const LLSD&, const LLHost&, U64 generation);
-    void capabilities(const LLSD&, U64 generation, U64 regionEpoch = 0);
+    void capabilities(const LLSD&, U64 generation, U64 regionEpoch = 0, const LLSD& requested = LLSD());
     void circuitResult(U64 generation, S32 result, U64 regionEpoch = 0);
     U64 generation() const { return mGeneration; }
     Phase phase() const { return mPhase; }
@@ -74,6 +74,14 @@ public:
     const LLSD& simulatorFeatures() const { return mSimulatorFeatures; }
     bool simulatorFeaturesReceived() const { return mSimulatorFeaturesReceived; }
     bool applySimulatorFeatures(const LLSD&, U64 generation, U64 regionEpoch);
+    struct RegionMetadata
+    {
+        F32 billableFactor=1.f;
+        bool billableKnown=false,protocolsKnown=false,productKnown=false;
+        U64 protocols=0;
+        S32 cpuClass=0,cpuRatio=0;
+        std::string coloName,productSKU,productName="unknown";
+    };
     struct RegionSnapshot
     {
         AccountHandle account;
@@ -86,12 +94,14 @@ public:
         F32 waterHeight=0;
         bool waterKnown=false,current=false;
         bool estateManager=false,estateManagerKnown=false;
+        RegionMetadata metadata;
         U32 objectCapacity=0;
         bool objectCapacityKnown=false;
         std::vector<VSCoarseSample<LLUUID>> coarse;
         VSParcelOverlay::Snapshot parcelOverlay;
     };
     std::vector<RegionSnapshot> regionSnapshots() const;
+    bool current(const RegionSnapshot&) const;
     std::vector<VSCoarseSample<LLUUID>> coarseAvatarLocations() const;
     bool receiveParcelOverlay(const LLHost&,U64 account,U64 circuit,S32 sequence,const std::vector<U8>&);
     bool applyRegionStats(const LLHost&,U64 account,U64 circuit,U64 flags,U32 capacity);
@@ -217,6 +227,7 @@ private:
         F32 waterHeight=0;
         bool waterKnown=false;
         bool estateManager=false,estateManagerKnown=false;
+        RegionMetadata metadata;
         U32 objectCapacity=0;
         bool objectCapacityKnown=false;
         VSCoarseSnapshot<LLUUID> coarse;
