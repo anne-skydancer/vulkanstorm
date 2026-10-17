@@ -4,6 +4,9 @@
 #include "vstextureupload.h"
 #include "vsuiimageprovider.h"
 #include "llimage.h"
+#include "lldir.h"
+#include <fstream>
+#include <tuple>
 #include "llfontgl.h"
 #include "llvector4a.h"
 #include "v2math.h"
@@ -73,6 +76,16 @@ struct VSUIResources::Impl
         return {asset,facade};
     }
 
+    struct BumpEntry {
+        VSUIRenderer::Image image;
+        std::uint64_t sourceGeneration=0,touched=0;
+        float scale=0;
+        unsigned heightChannel=0;
+    };
+    std::array<LLUUID,32> standardBumps;
+    unsigned standardBumpCount=3;
+    std::uint64_t bumpClock=0;
+    std::map<std::pair<LLUUID,unsigned>,BumpEntry> bumps;
     VSUIRenderer& renderer;
     VSResourceBudget imagePreparationBytes{640 * 1024 * 1024};
     std::map<std::string,Entry> assets;
@@ -109,7 +122,22 @@ struct VSUIResources::Impl
     std::array<float,4> clip{};
     unsigned                       deferred_draw_batches = 0;
     bool active=false;
-    explicit Impl(VSUIRenderer& value) : renderer(value) {}
+    explicit Impl(VSUIRenderer& value) : renderer(value)
+    {
+        std::ifstream file(gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS,"std_bump.ini"));
+        std::string magic,version,label,id;unsigned number=0;
+        check(bool(file>>magic>>version>>number) && magic=="LLStandardBumpmap" && version=="version" && number==1,
+              "Native standard bump configuration is missing or invalid");
+        while(file>>label)
+        {
+            check(bool(file>>id),"Incomplete native standard bump source record");
+            LLUUID source;
+            check(standardBumpCount<standardBumps.size() && LLUUID::parseUUID(id,&source) && source.notNull(),
+                  "Invalid native standard bump source");
+            standardBumps[standardBumpCount++]=source;
+        }
+        check(file.eof(),"Invalid native standard bump configuration record");
+    }
     void drawRotated(const Asset& a,S32 x,S32 y,S32 width,S32 height,F32 degrees,
                      const LLColor4& color,const LLRectf& uv)
     {
@@ -218,6 +246,38 @@ VSUIResources::PreparedImage VSUIResources::prepareImage(const LLImageRaw& raw,V
         d[3]=components==2?s[1]:components==4?s[3]:255;
     }
     return VSTextureUpload::prepare(width,height,std::move(bytes),role,compress);
+}
+LLUUID VSUIResources::standardBumpSource(unsigned code) const
+{return code>=3 && code<mImpl->standardBumpCount?mImpl->standardBumps[code]:LLUUID::null;}
+void VSUIResources::clearWorldDerivedImages() {mImpl->bumps.clear();}
+VSUIRenderer::Image VSUIResources::legacyBump(const LLUUID& id,unsigned code,float scale)
+{
+    if(id.isNull() || !code || code>=32) return {};
+    const auto source=image("remote:"+vs_native_image_id(id).asString());
+    if(!source || (code>=3 && VSUIRenderer::imageDescription(source).compression!=VSWorldContracts::ImageCompression::None)) return {};
+    const auto generation=VSUIRenderer::generation(source);
+    const unsigned components=unsigned(vs_ui_image_components(id));
+    const unsigned channel=components==1?0:components==3?2:3;
+    const auto key=std::make_pair(id,code);
+    auto found=mImpl->bumps.find(key);
+    if(found!=mImpl->bumps.end())
+    {
+        found->second.touched=++mImpl->bumpClock;
+        if(found->second.sourceGeneration==generation && found->second.scale==scale && found->second.heightChannel==channel)
+            return found->second.image;
+    }
+    if(found==mImpl->bumps.end() && mImpl->bumps.size()>=1024)
+    {
+        auto victim=mImpl->bumps.end();
+        for(auto item=mImpl->bumps.begin();item!=mImpl->bumps.end();++item)
+            if(item->second.image.use_count()==1 && (victim==mImpl->bumps.end() || item->second.touched<victim->second.touched)) victim=item;
+        if(victim==mImpl->bumps.end()) return {};
+        mImpl->bumps.erase(victim);
+    }
+    const auto generated=mImpl->renderer.generateBump(source,code,scale,channel);
+    if(!generated) return {}; // Keep the complete prior face publication on refusal.
+    mImpl->bumps.insert_or_assign(key,Impl::BumpEntry{generated,generation,++mImpl->bumpClock,scale,channel});
+    return generated;
 }
 bool VSUIResources::supportsCompression() const { return mImpl->renderer.supportsCompression(); }
 std::shared_ptr<const VSResourceBudget::Reservation> VSUIResources::reserveImagePreparation(std::size_t bytes)
@@ -459,6 +519,7 @@ LLPointer<LLImageRaw> VSUIResources::rawImage(const std::string& key) const
     const auto found = mImpl->assets.find(key);
     if (found == mImpl->assets.end()) return nullptr;
     const auto& asset = *found->second.asset;
+    if(VSUIRenderer::imagePixels(asset.image).size()!=std::size_t(asset.width)*asset.height*4) return nullptr;
     LLPointer<LLImageRaw> raw = new LLImageRaw(asset.width, asset.height, 4);
     const auto stride = asset.width * 4;
     for (unsigned y = 0; y < asset.height; ++y)
@@ -478,6 +539,8 @@ LLSD VSUIResources::evidence() const
     result["image_allocation_refusals"]=ll_sd_from_U64(stats.imageAllocationRefusals);
     result["image_preparation_bytes"]=ll_sd_from_U64(mImpl->imagePreparationBytes.used());
     result["image_preparation_budget_bytes"]=ll_sd_from_U64(mImpl->imagePreparationBytes.limit());
+    result["cached_bump_generations"]=S32(mImpl->bumps.size());
+    result["standard_bump_sources"]=S32(mImpl->standardBumpCount-3);
     result["maximum_image_dimension"]=S32(caps.maximumImageDimension);
     result["rgba8"]=caps.rgba8;result["bgra8"]=caps.bgra8;result["depth32"]=caps.depth32;
     return result;

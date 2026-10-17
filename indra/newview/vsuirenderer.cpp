@@ -59,7 +59,8 @@ struct VSUIRenderer::Impl
 {
     RefCntAutoPtr<IRenderDevice> device;
     RefCntAutoPtr<IDeviceContext> context;
-    RefCntAutoPtr<IShader> vertex, fragments[2];
+    RefCntAutoPtr<IShader> vertex, fragments[2],bumpVertex,bumpFragment;
+    RefCntAutoPtr<IPipelineState> bumpPipeline;
     RefCntAutoPtr<IPipelineState> pipelines[2][5][2][2]; // format, blend, sampler, mask
     std::uint64_t next_generation = 1;
     struct Submission
@@ -243,6 +244,104 @@ VSUIRenderer::FontAtlas VSUIRenderer::uploadPreparedTexture(const VSTextureUploa
     // A newly uploaded image may be replaced or refused by its producer before
     // its first draw. Keep its charged owner through an upload-completion fence.
     mImpl->pendingUploads.push_back(image);
+    return image;
+}
+
+VSUIRenderer::Image VSUIRenderer::generateBump(const Image& source,unsigned bumpCode,float normalScale,unsigned heightChannel)
+{
+    check(source && imageOwnedBy(source,mImpl->device) && bumpCode>0 && bumpCode<32 && heightChannel<4 &&
+          std::isfinite(normalScale) && std::abs(normalScale)<=1.e6f,"Invalid native bump generation input");
+    auto& impl=*mImpl;
+    if(!impl.bumpPipeline)
+    {
+        // The reference normgenF.glsl uses a four-neighbour cross-product
+        // kernel. Source images here are top-first, hence the +/-V inversion.
+        const char* vertex=R"(
+layout(location=0) out vec2 uv;
+void main(){vec2 p=vec2((gl_VertexIndex<<1)&2,gl_VertexIndex&2);uv=vec2(p.x,1.0-p.y);gl_Position=vec4(p*2.0-1.0,0,1);}
+)";
+        const char* fragment=R"(
+layout(location=0) in vec2 uv;
+layout(location=0) out vec4 result;
+layout(std140) uniform BumpView {vec4 settings;};
+uniform sampler2D g_Source;
+float heightAt(vec2 p) {
+    vec4 color=texture(g_Source,p);int mode=int(settings.w+.5);
+    if(mode>2) return color[mode-3]*255.0;
+    float value=dot(color.rgb,vec3(.2995,.5875,.1145));
+    return mode==2?1.0-value:value;
+}
+void main(){
+    float c=heightAt(uv),factor=settings.w>2.5?1.0:512.0;
+    float r=(heightAt(uv+vec2(settings.x,0))-c)*factor;
+    float l=(heightAt(uv-vec2(settings.x,0))-c)*factor;
+    float u=(heightAt(uv+vec2(0,settings.y))-c)*factor;
+    float d=(heightAt(uv-vec2(0,settings.y))-c)*factor;
+    vec3 right=vec3(settings.z,0,r),left=vec3(-settings.z,0,l);
+    vec3 up=vec3(0,-settings.z,u),down=vec3(0,settings.z,d);
+    vec3 n=cross(right,down)+cross(down,left)+cross(left,up)+cross(up,right);
+    float magnitude=length(n);n=magnitude>0?n/magnitude:vec3(0);
+    vec3 color=n*.5+.5;
+    if(settings.w>2.5) color=floor(clamp(color,0.0,1.0)*255.0)/255.0;
+    result=vec4(color,settings.w>2.5?c/255.0:c);
+}
+)";
+        ShaderCreateInfo shader{};shader.SourceLanguage=SHADER_SOURCE_LANGUAGE_GLSL;shader.GLSLVersion={4,5};
+        shader.EntryPoint="main";shader.Desc.UseCombinedTextureSamplers=true;
+        shader.Desc.Name="Native reference bump vertex";shader.Desc.ShaderType=SHADER_TYPE_VERTEX;shader.Source=vertex;
+        impl.device->CreateShader(shader,&impl.bumpVertex);
+        shader.Desc.Name="Native reference bump fragment";shader.Desc.ShaderType=SHADER_TYPE_PIXEL;shader.Source=fragment;
+        impl.device->CreateShader(shader,&impl.bumpFragment);
+        check(impl.bumpVertex && impl.bumpFragment,"Native bump shader creation failed");
+        GraphicsPipelineStateCreateInfo info{};info.PSODesc.Name="Native reference bump generation";
+        info.PSODesc.PipelineType=PIPELINE_TYPE_GRAPHICS;info.pVS=impl.bumpVertex;info.pPS=impl.bumpFragment;
+        auto& graphics=info.GraphicsPipeline;graphics.NumRenderTargets=1;graphics.RTVFormats[0]=TEX_FORMAT_RGBA8_UNORM;
+        graphics.PrimitiveTopology=PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;graphics.RasterizerDesc.CullMode=CULL_MODE_NONE;
+        graphics.DepthStencilDesc.DepthEnable=false;
+        info.PSODesc.ResourceLayout.DefaultVariableType=SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+        SamplerDesc sampler{};sampler.MinFilter=sampler.MagFilter=FILTER_TYPE_LINEAR;sampler.MipFilter=FILTER_TYPE_POINT;
+        sampler.MaxLOD=0;sampler.AddressU=sampler.AddressV=TEXTURE_ADDRESS_WRAP;
+        const ImmutableSamplerDesc immutable{SHADER_TYPE_PIXEL,"g_Source",sampler};
+        info.PSODesc.ResourceLayout.NumImmutableSamplers=1;info.PSODesc.ResourceLayout.ImmutableSamplers=&immutable;
+        impl.device->CreateGraphicsPipelineState(info,&impl.bumpPipeline);
+        check(impl.bumpPipeline!=nullptr,"Native bump pipeline creation failed");
+    }
+    const auto extent=imageExtent(source);const auto width=extent[0],height=extent[1];
+    const auto bytes=VSImageMips::bytes(width,height,true);
+    auto residency=impl.remoteImages.reserve(bytes);
+    if(!residency){++impl.imageAllocationRefusals;return {};}
+    auto image=std::make_shared<Texture>();image->owner=impl.device;image->residency=std::move(residency);
+    TextureDesc description{};description.Name="Native reference bump generation";description.Type=RESOURCE_DIM_TEX_2D;
+    description.Width=width;description.Height=height;description.Format=TEX_FORMAT_RGBA8_UNORM;
+    description.MipLevels=0;description.Usage=USAGE_DEFAULT;description.BindFlags=BIND_SHADER_RESOURCE|BIND_RENDER_TARGET;
+    description.MiscFlags=MISC_TEXTURE_FLAG_GENERATE_MIPS;
+    impl.device->CreateTexture(description,nullptr,&image->resource);check(image->resource!=nullptr,"Native bump target creation failed");
+    const std::array<float,4> parameters{1.f/width,1.f/height,normalScale,float(bumpCode<=2?bumpCode:3+heightChannel)};
+    BufferDesc buffer{};buffer.Name="Native bump parameters";buffer.Size=sizeof(parameters);buffer.Usage=USAGE_IMMUTABLE;buffer.BindFlags=BIND_UNIFORM_BUFFER;
+    const BufferData data{parameters.data(),sizeof(parameters)};RefCntAutoPtr<IBuffer> constants;
+    impl.device->CreateBuffer(buffer,&data,&constants);check(constants!=nullptr,"Native bump parameters allocation failed");
+    RefCntAutoPtr<IShaderResourceBinding> binding;impl.bumpPipeline->CreateShaderResourceBinding(&binding,true);
+    check(binding!=nullptr,"Native bump binding creation failed");
+    auto* parametersBinding=binding->GetVariableByName(SHADER_TYPE_PIXEL,"BumpView");
+    auto* sourceBinding=binding->GetVariableByName(SHADER_TYPE_PIXEL,"g_Source");
+    check(parametersBinding && sourceBinding,"Native bump shader resource ABI mismatch");
+    parametersBinding->Set(constants);sourceBinding->Set(imageView(source));
+    auto* target=image->resource->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+    impl.context->SetRenderTargets(1,&target,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    impl.context->SetPipelineState(impl.bumpPipeline);
+    const Viewport viewport{0,0,float(width),float(height),0,1};impl.context->SetViewports(1,&viewport,width,height);
+    impl.context->CommitShaderResources(binding,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    DrawAttribs draw{3,DRAW_FLAG_VERIFY_ALL};impl.context->Draw(draw);
+    impl.context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    if(image->resource->GetDesc().MipLevels>1) impl.context->GenerateMips(image->resource->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+    image->generation=impl.next_generation++;
+    image->description={width,height,4,VSWorldContracts::ImageOrigin::TopLeft,VSWorldContracts::ColorEncoding::Data,
+        VSWorldContracts::AlphaMode::Opaque,VSWorldContracts::ImageRole::RemoteAsset,image->generation};
+    image->description.mipLevels=image->resource->GetDesc().MipLevels;image->description.gpuBytes=bytes;
+    image->usage.attach(impl.imageUsage,bytes,0);
+    impl.submitted.emplace_back();auto& submission=impl.submitted.back();
+    submission.images={source,image};submission.bindings.push_back(std::move(binding));submission.vertices=std::move(constants);
+    submission.completion=impl.next_completion++;impl.context->EnqueueSignal(impl.fence,submission.completion);
     return image;
 }
 std::uint64_t VSUIRenderer::generation(const Image& image) { return image ? image->generation : 0; }

@@ -29,7 +29,7 @@ class StagingFailureTests(unittest.TestCase):
         platform_files = ['vulkanstorm-bin.exe', *self.libraries] if windows else ['bin/vulkanstorm-bin', *(f'lib/{name}' for name in self.libraries)]
         files = [*platform_files, *self.cef_runtime,
                  'app_settings/message_template.msg', 'app_settings/contributors.txt',
-                 'app_settings/packages-info.txt', 'skins/default/xui/en/test.xml',
+                 'app_settings/packages-info.txt', 'app_settings/std_bump.ini', 'skins/default/xui/en/test.xml',
                  'fonts/test.ttf', 'app_settings/shaders/test.glsl',
                  'licenses/vulkan-ghi/test.txt', 'licenses/vulkan-ghi/stb_dxt.txt', str(self.host.relative_to(self.stage)), str(self.media.relative_to(self.stage))]
         for name in files:
@@ -56,6 +56,11 @@ class StagingFailureTests(unittest.TestCase):
                         check(self.build)
                 finally:
                     path.write_bytes(b'test')
+
+    def test_missing_standard_bump_sources(self):
+        (self.stage / "app_settings/std_bump.ini").unlink()
+        with self.assertRaisesRegex(RuntimeError, "Missing staged file"):
+            check(self.build)
 
     def test_missing_codec_license(self):
         (self.stage / 'licenses/vulkan-ghi/stb_dxt.txt').unlink()

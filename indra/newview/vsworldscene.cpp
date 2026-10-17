@@ -2930,6 +2930,17 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 channelImages[channel]=mImpl->resources.image("remote:"+vs_native_image_id(texture).asString());
                 if(!channelImages[channel]) channelsReady=false;
             }
+            const bool proceduralBump=!surface.pbr && surface.bump && surface.textures[VSMaterial::Normal]==std::array<std::uint8_t,16>{};
+            if(proceduralBump)
+            {
+                LLUUID bumpSource;
+                if(surface.bump<=2) std::copy_n(surface.textures[VSMaterial::BaseColor].begin(),16,bumpSource.mData);
+                else bumpSource=mImpl->resources.standardBumpSource(surface.bump);
+                if(bumpSource.notNull()) vs_request_world_image(bumpSource,4096,surface.bump>=3);
+                channelImages[VSMaterial::Normal]=mImpl->resources.legacyBump(bumpSource,surface.bump,gSavedSettings.getF32("RenderNormalMapScale"));
+                if(!channelImages[VSMaterial::Normal]) channelsReady=false;
+                surface.uv[VSMaterial::Normal]=surface.uv[VSMaterial::BaseColor];
+            }
             if(o.media && face.material.hasMedia())
             {
                 const auto mediaID=o.media->texture(unsigned(f));
@@ -2945,6 +2956,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                         if(surface.textures[channel]!=std::array<std::uint8_t,16>{} && !channelImages[channel]) channelsReady=false;
                 }
             }
+            if(proceduralBump && !channelImages[VSMaterial::Normal]) channelsReady=false;
             if(!channelsReady) {uploadDeferred=true;continue;}
             auto image=channelImages[0];
             if(!explicitAlpha && image && surface.alpha==VSWorldContracts::AlphaMode::Opaque)

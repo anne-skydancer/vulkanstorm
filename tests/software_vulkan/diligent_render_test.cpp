@@ -3,6 +3,7 @@
 #include <DiligentCore/Common/interface/RefCntAutoPtr.hpp>
 #include <vulkan/vulkan.h>
 #include <array>
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -653,6 +654,52 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
         require(VSUIRenderer::imageDescription(images.upload(8,8,compressionPixels,role,true)).compression==VSWorldContracts::ImageCompression::None,
             "An exact-pixel image role was compressed");
     std::cout<<"TEXTURE_BC3_SUPPORTED="<<images.supportsCompression()<<"\nTEXTURE_COMPRESSED_GPU_BYTES="<<compressionInfo.gpuBytes<<'\n';
+
+    std::vector<std::uint8_t> bumpPixels(8*8*4);
+    for(unsigned y=0;y<8;++y) for(unsigned x=0;x<8;++x) {
+        const auto offset=(y*8+x)*4;bumpPixels[offset]=(x*31+y*13)%256;bumpPixels[offset+1]=(x*7+y*23)%256;
+        bumpPixels[offset+2]=(x*19+y*11)%256;bumpPixels[offset+3]=(x*37+y*17)%256;
+    }
+    auto bumpSource=images.upload(8,8,bumpPixels,VSWorldContracts::ImageRole::RemoteAsset);
+    const auto bumpSourceGeneration=VSUIRenderer::generation(bumpSource);
+    for(unsigned mode=1;mode<=4;++mode)
+    {
+        const unsigned heightChannel=mode==4?0:3;
+        auto normal=images.generateBump(bumpSource,mode,128.f,heightChannel);
+        require(normal && VSUIRenderer::imageDescription(normal).mipLevels==4,"Reference bump mip generation failed");
+
+        auto height=[&](unsigned x,unsigned y) {
+            const auto offset=((y%8)*8+(x%8))*4;
+            if(mode>=3) return double(bumpPixels[offset+heightChannel]);
+            const auto luminance=(.2995*bumpPixels[offset]+.5875*bumpPixels[offset+1]+.1145*bumpPixels[offset+2])/255.;
+            return mode==2?1.-luminance:luminance;
+        };
+        auto expectedBump=[&](unsigned x,unsigned y) {
+            Pixel pixel{};
+            const auto factor=mode>=3?1.:512.;
+            // Independent central-gradient form of the reference cross-product
+            // stencil, on canonical top-first rows with wrap addressing.
+            std::array<double,3> n{256.*(height((x+7)%8,y)-height((x+1)%8,y))*factor,
+                256.*(height(x,(y+1)%8)-height(x,(y+7)%8))*factor,4.*128.*128.};
+            const auto length=std::sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2]);
+            for(unsigned channel=0;channel<4;++channel)
+            {
+                double expected=channel==3?(mode>=3?height(x,y)/255.:height(x,y)):(n[channel]/length*.5+.5);
+                expected=std::clamp(expected,0.,1.)*255.;
+                const int quantized=mode>=3 && channel<3?int(std::floor(expected)):int(std::lround(expected));
+                pixel[channel]=static_cast<unsigned char>(quantized);
+            }
+            return pixel;
+        };
+        const std::string name=mode==1?"legacy-bump-brightness.ppm":mode==2?"legacy-bump-darkness.ppm":
+            mode==3?"legacy-bump-standard.ppm":"legacy-bump-gray.ppm";
+        VSUIRenderer::Packet bumpPacket{};bumpPacket.image=normal;bumpPacket.bounds={0,0,8,8};
+        bumpPacket.uv={0,0,1,1};bumpPacket.color={1,1,1,1};bumpPacket.clip={0,0,8,8};
+        bumpPacket.blend=VSUIRenderer::Blend::Replace;bumpPacket.sampling=VSUIRenderer::Sampling::Nearest;
+        images.draw(rtv,8,8,1,{bumpPacket});capture(name.c_str(),expectedBump);
+        require(VSUIRenderer::generation(bumpSource)==bumpSourceGeneration && VSUIRenderer::imagePixels(bumpSource)==bumpPixels,
+            "Native bump generation mutated its source image");
+    }
     auto anisotropic=surface->samplers[0];anisotropic.anisotropy=16;
     auto* anisotropicView=VSUIRenderer::imageView(materialPacket.image,anisotropic);
     require(anisotropicView && anisotropicView->GetSampler()->GetDesc().MaxAnisotropy==

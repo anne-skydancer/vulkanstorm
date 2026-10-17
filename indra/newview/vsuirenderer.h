@@ -45,6 +45,9 @@ public:
                  VSWorldContracts::ImageRole role=VSWorldContracts::ImageRole::CoreUI,bool compress=false);
     Image uploadPrepared(const std::shared_ptr<const VSTextureUpload::Prepared>&);
     bool supportsCompression() const;
+    // Reference normgen/standard-bump kernels, rendered from the admitted source
+    // generation. Standard bump height uses the original last component.
+    Image generateBump(const Image&,unsigned bumpCode,float normalScale,unsigned heightChannel=3);
     Image replace(const Image& old,unsigned x,unsigned y,unsigned width,unsigned height,
                   const std::vector<std::uint8_t>& rgba);
     FontAtlas     createFontAtlas(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba);
