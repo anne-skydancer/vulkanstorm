@@ -70,6 +70,7 @@ class SessionEvidenceTests(unittest.TestCase):
                     (child / 'results.json').write_text(json.dumps({'passed': outcome == 'pass'}))
                     return subprocess.CompletedProcess(child_command, 0 if outcome == 'pass' else 1)
                 with patch.object(sys, 'argv', command), \
+                        patch.object(session_runner.platform, 'system', return_value='Linux'), \
                         patch.object(session_runner, 'prepare_native_debugger'), \
                         patch.object(session_runner, 'skin_cases', return_value={'skin-default-base': ('default', '', 'en')}), \
                         patch.object(session_runner.subprocess, 'run', side_effect=execute) as launch, \

@@ -25,7 +25,7 @@ using S32=int;
 #define LL_WARNS(...) std::cerr
 #define LL_ENDL '\n'
 namespace LLCore {constexpr int HE_RESPONSE_TOO_LARGE=100;
-struct HttpStatus {enum {LLCORE};int value=0;HttpStatus()=default;HttpStatus(int,int code):value(code){}
+struct HttpStatus {enum {LLCORE};int value=0;HttpStatus()=default;explicit HttpStatus(int code):value(code){}HttpStatus(int,int code):value(code){}
  bool operator==(HttpStatus rhs)const{return value==rhs.value;}std::string toString()const{return std::to_string(value);}};}
 struct LLImageRaw {int getComponents(){return 4;}template<class T>void copy(T){}int getWidth(){return 1024;}int getHeight(){return 1024;}};
 template<class T>struct LLPointer:std::shared_ptr<T>{using std::shared_ptr<T>::shared_ptr;
@@ -34,7 +34,7 @@ struct NativeMaskImage:LLImageRaw {NativeMaskImage(bool,int,int){}void copy(LLPo
 struct LLTimer {static double getTotalSeconds(){return 1000.;}};
 struct VSWorldContracts {enum class ImageRole {RemoteAsset};};
 struct VSUIResources {static int prepareImage(LLImageRaw&,VSWorldContracts::ImageRole,bool){return 1;}};
-struct Remote {bool fetching=true,preparing=false,prepared=false,pendingCacheHit=false;
+struct Remote {std::string sourceURL;bool missingMapTile=false;bool fetching=true,preparing=false,prepared=false,pendingCacheHit=false;
  int generation=7,epoch=2,discard=-1,components=4,fullWidth=0,fullHeight=0,pendingDiscard=-1;
  int attempts=1,failedGeneration=0;double deadline=20;LLPointer<LLImageRaw> pendingAuxiliary;};
 struct Fetch {bool done=false,decoded=false;int deletes=0;LLCore::HttpStatus status;

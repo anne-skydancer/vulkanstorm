@@ -90,7 +90,7 @@ jobs:
       - run: python scripts/tests/test_native_pipette.py
       - run: python scripts/tests/test_native_spatial_roots.py
       - run: python scripts/tests/test_native_map_images.py
-          python scripts/tests/test_native_map_actions.py
+      - run: python scripts/tests/test_native_map_actions.py
       - run: python scripts/tests/test_native_task_inventory.py
       - run: python scripts/tests/test_native_world_assets.py
       - run: python scripts/tests/test_native_http_body_limit.py
