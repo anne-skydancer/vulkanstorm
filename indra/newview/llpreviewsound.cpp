@@ -83,11 +83,6 @@ void LLPreviewSound::playSound( void *userdata )
     LLPreviewSound* self = (LLPreviewSound*) userdata;
     const LLInventoryItem *item = self->getItem();
 
-    if (item && gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
     if(item && gAudiop)
     {
         send_sound_trigger(item->getAssetUUID(), SOUND_GAIN);

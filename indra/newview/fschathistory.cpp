@@ -128,7 +128,7 @@ public:
     static bool isNativeCallback(const std::string& name, const LLSD& data)
     {
         const std::string item = data.asString();
-        if (name == "AvatarIcon.Action") return item == "profile" || item == "im" || item == "chat_history" || item == "add" || item == "add_set" || item == "remove" || item == "invite_to_group" || item == "share" || item == "pay" || item == "copy_name" || item == "copy_url" || item == "block_unblock" || item == "mute_unmute" || item == "allow_text_chat" || item == "forbid_text_chat" || item == "ban_member" || item == "teleport" || item == "request_teleport";
+        if (name == "AvatarIcon.Action") return item == "zoom_in" || item == "profile" || item == "im" || item == "chat_history" || item == "add" || item == "add_set" || item == "remove" || item == "invite_to_group" || item == "share" || item == "pay" || item == "copy_name" || item == "copy_url" || item == "block_unblock" || item == "mute_unmute" || item == "allow_text_chat" || item == "forbid_text_chat" || item == "ban_member" || item == "teleport" || item == "request_teleport";
         if (name == "AvatarIcon.Check") return item == "is_blocked" || item == "is_muted" || item == "is_allowed_text_chat";
         if (name == "AvatarIcon.Enable") return item == "can_allow_text_chat" || item == "can_mute" || item == "can_unmute" || item == "can_pay" || item == "can_ban_member";
         if (name == "AvatarIcon.Visible") return item == "show_mute" || item == "show_unmute";
@@ -442,7 +442,7 @@ public:
         if (!mAccountCurrent()) return;
         std::string param = userdata.asString();
         if (gViewerWindow && gViewerWindow->isNativeVulkan() &&
-            (param == "zoom_in" || param == "map" || param == "track" ||
+            (param == "map" || param == "track" ||
              param == "teleport_to" || param == "voice_call" || param == "report_abuse"))
         {
             LLNotificationsUtil::add("NativeWorldUnavailable");
@@ -495,7 +495,7 @@ public:
         }
         else if (param == "zoom_in")
         {
-            handle_zoom_to_object(getAvatarId());
+            LLAvatarActions::zoomIn(getAvatarId());
         }
         else if (param == "map")
         {
@@ -1178,7 +1178,7 @@ protected:
             {
                 // Manual enable setters must obey the same scene boundary as
                 // registered callbacks, including the self-avatar branch.
-                for (const auto* scene : { "Zoom In", "track", "Teleport to", "Voice Call" })
+                for (const auto* scene : { "track", "Teleport to", "Voice Call" })
                     menu->setItemEnabled(scene, false);
             }
             menu->buildDrawLabels();

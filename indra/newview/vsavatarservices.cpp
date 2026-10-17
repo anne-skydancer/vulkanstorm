@@ -6,6 +6,9 @@
 #include "llinventorymodel.h"
 #include "llviewerjointattachment.h"
 #include "llviewerobjectlist.h"
+#include "llworld.h"
+#include <cmath>
+#include <set>
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #include "llviewerwindow.h"
@@ -177,4 +180,27 @@ bool vs_avatar_attachment_name(const LLUUID& item, std::string& name)
     }
 #endif
     return isAgentAvatarValid() && gAgentAvatarp->getAttachedPointName(item, name);
+}
+
+std::vector<VSAvatarLocation> vs_avatar_locations(const LLVector3d& relativeTo, F32 radius)
+{
+    std::vector<VSAvatarLocation> result;
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto session = VSNativeSession::active();
+        if (!session || !session->regionReady() || !gViewerWindow->nativeContext() || !relativeTo.isFinite() ||
+            !std::isfinite(radius) || radius < 0) return result;
+        const F64 squaredRadius = F64(radius) * radius;
+        std::set<LLUUID> seen;
+        for (const auto& avatar : gViewerWindow->nativeContext()->world().avatarLocations())
+            if ((avatar.position - relativeTo).lengthSquared() <= squaredRadius && seen.insert(avatar.id).second)
+                result.push_back({avatar.id, avatar.position});
+        return result;
+    }
+#endif
+    uuid_vec_t ids; std::vector<LLVector3d> positions;
+    LLWorld::getInstance()->getAvatars(&ids, &positions, relativeTo, radius);
+    for (std::size_t i = 0; i < ids.size(); ++i) result.push_back({ids[i], positions[i]});
+    return result;
 }

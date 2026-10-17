@@ -27,6 +27,7 @@
 
 #include "llfloateravatarpicker.h"
 #include "vsnativeim.h"
+#include "vsavatarservices.h"
 #include "llrender2dutils.h"
 #include "llnotificationsutil.h"
 
@@ -473,22 +474,14 @@ void LLFloaterAvatarPicker::onList()
 
 void LLFloaterAvatarPicker::populateNearMe()
 {
-    if (LLRender2D::isNativeUI())
-    {
-        mNearMeListComplete = true;
-        getChildView("NearMe")->setEnabled(false);
-        getChildView("ok_btn")->setEnabled(false);
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
     bool all_loaded = true;
     bool empty = true;
     LLScrollListCtrl* near_me_scroller = getChild<LLScrollListCtrl>("NearMe");
     near_me_scroller->deleteAllItems();
 
     uuid_vec_t avatar_ids;
-    LLWorld::getInstance()->getAvatars(&avatar_ids, NULL, gAgent.getPositionGlobal(), gSavedSettings.getF32("NearMeRange"));
+    for (const auto& avatar : vs_avatar_locations(gAgent.getPositionGlobal(), gSavedSettings.getF32("NearMeRange")))
+        avatar_ids.push_back(avatar.id);
     for(U32 i=0; i<avatar_ids.size(); i++)
     {
         LLUUID& av = avatar_ids[i];

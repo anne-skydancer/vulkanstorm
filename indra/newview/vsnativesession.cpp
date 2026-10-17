@@ -1093,6 +1093,16 @@ void VSNativeSession::cameraPan(const LLVector3& displacement)
     mAgentUpdateTime = 0;
 }
 void VSNativeSession::cameraRoll(F32 angle) { if (regionReady()) { mCamera.roll(angle); mAgentUpdateTime = 0; } }
+bool VSNativeSession::cameraLookAt(const LLVector3d& eye, const LLVector3d& target)
+{
+    if (!regionReady() || !eye.isFinite() || !target.isFinite()) return false;
+    const auto origin = from_region_handle(mHandle);
+    if (!mCamera.lookAt(mPosition, LLVector3(eye - origin), LLVector3(target - origin), gAgentCamera.getCameraOffsetInitial(),
+                        LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale())) return false;
+    gAgentCamera.changeCameraToThirdPerson(false);
+    mAgentUpdateTime = 0;
+    return true;
+}
 void VSNativeSession::cameraReset() { mCamera.resetView(); mAgentUpdateTime = 0; }
 void VSNativeSession::cameraResetOrbit() { mCamera.resetOrbit(); mAgentUpdateTime = 0; }
 void VSNativeSession::cameraResetPan() { mCamera.resetPan(); mAgentUpdateTime = 0; }

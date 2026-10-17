@@ -87,6 +87,7 @@ public:
     void cameraPan(const LLVector3&);
     void cameraRoll(F32);
     void cameraReset();
+    bool cameraLookAt(const LLVector3d& eye, const LLVector3d& target);
     void cameraResetOrbit();
     void cameraResetPan();
     void cameraResetRoll();

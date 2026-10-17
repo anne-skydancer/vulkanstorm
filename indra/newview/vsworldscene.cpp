@@ -1412,6 +1412,24 @@ std::optional<VSWorldScene::FaceHandle> VSWorldScene::face(const ObjectHandle& t
         return std::nullopt;
     return FaceHandle{token,index,object.revision};
 }
+std::vector<VSWorldScene::AvatarLocation> VSWorldScene::avatarLocations() const
+{
+    std::vector<AvatarLocation> result;
+    if (mImpl->retired) return result;
+    for (const auto& [local, object] : mImpl->objects)
+    {
+        if (object.pcode != LL_PCODE_LEGACY_AVATAR || !mImpl->linksCurrent(object)) continue;
+        LLVector3 position; LLQuaternion rotation; std::set<U32> visited;
+        if (!mImpl->transform(local, position, rotation, visited)) continue;
+        result.push_back({object.id, from_region_handle(mImpl->handle) + LLVector3d(position)});
+    }
+    for (const auto& [host, region] : mNeighbours)
+    {
+        auto nearby = region->avatarLocations();
+        result.insert(result.end(), nearby.begin(), nearby.end());
+    }
+    return result;
+}
 std::vector<VSWorldScene::Attachment> VSWorldScene::attachments() const
 {
     std::vector<Attachment> result;
@@ -1485,6 +1503,14 @@ std::optional<VSWorldContracts::Material> VSWorldScene::material(const FaceHandl
     result.alpha=result.diffuse[3]<.999f?VSWorldContracts::AlphaMode::Blend:
         image?VSUIRenderer::imageDescription(image).alpha:VSWorldContracts::AlphaMode::Opaque;
     return result;
+}
+std::optional<VSWorldScene::ObjectTransform> VSWorldScene::objectTransform(const ObjectHandle& token) const
+{
+    if (!current(token)) return {};
+    if (token.host != mImpl->host) return mNeighbours.at(token.host)->objectTransform(token);
+    LLVector3 position; LLQuaternion rotation; std::set<U32> visited;
+    if (!mImpl->transform(token.local, position, rotation, visited)) return {};
+    return ObjectTransform{from_region_handle(mImpl->handle) + LLVector3d(position), rotation, mImpl->objects.at(token.local).scale};
 }
 std::optional<std::array<std::array<float, 3>, 2>> VSWorldScene::selectionBounds(const ObjectHandle& token) const
 {
