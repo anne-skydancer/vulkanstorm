@@ -51,10 +51,10 @@ public:
 } message,*gMessageSystem=&message;
 struct VSWorldScene{
  struct ObjectHandle{LLHost host;LLUUID id;U32 local=1;U64 region=1,generation=1;int kind=0;LLUUID account=uuid(1);U64 accountGeneration=1;};
- std::map<LLUUID,ObjectHandle> objects;std::map<LLUUID,bool> frozen;VSResourceBudget budget{1024*1024};bool refuse=false;
+ std::map<LLUUID,ObjectHandle> objects;std::map<LLUUID,bool> frozen;std::set<LLUUID> orphan;VSResourceBudget budget{1024*1024};bool refuse=false;
  bool current(const ObjectHandle& token)const{auto found=objects.find(token.id);return found!=objects.end() && found->second.generation==token.generation && found->second.host==token.host && found->second.local==token.local && found->second.region==token.region && found->second.account==token.account && found->second.accountGeneration==token.accountGeneration;}
  std::optional<ObjectHandle> object(LLHost host,U32 local){for(const auto& [id,value]:objects)if(value.host==host && value.local==local)return value;return {};}
- bool freeze(const ObjectHandle& token,bool selected){if(!current(token))return false;frozen[token.id]=selected;return true;}
+ bool freeze(const ObjectHandle& token,bool selected){if(!current(token) || orphan.count(token.id))return false;frozen[token.id]=selected;return true;}
  std::shared_ptr<const VSResourceBudget::Reservation> reserveSpatialBytes(std::size_t bytes){return refuse?nullptr:budget.reserve(bytes);}
  std::function<bool()> guard(ObjectHandle token){return [this,token]{return current(token);};}
 } world;
@@ -83,11 +83,18 @@ int main(){
  assert(selection.beginHighlightRequest([&]{return panelCurrent;}));
  message.name="ForceObjectSelect";message.local=first.local;selection.receive(message);
  assert(selection.highlights().size()==1 && selection.highlights()[0].id==first.id);
+ world.orphan.insert(second.id);const auto sentBefore=message.sent.size();
+ assert(!selection.select({first,second}));
+ assert(guard() && selection.selected().size()==2 && message.sent.size()==sentBefore && world.frozen[first.id]);
+ world.orphan.clear();
  world.refuse=true;assert(!selection.highlight({second},true));assert(selection.highlights()[0].id==first.id);world.refuse=false;
  message.sender={2};message.local=second.local;message.replaceHighlights=false;selection.receive(message);assert(selection.highlights().size()==2);
  panelCurrent=false;selection.receive(message);assert(selection.highlights().empty());selection.tick();
  panelCurrent=true;assert(selection.beginHighlightRequest([&]{return panelCurrent;}));assert(selection.highlight({second},true));selection.clearHighlights();selection.receive(message);assert(selection.highlights().empty());
 
+ bool retireInGuard=false;
+ assert(selection.beginHighlightRequest([&]{if(retireInGuard)selection.clearHighlights();return true;}));
+ retireInGuard=true;assert(!selection.highlight({first},true));assert(selection.highlights().empty());
  message.name="ObjectProperties";message.replyID=first.id;message.sender={3};selection.receive(message);assert(!selection.properties(first));
  message.sender={1};world.refuse=true;selection.receive(message);assert(!selection.properties(first));world.refuse=false;
  selection.receive(message);auto publication=selection.properties(first);assert(publication && publication->properties->complete && publication->properties->name=="Name");

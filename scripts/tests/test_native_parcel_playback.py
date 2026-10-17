@@ -42,7 +42,7 @@ class NativeParcelPlaybackTests(unittest.TestCase):
         parcel += '\n' + balanced(deliver, deliver.index('else if (name == "ParcelMediaUpdate"'))
         # Keep the actual account/admission guards; neighbour handshake dispatch
         # is qualified by the scene/session replay, outside this media component.
-        prelude = deliver[deliver.index('    if (generation !='):deliver.index('    if (name=="EnableSimulator")')]
+        prelude = deliver[deliver.index('    if (generation !='):deliver.index('    std::optional<RegionMetadata> handshakeMetadata;')]
         definitions += '\nbool VSNativeSession::deliver(const std::string& name,const LLSD& body,const LLHost& sender,U64 generation){\n' + prelude + parcel + '\nreturn true;}'
         declaration = re.search(r'const\s+std::set<std::string>\s+worldMessages\s*=\s*\{.*?\};', source, re.S)
         self.assertIsNotNone(declaration, 'The real world-message admission set must be present')
