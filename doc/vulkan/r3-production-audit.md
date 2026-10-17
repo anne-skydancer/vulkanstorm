@@ -82,3 +82,15 @@ translation units compile. This does not yet establish all R3 acceptance.
 BRDF and probe-dependent appearance remain R5/R6 obligations. A saved preference
 with no production effect does not pass. Retain strict validation and ownership
 budgets throughout. Checkpoints are commits, not milestone completion.
+
+## Sampling production checkpoint
+
+Native remote and avatar image generations now carry bounded mip chains. Material
+samplers retain independent channel filtering, repeat/clamp/mirror addressing and
+glTF mip selection. RenderAnisotropic controls device-clamped anisotropy; sampler
+views belong to their immutable image generation. Media and UI remain single-level.
+GPU accounting includes every mip level. Headless production-renderer readbacks
+pass repeat/clamp/mirror and minification charts, plus descriptor checks for the
+actual device anisotropy limit. The affected native viewer sources compile.
+Progressive fetch/discard, compression, settings inventory and the remaining R3
+acceptance cases above remain open; this checkpoint does not qualify R3.

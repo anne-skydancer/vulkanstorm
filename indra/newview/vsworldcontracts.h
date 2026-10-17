@@ -22,15 +22,18 @@ enum class ImageRole
 {
     CoreUI,
     RemoteAsset,
-    AvatarComposite
+    AvatarComposite,
+    Media
 };
-enum class AddressMode { Clamp, Repeat };
+enum class AddressMode { Clamp, Repeat, Mirror };
 enum class Filter { Nearest, Linear };
 struct Sampler
 {
     Filter minification=Filter::Linear,magnification=Filter::Linear;
     AddressMode u=AddressMode::Repeat,v=AddressMode::Repeat;
-    bool mipmaps=false;
+    bool mipmaps=false,trilinear=true;
+    unsigned anisotropy=1;
+    bool operator==(const Sampler& rhs) const {return minification==rhs.minification && magnification==rhs.magnification && u==rhs.u && v==rhs.v && mipmaps==rhs.mipmaps && trilinear==rhs.trilinear && anisotropy==rhs.anisotropy;}
 };
 struct Image
 {
@@ -40,6 +43,7 @@ struct Image
     AlphaMode alpha=AlphaMode::Blend;
     ImageRole role=ImageRole::CoreUI;
     std::uint64_t generation=0;
+    unsigned mipLevels=1;
 };
 // Existing producers publish indexed region-local position/normal/UV0.
 // Optional channels are explicit schema requirements for later producers;

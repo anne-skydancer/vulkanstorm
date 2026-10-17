@@ -34,6 +34,7 @@ std::array<float, 2> transform(const Transform& t, float u, float v)
 State legacy(const LLTextureEntry& entry, const LLMaterial* material)
 {
     State out;
+    for(auto& sampler:out.samplers) sampler.mipmaps=true;
     std::copy_n(entry.getID().mData, 16, out.textures[BaseColor].begin());
     std::copy_n(entry.getColor().mV, 4, out.base.begin());
     out.fullbright = entry.getFullbright() != 0;
@@ -68,6 +69,7 @@ State pbr(const LLGLTFMaterial& asset, const LLGLTFMaterial* overrides)
     LLGLTFMaterial value(asset);
     if (overrides) value.applyOverride(*overrides);
     State out; out.pbr = true;
+    for(auto& sampler:out.samplers) sampler.mipmaps=true;
     for (unsigned i = 0; i < ChannelCount; ++i)
     {
         std::copy_n(value.mTextureId[i].mData, 16, out.textures[i].begin());

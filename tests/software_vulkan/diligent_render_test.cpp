@@ -557,6 +557,32 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
         {-1,-1,0,0,0,1,.25f,.25f},{1,-1,0,0,0,1,.25f,.25f}},{0,2,1,1,2,3});
     renderer.draw(rtv,8,8,view,{materialPacket});
     capture("material-transform.ppm",[](unsigned,unsigned){return Pixel{0,255,0,255};});
+    surface=std::make_shared<VSMaterial::State>();materialPacket.surface=surface;
+    surface->samplers[0].minification=surface->samplers[0].magnification=VSWorldContracts::Filter::Nearest;
+    materialPacket.mesh=renderer.upload({{-1,1,0,0,0,1,1.25f,.25f},{1,1,0,0,0,1,1.25f,.25f},
+        {-1,-1,0,0,0,1,1.25f,.25f},{1,-1,0,0,0,1,1.25f,.25f}},{0,2,1,1,2,3});
+    renderer.draw(rtv,8,8,view,{materialPacket});
+    capture("sampler-repeat.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
+    surface=std::make_shared<VSMaterial::State>(*surface);surface->samplers[0].u=VSWorldContracts::AddressMode::Clamp;
+    materialPacket.surface=surface;renderer.draw(rtv,8,8,view,{materialPacket});
+    capture("sampler-clamp.ppm",[](unsigned,unsigned){return Pixel{0,255,0,255};});
+    surface=std::make_shared<VSMaterial::State>(*surface);surface->samplers[0].u=VSWorldContracts::AddressMode::Mirror;
+    materialPacket.surface=surface;renderer.draw(rtv,8,8,view,{materialPacket});
+    capture("sampler-mirror.ppm",[](unsigned,unsigned){return Pixel{0,255,0,255};});
+    std::vector<std::uint8_t> checker(8*8*4);
+    for(unsigned y=0;y<8;++y) for(unsigned x=0;x<8;++x) {
+        const unsigned i=(y*8+x)*4;checker[i]=checker[i+1]=checker[i+2]=((x+y)&1)?255:0;checker[i+3]=255;
+    }
+    materialPacket.image=images.upload(8,8,checker,VSWorldContracts::ImageRole::RemoteAsset);
+    require(VSUIRenderer::imageDescription(materialPacket.image).mipLevels==4,"Remote image has no complete mip chain");
+    surface=std::make_shared<VSMaterial::State>();surface->samplers[0].mipmaps=true;surface->uv[0].matrix={16,0,0,16};
+    materialPacket.surface=surface;materialPacket.mesh=quad(0);
+    renderer.draw(rtv,8,8,view,{materialPacket});
+    capture("sampler-mipmaps.ppm",[](unsigned,unsigned){return Pixel{128,128,128,255};});
+    auto anisotropic=surface->samplers[0];anisotropic.anisotropy=16;
+    auto* anisotropicView=VSUIRenderer::imageView(materialPacket.image,anisotropic);
+    require(anisotropicView && anisotropicView->GetSampler()->GetDesc().MaxAnisotropy==
+        std::min(16u,unsigned(device->GetAdapterInfo().Sampler.MaxAnisotropy)),"Anisotropy did not follow device capabilities");
     VSWorldRenderer::Packet sky;sky.background=true;sky.fullbright=true;
     sky.mesh=renderer.upload({{-1,-1,0,0,0,1,0,0},{1,-1,0,0,0,1,1,0},
         {1,1,0,0,0,1,1,1},{-1,1,0,0,0,1,0,1}},{0,1,2,0,2,3});
