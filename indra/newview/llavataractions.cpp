@@ -2026,12 +2026,6 @@ void LLAvatarActions::zoomIn(const LLUUID& idAgent)
 
 void LLAvatarActions::getScriptInfo(const LLUUID& idAgent)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
-
     LL_INFOS() << "Reporting Script Info for avatar: " << idAgent.asString() << LL_ENDL;
     FSLSLBridge::instance().viewerToLSL("getScriptInfo|" + idAgent.asString() + "|" + (gSavedSettings.getBOOL("FSScriptInfoExtended") ? "1" : "0"));
 }

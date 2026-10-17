@@ -1293,6 +1293,12 @@ bool native_shared_setting_callback(const std::string& setting)
     // Reviewed shared CPU/UI/audio owners. Rendering and scene callbacks remain
     // with their native controller; never enter legacy GL through a cascade.
     static const char* const shared[] = {
+        "UseLSLBridge",
+        "UseLSLFlightAssist",
+        "UseMoveLock",
+        "RelockMoveLockAfterMovement",
+        "BridgeIntegrationOC",
+        "BridgeIntegrationLM",
         "ChatConsoleFontSize",
         "ChatPersistTime",
         "ConsoleMaxLines",
@@ -1598,6 +1604,14 @@ void settings_setup_listeners()
     // <FS:CR> Pose stand ground lock
     setting_setup_signal_listener(gSavedSettings, "FSPoseStandLock", handleSetPoseStandLock);
 
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+        setting_setup_signal_listener(gSavedSettings, "UseLSLBridge", [](const LLSD& value)
+        {
+            if (value.asBoolean()) FSLSLBridge::instance().initBridge();
+            else if (FSLSLBridge::instanceExists()) FSLSLBridge::instance().resetNativeAccount();
+        });
+#endif
     setting_setup_signal_listener(gSavedPerAccountSettings, "UseLSLFlightAssist", handleFlightAssistOptionChanged);
     setting_setup_signal_listener(gSavedPerAccountSettings, "UseMoveLock", handleMovelockOptionChanged);
     setting_setup_signal_listener(gSavedPerAccountSettings, "RelockMoveLockAfterMovement", handleMovelockAfterMoveOptionChanged);

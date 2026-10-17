@@ -108,3 +108,11 @@ The JSON's `implemented_native_paths_still_blocked` records these actionable mis
 7. Keep real unavailable-service, unauthorized, no-selection, maturity, RLVa and renderer-capability conditions. The acceptance target is no *Vulkan blanket gating* or nonfunctional admitted controls, not bypassing ordinary viewer policy.
 
 R3 runtime and uploaded-artifact qualification remains separate and pending in this audit. Future fixes need their own source/evidence attribution; this baseline must not be presented as qualified UI parity.
+
+## Local integration following this baseline
+
+The census above remains the immutable c06 baseline, not a claim about the current closure count. Local work now connects shared keyboard binding loading and window dispatch, utility/currency lifetimes, authenticated spatial/coarse/map models, native shared map drawing, CPU camera publication and generation-bound task inventory transport. The shared bridge lifecycle is being transposed through native attachment/configuration/script adapters; it is not qualified by the presence of startup calls.
+
+Actual headless viewer replay exposed and corrected Stream Title visibility teardown, the fixture's use of an incorrect Font Test registry key, and the missing native startup key-binding loader. Keyboard turn/release, Enter-to-chat, Backspace, Unicode and release-only gesture routes subsequently executed in the actual staged viewer. The utility tutorial legitimately opens `TutorialNotFound` without a grid tutorial URL; the fixture must acknowledge its real `OK_okbutton` before continuing mouse tests. Full connected replay, the skin/language/scale matrix and complete UI parity remain open until their current-source runtime evidence passes.
+
+Map/minimap and broader world UI are not enabled merely because their rendering/data foundations now exist. Shared parcel selection/hover/collision, region limits, land transactions, full map actions and remaining service/controller families must be connected before their ordinary controls can be accepted. Preserve reference permission, selection, availability, maturity and RLVa policy throughout. The UI push remains held pending all three R3 qualification jobs and verification of the uploaded artifacts.

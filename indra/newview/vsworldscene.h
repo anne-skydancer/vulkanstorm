@@ -1,6 +1,7 @@
 // Native CPU primitive scene, independent of GL drawables. LGPL-2.1.
 #pragma once
 #include "vsworldrenderer.h"
+#include "vsparceloverlay.h"
 #include "llhost.h"
 #include "lluuid.h"
 #include "v3math.h"
@@ -47,6 +48,21 @@ public:
     std::vector<Attachment> attachments() const;
     struct AvatarLocation { LLUUID id; LLVector3d position; };
     std::vector<AvatarLocation> avatarLocations() const;
+    struct ObjectSnapshot
+    {
+        ObjectHandle object;
+        LLUUID owner;
+        bool ownerKnown=false;
+        std::string nameValues,mediaVersion;
+        U32 updateFlags=0,rootUpdateFlags=0;
+        U8 pcode=0;
+        LLVector3d position;
+        LLVector3 scale;
+        bool attachment=false;
+    };
+    std::optional<ObjectSnapshot> objectSnapshot(const ObjectHandle&) const;
+    std::vector<ObjectSnapshot> objectSnapshots() const;
+    std::shared_ptr<const VSResourceBudget::Reservation> reserveSpatialBytes(std::size_t);
     struct Pick
     {
         FaceHandle           face;

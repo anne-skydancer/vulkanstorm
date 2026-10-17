@@ -35,6 +35,7 @@
 #include "vsnativeim.h"
 
 class FSLSLBridgeRequestResponder;
+class VSBridgeAdapter;
 std::function<bool()> fs_bridge_account_guard();
 
 const std::string LIB_ROCK_NAME = "Rock - medium, round";
@@ -75,6 +76,7 @@ public:
     void updateIntegrations();
 
     void initBridge();
+    U64 lifecycle() const { return mLifecycle; }
     // Retire account/region-owned endpoint and inventory references without rezzing objects.
     void resetNativeAccount();
     void recreateBridge();
@@ -87,7 +89,7 @@ public:
     void setBridge(LLViewerInventoryItem* item) { mpBridge = item; };
     LLViewerInventoryItem* getBridge() const { return mpBridge; };
     bool canUseBridge();
-    bool isBridgeValid() const { return nullptr != mpBridge; }
+    bool isBridgeValid() const;
 
     void checkBridgeScriptName();
     std::string currentFullName() const { return mCurrentFullName; }
@@ -107,12 +109,24 @@ public:
                           void* user_data) override;
 
 private:
+    U64 mLifecycle = 0;
+    void processAttachItem(const LLUUID&, bool, const std::function<void()>&, const std::function<void()>&);
+    void processDetachItem(const LLUUID&, bool);
+    void inspectBridgeContents(const LLInventoryObject::object_list_t&, bool, const std::function<void()>&);
+#if VS_NATIVE_VULKAN
+    std::shared_ptr<VSBridgeAdapter> mNativeAdapter;
+    LLUUID mNativeConfigureItem;
+    F64 mNativeConfigureDeadline = 0;
+    void tickNative();
+    bool uploadNativeScript(const LLUUID&, const std::string&);
+    void failNativeCreation(const LLUUID&);
+#endif
     std::string             mCurrentURL;
     bool                    mBridgeCreating;
     bool                    mAllowDetach;
     bool                    mFinishCreation;
 
-    LLViewerInventoryItem*  mpBridge;
+    LLPointer<LLViewerInventoryItem> mpBridge;
     std::string             mCurrentFullName;
     LLUUID                  mScriptItemID;  //internal script ID
     LLUUID                  mBridgeFolderID;

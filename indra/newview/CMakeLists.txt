@@ -1223,6 +1223,7 @@ set(viewer_HEADER_FILES
     vsavatarmotions.h
     vsavatarservices.h
     vscoarselocations.h
+    vsparceloverlay.h
     vswindfield.h
     llfloater360capture.h
     llfloaterabout.h
@@ -2318,6 +2319,7 @@ if(USE_DILIGENTCORE)
           vswearable.cpp vswearable.h
           vsnativeappearance.cpp vsnativeappearance.h
           vstaskinventory.cpp vstaskinventory.h
+          vsbridgeadapter.cpp vsbridgeadapter.h
           vsnativecircuits.cpp vsworldcontracts.h)
 endif()
 if(VS_VULKAN_DIAGNOSTICS)

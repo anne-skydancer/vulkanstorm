@@ -626,7 +626,7 @@ struct Replay : public LLAvatarPropertiesObserver
                         auto notice = toast ? toast->getNotification() : LLNotificationPtr();
                         require(notice && notice->getName() == "TutorialNotFound", "Missing tutorial did not produce its reference acknowledgement");
                         auto* panel = dynamic_cast<LLToastAlertPanel*>(toast->getPanel());
-                        auto* close = panel ? panel->findChild<LLButton>("close") : nullptr;
+                        auto* close = panel ? panel->findChild<LLButton>("OK_okbutton") : nullptr;
                         require(close && close->isInVisibleChain() && close->getEnabled(), "Tutorial acknowledgement control unavailable");
                         const LLRect bounds = close->calcScreenRect();
                         LLCoordGL point;

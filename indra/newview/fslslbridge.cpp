@@ -31,6 +31,10 @@
 #include "fslslbridge.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#include "vsavatarservices.h"
+#include "vsbridgeadapter.h"
+#include "lluri.h"
 #endif
 #include "fslslbridgerequest.h"
 
@@ -51,17 +55,36 @@
 #include "llviewercontrol.h"
 #include "llviewerregion.h"
 #include "llviewerwindow.h"
+#include "lluri.h"
+#include <optional>
 
 #if OPENSIM
 #include "llviewernetwork.h"
 #endif
 
-// Attachment creation requires the actual legacy scene owner. This remains
-// false through native teardown, when the session singleton has been released.
+static bool fs_bridge_avatar_ready()
+{
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) return owner->regionReady() && vs_avatar_character();
+#endif
+    return isAgentAvatarValid();
+}
+static void fs_bridge_detach(const LLUUID& item)
+{
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (owner->appearance()) owner->appearance()->detach(item);
+        return;
+    }
+#endif
+    LLVOAvatarSelf::detachAttachmentIntoInventory(item);
+}
 static bool fs_bridge_scene_owner_available()
 {
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active() || (gViewerWindow && gViewerWindow->isNativeVulkan())) return false;
+    if (VSNativeSession::active()) return fs_bridge_avatar_ready();
+    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return false;
 #endif
     return gViewerWindow != nullptr;
 }
@@ -70,8 +93,24 @@ std::function<bool()> fs_bridge_account_guard()
 {
     const LLUUID agent = gAgentID, session = gAgentSessionID;
     const auto current = vs_native_im_guard();
-    return [agent, session, current]
-    { return current() && agent == gAgentID && session == gAgentSessionID && fs_bridge_scene_owner_available(); };
+    const U64 lifecycle = FSLSLBridge::instanceExists() ? FSLSLBridge::instance().lifecycle() : 0;
+#if VS_NATIVE_VULKAN
+    const auto owner = VSNativeSession::active();
+    const U64 region = owner ? owner->regionEpoch() : 0;
+#endif
+    return [agent, session, current, lifecycle
+#if VS_NATIVE_VULKAN
+        , region
+#endif
+    ]
+    {
+        if (!current() || agent != gAgentID || session != gAgentSessionID || !fs_bridge_scene_owner_available() ||
+            !FSLSLBridge::instanceExists() || lifecycle != FSLSLBridge::instance().lifecycle()) return false;
+#if VS_NATIVE_VULKAN
+        if (auto owner = VSNativeSession::active()) return owner->regionEpoch() == region;
+#endif
+        return true;
+    };
 }
 
 static const std::string FS_BRIDGE_FOLDER = "#LSL Bridge";
@@ -130,6 +169,10 @@ FSLSLBridge::~FSLSLBridge()
 
 void FSLSLBridge::resetNativeAccount()
 {
+    ++mLifecycle;
+#if VS_NATIVE_VULKAN
+    mNativeAdapter.reset(); mNativeConfigureItem.setNull();
+#endif
     mCurrentURL.clear(); mpBridge = nullptr;
     mScriptItemID.setNull(); mBridgeFolderID.setNull(); mBridgeContainerFolderID.setNull();
     mBridgeUUID.setNull(); mReattachBridgeUUID.setNull(); mAllowedDetachables.clear();
@@ -144,6 +187,9 @@ void FSLSLBridge::onIdle(void* userdata)
 #endif
 
     FSLSLBridge* instance = static_cast<FSLSLBridge*>(userdata);
+#if VS_NATIVE_VULKAN
+    if (instance && VSNativeSession::active()) instance->tickNative();
+#endif
     if (instance)
     {
         switch (instance->mTimerResult)
@@ -189,6 +235,14 @@ bool FSLSLBridge::lslToViewer(std::string_view message, const LLUUID& fromID, co
     if (!fs_bridge_scene_owner_available()) { return false; }
 #endif
 
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active())
+    {
+        if (ownerID != owner->account().agent || !isBridgeValid() || !mNativeAdapter) return false;
+        const auto attachment = mNativeAdapter->attachment(getBridge()->getUUID());
+        if (!attachment || attachment->object.id != fromID) return false;
+    }
+#endif
     LL_DEBUGS("FSLSLBridge") << message << LL_ENDL;
 
     //<FS:TS> FIRE-962: Script controls for built-in AO
@@ -229,19 +283,27 @@ bool FSLSLBridge::lslToViewer(std::string_view message, const LLUUID& fromID, co
             return true;
         }
 
-        // brutish parsing
-        static const std::string bridge_url_tag = "<bridgeURL>";
-        static const std::string bridge_auth_tag = "<bridgeAuth>";
-        static const std::string bridge_ver_tag = "<bridgeVer>";
-        size_t urlStart  = message.find(bridge_url_tag) + bridge_url_tag.size();
-        size_t urlEnd    = message.find("</bridgeURL>");
-        size_t authStart = message.find(bridge_auth_tag) + bridge_auth_tag.size();
-        size_t authEnd   = message.find("</bridgeAuth>");
-        size_t verStart  = message.find(bridge_ver_tag) + bridge_ver_tag.size();
-        size_t verEnd    = message.find("</bridgeVer>");
-        std::string bURL = static_cast<std::string>(message.substr(urlStart,urlEnd - urlStart));
-        std::string bAuth = static_cast<std::string>(message.substr(authStart,authEnd - authStart));
-        std::string bVer = static_cast<std::string>(message.substr(verStart,verEnd - verStart));
+        const auto field = [message](std::string_view opening, std::string_view closing) -> std::optional<std::string>
+        {
+            const auto start = message.find(opening);
+            if (start == std::string_view::npos) return {};
+            const auto value = start + opening.size();
+            const auto end = message.find(closing, value);
+            if (end == std::string_view::npos || end < value) return {};
+            return std::string(message.substr(value, end - value));
+        };
+        const auto url = field("<bridgeURL>", "</bridgeURL>");
+        const auto auth = field("<bridgeAuth>", "</bridgeAuth>");
+        const auto version = field("<bridgeVer>", "</bridgeVer>");
+        if (!url || !auth || !version || url->size() > 4096 ||
+            (url->compare(0, 8, "https://") != 0 && url->compare(0, 7, "http://") != 0) || LLURI(*url).hostName().empty())
+        {
+            LL_WARNS("FSLSLBridge") << "Discarding malformed bridge handshake" << LL_ENDL;
+            return true;
+        }
+        const std::string& bURL = *url;
+        const std::string& bAuth = *auth;
+        const std::string& bVer = *version;
 
         // Verify Authorization
         if (ourBridge != bAuth)
@@ -258,7 +320,7 @@ bool FSLSLBridge::lslToViewer(std::string_view message, const LLUUID& fromID, co
             if (fsBridge && get_is_item_worn(fsBridge->getUUID()))
             {
                 mAllowDetach = true;
-                LLVOAvatarSelf::detachAttachmentIntoInventory(fsBridge->getUUID());
+                fs_bridge_detach(fsBridge->getUUID());
                 //This may have been an unfinished bridge. If so - stop the process before recreating.
                 if (getBridgeCreating())
                 {
@@ -595,6 +657,14 @@ bool FSLSLBridge::canUseBridge()
     if (!fs_bridge_scene_owner_available()) { return false; }
 #endif
 
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        if (!isBridgeValid() || !mNativeAdapter || !mNativeAdapter->guard(getBridge()->getUUID())()) return false;
+        const auto attachment = mNativeAdapter->attachment(getBridge()->getUUID());
+        if (!attachment || attachment->object.id != mBridgeUUID) return false;
+    }
+#endif
     static LLCachedControl<bool> sUseLSLBridge(gSavedSettings, "UseLSLBridge");
     return (isBridgeValid() && sUseLSLBridge && !mCurrentURL.empty());
 }
@@ -688,6 +758,7 @@ void FSLSLBridge::recreateBridge()
         return;
     }
 
+    ++mLifecycle;
     //announce yourself
     FSCommon::report_to_nearby_chat(LLTrans::getString("fsbridge_creating"));
 
@@ -724,7 +795,7 @@ void FSLSLBridge::cleanUpPreCreation()
         {
             LL_INFOS("FSLSLBridge") << "Found worn object " << item_id << " bridge category - detaching..." << LL_ENDL;
             mAllowedDetachables.push_back(item_id);
-            LLVOAvatarSelf::detachAttachmentIntoInventory(item_id);
+            fs_bridge_detach(item_id);
         }
     }
 
@@ -798,6 +869,8 @@ void FSLSLBridge::initBridge()
         return;
     }
 
+    if (getBridgeCreating()) return;
+    ++mLifecycle;
     setupFSCategory(vs_native_im_account_callback([this, current = fs_bridge_account_guard()](const LLUUID& bridge_folder_id)
         {
             if (!current()) return;
@@ -837,7 +910,7 @@ void FSLSLBridge::startCreation()
         return;
     }
 
-    if (!isAgentAvatarValid())
+    if (!fs_bridge_avatar_ready())
     {
         LL_WARNS("FSLSLBridge") << "AgentAvatar is not valid" << LL_ENDL;
         return;
@@ -924,13 +997,22 @@ void FSLSLBridge::createNewBridge()
 
 void FSLSLBridge::processAttach(LLViewerObject* object, const LLViewerJointAttachment* attachment)
 {
+    if (!object || !attachment || !isAgentAvatarValid()) return;
+    processAttachItem(object->getAttachmentItemID(), gAgentAvatarp->isSelf() && attachment->getName() == FS_BRIDGE_ATTACHMENT_POINT_NAME,
+        [this, object] { object->registerInventoryListener(this, nullptr); object->requestInventory(); },
+        [this, object] { configureBridgePrim(object); });
+}
+
+void FSLSLBridge::processAttachItem(const LLUUID& item_id, bool correct_point,
+    const std::function<void()>& inspect, const std::function<void()>& configure)
+{
 #if VS_NATIVE_VULKAN
     if (!fs_bridge_scene_owner_available()) { resetNativeAccount(); return; }
 #endif
 
     LL_INFOS("FSLSLBridge") << "Entering processAttach, checking the bridge container - gInventory.isInventoryUsable = " << (gInventory.isInventoryUsable() ? "true" : "false") << LL_ENDL;
 
-    if ((!gAgentAvatarp->isSelf()) || (attachment->getName() != FS_BRIDGE_ATTACHMENT_POINT_NAME))
+    if (!correct_point)
     {
         LL_WARNS("FSLSLBridge") << "Bridge not created. Our bridge container attachment isn't named correctly." << LL_ENDL;
         if (mBridgeCreating)
@@ -941,7 +1023,7 @@ void FSLSLBridge::processAttach(LLViewerObject* object, const LLViewerJointAttac
         return;
     }
 
-    LLViewerInventoryItem* fsObject = gInventory.getItem(object->getAttachmentItemID());
+    LLViewerInventoryItem* fsObject = gInventory.getItem(item_id);
     if (!fsObject) //just in case
     {
         LL_WARNS("FSLSLBridge") << "Bridge container is still NULL in inventory. Aborting." << LL_ENDL;
@@ -961,7 +1043,7 @@ void FSLSLBridge::processAttach(LLViewerObject* object, const LLViewerJointAttac
         if (fsObject->getName() != mCurrentFullName)
         {
             mAllowDetach = true;
-            LLVOAvatarSelf::detachAttachmentIntoInventory(fsObject->getUUID());
+            fs_bridge_detach(fsObject->getUUID());
             LL_WARNS("FSLSLBridge") << "Attempt to attach to bridge point an object other than current bridge" << LL_ENDL;
             FSCommon::report_to_nearby_chat(LLTrans::getString("fsbridge_failure_attach_wrong_object"));
             if (mBridgeCreating)
@@ -977,7 +1059,7 @@ void FSLSLBridge::processAttach(LLViewerObject* object, const LLViewerJointAttac
         {
             //the object is not where we think it is. Kick it off.
             mAllowDetach = true;
-            LLVOAvatarSelf::detachAttachmentIntoInventory(fsObject->getUUID());
+            fs_bridge_detach(fsObject->getUUID());
             LL_WARNS("FSLSLBridge") << "Bridge container isn't in the correct inventory location. Detaching it and aborting." << LL_ENDL;
             if (mBridgeCreating)
             {
@@ -1000,7 +1082,7 @@ void FSLSLBridge::processAttach(LLViewerObject* object, const LLViewerJointAttac
             FSCommon::report_to_nearby_chat(LLTrans::getString("fsbridge_failure_attach_point_in_use"));
             setBridgeCreating(false); //in case we interrupted the creation
         }
-        LLVOAvatarSelf::detachAttachmentIntoInventory(mpBridge->getUUID());
+        fs_bridge_detach(mpBridge->getUUID());
         return;
     }
     LL_DEBUGS("FSLSLBridge") << "Bridge container found is the same bridge we saved, id matched." << LL_ENDL;
@@ -1010,29 +1092,34 @@ void FSLSLBridge::processAttach(LLViewerObject* object, const LLViewerJointAttac
         // AH: We need to request objects inventory first before we can
         // do anything with it!
         LL_INFOS("FSLSLBridge") << "Requesting bridge inventory contents..." << LL_ENDL;
-        object->registerInventoryListener(this, nullptr);
-        object->requestInventory();
+        inspect();
     }
     else
     {
-        configureBridgePrim(object);
+        configure();
     }
 }
 
-void FSLSLBridge::inventoryChanged(LLViewerObject* object,
-                                LLInventoryObject::object_list_t* inventory,
-                                S32 serial_num,
-                                void* user_data)
+void FSLSLBridge::inventoryChanged(LLViewerObject* object, LLInventoryObject::object_list_t*, S32, void*)
 {
+    if (!object) return;
     object->removeInventoryListener(this);
+    LLInventoryObject::object_list_t contents;
+    object->getInventoryContents(contents);
+    inspectBridgeContents(contents, object->flagInventoryEmpty(), [this, object] { configureBridgePrim(object); });
+}
+
+void FSLSLBridge::inspectBridgeContents(const LLInventoryObject::object_list_t& inventory_objects,
+    bool inventory_empty, const std::function<void()>& configure)
+{
+
 
     LL_INFOS("FSLSLBridge") << "Received object inventory for existing bridge prim. Checking contents..." << LL_ENDL;
 
     //are we attaching the right thing? Check size and script
-    LLInventoryObject::object_list_t inventory_objects;
-    object->getInventoryContents(inventory_objects);
 
-    if (object->flagInventoryEmpty())
+
+    if (inventory_empty)
     {
         LL_INFOS("FSLSLBridge") << "Empty bridge detected- re-enter creation process" << LL_ENDL;
         setBridgeCreating(true);
@@ -1041,8 +1128,8 @@ void FSLSLBridge::inventoryChanged(LLViewerObject* object,
     {
         S32 count(0);
 
-        LLInventoryObject::object_list_t::iterator it = inventory_objects.begin();
-        LLInventoryObject::object_list_t::iterator end = inventory_objects.end();
+        LLInventoryObject::object_list_t::const_iterator it = inventory_objects.begin();
+        LLInventoryObject::object_list_t::const_iterator end = inventory_objects.end();
         bool isOurScript = false;
         for ( ; it != end; ++it)
         {
@@ -1090,7 +1177,7 @@ void FSLSLBridge::inventoryChanged(LLViewerObject* object,
     if (getBridgeCreating())
     {
         mFinishCreation = false;
-        configureBridgePrim(object);
+        configure();
     }
     else if (mFinishCreation)
     {
@@ -1120,6 +1207,13 @@ void FSLSLBridge::configureBridgePrim(LLViewerObject* object)
 
 void FSLSLBridge::processDetach(LLViewerObject* object, const LLViewerJointAttachment* attachment)
 {
+    if (!object) return;
+    processDetachItem(object->getAttachmentItemID(), isAgentAvatarValid() && gAgentAvatarp->isSelf() &&
+        attachment && attachment->getName() == FS_BRIDGE_ATTACHMENT_POINT_NAME);
+}
+
+void FSLSLBridge::processDetachItem(const LLUUID& item_id, bool correct_point)
+{
 #if VS_NATIVE_VULKAN
     if (!fs_bridge_scene_owner_available()) { resetNativeAccount(); return; }
 #endif
@@ -1127,7 +1221,7 @@ void FSLSLBridge::processDetach(LLViewerObject* object, const LLViewerJointAttac
     LL_INFOS("FSLSLBridge") << "Entering processDetach" << LL_ENDL;
 
     // Begin cleanup part
-    uuid_vec_t::iterator found = std::find(mAllowedDetachables.begin(), mAllowedDetachables.end(), object->getAttachmentItemID());
+    uuid_vec_t::iterator found = std::find(mAllowedDetachables.begin(), mAllowedDetachables.end(), item_id);
     if (found != mAllowedDetachables.end())
     {
         mAllowedDetachables.erase(found);
@@ -1145,7 +1239,7 @@ void FSLSLBridge::processDetach(LLViewerObject* object, const LLViewerJointAttac
     if (gSavedSettings.getBOOL("UseLSLBridge") && !mAllowDetach)
     {
         LL_INFOS("FSLSLBridge") << "Re-attaching bridge" << LL_ENDL;
-        LLViewerInventoryItem* inv_object = gInventory.getItem(object->getAttachmentItemID());
+        LLViewerInventoryItem* inv_object = gInventory.getItem(item_id);
         if (inv_object && FSLSLBridge::instance().mpBridge && FSLSLBridge::instance().mpBridge->getUUID() == inv_object->getUUID())
         {
             LLAttachmentsMgr::instance().addAttachmentRequest(inv_object->getUUID(), FS_BRIDGE_POINT, true, true);
@@ -1155,13 +1249,13 @@ void FSLSLBridge::processDetach(LLViewerObject* object, const LLViewerJointAttac
     }
     mAllowDetach = false;
 
-    if (gAgentAvatarp.isNull() || (!gAgentAvatarp->isSelf()) || (!attachment) || (attachment->getName() != FS_BRIDGE_ATTACHMENT_POINT_NAME))
+    if (!correct_point)
     {
         LL_WARNS("FSLSLBridge") << "Couldn't detach bridge, object has wrong name or avatar wasn't self." << LL_ENDL;
         return;
     }
 
-    LLViewerInventoryItem* fsObject = gInventory.getItem(object->getAttachmentItemID());
+    LLViewerInventoryItem* fsObject = gInventory.getItem(item_id);
     if (!fsObject) //just in case
     {
         LL_WARNS("FSLSLBridge") << "Couldn't detach bridge. inventory object was NULL." << LL_ENDL;
@@ -1171,7 +1265,7 @@ void FSLSLBridge::processDetach(LLViewerObject* object, const LLViewerJointAttac
     if (mFinishCreation)
     {
         LL_INFOS("FSLSLBridge") << "Bridge detached to save settings. Starting re-attach timer..." << LL_ENDL;
-        mReattachBridgeUUID = object->getAttachmentItemID();
+        mReattachBridgeUUID = item_id;
         new FSLSLBridgeReAttachTimer();
         return;
     }
@@ -1309,7 +1403,7 @@ void FSLSLBridgeRezCallback::fire(const LLUUID& inv_item)
         return;
     }
 
-    if (!isAgentAvatarValid())
+    if (!fs_bridge_avatar_ready())
     {
         LL_WARNS("FSLSLBridge") << "Agent is 0, bailing out" << LL_ENDL;
         return;
@@ -1324,6 +1418,7 @@ void FSLSLBridgeRezCallback::fire(const LLUUID& inv_item)
         return;
     }
 
+    if (!item) return;
     item->setDescription(item->getName());
     item->setComplete(true);
     item->updateServer(false);
@@ -1361,7 +1456,16 @@ void FSLSLBridgeScriptCallback::fire(const LLUUID& inv_item)
         return;
     }
 
-    if (!isAgentAvatarValid())
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        std::string buffer;
+        if (prepUploadFile(buffer).empty() || !FSLSLBridge::instance().uploadNativeScript(inv_item, buffer))
+            FSLSLBridge::instance().failNativeCreation(inv_item);
+        return;
+    }
+#endif
+    if (!fs_bridge_avatar_ready())
     {
         LL_WARNS("FSLSLBridge") << "Agent is 0, bailing out" << LL_ENDL;
         return;
@@ -1418,7 +1522,7 @@ void FSLSLBridgeScriptCallback::fire(const LLUUID& inv_item)
         if (FSLSLBridge::instance().isBridgeValid())
         {
             FSLSLBridge::instance().mAllowDetach = true;
-            LLVOAvatarSelf::detachAttachmentIntoInventory(FSLSLBridge::instance().getBridge()->getUUID());
+            fs_bridge_detach(FSLSLBridge::instance().getBridge()->getUUID());
         }
 
         FSLSLBridge::instance().cleanUpBridge();
@@ -1496,7 +1600,17 @@ void FSLSLBridge::checkBridgeScriptName()
         return;
     }
 
-    if (!isAgentAvatarValid())
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active())
+    {
+        auto* item = gInventory.getItem(mScriptItemID);
+        if (!item || !mNativeAdapter || !mNativeAdapter->saveScript(mpBridge->getUUID(), *item))
+        { failNativeCreation(mScriptItemID); return; }
+        new FSLSLBridgeCleanupTimer();
+        return;
+    }
+#endif
+    if (!fs_bridge_avatar_ready())
     {
         LL_WARNS("FSLSLBridge") << "No agent avatar" << LL_ENDL;
         cleanUpBridge();
@@ -1520,6 +1634,7 @@ void FSLSLBridge::checkBridgeScriptName()
 
 void FSLSLBridge::cleanUpBridge()
 {
+    ++mLifecycle;
     //something unexpected went wrong. Try to clean up and not crash.
     LL_WARNS("FSLSLBridge") << "Bridge object not found. Can't proceed with creation, exiting." << LL_ENDL;
     FSCommon::report_to_nearby_chat(LLTrans::getString("fsbridge_failure_not_found"));
@@ -1550,7 +1665,7 @@ void FSLSLBridge::finishBridge()
     if (getBridge())
     {
         LL_INFOS("FSLSLBridge") << "Detaching bridge after cleanup" << LL_ENDL;
-        LLVOAvatarSelf::detachAttachmentIntoInventory(getBridge()->getUUID());
+        fs_bridge_detach(getBridge()->getUUID());
     }
     else
     {
@@ -1563,9 +1678,12 @@ void FSLSLBridge::finishBridge()
 //
 // Helper functions
 //
-bool FSLSLBridge::isItemAttached(const LLUUID& iID)
+bool FSLSLBridge::isItemAttached(const LLUUID& id)
 {
-    return (isAgentAvatarValid() && gAgentAvatarp->isWearingAttachment(iID));
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) return owner->appearance() && owner->appearance()->isWorn(id);
+#endif
+    return isAgentAvatarValid() && gAgentAvatarp->isWearingAttachment(id);
 }
 
 void FSLSLBridge::setupFSCategory(inventory_func_type callback)
@@ -1794,7 +1912,7 @@ void FSLSLBridge::detachOtherBridges()
         if (get_is_item_worn(item->getUUID()) &&
             ((!fsBridge) || (item->getUUID() != fsBridge->getUUID())))
         {
-            LLVOAvatarSelf::detachAttachmentIntoInventory(item->getUUID());
+            fs_bridge_detach(item->getUUID());
         }
     }
 }
@@ -1820,3 +1938,126 @@ bool FSLSLBridgeStartCreationTimer::tick()
     FSLSLBridge::instance().setTimerResult(FSLSLBridge::START_CREATION_FINISHED);
     return true;
 }
+
+bool FSLSLBridge::isBridgeValid() const
+{
+    return mpBridge && gInventory.getItem(mpBridge->getUUID()) != nullptr;
+}
+
+#if VS_NATIVE_VULKAN
+void FSLSLBridge::tickNative()
+{
+    const auto owner = VSNativeSession::active();
+    if (!owner || !owner->regionReady() || !gSavedSettings.getBOOL("UseLSLBridge") || mBridgeFolderID.isNull() || !gInventory.isInventoryUsable()) return;
+    if (!mNativeAdapter)
+    {
+        mNativeAdapter = std::make_shared<VSBridgeAdapter>(owner,
+            [this](const VSWorldScene::Attachment& attachment)
+            {
+                if (attachment.point != FS_BRIDGE_POINT) return;
+                const auto* inventory = gInventory.getItem(attachment.item);
+                if (!inventory || inventory->getName() != mCurrentFullName) return;
+                const LLUUID item = attachment.item;
+                const auto configure = [this, item]
+                {
+                    mNativeConfigureItem = item;
+                    mNativeConfigureDeadline = LLFrameTimer::getTotalSeconds() + 30;
+                };
+                const auto inspect = [this, item, configure]
+                {
+                    const auto current = fs_bridge_account_guard();
+                    const auto object = mNativeAdapter->guard(item);
+                    mNativeAdapter->inspect(item, [this, current, object, configure](const VSTaskInventory::Result& result)
+                    {
+                        if (!current() || !object()) return;
+                        if (!result.success)
+                        {
+                            LL_WARNS("FSLSLBridge") << "Unable to retrieve native bridge contents" << LL_ENDL;
+                            return;
+                        }
+                        LLInventoryObject::object_list_t contents;
+                        for (const auto& entry : result.contents)
+                            if (entry->getType() != LLAssetType::AT_CATEGORY) contents.push_back(entry);
+                        inspectBridgeContents(contents, contents.empty(), configure);
+                    });
+                };
+                processAttachItem(item, true, inspect, configure);
+            },
+            [this](const LLUUID& item, U8 point) { processDetachItem(item, point == FS_BRIDGE_POINT); });
+    }
+    const auto current = fs_bridge_account_guard();
+    const auto adapter = mNativeAdapter;
+    adapter->tick();
+    if (!current() || mNativeConfigureItem.isNull()) return;
+    const LLUUID item = mNativeConfigureItem;
+    if (!getBridgeCreating() || !isBridgeValid() || getBridge()->getUUID() != item)
+    {
+        mNativeConfigureItem.setNull();
+        return;
+    }
+    if (adapter->configure(item))
+    {
+        mNativeConfigureItem.setNull();
+        if (current()) create_script_inner();
+    }
+    else if (LLFrameTimer::getTotalSeconds() > mNativeConfigureDeadline)
+    {
+        mNativeConfigureItem.setNull();
+        failNativeCreation(LLUUID::null);
+    }
+}
+
+bool FSLSLBridge::uploadNativeScript(const LLUUID& script, const std::string& buffer)
+{
+    const auto owner = VSNativeSession::active();
+    if (!owner || !isBridgeValid() || !getBridgeCreating() || !mNativeAdapter) return false;
+    const auto attachment = mNativeAdapter->attachment(getBridge()->getUUID());
+    const auto item = gInventory.getItem(script);
+    if (!attachment || !item) return false;
+    const std::string url = owner->capability(attachment->object.host, "UpdateScriptAgent");
+    if (url.empty()) return false;
+    const auto current = fs_bridge_account_guard();
+    const auto object = mNativeAdapter->guard(getBridge()->getUUID());
+    mScriptItemID = script;
+    gInventory.updateItem(item);
+    gInventory.notifyObservers();
+    if (!current() || !object()) return false;
+    LLResourceUploadInfo::ptr_t upload = std::make_shared<LLScriptAssetUpload>(attachment->object.id, script,
+        LLScriptAssetUpload::MONO, true, LLUUID::null, buffer,
+        [this, current, object, script](LLUUID, LLUUID, LLUUID asset, LLSD result)
+        {
+            if (!current() || !object() || mScriptItemID != script) return;
+            if ((result.has("compiled") && !result["compiled"].asBoolean()) || asset.isNull())
+            { failNativeCreation(script); return; }
+            // The shared task-upload finish variant does not update an agent
+            // inventory item. This is an UpdateScriptAgent upload, so retain
+            // the returned asset before the reference RezScript step.
+            auto* original = gInventory.getItem(script);
+            if (!original) { failNativeCreation(script); return; }
+            LLPointer<LLViewerInventoryItem> updated = new LLViewerInventoryItem(original);
+            updated->setAssetUUID(asset);
+            gInventory.updateItem(updated);
+            gInventory.notifyObservers();
+            if (current() && object()) setTimerResult(SCRIPT_UPLOAD_FINISHED);
+        },
+        [this, current, object, script](LLUUID, LLUUID, LLSD, std::string)
+        {
+            if (current() && object() && mScriptItemID == script) failNativeCreation(script);
+            return false; // Retain the shared upload controller's error reporting.
+        });
+    LLViewerAssetUpload::EnqueueInventoryUpload(url, upload);
+    return true;
+}
+
+void FSLSLBridge::failNativeCreation(const LLUUID& script)
+{
+    if (isBridgeValid())
+    {
+        mAllowDetach = true;
+        fs_bridge_detach(getBridge()->getUUID());
+    }
+    cleanUpBridge();
+    if (script.notNull()) remove_inventory_item(script, nullptr, true);
+    gInventory.notifyObservers();
+}
+#endif

@@ -91,7 +91,10 @@ jobs:
       - run: python scripts/tests/test_native_spatial_roots.py
       - run: python scripts/tests/test_native_map_images.py
       - run: python scripts/tests/test_native_map_actions.py
+      - run: python scripts/tests/test_native_map_models.py
+      - run: python scripts/tests/test_native_camera_publication.py
       - run: python scripts/tests/test_native_task_inventory.py
+      - run: python scripts/tests/test_native_bridge_lifecycle.py
       - run: python scripts/tests/test_native_world_assets.py
       - run: python scripts/tests/test_native_http_body_limit.py
       - run: python scripts/tests/test_native_texture_cache.py
