@@ -64,6 +64,7 @@ public:
     bool requestTaskInventory(const VSWorldScene::ObjectHandle&);
     const LLHost& host() const { return mHost; }
     std::string capability(const std::string&) const;
+    std::string capability(const LLHost&, const std::string&) const;
     LLSD evidence() const;
     const LLSD& simulatorFeatures() const { return mSimulatorFeatures; }
     bool simulatorFeaturesReceived() const { return mSimulatorFeaturesReceived; }

@@ -943,8 +943,22 @@ void VSWorldGLTF::append(std::vector<VSWorldRenderer::Packet>& packets, const LL
                     normal = normal * rotation;
                     normal.normalize();
                     const auto uv = vertex < primitive.mTexCoords0.size() ? primitive.mTexCoords0[vertex] : LLVector2::zero;
-                    vertices.push_back(
-                        { point.mV[0], point.mV[1], point.mV[2], normal.mV[0], normal.mV[1], normal.mV[2], uv.mV[0], uv.mV[1] });
+                    VSWorldRenderer::Vertex output{point.mV[0],point.mV[1],point.mV[2],normal.mV[0],normal.mV[1],normal.mV[2],uv.mV[0],uv.mV[1]};
+                    if(vertex<primitive.mTexCoords1.size()) {output.u1=primitive.mTexCoords1[vertex].mV[0];output.v1=primitive.mTexCoords1[vertex].mV[1];}
+                    if(vertex<primitive.mColors.size())
+                    {
+                        const auto& color=primitive.mColors[vertex];output.r=float(color.mV[0])/255;output.g=float(color.mV[1])/255;
+                        output.b=float(color.mV[2])/255;output.a=float(color.mV[3])/255;
+                    }
+                    if(vertex<primitive.mTangents.size())
+                    {
+                        const auto* tangent=primitive.mTangents[vertex].getF32ptr();
+                        vec3 t=glm::mat3(matrix)*vec3(tangent[0],tangent[1],tangent[2]);
+                        LLVector3 transformed(t.x*scale.mV[0],t.y*scale.mV[1],t.z*scale.mV[2]);transformed=transformed*rotation;transformed.normalize();
+                        output.tx=transformed.mV[0];output.ty=transformed.mV[1];output.tz=transformed.mV[2];
+                        output.tw=tangent[3]*(glm::determinant(glm::mat3(matrix))<0?-1.f:1.f);
+                    }
+                    vertices.push_back(output);
                 }
                 std::vector<unsigned>     indices;
                 VSWorldRenderer::Topology topology = VSWorldRenderer::Topology::Triangles;
@@ -1025,16 +1039,36 @@ void VSWorldGLTF::append(std::vector<VSWorldRenderer::Packet>& packets, const LL
                 packet.fullbright  = material.mUnlit.mPresent;
                 packet.alphaCutoff = material.mAlphaCutoff;
                 packet.doubleSided = material.mDoubleSided;
-                const S32 texture  = material.mPbrMetallicRoughness.mBaseColorTexture.mIndex;
-                if (index(texture, asset.mTextures) && index(asset.mTextures[texture].mSource, asset.mImages))
+                auto surface=std::make_shared<VSMaterial::State>();surface->pbr=true;
+                surface->base=packet.color;surface->alpha=packet.alpha?VSWorldContracts::AlphaMode::Blend:
+                    packet.masked?VSWorldContracts::AlphaMode::Mask:VSWorldContracts::AlphaMode::Opaque;
+                surface->cutoff=packet.alphaCutoff;surface->doubleSided=packet.doubleSided;surface->fullbright=packet.fullbright;
+                surface->metallic=material.mPbrMetallicRoughness.mMetallicFactor;surface->roughness=material.mPbrMetallicRoughness.mRoughnessFactor;
+                surface->normalScale=material.mNormalTexture.mScale;surface->occlusionStrength=material.mOcclusionTexture.mStrength;
+                std::copy_n(glm::value_ptr(material.mEmissiveFactor),3,surface->emissive.begin());
+                const TextureInfo* infos[]{&material.mPbrMetallicRoughness.mBaseColorTexture,&material.mNormalTexture,
+                    &material.mPbrMetallicRoughness.mMetallicRoughnessTexture,&material.mEmissiveTexture};
+                bool channelsReady=true;
+                for(unsigned channel=0;channel<4;++channel)
                 {
-                    packet.image = owner.image(unsigned(asset.mTextures[texture].mSource));
-                    if (!packet.image)
+                    const auto& info=*infos[channel];const auto texture=info.mIndex;
+                    const auto set=info.getTexCoord();
+                    if(set<0 || set>1 || (set==1 && primitive.mTexCoords1.size()!=primitive.mPositions.size()))
+                    {owner.error="glTF material requests an absent UV channel";return;}
+                    surface->uvSet[channel]=unsigned(set);
+                    const auto& source=info.mTextureTransform;
+                    const float c=std::cos(source.mRotation),r=std::sin(source.mRotation);
+                    surface->uv[channel].matrix={c*source.mScale.x,r*source.mScale.x,-r*source.mScale.y,c*source.mScale.y};
+                    surface->uv[channel].offset={source.mOffset.x+r*source.mScale.y,1-source.mOffset.y-c*source.mScale.y};
+                    if(index(texture,asset.mTextures) && index(asset.mTextures[texture].mSource,asset.mImages))
                     {
-                        deferred = true;
-                        continue;
+                        auto image=owner.image(unsigned(asset.mTextures[texture].mSource));
+                        if(!image) {channelsReady=false;continue;}
+                        if(!channel) packet.image=std::move(image);else packet.channels[channel-1]=std::move(image);
                     }
                 }
+                if(!channelsReady) {deferred=true;continue;}
+                packet.surface=std::move(surface);
             }
             candidatePackets.push_back(std::move(packet));
         }

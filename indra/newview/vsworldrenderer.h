@@ -1,6 +1,7 @@
 // Native indexed world geometry and submission ownership. LGPL-2.1.
 #pragma once
 #include "vsuirenderer.h"
+#include "vsmaterial.h"
 #include <array>
 #include <cstddef>
 #include <memory>
@@ -10,7 +11,12 @@ namespace Diligent { struct IRenderDevice; struct IDeviceContext; struct ITextur
 class VSWorldRenderer
 {
 public:
-    struct Vertex { float x,y,z,nx,ny,nz,u,v; };
+    struct Vertex
+    {
+        float x,y,z,nx,ny,nz,u,v;
+        float u1=0,v1=0,tx=0,ty=0,tz=0,tw=0;
+        float r=1,g=1,b=1,a=1;
+    };
     enum class Topology
     {
         Triangles,
@@ -23,6 +29,8 @@ public:
     {
         Mesh mesh;
         VSUIRenderer::Image image;
+        std::array<VSUIRenderer::Image, 3> channels;
+        std::shared_ptr<const VSMaterial::State> surface;
         std::array<float,4> color{1,1,1,1};
         bool fullbright = false;
         bool alpha = false;

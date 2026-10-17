@@ -40,17 +40,45 @@ network counts; corrupt/truncated recovery; clear/resize/read-only and pending-I
 shutdown; grid/account transitions; progressive range/discard demand. These checks
 must exercise the staged viewer and real cache, not just the bridge fixture.
 
-## Remaining R3 production paths
+## Material and animation production checkpoint
 
-| Area | Existing path | Missing work and acceptance |
-| --- | --- | --- |
-| Legacy materials | TE diffuse tint, UVs, fullbright and basic alpha classification in `VSWorldScene` | Shared material asset ownership; normal/specular/bump/shiny/emissive channels, tangent conventions, independent UV transforms and exact alpha semantics |
-| PBR | glTF scenes supply base color, alpha, unlit and double-sided flags | Object material assets and overrides; all channel textures/factors/color encodings; rigged and terrain material variants. Lighting/probe appearance remains R5/R6 |
-| Streaming/sampling | Immutable native image publication, bounded full-image HTTP/decode, shared disk-cache entry point | Demand-driven mip/discard/range progression, mip generation/residency, sampler/address/filter/anisotropy and compression policy, eviction/reload and TE/PBR animation |
-| Media | Shared UI/CEF owners and image publication | Plugin stride/format/origin, dirty-region generations and common world-media/preview resources |
-| Settings | Native controllers exist for earlier-stage services | Inventory rendering listeners in `llviewercontrol.cpp`; connect each R3 preference to observable native resource changes and persisted reload. Later lighting/postprocess controllers belong to their roadmap stages |
+Native scene faces now publish immutable material snapshots with all four PBR
+channel identities, factors, alpha state and independent UV transforms; legacy
+normal/specular IDs and transforms, fullbright, emissive-alpha, bump/shiny/glow
+and specular/gloss factors are retained. Legacy assets use bounded regional
+RenderMaterials acquisition and the shared LLMaterial decoder. PBR assets use
+the shared material asset loader and LLGLTFMaterial override application.
 
-Material, UV, color and sampling charts must compare reference semantics.
-A saved preference without a production effect does not satisfy acceptance.
-All stages retain existing ownership budgets, strict validation and explicit
-qualification limits. This record must be updated as production paths land.
+Object extra parameters supply material asset IDs. GenericStreamingMessage
+material overrides are admitted on their simulator circuit, validated before
+face mutation, queued with bounded region ownership when necessary, and retired
+with objects/regions. Texture animation uses LLViewerTextureAnim's existing
+state machine; its transforms are applied to packets, without per-frame mesh
+recreation. Material-aware masked selection samples the published transform.
+
+The production shader binds base, normal, ORM/specular and emissive channels,
+with explicit encoded/linear conversions, alpha handling and independent UVs.
+Geometry now retains UV1, color and tangent channels for glTF. UV transforms
+transpose textureUtilV.glsl's handedness and animation order. The headless GHI
+suite passes material opacity, linear factors, emissive and UV readbacks, as
+well as its existing renderer and negative validation tests. Native Windows
+translation units compile. This does not yet establish all R3 acceptance.
+
+## Open R3 work to complete before qualification
+
+- Finish tangent-path/reference comparisons, per-channel sampler/address/mip
+  choices, anisotropy and texture-animation variants; qualify all material
+  variants including rigged geometry and terrain PBR.
+- Progressive mip/discard/range demand, bounded GPU mip residency, compression
+  policy, eviction and local reload.
+- Dynamic media stride/format/origin and dirty-region publication shared with
+  world media and previews.
+- Inventory and connect R3 settings listeners to observable native changes.
+- Real disk-cache cold/warm restart and pixel/network evidence, corruption,
+  clear/resize/read-only, account/grid and pending-I/O shutdown cases.
+- Production-viewer replay for material transport, overrides, channel ownership,
+  image replacement and settings; cross-platform software qualification.
+
+BRDF and probe-dependent appearance remain R5/R6 obligations. A saved preference
+with no production effect does not pass. Retain strict validation and ownership
+budgets throughout. Checkpoints are commits, not milestone completion.

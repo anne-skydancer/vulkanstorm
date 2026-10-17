@@ -1,6 +1,9 @@
 // Native CPU primitive scene, independent of GL drawables. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsworldscene.h"
+#include "vsmaterialassets.h"
+#include "llgltfmateriallist.h"
+#include "llviewertextureanim.h"
 #include "vsterrainpacket.h"
 #include "vsworldavatar.h"
 #include "vsworldassets.h"
@@ -15,6 +18,8 @@
 #include "llmeshrepository.h"
 #include "llpartdata.h"
 #include "lltextureanim.h"
+#include "llgenericstreamingmessage.h"
+#include "llsdserialize.h"
 #include "llhudobject.h"
 #include "llhudeffectlookat.h"
 #include "llhudeffectpointat.h"
@@ -147,6 +152,26 @@ bool volumeExtras(const std::vector<U8>& extra, LLVolumeParams& params, std::opt
     }
     return p == extra.size() && (!flexible || params.getSculptID().isNull());
 }
+bool renderMaterialData(const U8* data,U32 size,LLRenderMaterialParams& materials)
+{
+    if(!size || data[0]>14 || size!=1+17*U32(data[0])) return false;
+    std::set<U8> faces;
+    for(unsigned i=0;i<data[0];++i)
+        if(data[1+17*i]>=45 || !faces.insert(data[1+17*i]).second) return false;
+    LLDataPackerBinaryBuffer packed(const_cast<U8*>(data),S32(size));
+    return materials.unpack(packed);
+}
+std::shared_ptr<LLViewerTextureAnim> textureAnimationData(const U8* data,U32 size)
+{
+    if(size!=16) return {};
+    std::array<U8,20> bytes{};bytes[0]=16;std::copy_n(data,16,bytes.begin()+4);
+    LLDataPackerBinaryBuffer packed(bytes.data(),20);
+    auto animation=std::make_shared<LLViewerTextureAnim>(nullptr);
+    animation->unpackTAMessage(packed);
+    if(animation->mFace < -1 || animation->mFace>=45 || !std::isfinite(animation->mStart) ||
+        !std::isfinite(animation->mLength) || animation->mLength<0 || !std::isfinite(animation->mRate)) return {};
+    return animation;
+}
 bool ownerExtras(const std::vector<U8>& extra,U32& meshFlags)
 {
     meshFlags=0;if (extra.empty()) return true;
@@ -176,6 +201,9 @@ struct VSWorldScene::Impl
     {
         VSWorldRenderer::Mesh                     mesh;
         LLTextureEntry                            material;
+        LLPointer<LLFetchedGLTFMaterial>            pbrAsset;
+        std::shared_ptr<const VSMaterial::State> surface;
+        std::array<VSUIRenderer::Image,3> publishedChannels;
         U64                                       poseGeneration = 0;
         LLTextureEntry                            publishedMaterial;
         VSUIRenderer::Image                       publishedImage;
@@ -186,6 +214,9 @@ struct VSWorldScene::Impl
     {
         LLUUID id;U32 parent=0;U8 pcode=LL_PCODE_VOLUME,attachment=0;LLVector3 position,scale,velocity,acceleration,angularVelocity;LLQuaternion rotation;
         LLUUID inventoryItem;
+        LLRenderMaterialParams renderMaterials;
+        std::shared_ptr<LLViewerTextureAnim> animation;
+        S32 textureAnimMode=0;
         U64 generation=0,revision=0;VSWorldMotion motion;
         U64 parentGeneration=0;bool parentRetired=false;
         std::optional<LLPartSysData>                         particles;
@@ -226,6 +257,8 @@ struct VSWorldScene::Impl
     };
     VSWorldRenderer& renderer;VSUIResources& resources;
     std::shared_ptr<VSWorldAssets> assets;
+    std::unique_ptr<VSMaterialAssets> materialAssets;
+    std::map<U32,LLSD> pendingMaterialOverrides;
     std::shared_ptr<Budgets> budgets;
     LLHost host;U64 handle=0,incarnation=0,nextObjectGeneration=1,nextRevision=1;
     U32 width=256,regionHeight=256;
@@ -768,6 +801,23 @@ struct VSWorldScene::Impl
         auto slot=budgets->objectRequests.reserve(1);if(!slot)return;
         Request request;request.slot=std::move(slot);pending.emplace(id,std::move(request));
     }
+    bool applyMaterialOverrides(Object& object,const LLSD& data)
+    {
+        const auto& sides=data["te"]; const auto& overrides=data["od"];
+        if(!sides.isArray() || !overrides.isArray() || sides.size()!=overrides.size() || sides.size()>45) return false;
+        std::vector<LLPointer<LLGLTFMaterial>> candidate(object.faces.size());
+        std::set<S32> seen;
+        for(S32 i=0;i<sides.size();++i)
+        {
+            if(!sides[i].isInteger() || sides[i].asInteger()<0 || U32(sides[i].asInteger())>=object.faces.size() ||
+                !seen.insert(sides[i].asInteger()).second || !overrides[i].isMap()) return false;
+            LLPointer<LLGLTFMaterial> value=new LLGLTFMaterial();value->applyOverrideLLSD(overrides[i]);
+            candidate[std::size_t(sides[i].asInteger())]=value;
+        }
+        for(std::size_t i=0;i<object.faces.size();++i) object.faces[i].material.setGLTFMaterialOverride(candidate[i]);
+        object.revision=nextRevision++;
+        return true;
+    }
     void eraseObject(U32 id)
     {
         for (auto& [local,object]:objects) if (object.parent==id) object.parentRetired=true;
@@ -776,7 +826,7 @@ struct VSWorldScene::Impl
             avatars.erase(object->second.id);
         if (const auto object = objects.find(id); object != objects.end())
             pendingAnimations.erase(object->second.id);
-        objects.erase(id);pending.erase(id);
+        objects.erase(id);pending.erase(id);pendingMaterialOverrides.erase(id);
     }
     void eraseAnimated()
     {
@@ -843,10 +893,16 @@ struct VSWorldScene::Impl
                     auto& old                     = previous->second.faces[face];
                     replacement.mesh              = std::move(old.mesh);
                     replacement.publishedMaterial = old.publishedMaterial;
+                    if(object.renderMaterials.getMaterial(U8(face))==previous->second.renderMaterials.getMaterial(U8(face)))
+                        replacement.material.setGLTFMaterialOverride(old.material.getGLTFMaterialOverride());
+                    replacement.surface = old.surface;
+                    replacement.publishedChannels = old.publishedChannels;
                     replacement.publishedImage    = std::move(old.publishedImage);
                     replacement.published         = old.published;
                     replacement.poseGeneration    = old.poseGeneration;
                 }
+                if(object.animation && previous->second.animation && object.animation->equals(*previous->second.animation))
+                {object.animation=previous->second.animation;object.textureAnimMode=previous->second.textureAnimMode;}
                 if (object.params.getSculptType() == previous->second.params.getSculptType())
                 {
                     object.gltf        = std::move(previous->second.gltf);
@@ -867,6 +923,8 @@ struct VSWorldScene::Impl
                     object.flex->pathSignatureSize = 0;
             }
         }
+        if(const auto override=pendingMaterialOverrides.find(id);override!=pendingMaterialOverrides.end())
+        {applyMaterialOverrides(object,override->second);pendingMaterialOverrides.erase(override);}
         object.motion.accept(object.position,object.rotation,object.velocity,object.acceleration,object.angularVelocity,LLFrameTimer::getTotalSeconds());
         if (!sameOwner && previous!=objects.end())
             for (auto& [local,child]:objects) if (child.parent==id) child.parentRetired=true;
@@ -955,6 +1013,7 @@ struct VSWorldScene::Impl
                 if (mesh.isNull())
                     supported = false;
             }
+            if(type==LLNetworkData::PARAMS_RENDER_MATERIAL && !renderMaterialData(scratch,U32(length),object.renderMaterials)) return false;
             if (type==LLNetworkData::PARAMS_EXTENDED_MESH)
             { if (length!=4) return false;object.extendedMeshFlags=littleU32(scratch); }
             if (type == LLNetworkData::PARAMS_LIGHT && length == 16)
@@ -1004,7 +1063,9 @@ struct VSWorldScene::Impl
         {
             if (!dp.unpackBinaryData(scratch, length, "TextureAnim") || length < 1)
                 return false;
-            object.textureAnimation = (scratch[0] & LLTextureAnim::ON) != 0;
+            object.animation=textureAnimationData(scratch,U32(length));
+            if(!object.animation) return false;
+            object.textureAnimation = (object.animation->mMode & LLTextureAnim::ON) != 0;
         }
         if (flags & 0x400)
         {
@@ -1134,6 +1195,7 @@ void VSWorldScene::reset(bool preserveAssets)
     mImpl->dirtyTerrainNeighbours();
     mImpl->patchSize                      = 0;
     mImpl->water.reset();mImpl->waterKnown=false;mImpl->terrainTextures={};
+    mImpl->materialAssets.reset();mImpl->pendingMaterialOverrides.clear();
     mImpl->objects.clear();mImpl->pending.clear();mImpl->nextRequest=0;
     mImpl->pendingAnimations.clear();
     mImpl->visiblePackets.clear();
@@ -1321,6 +1383,13 @@ std::optional<VSWorldContracts::Material> VSWorldScene::material(const FaceHandl
         return result;
     }
     VSWorldContracts::Material result;
+    if(face.surface)
+    {
+        result.diffuse=face.surface->base;result.alpha=face.surface->alpha;
+        result.fullbright=face.surface->fullbright;result.doubleSided=face.surface->doubleSided;
+        result.diffuseImageKnown=bool(face.publishedImage) || face.surface->textures[0]==std::array<std::uint8_t,16>{};
+        result.generation=token.generation;return result;
+    }
     std::copy(material.getColor().mV, material.getColor().mV + 4, result.diffuse.begin());
     result.fullbright        = material.getFullbright();
     result.generation        = token.generation;
@@ -1498,6 +1567,22 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
     }
     if (!mImpl->host.isOk()) {mImpl->host=msg.getSender();mImpl->handle=regionHandle;mImpl->incarnation=1;}
     const std::string name=msg.getMessageName();auto& state=*mImpl;state.agent=agent;
+    if(name=="GenericStreamingMessage")
+    {
+        LLGenericStreamingMessage message;message.unpack(&msg);
+        if(message.mMethod!=LLGenericStreamingMessage::METHOD_GLTF_MATERIAL_OVERRIDE) return false;
+        if(message.mData.size()>64*1024) {++state.rejected;return true;}
+        LLSD data;std::istringstream input(message.mData);
+        if(LLSDSerialize::fromNotation(data,input,S32(message.mData.size()))<=0 || !data.isMap() ||
+            !data["id"].isInteger() || !data["te"].isArray() || !data["od"].isArray() ||
+            data["te"].size()>45 || data["te"].size()!=data["od"].size()) {++state.rejected;return true;}
+        const auto id=U32(data["id"].asInteger());
+        if(const auto object=state.objects.find(id);object!=state.objects.end())
+        {if(!state.applyMaterialOverrides(object->second,data)) ++state.rejected;}
+        else if(state.pendingMaterialOverrides.size()<4096) state.pendingMaterialOverrides[id]=data;
+        return true;
+    }
+
     if(name=="ObjectUpdate" || name=="ObjectUpdateCompressed" || name=="ObjectUpdateCached" || name=="ImprovedTerseObjectUpdate")
     {
         if(msg.getNumberOfBlocks("RegionData")!=1 || msg.getSize("RegionData","RegionHandle")!=8)
@@ -1858,6 +1943,8 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
             cursor += 6;
             if (length > extra.size() - cursor)
                 break;
+            if(type==LLNetworkData::PARAMS_RENDER_MATERIAL && !renderMaterialData(extra.data()+cursor,length,object.renderMaterials))
+                object.renderable=false;
             if (type == LLNetworkData::PARAMS_LIGHT && length == 16)
                 object.light = extra[cursor + 3] != 0;
             cursor += length;
@@ -1898,7 +1985,9 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
         {
             U8 data[4096];
             msg.getBinaryData("ObjectData", "TextureAnim", data, animationSize, i, 4096);
-            object.textureAnimation = (data[0] & LLTextureAnim::ON) != 0;
+            object.animation=textureAnimationData(data,U32(animationSize));
+            if(!object.animation) {++state.rejected;continue;}
+            object.textureAnimation = (object.animation->mMode & LLTextureAnim::ON) != 0;
         }
         object.renderable = volumeExtras(extra, params, object.flexible);
         if (!object.renderable)
@@ -2735,6 +2824,13 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         }
         if (riggedOwner && riggedOwner->visibility() == VSWorldAvatar::Visibility::Invisible)
             continue;
+        if(o.animation && o.textureAnimation)
+        {
+            float offS=0,offT=0,scaleS=1,scaleT=1,rotation=0;
+            const auto changed=o.animation->animateTextures(offS,offT,scaleS,scaleT,rotation);
+            if(changed) o.textureAnimMode=changed|o.animation->mMode;
+        }
+        if(!mImpl->materialAssets) mImpl->materialAssets=std::make_unique<VSMaterialAssets>(mImpl->host);
         bool      uploadDeferred = producerDeferred;
         const S32 count=std::min(S32(o.faces.size()),o.volume->getNumVolumeFaces());
         auto      candidates     = o.faces;
@@ -2743,15 +2839,59 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             if (producerDeferred)
                 break;
             auto&        face    = candidates[f];
-            const LLUUID texture = face.material.getID();
-            if (texture.notNull())
-                LLUI::getUIImageByID(texture);
-            auto image = mImpl->resources.image("remote:" + texture.asString());
-            if (texture.notNull() && !image)
+            const auto materialID=o.renderMaterials.getMaterial(U8(f));
+            VSMaterial::State surface;
+            bool explicitAlpha=false;
+            if(materialID.notNull())
             {
-                uploadDeferred = true;
-                continue;
+                face.pbrAsset=gGLTFMaterialList.getMaterial(materialID);
+                if(!face.pbrAsset || !face.pbrAsset->isLoaded()) {uploadDeferred=true;continue;}
+                surface=VSMaterial::pbr(*face.pbrAsset,face.material.getGLTFMaterialOverride());
+                explicitAlpha=true;
             }
+            else
+            {
+                face.pbrAsset=nullptr;
+                auto legacy=mImpl->materialAssets->get(face.material.getMaterialID());
+                if(!face.material.getMaterialID().isNull() && !legacy) {uploadDeferred=true;continue;}
+                surface=VSMaterial::legacy(face.material,legacy.get());
+                explicitAlpha=bool(legacy);
+            }
+            if(o.animation && o.textureAnimation && (o.animation->mFace<0 || o.animation->mFace==f))
+            {
+                const auto& animation=*o.animation;
+                const bool translating=(o.textureAnimMode & LLViewerTextureAnim::TRANSLATE)!=0;
+                const bool scaling=(o.textureAnimMode & LLViewerTextureAnim::SCALE)!=0;
+                const bool rotating=(o.textureAnimMode & LLViewerTextureAnim::ROTATE)!=0;
+                const auto animated=VSMaterial::legacyUV(scaling?animation.mScaleS:face.material.getScaleS(),
+                    scaling?animation.mScaleT:face.material.getScaleT(),translating?animation.mOffS:face.material.getOffsetS(),
+                    translating?animation.mOffT:face.material.getOffsetT(),rotating?animation.mRot:face.material.getRotation());
+                if(!surface.pbr) surface.uv[0]=animated;
+                else for(auto& uv:surface.uv)
+                {
+                    const auto base=uv;
+                    const auto& a=base.matrix;const auto& b=animated.matrix;
+                    uv.matrix={a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],
+                               a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3]};
+                    uv.offset=VSMaterial::transform(base,animated.offset[0],animated.offset[1]);
+                }
+            }
+            std::array<VSUIRenderer::Image,4> channelImages;
+            bool channelsReady=true;
+            for(unsigned channel=0;channel<4;++channel)
+            {
+                LLUUID texture;std::copy_n(surface.textures[channel].begin(),16,texture.mData);
+                if(texture.isNull()) continue;
+                LLUI::getUIImageByID(texture);
+                channelImages[channel]=mImpl->resources.image("remote:"+texture.asString());
+                if(!channelImages[channel]) channelsReady=false;
+            }
+            if(!channelsReady) {uploadDeferred=true;continue;}
+            auto image=channelImages[0];
+            if(!explicitAlpha && image && surface.alpha==VSWorldContracts::AlphaMode::Opaque)
+                surface.alpha=VSUIRenderer::imageDescription(image).alpha;
+            if(!face.surface || !(*face.surface==surface)) face.surface=std::make_shared<VSMaterial::State>(surface);
+            std::copy_n(channelImages.begin()+1,3,face.publishedChannels.begin());
             const U64 poseGeneration = riggedOwner ? riggedOwner->poseGeneration() : 0;
             if (o.dirty || (riggedOwner && face.poseGeneration != poseGeneration) || !face.mesh)
             {
@@ -2763,34 +2903,20 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                     continue;
                 }
                 std::vector<VSWorldRenderer::Vertex> vertices;vertices.reserve(geometry.mNumVertices);
-                const float angle=face.material.getRotation(),c=std::cos(angle),s=std::sin(angle);
                 if (riggedOwner && geometry.mWeights)
                 {
                     if (!riggedOwner->skinRiggedFace(geometry, o.asset->skin, vertices))
-                    {
-                        uploadDeferred = true;
-                        continue;
-                    }
-                    for (auto& vertex:vertices)
-                    {
-                        const float u=vertex.u-.5f,t=1-vertex.v-.5f;
-                        vertex.u=(u*c+t*s)*face.material.getScaleS()+face.material.getOffsetS()+.5f;
-                        vertex.v=1-((-u*s+t*c)*face.material.getScaleT()+face.material.getOffsetT()+.5f);
-                    }
+                    {uploadDeferred=true;continue;}
                 }
                 else for (S32 v=0;v<geometry.mNumVertices;++v)
                 {
                     const auto* p=geometry.mPositions[v].getF32ptr();const auto* n=geometry.mNormals[v].getF32ptr();
-                    const LLVector3                                              scale = o.flexible ? LLVector3(1, 1, 1) : o.scale;
-                    LLVector3 point(p[0] * scale.mV[0], p[1] * scale.mV[1], p[2] * scale.mV[2]);
-                    point = point * rotation + position;
-                    LLVector3 normal(n[0] / scale.mV[0], n[1] / scale.mV[1], n[2] / scale.mV[2]);
-                    normal = normal * rotation;
+                    const LLVector3 scale=o.flexible?LLVector3(1,1,1):o.scale;
+                    LLVector3 point=LLVector3(p[0]*scale.mV[0],p[1]*scale.mV[1],p[2]*scale.mV[2])*rotation+position;
+                    LLVector3 normal=LLVector3(n[0]/scale.mV[0],n[1]/scale.mV[1],n[2]/scale.mV[2])*rotation;
                     normal.normalize();
-                    const auto& uv=geometry.mTexCoords[v];const float u=uv.mV[0]-.5f,t=uv.mV[1]-.5f;
-                    const float texU=(u*c+t*s)*face.material.getScaleS()+face.material.getOffsetS()+.5f;
-                    const float texV=(-u*s+t*c)*face.material.getScaleT()+face.material.getOffsetT()+.5f;
-                    vertices.push_back({point.mV[0],point.mV[1],point.mV[2],normal.mV[0],normal.mV[1],normal.mV[2],texU,1-texV});
+                    const auto& uv=geometry.mTexCoords[v];
+                    vertices.push_back({point.mV[0],point.mV[1],point.mV[2],normal.mV[0],normal.mV[1],normal.mV[2],uv.mV[0],1-uv.mV[1]});
                 }
                 std::vector<unsigned> indices(geometry.mIndices,geometry.mIndices+geometry.mNumIndices);
                 if (!mImpl->renderer.publishMesh(face.mesh, vertices, indices)) uploadDeferred = true;
@@ -2826,16 +2952,17 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             packet.hud   = hud;
             packet.image = face.publishedImage;
             packet.color = { color.mV[0], color.mV[1], color.mV[2], color.mV[3] };
+            packet.surface=face.surface;packet.channels=face.publishedChannels;
             std::copy(o.id.mData,o.id.mData+UUID_BYTES,packet.objectIdentity.begin());
             packet.objectGeneration=o.generation;packet.faceGeneration=o.revision;
             packet.faceIndex                                          = unsigned(f);
-            packet.fullbright                                         = hud || face.publishedMaterial.getFullbright() != 0;
-            packet.alpha                                              = color.mV[3] < 1;
-            if (packet.image)
+            if(face.surface)
             {
-                const auto image=VSUIRenderer::imageDescription(packet.image);
-                packet.alpha|=image.alpha==VSWorldContracts::AlphaMode::Blend;
-                packet.masked=image.alpha==VSWorldContracts::AlphaMode::Mask;
+                packet.color=face.surface->base;
+                packet.fullbright=hud || face.surface->fullbright;
+                packet.alpha=face.surface->alpha==VSWorldContracts::AlphaMode::Blend;
+                packet.masked=face.surface->alpha==VSWorldContracts::AlphaMode::Mask;
+                packet.alphaCutoff=face.surface->cutoff;packet.doubleSided=face.surface->doubleSided;
             }
             if (riggedOwner && riggedOwner->visibility() == VSWorldAvatar::Visibility::Jellydoll)
             {
@@ -2884,6 +3011,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         // Actual scene/submission owners determine their lifetime.
         visible.packet.mesh.reset();
         visible.packet.image.reset();
+        visible.packet.channels={};
         mImpl->visiblePackets.push_back(std::move(visible));
     }
     return packets;
@@ -2977,8 +3105,13 @@ std::optional<VSWorldScene::Pick> VSWorldScene::pick(const LLVector3& start, con
             const auto& pixels = VSUIRenderer::imagePixels(image);
             if (!extent[0] || !extent[1])
                 return false;
-            const F32 x  = (sample.uv[0] - std::floor(sample.uv[0])) * extent[0] - .5f;
-            const F32 y  = (sample.uv[1] - std::floor(sample.uv[1])) * extent[1] - .5f;
+            auto uv=sample.uv;
+            if(packet.surface)
+            {
+                uv=VSMaterial::transform(packet.surface->uv[0],uv[0],1-uv[1]);uv[1]=1-uv[1];
+            }
+            const F32 x  = (uv[0] - std::floor(uv[0])) * extent[0] - .5f;
+            const F32 y  = (uv[1] - std::floor(uv[1])) * extent[1] - .5f;
             const S32 ix = S32(std::floor(x)), iy = S32(std::floor(y));
             const F32 dx = x - ix, dy = y - iy;
             auto      alpha = [&](S32 px, S32 py)
