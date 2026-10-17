@@ -164,7 +164,8 @@ LLMediaCtrl::LLMediaCtrl( const Params& p) :
 LLMediaCtrl::~LLMediaCtrl()
 {
 #if VS_NATIVE_VULKAN
-    if (auto* resources = VSUIDrawBridge::resources()) resources->erase("media:" + mMediaTextureID.asString());
+    // The shared media source owns publication: another UI/world consumer may
+    // outlive this control. Its destroyMediaSource() retires the image.
     mNativeMediaImage = nullptr;
 #endif
 

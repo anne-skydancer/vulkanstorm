@@ -678,3 +678,23 @@ variants, independent channel GPU readbacks and object/account retirement.
 Evidence is retained in `.tmp/r3-legacy-grants-qualified`. This establishes the
 local legacy-material path; it does not certify unfinished terrain, settings,
 media-plugin or pressure-control work, or three-platform R3 acceptance.
+
+## Shared media-plugin publication
+
+The UI control now releases its own image handle without erasing a publication
+owned by the shared LLViewerMediaImpl. That source already retires publication
+in destroyMediaSource(). This preserves a world/UI consumer when a preview
+closes and preserves queued GPU generations after the last source retires.
+The peer OpenGL path is unchanged. A regression executes the actual control
+destructor with retained and final source ownership.
+
+The image-contract replay now opens the actual media plugin on a loopback HTML
+canvas with independently specified quadrant colors. It requires initial and
+updated 64x64 GPU pixels, resized 78x46 pixels, canonical orientation/stride,
+increasing immutable generations, shared-manager identity, publication survival
+after UI close with a retained surface consumer, final-source retirement and
+account retirement. HTTP receipts, independent pixel checks and mandatory
+archive readbacks reject absent or substituted evidence. The cases remain
+headless with bounded stage deadlines. Source regressions and real viewer
+translation-unit compilation pass; actual plugin runtime acceptance is pending
+its rebuilt canonical executable.

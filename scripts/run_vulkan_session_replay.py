@@ -159,6 +159,44 @@ def local_material_contracts_passed(record,directory):
     except (OSError,ValueError,KeyError,TypeError,AttributeError):return False
 
 
+MEDIA_PAGE = b"""<!doctype html><meta charset="utf-8"><style>html,body{margin:0;overflow:hidden}canvas{display:block}</style><canvas></canvas><script>
+const canvas=document.querySelector('canvas'),context=canvas.getContext('2d',{alpha:false});
+let phase=1;
+const palettes=[['#112233','#445566','#778899','#aabbcc'],['#dd2211','#33cc55','#8811bb','#4499ee']];
+function draw(){canvas.width=innerWidth;canvas.height=innerHeight;const w=canvas.width/2,h=canvas.height/2;
+const colors=palettes[phase-1];for(let i=0;i<4;i++){context.fillStyle=colors[i];context.fillRect((i%2)*w,Math.floor(i/2)*h,w,h);}}
+addEventListener('resize',draw);draw();
+setInterval(async()=>{try{const value=Number(await(await fetch('/r3-media-phase',{cache:'no-store'})).text());
+if((value===1||value===2)&&value!==phase){phase=value;draw();}}catch(e){}},100);
+</script>"""
+
+
+def media_contracts_passed(record,requests,directory):
+    """Demand actual plugin publication, shared ownership and independent pixels."""
+    from run_vulkan_texture_cache_tests import u64
+    try:
+        data=record['r3_media'];root=Path(directory).resolve()
+        if any(data.get(key) is not True for key in ('actual_plugin','shared_manager','shared_consumer_retained','immutable_generations','retired','account_retired')):return False
+        pages=[row for row in requests if row.get('path')=='/r3-media']
+        if not pages or any(row.get('bytes')!=len(MEDIA_PAGE) or row.get('sha256')!=hashlib.sha256(MEDIA_PAGE).hexdigest() for row in pages):return False
+        phases={row.get('phase') for row in requests if row.get('path')=='/r3-media-phase'}
+        if not {1,2}<=phases:return False
+        generation=0
+        for name,width,height,palette in (('initial',64,64,((17,34,51),(68,85,102),(119,136,153),(170,187,204))),('updated',64,64,((221,34,17),(51,204,85),(136,17,187),(68,153,238))),('resized',78,46,((221,34,17),(51,204,85),(136,17,187),(68,153,238)))):
+            row=data[name]
+            if row['width']!=width or row['height']!=height or row['bits_width']<width or row['bits_height']<height or not isinstance(row['origin_opengl'],bool):return False
+            current=u64(row['generation'])
+            if current<=generation:return False
+            generation=current
+            if row['file']!=f'r3/media-{name}.rgba':return False
+            path=root/row['file']
+            if path.is_symlink():return False
+            expected=b''.join(bytes((*palette[(y>=height//2)*2+(x>=width//2)],255)) for y in range(height) for x in range(width))
+            if path.read_bytes()!=expected:return False
+        return True
+    except (OSError,ValueError,KeyError,TypeError,AttributeError):return False
+
+
 def legacy_material_contracts_passed(record,requests,directory):
     try:
         data=record['r3_legacy_material'];root=Path(directory).resolve()
@@ -668,6 +706,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path in ('/r3-media','/r3-media-phase') and getattr(self.server,'r3_directory',None):
+            phase_file=self.server.r3_directory/'media-phase.txt'
+            phase=2 if phase_file.exists() and phase_file.read_text().strip()=='2' else 1
+            payload=MEDIA_PAGE if path=='/r3-media' else str(phase).encode()
+            self.server.requests.append(dict(path=path,method='GET',phase=phase,bytes=len(payload),sha256=hashlib.sha256(payload).hexdigest()))
+            self.send_response(200);self.send_header('Content-Type','text/html' if path=='/r3-media' else 'text/plain')
+            self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(payload)))
+            self.end_headers();self.wfile.write(payload);return
         if path=='/r3-legacy-materials' and getattr(self.server,'r3_directory',None):
             source=self.server.r3_directory/'legacy-materials.xml'
             if not source.is_file() or source.stat().st_size>2*1024*1024:self.send_error(404);return
@@ -1309,6 +1355,8 @@ def main():
                 raise RuntimeError('Missing production local bitmap/material reload, immutable generation or GPU pixel evidence')
             if args.local_image_contracts and not remote_material_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing production remote PBR transport, parse failure or account retirement evidence')
+            if args.local_image_contracts and not media_contracts_passed(report,server.requests,directory):
+                raise RuntimeError('Missing actual media plugin publication, shared ownership or GPU evidence')
             if args.local_image_contracts and not legacy_material_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing actual legacy material capability, UV/factor or channel GPU evidence')
             report['conference_start_request'] = conference_start_observed(server.requests)
