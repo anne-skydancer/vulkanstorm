@@ -1,6 +1,7 @@
 // Backend-neutral CPU avatar access for ordinary viewer services. LGPL-2.1.
 #pragma once
 #include "lluuid.h"
+#include "v3dmath.h"
 #include <vector>
 #include <string>
 #include <utility>
@@ -27,3 +28,6 @@ struct VSAvatarAttachment
 std::vector<VSAvatarAttachment> vs_avatar_attachments();
 
 bool vs_avatar_attachment_name(const LLUUID& item, std::string& name);
+
+struct VSAvatarLocation { LLUUID id; LLVector3d position; };
+std::vector<VSAvatarLocation> vs_avatar_locations(const LLVector3d& relativeTo, F32 radius);

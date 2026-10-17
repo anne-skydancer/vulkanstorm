@@ -2142,11 +2142,6 @@ void LLInventoryPanel::callbackPurgeSelectedItems(const LLSD& notification, cons
 
 bool LLInventoryPanel::attachObject(const LLSD& userdata)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return true;
-    }
     // Copy selected item UUIDs to a vector.
     std::set<LLFolderViewItem*> selected_items = mFolderRoot.get()->getSelectionList();
     uuid_vec_t items;

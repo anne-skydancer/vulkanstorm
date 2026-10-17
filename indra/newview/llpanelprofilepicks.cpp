@@ -878,11 +878,6 @@ void LLPanelProfilePick::onClickMap()
 
 void LLPanelProfilePick::onClickTeleport()
 {
-    if (LLRender2D::isNativeUI())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
 
     if (!getPosGlobal().isExactlyZero())
     {

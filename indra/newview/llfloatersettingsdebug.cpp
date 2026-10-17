@@ -58,12 +58,10 @@ namespace
 {
 bool native_debug_setting_editable(const LLControlVariable* control)
 {
-    if (!control) return false;
-    if (!gViewerWindow || !gViewerWindow->isNativeVulkan()) return true;
-    // Retain inspection of all settings. Only reviewed CPU observers may be
-    // invoked before native scene owners exist; use the shared menu policy.
-    return control->getName() == "DebugSettingsHideDefault" ||
-        VSUIAdmission::callback("ToggleControl", LLSD(control->getName()));
+    // Editing saved values does not invoke a legacy renderer. Each observer
+    // belongs to the backend that registered it, and native world owners read
+    // their shared settings independently of menu callback admission.
+    return control != nullptr;
 }
 }
 

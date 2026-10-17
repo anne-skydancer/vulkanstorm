@@ -1321,11 +1321,6 @@ void LLPanelProfileClassified::onMapClick()
 
 void LLPanelProfileClassified::onTeleportClick()
 {
-    if (LLRender2D::isNativeUI())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
 
     if (!getPosGlobal().isExactlyZero())
     {

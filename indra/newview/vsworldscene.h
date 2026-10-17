@@ -4,6 +4,8 @@
 #include "llhost.h"
 #include "lluuid.h"
 #include "v3math.h"
+#include "v3dmath.h"
+#include "llquaternion.h"
 #include <memory>
 #include <map>
 #include <optional>
@@ -42,6 +44,8 @@ public:
         U8           point = 0;
     };
     std::vector<Attachment> attachments() const;
+    struct AvatarLocation { LLUUID id; LLVector3d position; };
+    std::vector<AvatarLocation> avatarLocations() const;
     struct Pick
     {
         FaceHandle           face;
@@ -65,6 +69,8 @@ public:
     std::optional<ObjectHandle>          object(const LLUUID&) const;
     bool                                 loadGLTF(const ObjectHandle&, const std::string& filename);
     bool current(const ObjectHandle&) const;
+    struct ObjectTransform { LLVector3d position; LLQuaternion rotation; LLVector3 scale; };
+    std::optional<ObjectTransform> objectTransform(const ObjectHandle&) const;
     bool freeze(const ObjectHandle&, bool);
     std::function<bool()> guard(const ObjectHandle&) const;
     std::function<bool()> guard(const FaceHandle&) const;

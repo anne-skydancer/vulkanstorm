@@ -27,6 +27,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "vsnativeim.h"
+#include "vsavatarservices.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #endif
@@ -251,11 +252,6 @@ void LLAvatarActions::offerTeleport(const LLUUID& invitee)
 // static
 void LLAvatarActions::offerTeleport(const uuid_vec_t& ids)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
 
     if (ids.size() == 0)
         return;
@@ -675,6 +671,7 @@ void LLAvatarActions::pay(const LLUUID& id)
 
 void LLAvatarActions::teleport_request_callback(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return;
     S32 option;
     if (response.isInteger())
     {
@@ -737,11 +734,6 @@ void LLAvatarActions::teleport_request_callback(const LLSD& notification, const 
 // static
 void LLAvatarActions::teleportRequest(const LLUUID& id)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
 
 
     // <FS:PP> Warn if 'reject teleport offers and requests' mode is active
@@ -767,6 +759,7 @@ void LLAvatarActions::teleportRequest(const LLUUID& id)
 //  notification["NAME"] = av_name.getCompleteName();
 
     LLSD payload;
+    vs_native_im_stamp_notification(payload);
 
     LLNotificationsUtil::add("TeleportRequestPrompt", notification, payload, teleport_request_callback);
 }
@@ -1978,7 +1971,13 @@ void LLAvatarActions::report(const LLUUID& idAgent)
 
 bool LLAvatarActions::canZoomIn(const LLUUID& idAgent)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan()) return false;
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        const auto avatars = vs_avatar_locations(gAgent.getPositionGlobal(), gSavedSettings.getF32("RenderFarClip"));
+        return std::any_of(avatars.begin(), avatars.end(), [&](const auto& avatar) { return avatar.id == idAgent; });
+    }
+#endif
     // <FS:Ansariel> Firestorm radar support
     //return gObjectList.findObject(idAgent);
 
@@ -2007,11 +2006,9 @@ bool LLAvatarActions::canZoomIn(const LLUUID& idAgent)
 
 void LLAvatarActions::zoomIn(const LLUUID& idAgent)
 {
-    if (gViewerWindow && gViewerWindow->isNativeVulkan())
-    {
-        LLNotificationsUtil::add("NativeWorldUnavailable");
-        return;
-    }
+#if VS_NATIVE_VULKAN
+    if (VSNativeSession::active()) { handle_zoom_to_object(idAgent); return; }
+#endif
 
     // <FS:Ansariel> Firestorm radar support
     //handle_zoom_to_object(idAgent);

@@ -3065,6 +3065,14 @@ void LLAgentCamera::setFocusGlobal(const LLVector3d& focus, const LLUUID &object
 //-----------------------------------------------------------------------------
 void LLAgentCamera::setCameraPosAndFocusGlobal(const LLVector3d& camera_pos, const LLVector3d& focus, const LLUUID &object_id)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (owner->cameraLookAt(camera_pos, focus))
+        { mFocusTargetGlobal = focus; mFocusOnAvatar = false; }
+        return;
+    }
+#endif
     LLVector3d old_focus = mFocusTargetGlobal.isExactlyZero() ? focus : mFocusTargetGlobal;
 
     F64 focus_delta_squared = (old_focus - focus).magVecSquared();

@@ -651,10 +651,19 @@ void process_places_reply(LLMessageSystem* msg, void** data)
 
 void send_sound_trigger(const LLUUID& sound_id, F32 gain)
 {
-    if (sound_id.isNull() || gAgent.getRegion() == NULL)
+    if (sound_id.isNull()) return;
+    U64 regionHandle = 0;
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
     {
-        // disconnected agent or zero guids don't get sent (no sound)
-        return;
+        if (!owner->regionReady()) return;
+        regionHandle = owner->handle();
+    }
+    else
+#endif
+    {
+        if (!gAgent.getRegion()) return;
+        regionHandle = gAgent.getRegion()->getHandle();
     }
 
     LLMessageSystem* msg = gMessageSystem;
@@ -666,7 +675,7 @@ void send_sound_trigger(const LLUUID& sound_id, F32 gain)
     msg->addUUIDFast(_PREHASH_ObjectID, LLUUID::null );
     msg->addUUIDFast(_PREHASH_ParentID, LLUUID::null );
 
-    msg->addU64Fast(_PREHASH_Handle, gAgent.getRegion()->getHandle());
+    msg->addU64Fast(_PREHASH_Handle, regionHandle);
 
     LLVector3 position = gAgent.getPositionAgent();
     msg->addVector3Fast(_PREHASH_Position, position);
@@ -8165,6 +8174,7 @@ void send_lures(const LLSD& notification, const LLSD& response)
 
 bool handle_lure_callback(const LLSD& notification, const LLSD& response)
 {
+    if (!vs_native_im_notification_current(notification["payload"])) return false;
     static const unsigned OFFER_RECIPIENT_LIMIT = 250;
     if(notification["payload"]["ids"].size() > OFFER_RECIPIENT_LIMIT)
     {
@@ -8199,11 +8209,23 @@ void handle_lure(const uuid_vec_t& ids)
 {
     if (ids.empty()) return;
 
-    if (!gAgent.getRegion()) return;
+    std::string regionName;
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!owner->regionReady()) return;
+        regionName = owner->regionName();
+    }
+    else
+#endif
+    {
+        if (!gAgent.getRegion()) return;
+        regionName = gAgent.getRegion()->getName();
+    }
 
     LLSD edit_args;
 // [RLVa:KB] - Checked: 2010-04-07 (RLVa-1.2.0d) | Modified: RLVa-1.0.0a
-    edit_args["REGION"] = (!gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC)) ? gAgent.getRegion()->getName() : RlvStrings::getString(RlvStringKeys::Hidden::Generic);
+    edit_args["REGION"] = (!gRlvHandler.hasBehaviour(RLV_BHVR_SHOWLOC)) ? regionName : RlvStrings::getString(RlvStringKeys::Hidden::Generic);
 // [/RLVa:KB]
 //  edit_args["REGION"] = gAgent.getRegion()->getName();
 
@@ -8227,6 +8249,7 @@ void handle_lure(const uuid_vec_t& ids)
         payload["ids"].append(idAgent);
     }
     payload["rlv_shownames"] = fRlvShouldHideNames;
+    vs_native_im_stamp_notification(payload);
 // [/RLVa:KB]
 //  for (std::vector<LLUUID>::const_iterator it = ids.begin();
 //      it != ids.end();

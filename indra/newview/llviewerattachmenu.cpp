@@ -27,6 +27,12 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewerattachmenu.h"
+#include "vsavatarservices.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsnativeappearance.h"
+#endif
 
 // project includes
 #include "llagent.h"
@@ -109,6 +115,37 @@ void LLViewerAttachMenu::populateMenus(const std::string& attach_to_menu_name, c
 // static
 void LLViewerAttachMenu::attachObjects(const uuid_vec_t& items, const std::string& joint_name)
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!owner->regionReady() || !owner->appearance()) return;
+        const auto points = vs_avatar_attachment_points();
+        const auto point = std::find_if(points.begin(), points.end(), [&](const auto& entry) { return entry.second == joint_name; });
+        if (point == points.end()) return;
+        const U8 index = U8(point->first);
+        for (const auto& id : items)
+        {
+            const auto* item = gInventory.getLinkedItem(id);
+            if (!item || item->getType() != LLAssetType::AT_OBJECT) continue;
+            if (gInventory.isObjectDescendentOf(item->getUUID(), gInventory.getRootFolderID()))
+                owner->appearance()->attach(item->getUUID(), index, true);
+            else if (item->isFinished() && gInventory.isObjectDescendentOf(item->getUUID(), gInventory.getLibraryRootFolderID()))
+            {
+                const auto current = vs_native_im_guard();
+                std::weak_ptr<VSNativeSession> weak = owner;
+                LLPointer<LLInventoryCallback> callback = new LLBoostFuncInventoryCallback([weak,current,index](const LLUUID& copied)
+                {
+                    if (!current()) return;
+                    if (const auto session = weak.lock(); session && session->appearance())
+                        session->appearance()->attach(copied, index, true);
+                });
+                copy_inventory_item(gAgent.getID(), item->getPermissions().getOwner(), item->getUUID(),
+                                    LLUUID::null, std::string(), callback);
+            }
+        }
+        return;
+    }
+#endif
     LLViewerJointAttachment* attachmentp = NULL;
     for (LLVOAvatar::attachment_map_t::iterator iter = gAgentAvatarp->mAttachmentPoints.begin();
          iter != gAgentAvatarp->mAttachmentPoints.end(); )

@@ -47,6 +47,25 @@ public:
         if (zoomIn != 0) mDistance = std::clamp(mDistance - zoomIn * mDistance * dt, .25f, 128.f);
         if (track.magVecSquared() > 0) pan(track * (dt * 5.f), cameraOffset, focusOffset, scale);
     }
+    bool lookAt(const LLVector3& agent, const LLVector3& eye, const LLVector3& target,
+                const LLVector3& cameraOffset, const LLVector3& focusOffset, F32 scale)
+    {
+        if (!agent.isFinite() || !eye.isFinite() || !target.isFinite()) return false;
+        LLVector3 direction = target - eye;
+        const F32 distance = direction.normalize();
+        const LLVector3 radial = LLVector3(0,0,1) + cameraOffset * scale - focusOffset;
+        const F32 radialLength = radial.length();
+        if (distance <= .001f || radialLength <= .001f) return false;
+        const F32 baseYaw = std::atan2(-radial.mV[VY], -radial.mV[VX]);
+        const F32 basePitch = std::atan2(-radial.mV[VZ], std::hypot(radial.mV[VX], radial.mV[VY]));
+        mYaw = wrap(std::atan2(direction.mV[VY], direction.mV[VX]) - baseYaw);
+        mPitch = std::asin(std::clamp(direction.mV[VZ], -1.f, 1.f)) - basePitch;
+        mRoll = 0;
+        mDistance = std::clamp(distance / radialLength, .25f, 128.f);
+        mPan.clear();
+        mPan = target - state(agent, cameraOffset, focusOffset, scale).focus;
+        return true;
+    }
     void setFlying(bool flying) { mFlying = flying; }
     void face(const LLVector3& direction)
     { if (direction.isFinite() && direction.magVecSquared() > .001f) mYaw = mBodyYaw = std::atan2(direction.mV[VY], direction.mV[VX]); }

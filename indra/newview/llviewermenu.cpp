@@ -5323,24 +5323,24 @@ class LLSelfSitDown : public view_listener_t
 
 bool show_sitdown_self()
 {
-    return isAgentAvatarValid() && !gAgentAvatarp->isSitting();
+    return vs_avatar_character() && !gAgent.isSitting();
 }
 
 bool enable_sitdown_self()
 {
 // [RLVa:KB] - Checked: 2010-08-28 (RLVa-1.2.1a) | Added: RLVa-1.2.1a
-    return show_sitdown_self() && !gAgentAvatarp->isEditingAppearance() && !gAgent.getFlying() && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT);
+    return show_sitdown_self() && (!isAgentAvatarValid() || !gAgentAvatarp->isEditingAppearance()) && !gAgent.getFlying() && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT);
 // [/RLVa:KB]
-//  return show_sitdown_self() && !gAgentAvatarp->isEditingAppearance() && !gAgent.getFlying();
+//  return show_sitdown_self() && (!isAgentAvatarValid() || !gAgentAvatarp->isEditingAppearance()) && !gAgent.getFlying();
 }
 
 class LLSelfToggleSitStand : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
-        if (isAgentAvatarValid())
+        if (vs_avatar_character())
         {
-            if (gAgentAvatarp->isSitting())
+            if (gAgent.isSitting())
             {
                 gAgent.standUp();
             }
@@ -5368,11 +5368,11 @@ class FSSelfForceSit : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
-        if (!gAgentAvatarp->isSitting() && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT))
+        if (!gAgent.isSitting() && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT))
         {
             gAgent.sitDown();
         }
-        else if (gAgentAvatarp->isSitting() && !gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT))
+        else if (gAgent.isSitting() && !gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT))
         {
             gAgent.standUp();
         }
@@ -5383,21 +5383,21 @@ class FSSelfForceSit : public view_listener_t
 
 bool enable_forcesit_self()
 {
-    return isAgentAvatarValid() &&
-        ((!gAgentAvatarp->isSitting() && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT)) ||
-        (gAgentAvatarp->isSitting() && !gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)));
+    return vs_avatar_character() &&
+        ((!gAgent.isSitting() && !gRlvHandler.hasBehaviour(RLV_BHVR_SIT)) ||
+        (gAgent.isSitting() && !gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)));
 }
 
 class FSSelfCheckForceSit : public view_listener_t
 {
     bool handleEvent(const LLSD& userdata)
     {
-        if (!isAgentAvatarValid())
+        if (!vs_avatar_character())
         {
             return false;
         }
 
-        return gAgentAvatarp->isSitting();
+        return gAgent.isSitting();
     }
 };
 
@@ -8394,6 +8394,28 @@ void handle_look_at_selection(const LLSD& param)
 bool handle_zoom_to_object(const LLUUID& object_id, const std::optional<LLVector3d>& object_pos)
 // </FS:Ansariel> Option to try via exact position
 {
+#if VS_NATIVE_VULKAN
+    if (const auto owner = VSNativeSession::active())
+    {
+        if (!owner->regionReady() || !gViewerWindow || !gViewerWindow->nativeContext()) return false;
+        auto& world = gViewerWindow->nativeContext()->world();
+        if (const auto token = world.object(object_id))
+            if (const auto object = world.objectTransform(*token))
+            {
+                const LLVector3d eyeOffset = LLVector3d(gSavedSettings.getF32("CameraZoomDistance"), 0,
+                    gSavedSettings.getF32("CameraZoomEyeZOffset")) * object->rotation;
+                return owner->cameraLookAt(object->position + eyeOffset, object->position +
+                    LLVector3d(0,0,gSavedSettings.getF32("CameraZoomFocusZOffset")));
+            }
+        if (object_pos)
+        {
+            LLVector3d offset = *object_pos - gAgent.getPositionGlobal(); offset.normalize();
+            offset *= -4.f; offset.mdV[VZ] += .5;
+            return owner->cameraLookAt(*object_pos + offset, *object_pos);
+        }
+        return false;
+    }
+#endif
     // <FS:Zi> Fix camera zoom to look at the avatar's face from the front
     // const F32 PADDING_FACTOR = 2.f;
     // </FS:Zi>

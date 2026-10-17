@@ -33,7 +33,8 @@ struct LLVector3{
  float mV[3]{};LLVector3()=default;LLVector3(float x,float y,float z):mV{x,y,z}{}
  void clear(){*this={};}bool isFinite()const{return std::isfinite(mV[0])&&std::isfinite(mV[1])&&std::isfinite(mV[2]);}
  float magVecSquared()const{return mV[0]*mV[0]+mV[1]*mV[1]+mV[2]*mV[2];}
- void normalize(){*this*=1/std::sqrt(magVecSquared());}
+ float length()const{return std::sqrt(magVecSquared());}
+ float normalize(){float n=length();if(n>0)*this*=1/n;return n;}
  LLVector3 operator+(LLVector3 v)const{return {mV[0]+v.mV[0],mV[1]+v.mV[1],mV[2]+v.mV[2]};}
  LLVector3 operator-(LLVector3 v)const{return {mV[0]-v.mV[0],mV[1]-v.mV[1],mV[2]-v.mV[2]};}
  LLVector3 operator*(float s)const{return {mV[0]*s,mV[1]*s,mV[2]*s};}
@@ -187,6 +188,12 @@ int main(){
  assert(owner.cameraState().firstPerson); // Idle controls must not eject mouselook.
  owner.mCamera.setFirstPerson(false);assert(!owner.cameraState().firstPerson);
 
+ // Shared camera position/focus commands must reproduce both requested points.
+ LLVector3 eye{110,103,22},target{108,103,21};
+ assert(owner.mCamera.lookAt(owner.mPosition,eye,target,gAgentCamera.offset,gAgentCamera.focus,gAgentCamera.scale));
+ const auto focused=owner.cameraState();
+ for(int i=0;i<3;++i){assert(close(focused.center.mV[i],eye.mV[i]));assert(close(focused.focus.mV[i],target.mV[i]));}
+ assert(!owner.mCamera.lookAt(owner.mPosition,target,target,gAgentCamera.offset,gAgentCamera.focus,gAgentCamera.scale));
  owner.mPhase=VSNativeSession::Phase::Login;assert(!owner.movementAction(6,"push_forward",true));
 }
 '''.replace('FUNCTIONS', functions)
