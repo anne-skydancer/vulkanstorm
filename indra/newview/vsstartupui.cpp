@@ -361,7 +361,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view name)
         {
-            return name == "view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
+            return name == "view" || name == "phototools_view" || name == "mouselook_view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
                    name == "preferences" || name == "profile" || name == "contact_sets" ||
                    name == "conversation_log" || name == "block_list" || name == "group_titles";
         },
@@ -435,7 +435,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 "TeleportHistory.TimeZone.Set", "TeleportHistory.TimeZone.Check",
                 "TeleportHistory.TabOpen", "TeleportHistory.TabClose",
                 "CameraPresets.Save", "CameraPresets.ShowPresetsList", "CameraPresets.Delete", "CameraPresets.Reset", "Presets.toggleCameraFloater", "PresetsCamera.RowClick", "CameraPresets.ChangeView", "Zoom.minus", "Zoom.plus", "Slider.value_changed", "Camera.track", "Camera.rotate", "Camera.roll_left", "Camera.roll_right",
-                "View.ResetView", "View.ToggleCameraFloater", "View.CheckCameraFloater",
+                "View.ResetView", "View.Mouselook", "View.EnableMouselook", "View.ToggleCameraFloater", "View.CheckCameraFloater",
                 "Toybox.RestoreDefaults", "Toybox.ClearAll", "Toolbars.RemoveSelectedCommand",
                 "File.Quit", "File.CloseWindow", "File.EnableCloseWindow", "File.CloseAllWindows",
                 "File.EnableCloseAllWindows", "File.CloseWindowGroup", "File.EnableCloseWindowGroup",
