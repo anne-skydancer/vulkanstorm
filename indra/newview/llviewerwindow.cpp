@@ -1596,7 +1596,6 @@ void LLViewerWindow::handleMouseLeave(LLWindow *window)
 
 bool LLViewerWindow::handleCloseRequest(LLWindow *window, bool from_user)
 {
-    if (mNativeVulkan) { LLAppViewer::instance()->requestQuit(); return true; }
     if (!LLApp::isExiting() && !LLApp::isStopped())
     {
         if (from_user)

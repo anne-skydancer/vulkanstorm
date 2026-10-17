@@ -26,6 +26,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "vsavatarservices.h"
+#include "vsnativeim.h"
 
 #include "llgesturemgr.h"
 
@@ -108,6 +109,23 @@ LLGestureMgr::~LLGestureMgr()
     gInventory.removeObserver(this);
 }
 
+
+void LLGestureMgr::resetNativeAccount()
+{
+    // Retire playback locally; do not send deactivation to the next account.
+    mPlaying.clear();
+    for (const auto& row : mActive)
+        delete row.second;
+    mActive.clear();
+    mCallbackMap.clear();
+    mLoadingAssets.clear();
+    mIDs.clear();
+    mComplete.clear();
+    mIncomplete.clear();
+    mLoadingCount = 0;
+    mDeactivateSimilarNames.clear();
+    notifyObservers();
+}
 
 void LLGestureMgr::init()
 {
@@ -259,6 +277,7 @@ struct LLLoadInfo
     LLUUID mItemID;
     bool mInformServer;
     bool mDeactivateSimilar;
+    std::function<bool()> mAccountCurrent = vs_native_im_guard();
 };
 
 // If inform_server is true, will send a message upstream to update
@@ -1184,6 +1203,12 @@ void LLGestureMgr::onLoadComplete(const LLUUID& asset_uuid,
                                   void* user_data, S32 status, LLExtStat ext_status)
 {
     LLLoadInfo* info = (LLLoadInfo*)user_data;
+
+    if (info->mAccountCurrent && !info->mAccountCurrent())
+    {
+        delete info;
+        return;
+    }
 
     LLUUID item_id = info->mItemID;
     bool inform_server = info->mInformServer;

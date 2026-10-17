@@ -42,7 +42,7 @@ struct LLMarketplaceInventoryImporter{
 namespace LLMarketplaceInventoryNotifications{
  int calls=0;void update(){++calls;}
 }
-bool avatar=false;bool isAgentAvatarValid(){return avatar;}
+bool avatar=false;void* vs_avatar_character(){return avatar?&avatar:nullptr;}
 struct LLGestureMgr{
  static inline bool exists=false;static inline int ticks=0,creates=0;
  static bool instanceExists(){return exists;}

@@ -17,6 +17,13 @@
 #include "fslslbridge.h"
 #include "vsnativeim.h"
 #include "llcallingcard.h"
+#include "llfriendcard.h"
+#include "llappearancemgr.h"
+#include "llgesturemgr.h"
+#include "llpresetsmanager.h"
+#include "fsfloaterwearablefavorites.h"
+#include "fsfavoritegroups.h"
+#include "fsgrouptitleregionmgr.h"
 #include "lluserrelations.h"
 #include "lggcontactsets.h"
 #include "llagentlanguage.h"
@@ -493,6 +500,8 @@ void VSNativeSession::begin()
     const auto owner = shared_from_this(); const U64 generation = mGeneration, epoch = mRegionEpoch;
     const std::string seed = mSeed;
     LLCoros::instance().launch("nativeSeedCapabilities", [owner, generation, epoch, seed]() { owner->seedCoro(seed, generation, epoch); });
+    LLStartUp::multimediaInit();
+    LLStartUp::fontInit();
     LLStartUp::setStartupState(STATE_WORLD_WAIT);
     publishProgress();
 }
@@ -1661,22 +1670,17 @@ void VSNativeSession::connected()
     LLStartUp::initExperiences();
     gAgentMovementCompleted = true;
     LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
-    LLStartUp::setStartupState(STATE_STARTED);
-    LLAppViewer::instance()->handleLoginComplete();
-    FSAvatarRenderPersistence::instance().init();
-    AOEngine::onLoginComplete();
+    mStartup = Startup::Inventory;
+    mStartupTime = now();
+    mStartupTimedOut = false;
+    LLStartUp::setStartupState(STATE_INVENTORY_CALLBACKS);
+    if (!gInventory.isInventoryUsable())
+        LLNotificationsUtil::add("InventoryUnusable");
+    else
+        gInventory.createCommonSystemCategories();
     restore_native_account_policies();
     FSPanelLogin::closePanel();
     gViewerWindow->setNativeConnected(true);
-    // Finish through the shared skinned progress/fade and input release path.
-    gViewerWindow->setProgressPercent(100.f);
-    gViewerWindow->setProgressString("");
-    gViewerWindow->showCursor();
-    gViewerWindow->getWindow()->resetBusyCount();
-    gViewerWindow->getWindow()->setCursor(UI_CURSOR_ARROW);
-    gViewerWindow->setStartupComplete();
-    gViewerWindow->setProgressCancelButtonVisible(false);
-    init_audio();
     requestParcel();
     if (!LLGridManager::instance().isInSecondLife())
     {
@@ -1761,6 +1765,95 @@ bool VSNativeSession::requestTaskInventory(const VSWorldScene::ObjectHandle& tok
        !gViewerWindow || !gViewerWindow->nativeContext())return false;
     return gViewerWindow->nativeContext()->world().requestTaskInventory(*static_cast<LLMessageSystem*>(gMessageSystem),token,mAgent,mSession);
 }
+void VSNativeSession::advanceStartup()
+{
+    if (mPhase != Phase::Connected || mChangingRegion)
+        return;
+    switch (mStartup)
+    {
+    case Startup::Inventory:
+        // Category creation has asynchronous server callbacks. Do not publish a
+        // ready UI or start COF-dependent controllers before those complete.
+        if (!gInventory.isInventoryUsable() || !LLInventoryModel::isSysFoldersReady())
+            return;
+        LLAppearanceMgr::instance().initCOFID();
+        gInventory.addChangedMask(LLInventoryObserver::ALL, LLUUID::null);
+        gInventory.notifyObservers();
+        mStartup = Startup::Misc;
+        LLStartUp::setStartupState(STATE_MISC);
+        return;
+    case Startup::Misc:
+        init_audio();
+        LLStartUp::initActiveGestures();
+        FSGroupTitleRegionMgr::getInstance()->loadFromDisk();
+        FSFavoriteGroups::getInstance()->loadFavorites();
+        LLPresetsManager::getInstance()->createMissingDefault(PRESETS_CAMERA);
+        LLInventoryModelBackgroundFetch::instance().findLostItems();
+        gViewerWindow->sendShapeToSim();
+        gRenderStartTime.reset();
+        gForegroundTime.reset();
+        mStartup = Startup::Precache;
+        mStartupTime = now();
+        LLStartUp::setStartupState(STATE_PRECACHE);
+        return;
+    case Startup::Precache:
+    {
+        // The native frame pumps the same texture-fetch/cache workers and the
+        // appearance owner every frame. Retain the reference saved pre-cache
+        // interval; it is a loading opportunity, not a synthetic message delay.
+        const double delay = llmax(0.f, gSavedSettings.getF32("PrecachingDelay"));
+        const bool avatar = gViewerWindow->nativeContext() && gViewerWindow->nativeContext()->world().selfAvatar();
+        const double elapsed = now() - mStartupTime;
+        gViewerWindow->setProgressPercent(60.f + 30.f * F32(delay > 0 ? llmin(1.0, elapsed / delay) : 1.0));
+        gViewerWindow->setProgressString(LLTrans::getString("LoginPrecaching"));
+        if ((elapsed >= delay && avatar) || elapsed > 10.0 * delay)
+        {
+            mStartup = Startup::Wearables;
+            mStartupTime = now();
+            LLStartUp::setStartupState(STATE_WEARABLES_WAIT);
+            gViewerWindow->setProgressString(LLTrans::getString("LoginDownloadingClothing"));
+        }
+        return;
+    }
+    case Startup::Wearables:
+        gViewerWindow->setProgressPercent(90.f);
+        gViewerWindow->setProgressString(LLTrans::getString("LoginDownloadingClothing"));
+        if (!mAppearance || !mAppearance->startupReady())
+        {
+            // Same ten-second clothing wait and visible warning as OpenGL.
+            // A timeout releases login, but never labels the appearance ready.
+            if (now() - mStartupTime < 10.0)
+                return;
+            mStartupTimedOut = true;
+            LLNotificationsUtil::add("ClothingLoading");
+            LL_WARNS("NativeSession") << "Startup clothing wait exceeded; appearance continues loading" << LL_ENDL;
+        }
+        LLStartUp::setStartupState(STATE_CLEANUP);
+        if (gSavedSettings.getBOOL("UseLSLBridge") && !FSLSLBridge::instance().getBridgeCreating())
+            FSLSLBridge::instance().initBridge();
+        FSFloaterWearableFavorites::initCategory();
+        if (!gSavedSettings.getBOOL("FSCreateCallingCards"))
+            LLFriendCardsManager::createAgentCallingCard();
+        gAgent.observeFriends();
+        FSAvatarRenderPersistence::instance().init();
+        AOEngine::onLoginComplete();
+        mStartup = Startup::Complete;
+        LLStartUp::setStartupState(STATE_STARTED);
+        LLAppViewer::instance()->handleLoginComplete();
+        gViewerWindow->setProgressPercent(100.f);
+        gViewerWindow->setProgressString("");
+        gViewerWindow->showCursor();
+        gViewerWindow->getWindow()->resetBusyCount();
+        gViewerWindow->getWindow()->setCursor(UI_CURSOR_ARROW);
+        gViewerWindow->setStartupComplete();
+        gViewerWindow->setProgressCancelButtonVisible(false);
+        return;
+    case Startup::Idle:
+    case Startup::Complete:
+        return;
+    }
+}
+
 void VSNativeSession::publishProgress()
 {
     LLSD progress;progress["account_generation"]=ll_sd_from_U64(mGeneration);
@@ -2009,6 +2102,7 @@ void VSNativeSession::tick()
         vs_pump_ui_images();
         if (LLInventoryModelBackgroundFetch::instanceExists()) LLInventoryModelBackgroundFetch::instance().pumpAccountFetch();
     }
+    advanceStartup();
 }
 void VSNativeSession::unbind()
 {
@@ -2062,8 +2156,12 @@ void VSNativeSession::disconnect(const std::string& reason)
 }
 void VSNativeSession::reset()
 {
+    mStartup = Startup::Idle;
+    mStartupTime = 0;
+    mStartupTimedOut = false;
     if (mShutdown) return;
     mAppearance.reset();
+    if (LLGestureMgr::instanceExists()) LLGestureMgr::instance().resetNativeAccount();
     // The AO editor retains set/state pointers into the retiring account.
     // Destroy it and disconnect its observers before the engine clears them.
     LLFloaterReg::destroyInstance("animation_overrider");
@@ -2199,6 +2297,9 @@ LLSD VSNativeSession::evidence() const
     result["rejected"] = LLSD::Integer(mRejected); result["expired"] = LLSD::Integer(mExpired);
     result["region"] = mName; result["handshake"] = mHandshake; result["movement"] = mMovement;
     result["simulator_features_received"] = mSimulatorFeaturesReceived;
+    result["startup_stage"] = S32(mStartup);
+    result["startup_complete"] = mStartup == Startup::Complete;
+    result["startup_clothing_timed_out"] = mStartupTimedOut;
     result["appearance_owner_initialized"]=mAppearanceOwnerInitialized;
     result["wearable_metadata_known"]=mWearablesKnown;result["wearable_metadata"]=mWearablesMetadata;
     if (mAppearance)

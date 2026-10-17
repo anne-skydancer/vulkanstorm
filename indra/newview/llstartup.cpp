@@ -3061,38 +3061,7 @@ bool idle_startup()
         // JC: Initialize "active" gestures.  This may also trigger
         // many gesture downloads, if this is the user's first
         // time on this machine or -purge has been run.
-        LLSD gesture_options
-            = LLLoginInstance::getInstance()->getResponse("gestures");
-        if (gesture_options.isDefined())
-        {
-            LL_DEBUGS("AppInit") << "Gesture Manager loading " << gesture_options.size()
-                << LL_ENDL;
-            uuid_vec_t item_ids;
-            for(LLSD::array_const_iterator resp_it = gesture_options.beginArray(),
-                end = gesture_options.endArray(); resp_it != end; ++resp_it)
-            {
-                // If the id is not specifed in the LLSD,
-                // the LLSD operator[]() will return a null LLUUID.
-                LLUUID item_id = (*resp_it)["item_id"];
-                LLUUID asset_id = (*resp_it)["asset_id"];
-
-                if (item_id.notNull() && asset_id.notNull())
-                {
-                    // Could schedule and delay these for later.
-                    const bool no_inform_server = false;
-                    const bool no_deactivate_similar = false;
-                    LLGestureMgr::instance().activateGestureWithAsset(item_id, asset_id,
-                                         no_inform_server,
-                                         no_deactivate_similar);
-                    // We need to fetch the inventory items for these gestures
-                    // so we have the names to populate the UI.
-                    item_ids.push_back(item_id);
-                }
-            }
-            // no need to add gesture to inventory observer, it's already made in constructor
-            LLGestureMgr::instance().setFetchIDs(item_ids);
-            LLGestureMgr::instance().startFetch();
-        }
+        LLStartUp::initActiveGestures();
         gDisplaySwapBuffers = true;
         do_startup_frame();
 
@@ -4334,8 +4303,44 @@ void reset_login()
 
 //---------------------------------------------------------------------------
 
-// Initialize all plug-ins except the web browser (which was initialized
-// early, before the login screen). JC
+// Both backends use the same account gesture restoration and asset requests.
+void LLStartUp::initActiveGestures()
+{
+    LLSD gesture_options
+        = LLLoginInstance::getInstance()->getResponse("gestures");
+    if (gesture_options.isDefined())
+    {
+        LL_DEBUGS("AppInit") << "Gesture Manager loading " << gesture_options.size()
+            << LL_ENDL;
+        uuid_vec_t item_ids;
+        for(LLSD::array_const_iterator resp_it = gesture_options.beginArray(),
+            end = gesture_options.endArray(); resp_it != end; ++resp_it)
+        {
+            // If the id is not specifed in the LLSD,
+            // the LLSD operator[]() will return a null LLUUID.
+            LLUUID item_id = (*resp_it)["item_id"];
+            LLUUID asset_id = (*resp_it)["asset_id"];
+
+            if (item_id.notNull() && asset_id.notNull())
+            {
+                // Could schedule and delay these for later.
+                const bool no_inform_server = false;
+                const bool no_deactivate_similar = false;
+                LLGestureMgr::instance().activateGestureWithAsset(item_id, asset_id,
+                                     no_inform_server,
+                                     no_deactivate_similar);
+                // We need to fetch the inventory items for these gestures
+                // so we have the names to populate the UI.
+                item_ids.push_back(item_id);
+            }
+        }
+        // no need to add gesture to inventory observer, it's already made in constructor
+        LLGestureMgr::instance().setFetchIDs(item_ids);
+        LLGestureMgr::instance().startFetch();
+    }
+}
+
+// Initialize stream title services; the login browser is already initialized.
 void LLStartUp::multimediaInit()
 {
     LL_DEBUGS("AppInit") << "Initializing Multimedia...." << LL_ENDL;

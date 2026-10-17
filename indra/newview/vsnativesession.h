@@ -131,6 +131,7 @@ private:
     bool teleportRequest(U64, const LLVector3&);
     void connected();
     void publishProgress();
+    void advanceStartup();
     void requestParcel();
     void clearParcelPlayback();
     void updateParcelPlayback();
@@ -147,6 +148,10 @@ private:
     void unbind();
     Phase mPhase = Phase::Login;
     bool mShutdown = false;
+    enum class Startup { Idle, Inventory, Misc, Precache, Wearables, Complete };
+    Startup mStartup = Startup::Idle;
+    double mStartupTime = 0;
+    bool mStartupTimedOut = false;
     bool mLogoutPresented = false, mLogoutReply = false;
     U64 mGeneration = 1;
     U64 mRegionEpoch = 1;

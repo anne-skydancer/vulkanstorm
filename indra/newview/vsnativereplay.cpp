@@ -555,6 +555,7 @@ struct Replay
     bool encodedRegionLookup = false, encodedLocationTeleport = false, encodedHomeTeleport = false;
     F64 navigationDeadline = 0;
     LLSD report, imEvidence;
+    std::set<S32> startupStages;
     unsigned deniedSettings = 0, allowedSettings = 0;
     static void outgoing(LLMessageSystem* msg, void** data)
     {
@@ -676,6 +677,20 @@ struct Replay
     }
     void tick(VSNativeSession& owner)
     {
+        if (step <= 1 && owner.phase() == VSNativeSession::Phase::Connected)
+        {
+            const S32 state = S32(LLStartUp::getStartupState());
+            if (startupStages.insert(state).second)
+            {
+                LLSD stage;
+                stage["state"] = LLStartUp::getStartupStateString();
+                stage["progress_visible"] = gViewerWindow->getShowProgress();
+                stage["session"] = owner.evidence();
+                report["startup_work"].append(stage);
+            }
+            if (state == STATE_PRECACHE || state == STATE_WEARABLES_WAIT)
+                require(gViewerWindow->getShowProgress(), "Native startup dismissed progress before required loading stages");
+        }
         if (completionHeld)
         {
             require(LLFrameTimer::getTotalSeconds()<completionDeadline,"Concurrent viewer completion gate timed out");
@@ -752,6 +767,10 @@ struct Replay
             // The shared startup fade intentionally covers connected controls.
             // Exercise hover/click oracles only after it releases input.
             if (gViewerWindow->getShowProgress()) return;
+            require(startupStages.count(STATE_INVENTORY_CALLBACKS) && startupStages.count(STATE_MISC) &&
+                    startupStages.count(STATE_PRECACHE) && startupStages.count(STATE_WEARABLES_WAIT) &&
+                    owner.evidence()["startup_complete"].asBoolean(),
+                    "Native connected UI bypassed actual startup work");
             if (!muteRequest) return;
             if (!muteReplyQueued)
             {

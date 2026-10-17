@@ -61,6 +61,7 @@ public:
 
 
     void init();
+    void resetNativeAccount();
 
     // Call once per frame to manage gestures
     void update();
