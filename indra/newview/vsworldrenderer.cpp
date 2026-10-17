@@ -208,6 +208,19 @@ void main() {
         result=vec4(mix(vec3(0.65,0.8,0.95),vec3(0.08,0.22,0.48),clamp(texUV.y,0.0,1.0)),1);
         return;
     }
+    if (surfaceFlags.x<-.5) {
+        // terrainF.glsl's four swatches and shipped two-dimensional alpha ramp.
+        vec2 coord=vec2(texUV.x,1.0-texUV.y);
+        vec2 uv=coord*vec2(uvTransform[0].x,uvTransform[0].w)+uvTransform[1].xy;
+        uv.y=1.0-uv.y;
+        vec4 c0=texture(g_Texture,uv),c1=texture(g_Normal,uv);
+        vec4 c2=texture(g_ORM,uv),c3=texture(g_Emissive,uv);
+        float a1=texture(g_Occlusion,vec2(texUV1.x,1.0-texUV1.y)).a;
+        float a2=texture(g_Occlusion,vec2(texUV1.x-2.0,1.0-texUV1.y)).a;
+        float af=texture(g_Occlusion,vec2(texUV1.x-1.0,1.0-texUV1.y)).a;
+        result=vec4(mix(mix(c3,c2,a2),mix(c1,c0,a1),af).rgb*tint.rgb*light,1);
+        return;
+    }
     vec2 baseUV=surfaceFlags.x>0.5 ? channelUV(0) : texUV;
     vec4 sampleColor=texture(g_Texture,baseUV);
     vec4 c=sampleColor*tint*faceColor;
@@ -598,6 +611,7 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
                 constants.uv[2*i+1]={surface.uv[i].offset[0],surface.uv[i].offset[1],0,0};
             }
         }
+        if (p.terrain) constants.surfaceFlags[0]=-1;
         if (p.hud)
         {
             if (!drawingHud)

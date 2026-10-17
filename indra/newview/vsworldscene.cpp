@@ -14,6 +14,7 @@
 #include "vswindfield.h"
 #include "vsvegetation.h"
 #include "vsterraingeometry.h"
+#include "vsterrainmaterial.h"
 #include "vsrendercomplexity.h"
 #include "vsvolumelod.h"
 #include "vsvegetationlod.h"
@@ -731,6 +732,7 @@ struct VSWorldScene::Impl
                 auto geometryWorking = budgets->terrainBytes.reserve(256 * 1024);
                 if (!geometryWorking)
                     return false;
+                const auto origin = from_region_handle(handle);
                 VSTerrainGeometry producer(n, stride, north, east,
                                            [&](U32 x, U32 y, U32, LLVector3* point, LLVector3* normal, LLVector2* uv, LLVector2* detail)
                                            {
@@ -739,8 +741,9 @@ struct VSWorldScene::Impl
                                                const F32      z        = height(S32(gx), S32(gy), fallback);
                                                *point                  = LLVector3(F32(gx), F32(gy), z);
                                                *normal                 = terrainNormal(S32(gx), S32(gy), z);
-                                               *uv                     = LLVector2(F32(gx) / 16, 1 - F32(gy) / 16);
-                                               *detail                 = LLVector2::zero;
+                                               *uv = LLVector2(F32(gx),1-F32(gy));
+                                               const auto blend=VSTerrainMaterial::coordinates(origin.mdV[0],origin.mdV[1],F32(gx),F32(gy),z,F32(width),terrainStarts,terrainRanges);
+                                               *detail=LLVector2(blend[0],blend[1]);
                                            });
                 const auto        geometry = producer.mesh();
                 std::vector<VSWorldRenderer::Vertex> vertices;
@@ -751,10 +754,11 @@ struct VSWorldScene::Impl
                     const auto& normal = geometry.normals[index];
                     const auto& uv     = geometry.uv[index];
                     vertices.push_back(
-                        { point.mV[0], point.mV[1], point.mV[2], normal.mV[0], normal.mV[1], normal.mV[2], uv.mV[0], uv.mV[1] });
+                        { point.mV[0], point.mV[1], point.mV[2], normal.mV[0], normal.mV[1], normal.mV[2],uv.mV[0],uv.mV[1],geometry.detail[index].mV[0],geometry.detail[index].mV[1] });
                 }
                 std::vector<U32> indices(geometry.indices.begin(), geometry.indices.end());
-                if (!renderer.publishMesh(publication.mesh, vertices, indices))
+                if (!renderer.publishMesh(publication.mesh, vertices, indices,VSWorldRenderer::Topology::Triangles,
+                                          VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0|VSWorldContracts::UV1))
                     return false;
                 publication.stride = stride;
                 publication.north  = north;
@@ -763,7 +767,26 @@ struct VSWorldScene::Impl
         }
         return true;
     }
-    void surfaces(std::vector<VSWorldRenderer::Packet>& packets, const LLVector3& eye)
+    VSUIRenderer::Image terrainRamp()
+    {
+        const std::string key="terrain:alpha-ramp";
+        if(auto image=resources.image(key)) return image;
+        const auto path=gDirUtilp->findSkinnedFilename(LLDir::TEXTURES,"alpha_gradient_2d.j2c");
+        LLPointer<LLImageFormatted> encoded=LLImageFormatted::createFromExtension("alpha_gradient_2d.j2c");
+        LLPointer<LLImageRaw> source=new LLImageRaw;
+        if(path.empty() || !encoded || !encoded->load(path) || !encoded->decode(source,0)) return {};
+        LLPointer<LLImageRaw> raw=new LLImageRaw(source->getWidth(),source->getHeight(),4);
+        const unsigned components=source->getComponents();
+        for(unsigned i=0;i<unsigned(source->getWidth()*source->getHeight());++i)
+        {
+            auto* pixel=raw->getData()+i*4;
+            pixel[0]=pixel[1]=pixel[2]=255;
+            pixel[3]=source->getData()[i*components+(components==4?3:0)];
+        }
+        resources.publish(key,*raw);
+        return resources.image(key);
+    }
+    void surfaces(std::vector<VSWorldRenderer::Packet>& packets,const LLVector3& eye,unsigned viewportHeight=768)
     {
         if (!sky)
             sky = renderer.upload(
@@ -781,22 +804,28 @@ struct VSWorldScene::Impl
         {
             const unsigned x0 = unsigned(key >> 32), y0 = U32(key), n = g.size;
             if (!g.mesh) continue;
-            // First surface pass uses a single height-selected simulator detail
-            // map per patch; four-way terrain splatting is a later material pass.
-            const float h=height(x0+n/2,y0+n/2,0),start=terrainStarts[0],range=std::max(terrainRanges[0],1.f);
-            const unsigned level=unsigned(std::clamp((h-start)/range*4.f,0.f,3.f));const auto& texture=terrainTextures[level];
-            if (texture.notNull()) LLUI::getUIImageByID(texture);
-            VSWorldRenderer::Packet p;p.mesh=g.mesh;p.image=resources.image("remote:"+vs_native_image_id(texture).asString());
-            p.terrain                                      = true;
-            p.terrainKey                                   = key;
-            p.objectGeneration                             = incarnation;
-            if (!p.image)
+            VSWorldRenderer::Packet p;
+            p.mesh=g.mesh;p.terrain=true;p.terrainKey=key;p.objectGeneration=incarnation;
+            auto surface=std::make_shared<VSMaterial::State>();
+            const F32 scale=1.f/std::max(gSavedSettings.getF32("RenderTerrainScale"),.001f);
+            const auto origin=from_region_handle(handle);
+            surface->uv[0].matrix={scale,0,0,scale};
+            surface->uv[0].offset={F32(std::fmod(origin.mdV[0],1.0/scale)*scale),F32(std::fmod(origin.mdV[1],1.0/scale)*scale)};
+            surface->samplers[VSMaterial::Occlusion].u=surface->samplers[VSMaterial::Occlusion].v=VSWorldContracts::AddressMode::Clamp;
+            const LLVector3 center(F32(x0)+F32(n)*.5f,F32(y0)+F32(n)*.5f,height(x0+n/2,y0+n/2,0));
+            const unsigned demand=unsigned(std::clamp(F32(n)*std::max(viewportHeight,1u)/std::max((center-eye).length(),1.f),1.f,4096.f));
+            const auto fallback=resources.defaultWorldImage();
+            for(unsigned layer=0;layer<4;++layer)
             {
-                p.image=resources.defaultWorldImage();
-                // Match the reference default even if its small upload must
-                // retry. The renderer already owns a white fallback binding.
-                if (!p.image) p.color={127.f/255,127.f/255,127.f/255,1};
+                const auto& texture=terrainTextures[layer];
+                if(texture.notNull()) vs_request_world_image(texture,demand);
+                auto image=texture.notNull()?resources.image("remote:"+vs_native_image_id(texture).asString()):VSUIRenderer::Image{};
+                if(!image) image=fallback;
+                if(!layer) p.image=std::move(image);else p.channels[layer-1]=std::move(image);
             }
+            p.channels[3]=terrainRamp();
+            if(!p.image && !fallback) p.color={127.f/255,127.f/255,127.f/255,1};
+            p.surface=std::move(surface);
             packets.push_back(std::move(p));
         }
         if (waterKnown)
@@ -1595,6 +1624,7 @@ void VSWorldScene::configureRegion(const LLSD& h)
         const float start=float(h["terrain_starts"][i].asReal()),range=float(h["terrain_ranges"][i].asReal());
         state.terrainStarts[i]=std::isfinite(start)?start:0;state.terrainRanges[i]=std::isfinite(range)?range:1;
     }
+    for(auto& [key,patch]:state.ground) patch.dirty=true;
 }
 bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& agent)
 {
@@ -2130,7 +2160,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
     for (auto& [local,object]:mImpl->objects)
         if (object.motion.update(frameTime,mImpl->timeDilation,healthy,object.attachment!=0,motionPolicy))
         { object.dirty=true;mImpl->dirtyChildren(local); }
-    mImpl->surfaces(packets,eye);
+    mImpl->surfaces(packets,eye,viewportHeight);
     // Evaluate avatar roots and bones before resolving attached primitive transforms.
     for (const auto& [id,o]:mImpl->objects) if (o.pcode==LL_PCODE_LEGACY_AVATAR)
     {

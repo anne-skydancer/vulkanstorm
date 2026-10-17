@@ -932,3 +932,21 @@ includes `<cstring>` before the pinned STB header; the vendor source, pin and
 codec policy remain unchanged. Public-header regression coverage also compiles
 the wrapper first in implementation mode. Linux CI remains decisive for the
 platform's standard-library include behavior.
+
+
+### Four-layer legacy terrain checkpoint (2026-10-17)
+
+Replaced the native patch-wide single-texture selection with the reference
+four-detail-layer composition. Native mesh UV1 carries shared height/noise
+composition coordinates. The production shader samples all four independently
+published images and the shipped alpha-gradient asset, using the reference
+blend order. World demand remains projected rather than forcing UI resolution.
+RenderTerrainScale changes constants without rebuilding geometry.
+
+The native coordinate producer matches the actual reference generateHeights
+method over 65,536 samples with asymmetric corner parameters. Headless
+SwiftShader production-renderer charts verify all four layers, three blend
+seams and live scale changes; every chart is mandatory runner evidence.
+Ground admission/refusal and prior-publication ownership regressions pass.
+This checkpoint does not close terrain PBR, cache lifecycle, pressure runtime
+qualification or final three-platform R3 acceptance.

@@ -11,6 +11,7 @@ class TerrainPublication(unittest.TestCase):
     def test_pending_detail_texture_keeps_received_ground_visible(self):
         body=method((ROOT/'indra/newview/vsworldscene.cpp').read_text(), 'void surfaces(')
         fixture=r'''
+#include "vsmaterial.h"
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -19,17 +20,21 @@ class TerrainPublication(unittest.TestCase):
 #include <memory>
 #include <string>
 #include <vector>
-using U32=unsigned;using U64=unsigned long long;using S32=int;
-struct LLUUID {int id=0;bool notNull()const{return id!=0;}std::string asString()const{return std::to_string(id);}};
+using U32=unsigned;using U64=unsigned long long;using S32=int;using F32=float;
+struct Origin{double mdV[3]{};};Origin from_region_handle(U64){return {};}
+struct Settings{float getF32(const char*){return 16;}}gSavedSettings;
+struct LLUUID {int id=0;bool notNull()const{return id!=0;}bool isNull()const{return id==0;}std::string asString()const{return std::to_string(id);}};
 LLUUID vs_native_image_id(LLUUID id){return id;}
-struct LLUI {static void getUIImageByID(LLUUID){}};
+void vs_request_world_image(LLUUID,unsigned){}
+struct VSUIRenderer{using Image=std::shared_ptr<int>;};
 struct LLVector3 {float x,y,z;LLVector3(float a,float b,float c):x(a),y(b),z(c){}
  LLVector3 operator-(const LLVector3& v)const{return {x-v.x,y-v.y,z-v.z};}
- float lengthSquared()const{return x*x+y*y+z*z;}};
+ float lengthSquared()const{return x*x+y*y+z*z;}float length()const{return std::sqrt(lengthSquared());}};
 struct VSWorldRenderer {
  using Mesh=std::shared_ptr<int>;
  struct Vertex{float x,y,z,nx,ny,nz,u,v;};
  struct Packet{Mesh mesh;std::shared_ptr<int> image;bool background=false,fullbright=false,terrain=false,alpha=false;
+ std::array<std::shared_ptr<int>,4> channels{};std::shared_ptr<const VSMaterial::State> surface;
  U64 terrainKey=0,objectGeneration=0;std::array<float,4> color{1,1,1,1};float distanceSquared=0;};
  Mesh upload(const std::vector<Vertex>&,const std::vector<unsigned>&){return std::make_shared<int>(80);}
 };
@@ -42,7 +47,8 @@ struct Scene {
  VSWorldRenderer renderer;Resources resources;VSWorldRenderer::Mesh sky,water;
  struct Ground {VSWorldRenderer::Mesh mesh;unsigned size=16;};std::map<U64,Ground> ground;
  std::array<float,4> terrainStarts{},terrainRanges{1,1,1,1};std::array<LLUUID,4> terrainTextures{{{1},{2},{3},{4}}};
- U64 incarnation=7;bool waterKnown=false;float waterHeight=0;unsigned width=256,regionHeight=256;
+ std::shared_ptr<int> terrainRamp(){return std::make_shared<int>(88);}
+ U64 handle=0,incarnation=7;bool waterKnown=false;float waterHeight=0;unsigned width=256,regionHeight=256;
  float height(int,int,float){return 0;}
 BODY
 };
@@ -61,7 +67,7 @@ int main(){Scene s;auto mesh=std::make_shared<int>(1);s.ground[0]={mesh,16};
         compiler=shutil.which('clang++') or shutil.which('g++');self.assertIsNotNone(compiler)
         with tempfile.TemporaryDirectory() as temp:
             path=Path(temp)/'terrain_surface.cpp';binary=path.with_suffix('.exe');path.write_text(fixture)
-            built=subprocess.run([compiler,'-std=c++20','-Wall','-Wextra','-Werror',str(path),'-o',str(binary)],capture_output=True,text=True)
+            built=subprocess.run([compiler,'-std=c++20','-Wall','-Wextra','-Werror','-I'+str(ROOT/'indra/newview'),str(path),'-o',str(binary)],capture_output=True,text=True)
             self.assertEqual(built.returncode,0,built.stdout+built.stderr)
             result=subprocess.run([str(binary)],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
@@ -108,16 +114,17 @@ struct LLVector3 {
 struct LLVector2{float mV[2]{};LLVector2()=default;LLVector2(float x,float y):mV{x,y}{};static const LLVector2 zero;};const LLVector2 LLVector2::zero{};
 struct Settings{bool dynamic=true;float getF32(const char*)const{return 1;}bool getBOOL(const char*)const{return dynamic;}}gSavedSettings;
 struct VSWorldRenderer {
- struct Vertex{float x,y,z,nx,ny,nz,u,v;};using Mesh=std::shared_ptr<unsigned>;
+ enum class Topology{Triangles};
+ struct Vertex{float x,y,z,nx,ny,nz,u,v,u1,v1;};using Mesh=std::shared_ptr<unsigned>;
  unsigned attempts=0,next=10,refuse=0;
- bool publishMesh(Mesh& current,const std::vector<Vertex>&,const std::vector<U32>&){
+ bool publishMesh(Mesh& current,const std::vector<Vertex>&,const std::vector<U32>&,Topology,unsigned){
   if(++attempts==refuse)return false;current=std::make_shared<unsigned>(next++);return true;}
 };
 struct VSTerrainGeometry {
- struct Data{std::vector<LLVector3>vertices,normals;std::vector<LLVector2>uv;std::vector<U32>indices;};Data data;
+ struct Data{std::vector<LLVector3>vertices,normals;std::vector<LLVector2>uv,detail;std::vector<U32>indices;};Data data;
  template<class F> VSTerrainGeometry(U32,U32,U32,U32,F sample){
   LLVector3 p,n;LLVector2 uv,d;sample(0,0,0,&p,&n,&uv,&d);
-  data.vertices={p};data.normals={n};data.uv={uv};data.indices={0,0,0};}
+  data.vertices={p};data.normals={n};data.uv={uv};data.detail={d};data.indices={0,0,0};}
  Data mesh()const{return data;}
 };
 struct Ground {
@@ -126,7 +133,11 @@ struct Ground {
  unsigned stride=1,north=1,east=1;
 };
 struct Budgets{VSResourceBudget terrainBytes{2*1024*1024};};
+struct Origin{double mdV[3]{};};Origin from_region_handle(U64){return {};}
+namespace VSTerrainMaterial{std::array<float,2> coordinates(double,double,float,float,float,float,std::array<float,4>,std::array<float,4>){return {};}}
+namespace VSWorldContracts{enum{Position=1,Normal=2,UV0=4,UV1=8};}
 struct Impl {
+ std::array<float,4> terrainStarts{},terrainRanges{1,1,1,1};
  bool retired=false;U64 handle=0;U32 width=256,regionHeight=256;
  struct GroundPublication{VSWorldRenderer::Mesh mesh;unsigned stride=1,north=1,east=1;};
  std::map<U64,Ground>ground;std::optional<std::map<U64,GroundPublication>>groundCandidate;
