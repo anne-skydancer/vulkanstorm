@@ -1018,6 +1018,7 @@ def main():
     command.extend(['--sessionsettings', str(selection_file)])
     command.extend(['--set', 'UIScaleFactor', str(args.ui_scale)])
     command.extend(['--set', 'CacheLocation', str(isolated_profile / 'cache'),
+                    '--set', 'NewCacheLocation', str(isolated_profile / 'cache'),
                     '--set', 'FSUseNearbyChatConsole', 'true'])
     report = {}; log = ''; code = None; passed = False
     with SimulatorHTTP() as server:

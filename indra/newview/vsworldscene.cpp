@@ -34,6 +34,7 @@
 #include "patch_dct.h"
 #include <limits>
 #include "vsuiresources.h"
+#include "vsuiimageprovider.h"
 #include "llimage.h"
 #include "llprimitive.h"
 #include "llvolumemessage.h"
@@ -2909,7 +2910,9 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             {
                 LLUUID texture;std::copy_n(surface.textures[channel].begin(),16,texture.mData);
                 if(texture.isNull()) continue;
-                LLUI::getUIImageByID(texture);
+                const float distance=std::max((position-eye).length(),1.f);
+                const unsigned demand=unsigned(std::clamp(o.scale.length()*std::max(viewportHeight,1u)/distance,1.f,4096.f));
+                vs_request_world_image(texture,demand);
                 channelImages[channel]=mImpl->resources.image("remote:"+texture.asString());
                 if(!channelImages[channel]) channelsReady=false;
             }

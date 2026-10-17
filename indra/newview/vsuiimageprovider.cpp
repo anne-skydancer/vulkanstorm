@@ -7,6 +7,8 @@
 #include "llimagej2c.h"
 #include "llimageworker.h"
 #include "lltexturecache.h"
+#include "lltexturefetch.h"
+#include "llviewercontrol.h"
 #include "lleventcoro.h"
 #include "llsdutil.h"
 #include <atomic>
@@ -36,78 +38,6 @@ public:
     NativeMaskImage(std::shared_ptr<const VSResourceBudget::Reservation> residency,U16 width,U16 height)
         :LLImageRaw(width,height,1),mResidency(std::move(residency)) {}
 };
-class NativeDecoded final : public LLImageDecodeThread::Responder
-{
-    std::function<void(bool,LLPointer<LLImageRaw>,LLPointer<LLImageRaw>)> mComplete;
-public:
-    explicit NativeDecoded(decltype(mComplete) complete):mComplete(std::move(complete)) {}
-    void completed(bool success,const std::string&,LLImageRaw* raw,LLImageRaw* auxiliary,U32) override
-    {
-        LL::WorkQueue::getInstance("mainloop")->post([complete=mComplete,success,raw=LLPointer<LLImageRaw>(raw),auxiliary=LLPointer<LLImageRaw>(auxiliary)]
-            {complete(success,raw,auxiliary);});
-    }
-};
-// Use the same encoded UUID cache as LLTextureFetch. Only complete validated
-// J2C entries enter this full-resolution subscriber; partial entries remain in
-// the shared cache for streaming consumers and fall back to the network here.
-struct NativeCacheResult
-{
-    std::atomic<bool> done{false};
-    LLPointer<LLImageFormatted> image;
-    S32 imageSize = 0;
-    bool success = false;
-    std::shared_ptr<LLEventMailDrop> ready = std::make_shared<LLEventMailDrop>("nativeTextureCacheRead", true);
-};
-class NativeCacheRead final : public LLTextureCache::ReadResponder
-{
-    std::shared_ptr<NativeCacheResult> mResult;
-public:
-    explicit NativeCacheRead(std::shared_ptr<NativeCacheResult> result) : mResult(std::move(result)) {}
-    void completed(bool success) override
-    {
-        mResult->image = mFormattedImage;
-        mResult->imageSize = mImageSize;
-        mResult->success = success;
-        mResult->done.store(true, std::memory_order_release);
-        LL::WorkQueue::getInstance("mainloop")->post([result = mResult] { result->ready->post(LLSD()); });
-    }
-};
-struct NativeCacheReadHandle
-{
-    LLTextureCache* cache;
-    LLTextureCache::handle_t handle;
-    ~NativeCacheReadHandle()
-    {
-        // Viewer shutdown owns the cache after its pointer is retired. A late
-        // fiber must never call an already destroyed worker queue.
-        if (cache == LLAppViewer::getTextureCache() && handle != LLWorkerThread::nullHandle())
-            cache->readComplete(handle, true);
-    }
-};
-LLPointer<LLImageFormatted> readNativeTexture(const LLUUID& id)
-{
-    auto* cache = LLAppViewer::getTextureCache();
-    if (!cache) return nullptr;
-    auto result = std::make_shared<NativeCacheResult>();
-    NativeCacheReadHandle read{cache, cache->readFromCache(id, 0, 16 * 1024 * 1024, new NativeCacheRead(result))};
-    if (read.handle == LLWorkerThread::nullHandle()) return nullptr;
-    llcoro::suspendUntilEventOnWithTimeout(*result->ready, 15, LLSDMap("timeout", true));
-    if (!result->done.load(std::memory_order_acquire) || !result->success || !result->image ||
-        result->imageSize <= 0 || result->imageSize > 16 * 1024 * 1024 ||
-        result->image->getDataSize() != result->imageSize || result->image->getCodec() != IMG_CODEC_J2C)
-        return nullptr;
-    return result->image;
-}
-class NativeCacheWrite final : public LLTextureCache::WriteResponder
-{
-    // The cache worker borrows encoded bytes until writeComplete retires it.
-    LLPointer<LLImageFormatted> mImage;
-    std::shared_ptr<const VSResourceBudget::Reservation> mResidency;
-public:
-    NativeCacheWrite(LLPointer<LLImageFormatted> image, std::shared_ptr<const VSResourceBudget::Reservation> residency)
-        : mImage(std::move(image)), mResidency(std::move(residency)) {}
-    void completed(bool) override {}
-};
 struct Image : LLInitParam::Block<Image>
 {
     Mandatory<std::string> name;
@@ -135,20 +65,29 @@ struct VSUIImageProvider::Impl
     VSUIResources &resources;
     std::map<std::string, Image> declarations;
     std::map<std::string, LLUIImagePtr> cache;
-    struct Remote { LLUIImagePtr facade, pixels; LLPointer<LLImageRaw> auxiliary; U64 generation = 0, readyGeneration = 0, failedGeneration = 0,touched=0; unsigned attempts = 0; double retryAt = 0; bool cacheChecked = false; };
-    std::map<LLUUID, Remote> remote;
-    std::map<LLUUID, std::shared_ptr<LLCoreHttpUtil::HttpCoroutineAdapter>> requests;
-    std::vector<LLTextureCache::handle_t> cacheWrites;
-    U64 diskHits = 0, diskMisses = 0, diskWrites = 0, networkRequests = 0;
+    struct Remote
+    {
+        LLUIImagePtr facade,pixels;
+        LLPointer<LLImageRaw> auxiliary;
+        U64 generation=0,readyGeneration=0,failedGeneration=0,touched=0,epoch=0;
+        unsigned attempts=0,target=64;
+        S32 discard=-1,fullWidth=0,fullHeight=0,components=4;
+        U32 resolutionLimit=0;
+        double retryAt=0,deadline=0,lastUsed=0;
+        U64 demandFrame=0;
+        bool fetching=false,uiDemand=false,cacheChecked=false,fullRes=false;
+    };
+    std::map<LLUUID,Remote> remote;
+    U64 diskHits=0,diskMisses=0;
     bool retired = false;
-    U64 regionEpoch=0,clock=0;
-    VSResourceBudget masks{64 * 1024 * 1024},decodes{256 * 1024 * 1024};
+    U64 regionEpoch=0,clock=0,demandFrame=0;
+    VSResourceBudget masks{64 * 1024 * 1024};
     bool evict(const LLUUID& preserve)
     {
         auto victim=remote.end();
         for (auto found=remote.begin();found!=remote.end();++found)
         {
-            if (found->first==preserve || requests.count(found->first) ||
+            if (found->first==preserve || found->second.fetching ||
                 (found->second.facade && found->second.facade->getNumRefs()>1)) continue;
             if (victim==remote.end() || found->second.touched<victim->second.touched) victim=found;
         }
@@ -187,41 +126,89 @@ VSUIImageProvider::~VSUIImageProvider()
 void vs_pump_ui_images() { if (sActiveProvider) sActiveProvider->pumpImages(); }
 void VSUIImageProvider::pumpImages()
 {
-    if (mImpl->retired) return;
-    if (auto* cache = LLAppViewer::getTextureCache())
-        mImpl->cacheWrites.erase(std::remove_if(mImpl->cacheWrites.begin(), mImpl->cacheWrites.end(),
-            [cache](auto handle) { return cache->writeComplete(handle); }), mImpl->cacheWrites.end());
-    else mImpl->cacheWrites.clear();
-    const auto owner = VSNativeSession::active();
-    if (!owner || owner->phase() != VSNativeSession::Phase::Connected) return;
-    if (mImpl->regionEpoch!=owner->regionEpoch())
+    if(mImpl->retired) return;
+    const auto owner=VSNativeSession::active();
+    auto* fetch=LLAppViewer::getTextureFetch();
+    if(!owner || owner->phase()!=VSNativeSession::Phase::Connected || !fetch) return;
+    ++mImpl->demandFrame;
+    const auto generation=owner->generation(),epoch=owner->regionEpoch();
+    if(mImpl->regionEpoch!=epoch)
     {
-        auto requests=std::exchange(mImpl->requests,{});mImpl->regionEpoch=owner->regionEpoch();
-        for (auto& [id,entry]:mImpl->remote)
-            if (entry.readyGeneration!=owner->generation())
+        mImpl->regionEpoch=epoch;
+        for(auto& [id,entry]:mImpl->remote)
+        {
+            if(entry.fetching) fetch->deleteRequest(id,true);
+            entry.fetching=false;
+            if(entry.readyGeneration!=generation)
             {entry.generation=entry.failedGeneration=0;entry.attempts=0;entry.retryAt=0;}
-        for (auto& [id,request]:requests) request->cancelSuspendedOperation();
+        }
     }
-    if (!owner->regionReady()) return;
-    std::vector<LLUUID> pending;
-    for (auto& [id, entry] : mImpl->remote)
-        if (entry.readyGeneration != owner->generation() && !mImpl->requests.count(id) && entry.attempts < 3 &&
-            LLTimer::getTotalSeconds() >= entry.retryAt)
-        { entry.generation = 0; pending.push_back(id); }
-    for (const auto& id : pending)
+    for(auto& [id,entry]:mImpl->remote)
     {
-        if (mImpl->requests.size() >= 32) break;
-        getUIImageByID(id);
+        if(!entry.fetching) continue;
+        if(entry.generation!=generation || entry.epoch!=epoch)
+        {fetch->deleteRequest(id,true);entry.fetching=false;continue;}
+        S32 discard=-1,state=0;LLPointer<LLImageRaw> raw,auxiliary;LLCore::HttpStatus status;
+        const bool done=fetch->getRequestFinished(id,discard,state,raw,auxiliary,status);
+        if(raw && discard>=0 && discard!=entry.discard)
+        {
+            if(!fetch->getRequestDimensions(id,entry.fullWidth,entry.fullHeight,entry.components))
+            {entry.fullWidth=raw->getWidth()<<discard;entry.fullHeight=raw->getHeight()<<discard;}
+            LLPointer<LLImageRaw> mask;
+            bool admitted=entry.components!=5 || auxiliary.notNull();
+            if(auxiliary)
+            {
+                auto residency=mImpl->masks.reserve(std::size_t(auxiliary->getWidth())*auxiliary->getHeight());
+                while(!residency && mImpl->evict(id)) residency=mImpl->masks.reserve(std::size_t(auxiliary->getWidth())*auxiliary->getHeight());
+                if(residency)
+                {mask=new NativeMaskImage(std::move(residency),auxiliary->getWidth(),auxiliary->getHeight());mask->copy(auxiliary);}
+                else admitted=false;
+            }
+            LLUIImagePtr image;
+            if(admitted)
+            {
+                image=mImpl->resources.publish("remote:"+id.asString(),*raw);
+                while(!image && mImpl->evict(id)) image=mImpl->resources.publish("remote:"+id.asString(),*raw);
+            }
+            if(image)
+            {
+                if(!entry.cacheChecked)
+                {if(fetch->isFromLocalCache(id)) ++mImpl->diskHits;else ++mImpl->diskMisses;entry.cacheChecked=true;}
+                entry.pixels=image;entry.auxiliary=mask;entry.discard=discard;
+                entry.readyGeneration=generation;entry.failedGeneration=0;entry.attempts=0;entry.retryAt=0;
+                entry.facade->setNativeExtent(raw->getWidth(),raw->getHeight());entry.facade->onImageLoaded();
+            }
+        }
+        if(done || LLTimer::getTotalSeconds()>=entry.deadline)
+        {
+            fetch->deleteRequest(id,true);entry.fetching=false;
+            if(status==LLCore::HttpStatus(LLCore::HttpStatus::LLCORE,LLCore::HE_RESPONSE_TOO_LARGE))
+            {entry.failedGeneration=generation;entry.attempts=3;}
+            if(!raw && entry.attempts>=3) entry.failedGeneration=generation;
+        }
     }
+    if(!owner->regionReady()) return;
+    std::vector<LLUUID> pending;
+    for(const auto& [id,entry]:mImpl->remote)
+        if(!entry.fetching && entry.attempts<3 && LLTimer::getTotalSeconds()>=entry.retryAt &&
+            ((entry.uiDemand && entry.facade && entry.facade->getNumRefs()>1) || LLTimer::getTotalSeconds()-entry.lastUsed<1.0))
+            pending.push_back(id);
+    for(const auto& id:pending) getUIImageByID(id,-2);
 }
 LLSD VSUIImageProvider::textureCacheEvidence() const
 {
     LLSD result;
-    result["disk_hits"] = ll_sd_from_U64(mImpl->diskHits);
-    result["disk_misses"] = ll_sd_from_U64(mImpl->diskMisses);
-    result["disk_writes_started"] = ll_sd_from_U64(mImpl->diskWrites);
-    result["network_requests"] = ll_sd_from_U64(mImpl->networkRequests);
-    result["pending_disk_writes"] = S32(mImpl->cacheWrites.size());
+    result["disk_hits"]=ll_sd_from_U64(mImpl->diskHits);result["disk_misses"]=ll_sd_from_U64(mImpl->diskMisses);
+    U32 reads=0,writes=0,waits=0;
+    if(auto* fetch=LLAppViewer::getTextureFetch())
+    {
+        fetch->getStateStats(&reads,&writes,&waits);
+        result["network_requests"]=ll_sd_from_U64(fetch->getTotalNumHTTPRequests());
+        result["pending_fetches"]=fetch->getNumRequests();
+    }
+    result["disk_read_attempts"]=ll_sd_from_U64(reads);
+    result["disk_writes_started"]=ll_sd_from_U64(writes);
+    result["cache_policy"]="shared_LLTextureFetch";
     return result;
 }
 LLSD vs_ui_texture_cache_evidence()
@@ -272,55 +259,56 @@ bool VSUIImageProvider::imageReady(const LLUUID& id) const
 }
 void VSUIImageProvider::refreshImage(const LLUUID& id)
 {
-    if (auto request = mImpl->requests.find(id); request != mImpl->requests.end())
-    {
-        const auto adapter = request->second;
-        mImpl->requests.erase(request);
-        adapter->cancelSuspendedOperation();
-    }
-    if (auto image = mImpl->remote.find(id); image != mImpl->remote.end())
-        image->second.generation = image->second.readyGeneration = image->second.failedGeneration = 0;
-    // Explicit refresh/local reload must not resurrect an older disk image.
-    if (auto* cache = LLAppViewer::getTextureCache()) cache->removeFromCache(id);
-    mImpl->remote[id].cacheChecked = true;
-    mImpl->remote[id].attempts = 0; mImpl->remote[id].retryAt = 0;
-    getUIImageByID(id);
+    if(auto* fetch=LLAppViewer::getTextureFetch()) fetch->deleteRequest(id,true);
+    if(auto* cache=LLAppViewer::getTextureCache()) cache->removeFromCache(id);
+    auto& entry=mImpl->remote[id];entry.fetching=false;entry.generation=entry.readyGeneration=entry.failedGeneration=0;
+    entry.attempts=0;entry.retryAt=0;entry.discard=-1;entry.cacheChecked=false;
+    getUIImageByID(id,-1);
 }
 void VSUIImageProvider::resetAccount()
 {
-    auto requests = std::move(mImpl->requests);
-    for (auto& request : requests) request.second->cancelSuspendedOperation();
-    const auto fallback = getUIImage("Generic_Person");
-    for (auto& entry : mImpl->remote)
+    const auto fallback=getUIImage("Generic_Person");
+    for(auto& [id,entry]:mImpl->remote)
     {
-        mImpl->resources.erase("remote:" + entry.first.asString());
-        entry.second.pixels = fallback;
-        entry.second.auxiliary=nullptr;
-        entry.second.facade->setNativeExtent(fallback->getWidth(), fallback->getHeight());
-        entry.second.generation = entry.second.readyGeneration = entry.second.failedGeneration = 0;
-        entry.second.attempts = 0; entry.second.retryAt = 0; entry.second.cacheChecked = false;
+        if(entry.fetching) if(auto* fetch=LLAppViewer::getTextureFetch()) fetch->deleteRequest(id,true);
+        mImpl->resources.erase("remote:"+id.asString());
+        entry.pixels=fallback;entry.auxiliary=nullptr;entry.fetching=false;
+        entry.facade->setNativeExtent(fallback->getWidth(),fallback->getHeight());
+        entry.generation=entry.readyGeneration=entry.failedGeneration=0;
+        entry.attempts=0;entry.retryAt=0;entry.discard=-1;entry.cacheChecked=false;
     }
 }
 void VSUIImageProvider::cleanUp()
 {
-    mImpl->retired = true;
-    if (auto* cache = LLAppViewer::getTextureCache())
-        for (auto handle : mImpl->cacheWrites) cache->writeComplete(handle, true);
-    mImpl->cacheWrites.clear();
-    auto requests = std::move(mImpl->requests);
-    for (auto& request : requests) request.second->cancelSuspendedOperation();
-    for (const auto& entry : mImpl->remote) mImpl->resources.erase("remote:" + entry.first.asString());
+    mImpl->retired=true;
+    for(const auto& [id,entry]:mImpl->remote)
+    {
+        if(entry.fetching) if(auto* fetch=LLAppViewer::getTextureFetch()) fetch->deleteRequest(id,true);
+        mImpl->resources.erase("remote:"+id.asString());
+    }
     mImpl->remote.clear();
-    for (const auto &entry : mImpl->cache)
-        mImpl->resources.erase("skin:" + entry.first);
+    for(const auto& entry:mImpl->cache) mImpl->resources.erase("skin:"+entry.first);
     mImpl->cache.clear();
 }
-LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32)
+LLUIImagePtr VSUIImageProvider::requestWorldImage(const LLUUID& id,unsigned dimension)
+{
+    if(id.isNull()) return nullptr;
+    if(!mImpl->remote.count(id) && mImpl->remote.size()>=16384 && !mImpl->evict(id)) return nullptr;
+    auto& entry=mImpl->remote[id];
+    const unsigned target=std::clamp(dimension,1u,4096u);
+    entry.target=entry.demandFrame==mImpl->demandFrame?std::max(entry.target,target):target;
+    entry.demandFrame=mImpl->demandFrame;
+    return getUIImageByID(id,-1);
+}
+LLUIImagePtr vs_request_world_image(const LLUUID& id,unsigned dimension)
+{return sActiveProvider?sActiveProvider->requestWorldImage(id,dimension):nullptr;}
+LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 priority)
 {
     if (id.isNull())
         return nullptr;
     if (!mImpl->remote.count(id) && mImpl->remote.size()>=16384 && !mImpl->evict(id)) return getUIImage("Generic_Person");
-    auto& entry = mImpl->remote[id];entry.touched=++mImpl->clock;
+    auto& entry = mImpl->remote[id];
+    if(priority!=-2) {entry.touched=++mImpl->clock;entry.lastUsed=LLTimer::getTotalSeconds();}
     const auto owner = VSNativeSession::active();
     const U64 generation = owner ? owner->generation() : 0;
     if (!entry.facade)
@@ -339,155 +327,37 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32)
                     }
             });
     }
-    // Match the viewer texture fetcher: ViewerAsset is the current asset
-    // endpoint; GetTexture is only the legacy endpoint when it is absent.
-    const std::string capability = owner ? (owner->capability("ViewerAsset").empty()
-        ? owner->capability("GetTexture") : owner->capability("ViewerAsset")) : std::string();
-    if (owner && owner->phase() == VSNativeSession::Phase::Connected && capability.empty())
-        entry.failedGeneration = generation;
-    if (!owner || owner->phase() != VSNativeSession::Phase::Connected || !owner->regionReady() ||
-        capability.empty() || entry.generation == generation || entry.attempts >= 3 || mImpl->requests.size() >= 32)
+    if(priority>=0) entry.uiDemand=true;
+    auto* fetch=LLAppViewer::getTextureFetch();
+    if(!owner || owner->phase()!=VSNativeSession::Phase::Connected || !owner->regionReady() || !fetch || entry.fetching)
         return entry.facade;
-    const bool checkDisk = !entry.cacheChecked;
-    entry.cacheChecked = true;
-    entry.generation = generation; ++entry.attempts;
-    entry.retryAt = LLTimer::getTotalSeconds() + 5 * entry.attempts;
-    const std::weak_ptr<Impl> weak = mImpl;
-    const std::weak_ptr<VSNativeSession> session = owner;
-    const U64 epoch=owner->regionEpoch();
-    const std::string url = capability + (capability.find('?') == std::string::npos ? "?" : "&") + "texture_id=" + id.asString();
-    LLCoros::instance().launch("nativeUITexture", [weak, session, generation, epoch, id, url, checkDisk]()
+    const U32 limit=llclamp(gSavedSettings.getU32("RenderMaxTextureResolution"),512u,4096u);
+    const bool fullRes=gSavedSettings.getBOOL("TextureLoadFullRes");
+    const bool changedLimit=entry.resolutionLimit && (entry.resolutionLimit!=limit || entry.fullRes!=fullRes);
+    entry.resolutionLimit=limit;entry.fullRes=fullRes;
+    const unsigned target=entry.uiDemand?4096u:std::min(limit,entry.target);
+    S32 desired=0;
+    if(!entry.uiDemand && !fullRes)
     {
-        auto images = weak.lock();
-        if (!images || images->retired) return;
-        auto adapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("nativeUITexture", LLCore::HttpRequest::DEFAULT_POLICY_ID);
-        images->requests[id] = adapter;
-        auto readBudget = checkDisk ? images->decodes.reserve(16 * 1024 * 1024) : nullptr;
-        images.reset(); // Never retain the resource owner across a suspension.
-        LLPointer<LLImageFormatted> cached = readBudget ? readNativeTexture(id) : nullptr;
-        readBudget.reset();
-        {
-        const auto currentOwner = session.lock();
-        images = weak.lock();
-        if (!images || images->retired || !currentOwner || VSNativeSession::active() != currentOwner ||
-            currentOwner->generation() != generation || currentOwner->regionEpoch() != epoch ||
-            !currentOwner->regionReady() || !images->requests.count(id) || images->requests.at(id) != adapter) return;
-        if (checkDisk) { if (cached) ++images->diskHits; else ++images->diskMisses; }
-        if (!cached) ++images->networkRequests;
-        }
-        images.reset();
-        auto request = std::make_shared<LLCore::HttpRequest>();
-        auto options = std::make_shared<LLCore::HttpOptions>(); options->setTransferTimeout(15); options->setRetries(0);
-        options->setMaximumResponseBodyBytes(16 * 1024 * 1024);
-        LLSD result;
-        if (!cached) result = adapter->getRawAndSuspend(request, url, options);
-        LL::WorkQueue::getInstance("mainloop")->post([weak,session,generation,epoch,id,adapter,result,cached]()
-        {
-        auto images = weak.lock(); const auto owner = session.lock();
-        if (!images || images->retired) return;
-        if (!owner || VSNativeSession::active()!=owner || owner->generation()!=generation ||
-            owner->regionEpoch()!=epoch || !owner->regionReady()) return;
-        const auto pending = images->requests.find(id);
-        if (pending == images->requests.end() || pending->second != adapter) return;
-        images->requests.erase(pending);
-        if (!owner || owner->generation() != generation || owner->phase() != VSNativeSession::Phase::Connected) return;
-        auto found = images->remote.find(id);
-        if (found == images->remote.end() || found->second.generation != generation) return;
-        // A completed final attempt is terminal until explicit refresh or account reset.
-        // Mark before decoding so every HTTP/decode failure has the same outcome.
-        if (found->second.attempts >= 3) found->second.failedGeneration = generation;
-        LLPointer<LLImageFormatted> formatted = cached;
-        if (!formatted)
-        {
-            const auto status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result["http_result"]);
-            if (!status)
-            {
-                if (status == LLCore::HttpStatus(LLCore::HttpStatus::LLCORE, LLCore::HE_RESPONSE_TOO_LARGE))
-                    found->second.failedGeneration = generation;
-                return;
-            }
-            const auto& bytes = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary();
-            if (bytes.empty() || bytes.size() > 16 * 1024 * 1024) return;
-            formatted = LLImageFormatted::createFromExtension("j2c");
-            auto* data = static_cast<U8*>(ll_aligned_malloc_16(bytes.size()));
-            if (!data) return;
-            std::copy(bytes.begin(), bytes.end(), data); formatted->setData(data, S32(bytes.size()));
-
-        }
-        if (!formatted->updateData() || formatted->getWidth() <= 0 || formatted->getHeight() <= 0 ||
-            formatted->getWidth() > 4096 || formatted->getHeight() > 4096)
-        {
-            if (cached)
-            {
-                if (auto* cache = LLAppViewer::getTextureCache()) cache->removeFromCache(id);
-                found->second.generation = 0; found->second.retryAt = 0;
-                --found->second.attempts;
-            }
-            return;
-        }
-        const bool needsMask=formatted->getComponents()==5;
-        auto decodeResidency=images->decodes.reserve(std::size_t(formatted->getDataSize())+std::size_t(formatted->getWidth())*formatted->getHeight()*(needsMask?5:4));
-        auto* decoder=LLAppViewer::getImageDecodeThread();
-        if(!decodeResidency || !decoder) {found->second.failedGeneration=generation;return;}
-        // Retain the request slot through CPU decoding so subsequent pumping
-        // cannot turn the bounded HTTP queue into an unbounded decode queue.
-        images->requests[id]=adapter;
-        LLPointer<LLImageDecodeThread::Responder> decoded=new NativeDecoded(
-            [weak,session,generation,epoch,id,adapter,decodeResidency,needsMask,formatted,cached](bool success,LLPointer<LLImageRaw> raw,LLPointer<LLImageRaw> mask)
-        {
-        auto images=weak.lock();const auto owner=session.lock();
-        if(!images || images->retired || !owner || VSNativeSession::active()!=owner || owner->generation()!=generation ||
-           owner->regionEpoch()!=epoch || !owner->regionReady())return;
-        const auto pending=images->requests.find(id);
-        if(pending==images->requests.end() || pending->second!=adapter)return;
-        images->requests.erase(pending);
-        const auto found=images->remote.find(id);
-        if(found==images->remote.end() || found->second.generation!=generation)return;
-        if (!success || !raw)
-        {
-            if (cached)
-            {
-                if (auto* cache = LLAppViewer::getTextureCache()) cache->removeFromCache(id);
-                found->second.generation = 0; found->second.retryAt = 0;
-                --found->second.attempts;
-            }
-            return;
-        }
-        if (!cached && images->cacheWrites.size() < 16)
-            if (auto* cache = LLAppViewer::getTextureCache())
-            {
-                const auto handle = cache->writeToCache(id, formatted->getData(), formatted->getDataSize(),
-                    formatted->getDataSize(), raw, 0, new NativeCacheWrite(formatted, decodeResidency));
-                if (handle != LLWorkerThread::nullHandle())
-                {
-                    images->cacheWrites.push_back(handle);
-                    ++images->diskWrites;
-                }
-            }
-        LLPointer<LLImageRaw> auxiliary;
-        if (needsMask)
-        {
-            if(!mask || mask->getComponents()!=1 || mask->getWidth()!=raw->getWidth() || mask->getHeight()!=raw->getHeight())return;
-            auto residency=images->masks.reserve(std::size_t(raw->getWidth())*raw->getHeight());
-            while (!residency && images->evict(id)) residency=images->masks.reserve(std::size_t(raw->getWidth())*raw->getHeight());
-            if (!residency) {found->second.failedGeneration=generation;return;}
-            auxiliary=new NativeMaskImage(std::move(residency),mask->getWidth(),mask->getHeight());
-            auxiliary->copy(mask);
-        }
-        auto pixels=images->resources.publish("remote:"+id.asString(),*raw);
-        while (!pixels && images->evict(id)) pixels=images->resources.publish("remote:"+id.asString(),*raw);
-        if (!pixels) {found->second.failedGeneration=generation;return;}
-        found->second.auxiliary=auxiliary;
-        found->second.pixels = std::move(pixels);
-        found->second.facade->setNativeExtent(raw->getWidth(), raw->getHeight());
-        found->second.readyGeneration = generation;
-        found->second.failedGeneration = 0;
-        found->second.facade->onImageLoaded();
-        });
-        if(!decoder->decodeImage(formatted,0,needsMask,decoded))
-        {images->requests.erase(id);found->second.failedGeneration=generation;}
-        });
-    });
+        if(!entry.fullWidth) desired=MAX_DISCARD_LEVEL;
+        else while(desired<MAX_DISCARD_LEVEL && (unsigned(entry.fullWidth>>desired)>target || unsigned(entry.fullHeight>>desired)>target)) ++desired;
+    }
+    // Keep a one-level hysteresis for projected demand; explicit preference
+    // changes also replace an unnecessarily large resident image generation.
+    if(!changedLimit && entry.readyGeneration==generation && entry.discard>=0 &&
+        (entry.discard==desired || desired==entry.discard+1)) return entry.facade;
+    if(changedLimit) {entry.attempts=0;entry.failedGeneration=0;}
+    if(entry.attempts>=3 || LLTimer::getTotalSeconds()<entry.retryAt) return entry.facade;
+    const std::string capability=owner->capability("ViewerAsset").empty()?owner->capability("GetTexture"):owner->capability("ViewerAsset");
+    const std::string url=capability.empty()?std::string():capability+(capability.find('?')==std::string::npos?"?":"&")+"texture_id="+id.asString();
+    const S32 queued=fetch->createRequest(FTT_DEFAULT,url,id,LLHost(),entry.uiDemand?100000.f:float(target*target),
+        entry.fullWidth,entry.fullHeight,entry.components,desired,true,true);
+    if(queued>=0)
+    {
+        entry.fetching=true;entry.generation=generation;entry.epoch=owner->regionEpoch();
+        ++entry.attempts;entry.retryAt=LLTimer::getTotalSeconds()+5*entry.attempts;
+        entry.deadline=LLTimer::getTotalSeconds()+20;
+    }
     return entry.facade;
 }
 LLPointer<LLUIImage> VSUIImageProvider::getUIImage(const std::string &name, S32)

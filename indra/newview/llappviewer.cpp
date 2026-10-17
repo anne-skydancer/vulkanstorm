@@ -1594,23 +1594,20 @@ bool LLAppViewer::initNativeVulkanLogin()
     LLImage::initClass(gSavedSettings.getBOOL("TextureNewByteRange"), gSavedSettings.getS32("TextureReverseByteRange"));
     LLLFSThread::initClass(true);
     initGeneralThread();
-    gDirUtilp->setCacheDir(gSavedSettings.getString("CacheLocation"));
-    gDirUtilp->setSoundCacheDir(gSavedSettings.getString("FSSoundCacheLocation"));
-    const std::string cache_dir = gDirUtilp->getExpandedFilename(LL_PATH_CACHE, gSavedSettings.getString("DiskCacheDirName"));
-    LLFile::mkdir(cache_dir);
-    LLDiskCache::initParamSingleton(cache_dir, uintmax_t(gSavedSettings.getU32("FSDiskCacheSize")) * 1024ULL * 1024ULL,
-                                   gSavedSettings.getBOOL("EnableDiskCacheDebugInfo"),
-                                   gSavedSettings.getF32("FSDiskCacheHighWaterPercent"), gSavedSettings.getF32("FSDiskCacheLowWaterPercent"));
-    // Initialize the shared CPU cache/decode workers independently of the
-    // legacy GL texture fetcher and drawable repository.
+    // Use the same startup cache controls, versions, relocation and purge
+    // policy as the OpenGL peer. Native consumers differ only at publication.
+#if VS_NATIVE_VULKAN
+    if (VSVulkanContext::headlessReplay()) gHeadlessClient = true;
+#endif
     LLSD pools=gSavedSettings.getLLSD("ThreadPoolSizes");
     pools["ImageDecode"]=llclamp(S32(gSavedSettings.getU32("FSImageDecodeThreads")),1,32);
     gSavedSettings.setLLSD("ThreadPoolSizes",pools);
     sImageDecodeThread=new LLImageDecodeThread(true);
-    sTextureCache=new LLTextureCache(true);sTextureCache->setReadOnly(mSecondInstance);
-    sTextureCache->initCache(LL_PATH_CACHE,static_cast<S64>(std::clamp<U64>(static_cast<U64>(gSavedSettings.getU32("CacheSize"))*1024*1024,
-        256ULL*1024*1024,100ULL*1024*1024*1024)),false);
+    sTextureCache=new LLTextureCache(true);
     sPurgeDiskCacheThread=new LLPurgeDiskCacheThread();
+    if(!initCache()) return false;
+    // Reuse the reference CPU fetch/cache/discard state machine without GL.
+    sTextureFetch=new LLTextureFetch(sTextureCache,true,false,true);
     LLFilePickerThread::initClass();
     LLDirPickerThread::initClass();
     LLViewerEventRecorder::createInstance();
@@ -1705,6 +1702,7 @@ bool LLAppViewer::frameNativeVulkanLogin()
     LLLFSThread::updateClass(0);
     if(sImageDecodeThread)sImageDecodeThread->update(0);
     if(sTextureCache)sTextureCache->update(0);
+    if(sTextureFetch)sTextureFetch->update(0);
     if (gServicePump) { gServicePump->pump(); gServicePump->callback(); }
     // Shared text UI views and CPU controllers advance through their idle queue.
     // Only services initialized for this native account register callbacks here.
@@ -1753,8 +1751,28 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
     if (gMessageSystem) gMessageSystem->setMessageAdmission({});
     mNativeSession.reset();
 #endif
-    if(sImageDecodeThread) {sImageDecodeThread->shutdown();delete sImageDecodeThread;sImageDecodeThread=nullptr;}
-    if(sTextureCache) {sTextureCache->shutdown();delete sTextureCache;sTextureCache=nullptr;}
+    if(sTextureFetch)
+    {
+        sTextureFetch->deleteAllRequests();
+        LLTimer drain;
+        while(drain.getElapsedTimeF64()<5.0)
+        {
+            auto pending=sTextureFetch->update(1);
+            if(sTextureCache) pending+=sTextureCache->update(1);
+            if(sImageDecodeThread) pending+=sImageDecodeThread->update(1);
+            if(!pending) break;
+        }
+        sTextureFetch->shutdown();
+    }
+    if(sImageDecodeThread) sImageDecodeThread->shutdown();
+    if(sTextureCache) sTextureCache->shutdown();
+    if(sTextureFetch)
+    {
+        sTextureFetch->shutDownTextureCacheThread();
+        sTextureFetch->waitOnPending();delete sTextureFetch;sTextureFetch=nullptr;
+    }
+    delete sImageDecodeThread;sImageDecodeThread=nullptr;
+    delete sTextureCache;sTextureCache=nullptr;
     gMainloopWork.runFor(std::chrono::milliseconds(100));
     LLStartUp::cleanupNameCache();
     if (LLLoginInstance::instanceExists()) LLLoginInstance::getInstance()->disconnect();
@@ -5809,6 +5827,9 @@ void LLAppViewer::purgeCache()
     LL_INFOS("AppCache") << "Purging Cache and Texture Cache..." << LL_ENDL;
     LLAppViewer::getTextureCache()->purgeCache(LL_PATH_CACHE);
     LLVOCache::getInstance()->removeCache(LL_PATH_CACHE);
+#if VS_NATIVE_VULKAN
+    if (!VSNativeSession::active())
+#endif
     LLViewerShaderMgr::instance()->clearShaderCache();
     purgeCefStaleCaches();
     gDirUtilp->deleteFilesInDir(gDirUtilp->getExpandedFilename(LL_PATH_CACHE, ""), "*");

@@ -239,7 +239,8 @@ def main():
                 '--set', 'RenderDebugGLSession', 'true',
                 '--set', 'QuitAfterSeconds', '170', '--set', 'RenderVSyncEnable', 'false',
                 '--set', 'UpdaterShowReleaseNotes', '0', '--set', 'FSShowWhitelistReminder', 'false',
-                '--set', 'CacheLocation', str(profile/'cache'), '--set', 'UIScaleFactor', '1.0',
+                '--set', 'CacheLocation', str(profile/'cache'), '--set', 'NewCacheLocation', str(profile/'cache'),
+                '--set', 'UIScaleFactor', '1.0',
                 '--set', 'WindowWidth', '1024', '--set', 'WindowHeight', '768']
             selection=ET.Element('llsd')
             append_llsd(selection,{name:dict(Type='String',Persist=0,Comment='Baseline fixed UI input',Value=value)

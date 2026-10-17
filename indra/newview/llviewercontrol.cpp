@@ -1293,7 +1293,10 @@ void setting_setup_signal_listener(LLControlGroup& group, const std::string& set
         // Native owners observe admitted settings themselves. Preserve saved values
         // without activating a legacy GL/world/optional listener, including cascades.
         if (VSNativeSession::active() && control->getName() != "FSEnableLogThrottle"
-            && control->getName() != "SDL2IMEEnabled") return;
+            && control->getName() != "SDL2IMEEnabled"
+            && control->getName() != "FSDiskCacheSize"
+            && control->getName() != "FSDiskCacheHighWaterPercent"
+            && control->getName() != "FSDiskCacheLowWaterPercent") return;
 #endif
         callback(new_val);
     });
@@ -1305,7 +1308,10 @@ void setting_setup_signal_listener(LLControlGroup& group, const std::string& set
     {
 #if VS_NATIVE_VULKAN
         if (VSNativeSession::active() && control->getName() != "FSEnableLogThrottle"
-            && control->getName() != "SDL2IMEEnabled") return;
+            && control->getName() != "SDL2IMEEnabled"
+            && control->getName() != "FSDiskCacheSize"
+            && control->getName() != "FSDiskCacheHighWaterPercent"
+            && control->getName() != "FSDiskCacheLowWaterPercent") return;
 #endif
         callback();
     });

@@ -139,3 +139,43 @@ regressions pass. Actual staged-viewer plugin/world-media replay and complete R3
 cross-platform qualification remain open. This is not a claim of R3 completion.
 The uncompressed object parser also now rejects malformed render-material data
 instead of allowing a later independent geometry result to overwrite failure.
+
+## Shared progressive fetch/cache production checkpoint
+
+The earlier full-file native cache bridge has been replaced by native subscribers
+to LLTextureFetch's existing CPU state machine. The shared worker now performs
+partial cache reads, range fetches, J2C discard decoding, corruption recovery and
+cache writes for native images. Explicit native capability URLs retain UUID
+cache identity without entering LLWorld or UDP resolution. OpenGL construction
+and request defaults remain unchanged.
+
+The native instance retains the 16 MiB transport/encoded ceiling, maximum 32
+requests, 4096-pixel dimensions and a 256 MiB decode admission budget. Oversized
+responses terminate rather than entering ordinary HTTP retry handling. Image and
+auxiliary-mask publication is immutable, guarded by account/region generation,
+and keeps the admitted GPU generation on refusal. Projected world demand is
+combined per frame; UI subscribers retain high-resolution demand. Resolution and
+full-resolution preferences affect requests and resident replacement, with a
+one-level projected-demand hysteresis. Inactive world demand does not perpetually
+start requests. Fetch, cache and decode workers are pumped and retired in order.
+
+Native startup now uses the shared cache version, location/relocation, size,
+clear, codec-version and read-only policy. Only the three audited CPU disk-cache
+size/watermark listeners are additionally admitted; GL listeners remain gated.
+Replay profiles set both current and pending cache locations to their isolated
+cache directory, so shared relocation policy cannot redirect qualification data.
+
+Native translation units compile. Regressions execute the production request
+policy (partial/unknown/full discard, native queue/byte bounds and unchanged GL
+defaults), native decode admission/corrupt-header recovery, and decisive HTTP
+limits. The obsolete bridge-specific fixture was replaced because that bridge
+no longer exists. R2 geometry/asset/account and preference/parity-profile checks
+pass. The previous media checkpoint's fully staged viewer passed connected
+session replay offscreen in 13.8 seconds with source-qualified evidence.
+
+Still required for this new checkpoint: rebuild/stage and actual-viewer replay,
+real cold/warm process-restart evidence with pixel/network comparisons, range
+streaming fixtures and clear/resize/read-only/transition/pending-I/O cases.
+Compression, tangent/reference charts, complete terrain PBR and the remaining R3
+settings/production qualification obligations also remain open. This is not R3
+completion or cross-platform qualification.
