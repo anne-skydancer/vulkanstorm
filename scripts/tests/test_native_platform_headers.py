@@ -37,6 +37,7 @@ class NativePlatformHeaders(unittest.TestCase):
             for order, source in (
                 ('platform-first', X11 + HEADERS + CHECKS),
                 ('native-first', HEADERS + X11 + CHECKS),
+                ('codec-implementation', '#define STB_DXT_IMPLEMENTATION\n#include \"vstextureupload.h\"\n' + X11 + CHECKS),
             ):
                 with self.subTest(order=order):
                     path = Path(temporary) / (order + '.cpp')
