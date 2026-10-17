@@ -82,6 +82,9 @@ public:
     LLUUID                               rootID(const LLUUID&) const;
     bool                                 isAttachment(const LLUUID&) const;
     LLSD evidence() const;
+#if VS_VULKAN_DIAGNOSTICS
+    LLSD terrainStatus() const;
+#endif
 private:
     void publishGroundFrame(const LLVector3& eye);
     struct Budgets;

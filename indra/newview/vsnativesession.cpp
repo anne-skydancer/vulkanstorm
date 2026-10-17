@@ -1646,7 +1646,14 @@ void VSNativeSession::connected()
     AOEngine::onLoginComplete();
     FSPanelLogin::closePanel();
     gViewerWindow->setNativeConnected(true);
-    gViewerWindow->getProgressView()->setVisible(false);
+    // Finish through the shared skinned progress/fade and input release path.
+    gViewerWindow->setProgressPercent(100.f);
+    gViewerWindow->setProgressString("");
+    gViewerWindow->showCursor();
+    gViewerWindow->getWindow()->resetBusyCount();
+    gViewerWindow->getWindow()->setCursor(UI_CURSOR_ARROW);
+    gViewerWindow->setStartupComplete();
+    gViewerWindow->setProgressCancelButtonVisible(false);
     init_audio();
     requestParcel();
     if (!LLGridManager::instance().isInSecondLife())
@@ -1742,7 +1749,16 @@ void VSNativeSession::publishProgress()
     progress["appearance_owner"]=mAppearanceOwnerInitialized;progress["wearable_metadata"]=mWearablesKnown;
     progress["connected"]=regionReady();
     if (mPhase==Phase::Connecting && gViewerWindow)
-        gViewerWindow->setProgressPercent(20.f*(unsigned(mCircuitAck)+unsigned(mSeedReady)+unsigned(mHandshake)+unsigned(mMovement)));
+    {
+        // Use the reference stage fractions, localized strings and MOTD.
+        // Authentication already reached 30%; connection must not reset to 0%.
+        const F32 percent = !mSeedReady ? 40.f : !mHandshake ? 59.f : 60.f;
+        const char* message = !mSeedReady ? "LoginRequestSeedCapGrant" :
+                              !mHandshake ? "LoginWaitingForRegionHandshake" : "LoginConnectingToRegion";
+        gViewerWindow->setProgressPercent(percent);
+        gViewerWindow->setProgressString(LLTrans::getString(message));
+        gViewerWindow->setProgressMessage(gAgent.mMOTD);
+    }
     LLEventPumps::instance().obtain("native_session_progress").post(progress);
 }
 void VSNativeSession::appendChat(LLSD chat, U64 generation)
@@ -1987,7 +2003,7 @@ void VSNativeSession::requestLogout(bool quit)
         clearParcelPlayback();
         unbind(); mPoll.reset();
         for(auto& [host,region]:mCircuits) {if(region.cancel)region.cancel();region.cancel={};region.poll.reset();}
-        send("LogoutRequest", LLSD()); mPhase = Phase::Logout; mDeadline = now() + 5;
+        send("LogoutRequest", LLSD()); mPhase = Phase::Logout; mDeadline = now() + gLogoutMaxTime;
         gViewerWindow->setShowProgress(true, !gSavedSettings.getBOOL("FSDisableLogoutScreens"));
         gViewerWindow->setProgressPercent(100.f);
         gViewerWindow->setProgressString(LLTrans::getString("LoggingOut"));
@@ -1996,8 +2012,11 @@ void VSNativeSession::requestLogout(bool quit)
 }
 void VSNativeSession::finishLogout()
 {
-    gViewerWindow->setShowProgress(false, true);
-    const bool quit = mQuit; reset();
+    const bool quit = mQuit;
+    // Preserve the logout surface through application teardown. Only a return
+    // to the login screen hides it before restoring the shared login panel.
+    if (!quit) gViewerWindow->setShowProgress(false, true);
+    reset();
     if (quit) LLAppViewer::instance()->forceQuit(); else reset_login();
 }
 void VSNativeSession::disconnect(const std::string& reason)

@@ -7142,7 +7142,9 @@ void LLViewerWindow::setStartupComplete()
 #if LL_SDL2
     // FIRE-32559: For some reason aftrer login vsync always acts as if it's disabled, so
     // the flag will get set again here after the 3D view is set up -Zi
-    getWindow()->toggleVSync(gSavedSettings.getBOOL("RenderVSyncEnable"));
+    // Native presentation reads the same setting when presenting; SDL's
+    // toggleVSync requires a GL context and must not run on this peer path.
+    if (!isNativeVulkan()) getWindow()->toggleVSync(gSavedSettings.getBOOL("RenderVSyncEnable"));
 #endif
 }
 
