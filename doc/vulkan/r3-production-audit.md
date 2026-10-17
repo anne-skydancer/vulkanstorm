@@ -179,3 +179,19 @@ streaming fixtures and clear/resize/read-only/transition/pending-I/O cases.
 Compression, tangent/reference charts, complete terrain PBR and the remaining R3
 settings/production qualification obligations also remain open. This is not R3
 completion or cross-platform qualification.
+
+## Shared-fetch runtime correction and UI sampling contract
+
+The first actual-viewer replay of the shared-fetch checkpoint exited with an
+access violation. A first-chance native debugger trace located the call to
+LLViewerStatsRecorder::textureFetch: native startup had not created that shared
+CPU service. Native startup now creates it before texture fetching, and teardown
+retires it after the fetcher. The fetch statistics path remains active.
+
+Reference LLUIImageList::getUIImageByID/loadUIImageByID explicitly uses MIPMAP_NO.
+The native UI sampler therefore clamps to level zero even when an image also
+contains world mip levels. Explicit nearest material filtering also remains
+nearest when global anisotropy is enabled. An independent minified-image pixel
+chart and sampler descriptor check pass, along with the six headless production
+renderer/validation/negative modes. The corrected app source compiles; the staged
+viewer must be rebuilt and replayed before this correction has runtime acceptance.

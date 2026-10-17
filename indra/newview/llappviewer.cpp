@@ -1606,6 +1606,7 @@ bool LLAppViewer::initNativeVulkanLogin()
     sTextureCache=new LLTextureCache(true);
     sPurgeDiskCacheThread=new LLPurgeDiskCacheThread();
     if(!initCache()) return false;
+    LLViewerStatsRecorder::createInstance();
     // Reuse the reference CPU fetch/cache/discard state machine without GL.
     sTextureFetch=new LLTextureFetch(sTextureCache,true,false,true);
     LLFilePickerThread::initClass();
@@ -1773,6 +1774,7 @@ bool LLAppViewer::cleanupNativeVulkanLogin()
     }
     delete sImageDecodeThread;sImageDecodeThread=nullptr;
     delete sTextureCache;sTextureCache=nullptr;
+    if(LLViewerStatsRecorder::instanceExists()) LLViewerStatsRecorder::deleteSingleton();
     gMainloopWork.runFor(std::chrono::milliseconds(100));
     LLStartUp::cleanupNameCache();
     if (LLLoginInstance::instanceExists()) LLLoginInstance::getInstance()->disconnect();

@@ -583,6 +583,20 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     auto* anisotropicView=VSUIRenderer::imageView(materialPacket.image,anisotropic);
     require(anisotropicView && anisotropicView->GetSampler()->GetDesc().MaxAnisotropy==
         std::min(16u,unsigned(device->GetAdapterInfo().Sampler.MaxAnisotropy)),"Anisotropy did not follow device capabilities");
+    auto nearest=anisotropic;nearest.minification=nearest.magnification=VSWorldContracts::Filter::Nearest;
+    auto* nearestView=VSUIRenderer::imageView(materialPacket.image,nearest);
+    require(nearestView->GetSampler()->GetDesc().MinFilter==FILTER_TYPE_POINT &&
+        nearestView->GetSampler()->GetDesc().MaxAnisotropy==1,"Anisotropy replaced explicit nearest filtering");
+    // A minified UI image still uses level zero, matching LLUIImageList's
+    // MIPMAP_NO contract even when the same resource has world mip levels.
+    std::vector<std::uint8_t> uiTexels(64*64*4,0);
+    for(unsigned i=0;i<64*64;++i) uiTexels[i*4+3]=255;
+    for(unsigned y=27;y<=28;++y) for(unsigned x=27;x<=28;++x)
+        for(unsigned c=0;c<3;++c) uiTexels[(y*64+x)*4+c]=255;
+    VSUIRenderer::Packet uiPacket;uiPacket.image=images.upload(64,64,uiTexels,VSWorldContracts::ImageRole::RemoteAsset);
+    uiPacket.bounds={0,0,8,8};uiPacket.clip={0,0,8,8};uiPacket.blend=VSUIRenderer::Blend::Replace;
+    images.draw(rtv,8,8,1,{uiPacket});
+    capture("ui-base-level.ppm",[](unsigned x,unsigned y){return x==3 && y==3?Pixel{255,255,255,255}:Pixel{0,0,0,255};});
     VSWorldRenderer::Packet sky;sky.background=true;sky.fullbright=true;
     sky.mesh=renderer.upload({{-1,-1,0,0,0,1,0,0},{1,-1,0,0,0,1,1,0},
         {1,1,0,0,0,1,1,1},{-1,1,0,0,0,1,0,1}},{0,1,2,0,2,3});

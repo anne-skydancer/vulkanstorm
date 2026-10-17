@@ -148,6 +148,10 @@ void main() { result=vec4(color.rgb,texture(g_Texture,texUV).a*color.a); }
         SamplerDesc sampler{};
         sampler.MinFilter = sampler.MagFilter = sampling == Sampling::Nearest ? FILTER_TYPE_POINT : FILTER_TYPE_LINEAR;
         sampler.MipFilter = FILTER_TYPE_POINT;
+        // LLUIImageList::getUIImageByID/loadUIImageByID uses MIPMAP_NO.
+        // A world subscriber may share this image's mip chain, but UI draws
+        // sample its base level independently of the world sampler view.
+        sampler.MaxLOD = 0;
         sampler.AddressU = sampler.AddressV = sampler.AddressW = TEXTURE_ADDRESS_CLAMP;
         ImmutableSamplerDesc immutable{SHADER_TYPE_PIXEL, "g_Texture", sampler};
         ci.PSODesc.ResourceLayout.NumImmutableSamplers = 1; ci.PSODesc.ResourceLayout.ImmutableSamplers = &immutable;
@@ -405,7 +409,8 @@ Diligent::ITextureView* VSUIRenderer::imageView(const Image& image,const VSWorld
 {
     if(!image) return nullptr;
     const auto& capabilities=image->owner->GetAdapterInfo().Sampler;
-    const bool aniso=capabilities.MaxAnisotropy>1;
+    const bool aniso=capabilities.MaxAnisotropy>1 && input.mipmaps &&
+        input.minification==VSWorldContracts::Filter::Linear && input.magnification==VSWorldContracts::Filter::Linear;
     const unsigned anisotropy=aniso?std::clamp(input.anisotropy,1u,unsigned(capabilities.MaxAnisotropy)):1u;
     const Texture::SamplerKey key{int(input.minification),int(input.magnification),int(input.u),int(input.v),input.mipmaps,input.trilinear,anisotropy};
     if(const auto found=image->sampledViews.find(key);found!=image->sampledViews.end()) return found->second;
