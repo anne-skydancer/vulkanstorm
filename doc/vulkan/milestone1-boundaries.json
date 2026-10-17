@@ -1,5 +1,5 @@
 {
-  "source_commit": "1ab1d5df54b583f5ed40a160886fe41e92eab9a3",
+  "source_commit": "a820ea6760479052168445b574d688a9841cb9bb",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "1830610b8316f5b6b5b200bc22a3fe06439bea820b43700f3dcaccd6e751ce05",
+      "sha256": "8a4916182f0571b48a392846483199aa414655b7f3ec42a1bd28ffffa8a821c7",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -33,7 +33,7 @@
       ]
     },
     "indra/newview/llviewerwindow.cpp": {
-      "sha256": "e10036ffbc1b52bfaff9431892735b180e6d1a2aef02c97c4dc5de72f0d89354",
+      "sha256": "8a2382d713f3084325b46ec2c6b0d659404f61803b042573cdcfe9e568274bb5",
       "anchors": [
         "LLViewerWindow::LLViewerWindow",
         "LLViewerWindow::initBase",
@@ -726,7 +726,7 @@
       ]
     },
     "indra/newview/vsstartupui.cpp": {
-      "sha256": "9ad522bcd0e7b165076ca76e2250ace778e3c80a33a1f981372eee61dcc0c722",
+      "sha256": "8200c00bb8f209e41e41af848625f392e90bc654f8d57ecd8b0d9f4a076a4850",
       "anchors": [
         "vs_startup_ui_admission",
         "message_critical",
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "30a1c1c38814ecfd5a49c55f10d09d436bbe2ae150a7b90e50109e1b90dfaa8c",
+      "sha256": "5cb984b224517bbf657976748433ee445328c3c0f12f1b8b0ba448e6eada2449",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
@@ -841,7 +841,7 @@
       ]
     },
     "indra/newview/vsnativeim.cpp": {
-      "sha256": "51d950b9f8e448de86fe1546b74308c43ef78f74fe5737ff852f59f711775cfe",
+      "sha256": "510fb50ce689fe6bf32374bb12cee0213ac983c9f3144e41e86fe285987da855",
       "anchors": [
         "vs_native_im_receive",
         "vs_native_im_guard",
@@ -867,7 +867,7 @@
       ]
     },
     "indra/newview/vsnativeimreplay.cpp": {
-      "sha256": "78218382027a1af9357520d36eae2acbbb19f217e18d76e3dcb371522167c110",
+      "sha256": "c130c92f21f74041939031dbb138d54d6da27ff961ed40d355c4c91583ad9920",
       "anchors": [
         "vs_native_im_replay_tick",
         "vs_native_im_replay_expired",
