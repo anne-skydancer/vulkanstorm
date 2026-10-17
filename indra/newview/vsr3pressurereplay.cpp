@@ -11,6 +11,9 @@
 #include "llwindow.h"
 #include "llframetimer.h"
 #include "llsdutil.h"
+#include "llsdserialize.h"
+#include <filesystem>
+#include <fstream>
 #include "llprimitive.h"
 #include "llvolumemessage.h"
 #include "llregionhandle.h"
@@ -100,6 +103,25 @@ LLSD                   imageEvidence()
     throw std::runtime_error("R3 pressure image GPU evidence missing");
 }
 } // namespace
+void vs_r3_pressure_replay_pump()
+{
+    // Run before the replay's pending-image gate: a stalled fetch must not hide
+    // the phase deadline or leave qualification waiting for its outer timeout.
+    if (!state || LLFrameTimer::getTotalSeconds() < state->deadline)
+        return;
+    LLSD failure = vs_ui_texture_cache_evidence(true);
+    failure["pressure_step"] = S32(state->step);
+    if (gViewerWindow && gViewerWindow->nativeContext())
+        failure["bias"] = gViewerWindow->nativeContext()->resources().textureMemoryPolicy().bias;
+    if (const char* directory = std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"))
+    {
+        const auto path = std::filesystem::path(directory) / "r3";
+        std::filesystem::create_directories(path);
+        std::ofstream output(path / "pressure-failure.xml");
+        LLSDSerialize::toPrettyXML(failure, output);
+    }
+    throw std::runtime_error("R3 pressure lifecycle timed out at step " + std::to_string(state->step));
+}
 bool vs_r3_pressure_replay_tick(LLSD& report)
 {
     if (!std::getenv("VS_VULKAN_REPLAY_LOCAL_IMAGES") || !std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE") ||
@@ -129,7 +151,7 @@ bool vs_r3_pressure_replay_tick(LLSD& report)
         return false;
     }
     auto& s = *state;
-    require(LLFrameTimer::getTotalSeconds() < s.deadline, "R3 pressure lifecycle timed out");
+    vs_r3_pressure_replay_pump();
     auto image = resources.image("remote:" + textureID.asString());
     if (!image)
         return false;

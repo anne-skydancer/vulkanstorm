@@ -75,7 +75,7 @@ struct VSUIImageProvider::Impl : std::enable_shared_from_this<VSUIImageProvider:
         LLUIImagePtr facade,pixels;
         LLPointer<LLImageRaw> auxiliary;
         U64 generation=0,readyGeneration=0,failedGeneration=0,touched=0,epoch=0;
-        unsigned attempts=0,target=64;
+        unsigned attempts=0,target=64,previousTarget=0,frameTarget=0;
         S32 discard=-1,fullWidth=0,fullHeight=0,components=4;
         U32 resolutionLimit=0;
         double retryAt=0,deadline=0,lastUsed=0;
@@ -579,8 +579,17 @@ LLUIImagePtr VSUIImageProvider::requestWorldImage(const LLUUID& id,unsigned dime
     auto& entry=mImpl->remote[id];
     entry.exactWorld|=exact;
     const unsigned target=std::clamp(dimension,1u,4096u);
-    entry.target=entry.demandFrame==mImpl->demandFrame?std::max(entry.target,target):target;
-    entry.demandFrame=mImpl->demandFrame;
+    // Retain the previous frame's peak while this frame's consumers enumerate,
+    // like the reference texture list's accumulated virtual-size demand. A small
+    // first consumer must not start a coarse fetch before a larger one submits.
+    if(entry.demandFrame!=mImpl->demandFrame)
+    {
+        entry.previousTarget=entry.frameTarget;
+        entry.frameTarget=0;
+        entry.demandFrame=mImpl->demandFrame;
+    }
+    entry.frameTarget=std::max(entry.frameTarget,target);
+    entry.target=std::max(entry.previousTarget,entry.frameTarget);
     return getUIImageByID(id,-1);
 }
 LLUIImagePtr vs_request_world_image(const LLUUID& id,unsigned dimension,bool exact)
