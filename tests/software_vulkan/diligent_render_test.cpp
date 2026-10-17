@@ -626,11 +626,17 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     // no palette approximation; eight code values cover five-bit quantization.
     std::vector<std::uint8_t> compressionPixels(8*8*4);
     for(unsigned i=0;i<64;++i) {compressionPixels[i*4]=73;compressionPixels[i*4+1]=121;compressionPixels[i*4+2]=199;compressionPixels[i*4+3]=255;}
+    const auto beforeCompression=images.statistics();
     auto compressed=images.upload(8,8,compressionPixels,VSWorldContracts::ImageRole::RemoteAsset,true);
     const auto compressionInfo=VSUIRenderer::imageDescription(compressed);
     require((compressionInfo.compression==VSWorldContracts::ImageCompression::BC3)==images.supportsCompression(),
         "Compressed texture selection ignored device capabilities");
     require(!images.supportsCompression() || compressionInfo.gpuBytes==112,"Compressed mip payload byte accounting is wrong");
+    const auto afterCompression=images.statistics();
+    require(afterCompression.residentGPUImageBytes-beforeCompression.residentGPUImageBytes==compressionInfo.gpuBytes &&
+            afterCompression.residentImageSnapshotBytes-beforeCompression.residentImageSnapshotBytes==256 &&
+            afterCompression.residentImageBytes-beforeCompression.residentImageBytes==compressionInfo.gpuBytes+256,
+            "CPU snapshots and GPU payloads were conflated or lost from admission accounting");
     auto compressionPacket=textured;compressionPacket.mesh=quad(0);compressionPacket.image=compressed;
     renderer.draw(rtv,8,8,view,{compressionPacket});
     capture("compression-policy.ppm",[](unsigned,unsigned){return Pixel{73,121,199,255};},8);

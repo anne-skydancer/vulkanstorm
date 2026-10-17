@@ -62,6 +62,8 @@ class LLTextureFetch : public LLWorkerThread
 
 public:
     static std::string getStateString(S32 state);
+    std::size_t nativeDecodeBytesUsed() const {return mNativeDecodeBytes.used();}
+    std::size_t nativeDecodeBytesLimit() const {return mNativeDecodeBytes.limit();}
 
     LLTextureFetch(LLTextureCache* cache, bool threaded, bool qa_mode, bool native_consumer = false);
     ~LLTextureFetch();

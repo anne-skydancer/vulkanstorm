@@ -66,6 +66,10 @@ def texture_cache_completeness(files, source, executable_digest):
                 for name in ('initial','replaced','refused','recovered'):
                     path=child['r3_local_images'][name]['file']
                     if folder+'/'+str(path).replace('\\','/') not in files:raise ValueError('R3 local image omitted from archive: '+str(path))
+                for stage in ('initial','replaced','refused','recovered'):
+                    for image in child['r3_local_material'][stage]:
+                        path=image['file']
+                        if folder+'/'+str(path).replace('\\','/') not in files:raise ValueError('R3 local material omitted from archive: '+str(path))
     except (OSError,ValueError,KeyError,TypeError) as error:
         errors.append('Invalid R3 texture-cache evidence: '+str(error))
     return errors

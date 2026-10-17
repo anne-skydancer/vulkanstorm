@@ -294,6 +294,8 @@ LLSD VSUIImageProvider::textureCacheEvidence(bool includePixels) const
         fetch->getStateStats(&reads,&writes,&waits);
         result["network_requests"]=ll_sd_from_U64(fetch->getTotalNumHTTPRequests());
         result["pending_fetches"]=fetch->getNumRequests();
+        result["decoded_cpu_reservation_bytes"]=ll_sd_from_U64(fetch->nativeDecodeBytesUsed());
+        result["decoded_cpu_reservation_limit_bytes"]=ll_sd_from_U64(fetch->nativeDecodeBytesLimit());
     }
     S32 pendingUploads=0;
     for(const auto& [id,entry]:mImpl->remote) if(entry.preparing || entry.prepared) ++pendingUploads;

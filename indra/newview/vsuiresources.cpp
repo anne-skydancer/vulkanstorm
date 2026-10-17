@@ -472,6 +472,8 @@ LLSD VSUIResources::evidence() const
     result["texture_cache"] = vs_ui_texture_cache_evidence();
     result["deferred_draw_batches"]                                                            = S32(mImpl->deferred_draw_batches);
     result["resident_image_payload_bytes"]=ll_sd_from_U64(stats.residentImageBytes);
+    result["resident_gpu_image_payload_bytes"]=ll_sd_from_U64(stats.residentGPUImageBytes);
+    result["resident_image_snapshot_bytes"]=ll_sd_from_U64(stats.residentImageSnapshotBytes);
     result["image_payload_budget_bytes"]=ll_sd_from_U64(stats.imageBudgetBytes);
     result["image_allocation_refusals"]=ll_sd_from_U64(stats.imageAllocationRefusals);
     result["image_preparation_bytes"]=ll_sd_from_U64(mImpl->imagePreparationBytes.used());

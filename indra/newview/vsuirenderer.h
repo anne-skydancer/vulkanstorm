@@ -36,7 +36,7 @@ public:
         bool alpha_mask = false; // image alpha with tint RGB, like LLUIImage::drawSolid
         std::optional<std::array<Vertex,6>> triangles; // native font geometry, same logical coordinate space
     };
-    struct Statistics { std::uint64_t packets=0,draws=0,vertices=0,residentImageBytes=0,imageBudgetBytes=0,imageAllocationRefusals=0; };
+    struct Statistics { std::uint64_t packets=0,draws=0,vertices=0,residentImageBytes=0,imageBudgetBytes=0,imageAllocationRefusals=0,residentGPUImageBytes=0,residentImageSnapshotBytes=0; };
     VSUIRenderer(Diligent::IRenderDevice*, Diligent::IDeviceContext*);
     ~VSUIRenderer();
     VSUIRenderer(const VSUIRenderer&) = delete;
