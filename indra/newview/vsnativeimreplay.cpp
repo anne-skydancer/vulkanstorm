@@ -81,6 +81,7 @@
 #include "llconsole.h"
 #include "vsplainchat.h"
 #include "llviewerwindow.h"
+#include "llrootview.h"
 #include "llwindow.h"
 #include "llweb.h"
 #include "llslurl.h"
