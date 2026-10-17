@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="buy land" title="Torpaq alma">
+    <floater.string name="estimated_zero">
+        US$ 0.00
+    </floater.string>
 	<floater.string name="can_resell">
 		Başqa şəxsə satıla bilər.
 	</floater.string>
@@ -222,7 +225,7 @@ Bu hissədə 512 m² torpaq var.
 		1000
 	</line_editor>
 	<text name="currency_est">
-		tahmini qiyməti [LOCAL_AMOUNT] olacaq
+		tahmini qiyməti [LOCALAMOUNT] olacaq
 	</text>
 	<text name="currency_balance">
 		Sizin 2100 L$ varınızdır.
@@ -230,4 +233,14 @@ Bu hissədə 512 m² torpaq var.
 	<check_box label="Qrupdan [AMOUNT] m² töhfəni silin." name="remove_contribution"/>
 	<button label="Almaq" name="buy_btn"/>
 	<button label="Ləğv et" name="cancel_btn"/>
+
+    <text name="getting_data">
+				Hesablanır...
+			</text>
+    <text name="currency_links">
+				[http://www.secondlife.com/my/account/payment_method_management.php ödəniş üsulu] | [http://www.secondlife.com/my/account/currency.php pul]
+			</text>
+    <text name="exchange_rate_note">
+				Yeni məzənnəni görmək üçün məbləği yenidən daxil edin.
+			</text>
 </floater>

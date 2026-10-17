@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="buy land" title="Acquista Terreno">
+    <floater.string name="estimated_zero">
+        US$ 0.00
+    </floater.string>
 	<floater.string name="can_resell">
 		Può essere rivenduto.
 	</floater.string>
@@ -208,7 +211,7 @@ Questo lotto consiste in 512 m² di terreno.
 		Compra ulter. L$
 	</text>
 	<text name="currency_est">
-		per circa [LOCAL_AMOUNT]
+		per circa [LOCALAMOUNT]
 	</text>
 	<text name="currency_balance">
 		Possiedi 2.100 L$.
@@ -216,4 +219,14 @@ Questo lotto consiste in 512 m² di terreno.
 	<button label="Compra" name="buy_btn"/>
 	<check_box label="Rimuovi [AMOUNT] m² di contribuzione dal gruppo." name="remove_contribution"/>
 	<button label="Annulla" name="cancel_btn"/>
+
+    <text name="getting_data">
+				Stima in corso......
+			</text>
+    <text name="currency_links">
+				[http://www.secondlife.com/my/account/payment_method_management.php metodo di pagamento] | [http://www.secondlife.com/my/account/currency.php valuta]
+			</text>
+    <text name="exchange_rate_note">
+				Inserisci di nuovo l'importo per vedere l'ultimo tasso di cambio.
+			</text>
 </floater>

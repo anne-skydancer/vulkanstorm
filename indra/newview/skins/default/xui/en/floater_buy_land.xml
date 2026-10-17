@@ -2,13 +2,16 @@
 <floater
  legacy_header_height="18"
  can_minimize="false"
- height="484"
+ height="546"
  layout="topleft"
  name="buy land"
  help_topic="buy_land"
  single_instance="true"
  title="Buy Land"
  width="740">
+    <floater.string name="estimated_zero">
+        US$ 0.00
+    </floater.string>
     <floater.string
      name="can_resell">
         May be resold.
@@ -689,7 +692,7 @@ This parcel is 512 m² of land.
      name="currency_est"
      top="425"
      width="178">
-        for approx. [LOCAL_AMOUNT]
+        for approx. [LOCALAMOUNT]
     </text>
     <text
      type="string"
@@ -709,7 +712,7 @@ This parcel is 512 m² of land.
      layout="topleft"
      left="440"
      name="buy_btn"
-     top="454"
+     top="516"
      width="100" />
     <check_box
      follows="bottom|left"
@@ -727,6 +730,15 @@ This parcel is 512 m² of land.
      layout="topleft"
      left="-90"
      name="cancel_btn"
-     top="454"
+     top="516"
      width="80" />
+
+    <text name="getting_data" follows="top|right" layout="topleft"
+          left="260" top="425" width="178" height="16" visible="false">
+Estimating...
+    </text>
+    <text name="currency_links" follows="left|bottom" layout="topleft"
+          left="72" top="470" width="650" height="16" visible="false">[http://www.secondlife.com/my/account/payment_method_management.php payment method] | [http://www.secondlife.com/my/account/currency.php currency]</text>
+    <text name="exchange_rate_note" follows="left|bottom" layout="topleft"
+          left="72" top="490" width="650" height="16" visible="false">Re-enter amount to see the latest exchange rate.</text>
 </floater>

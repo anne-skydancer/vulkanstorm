@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="buy land" title="購買土地">
+    <floater.string name="estimated_zero">
+        US$ 0.00
+    </floater.string>
 	<floater.string name="can_resell">
 		可以再出售。
 	</floater.string>
@@ -216,7 +219,7 @@
 		購買更多 L$
 	</text>
 	<text name="currency_est">
-		花費大約 [LOCAL_AMOUNT]
+		花費大約 [LOCALAMOUNT]
 	</text>
 	<text name="currency_balance">
 		你有 2.100 L$。
@@ -224,4 +227,14 @@
 	<button label="購買" name="buy_btn" />
 	<check_box label="從群組移除 [AMOUNT] 平方公尺的捐出地。" name="remove_contribution" />
 	<button label="取消" name="cancel_btn" />
+
+    <text name="getting_data">
+				估算中…
+			</text>
+    <text name="currency_links">
+				[http://www.secondlife.com/my/account/payment_method_management.php 付費方式] | [http://www.secondlife.com/my/account/currency.php 幣種]
+			</text>
+    <text name="exchange_rate_note">
+				重新輸入金額即可檢視最新的匯率。
+			</text>
 </floater>

@@ -460,6 +460,9 @@ void LLCurrencyUIManager::Impl::updateUI()
         mPanel.getChildView("currency_action")->setVisible(false);
         mPanel.getChildView("currency_amt")->setVisible(false);
         mPanel.getChildView("currency_est")->setVisible(false);
+        mPanel.getChildView("getting_data")->setVisible(false);
+        mPanel.getChildView("currency_links")->setVisible(false);
+        mPanel.getChildView("exchange_rate_note")->setVisible(false);
         return;
     }
 
