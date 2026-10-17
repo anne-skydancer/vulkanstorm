@@ -241,7 +241,7 @@ VSUIRenderer::FontAtlas VSUIRenderer::uploadPreparedTexture(const VSTextureUploa
         VSWorldContracts::ColorEncoding::EncodedSRGB,VSWorldContracts::AlphaMode::Blend,role,image->generation};
     image->description.alpha=alphaMode(rgba);
     image->description.mipLevels=desc.MipLevels;
-    image->description.compression=prepared.compressed?VSWorldContracts::ImageCompression::BC3:VSWorldContracts::ImageCompression::None;
+    image->description.compression=prepared.compressed?VSWorldContracts::ImageCompression::BC3:VSWorldContracts::ImageCompression::Uncompressed;
     image->description.gpuBytes=gpuBytes;
     image->pixels=rgba;
     image->usage.attach(mImpl->imageUsage,gpuBytes,rgba.size());

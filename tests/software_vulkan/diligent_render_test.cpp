@@ -651,7 +651,7 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     renderer.draw(rtv,8,8,view,{compressionPacket});
     capture("compression-replacement.ppm",[](unsigned,unsigned){return Pixel{0,0,255,255};});
     for(const auto role:{VSWorldContracts::ImageRole::CoreUI,VSWorldContracts::ImageRole::Media,VSWorldContracts::ImageRole::AvatarComposite})
-        require(VSUIRenderer::imageDescription(images.upload(8,8,compressionPixels,role,true)).compression==VSWorldContracts::ImageCompression::None,
+        require(VSUIRenderer::imageDescription(images.upload(8,8,compressionPixels,role,true)).compression==VSWorldContracts::ImageCompression::Uncompressed,
             "An exact-pixel image role was compressed");
     std::cout<<"TEXTURE_BC3_SUPPORTED="<<images.supportsCompression()<<"\nTEXTURE_COMPRESSED_GPU_BYTES="<<compressionInfo.gpuBytes<<'\n';
 
