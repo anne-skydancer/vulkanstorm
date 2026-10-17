@@ -1,5 +1,6 @@
 // Required native login/progress/alert controls; optional viewer UI remains gated. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "ao.h"
 #include "llfloaterinventorysettings.h"
 #include "llfloatermarketplacelistings.h"
 #include "llfloaterlinkreplace.h"
@@ -215,7 +216,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
     return std::make_unique<VSUIAdmission>(
         [](const std::type_info& t)
         {
-            const bool admitted = t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
+            const bool admitted = t == typeid(FloaterAO) || t == typeid(LLFloaterSidePanelContainer) || t == typeid(LLSidepanelInventory) ||
                 t == typeid(LLPanelMainInventory) || LLPanelMainInventory::isNativeInternalType(t) ||
                 t == typeid(LLPanelMarketplaceInbox) || t == typeid(LLInboxInventoryPanel) ||
                 t == typeid(LLInboxFolderViewFolder) || t == typeid(LLInboxFolderViewItem) || t == typeid(LLInventoryGallery) || t == typeid(LLInventoryGalleryItem) ||
@@ -331,7 +332,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "fs_partial_inventory" || name == "properties" || name == "item_properties" ||
             name == "change_item_thumbnail" || name == "preview_sound" || name == "preview_script" ||
             name == "script_colors" || name == "upload_image" || name == "upload_sound" ||
-            name == "pay_resident" || name == "display_name"; },
+            name == "pay_resident" || name == "display_name" || name == "animation_overrider"; },
         [](std::string_view name) { return name == "experiences_panel" || name == "llpanelexperiencepicker" || name == "experience_log" || name == "llpanelmarketplacelistings" || name == "marketplace_listings_panel" || name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
             name == "panel_marketplace_inbox" || name == "inventory_gallery" || name == "progress_view" || name == "progress_view_mini" || name == "popup_holder" ||
             name == "status" || name == "volumepulldown_floater" || name == "navigation_bar" || name == "toolbar_view" || name == "toolbar view" || name == "native_nearby_chat" || name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
@@ -354,7 +355,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view name)
         {
-            return name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
+            return name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
                    name == "preferences" || name == "profile" || name == "contact_sets" ||
                    name == "conversation_log" || name == "block_list" || name == "group_titles";
         },
@@ -406,7 +407,9 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                        setting == "FSUseBuiltInHistory" || setting == "PlainTextChatHistory" ||
                        setting == "ShowNavbarNavigationPanel" || setting == "ShowNavbarFavoritesPanel" ||
                        setting == "NavBarShowCoordinates" || setting == "NavBarShowParcelProperties" ||
-                       setting == "MenuSearch" || setting == "ShowNetStats" || setting == "MuteAudio";
+                       setting == "MenuSearch" || setting == "ShowNetStats" || setting == "MuteAudio" ||
+                       setting == "FSIgnoreAdHocSessions" || setting == "FSReportIgnoredAdHocSession" ||
+                       setting == "FSDontIgnoreAdHocFromFriends";
             }
             if (name == "TeleportHistory.GearMenu.Action" || name == "TeleportHistory.GearMenu.Enable")
             {
@@ -415,6 +418,13 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                        action == "clear_history" || action == "expand_all" || action == "collapse_all";
             }
             static const std::string_view callbacks[] = {
+                // Shared account/notification policy; none requires a scene renderer.
+                "World.SetDoNotDisturb", "World.GetBusy", "View.Status.CheckDoNotDisturb",
+                "World.SetAutorespond", "World.GetAutorespond",
+                "World.SetAutorespondNonFriends", "World.GetAutorespondNonFriends",
+                "World.SetRejectTeleportOffers", "World.GetRejectTeleportOffers",
+                "World.SetRejectFriendshipRequests", "World.GetRejectFriendshipRequests",
+                "World.SetRejectAllGroupInvites", "World.GetRejectAllGroupInvites",
                 "Marketplace.ViewSort.Action", "Marketplace.ViewSort.CheckItem", "Avatar.OpenMarketplace", "LoadSLMarketplace", "OpenGridStatus",
                 "TeleportHistory.TimeZone.Set", "TeleportHistory.TimeZone.Check",
                 "TeleportHistory.TabOpen", "TeleportHistory.TabClose",

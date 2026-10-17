@@ -153,6 +153,9 @@ class FloaterAO
         LLButton* mNextButtonSmall;
         LLCheckBoxCtrl* mOverrideSitsCheckBoxSmall;
 
+        boost::signals2::scoped_connection mReloadConnection;
+        boost::signals2::scoped_connection mAnimationConnection;
+
         bool mCanDragAndDrop;
         bool mImportRunning;
         bool mMore;

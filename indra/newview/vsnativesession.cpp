@@ -2033,6 +2033,9 @@ void VSNativeSession::reset()
 {
     if (mShutdown) return;
     mAppearance.reset();
+    // The AO editor retains set/state pointers into the retiring account.
+    // Destroy it and disconnect its observers before the engine clears them.
+    LLFloaterReg::destroyInstance("animation_overrider");
     if (AOEngine::instanceExists())
         AOEngine::instance().resetAccount();
     gAgent.clearScriptControlState();

@@ -1,5 +1,6 @@
 // Replay ordinary login and native session dispatch against a loopback fixture. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
+#include "ao.h"
 #include "vsr1replay.h"
 #include "vsr2replay.h"
 #include "vsr3replay.h"
@@ -124,6 +125,23 @@ void qualifyScriptNotifications(LLSD& report, const LLHost& host)
 }
 void qualifyConnectedSkinGeometry(LLSD& report)
 {
+    // Use the shipped AO controller and selected skin, including both layouts.
+    require(VSUIAdmission::command("animationoverride"), "Native AO toolbar route is blocked");
+    auto* ao = LLFloaterReg::showTypedInstance<FloaterAO>("animation_overrider");
+    require(ao && ao->isInVisibleChain(), "Shared AO editor failed to open");
+    const bool full = gSavedPerAccountSettings.getBOOL("UseFullAOInterface");
+    ao->getChild<LLButton>("ao_less")->onCommit();
+    require(ao->getChild<LLPanel>("animation_overrider_panel_small")->getVisible() &&
+            !ao->getChild<LLPanel>("animation_overrider_panel")->getVisible(), "AO compact layout did not activate");
+    gViewerWindow->drawNativeUI();
+    ao->getChild<LLButton>("ao_more")->onCommit();
+    require(ao->getChild<LLPanel>("animation_overrider_panel")->getVisible() &&
+            !ao->getChild<LLPanel>("animation_overrider_panel_small")->getVisible(), "AO full layout did not activate");
+    gViewerWindow->drawNativeUI();
+    if (!full) ao->getChild<LLButton>("ao_less")->onCommit();
+    ao->closeFloater();
+    report["ao_editor"]["full_and_compact"] = true;
+
     auto* root = gViewerWindow->getRootView();
     auto* chat = gViewerWindow->nativeChat();
     auto* navigation = root ? root->findChild<LLPanel>("navigation_bar") : nullptr;
@@ -204,6 +222,29 @@ void qualifyConnectedSkinGeometry(LLSD& report)
     };
     status_text("time_and_media_bg", "TimeText");
     status_text("balance_bg", "balance");
+    // These account policies were wrongly excluded by the text-only gate.
+    // Commit the shipped menu twice and require the actual shared state changes.
+    const std::pair<const char*, bool (LLAgent::*)() const> policies[] = {
+        {"Do Not Disturb", &LLAgent::isDoNotDisturb},
+        {"Set Autorespond", &LLAgent::getAutorespond},
+        {"Set Autorespond to non-friends", &LLAgent::getAutorespondNonFriends},
+        {"Automatically reject teleport offers", &LLAgent::getRejectTeleportOffers},
+        {"Reject all friendship requests", &LLAgent::getRejectFriendshipRequests},
+        {"Reject all group invites", &LLAgent::getRejectAllGroupInvites}
+    };
+    for (const auto& [name, state] : policies)
+    {
+        auto* item = gMenuBarView->findChild<LLMenuItemCallGL>(name);
+        require(item, "Shared account policy menu is missing");
+        item->buildDrawLabel();
+        require(item->getEnabled(), "Shared account policy menu remains blocked");
+        const bool original = (gAgent.*state)();
+        item->onCommit();
+        require((gAgent.*state)() != original, "Account policy menu did not change shared state");
+        item->onCommit();
+        require((gAgent.*state)() == original, "Account policy menu did not restore shared state");
+        report["account_policy_menus"][name] = true;
+    }
     // Building every instantiated menu label evaluates the real enabled/check/visible routes,
     // including nested menus, without committing destructive or server actions.
     auto labels = [&](auto&& self, LLView* view) -> void

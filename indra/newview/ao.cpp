@@ -281,8 +281,8 @@ bool FloaterAO::postBuild()
 
     updateSmart();
 
-    AOEngine::instance().setReloadCallback(boost::bind(&FloaterAO::updateList, this));
-    AOEngine::instance().setAnimationChangedCallback(boost::bind(&FloaterAO::onAnimationChanged, this, _1));
+    mReloadConnection = AOEngine::instance().setReloadCallback(boost::bind(&FloaterAO::updateList, this));
+    mAnimationConnection = AOEngine::instance().setAnimationChangedCallback(boost::bind(&FloaterAO::onAnimationChanged, this, _1));
 
     onChangeAnimationSelection();
     mMainInterfacePanel->setVisible(true);
@@ -513,7 +513,13 @@ void FloaterAO::onClickReload()
 
 void FloaterAO::onClickAdd()
 {
-    LLNotificationsUtil::add("NewAOSet", LLSD(), LLSD(), boost::bind(&FloaterAO::newSetCallback, this, _1, _2));
+    const auto handle = getHandle();
+    LLNotificationsUtil::add("NewAOSet", LLSD(), LLSD(),
+        [handle](const LLSD& notification, const LLSD& response)
+        {
+            auto* floater = dynamic_cast<FloaterAO*>(handle.get());
+            return floater ? floater->newSetCallback(notification, response) : false;
+        });
 }
 
 bool FloaterAO::newSetCallback(const LLSD& notification, const LLSD& response)
@@ -547,9 +553,10 @@ bool FloaterAO::newSetCallback(const LLSD& notification, const LLSD& response)
             return false;
         }
 
-        AOEngine::instance().addSet(newSetName, [this](const LLUUID& new_cat_id)
+        const auto handle = getHandle();
+        AOEngine::instance().addSet(newSetName, [handle](const LLUUID&)
         {
-            reloading(true);
+            if (auto* floater = dynamic_cast<FloaterAO*>(handle.get())) floater->reloading(true);
         });
     }
     return false;
@@ -564,7 +571,19 @@ void FloaterAO::onClickRemove()
 
     LLSD args;
     args["AO_SET_NAME"] = mSelectedSet->getName();
-    LLNotificationsUtil::add("RemoveAOSet", args, LLSD(), boost::bind(&FloaterAO::removeSetCallback, this, _1, _2));
+    const auto handle = getHandle();
+    const auto setName = mSelectedSet->getName();
+    const auto setID = mSelectedSet->getInventoryUUID();
+    LLNotificationsUtil::add("RemoveAOSet", args, LLSD(),
+        [handle, setName, setID](const LLSD& notification, const LLSD& response)
+        {
+            auto* floater = dynamic_cast<FloaterAO*>(handle.get());
+            // A delayed confirmation must not remove a newly selected set.
+            if (!floater) return false;
+            const auto* current = AOEngine::instance().getSetByName(setName);
+            if (!current || current->getInventoryUUID() != setID || floater->mSelectedSet != current) return false;
+            return floater->removeSetCallback(notification, response);
+        });
 }
 
 bool FloaterAO::removeSetCallback(const LLSD& notification, const LLSD& response)
