@@ -795,7 +795,7 @@ struct VSWorldGLTF::Impl : std::enable_shared_from_this<Impl>
             update.decoded=nullptr;update.decodedResidency.reset();
         }
         const bool pressure=resources.textureMemoryPolicy().bias>1.9;
-        const auto extent=VSUIRenderer::imageExtent(previous);
+        const auto extent=previous ? VSUIRenderer::imageExtent(previous) : std::array<unsigned,2>{};
         const bool overLimit=!fullRes && (extent[0]>limit || extent[1]>limit);
         if(previous && update.known && update.wanted==wanted &&
             (update.publishedDiscard==desired || (!changedLimit && !overLimit && !pressure && desired==update.publishedDiscard+1))) return previous;
