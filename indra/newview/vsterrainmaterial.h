@@ -6,6 +6,16 @@
 #include <cmath>
 namespace VSTerrainMaterial
 {
+inline std::array<float,4> weights(float a1,float a2,float final)
+{
+    // get_terrain_mix_weights: drop the reference's .1 sampling threshold,
+    // then normalize the surviving contributions.
+    std::array<float,4> value{final*a1,final*(1-a1),(1-final)*a2,(1-final)*(1-a2)};
+    float total=0;
+    for(auto& weight:value) {weight=std::max(weight-.1f,0.f);total+=weight;}
+    for(auto& weight:value) weight/=total;
+    return value;
+}
 inline float bilinear(float v00,float v01,float v10,float v11,float x,float y)
 {
     const float ix=1.f-x,iy=1.f-y;

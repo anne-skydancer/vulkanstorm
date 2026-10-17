@@ -73,13 +73,15 @@ struct LLTimer {static double getTotalSeconds(){return 100.;}};
 struct Image {int refs=1;int getNumRefs()const{return refs;}};
 using LLUIImagePtr=std::shared_ptr<Image>;
 struct Remote {
- bool local=false,fetching=false,preparing=false,prepared=false,uiDemand=true,hasUploadPolicy=true;
+ bool local=false,fetching=false,preparing=false,prepared=false,uiDemand=true,hasUploadPolicy=true,exactWorld=false;
  int discard=0,generation=7,readyGeneration=7,failedGeneration=7,attempts=2;
  double lastUsed=90,retryAt=0;int touched=0;
  LLUIImagePtr facade=std::make_shared<Image>(),pixels=std::make_shared<Image>();
  std::shared_ptr<int> auxiliary=std::make_shared<int>(1);
 };
 struct Resources {
+ struct Policy{double bias=1;} policy;
+ const Policy& textureMemoryPolicy()const{return policy;}
  std::map<std::string,std::shared_ptr<int>> images;
  std::shared_ptr<int> image(const std::string& key){return images[key];}
  void erase(const std::string& key){images.erase(key);}
@@ -91,7 +93,7 @@ struct Impl {
 struct Provider {
  std::shared_ptr<Impl> mImpl=std::make_shared<Impl>();std::vector<LLUUID> requests;
  void getUIImageByID(LLUUID id,int){requests.push_back(id);}
- void pump(){PENDING}
+ void pump(){const unsigned generation=7;PENDING}
 };
 int main(){
  Provider provider;auto& impl=*provider.mImpl;
@@ -107,6 +109,14 @@ int main(){
  assert(!impl.evict({99})); // No payload: no spurious successful reclamation.
  provider.pump();assert(provider.requests.empty()); // Retained hidden control is not demand.
  entry.lastUsed=99.9;provider.pump();assert(provider.requests.size()==1);
+ // An inactive view still pumps coarsening for a previously admitted world
+ // image. UI and explicit full-resolution subscribers retain their policy.
+ entry.lastUsed=90;entry.readyGeneration=7;entry.uiDemand=false;
+ impl.resources.policy.bias=4;provider.requests.clear();provider.pump();
+ assert(provider.requests.size()==1);
+ entry.exactWorld=true;provider.requests.clear();provider.pump();assert(provider.requests.empty());
+ entry.exactWorld=false;entry.uiDemand=true;provider.pump();assert(provider.requests.empty());
+ impl.resources.policy.bias=1;entry.lastUsed=99.9;
  impl.resources.images["remote:1"]=std::make_shared<int>(20);
  assert(!impl.evict({99})); // Recently drawn controls remain resident.
  entry.lastUsed=90;

@@ -539,7 +539,7 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     // synthetic ramp has known endpoint texels, making every layer and seam
     // independently observable without depending on the composition producer.
     VSWorldRenderer::Packet terrain;
-    terrain.terrain=true;terrain.fullbright=true;terrain.doubleSided=true;
+    terrain.terrain=true;terrain.fullbright=true;
     auto terrainSurface=std::make_shared<VSMaterial::State>();
     terrainSurface->samplers[VSMaterial::Occlusion].u=VSWorldContracts::AddressMode::Clamp;
     terrainSurface->samplers[VSMaterial::Occlusion].v=VSWorldContracts::AddressMode::Clamp;
@@ -575,6 +575,87 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     terrainSurface->uv[0].matrix={.5f,0,0,.5f};terrain.surface=terrainSurface;
     renderer.draw(rtv,8,8,view,{terrain});
     capture("terrain-scale-after.ppm",[](unsigned,unsigned){return Pixel{0,255,0,255};});
+    auto pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>();
+    pbrTerrain->blend=terrain.channels[3];pbrTerrain->planar=1;
+    for(auto& layer:pbrTerrain->layers) {layer.pbr=true;layer.base={.5f,.5f,.5f,1};}
+    for(auto& layer:pbrTerrain->images)layer[0]=images.upload(1,1,{128,128,128,255});
+    terrain.terrainMaterial=pbrTerrain;
+    renderer.draw(rtv,8,8,view,{terrain});
+    capture("terrain-pbr-linear-factor.ppm",[](unsigned,unsigned){return Pixel{92,92,92,255};});
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    pbrTerrain->layers[0].base={0,0,0,1};pbrTerrain->layers[0].emissive={1,0,0};
+    pbrTerrain->images[0][3]=images.upload(1,1,{128,0,0,255});
+    terrain.terrainMaterial=pbrTerrain;
+    renderer.draw(rtv,8,8,view,{terrain});
+    capture("terrain-pbr-emissive.ppm",[](unsigned,unsigned){return Pixel{128,0,0,255};});
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    pbrTerrain->detail=-1;terrain.terrainMaterial=pbrTerrain;
+    renderer.draw(rtv,8,8,view,{terrain});
+    capture("terrain-pbr-detail-emissive.ppm",[](unsigned,unsigned){return Pixel{0,0,0,255};});
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    pbrTerrain->layers[0].base={1,1,1,1};pbrTerrain->layers[0].emissive={};
+    pbrTerrain->images[0][0]=images.upload(1,1,{255,255,255,255});
+    pbrTerrain->images[0][2]=images.upload(1,1,{0,255,0,255});
+    terrain.terrainMaterial=pbrTerrain;
+    renderer.draw(rtv,8,8,view,{terrain});
+    capture("terrain-pbr-occlusion.ppm",[](unsigned,unsigned){return Pixel{0,0,0,255};});
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    pbrTerrain->detail=-2;terrain.terrainMaterial=pbrTerrain;
+    renderer.draw(rtv,8,8,view,{terrain});
+    capture("terrain-pbr-detail-occlusion.ppm",[](unsigned,unsigned){return Pixel{255,255,255,255};});
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    pbrTerrain->images[0][1]=images.upload(1,1,{255,128,128,255});
+    terrain.terrainMaterial=pbrTerrain;terrain.fullbright=false;
+    auto terrainNormalView=view;terrainNormalView.sun={1,0,0,0};terrainNormalView.ambient={0,0,0,0};
+    renderer.draw(rtv,8,8,terrainNormalView,{terrain});
+    capture("terrain-pbr-normal.ppm",[](unsigned,unsigned){return Pixel{255,255,255,255};});
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    pbrTerrain->layers[0].normalTangent={0,1,1,0};terrain.terrainMaterial=pbrTerrain;
+    terrainNormalView.sun={0,1,0,0};
+    renderer.draw(rtv,8,8,terrainNormalView,{terrain});
+    capture("terrain-pbr-normal-rotation.ppm",[](unsigned,unsigned){return Pixel{255,255,255,255};});
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    pbrTerrain->detail=-3;terrain.terrainMaterial=pbrTerrain;
+    renderer.draw(rtv,8,8,terrainNormalView,{terrain});
+    capture("terrain-pbr-detail-normal.ppm",[](unsigned,unsigned){return Pixel{0,0,0,255};});
+    terrain.fullbright=true;
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    pbrTerrain->detail=0;
+    const std::array<Pixel,4> terrainColors{{{255,0,0,255},{0,255,0,255},{0,0,255,255},{255,255,255,255}}};
+    const std::array<Pixel,7> terrainLinearExpected{{{255,0,0,255},{188,188,0,255},{0,255,0,255},
+        {0,188,188,255},{0,0,255,255},{188,188,255,255},{255,255,255,255}}};
+    for(unsigned layer=0;layer<4;++layer) {
+        pbrTerrain->layers[layer].base={1,1,1,1};pbrTerrain->layers[layer].emissive={};
+        pbrTerrain->images[layer]={};
+        const auto color=terrainColors[layer];
+        pbrTerrain->images[layer][0]=images.upload(1,1,{color[0],color[1],color[2],color[3]});
+    }
+    for(unsigned layer=0;layer<7;++layer) {
+        auto vertices=scaleVertices;
+        for(auto& vertex:vertices)vertex.u1=compositions[layer];
+        terrain.mesh=renderer.upload(vertices,{0,2,1,1,2,3});
+        terrain.terrainMaterial=pbrTerrain;
+        renderer.draw(rtv,8,8,view,{terrain});
+        const auto name="terrain-pbr-layer-"+std::to_string(layer)+".ppm";
+        const auto expected=terrainLinearExpected[layer];
+        capture(name.c_str(),[expected](unsigned,unsigned){return expected;});
+    }
+    // Paintmap RGB encodes layers 1..3; layer 0 is the remaining weight.
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    pbrTerrain->paint=true;pbrTerrain->blend=images.upload(1,1,{0,255,0,255});
+    terrain.terrainMaterial=pbrTerrain;
+    renderer.draw(rtv,8,8,view,{terrain});
+    capture("terrain-pbr-paint.ppm",[](unsigned,unsigned){return Pixel{0,0,255,255};});
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    pbrTerrain->blend=images.upload(1,1,{0,0,0,255});terrain.terrainMaterial=pbrTerrain;
+    renderer.draw(rtv,8,8,view,{terrain});
+    capture("terrain-pbr-paint-default.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
+    std::array<std::weak_ptr<const VSUIRenderer::Texture>,4> terrainRetirement;
+    for(unsigned layer=0;layer<4;++layer) terrainRetirement[layer]=pbrTerrain->images[layer][0];
+    terrain.terrainMaterial.reset();pbrTerrain.reset();
+    for(const auto& image:terrainRetirement) require(!image.expired(),"Terrain submission released an image before retirement");
+    renderer.retire();
+    for(const auto& image:terrainRetirement) require(image.expired(),"Completed terrain submission retained a material image");
     // Production material/UV/color-space charts, independently specified pixels.
     VSWorldRenderer::Packet materialPacket=textured;
     auto surface=std::make_shared<VSMaterial::State>();

@@ -10,6 +10,29 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class TerrainMaterials(unittest.TestCase):
+    def test_terrain_qualification_requires_every_layer_and_pixels(self):
+        import sys
+        sys.path.insert(0, str(ROOT / 'scripts'))
+        from run_vulkan_session_replay import r3_terrain_contracts_passed
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'r3/terrain').mkdir(parents=True)
+            record=dict(complete=True,live_scale_transform=True,paint_bake=True,paint_deleted=True,
+                        paint_bit_depth=1,layers=[])
+            for layer,color in enumerate(((255,0,0,255),(0,255,0,255),(0,0,255,255),(255,255,255,255))):
+                relative=f'r3/terrain/paint-layer-{layer}.rgba'
+                (root/relative).write_bytes(bytes(color)*64*64)
+                record['layers'].append(dict(file=relative,layer=layer,pixels_verified=True))
+            report={'r3_terrain':record}
+            self.assertTrue(r3_terrain_contracts_passed(report,root))
+            record['paint_deleted']=False
+            self.assertFalse(r3_terrain_contracts_passed(report,root))
+            record['paint_deleted']=True
+            last=root/record['layers'][3]['file'];original=last.read_bytes()
+            last.write_bytes(original[:-1]+b'\x00')
+            self.assertFalse(r3_terrain_contracts_passed(report,root))
+            last.write_bytes(original);record['layers'].pop()
+            self.assertFalse(r3_terrain_contracts_passed(report,root))
+
     def test_composition_matches_reference_height_and_corner_policy(self):
         reference = (ROOT / 'indra/newview/llvlcomposition.cpp').read_text()
         bilinear = method(reference, 'F32 bilinear(')

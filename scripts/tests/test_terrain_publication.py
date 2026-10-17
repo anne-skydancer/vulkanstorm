@@ -22,7 +22,7 @@ class TerrainPublication(unittest.TestCase):
 #include <vector>
 using U32=unsigned;using U64=unsigned long long;using S32=int;using F32=float;
 struct Origin{double mdV[3]{};};Origin from_region_handle(U64){return {};}
-struct Settings{float getF32(const char*){return 16;}}gSavedSettings;
+struct Settings{float getF32(const char*){return 16;}bool getBOOL(const char*){return false;}}gSavedSettings;
 struct LLUUID {int id=0;bool notNull()const{return id!=0;}bool isNull()const{return id==0;}std::string asString()const{return std::to_string(id);}};
 LLUUID vs_native_image_id(LLUUID id){return id;}
 void vs_request_world_image(LLUUID,unsigned){}
@@ -35,6 +35,7 @@ struct VSWorldRenderer {
  struct Vertex{float x,y,z,nx,ny,nz,u,v;};
  struct Packet{Mesh mesh;std::shared_ptr<int> image;bool background=false,fullbright=false,terrain=false,alpha=false;
  std::array<std::shared_ptr<int>,4> channels{};std::shared_ptr<const VSMaterial::State> surface;
+ std::shared_ptr<const int> terrainMaterial;
  U64 terrainKey=0,objectGeneration=0;std::array<float,4> color{1,1,1,1};float distanceSquared=0;};
  Mesh upload(const std::vector<Vertex>&,const std::vector<unsigned>&){return std::make_shared<int>(80);}
 };
@@ -48,6 +49,7 @@ struct Scene {
  struct Ground {VSWorldRenderer::Mesh mesh;unsigned size=16;};std::map<U64,Ground> ground;
  std::array<float,4> terrainStarts{},terrainRanges{1,1,1,1};std::array<LLUUID,4> terrainTextures{{{1},{2},{3},{4}}};
  std::shared_ptr<int> terrainRamp(){return std::make_shared<int>(88);}
+ std::shared_ptr<const int> terrainMaterial(unsigned){return {};}
  U64 handle=0,incarnation=7;bool waterKnown=false;float waterHeight=0;unsigned width=256,regionHeight=256;
  float height(int,int,float){return 0;}
 BODY

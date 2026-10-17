@@ -19,7 +19,12 @@ MATERIAL_READBACKS=('material-opaque.ppm','material-linear-factor.ppm','material
     'compression-policy.ppm','compression-replacement.ppm','legacy-bump-brightness.ppm',
     'legacy-bump-darkness.ppm','legacy-bump-standard.ppm','legacy-bump-gray.ppm',
     *(f'terrain-layer-{index}.ppm' for index in range(7)),
-    'terrain-scale-before.ppm','terrain-scale-after.ppm')
+    'terrain-scale-before.ppm','terrain-scale-after.ppm',
+    'terrain-pbr-linear-factor.ppm','terrain-pbr-emissive.ppm',
+    'terrain-pbr-detail-emissive.ppm','terrain-pbr-occlusion.ppm','terrain-pbr-detail-occlusion.ppm',
+    'terrain-pbr-normal.ppm','terrain-pbr-normal-rotation.ppm','terrain-pbr-detail-normal.ppm',
+    *(f'terrain-pbr-layer-{index}.ppm' for index in range(7)),
+    'terrain-pbr-paint.ppm','terrain-pbr-paint-default.ppm')
 
 
 @contextmanager

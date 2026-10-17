@@ -348,7 +348,14 @@ struct VSVulkanContext::Impl
         LLCoordWindow size;
         require(window.getSize(&size), "Cannot query native viewer extent");
         if (size.mX <= 0 || size.mY <= 0 || window.getMinimized())
+        {
+            // Coarsening and completion do not depend on producing a visible
+            // frame. Keep immutable old images until replacements are admitted.
+            if(resources->textureMemoryPolicy().bias>1.9) worldScene->refreshInactiveImages();
+            renderer->flushUploads();context->Flush();
+            renderer->retire();worldRenderer->retire();
             return false;
+        }
         if (replayTarget && (replayTarget->GetDesc().Width!=unsigned(size.mX) || replayTarget->GetDesc().Height!=unsigned(size.mY)))
         {
             context->SetRenderTargets(0,nullptr,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);

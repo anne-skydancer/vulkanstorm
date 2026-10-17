@@ -981,6 +981,22 @@ void VSWorldGLTF::releaseRenderingResources()
     for(const auto& [index,key]:mImpl->images) mImpl->resources.erase(key);
     mImpl->images.clear();mImpl->imageUpdates.clear();
 }
+void VSWorldGLTF::refreshInactiveImages()
+{
+    if(!mImpl->current() || !mImpl->ready || !mImpl->error.empty()) return;
+    for(const auto& [index,key]:mImpl->images)
+    {
+        const auto previous=mImpl->resources.image(key);
+        const auto& update=mImpl->imageUpdates[index];
+        const auto replacement=mImpl->image(index,std::max({update.target,update.frameDemand,1u}));
+        if(!previous || !replacement || replacement==previous) continue;
+        for(auto& packet:mImpl->publishedPackets)
+        {
+            if(packet.image==previous) packet.image=replacement;
+            for(auto& channel:packet.channels) if(channel==previous) channel=replacement;
+        }
+    }
+}
 VSWorldGLTF::~VSWorldGLTF() = default;
 void VSWorldGLTF::append(std::vector<VSWorldRenderer::Packet>& packets, const LLVector3& position, const LLQuaternion& rotation,
                          const LLVector3& scale, const LLVector3& eye,unsigned viewportHeight)

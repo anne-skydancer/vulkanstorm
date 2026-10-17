@@ -304,7 +304,9 @@ void VSUIImageProvider::pumpImages()
     std::vector<LLUUID> pending;
     for(const auto& [id,entry]:mImpl->remote)
         if(!entry.local && !entry.fetching && !entry.preparing && !entry.prepared && entry.attempts<3 && LLTimer::getTotalSeconds()>=entry.retryAt &&
-            LLTimer::getTotalSeconds()-entry.lastUsed<1.0)
+            (LLTimer::getTotalSeconds()-entry.lastUsed<1.0 ||
+             (!entry.uiDemand && !entry.exactWorld && entry.readyGeneration==generation &&
+              mImpl->resources.textureMemoryPolicy().bias>1.9)))
             pending.push_back(id);
     for(const auto& id:pending) getUIImageByID(id,-2);
 }
