@@ -92,6 +92,7 @@ jobs:
       - run: python scripts/tests/test_native_remote_materials.py
       - run: python scripts/tests/test_vulkan_remote_material_evidence.py
       - run: python scripts/tests/test_vulkan_legacy_material_evidence.py
+      - run: python scripts/tests/test_native_material_capabilities.py
       - run: python scripts/tests/test_vulkan_texture_cache_instances.py
       - run: python scripts/tests/test_vulkan_local_image_evidence.py
       - run: python scripts/tests/test_vulkan_texture_cache_evidence.py
