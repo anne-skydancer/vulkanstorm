@@ -729,6 +729,7 @@ set(viewer_SOURCE_FILES
     llsechandler_basic.cpp
     llselectmgr.cpp
     vscameraview.cpp
+    vsteleportpolicy.cpp
     vsobjectcontext.cpp
     vsobjectproperties.cpp
     llsetkeybinddialog.cpp
@@ -1619,6 +1620,7 @@ set(viewer_HEADER_FILES
     llsechandler_basic.h
     llselectmgr.h
     vscameraview.h
+    vsteleportpolicy.h
     vsobjectcontext.h
     vsobjectproperties.h
     llsetkeybinddialog.h

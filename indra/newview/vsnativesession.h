@@ -154,7 +154,7 @@ public:
     using LocationCallback = std::function<void(const std::string&, const LLVector3&)>;
     bool resolveLocation(const LLVector3d&, LocationCallback);
     bool teleportToRegion(const std::string&, const LLVector3&);
-    bool teleportToLocation(const LLVector3d&);
+    bool teleportToLocation(const LLVector3d&, const LLVector3* lookAt = nullptr);
     bool teleportToLandmark(const LLUUID&);
     bool teleportHome() { return teleportToLandmark(LLUUID::null); }
     bool teleportToLure(const LLUUID&, bool godlike);
@@ -192,7 +192,8 @@ private:
     void retireNeighbour(const LLHost&);
     void neighbourCircuitResult(const LLHost&, U64 account, U64 circuit, S32 result);
     void neighbourSeedCoro(LLHost, std::string, U64 account, U64 circuit);
-    bool teleportRequest(U64, const LLVector3&);
+    bool teleportRequest(U64, const LLVector3&, const LLVector3* lookAt = nullptr);
+    void initializeEnvironment();
     void connected();
     void publishProgress();
     void advanceStartup();
@@ -255,6 +256,8 @@ private:
     std::string mRequestedRegion;
     LLVector3 mRequestedPosition;
     double mNavigationDeadline = 0;
+    U32 mTeleportFlags = 0;
+    bool mTeleportArrival = false;
     struct LocationRequest { LLVector3d position; LocationCallback callback; double deadline; };
     std::vector<LocationRequest> mLocationRequests;
     S32 mParcelSequence = 0;

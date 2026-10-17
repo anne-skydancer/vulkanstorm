@@ -173,3 +173,28 @@ The acceptance rule remains 100% production connected UI and keyboard navigation
 No CPU model checkpoint, constructed controller, admission count, or passing subset
 constitutes completion. Remaining native object tools, parcel visual feedback,
 map/appearance/snapshot and other documented families remain open.
+
+
+### Environment lifetime and teleport-admission follow-up
+
+The canonical viewer built and staged successfully at `e9aff5966b`, but strict
+replay `.tmp/uk14` failed during its early R1 region-crossing sequence. The native
+debugger identified a null explicit `LLSimpleton<LLEnvironment>` owner. Native
+startup had bypassed both reference `createInstance()` and `initSingleton()`;
+calling `instance()` did not construct it. This build is not accepted.
+
+The follow-up explicitly creates and initializes the shared environment after
+actual circuit readiness, before initial/crossing services. Account views close
+before environment and parcel cleanup. A compiled regression executes the actual
+simpleton implementation, initialization/cleanup and native creation helper,
+including repeated connection, retirement and relogin. Runtime requalification
+remains required.
+
+The input/service audit also found native teleport entry points bypassing the
+reference admission checks. Shared location/landmark/cancel policies now retain
+the original startup, RLVa and force-command behavior. Native producers preserve
+the requested look vector, reference default look target and godlike lure flags;
+real parcel completion/failure callbacks retire teleport-dependent state.
+Compiled tests compare the original reference admission matrix and execute the
+actual wire producers. These fixes do not close the remaining world tool,
+autopilot, nested editor or complete keyboard/UI requirements by themselves.

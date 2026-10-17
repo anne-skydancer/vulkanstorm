@@ -100,12 +100,15 @@ jobs:
       - run: python scripts/tests/test_native_region_info.py
       - run: python scripts/tests/test_native_avatar_standing.py
       - run: python scripts/tests/test_native_camera_mode.py
+      - run: python scripts/tests/test_shared_teleport_admission.py
       - run: python scripts/tests/test_native_parcel_cpu.py
       - run: python scripts/tests/test_native_parcel_parser.py
       - run: python scripts/tests/test_native_land_lifecycle.py
       - run: python scripts/tests/test_native_parcel_replies.py
       - run: python scripts/tests/test_native_covenant_lifecycle.py
       - run: python scripts/tests/test_native_environment_cpu.py
+      - run: python scripts/tests/test_native_environment_lifecycle.py
+      - run: python scripts/tests/test_native_source_fixture.py
       - run: python scripts/tests/test_native_parcel_boundaries.py
       - run: python scripts/tests/test_native_parcel_transactions.py
       - run: python scripts/tests/test_native_open_region_settings.py

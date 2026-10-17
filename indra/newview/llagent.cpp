@@ -27,6 +27,7 @@
 
 #include "llviewerprecompiledheaders.h"
 #include "vsregionlimits.h"
+#include "vsteleportpolicy.h"
 #include "vsavatarservices.h"
 #include "llcharacter.h"
 #include "vsnativeim.h"
@@ -5279,24 +5280,7 @@ void LLAgent::teleportViaLandmark(const LLUUID& landmark_asset_id)
 #if VS_NATIVE_VULKAN
     if (auto session = VSNativeSession::active()) { session->teleportToLandmark(landmark_asset_id); return; }
 #endif
-    // <FS:Ansariel> FIRE-21576: Prevent TPing home while still logging in if RLVa is enabled
-    if (RlvActions::isRlvEnabled() && LLStartUp::getStartupState() < STATE_STARTED)
-    {
-        return;
-    }
-    // </FS:Ansariel>
-
-// [RLVa:KB] - Checked: 2010-08-22 (RLVa-1.2.1a) | Modified: RLVa-1.2.1a
-    // NOTE: we'll allow teleporting home unless both @tplm=n *and* @tploc=n restricted
-    if ( (rlv_handler_t::isEnabled()) &&
-         ( ( (landmark_asset_id.notNull()) ? gRlvHandler.hasBehaviour(RLV_BHVR_TPLM)
-                                           : gRlvHandler.hasBehaviour(RLV_BHVR_TPLM) && gRlvHandler.hasBehaviour(RLV_BHVR_TPLOC) ) ||
-           ((gRlvHandler.hasBehaviour(RLV_BHVR_UNSIT)) && (isAgentAvatarValid()) && (gAgentAvatarp->isSitting())) ))
-    {
-        RlvUtil::notifyBlocked(RlvStringKeys::Blocked::Teleport);
-        return;
-    }
-// [/RLVa:KB]
+    if (!vs_teleport_landmark_allowed(landmark_asset_id)) return;
 
     if (landmark_asset_id.isNull())
     {
@@ -5432,26 +5416,7 @@ void LLAgent::teleportViaLocation(const LLVector3d& pos_global)
 #if VS_NATIVE_VULKAN
     if (auto session = VSNativeSession::active()) { session->teleportToLocation(pos_global); return; }
 #endif
-// [RLVa:KB] - Checked: RLVa-2.0.0
-    if ( (RlvActions::isRlvEnabled()) && (!RlvUtil::isForceTp()) )
-    {
-        if (LLStartUp::getStartupState() < STATE_STARTED)
-        {
-            return;
-        }
-
-        if ( (RlvActions::isLocalTp(pos_global)) ? !RlvActions::canTeleportToLocal(pos_global) : !RlvActions::canTeleportToLocation() )
-        {
-            RlvUtil::notifyBlocked(RlvStringKeys::Blocked::Teleport);
-            return;
-        }
-
-        if ( (gRlvHandler.getCurrentCommand()) && (RLV_BHVR_TPTO == gRlvHandler.getCurrentCommand()->getBehaviourType()) )
-        {
-            gRlvHandler.setCanCancelTp(false);
-        }
-    }
-// [/RLVa:KB]
+    if (!vs_teleport_location_allowed(pos_global)) return;
 
     mTeleportRequest = LLTeleportRequestPtr(new LLTeleportRequestViaLocation(pos_global));
     startTeleportRequest();
@@ -5585,26 +5550,14 @@ void LLAgent::doTeleportViaLocation(const LLVector3d& pos_global)
 void LLAgent::teleportViaLocationLookAt(const LLVector3d& pos_global, const LLVector3& look_at)
 {
 #if VS_NATIVE_VULKAN
-    if (auto session = VSNativeSession::active()) { session->teleportToLocation(pos_global); return; }
-#endif
-    if ( (RlvActions::isRlvEnabled()) && (!RlvUtil::isForceTp()) )
+    if (auto session = VSNativeSession::active())
     {
-        if (LLStartUp::getStartupState() < STATE_STARTED)
-        {
-            return;
-        }
-
-        if ( (RlvActions::isLocalTp(pos_global)) ? !RlvActions::canTeleportToLocal(pos_global) : !RlvActions::canTeleportToLocation() )
-        {
-            RlvUtil::notifyBlocked(RlvStringKeys::Blocked::Teleport);
-            return;
-        }
-
-        if ( (gRlvHandler.getCurrentCommand()) && (RLV_BHVR_TPTO == gRlvHandler.getCurrentCommand()->getBehaviourType()) )
-        {
-            gRlvHandler.setCanCancelTp(false);
-        }
+        const LLVector3 direction = look_at.isExactlyZero() ? LLViewerCamera::getInstance()->getAtAxis() : look_at;
+        session->teleportToLocation(pos_global, &direction);
+        return;
     }
+#endif
+    if (!vs_teleport_location_allowed(pos_global)) return;
 
     mTeleportRequest = LLTeleportRequestPtr(new LLTeleportRequestViaLocationLookAt(pos_global, (look_at.isExactlyZero()) ? LLViewerCamera::getInstance()->getAtAxis() : look_at));
     startTeleportRequest();
