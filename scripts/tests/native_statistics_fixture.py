@@ -401,6 +401,7 @@ struct Viewer{int shown=0;bool full=false;float percent=0;std::string text;
  void setShowProgress(bool s,bool f){shown+=s;full=f;}void setProgressPercent(float f){percent=f;}
  void setProgressString(std::string s){text=s;}}viewer;Viewer*gViewerWindow=&viewer;
 struct LLAppViewer{bool quit=false;static LLAppViewer*instance(){static LLAppViewer a;return &a;}void forceQuit(){quit=true;}};
+float gLogoutMaxTime=6;
 double now(){return 10;}
 struct VSNativeSession{enum class Phase{Connected,Connecting,Logout,Login};Phase mPhase=Phase::Connected;
  bool mQuit=false;double mDeadline=0;int sent=0,released=0;
@@ -411,7 +412,7 @@ struct VSNativeSession{enum class Phase{Connected,Connecting,Logout,Login};Phase
  void requestLogout(bool);};
 BODY
 int main(){VSNativeSession s;s.requestLogout(false);assert(s.mPhase==VSNativeSession::Phase::Logout);
- assert(s.sent==2 && s.released==1 && s.mDeadline==15 && viewer.shown==1 && viewer.full && viewer.percent==100 && viewer.text=="LoggingOut");
+ assert(s.sent==2 && s.released==1 && s.mDeadline==16 && viewer.shown==1 && viewer.full && viewer.percent==100 && viewer.text=="LoggingOut");
  s.requestLogout(true);assert(s.mQuit && s.sent==2 && s.released==1 && viewer.shown==1);
  s.mPhase=VSNativeSession::Phase::Connected;gSavedSettings.disable=true;s.requestLogout(false);assert(!viewer.full && viewer.shown==2);
  s.mPhase=VSNativeSession::Phase::Login;s.requestLogout(true);assert(LLAppViewer::instance()->quit);}
@@ -421,6 +422,44 @@ int main(){VSNativeSession s;s.requestLogout(false);assert(s.mPhase==VSNativeSes
         self.assertLess(finish.index('setShowProgress(false, true)'),finish.index('reset()'))
         owner=(ROOT/'indra/newview/vsviewerwindow.cpp').read_text()
         self.assertIn('sendChildToFront(mProgressView)',function(owner,'void LLViewerWindow::drawNativeUI('))
+    def test_connecting_progress_uses_reference_stage_text_and_motd(self):
+        source=(ROOT/'indra/newview/vsnativesession.cpp').read_text()
+        progress=function(source,'void VSNativeSession::publishProgress(')
+        block=function(progress,'if (mPhase==Phase::Connecting && gViewerWindow)')
+        self.compile(r'''#include <cassert>
+#include <string>
+using F32=float;
+struct Viewer {float percent=30;std::string text,message;
+ void setProgressPercent(float p){assert(p>=percent);percent=p;}
+ void setProgressString(const std::string&s){text=s;}void setProgressMessage(const std::string&s){message=s;}} viewer;
+auto* gViewerWindow=&viewer;
+namespace LLTrans {std::string getString(const char* key){return key;}}
+struct Agent {std::string mMOTD="Shared MOTD";}gAgent;
+struct Session {enum class Phase{Connecting,Connected,Logout};Phase mPhase=Phase::Connecting;
+ bool mSeedReady=false,mHandshake=false;void progress(){
+''' + block + r'''}};
+int main(){Session s;s.progress();assert(viewer.percent==40 && viewer.text=="LoginRequestSeedCapGrant" && viewer.message==gAgent.mMOTD);
+ s.mSeedReady=true;s.progress();assert(viewer.percent==59 && viewer.text=="LoginWaitingForRegionHandshake");
+ s.mHandshake=true;s.progress();assert(viewer.percent==60 && viewer.text=="LoginConnectingToRegion");
+ s.mPhase=Session::Phase::Logout;viewer.text="LoggingOut";s.progress();assert(viewer.text=="LoggingOut");}
+''')
+
+    def test_quit_keeps_progress_while_return_to_login_hides_it(self):
+        source=(ROOT/'indra/newview/vsnativesession.cpp').read_text()
+        body=function(source,'void VSNativeSession::finishLogout(')
+        self.compile(r'''#include <cassert>
+struct Viewer {bool visible=true;void setShowProgress(bool show,bool){visible=show;}} viewer;
+auto* gViewerWindow=&viewer;
+struct LLAppViewer {int quits=0;static LLAppViewer* instance(){static LLAppViewer app;return &app;}void forceQuit(){++quits;}};
+int logins=0;void reset_login(){++logins;}
+struct VSNativeSession {bool mQuit=false;int resets=0;void reset(){++resets;mQuit=false;}void finishLogout();};
+''' + body + r'''
+int main(){VSNativeSession s;s.mQuit=true;s.finishLogout();
+ assert(viewer.visible && s.resets==1 && LLAppViewer::instance()->quits==1 && logins==0);
+ s.finishLogout();assert(!viewer.visible && s.resets==2 && logins==1);
+}
+''')
+
     def test_native_toolbar_origin_matches_shared_world_panel_not_navigation_bottom(self):
         source=(ROOT/'indra/newview/vsviewerwindow.cpp').read_text()
         body=function(source,'LLRect nativeToolbarRect(')

@@ -3424,6 +3424,29 @@ bool VSWorldScene::isAttachment(const LLUUID& identity) const
             return true;
     return false;
 }
+#if VS_VULKAN_DIAGNOSTICS
+LLSD VSWorldScene::terrainStatus() const
+{
+    // Cheap, credential-free counters for live terrain/FPS diagnosis. Avoid
+    // serializing every object, avatar and image as the full evidence does.
+    LLSD status;
+    status["received_patches"] = S32(mImpl->ground.size());
+    S32 meshes = 0;
+    for (const auto& [key, patch] : mImpl->ground) meshes += bool(patch.mesh);
+    status["published_meshes"] = meshes;
+    status["detail_ids_known"] = 0;
+    status["detail_images_ready"] = 0;
+    for (const auto& id : mImpl->terrainTextures)
+    {
+        if (id.isNull()) continue;
+        status["detail_ids_known"] = status["detail_ids_known"].asInteger() + 1;
+        if (mImpl->resources.image("remote:" + vs_native_image_id(id).asString()))
+            status["detail_images_ready"] = status["detail_images_ready"].asInteger() + 1;
+    }
+    status["terrain_bytes"] = F64(mImpl->budgets->terrainBytes.used());
+    return status;
+}
+#endif
 LLSD VSWorldScene::evidence() const
 {
     // Counts live decoded owners, including generations retained after cache

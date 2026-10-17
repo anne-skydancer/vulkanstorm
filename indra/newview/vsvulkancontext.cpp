@@ -159,6 +159,13 @@ struct VSVulkanContext::Impl
     std::string                                       adapter;
     LLSD renderer_info;
     double lastTextureMemoryUpdate=0;
+#if VS_VULKAN_DIAGNOSTICS
+    const bool profileFrames = std::getenv("VS_VULKAN_FRAME_PROFILE") != nullptr;
+    using ProfileClock = std::chrono::steady_clock;
+    ProfileClock::time_point profileEpoch = ProfileClock::now();
+    unsigned profileCount = 0;
+    double profilePackets = 0, profileWorld = 0, profileUI = 0, profilePresent = 0;
+#endif
     FrameObserver observer;
     SceneObserver sceneObserver;
 #if !LL_WINDOWS
@@ -333,6 +340,10 @@ struct VSVulkanContext::Impl
     bool present(float dpi, const std::function<void()>& draw)
     {
         using namespace Diligent;
+#if VS_VULKAN_DIAGNOSTICS
+        double packetMilliseconds = 0, worldMilliseconds = 0;
+        unsigned terrainPackets = 0, scenePackets = 0;
+#endif
         updateTextureMemory();
         LLCoordWindow size;
         require(window.getSize(&size), "Cannot query native viewer extent");
@@ -383,8 +394,27 @@ struct VSVulkanContext::Impl
             const float distance=gSavedSettings.getF32("RenderFarClip");
             auto view    = VSWorldScene::cameraView(eye, camera.at, camera.up, size.mX, size.mY, distance);
             view.hudZoom = gAgentCamera.mHUDCurZoom;
-            worldRenderer->draw(target, size.mX, size.mY, view, worldScene->packets(eye, distance, size.mY, size.mX));
+#if VS_VULKAN_DIAGNOSTICS
+            const auto packetStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};
+#endif
+            auto scene = worldScene->packets(eye, distance, size.mY, size.mX);
+#if VS_VULKAN_DIAGNOSTICS
+            const auto submitStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};
+            if (profileFrames)
+            {
+                packetMilliseconds = std::chrono::duration<double,std::milli>(submitStart-packetStart).count();
+                scenePackets = unsigned(scene.size());
+                terrainPackets = unsigned(std::count_if(scene.begin(), scene.end(), [](const auto& packet){return packet.terrain;}));
+            }
+#endif
+            worldRenderer->draw(target, size.mX, size.mY, view, scene);
+#if VS_VULKAN_DIAGNOSTICS
+            if (profileFrames) worldMilliseconds = std::chrono::duration<double,std::milli>(ProfileClock::now()-submitStart).count();
+#endif
         }
+#if VS_VULKAN_DIAGNOSTICS
+        const auto uiStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};
+#endif
         if (sceneObserver) sceneObserver(device, context, target, size.mX, size.mY);
         resources->begin(size.mX, size.mY, dpi);
 #if VS_VULKAN_DIAGNOSTICS
@@ -404,6 +434,11 @@ struct VSVulkanContext::Impl
             observer(device, context, target, size.mX, size.mY, dpi, packets);
 #if VS_VULKAN_DIAGNOSTICS
         const auto parityPresentStart=std::chrono::steady_clock::now();
+        if (profileFrames)
+        {
+            profilePackets += packetMilliseconds; profileWorld += worldMilliseconds;
+            profileUI += std::chrono::duration<double,std::milli>(ProfileClock::now()-uiStart).count();
+        }
 #endif
         if (swapchain) swapchain->Present(gSavedSettings.getBOOL("RenderVSyncEnable") ? 1 : 0);
         else
@@ -418,6 +453,30 @@ struct VSVulkanContext::Impl
 #endif
         renderer->retire();
         worldRenderer->retire();
+#if VS_VULKAN_DIAGNOSTICS
+        if (profileFrames)
+        {
+            const auto end = ProfileClock::now();
+            profilePresent += std::chrono::duration<double,std::milli>(end-parityPresentStart).count();
+            ++profileCount;
+            const auto seconds = std::chrono::duration<double>(end-profileEpoch).count();
+            if (seconds >= 2)
+            {
+                const auto ground = worldScene->terrainStatus();
+                LL_INFOS("NativeFrameProfile") << "frames=" << profileCount << " fps=" << profileCount/seconds
+                    << " packets_cpu_ms=" << profilePackets/profileCount << " world_submit_cpu_ms=" << profileWorld/profileCount
+                    << " ui_cpu_ms=" << profileUI/profileCount << " present_retire_cpu_ms=" << profilePresent/profileCount
+                    << " scene_packets=" << scenePackets << " terrain_packets=" << terrainPackets
+                    << " terrain_received=" << ground["received_patches"].asInteger()
+                    << " terrain_meshes=" << ground["published_meshes"].asInteger()
+                    << " terrain_detail_ids=" << ground["detail_ids_known"].asInteger()
+                    << " terrain_images=" << ground["detail_images_ready"].asInteger()
+                    << " terrain_bytes=" << ground["terrain_bytes"].asReal() << LL_ENDL;
+                profileEpoch=end; profileCount=0;
+                profilePackets=profileWorld=profileUI=profilePresent=0;
+            }
+        }
+#endif
         return true;
     }
 };

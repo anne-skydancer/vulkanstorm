@@ -481,7 +481,7 @@ void FSPanelLogin::reshape(S32 width, S32 height, bool called_from_parent)
     {
         if (LLLayoutPanel* stage = findChild<LLLayoutPanel>("center_stage"))
         {
-            stage->reshape(llmin(width, 1008), stage->getRect().getHeight());
+            stage->setTargetDim(llmin(width, 1008));
             getChild<LLLayoutStack>("main_stack")->updateLayout();
             getChild<LLLayoutStack>("ui_stack")->updateLayout();
         }

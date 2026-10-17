@@ -152,3 +152,31 @@ and retirement for scene cost; pending, limited and full-resolution states
 for embedded image limits. Matching live-login acceptance still needs a user
 retry of the rebuilt canonical executable; a headless replay alone cannot
 prove the real account no longer crashes. Preserve private dump/log evidence.
+
+## Startup/shutdown reference audit and terrain regression report
+
+The user confirms live login now succeeds, but reports ground appearing before
+the null-image fix and absent afterward, plus low FPS. Treat this as an open
+visual regression report, not accepted terrain behavior or a proven causal
+attribution. The exact c0f1d0e290-to-6efe1ebca9 viewer delta contains only two
+null-image guards and the Linux codec include. Preserve these crash fixes while
+tracing ground reception, mesh publication, image readiness and draw submission.
+
+The startup audit found the Release login layout's setTargetDim replaced with
+reshape, native completion hiding the progress view instead of using the shared
+fade, connection progress resetting below authentication, and logout hiding its
+progress before application teardown. Restore the Release layout and shared
+localized progress/fade/cursor completion. Native presentation owns vsync; the
+shared completion method must skip SDL's GL-only vsync call. Keep logout visible
+on quit and use shared gLogoutMaxTime (normally six seconds); return-to-login
+still hides the logout overlay. These corrections are not a declaration of full
+startup/shutdown parity: final snapshots, account/cache persistence and pending
+upload shutdown sequencing still require production work and qualification.
+
+System WPR CPU capture was refused (0xc5585011). Do not infer an FPS bottleneck
+from source inspection. Opt-in VS_VULKAN_FRAME_PROFILE counters in diagnostic
+builds record average packet/world/UI/present CPU times, observed frame cadence,
+submitted terrain packets, and current-region terrain mesh/detail-image counts
+every two seconds. No synthetic replacement ground is introduced. The ignored
+manual capture launcher enables these counters for the next user login; no
+profiling is enabled by default. This is CPU submission timing, not GPU timing.
