@@ -2324,6 +2324,8 @@ if(VS_VULKAN_DIAGNOSTICS)
           vsr3mediareplay.cpp vsr3mediareplay.h
           vsr3gltfreplay.cpp vsr3gltfreplay.h
           vsr3terrainreplay.cpp vsr3terrainreplay.h
+          vsr3pressurereplay.cpp vsr3pressurereplay.h
+          vsr3cachereplay.cpp vsr3cachereplay.h
           vsterrainreplay.cpp vsterrainreplay.h
          vsr2readback.cpp vsr2readback.h
          vsparitybaseline.cpp vsparitybaseline.h

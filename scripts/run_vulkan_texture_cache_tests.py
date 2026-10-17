@@ -51,6 +51,64 @@ def validate_image(row,folder):
     with path.open('rb') as source:digest=hashlib.file_digest(source,'sha256').hexdigest()
     if digest!=row['gpu_rgba_sha256']:raise ValueError('GPU artifact checksum mismatch')
 
+def validate_shutdown(record,folder,requests):
+    import xml.etree.ElementTree as ET
+    from run_vulkan_session_replay import read_llsd
+    shutdown=record['r3_shutdown']
+    if any(shutdown.get(key) is not True for key in ('http_pending','write_queued','ordinary_cleanup')):
+        raise ValueError('Shutdown did not start with real pending cache/fetch work')
+    if shutdown.get('additional_http_requests')!=1 or shutdown.get('write_id')!='a3000000-0000-0000-0000-000000000002':
+        raise ValueError('Invalid pending-shutdown identity or HTTP count')
+    if shutdown.get('read_id')!='a3000000-0000-0000-0000-000000000003':
+        raise ValueError('Invalid pending-shutdown read identity')
+    pending=[row for row in requests if row.get('shutdown_pending') is True and
+             row.get('query',{}).get('texture_id')==[shutdown['read_id']] and row.get('bytes')==0]
+    if len(pending)!=1:
+        raise ValueError('Missing actual HTTP request held pending at shutdown')
+    for key,relative in (('write_completion','r3/pending-cache-write.xml'),('read_observation','r3/pending-cache-read.requested')):
+        if shutdown.get(key)!=relative:
+            raise ValueError('Unexpected pending-shutdown artifact path')
+        path=folder/relative
+        if path.is_symlink() or not path.resolve().is_relative_to(folder.resolve()) or not path.is_file():
+            raise ValueError('Missing pending-shutdown completion evidence')
+    completed=read_llsd(ET.parse(folder/shutdown['write_completion']).getroot())
+    if not (folder/shutdown['read_observation']).read_text().startswith('HTTP request observed;'):
+        raise ValueError('Invalid pending HTTP observation artifact')
+    if any(completed.get(key) is not True for key in ('completed','success','writer_retired')) or completed.get('id')!=shutdown['write_id']:
+        raise ValueError('Ordinary shutdown did not complete and retire its queued cache write')
+    return 1
+
+
+def validate_restart(record,folder):
+    row=record['r3_shutdown_restart'];validate_image(row,folder)
+    if row.get('id')!='a3000000-0000-0000-0000-000000000002' or (row['width'],row['height'],row['discard'])!=(1024,1024,0):
+        raise ValueError('Restart did not load the prior queued-write identity')
+    if row['gpu_rgba_sha256']!=full_pattern_sha256():
+        raise ValueError('Restart cache write GPU pixels differ from the independent full source')
+
+
+def validate_pressure(record,folder):
+    pressure=record['r3_pressure']
+    if any(pressure.get(key) is not True for key in ('complete','object_retired')):
+        raise ValueError('Incomplete pressure lifecycle')
+    for name in ('initial','pressure','full_resolution_preference','minimized','restored'):
+        validate_image(pressure[name],folder)
+    for name in ('initial','full_resolution_preference','restored'):
+        row=pressure[name]
+        if (row['width'],row['height'],row['discard'])!=(1024,1024,0) or row['gpu_rgba_sha256']!=full_pattern_sha256():
+            raise ValueError('Pressure restoration/full-resolution pixels differ from expected source')
+    low=pressure['pressure']
+    if low.get('bias',0)<2 or low['discard']<=0 or low['width']!=1024>>low['discard'] or low['height']!=low['width']:
+        raise ValueError('Pressure did not coarsen the actual world texture')
+    mini=pressure['minimized']
+    if (mini['width'],mini['height'],mini['discard'])!=(256,256,2) or mini.get('bias',0)<3.9:
+        raise ValueError('Minimized pressure did not pump the expected coarser generation')
+    if mini.get('previous_scene_images_retired') is not True:
+        raise ValueError('Minimized scene retained an old full-resolution generation')
+    if pressure['full_resolution_preference'].get('bias',0)<2 or pressure['restored'].get('bias',10)>1.01:
+        raise ValueError('Pressure preference/restoration controller evidence is missing')
+
+
 def texture_requests(requests):
     if not isinstance(requests,list) or any(not isinstance(row,dict) or not isinstance(row.get('query',{}),dict) for row in requests):
         raise ValueError('Invalid texture HTTP request records')
@@ -96,7 +154,10 @@ def validate_case(record,requests,folder,cache_directory,readonly=False):
     retired=record['retired_texture_cache']
     if retired['images'] or retired['pending_fetches']!=0 or retired.get('pending_uploads')!=0:raise ValueError('Retired account retained cached GPU images or fetches')
     if retired['process_instance']!=cache['process_instance']:raise ValueError('Cache lifecycle evidence changed process identity')
-    if u64(retired['network_requests'])!=len(texture_requests(requests)):raise ValueError('Texture HTTP evidence disagrees with the worker counter')
+    # Account-retirement counters precede the final diagnostic shutdown probe.
+    # Keep those time points distinct rather than rewriting the retired snapshot.
+    extra=validate_shutdown(record,folder,requests) if 'r3_shutdown' in record else 0
+    if u64(retired['network_requests'])+extra!=len(texture_requests(requests)):raise ValueError('Texture HTTP evidence disagrees with the worker counter')
     return rows
 
 def snapshot(cache_directory):
@@ -202,6 +263,7 @@ def main():
                      '--texture-fixture',str(ROOT/'indra/newview/skins/default/textures/uv_test1.j2c')]
             if policy:command.extend(['--cache-policy',str(policy)])
             if case=='cold':command.append('--local-image-contracts')
+            if case=='warm':command.append('--pending-cache-write-restart')
             if case=='read-only':command.append('--texture-cache-read-only')
             if case=='clear':command.append('--cache-clear')
             if case=='resize':
@@ -217,6 +279,9 @@ def main():
             child=json.loads((folder/'results.json').read_text());requests=json.loads((folder/'http-replay.json').read_text())
             if code:raise RuntimeError(f'Viewer cache case returned {code}')
             rows=validate_case(child,requests,folder,cache,case=='read-only')
+            if case=='cold':validate_pressure(child,folder)
+            if case=='cold':validate_shutdown(child,folder,requests)
+            if case=='warm':validate_restart(child,folder)
             instance=child['texture_cache']['process_instance']
             if instance in processes:raise RuntimeError('Cache cases reused a viewer process instance')
             processes.add(instance)

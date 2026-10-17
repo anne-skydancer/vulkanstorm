@@ -4,6 +4,7 @@
 #include "vsr3mediareplay.h"
 #include "vsr3gltfreplay.h"
 #include "vsr3terrainreplay.h"
+#include "vsr3pressurereplay.h"
 #include "lllocalbitmaps.h"
 #include "lllocalgltfmaterials.h"
 #include "vsnativesession.h"
@@ -580,6 +581,7 @@ void vs_r3_replay_retired(LLSD& report)
 void vs_r3_replay_cleanup()
 {
     vs_r3_terrain_replay_cleanup();
+    vs_r3_pressure_replay_cleanup();
     vs_r3_media_cleanup();
     vs_r3_gltf_cleanup();
     if(worldImages) {
