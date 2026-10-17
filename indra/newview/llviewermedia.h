@@ -43,6 +43,7 @@
 #include "lleventcoro.h"
 #include "llcoros.h"
 #include "llcorehttputil.h"
+#include <map>
 
 class LLViewerMediaImpl;
 class LLUUID;
@@ -379,6 +380,10 @@ public:
 
     // Updates the "interest" value in this object
     void calculateInterest();
+#if VS_NATIVE_VULKAN
+    void setNativeSurface(const LLUUID&, F64 pixels, F64 distance);
+    void removeNativeSurface(const LLUUID&);
+#endif
     F64 getInterest() const { return mInterest; };
     F64 getApproximateTextureInterest();
     S32 getProximity() const { return mProximity; };
@@ -471,6 +476,10 @@ private:
     bool mSuspendUpdates;
     bool mTextureUpdatePending = false;
     bool mVisible;
+#if VS_NATIVE_VULKAN
+    struct NativeSurface { F64 pixels=0, distance=0, updated=0; };
+    std::map<LLUUID, NativeSurface> mNativeSurfaces;
+#endif
     ECursorType mLastSetCursor;
     EMediaNavState mMediaNavState;
     F64 mInterest;

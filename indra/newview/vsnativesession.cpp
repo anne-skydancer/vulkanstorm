@@ -515,6 +515,8 @@ void VSNativeSession::seedCoro(std::string url, U64 generation, U64 regionEpoch)
                               "UpdateAvatarAppearance",
                               "UploadBakedTexture",
                               "RenderMaterials",
+                              "ObjectMedia",
+                              "ObjectMediaNavigate",
                               "ModifyMaterialParams",
                               "AvatarPickerSearch",
                               "GroupAPIv1",
