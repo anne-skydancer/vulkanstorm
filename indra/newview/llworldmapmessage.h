@@ -41,6 +41,8 @@ public:
     typedef std::function<void(U64 region_handle, const std::string& url, const LLUUID& snapshot_id, bool teleport)>
         url_callback_t;
 
+    void resetNativeAccount();
+
     // Process incoming answers to map stuff requests
     static void processMapBlockReply(LLMessageSystem*, void**);
     static void processMapItemReply(LLMessageSystem*, void**);

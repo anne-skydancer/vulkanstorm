@@ -39,6 +39,13 @@ class NativeUtilityLifecycleTest(unittest.TestCase):
         self.assertIsNotNone(connect)
         stream = method_body("indra/newview/fsfloaterstreamtitle.cpp", "void FSStreamTitleManager::resetAccount()")
         mention = method_body("indra/newview/llfloaterchatmentionpicker.cpp", "void LLFloaterChatMentionPicker::resetAccount()")
+        title_header = (ROOT / "indra/newview/fsfloaterstreamtitle.h").read_text()
+        title_source = (ROOT / "indra/newview/fsfloaterstreamtitle.cpp").read_text()
+        visibility_member = re.search(r"boost::signals2::scoped_connection mVisibilityConnection;", title_header)
+        self.assertIsNotNone(visibility_member)
+        visibility_connect = re.search(r"mVisibilityConnection = setVisibleCallback\([^\n]+;", title_source)
+        self.assertIsNotNone(visibility_connect)
+        title_destructor = method_body("indra/newview/fsfloaterstreamtitle.cpp", "FSFloaterStreamTitle::~FSFloaterStreamTitle()")
         fixture = r'''#include <cassert>
 #include <string>
 #include <vector>
@@ -57,6 +64,19 @@ struct LLFloaterSettingsColor {
     MEMBER
     void updateList(bool) { ++updates; }
     void postBuild() { CONNECT }
+};
+int history_closes = 0;
+struct TitleFloaterBase {
+    boost::signals2::signal<void()> visibility;
+    auto setVisibleCallback(const boost::signals2::signal<void()>::slot_type& callback){return visibility.connect(callback);}
+    ~TitleFloaterBase(){assert(visibility.num_slots()==0);visibility();}
+};
+struct FSFloaterStreamTitle : TitleFloaterBase {
+    boost::signals2::connection mUpdateConnection;
+    TITLE_FIELD
+    void closeHistory(){++history_closes;}
+    void postBuild(){TITLE_BINDING}
+    ~FSFloaterStreamTitle() TITLE_DESTRUCTOR
 };
 struct FSStreamTitleManager {
     std::string mCurrentStreamTitle;
@@ -87,6 +107,8 @@ struct LLFloaterChatMentionPicker {
     static void resetAccount() MENTION
 };
 int main() {
+    {FSFloaterStreamTitle title;title.postBuild();title.visibility();assert(history_closes==1);}
+    assert(history_closes==2); // Base teardown cannot call derived members again.
     // A surviving settings service must not call a destroyed or previous window.
     {
         LLFloaterSettingsColor color;
@@ -132,6 +154,8 @@ int main() {
 '''
         fixture = fixture.replace("MEMBER", member[0]).replace("CONNECT", connect[0])
         fixture = fixture.replace("STREAM", stream).replace("MENTION", mention)
+        fixture = fixture.replace("TITLE_FIELD", visibility_member[0]).replace("TITLE_BINDING", visibility_connect[0])
+        fixture = fixture.replace("TITLE_DESTRUCTOR", title_destructor)
         # Use the viewer's installed Boost when present, otherwise the compiler's
         # normal system headers. This test does not download or substitute Boost.
         candidates = sorted(ROOT.glob("build*/packages/include"))

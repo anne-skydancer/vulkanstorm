@@ -73,6 +73,8 @@
 #include "llmediactrl.h"
 #include "llpluginclassmedia.h"
 #include "llviewermessage.h"
+#include "llworldmap.h"
+#include "llworldmapmessage.h"
 #include "fspanellogin.h"
 #include "llprogressview.h"
 #include "llnotificationsutil.h"
@@ -148,6 +150,7 @@ const std::set<std::string> session = { "SimStats",
                                         "ParcelMediaCommandMessage",
                                         "RegionIDAndHandleReply",
                                         "MapBlockReply",
+                                        "MapItemReply",
                                         "RegionHandshake",
                                         "AgentMovementComplete",
                                         "ChatFromSimulator",
@@ -350,7 +353,7 @@ void VSNativeSession::install(LLMessageSystem& msg)
     for (const auto& name : worldMessages) msg.setHandlerFunc(name.c_str(), receiveMessage);
     msg.setHandlerFunc("AgentWearablesUpdate",receiveMessage);
     msg.setHandlerFunc("EnableSimulator",receiveMessage);
-    for (const char* name : {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
+    for (const char* name : {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
          "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
     LLAvatarTracker::instance().registerCallbacks(&msg);
@@ -1293,6 +1296,8 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
     const bool known=sender==mHost || peer!=mCircuits.end();
     if (transport.count(name)) return mHost.isOk() && known && mPhase != Phase::Disconnected;
     if (name=="LayerData") return mHost.isOk() && known && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
+    if (name=="CoarseLocationUpdate") return mPhase==Phase::Connected && peer!=mCircuits.end() &&
+        peer->second.acknowledged && peer->second.handshake;
     if (worldMessages.count(name)) return (mPhase==Phase::Connecting || mPhase==Phase::Connected) &&
         (sender==mHost || (peer!=mCircuits.end() && peer->second.acknowledged && peer->second.handshake));
     if (known && (name=="RegionHandshake" || name=="DisableSimulator" || name=="CloseCircuit"))
@@ -1322,6 +1327,23 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         return;
     }
     LLSD body = LLSD::emptyMap();
+    if(name=="CoarseLocationUpdate")
+    {
+        const S32 count=msg->getNumberOfBlocks("Location"),identities=msg->getNumberOfBlocks("AgentData");
+        if(count<0 || count>4096 || (identities!=0 && identities!=count)) {++mRejected;return;}
+        S16 you,prey;msg->getS16("Index","You",you);msg->getS16("Index","Prey",prey);
+        LLSD index;index["You"]=S32(you);index["Prey"]=S32(prey);body["Index"].append(index);
+        body["Location"]=LLSD::emptyArray();
+        if(identities)body["AgentData"]=LLSD::emptyArray();
+        for(S32 i=0;i<count;++i)
+        {
+            U8 x,y,z;msg->getU8("Location","X",x,i);msg->getU8("Location","Y",y,i);msg->getU8("Location","Z",z,i);
+            LLSD row;row["X"]=S32(x);row["Y"]=S32(y);row["Z"]=S32(z);body["Location"].append(row);
+            if(identities){LLUUID id;msg->getUUID("AgentData","AgentID",id,i);LLSD agent;agent["AgentID"]=id;body["AgentData"].append(agent);}
+        }
+        if(!receiveCoarse(body,msg->getSender(),mGeneration,circuitGeneration(msg->getSender()),true))++mRejected;
+        return;
+    }
     if(name=="AgentWearablesUpdate")
     {
         LLUUID agent,identity;U32 serial;
@@ -1392,8 +1414,14 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         LLUUID id; U64 handle; msg->getUUID("ReplyBlock", "RegionID", id); msg->getU64("ReplyBlock", "RegionHandle", handle);
         body["id"] = id; body["handle"] = ll_sd_from_U64(handle);
     }
+    else if (name == "MapItemReply")
+    {
+        LLUUID agent;msg->getUUID("AgentData","AgentID",agent);body["agent"]=agent;
+    }
     else if (name == "MapBlockReply")
     {
+        const S32 blocks=msg->getNumberOfBlocks("Data"),sizes=msg->getNumberOfBlocks("Size");
+        if(blocks<0 || blocks>4096 || (sizes!=0 && sizes!=blocks)){++mRejected;return;}
         LLUUID agent; msg->getUUID("AgentData", "AgentID", agent); body["agent"] = agent;
         body["regions"] = LLSD::emptyArray();
         for (S32 i = 0; i < msg->getNumberOfBlocks("Data"); ++i)
@@ -1503,8 +1531,15 @@ void VSNativeSession::receive(LLMessageSystem* msg)
     }
     else if (name == "Error")
     { std::string text; msg->getString("Data", "Message", text); body["text"] = text; }
-    if (deliver(name, body, msg->getSender(), mGeneration) && name == "MoneyBalanceReply")
-        process_money_balance_reply(msg, nullptr);
+    const U64 generation=mGeneration;
+    const LLHost source=msg->getSender();
+    if(deliver(name,body,source,generation) && mGeneration==generation && mPhase==Phase::Connected && source==mHost)
+    {
+        // Keep complete wire fields and existing shared map/transaction semantics.
+        if(name=="MoneyBalanceReply")process_money_balance_reply(msg,nullptr);
+        else if(name=="MapBlockReply")LLWorldMapMessage::processMapBlockReply(msg,nullptr);
+        else if(name=="MapItemReply")LLWorldMapMessage::processMapItemReply(msg,nullptr);
+    }
 }
 bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const LLHost& sender, U64 generation)
 {
@@ -1525,6 +1560,12 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         if (name=="DisableSimulator" || name=="CloseCircuit") {retireNeighbour(sender);return true;}
         if (name!="RegionHandshake" || !body["name"].isString() || body["id"].asUUID().isNull()) return false;
         if (gViewerWindow && gViewerWindow->nativeContext() && !gViewerWindow->nativeContext()->world().configureRegion(sender,body)) return false;
+        region->second.id=body["id"].asUUID();region->second.owner=body["owner"].asUUID();
+        region->second.name=body["name"].asString().substr(0,256);
+        region->second.flags=body.has("flags64")?ll_U64_from_sd(body["flags64"]):U32(body["flags"].asInteger());
+        region->second.access=U8(body["access"].asInteger());
+        region->second.waterHeight=F32(body["water_height"].asReal());
+        region->second.waterKnown=body["water_height"].isReal()&&std::isfinite(region->second.waterHeight);
         region->second.handshake=true;if (region->second.acknowledged) region->second.deadline=0;
         gMessageSystem->newMessage("RegionHandshakeReply");gMessageSystem->nextBlock("AgentData");
         gMessageSystem->addUUID("AgentID",mAgent);gMessageSystem->addUUID("SessionID",mSession);
@@ -1597,7 +1638,16 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         mWaterKnown  = body["water_height"].isReal() && std::isfinite(mWaterHeight);
         LLLandmark::setRegionHandle(mRegionID, mHandle);
         if (gViewerWindow && gViewerWindow->nativeContext()) gViewerWindow->nativeContext()->world().configureRegion(sender,body);
-        if (auto circuit=mCircuits.find(sender);circuit!=mCircuits.end()) circuit->second.handshake=true;
+        if(auto region=mCircuits.find(sender);region!=mCircuits.end())
+        {
+        region->second.id=body["id"].asUUID();region->second.owner=body["owner"].asUUID();
+        region->second.name=body["name"].asString().substr(0,256);
+        region->second.flags=body.has("flags64")?ll_U64_from_sd(body["flags64"]):U32(body["flags"].asInteger());
+        region->second.access=U8(body["access"].asInteger());
+        region->second.waterHeight=F32(body["water_height"].asReal());
+        region->second.waterKnown=body["water_height"].isReal()&&std::isfinite(region->second.waterHeight);
+            region->second.handshake=true;
+        }
         mHandshake = true; send("RegionHandshakeReply", LLSD()); connected();
     }
     else if (name == "AgentMovementComplete" && (mPhase == Phase::Connecting || mPhase == Phase::Connected))
@@ -1654,6 +1704,10 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         if (body["id"].asUUID().isNull() || !body.has("handle") ||
             !LLLandmark::hasPendingRegionHandle(body["id"].asUUID())) return false;
         LLLandmark::receiveRegionHandle(body["id"].asUUID(), ll_U64_from_sd(body["handle"]));
+    }
+    else if (name == "MapItemReply" && mPhase == Phase::Connected)
+    {
+        if(body["agent"].asUUID()!=mAgent)return false;
     }
     else if (name == "MapBlockReply" && mPhase == Phase::Connected)
     {
@@ -2259,6 +2313,9 @@ void VSNativeSession::reset()
     mStartupTime = 0;
     mStartupTimedOut = false;
     if (mShutdown) return;
+    LLFloaterReg::destroyInstance("world_map");LLFloaterReg::destroyInstance("mini_map");
+    if(LLWorldMapMessage::instanceExists())LLWorldMapMessage::instance().resetNativeAccount();
+    if(LLWorldMap::instanceExists())LLWorldMap::instance().reset();
     gViewerInput.resetNativeGlobalKeys();
     mAppearance.reset();
     if (LLGestureMgr::instanceExists()) LLGestureMgr::instance().resetNativeAccount();

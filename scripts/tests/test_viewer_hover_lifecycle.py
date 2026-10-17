@@ -54,6 +54,12 @@ struct LLMouseHandler {
  virtual void screenPointToLocal(int x,int y,int* ox,int* oy) { *ox=x;*oy=y; }
  virtual bool handleHover(int,int,MASK) { return false; }
 };
+struct LLToolPipette {
+ static bool instanceExists(){return false;}
+ static LLToolPipette&instance(){static LLToolPipette tool;return tool;}
+ bool nativeActive(){return false;}bool hasMouseCapture(){return false;}
+ bool handleHover(int,int,int){return false;}bool handleToolTip(int,int,int){return false;}
+};
 struct LLView:LLMouseHandler {
  LLView* parent=nullptr; std::vector<LLView*> children; LLRect rect;
  bool visible=true,opaque=false,highlight=false; unsigned entered=0,left=0;

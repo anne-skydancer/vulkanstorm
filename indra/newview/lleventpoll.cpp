@@ -119,6 +119,8 @@ namespace Details
             auto owner = VSNativeSession::active();
             if (!owner || owner->generation() != mNativeGeneration ||
                 !mNativeCircuitGeneration || owner->circuitGeneration(LLHost(mSenderIp))!=mNativeCircuitGeneration) return;
+            if(msg_name=="CoarseLocationUpdate")
+            {owner->receiveCoarse(body,LLHost(mSenderIp),mNativeGeneration,mNativeCircuitGeneration);return;}
             if (msg_name=="EnableSimulator" || msg_name=="EstablishAgentCommunication")
             { owner->regionEvent(msg_name,body,LLHost(mSenderIp),mNativeGeneration,mNativeCircuitGeneration);return; }
         }

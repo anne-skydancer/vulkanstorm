@@ -1,6 +1,7 @@
 // CPU-only native session ownership. LGPL-2.1, like the viewer.
 #pragma once
 #include "llhost.h"
+#include "vscoarselocations.h"
 #include "vsnativecamera.h"
 #include "vsparcelpermissions.h"
 #include "vsworldscene.h"
@@ -71,6 +72,22 @@ public:
     const LLSD& simulatorFeatures() const { return mSimulatorFeatures; }
     bool simulatorFeaturesReceived() const { return mSimulatorFeaturesReceived; }
     bool applySimulatorFeatures(const LLSD&, U64 generation, U64 regionEpoch);
+    struct RegionSnapshot
+    {
+        AccountHandle account;
+        LLHost host;
+        U64 handle=0,circuit=0,flags=0;
+        U32 width=256,height=256;
+        LLUUID id,owner;
+        std::string name;
+        U8 access=0;
+        F32 waterHeight=0;
+        bool waterKnown=false,current=false;
+        std::vector<VSCoarseSample<LLUUID>> coarse;
+    };
+    std::vector<RegionSnapshot> regionSnapshots() const;
+    std::vector<VSCoarseSample<LLUUID>> coarseAvatarLocations() const;
+    bool receiveCoarse(const LLSD&, const LLHost&, U64 account, U64 circuit, bool legacyUDP=false);
     U64 circuitGeneration(const LLHost&) const;
     bool regionEvent(const std::string&, const LLSD&, const LLHost&, U64 account, U64 circuit);
     const std::string& regionName() const { return mName; }
@@ -183,6 +200,13 @@ private:
         U32 width=256,height=256;
         bool acknowledged=false,handshake=false,seedFailed=false;
         double deadline=0;
+        LLUUID id,owner;
+        std::string name;
+        U64 flags=0;
+        U8 access=0;
+        F32 waterHeight=0;
+        bool waterKnown=false;
+        VSCoarseSnapshot<LLUUID> coarse;
         LLSD capabilities;
         std::function<void()> cancel;
         std::unique_ptr<LLEventPoll> poll;

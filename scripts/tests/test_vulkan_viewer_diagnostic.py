@@ -586,6 +586,7 @@ int main(){
     def test_sdl_native_window_initializes_ime_policy_and_routes_composition(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / 'indra/llwindow/llwindowsdl2.cpp').read_text(encoding='utf-8')
+        preedit = source[source.index('static void update_native_preedit('):source.index('bool LLWindowSDL::createNativeWindow(')]
         creation = source[source.index('bool LLWindowSDL::createNativeWindow('):
                           source.index('static SDL_Surface *Load_BMP_Resource')]
         focus = source[source.index('void LLWindowSDL::allowLanguageTextInput('):
@@ -623,15 +624,20 @@ struct SDL_SysWMinfo{int version=0,subsystem=0;struct{struct{void* display=nullp
 #define SDL_VERSION(v) (*(v)=1)
 bool SDL_GetWindowWMInfo(SDL_Window*,SDL_SysWMinfo* info){info->subsystem=SDL_SYSWM_X11;info->info.x11={reinterpret_cast<void*>(1),42};return true;}
 struct LLPreeditor{
+    using segment_lengths_t=std::vector<S32>;using standouts_t=std::deque<bool>;
+    std::vector<S32> segments;std::deque<bool> highlights;
     LLWString text;int resets=0,updates=0,caret=0;S32 compositionLength=0;bool selected=false;
     void getPreeditRange(S32* position,S32* length)const{*position=caret;*length=compositionLength;}
     void resetPreedit(){++resets;if(selected || compositionLength)text.clear();compositionLength=0;selected=false;}
     void updatePreedit(const LLWString& value,const std::vector<S32>& lengths,const std::deque<bool>& standouts,S32 position){
-        assert(lengths==std::vector<S32>{S32(value.size())} && standouts==std::deque<bool>{true});
+        S32 sum=0;for(auto length:lengths){assert(length>0);sum+=length;}
+        assert(sum==S32(value.size())&&lengths.size()==standouts.size());segments=lengths;highlights=standouts;
         ++updates;text=value;caret=position;compositionLength=S32(value.size());
     }
 };
-struct Event{int type=SDL_TEXTEDITING;struct{char text[32]="abc";int start=2;}edit;};
+''' + preedit + r'''
+#define SDL_VERSION_ATLEAST(a,b,c) 0
+struct Event{int type=SDL_TEXTEDITING;struct{char text[32]="abc";int start=2,length=1;}edit;};
 struct LLWindowSDL{
     bool mUseGL=false,mIMEEnabled=false;LLPreeditor* mPreeditor=nullptr;
     std::string mWindowTitle="native";int mSDLFlags=0;SDL_Window* mWindow=nullptr;
@@ -652,6 +658,8 @@ int main(){
     assert(window.createNativeWindow(0,0,640,480));
     LLPreeditor editor;window.allowLanguageTextInput(&editor,true);window.gatherEditing({});
     assert(editor.updates==1 && editor.text==L"abc" && editor.caret==2);
+    assert((editor.segments==std::vector<S32>{2,1}) && (editor.highlights==std::deque<bool>{false,true}));
+
     window.allowLanguageTextInput(&editor,false);window.gatherEditing({});
     assert(editor.updates==1 && editor.text.empty() && stops==1);
     // Ordinary select-all is committed text, not pending IME composition.
@@ -681,6 +689,13 @@ int main(){
     assert(disabled.createNativeWindow(0,0,640,480));
     disabled.allowLanguageTextInput(&editor,true);disabled.gatherEditing({});
     assert(editor.updates==1 && disabled.mPreeditor==nullptr);
+    update_native_preedit(&editor,"abcdef",2,2);
+    assert((editor.segments==std::vector<S32>{2,2,2}) && (editor.highlights==std::deque<bool>{false,true,false}));
+    update_native_preedit(&editor,"abcdef",99,99);
+    assert(editor.caret==6 && (editor.segments==std::vector<S32>{6}) && !editor.highlights[0]);
+
+    update_native_preedit(&editor,std::string(128,'x').c_str(),64,32);
+    assert(editor.text.size()==128 && (editor.segments==std::vector<S32>{64,32,32}));
 }
 '''
         compiler = shutil.which('clang++') or shutil.which('g++')

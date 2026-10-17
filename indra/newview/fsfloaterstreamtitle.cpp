@@ -176,6 +176,8 @@ FSFloaterStreamTitle::FSFloaterStreamTitle(const LLSD& key)
 
 FSFloaterStreamTitle::~FSFloaterStreamTitle()
 {
+    mVisibilityConnection.disconnect();
+    closeHistory();
     if (mUpdateConnection.connected())
     {
         mUpdateConnection.disconnect();
@@ -195,7 +197,7 @@ bool FSFloaterStreamTitle::postBuild()
     mHistoryBtn->setIsToggledCallback([](LLUICtrl*, const LLSD&) { return LLFloaterReg::instanceVisible("fs_streamtitlehistory"); });
 
 
-    setVisibleCallback(boost::bind(&FSFloaterStreamTitle::closeHistory, this));
+    mVisibilityConnection = setVisibleCallback(boost::bind(&FSFloaterStreamTitle::closeHistory, this));
 
     return true;
 }

@@ -131,6 +131,7 @@ public:
     // </FS:Ansariel>
 
     const S32 getAgentCount() const;                // Compute the total agents count
+    const LLUUID& getLandForSaleImageID() const { return mMapImageID; }
     LLPointer<LLViewerFetchedTexture> getLandForSaleImage();    // Get the overlay image, fetch it if necessary
 
     bool isName(const std::string& name) const;
