@@ -21719,13 +21719,15 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-controller-pending",
+      "implementation": "native-reference-present/effect-unqualified",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleTerrainScaleChanged; saving a value is not applying its effect.",
-      "native_source_references": [],
+      "native_source_references": [
+        "indra/newview/vsworldscene.cpp"
+      ],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
