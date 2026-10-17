@@ -109,6 +109,14 @@ def validate_pressure(record,folder):
         raise ValueError('Pressure preference/restoration controller evidence is missing')
 
 
+def validate_identity_transition(cold,warm):
+    for key,expected in (
+            ('grid_identity',('util.agni.lindenlab.com','util.aditi.lindenlab.com')),
+            ('account_identity',('10000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002'))):
+        if (cold['texture_cache'].get(key),warm['texture_cache'].get(key))!=expected:
+            raise ValueError('Cache restart did not exercise distinct '+key)
+
+
 def texture_requests(requests):
     if not isinstance(requests,list) or any(not isinstance(row,dict) or not isinstance(row.get('query',{}),dict) for row in requests):
         raise ValueError('Invalid texture HTTP request records')
@@ -263,7 +271,7 @@ def main():
                      '--texture-fixture',str(ROOT/'indra/newview/skins/default/textures/uv_test1.j2c')]
             if policy:command.extend(['--cache-policy',str(policy)])
             if case=='cold':command.append('--local-image-contracts')
-            if case=='warm':command.append('--pending-cache-write-restart')
+            if case=='warm':command.extend(['--pending-cache-write-restart','--cache-grid','aditi','--cache-account','secondary'])
             if case=='read-only':command.append('--texture-cache-read-only')
             if case=='clear':command.append('--cache-clear')
             if case=='resize':
@@ -281,7 +289,9 @@ def main():
             rows=validate_case(child,requests,folder,cache,case=='read-only')
             if case=='cold':validate_pressure(child,folder)
             if case=='cold':validate_shutdown(child,folder,requests)
-            if case=='warm':validate_restart(child,folder)
+            if case=='warm':
+                validate_restart(child,folder)
+                validate_identity_transition(reports['cold'],child)
             instance=child['texture_cache']['process_instance']
             if instance in processes:raise RuntimeError('Cache cases reused a viewer process instance')
             processes.add(instance)

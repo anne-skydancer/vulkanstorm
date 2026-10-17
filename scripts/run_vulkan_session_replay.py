@@ -518,6 +518,8 @@ def append_llsd(parent, value):
         ET.SubElement(parent, 'date').text = value.isoformat().replace('+00:00', 'Z')
     elif isinstance(value, int):
         ET.SubElement(parent, 'integer').text = str(value)
+    elif isinstance(value, float):
+        ET.SubElement(parent, 'real').text = repr(value)
     else:
         ET.SubElement(parent, 'string').text = str(value)
 
@@ -555,13 +557,23 @@ def configure_replay_contract_environment(env,args):
         else:env.pop(key,None)
 
 
-def r3_terrain_contracts_passed(report,directory):
+def r3_terrain_contracts_passed(report,directory,requests):
     try:
         record=report['r3_terrain']
         if any(record.get(key) is not True for key in ('complete','live_scale_transform','paint_bake','paint_deleted')):
             return False
         if record.get('paint_bit_depth')!=1 or len(record['layers'])!=4:
             return False
+        override=record['regional_override']
+        relative='r3/terrain/regional-override.rgba'
+        path=Path(directory)/relative
+        if (override.get('file')!=relative or override.get('pixels_verified') is not True or
+                override.get('base_factor')!=.25 or path.is_symlink() or
+                not path.resolve().is_relative_to(Path(directory).resolve())):return False
+        data=path.read_bytes()
+        if len(data)!=64*64*4 or any(abs(value-(137,0,0,255)[offset%4])>1 for offset,value in enumerate(data)):return False
+        if not any(row.get('path')=='/r3-terrain-overrides' and row.get('method')=='GET' and
+                   row.get('base_factor')==.25 for row in requests):return False
         colors=((255,0,0,255),(0,255,0,255),(0,0,255,255),(255,255,255,255))
         for index,row in enumerate(record['layers']):
             relative=f'r3/terrain/paint-layer-{index}.rgba'
@@ -735,7 +747,8 @@ def conference_start_observed(requests):
 class SimulatorHTTP(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self):
+    def __init__(self,account_id='10000000-0000-0000-0000-000000000001'):
+        self.account_id=account_id
         super().__init__(('127.0.0.1', 0), Handler)
         self.auth_requests = 0
         self.seed_requests = 0
@@ -763,9 +776,14 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
+    def account_payload(self,data):
+        # All synthetic inventory/appearance fixtures identify the same owner.
+        # Remap that UUID together when qualifying a distinct cache consumer.
+        return data.replace(b'10000000-0000-0000-0000-000000000001',self.server.account_id.encode('ascii'))
+
     def respond_llsd(self, body, status=200):
         root = ET.Element('llsd'); append_llsd(root, body)
-        data = ET.tostring(root, encoding='utf-8')
+        data = self.account_payload(ET.tostring(root, encoding='utf-8'))
         self.send_response(status)
         self.send_header('Content-Type', 'application/llsd+xml')
         self.send_header('Content-Length', str(len(data)))
@@ -782,7 +800,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200);self.send_header('Content-Type','text/html' if path=='/r3-media' else 'text/plain')
             self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(payload)))
             self.end_headers();self.wfile.write(payload);return
-        if path=='/r3-legacy-materials' and getattr(self.server,'r3_directory',None):
+        if path=='/r3-terrain-overrides' and getattr(self.server,'r3_directory',None):
+            self.server.requests.append(dict(path=path,method='GET',base_factor=.25))
+            self.respond_llsd(dict(success=True,overrides=[dict(bc=[.25,.25,.25,1.]) for _ in range(4)]))
+            return
+        if path=='/r3-legacy-materials'  and getattr(self.server,'r3_directory',None):
             source=self.server.r3_directory/'legacy-materials.xml'
             if not source.is_file() or source.stat().st_size>2*1024*1024:self.send_error(404);return
             payload=source.read_bytes()
@@ -818,6 +840,11 @@ class Handler(BaseHTTPRequestHandler):
                     self.server.replay_finished.wait(25)
                     self.close_connection=True
                     return
+                if getattr(self.server,'r3_directory',None):
+                    ids=self.server.r3_directory/'terrain/regional-material-ids.txt'
+                    if ids.is_file() and query['texture_id'][0] in ids.read_text().splitlines():
+                        self.server.requests.append(dict(path=path,method='GET',query=query,bytes=0,status=404))
+                        self.send_response(404);self.send_header('Content-Length','0');self.end_headers();return
                 stream=getattr(self.server,'stream_texture',None)
                 streaming=bool(stream and query['texture_id'] in
                     (['a3000000-0000-0000-0000-000000000001'],['a3000000-0000-0000-0000-000000000002']))
@@ -876,7 +903,7 @@ class Handler(BaseHTTPRequestHandler):
                 notes='Native profile notes', online=True, allow_publish=False, identified=False, transacted=False,
                 caption='Native test resident', groups=[dict(id='80000000-0000-0000-0000-000000000008',
                     name='Native replay group', image_id='60000000-0000-0000-0000-000000000006')], picks=[])
-            if agent == '10000000-0000-0000-0000-000000000001':
+            if agent == self.server.account_id:
                 profile['sl_image_id'] = profile['fl_image_id'] = '00000000-0000-0000-0000-000000000000'
             profile.update(self.server.profile_updates.get(agent, {}))
             self.respond_llsd(profile)
@@ -892,7 +919,7 @@ class Handler(BaseHTTPRequestHandler):
             root = ET.Element('llsd')
             append_llsd(root, dict(success=True, email='fixture@example.invalid',
                                   directory_visibility='default', im_via_email=False))
-            data = ET.tostring(root, encoding='utf-8')
+            data = self.account_payload(ET.tostring(root, encoding='utf-8'))
             self.send_response(200)
             self.send_header('Content-Type', 'application/llsd+xml')
             self.send_header('Content-Length', str(len(data)))
@@ -906,7 +933,7 @@ class Handler(BaseHTTPRequestHandler):
             append_llsd(root, {'agents': [dict(id=agent, username='cpu.sender',
                          display_name='CPU Sender', legacy_first_name='CPU', legacy_last_name='Sender',
                          is_display_name_default=True) for agent in ids], 'bad_ids': []})
-            data = ET.tostring(root, encoding='utf-8')
+            data = self.account_payload(ET.tostring(root, encoding='utf-8'))
             self.send_response(200)
             self.send_header('Content-Type', 'application/llsd+xml')
             self.send_header('Cache-Control', 'max-age=3600')
@@ -940,7 +967,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         path = urlsplit(self.path).path
         size = int(self.headers.get('Content-Length', '0'))
-        if path != '/profile/10000000-0000-0000-0000-000000000001' or not 0 < size <= 65536:
+        if path != '/profile/'+self.server.account_id or not 0 < size <= 65536:
             self.send_error(400)
             return
         request = read_llsd(ET.fromstring(self.rfile.read(size)))
@@ -1042,7 +1069,7 @@ class Handler(BaseHTTPRequestHandler):
                                                'buddy_rights_given': 1, 'buddy_rights_has': 1}]})
             if self.server.auth_requests == 1 or params[0].get('read_critical') not in (True, 1):
                 response = dict(login='false', reason='critical', message='Loopback authentication policy acknowledgement')
-            data = xmlrpc.client.dumps((response,), methodresponse=True).encode('utf-8')
+            data = self.account_payload(xmlrpc.client.dumps((response,), methodresponse=True).encode('utf-8'))
             self.send_response(200)
             self.send_header('Content-Type', 'text/xml')
             self.send_header('Content-Length', str(len(data)))
@@ -1101,6 +1128,8 @@ class Handler(BaseHTTPRequestHandler):
             if getattr(self.server,'r3_directory',None):
                 ET.SubElement(mapping,'key').text='RenderMaterials'
                 ET.SubElement(mapping,'string').text=self.server.url+'/r3-legacy-materials'
+                ET.SubElement(mapping,'key').text='ModifyRegion'
+                ET.SubElement(mapping,'string').text=self.server.url+'/r3-terrain-overrides'
             if getattr(self.server,'r2_directory',None):
                 ET.SubElement(mapping,'key').text='GetMesh2'
                 ET.SubElement(mapping,'string').text=self.server.url+'/r2-mesh'
@@ -1212,7 +1241,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
             return
-        data = ET.tostring(root, encoding='utf-8')
+        data = self.account_payload(ET.tostring(root, encoding='utf-8'))
         try:
             self.send_response(200)
             self.send_header('Content-Type', 'application/llsd+xml')
@@ -1238,6 +1267,8 @@ def main():
     parser.add_argument('--all-skins', action='store_true', help='Run the complete connected replay for every packaged skin/theme and German overlay')
     parser.add_argument('--headless', action='store_true', help='Replay production viewer integration offscreen without a native window; does not qualify presentation')
     parser.add_argument('--cache-directory', type=Path, help='Explicit isolated cache shared by sequential qualification processes')
+    parser.add_argument('--cache-account',choices=('primary','secondary'),default='primary',help='Synthetic owner identity for cache transition qualification')
+    parser.add_argument('--cache-grid',choices=('agni','aditi'),default='agni',help='Built-in grid identity; authentication stays on the isolated loopback fixture')
     parser.add_argument('--cache-policy', type=Path, help='Prior process cache-version metadata for restart qualification')
     parser.add_argument('--cache-size', type=int, help='Texture cache size in MiB for qualification')
     parser.add_argument('--cache-clear', action='store_true', help='Exercise the normal next-startup cache purge setting')
@@ -1399,6 +1430,7 @@ def main():
     # Empty theme strings cannot survive the viewer's command-line tokenizer.
     command.extend(['--sessionsettings', str(selection_file)])
     command.extend(['--set', 'UIScaleFactor', str(args.ui_scale)])
+    command.extend(['--set','CmdLineGridChoice','util.'+args.cache_grid+'.lindenlab.com'])
     if args.profile_directory:
         command.extend(['--set', 'AllowMultipleViewers', 'true'])
     cache_directory=args.cache_directory.resolve() if args.cache_directory else isolated_profile/'cache'
@@ -1411,7 +1443,9 @@ def main():
     if args.texture_cache_contracts:command.extend(['--set','RenderCompressTextures','false',
         '--set','RenderMaxTextureResolution','2048','--set','TextureLoadFullRes','false'])
     report = {}; log = ''; code = None; passed = False
-    with SimulatorHTTP() as server:
+    account_id='10000000-0000-0000-0000-00000000000'+('1' if args.cache_account=='primary' else '2')
+    with SimulatorHTTP(account_id) as server:
+        env['VS_VULKAN_REPLAY_ACCOUNT_ID']=account_id
         server.texture_fixture=args.texture_fixture.resolve() if args.texture_fixture else None
         server.terrain_fixture=directory/'terrain/detail.j2c' if args.terrain_contracts else None
         server.r3_directory=directory/'r3' if args.local_image_contracts else None
@@ -1448,7 +1482,7 @@ def main():
                 raise RuntimeError('Missing actual shared preference effects and persisted values')
             if args.local_image_contracts and not r3_gltf_fixture.contracts_passed(report,directory):
                 raise RuntimeError('Missing actual imported glTF image contracts')
-            if args.local_image_contracts and not r3_terrain_contracts_passed(report,directory):
+            if args.local_image_contracts and not r3_terrain_contracts_passed(report,directory,server.requests):
                 raise RuntimeError('Missing actual production terrain material, paint or settings evidence')
             if args.local_image_contracts and not media_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing actual media plugin publication, shared ownership or GPU evidence')
@@ -1492,7 +1526,7 @@ def main():
             report['ui_pixel_tolerance'] = 3
             profile_writes = [request.get('body', {}) for request in server.requests
                               if request.get('method') == 'PUT'
-                              and request.get('path') == '/profile/10000000-0000-0000-0000-000000000001']
+                              and request.get('path') == '/profile/'+server.account_id]
             report['profile_image_writes'] = {field: any(body.get(field) == '60000000-0000-0000-0000-000000000006'
                                                          for body in profile_writes)
                                              for field in ('sl_image_id', 'fl_image_id')}

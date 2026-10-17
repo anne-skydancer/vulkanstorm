@@ -64,8 +64,10 @@ def contracts_passed(record,directory):
   for name,expected in inputs().items():
    if (root/'r3/gltf-images'/name).read_bytes()!=expected:return False
   generations=set()
-  for phase in ('initial','full-resolution','limited-again','replacement'):
-   row=data[phase];width=1024 if phase=='full-resolution' else 512;height=width//2;variant=int(phase=='replacement')
+  for phase in ('initial','full-resolution','limited-again','replacement','minimized','restored'):
+   row=data[phase];width=row['width'] if phase=='minimized' else 1024 if phase=='full-resolution' else 512;height=width//2;variant=int(phase in ('replacement','minimized','restored'))
+   if phase=='minimized' and (type(width) is not int or width not in (16,32,64,128,256) or row.get('bias',0)<3.9):return False
+   if phase=='restored' and row.get('restored_window') is not True:return False
    if row['width']!=width or row['height']!=height or row['variant']!=variant or row['material_contracts'] is not True:return False
    if [image['channel'] for image in row['images']]!=list(range(5)):return False
    for channel,image in enumerate(row['images']):
@@ -83,5 +85,5 @@ def contracts_passed(record,directory):
   return True
  except (KeyError,ValueError,TypeError,OSError):return False
 def required_files(record):
- return ['r3/gltf-images/'+name for name in inputs()]+[image['file'] for phase in ('initial','full-resolution','limited-again','replacement') for image in record['r3_gltf_images'][phase]['images']]
+ return ['r3/gltf-images/'+name for name in inputs()]+[image['file'] for phase in ('initial','full-resolution','limited-again','replacement','minimized','restored') for image in record['r3_gltf_images'][phase]['images']]
 if __name__=='__main__':write('.tmp/r3-gltf-fixture')

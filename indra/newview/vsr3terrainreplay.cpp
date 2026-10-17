@@ -84,6 +84,15 @@ struct TerrainReplay {
    gSavedSettings.setString(setting,assets[layer]->getWorldID().asString());
   }
  }
+ void configure(VSWorldScene& world,bool regional) {
+  LLSD handshake;handshake["water_height"]=20.;
+  for(unsigned layer=0;layer<4;++layer) {
+   handshake["terrain_textures"].append(regional?assets[layer]->getWorldID():LLUUID("c3800000-0000-0000-0000-000000000001"));
+   handshake["terrain_starts"].append(regional?1000.:0.);
+   handshake["terrain_ranges"].append(1.);
+  }
+  world.configureRegion(handshake);
+ }
  void capture(VSVulkanContext& owner,Diligent::IRenderDevice* device,Diligent::IDeviceContext* context,
               Diligent::ITextureView* windowTarget,unsigned width,unsigned height) {
   using namespace Diligent;
@@ -98,11 +107,12 @@ struct TerrainReplay {
   if(packets.empty() || !packets[0].terrainMaterial) return;
   requireTerrain(packets.size()==1,"R3 terrain production patch missing or duplicated");
   const auto& material=*packets[0].terrainMaterial;
-  requireTerrain(material.paint && material.detail==0 && material.planar==3 && material.sharpness==8,
+  requireTerrain(material.paint==(phase<4) && material.detail==0 && material.planar==3 && material.sharpness==8,
    "R3 terrain settings did not reach production material");
+  if(phase==4 && std::abs(material.layers[0].base[0]-.25f)>1e-6f) return;
   for(unsigned layer=0;layer<4;++layer) {
    requireTerrain(material.images[layer][0] && material.layers[layer].pbr,"R3 terrain lost loaded local PBR channel");
-   requireTerrain(std::abs(material.layers[layer].uv[0].matrix[0]-.125f)<1e-6f,"R3 terrain PBR scale was inert");
+   requireTerrain(phase==4 || std::abs(material.layers[layer].uv[0].matrix[0]-.125f)<1e-6f,"R3 terrain PBR scale was inert");
   }
   packets[0].fullbright=true; // Isolate R3 material inputs from later R5 lighting.
   if(!renderer) renderer=std::make_unique<VSWorldRenderer>(device,context);
@@ -130,11 +140,21 @@ struct TerrainReplay {
   context->UnmapTextureSubresource(staging,0,0);
 
   const auto root=std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));
-  const auto name="r3/terrain/paint-layer-"+std::to_string(phase)+".rgba";
+  const auto name=phase==4?std::string("r3/terrain/regional-override.rgba"):"r3/terrain/paint-layer-"+std::to_string(phase)+".rgba";
   std::ofstream out(root/name,std::ios::binary);out.write(reinterpret_cast<const char*>(pixels.data()),pixels.size());
   requireTerrain(out.good(),"R3 terrain material readback archive failed");out.close();
+  const U8 regionalColor[4]={137,0,0,255}; // sRGB encoding of linear .25 red.
+  const U8* expected=phase==4?regionalColor:colors[phase];
   for(std::size_t offset=0;offset<pixels.size();++offset)
-   requireTerrain(std::abs(int(pixels[offset])-int(colors[phase][offset%4]))<=1,"R3 actual terrain PBR pixels differ from selected paint layer");
+   requireTerrain(std::abs(int(pixels[offset])-int(expected[offset%4]))<=1,"R3 actual terrain PBR pixels differ from selected material");
+  if(phase==4) {
+   evidence["regional_override"]["file"]=name;evidence["regional_override"]["pixels_verified"]=true;
+   evidence["regional_override"]["base_factor"]=material.layers[0].base[0];
+   configure(world,false);complete=true;
+   renderer->retire();context->SetRenderTargets(1,&windowTarget,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+   Viewport viewport{0.f,0.f,float(width),float(height)};context->SetViewports(1,&viewport,width,height);
+   return;
+  }
   LLSD row;row["file"]=name;row["layer"]=S32(phase);row["pixels_verified"]=true;
   evidence["layers"].append(row);
   if(++phase<4) {
@@ -163,7 +183,16 @@ struct TerrainReplay {
    evidence["paint_bake"]=true;evidence["paint_bit_depth"]=1;
    world.deleteTerrainPaintMap();
    requireTerrain(!gSavedSettings.getBOOL("LocalTerrainPaintEnabled") && !resources.image("terrain:local-paint"),"R3 terrain paint deletion failed");
-   evidence["paint_deleted"]=true;complete=true;
+   evidence["paint_deleted"]=true;
+   // Keep the actual shared material assets alive, but remove local overrides.
+   // Their UUIDs now arrive through the ordinary regional material owner.
+   std::ofstream ids(root/"r3/terrain/regional-material-ids.txt");
+   for(unsigned layer=0;layer<4;++layer) {
+    ids<<assets[layer]->getWorldID()<<"\n";
+    gSavedSettings.setString("LocalTerrainAsset"+std::to_string(layer+1),"");
+   }
+   ids.close();requireTerrain(ids.good(),"Regional terrain identity artifact failed");
+   configure(world,true);
   }
   renderer->retire();context->SetRenderTargets(1,&windowTarget,nullptr,RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
   Viewport viewport{0.f,0.f,float(width),float(height)};context->SetViewports(1,&viewport,width,height);
