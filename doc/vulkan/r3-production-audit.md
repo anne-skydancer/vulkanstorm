@@ -790,3 +790,25 @@ The actual publication regression covers both initial and resize acknowledgement
 as well as refused uploads and subsequent dirty publication. Viewer compilation
 and focused evidence/replay tests pass; the full runtime/cache checks are pending
 the rebuilt checkpoint. The original warm-request cause remains unclaimed.
+
+
+## Expanded demand during an outstanding cache read
+
+At source `826953839e`, four independent headless read-only restarts reused the
+saved cache with zero texture HTTP requests (`.tmp/r3-cache-body-repeat`). This
+successful repetition does not establish the cause of the earlier intermittent
+miss. Native body lookups now retain APR status, actual 64-bit length and an
+independent file-stat diagnostic; oversized cached bodies are rejected before
+narrowing or allocation. Legacy file queries retain their existing path.
+
+A separate state-machine audit reproduced a concrete pending-demand gap: a
+successful 600-byte disk read can complete after a subscriber raises demand to
+16 MiB. Previously `CACHE_POST` treated this as a miss and proceeded to HTTP,
+even though the requested remainder could already exist on disk. Native reads
+now record their submitted end offset and continue the shared cache read when
+a completed bounded read satisfied that old demand. Short reads at the submitted
+bound, disabled caches and OpenGL consumers retain ordinary recovery behavior.
+The actual production `CACHE_POST` block is executed by a C++ regression covering
+all those transitions and final full-cache completion. This corrects an observed
+state-machine defect; attribution of the historical intermittent misses remains
+unproven. Full R3 runtime and platform qualification remain open.

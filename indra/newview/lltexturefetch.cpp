@@ -557,6 +557,7 @@ private:
     e_write_to_cache_state mWriteToCacheState;
     LLTextureFetch* mFetcher;
     U64 mNativeCacheReadOperation=0,mNativeCacheWriteOperation=0;
+    S32 mNativeCacheReadEnd=0;
     LLPointer<LLImageFormatted> mFormattedImage;
     std::shared_ptr<const VSResourceBudget::Reservation> mNativeDecodeResidency;
     LLPointer<LLImageRaw>       mRawImage,
@@ -1280,6 +1281,7 @@ bool LLTextureFetchWorker::doWork(S32 param)
 
             add(LLTextureFetch::sCacheAttempt, 1.0);
             mNativeCacheReadOperation=mFetcher->mNativeConsumer?sNativeCacheOperation.fetch_add(1):0;
+            mNativeCacheReadEnd=mDesiredSize;
 
             if (mUrl.compare(0, 7, "file://") == 0)
             {
@@ -1357,6 +1359,20 @@ bool LLTextureFetchWorker::doWork(S32 param)
                                << " Size: " << llformat("%dx%d",mFormattedImage->getWidth(),mFormattedImage->getHeight())
                                << " Desired Discard: " << mDesiredDiscard << " Desired Size: " << mDesiredSize << LL_ENDL;
             record(LLTextureFetch::sCacheHitRate, LLUnits::Ratio::fromValue(1));
+        }
+        else if (mFetcher->mNativeConsumer && mNativeCacheReadEnd>0 &&
+                 mNativeCacheReadEnd<mDesiredSize && mCachedSize>=mNativeCacheReadEnd &&
+                 mFetcher->canLoadFromCache())
+        {
+            // A second subscriber increased demand while the bounded disk read
+            // was pending. Its complete result is not a cache miss: continue
+            // from the cached offset before considering HTTP. A short read at
+            // the submitted bound still takes the ordinary recovery path.
+            LL_INFOS("NativeTextureCache") << mID << " cache demand extended: read_end="
+                << mNativeCacheReadEnd << " cached_bytes=" << mCachedSize
+                << " desired_bytes=" << mDesiredSize << LL_ENDL;
+            setState(LOAD_FROM_TEXTURE_CACHE);
+            return false;
         }
         else
         {
