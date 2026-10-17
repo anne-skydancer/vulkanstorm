@@ -456,3 +456,13 @@ sources. The existing one-unit pixel bound is unchanged; source images remain
 immutable. Viewer face/publication sources compile. Actual viewer bump-face and
 account-lifecycle replay remains required. This adds the production path without
 claiming full R3 acceptance or implementing the later R5/R6 lighting/BRDF work.
+
+The canonical `9b6a3eba03` legacy-bump build passed ordinary connected UI and
+local bitmap/material replay in 13.1 seconds. A production world-bump replay now
+sends actual ObjectUpdate/KillObject messages, inspects all six admitted faces,
+checks cache sharing, replaces a local source, changes normal scale and records
+independent gradient-oracle/GPU readbacks. Account reset must release every
+retained derived generation. The cold cache CI case requires this evidence and
+its actual archived source/oracle/readback files. Source compilation and evidence
+failure regressions pass; runtime acceptance of this added world-face exercise
+remains pending its canonical rebuild.

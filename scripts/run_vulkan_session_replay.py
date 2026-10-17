@@ -158,6 +158,47 @@ def local_material_contracts_passed(record,directory):
     except (OSError,ValueError,KeyError,TypeError,AttributeError):return False
 
 
+def world_bump_contracts_passed(record,directory):
+    """Actual ObjectUpdate faces must retain scoped, generation-cached normals."""
+    from run_vulkan_texture_cache_tests import u64
+    try:
+        data=record['r3_world_bumps'];root=Path(directory).resolve();stages=[]
+        standard_source=(Path(__file__).resolve().parents[1]/'indra/newview/app_settings/std_bump.ini').read_text().split()[4]
+        if any(data.get(key) is not True for key in ('udp_object_update','stable_cached_generations','object_retired','account_retired')):return False
+        for name,scale in (('initial',128),('source_replaced',128),('scale_changed',64)):
+            rows=data[name]
+            if not isinstance(rows,list) or [row['code'] for row in rows]!=[1,2,3]:return False
+            for row in rows:
+                width,height=row['width'],row['height']
+                if not 0<width<=4096 or not 0<height<=4096 or row['scale']!=scale:return False
+                if not u64(row['generation']) or not u64(row['source_generation']) or row['components'] not in range(1,6):return False
+                contents={}
+                for key in ('gpu_file','expected_file','source_file'):
+                    relative=Path(row[key]);path=(root/relative).resolve()
+                    if relative.is_absolute() or '..' in relative.parts or not path.is_relative_to(root) or (root/relative).is_symlink():return False
+                    contents[key]=path.read_bytes()
+                    if len(contents[key])!=width*height*4:return False
+                if max(abs(a-b) for a,b in zip(contents['gpu_file'],contents['expected_file']))>1:return False
+                if row['code']==3 and row['source_id']!=standard_source:return False
+                if row['code']<=2:
+                    if width!=16 or height!=16 or row['source_id']!='b3000000-0000-0000-0000-000000000002':return False
+                    phase=name!='initial'
+                    expected=bytearray()
+                    for y in range(15,-1,-1):
+                        for x in range(16):expected.extend((255 if (x<8)!=phase else 0,255 if (y<8)!=phase else 0,0,255))
+                    if contents['source_file']!=expected:return False
+            stages.append(rows)
+        for channel in range(3):
+            initial,replaced,scaled=(stage[channel] for stage in stages)
+            if u64(scaled['generation'])<=u64(replaced['generation']):return False
+            if u64(scaled['source_generation'])!=u64(replaced['source_generation']):return False
+            if channel<2:
+                if u64(replaced['generation'])<=u64(initial['generation']) or u64(replaced['source_generation'])<=u64(initial['source_generation']):return False
+            elif replaced['generation']!=initial['generation'] or replaced['source_generation']!=initial['source_generation']:return False
+        return True
+    except (OSError,ValueError,KeyError,TypeError,AttributeError):return False
+
+
 def r2_contracts_passed(record, requests, directory=None, *, write_manifest=True):
     """Never promote a passing R1/UI replay into R2 qualification."""
     if not isinstance(requests, list) or any(not isinstance(request, dict) for request in requests):
@@ -1148,7 +1189,7 @@ def main():
                 raise RuntimeError('Missing production R1 ownership/lifecycle or actual mesh replacement evidence')
             if args.r2_contracts and not r2_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing complete production R2 geometry/appearance/lifecycle evidence')
-            if args.local_image_contracts and (not local_image_contracts_passed(report,directory) or not local_material_contracts_passed(report,directory)):
+            if args.local_image_contracts and (not local_image_contracts_passed(report,directory) or not local_material_contracts_passed(report,directory) or not world_bump_contracts_passed(report,directory)):
                 raise RuntimeError('Missing production local bitmap/material reload, immutable generation or GPU pixel evidence')
             report['conference_start_request'] = conference_start_observed(server.requests)
             if not report['conference_start_request']:
