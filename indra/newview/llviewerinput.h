@@ -34,6 +34,7 @@ const S32 keybindings_xml_version = 1;
 const std::string script_mouse_handler_name = "script_trigger_lbutton";
 
 class LLWindow;
+class LLFocusableElement;
 
 class LLNamedFunction
 {
@@ -120,7 +121,7 @@ public:
 
     S32             loadBindingsXML(const std::string& filename);                                       // returns number bound, 0 on error
     EKeyboardMode   getMode() const;
-    std::string nativeBindingAction(KEY key, MASK mask, bool first_person) const;
+    void resetNativeKeys() const;
 
     static bool     modeFromString(const std::string& string, S32 *mode);           // False on failure
     static bool     mouseFromString(const std::string& string, EMouseClickType *mode);// False on failure
@@ -187,6 +188,8 @@ private:
     typedef std::map<U32, U32> key_remap_t;
     key_remap_t     mRemapKeys[MODE_COUNT];
     std::set<KEY>   mKeysSkippedByUI;
+    mutable std::map<KEY, LLKeyboardBinding> mNativeHeldBindings;
+    mutable LLFocusableElement* mNativeKeyFocus = nullptr;
     bool            mKeyHandledByUI[KEY_COUNT];     // key processed successfully by UI
 
     // This is indentical to what llkeyboard does (mKeyRepeated, mKeyLevel, mKeyDown e t c),

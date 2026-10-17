@@ -629,6 +629,9 @@ RlvFloaterStrings::RlvFloaterStrings(const LLSD& sdKey)
     , m_fDirty(false)
     , m_pStringList(NULL)
 {
+    // The shipped XUI resolves this callback during construction, before
+    // postBuild installs the same controller on its default button.
+    mCommitCallbackRegistrar.add("ClickDefault", boost::bind(&RlvFloaterStrings::onStringRevertDefault, this));
 }
 
 // Checked: 2011-11-08 (RLVa-1.5.0)

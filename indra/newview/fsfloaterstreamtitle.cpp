@@ -60,6 +60,14 @@ void FSStreamTitleManager::initSingleton()
     processMetadataUpdate(gAudiop->getStreamingAudioImpl()->getCurrentMetadata());
 }
 
+void FSStreamTitleManager::resetAccount()
+{
+    mCurrentStreamTitle.clear();
+    mStreamTitleHistory.clear();
+    mHistoryUpdateSignal(mStreamTitleHistory);
+    mUpdateSignal(mCurrentStreamTitle);
+}
+
 void FSStreamTitleManager::processMetadataUpdate(const LLSD& metadata) noexcept
 {
     std::string title{};

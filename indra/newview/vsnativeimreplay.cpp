@@ -12,6 +12,11 @@
 #include "lllocationinputctrl.h"
 #include "lljoystickbutton.h"
 #include "llagentcamera.h"
+#include "llviewerinput.h"
+#include "llkeyboard.h"
+#include "llfocusmgr.h"
+#include "fsnearbychathub.h"
+#include "fsnearbychatcontrol.h"
 #include "llfloaterprofile.h"
 #include "llpanelprofile.h"
 #include "llavatarpropertiesprocessor.h"
@@ -202,6 +207,7 @@ void incoming(VSNativeSession& owner, EInstantMessage dialog, const LLUUID& id, 
 struct Replay : public LLAvatarPropertiesObserver
 {
     unsigned step = 0;
+    bool keyboardChecked = false;
     unsigned cameraCheck = 0;
     unsigned landCheck = 0;
     bool savedLandIndicators = false;
@@ -586,6 +592,64 @@ struct Replay : public LLAvatarPropertiesObserver
         if (step == 0)
         {
             require(owner.phase() == VSNativeSession::Phase::Connected && gIMMgr, "IM replay requires connected shared services");
+            if (!keyboardChecked)
+            {
+                require(gKeyboard != nullptr, "Actual keyboard owner is missing");
+                const bool letterMovement = gSavedSettings.getBOOL("LetterKeysAffectsMovementNotFocusChatBar");
+                gSavedSettings.setBOOL("LetterKeysAffectsMovementNotFocusChatBar", true);
+                if (gMenuHolder) gMenuHolder->hideMenus();
+                gFocusMgr.setKeyboardFocus(nullptr);
+                const auto before = owner.cameraState();
+                // Enter through the actual platform keyboard -> window callback ->
+                // shared arbitration -> scan -> existing registered action chain.
+                gKeyboard->handleTranslatedKeyDown(KEY_LEFT, MASK_NONE);
+                gKeyboard->scanKeyboard();
+                owner.cameraControls(.1f);
+                const auto turned = owner.cameraState();
+                require((turned.at - before.at).magVecSquared() > .0001f,
+                    "Window keyboard callback did not apply configured turn action");
+                gKeyboard->handleTranslatedKeyUp(KEY_LEFT, MASK_NONE);
+                gKeyboard->scanKeyboard();
+                owner.cameraControls(.1f);
+                require((owner.cameraState().at - turned.at).magVecSquared() < .000001f,
+                    "Released keyboard turn remained active");
+                gKeyboard->handleTranslatedKeyDown(KEY_RETURN, MASK_NONE);
+                gViewerWindow->handleUnicodeChar(13, MASK_NONE);
+                gKeyboard->scanKeyboard();
+                require(FSNearbyChat::instance().defaultChatBarHasFocus(),
+                    "No-focus Enter did not activate actual nearby chat input");
+                gKeyboard->handleTranslatedKeyUp(KEY_RETURN, MASK_NONE);
+                gKeyboard->scanKeyboard();
+                auto* bottom = gViewerWindow->getRootView()->findChild<FSNearbyChatControl>("default_chat_bar");
+                require(bottom != nullptr, "Default chat editor is missing");
+                const auto savedText = bottom->getText();
+                bottom->setText(LLStringExplicit("ab"));
+                bottom->setCursorAndScrollToEnd();
+                gKeyboard->handleTranslatedKeyDown(KEY_BACKSPACE, MASK_NONE);
+                gKeyboard->scanKeyboard();
+                gKeyboard->handleTranslatedKeyUp(KEY_BACKSPACE, MASK_NONE);
+                gKeyboard->scanKeyboard();
+                require(bottom->getText() == "a", "Window Backspace was lost or deleted twice");
+                require(gViewerWindow->handleUnicodeChar(0x03a9, MASK_NONE), "Window Unicode input was not consumed");
+                require(bottom->getText() == "a\xCE\xA9", "Window Unicode input did not reach actual editor");
+                bottom->setText(LLStringExplicit(""));
+                gFocusMgr.setKeyboardFocus(nullptr);
+                gKeyboard->handleTranslatedKeyDown(KEY_DIVIDE, MASK_NONE);
+                gKeyboard->scanKeyboard();
+                require(!FSNearbyChat::instance().defaultChatBarHasFocus(), "Gesture shortcut fired before key release");
+                gKeyboard->handleTranslatedKeyUp(KEY_DIVIDE, MASK_NONE);
+                gKeyboard->scanKeyboard();
+                require(FSNearbyChat::instance().defaultChatBarHasFocus() && bottom->getText() == "/",
+                    "Released gesture shortcut did not activate actual chat editor");
+                bottom->setText(LLStringExplicit(savedText));
+                gFocusMgr.setKeyboardFocus(nullptr);
+                gViewerInput.resetNativeKeys();
+                gKeyboard->resetKeys();
+                owner.cameraReset();
+                gSavedSettings.setBOOL("LetterKeysAffectsMovementNotFocusChatBar", letterMovement);
+                evidence["connected_keyboard_window_dispatch"] = true;
+                keyboardChecked = true;
+            }
             if (cameraCheck < 6)
             {
                 const char* names[] = {"camera", "fs_camera_small", "phototools_camera"};

@@ -30,6 +30,7 @@
 
 #include "llcontrol.h"
 #include "llfloater.h"
+#include <boost/signals2/connection.hpp>
 
 class LLColorSwatchCtrl;
 class LLScrollListCtrl;
@@ -66,6 +67,7 @@ private:
     void hideUIControls();
 
     LLScrollListCtrl* mSettingList;
+    boost::signals2::scoped_connection mHideDefaultsConnection;
 
 protected:
     LLUICtrl*           mDefaultButton = nullptr;

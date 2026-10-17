@@ -31,6 +31,8 @@
 #include "llexperiencecache.h"
 #include "llemojihelper.h"
 #include "llfloateremojipicker.h"
+#include "llfloaterchatmentionpicker.h"
+#include "fsfloaterstreamtitle.h"
 
 namespace
 {
@@ -133,11 +135,13 @@ void vs_native_im_reset()
     LLFloaterGroupBulkBan::destroyAccountFloaters();
     gEventNotifier.clearAccount();
     if (LLEmojiHelper::instanceExists()) LLEmojiHelper::instance().resetAccount();
+    LLFloaterChatMentionPicker::resetAccount();
     extern std::vector<LLSD> gLoadUrlList;
     gLoadUrlList.clear();
     // Panels retain pointers into shared group/profile account data. Destroy
     // them while those services still exist, before discarding the old login.
-    for (const char* name : { "settings_debug", "guidebook", "marketplace", "grid_status", "destinations", "fs_teleporthistory", "help_browser", "stats", "lagmeter", "web_content", "search", "inspect_remote_object", "search_replace", "fs_nearby_chat", "imcontacts", "toybox", "inventory_settings", "emoji_picker", "event", "experiences", "experience_profile", "experience_search", "marketplace_listings", "associate_listing", "marketplace_validation", "linkreplace", "inventory", "secondary_inventory", "people", "avatar_picker", "group_picker", "pay_resident", "display_name", "pay_object", "upload_image", "upload_sound", "properties", "item_properties", "change_item_thumbnail", "preview_sound", "preview_script", "script_colors", "fs_partial_inventory", "preview_texture", "preview_notecard", "preview_conversation", "conversation", "fs_add_contact", "fs_contact_set_config", "fs_blocklist", "mute_object_by_name", "publish_classified", "fs_group_titles", "vs_group_search", "fs_group", "profile", "prefs_translation", "prefs_autoreplace", "prefs_spellchecker", "prefs_spellchecker_import", "perms_default", "preferences", "prefs_proxy", "keybind_dialog" })
+    for (const char* name : { "window_size", "fs_protectedfolders", "fs_streamtitlehistory", "fs_streamtitle", "chat_mention_picker", "emoji_complete", "preview_trash", "new_feature_notification", "fs_whitelist_floater", "settings_color", "fs_splash_screen_settings", "fs_volume_controls", "font_test", "hud", "rlv_strings",
+        "settings_debug", "guidebook", "marketplace", "grid_status", "destinations", "fs_teleporthistory", "help_browser", "stats", "lagmeter", "web_content", "search", "inspect_remote_object", "search_replace", "fs_nearby_chat", "imcontacts", "toybox", "inventory_settings", "emoji_picker", "event", "experiences", "experience_profile", "experience_search", "marketplace_listings", "associate_listing", "marketplace_validation", "linkreplace", "inventory", "secondary_inventory", "people", "avatar_picker", "group_picker", "pay_resident", "display_name", "pay_object", "upload_image", "upload_sound", "properties", "item_properties", "change_item_thumbnail", "preview_sound", "preview_script", "script_colors", "fs_partial_inventory", "preview_texture", "preview_notecard", "preview_conversation", "conversation", "fs_add_contact", "fs_contact_set_config", "fs_blocklist", "mute_object_by_name", "publish_classified", "fs_group_titles", "vs_group_search", "fs_group", "profile", "prefs_translation", "prefs_autoreplace", "prefs_spellchecker", "prefs_spellchecker_import", "perms_default", "preferences", "prefs_proxy", "keybind_dialog" })
     {
         const auto floaters = LLFloaterReg::getFloaterList(name);
         for (auto* floater : floaters)
@@ -158,6 +162,7 @@ void vs_native_im_reset()
     // Session observers/close signals have completed before their shared host
     // retires. The next account constructs a fresh container and pinned tabs.
     LLFloaterReg::destroyInstance("fs_im_container");
+    if (FSStreamTitleManager::instanceExists()) FSStreamTitleManager::instance().resetAccount();
     // Inbox panel destructors unregister from this account's freshness owner.
     // Retire all inventory views first, then persist while the old account
     // directory is still selected and discard IDs before the next login loads.

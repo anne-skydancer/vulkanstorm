@@ -316,6 +316,30 @@ void LLAgentCamera::resetView(bool reset_camera, bool change_camera, bool moveme
         return;
     }
 
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active())
+    {
+        if (gAgent.getAutoPilot()) gAgent.stopAutoPilot(true);
+        if (gMenuHolder) gMenuHolder->hideMenus();
+        if ((gSavedSettings.getBOOL("FSResetCameraOnMovement") || !movement) &&
+            !gSavedSettings.getBOOL("FreezeTime"))
+        {
+            if (change_camera) changeCameraToDefault();
+            if (reset_camera)
+            {
+                native->cameraResetPan();
+                native->cameraResetRoll();
+                setFocusOnAvatar(true, ANIMATE);
+                mCameraFOVZoomFactor = 0.f;
+            }
+            resetPanDiff();
+            resetOrbitDiff();
+            mHUDTargetZoom = 1.f;
+        }
+        return;
+    }
+#endif
+
     if (gAgent.getAutoPilot())
     {
         gAgent.stopAutoPilot(true);
