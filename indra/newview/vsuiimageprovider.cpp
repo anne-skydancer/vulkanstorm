@@ -138,21 +138,36 @@ struct VSUIImageProvider::Impl : std::enable_shared_from_this<VSUIImageProvider:
         if(!posted) {entry.preparing=false;if(!entry.prepared) entry.uploadResidency.reset();}
         return posted;
     }
-    bool evict(const LLUUID& preserve)
+    LLUIImagePtr fallback;
+    bool evict(const LLUUID& preserve,bool metadata=false)
     {
         auto victim=remote.end();
         for (auto found=remote.begin();found!=remote.end();++found)
         {
+            const bool subscribed=found->second.facade && found->second.facade->getNumRefs()>1;
             if (found->first==preserve || found->second.local || found->second.fetching || found->second.preparing || found->second.prepared ||
-                (found->second.facade && found->second.facade->getNumRefs()>1)) continue;
+                (metadata && subscribed)) continue;
+            // A retained control can be hidden. Preserve its facade identity,
+            // but only recent draw/request interest pins its cached payload.
+            if(!metadata && LLTimer::getTotalSeconds()-found->second.lastUsed<1.0) continue;
             // Dropping a cache entry cannot free bytes held by scene packets or
             // queued uploads. Keep that entry rather than churn through the cache.
             const auto image=resources.image("remote:"+found->first.asString());
             if(image && image.use_count()>2) continue;
+            if(!metadata && !image && !found->second.auxiliary) continue;
             if (victim==remote.end() || found->second.touched<victim->second.touched) victim=found;
         }
         if (victim==remote.end()) return false;
-        resources.erase("remote:"+victim->first.asString());remote.erase(victim);return true;
+        resources.erase("remote:"+victim->first.asString());
+        auto& entry=victim->second;
+        if(!metadata && entry.facade && entry.facade->getNumRefs()>1)
+        {
+            entry.pixels=fallback;entry.auxiliary=nullptr;entry.discard=-1;
+            entry.generation=entry.readyGeneration=entry.failedGeneration=0;
+            entry.attempts=0;entry.retryAt=0;entry.hasUploadPolicy=false;
+        }
+        else remote.erase(victim);
+        return true;
     }
     explicit Impl(VSUIResources &r) : resources(r)
     {
@@ -278,7 +293,7 @@ void VSUIImageProvider::pumpImages()
     std::vector<LLUUID> pending;
     for(const auto& [id,entry]:mImpl->remote)
         if(!entry.local && !entry.fetching && !entry.preparing && !entry.prepared && entry.attempts<3 && LLTimer::getTotalSeconds()>=entry.retryAt &&
-            ((entry.uiDemand && entry.facade && entry.facade->getNumRefs()>1) || LLTimer::getTotalSeconds()-entry.lastUsed<1.0))
+            LLTimer::getTotalSeconds()-entry.lastUsed<1.0)
             pending.push_back(id);
     for(const auto& id:pending) getUIImageByID(id,-2);
 }
@@ -370,7 +385,7 @@ bool VSUIImageProvider::publishLocalImage(const LLUUID& id,const LLImageRaw& raw
     if(mImpl->retired || id.isNull() || id==IMG_DEFAULT) return false;
     auto found=mImpl->remote.find(id);
     if(found!=mImpl->remote.end() && !found->second.local) return false;
-    if(found==mImpl->remote.end() && mImpl->remote.size()>=16384 && !mImpl->evict(id)) return false;
+    if(found==mImpl->remote.end() && mImpl->remote.size()>=16384 && !mImpl->evict(id,true)) return false;
     const auto pixels=mImpl->resources.publish("remote:"+id.asString(),raw);
     if(!pixels) return false;
     auto& entry=mImpl->remote[id];entry.local=true;entry.redirect.setNull();entry.redirectLoaded.disconnect();
@@ -546,7 +561,7 @@ void VSUIImageProvider::cleanUp()
 LLUIImagePtr VSUIImageProvider::requestWorldImage(const LLUUID& id,unsigned dimension,bool exact)
 {
     if(id.isNull()) return nullptr;
-    if(!mImpl->remote.count(id) && mImpl->remote.size()>=16384 && !mImpl->evict(id)) return nullptr;
+    if(!mImpl->remote.count(id) && mImpl->remote.size()>=16384 && !mImpl->evict(id,true)) return nullptr;
     auto& entry=mImpl->remote[id];
     entry.exactWorld|=exact;
     const unsigned target=std::clamp(dimension,1u,4096u);
@@ -560,7 +575,7 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
 {
     if (id.isNull())
         return nullptr;
-    if (!mImpl->remote.count(id) && mImpl->remote.size()>=16384 && !mImpl->evict(id)) return getUIImage("Generic_Person");
+    if (!mImpl->remote.count(id) && mImpl->remote.size()>=16384 && !mImpl->evict(id,true)) return getUIImage("Generic_Person");
     auto& entry = mImpl->remote[id];
     if(priority!=-2) {entry.touched=++mImpl->clock;entry.lastUsed=LLTimer::getTotalSeconds();}
     const auto owner = VSNativeSession::active();
@@ -568,6 +583,7 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
     if (!entry.facade)
     {
         entry.pixels = getUIImage("Generic_Person");
+        mImpl->fallback=entry.pixels;
         const std::weak_ptr<Impl> weak = mImpl;
         entry.facade = new LLUIImage(id.asString(), entry.pixels->getWidth(), entry.pixels->getHeight(),
             [weak, id](S32 x, S32 y, S32 w, S32 h, const LLColor4& color, bool solid,
@@ -576,6 +592,8 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
                 if (const auto images = weak.lock(); images && !images->retired)
                     if (const auto found = images->remote.find(id); found != images->remote.end())
                     {
+                        found->second.touched=++images->clock;
+                        found->second.lastUsed=LLTimer::getTotalSeconds();
                         if (solid) found->second.pixels->drawSolid(x, y, w, h, color);
                         else found->second.pixels->draw(x, y, w, h, color);
                     }

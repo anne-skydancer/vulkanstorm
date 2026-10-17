@@ -34,7 +34,7 @@ struct VSUIImageProvider {
   int fullWidth=0,fullHeight=0,components=0,readyGeneration=0;};
  struct Resources {bool refuse=false;int publications=0;std::shared_ptr<Image> publish(const std::string&,const LLImageRaw& raw){
   if(refuse){return {};}return std::make_shared<Image>(Image{raw.w,raw.h,++publications,0});}};
- struct Impl {bool retired=false;std::map<LLUUID,Remote> remote;Resources resources;bool evict(LLUUID){return false;}};
+ struct Impl {bool retired=false;std::map<LLUUID,Remote> remote;Resources resources;bool evict(LLUUID,bool=false){return false;}};
  std::shared_ptr<Impl> mImpl=std::make_shared<Impl>();
  void getUIImageByID(LLUUID id,int){auto& value=mImpl->remote[id];if(!value.facade)value.facade=std::make_shared<Image>();}
  bool publishLocalImage(const LLUUID&,const LLImageRaw&);
