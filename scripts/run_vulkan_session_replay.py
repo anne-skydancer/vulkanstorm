@@ -191,7 +191,9 @@ def r2_contracts_passed(record, requests, directory=None, *, write_manifest=True
             return False
         capture = read_llsd(ET.fromstring((root/'bake-readbacks.xml').read_text()))
         readbacks = capture['bakes']
-        if capture['mesh_replacement'] != dict(budget_bytes=108, refusals=2, input_rejections=2, gpu_buffer_readbacks=2,
+        # Three 72-byte vertices (UV1/tangent/color included) plus three U32 indices.
+        # Keep this independent of the viewer-reported allocation/readback sizes.
+        if capture['mesh_replacement'] != dict(budget_bytes=228, refusals=2, input_rejections=2, gpu_buffer_readbacks=2,
                 prior_generation_retained=True, owner_release_allows_retry=True,
                 bytes_after_retire=0, snapshot_bytes_after_retire=0):
             return False
@@ -219,7 +221,7 @@ def r2_contracts_passed(record, requests, directory=None, *, write_manifest=True
                 artifacts.append(dict(path=path.name,bytes=path.stat().st_size,sha256=digest))
             if digests[0] != digests[1]:
                 return False
-        for kind, size in (('vertices', 96), ('indices', 12)):
+        for kind, size in (('vertices', 216), ('indices', 12)):
             hashes = []
             for side in ('actual', 'expected'):
                 path = root/f'mesh-{kind}-{side}.bin'
