@@ -1,5 +1,5 @@
 {
-  "source_commit": "8f1ccdb3b78361b3858ba615942a3554baea2b34",
+  "source_commit": "8bd5649c5ae737071def53d3a5b0bfa9868a9889",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "c1a9091e709b05051cd833122ef415917047e146e0d9c0cfe48232e81649231e",
+      "sha256": "981d875233d7313dd660c66b003c1eb4df97f7c69ea49a20288d2363411b3c2e",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
@@ -401,7 +401,7 @@
       ]
     },
     "indra/newview/vsuirenderer.cpp": {
-      "sha256": "0bf0422f467d327701230e9b1bb81de1c82383c617a2a3af280c316da742794d",
+      "sha256": "7301a4cb23238adf2c86c8a17a0f5aac8b042830ad0b6fb8d3e5406716407b93",
       "anchors": [
         "VSUIRenderer::upload",
         "VSUIRenderer::draw",
