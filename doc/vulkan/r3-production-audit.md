@@ -670,3 +670,11 @@ validated web-URL admission as the other requested services. A regression
 executes the actual primary admission loop, proving those fields survive while
 non-web and unrequested capabilities remain rejected. The fix compiles; the
 legacy runtime acceptance must be rerun with it.
+
+The capability correction is now verified by the actual staged viewer at
+`343e202e13`: the headless software-Vulkan session passed in 21.0 seconds,
+including the real compressed legacy material HTTP response, all six face
+variants, independent channel GPU readbacks and object/account retirement.
+Evidence is retained in `.tmp/r3-legacy-grants-qualified`. This establishes the
+local legacy-material path; it does not certify unfinished terrain, settings,
+media-plugin or pressure-control work, or three-platform R3 acceptance.
