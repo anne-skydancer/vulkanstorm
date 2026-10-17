@@ -1,5 +1,5 @@
 {
-  "source_commit": "c53c4db3e25aa73a0aadb1cb8bd429d248a516ca",
+  "source_commit": "915787799b335fd74afb3ff6a037de783ffd421b",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -49714,7 +49714,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 29,
       "end": 31,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49723,7 +49723,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 423,
       "end": 425,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49732,7 +49732,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 791,
       "end": 793,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49741,7 +49741,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 843,
       "end": 845,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49750,7 +49750,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 911,
       "end": 913,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49759,7 +49759,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 938,
       "end": 940,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49768,7 +49768,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 973,
       "end": 975,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49777,7 +49777,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 981,
       "end": 983,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49786,7 +49786,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 989,
       "end": 991,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49795,7 +49795,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 1168,
       "end": 1170,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49804,7 +49804,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 1189,
       "end": 1191,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49813,7 +49813,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 1214,
       "end": 1216,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49822,7 +49822,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 1236,
       "end": 1238,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49831,7 +49831,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 1254,
       "end": 1256,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -49839,44 +49839,44 @@
     {
       "path": "indra/newview/llagentcamera.cpp",
       "start": 2530,
-      "end": 2532,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "end": 2530,
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
     },
     {
       "path": "indra/newview/llagentcamera.cpp",
-      "start": 2595,
-      "end": 2597,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "start": 2596,
+      "end": 2598,
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
     },
     {
       "path": "indra/newview/llagentcamera.cpp",
-      "start": 2681,
-      "end": 2683,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "start": 2682,
+      "end": 2684,
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
     },
     {
       "path": "indra/newview/llagentcamera.cpp",
-      "start": 2866,
-      "end": 2868,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "start": 2867,
+      "end": 2869,
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
     },
     {
       "path": "indra/newview/llagentcamera.cpp",
-      "start": 3343,
-      "end": 3345,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "start": 3344,
+      "end": 3346,
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -50515,7 +50515,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 2304,
       "end": 2310,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -50524,7 +50524,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 2316,
       "end": 2322,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -50533,7 +50533,7 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 2328,
       "end": 2330,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -50542,16 +50542,16 @@
       "path": "indra/newview/llagentcamera.cpp",
       "start": 2340,
       "end": 2342,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
     },
     {
       "path": "indra/newview/llagentcamera.cpp",
-      "start": 3124,
-      "end": 3126,
-      "sha256": "76258cb4ea6a36e73684bfa6c3df26d51a2d9c66e60e546e7d4137c453beb0ce",
+      "start": 3125,
+      "end": 3127,
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -50789,10 +50789,28 @@
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llagentcamera.cpp",
+      "start": 2530,
+      "end": 2530,
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llagentcamera.cpp",
+      "start": 2539,
+      "end": 2542,
+      "sha256": "6e74dc5f1c89ec69646c24588a3ed7249b49daf90c0bb0ac1764ef4a6be1acd1",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "0abb18d4adfb255acea7ff00b246017923d74483",
+    "previous_source_commit": "3238dcf77c106ba6fbbd7585bcd499e042123b81",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
