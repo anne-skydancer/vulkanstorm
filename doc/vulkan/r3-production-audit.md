@@ -903,3 +903,22 @@ Linux and reproduces its exact macro otherwise. Both include orders reproduce
 the pre-fix failure and pass after the rename, without undefining platform
 macros. Native texture preparation and material-basis regressions also pass.
 The full Linux CI rebuild remains the platform qualification step.
+
+
+The same revision's qualification workflow also failed before graphics jobs:
+its extracted native cleanup fixture lacked the current texture-fetch drain,
+shutdown and statistics-recorder interfaces. The fixture now executes that
+sequence and asserts pending workers drain before deletion. A full 98-script
+source-CI sweep identified three further stale fixtures: scene replacement
+material/media/animation ownership, avatar bake alias resolution and extracted
+image-role classification. These fixtures now model the current dependencies
+and retain/extend ownership, alias-generation and pool-capacity assertions;
+viewer behavior was not changed to satisfy those tests.
+
+After these corrections, 97 of the 98 source-CI scripts pass locally. The
+remaining Windows-only process-isolation script cannot create its private
+window station under the current process token (WinError 5); its Windows-only
+cases are skipped on the Linux source-CI runner. One initial parallel sweep
+also saw a loopback connection reset in the parity baseline; that unchanged
+script passes standalone. This does not establish the reset's cause or waive
+its assertions. Actual Linux builds/graphics still require the pushed CI run.

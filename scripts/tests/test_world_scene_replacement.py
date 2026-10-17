@@ -32,6 +32,7 @@ class WorldSceneReplacement(unittest.TestCase):
             'bool replace(U32 id,Object&& object)', 'void eraseAnimated()'))
         self.compile(r'''
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstdint>
 #include <map>
@@ -39,7 +40,7 @@ class WorldSceneReplacement(unittest.TestCase):
 #include <string>
 #include <optional>
 #include <vector>
-using U32=uint32_t;using U64=uint64_t;using S32=int;using U16=uint16_t;
+using U8=uint8_t;using U32=uint32_t;using U64=uint64_t;using S32=int;using U16=uint16_t;
 constexpr int LL_PCODE_LEGACY_AVATAR=9;
 struct LLUUID {
  int value=0;
@@ -61,12 +62,20 @@ struct LLFrameTimer {static double getTotalSeconds(){return 100;}};
 namespace VSWorldContracts {enum class OwnerKind {Avatar,ControlAvatar,Attachment,Object};}
 struct LLExtendedMeshParams {static constexpr U32 ANIMATED_MESH_ENABLED_FLAG=1;};
 struct Mesh {int generation;};
+struct Material {std::shared_ptr<int> value;
+ void setGLTFMaterialOverride(const std::shared_ptr<int>& v){value=v;}
+ std::shared_ptr<int> getGLTFMaterialOverride()const{return value;}};
+struct RenderMaterials {std::map<U8,int> values;int getMaterial(U8 face)const{
+ auto found=values.find(face);return found==values.end()?0:found->second;}};
+struct TextureAnimation {int token=0;bool equals(const TextureAnimation& other)const{return token==other.token;}};
 struct Object {
  LLUUID id;U32 parent=0;int pcode=4,attachment=0;
  U64 generation=0,revision=0;U32 extendedMeshFlags=0;bool parentRetired=false,renderable=true,dirty=true;
  std::shared_ptr<const VSResourceBudget::Reservation> slot,primitiveResidency;
  std::shared_ptr<LLVolume> volume;Params params;
- struct Face {std::shared_ptr<Mesh> mesh;int publishedMaterial=0;std::shared_ptr<int> publishedImage;bool published=false;U64 poseGeneration=0;};std::vector<Face> faces,admittedFaces;
+ struct Face {Material material;std::shared_ptr<int> surface;std::array<std::shared_ptr<int>,4> publishedChannels;std::shared_ptr<Mesh> mesh;int publishedMaterial=0;std::shared_ptr<int> publishedImage;bool published=false;U64 poseGeneration=0;};std::vector<Face> faces,admittedFaces;
+ std::map<unsigned,std::shared_ptr<int>> media;RenderMaterials renderMaterials;
+ std::shared_ptr<TextureAnimation> animation;U8 textureAnimMode=0;
  Motion motion;int scale=0,position=0,rotation=0,velocity=0,acceleration=0,angularVelocity=0;
  U16 taskSerial=0;bool taskKnown=false;std::string taskFile;
  std::optional<int> taskRequest;double taskDeadline=0;std::map<LLUUID,S32> controlAnimations;
@@ -81,6 +90,9 @@ struct Scene {
  std::map<LLUUID,AnimationState> pendingAnimations;
  std::shared_ptr<Budgets> budgets=std::make_shared<Budgets>();
  U64 nextObjectGeneration=1,nextRevision=1;unsigned requests=0;
+ std::map<U32,int> pendingMaterialOverrides;unsigned overrides=0;
+ bool applyMaterialOverrides(Object& object,int value){++overrides;object.faces[0].material.value=std::make_shared<int>(value);return true;}
+
  void request(U32){++requests;}void dirtyChildren(U32){}
  bool linksCurrent(const Object& object)const{return !object.parentRetired;}
 BODIES
@@ -95,16 +107,23 @@ int main(){
  auto& original=scene.objects.at(50);original.faces[0].mesh=first;original.faces[1].mesh=second;
  original.faces[0].published=true;original.faces[0].publishedMaterial=34;original.faces[0].poseGeneration=9;
  original.faces[0].publishedImage=std::make_shared<int>(112);const auto image=original.faces[0].publishedImage;
+ original.faces[0].material.value=std::make_shared<int>(113);
+ original.faces[0].surface=std::make_shared<int>(114);original.faces[0].publishedChannels[0]=std::make_shared<int>(115);
+ auto materialOverride=original.faces[0].material.value,materialSurface=original.faces[0].surface,normal=original.faces[0].publishedChannels[0];
+ original.media[0]=std::make_shared<int>(116);auto media=original.media[0];
+ original.animation=std::make_shared<TextureAnimation>(TextureAnimation{6});auto animation=original.animation;original.textureAnimMode=3;
  original.taskKnown=true;original.taskSerial=17;original.taskRequest=4;original.controlAnimations[{21}]=6;
  original.controlAvatar=std::make_shared<int>(123);auto controller=original.controlAvatar;
  original.flexible=Flexible{};original.flex=std::make_shared<FlexState>();auto simulation=original.flex;
  const auto generation=original.generation,revision=original.revision;
  auto lease=original.slot;
- auto compatible=update();compatible.flexible=Flexible{};assert(scene.replace(50,std::move(compatible)));
+ auto compatible=update();compatible.animation=std::make_shared<TextureAnimation>(TextureAnimation{6});compatible.flexible=Flexible{};assert(scene.replace(50,std::move(compatible)));
  const auto& preserved=scene.objects.at(50);
  assert(preserved.faces[0].mesh==first&&preserved.faces[1].mesh==second);
  assert(preserved.faces[0].published&&preserved.faces[0].publishedMaterial==34&&
         preserved.faces[0].publishedImage==image&&preserved.faces[0].poseGeneration==9);
+ assert(preserved.faces[0].material.value==materialOverride&&preserved.faces[0].surface==materialSurface&&preserved.faces[0].publishedChannels[0]==normal);
+ assert(preserved.media.at(0)==media&&preserved.animation==animation&&preserved.textureAnimMode==3);
  assert(preserved.generation==generation&&preserved.revision>revision&&preserved.dirty);
  assert(preserved.slot==lease&&preserved.taskKnown&&preserved.taskSerial==17);
  assert(preserved.taskRequest==4&&preserved.controlAnimations.at({21})==6);
@@ -132,6 +151,14 @@ int main(){
   assert(fresh.replace(50,std::move(next)));
   assert(!fresh.objects.at(50).faces[0].mesh);
  }
+ // A changed asset ID retains its incoming override, not the previous asset's.
+ Scene materials;auto prior=update();prior.renderMaterials.values[0]=4;
+ prior.faces[0].material.value=std::make_shared<int>(11);assert(materials.replace(50,std::move(prior)));
+ auto changed=update();changed.renderMaterials.values[0]=5;auto incoming=std::make_shared<int>(22);
+ changed.faces[0].material.value=incoming;assert(materials.replace(50,std::move(changed)));
+ assert(materials.objects.at(50).faces[0].material.value==incoming);
+ Scene queued;queued.pendingMaterialOverrides[50]=99;assert(queued.replace(50,update()));
+ assert(queued.pendingMaterialOverrides.empty()&&queued.overrides==1&&*queued.objects.at(50).faces[0].material.value==99);
  // The ordinary animesh kill switch retires the complete linked family,
  // while retaining unrelated owners and their resource leases.
  Scene animated;auto control=update();control.extendedMeshFlags=1;

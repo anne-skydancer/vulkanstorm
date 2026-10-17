@@ -29,6 +29,9 @@ struct UUID {unsigned char mData[16]{};UUID(unsigned v=0){mData[0]=v;}
  bool notNull()const{return mData[0]!=0;}std::string asString()const{return std::to_string(mData[0]);}
  bool operator!=(UUID b)const{return !std::equal(mData,mData+16,b.mData);}};
 const UUID IMG_DEFAULT_AVATAR{90},IMG_INVISIBLE{91};
+std::map<int,UUID> nativeAliases;
+UUID vs_native_image_id(const UUID& id){auto found=nativeAliases.find(id.mData[0]);return found==nativeAliases.end()?id:found->second;}
+
 struct Param {int id;float weight;Param(int i,float w):id(i),weight(w){}virtual ~Param()=default;
  int getID()const{return id;}float getWeight()const{return weight;}};
 struct LLTexLayerParam:Param {int type;LLTexLayerParam(int id,float weight,int t):Param(id,weight),type(t){}
@@ -64,6 +67,10 @@ int main(){Avatar avatar;Param height{33,.25f};LLTexLayerParam skinColor{100,.4f
  std::swap(avatar.ownedWearables[1],avatar.ownedWearables[2]);assert(avatar.bakeSignature(upper,ready)!=order);
  assert(avatar.bakeSignature(head,ready)==h);
  avatar.resources.images["remote:1"]=2;assert(avatar.bakeSignature(head,ready)!=h);
+ nativeAliases[1]=UUID{3};avatar.resources.images["remote:3"]=7;
+ ready=true;auto aliased=avatar.bakeSignature(head,ready);assert(ready&&aliased!=h);
+ avatar.resources.images["remote:3"]=8;assert(avatar.bakeSignature(head,ready)!=aliased);
+ nativeAliases.clear();
  avatar.resources.images.erase("remote:1");ready=true;avatar.bakeSignature(head,ready);assert(!ready);
  assert(LLUI::requests>0);
 }

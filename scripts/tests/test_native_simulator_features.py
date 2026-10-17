@@ -77,15 +77,31 @@ struct Session {void shutdown(){assert(!gRlvHandler.m_fEnabled&&handler_deletes=
  account_alive=false;}};
 struct Message {void setMessageAdmission(std::function<void()>){}};
 Message* gMessageSystem=nullptr;
-struct Worker {bool stopped=false;void shutdown(){assert(!account_alive);stopped=true;}
- ~Worker(){assert(stopped);}};
-Worker* sImageDecodeThread=new Worker;Worker* sTextureCache=new Worker;
-struct Mainloop {template<class Duration>void runFor(Duration){assert(!sImageDecodeThread&&!sTextureCache);}} gMainloopWork;
+int drained_workers=0,fetch_waits=0;
+struct Worker {
+ bool stopped=false,fetch=false,requestsDeleted=false,cacheThreadStopped=false,waited=false;
+ unsigned updates=0;
+ explicit Worker(bool isFetch=false):fetch(isFetch){}
+ void deleteAllRequests(){assert(fetch&&!account_alive&&!stopped);requestsDeleted=true;}
+ int update(int){assert(!account_alive&&!stopped);++drained_workers;return ++updates==1?1:0;}
+ void shutdown(){assert(!account_alive);assert(!fetch||requestsDeleted);stopped=true;}
+ void shutDownTextureCacheThread(){assert(fetch&&stopped);cacheThreadStopped=true;}
+ void waitOnPending(){assert(cacheThreadStopped);waited=true;++fetch_waits;}
+ ~Worker(){assert(stopped);assert(!fetch||(cacheThreadStopped&&waited));}
+};
+Worker* sImageDecodeThread=new Worker;Worker* sTextureCache=new Worker;Worker* sTextureFetch=new Worker(true);
+struct LLTimer {unsigned elapsed=0;double getElapsedTimeF64(){return elapsed++;}};
+struct LLViewerStatsRecorder {
+ static bool instanceExists(){return true;}
+ static void deleteSingleton(){assert(!sTextureFetch&&!sImageDecodeThread&&!sTextureCache);}
+};
+struct Mainloop {template<class Duration>void runFor(Duration){assert(!sTextureFetch&&!sImageDecodeThread&&!sTextureCache);}} gMainloopWork;
 struct LLAppViewer {std::shared_ptr<Session> mNativeSession=std::make_shared<Session>();
  bool cleanupNativeVulkanLogin();};
 NATIVE_PREFIX
 int main(){
  LLAppViewer app;assert(app.cleanupNativeVulkanLogin());
+ assert(drained_workers==6&&fetch_waits==1);
  assert(!gRlvHandler.m_fEnabled&&listener_removals==1&&observer_removals==1&&status_queries==1);
  fibers_alive=false;
  gRlvHandler.cleanup();assert(status_queries==1&&handler_deletes==1);

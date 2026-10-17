@@ -35,6 +35,7 @@ CORE
 COMPOSITE
 LOOKUP
 };
+ROLE_FUNCTION
 VSWorldContracts::ImageRole classify(const std::string& key){CLASSIFY return role;}
 int main(){using Role=VSWorldContracts::ImageRole;Pool p;
  assert(classify("skin:button")==Role::CoreUI&&classify("control:picture")==Role::CoreUI);
@@ -49,7 +50,7 @@ int main(){using Role=VSWorldContracts::ImageRole;Pool p;
  auto refused=p.compositeImages.reserve(p.compositeImages.limit());assert(!refused);
  before.reset();candidate.reset();retiring.reset();assert(!p.compositeImages.used());
 }
-'''.replace('CORE',core).replace('COMPOSITE',composite).replace('LOOKUP',method(renderer,'VSResourceBudget& imageBudget(')).replace('CLASSIFY',classification).replace('MAXIMUM',str(maximum)+'ULL')
+'''.replace('CORE',core).replace('COMPOSITE',composite).replace('LOOKUP',method(renderer,'VSResourceBudget& imageBudget(')).replace('ROLE_FUNCTION',method(resources,'VSWorldContracts::ImageRole imageRole(')).replace('CLASSIFY',classification).replace('MAXIMUM',str(maximum)+'ULL')
         with tempfile.TemporaryDirectory() as directory:
             cpp=Path(directory)/'avatar_image_pool.cpp';exe=Path(directory)/'avatar_image_pool.exe'
             cpp.write_text(fixture)
