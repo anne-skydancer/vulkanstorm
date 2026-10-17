@@ -171,6 +171,20 @@ if((value===1||value===2)&&value!==phase){phase=value;draw();}}catch(e){}},100);
 </script>"""
 
 
+def shared_settings_contracts_passed(record,directory):
+    try:
+        row=record['r3_shared_settings'];root=Path(directory).resolve()
+        if row.get('navbar_callback') is not True or row.get('debug_callback') is not True or row.get('persisted') is not True or row.get('font_callbacks')!=2:return False
+        if row['file']!='r3/settings-roundtrip.xml':return False
+        path=root/row['file']
+        if path.is_symlink():return False
+        saved=read_llsd(ET.fromstring(path.read_bytes()))
+        for setting,key in (('ShowNavbarNavigationPanel','navigation'),('ShowNavbarFavoritesPanel','favorites'),('DebugViews','debug')):
+            if type(row[key]) is not bool or saved[setting]['Type']!='Boolean' or bool(saved[setting]['Value'])!=row[key]:return False
+        return saved['ChatFontSize']['Type']=='S32' and type(row['font']) is int and 0<=row['font']<4 and saved['ChatFontSize']['Value']==row['font']
+    except (OSError,KeyError,ValueError,TypeError,ET.ParseError):return False
+
+
 def media_contracts_passed(record,requests,directory):
     """Demand actual plugin publication, shared ownership and independent pixels."""
     from run_vulkan_texture_cache_tests import u64
@@ -1355,6 +1369,8 @@ def main():
                 raise RuntimeError('Missing production local bitmap/material reload, immutable generation or GPU pixel evidence')
             if args.local_image_contracts and not remote_material_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing production remote PBR transport, parse failure or account retirement evidence')
+            if args.local_image_contracts and not shared_settings_contracts_passed(report,directory):
+                raise RuntimeError('Missing actual shared preference effects and persisted values')
             if args.local_image_contracts and not media_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing actual media plugin publication, shared ownership or GPU evidence')
             if args.local_image_contracts and not legacy_material_contracts_passed(report,server.requests,directory):

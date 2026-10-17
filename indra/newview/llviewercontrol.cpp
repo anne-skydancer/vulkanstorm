@@ -1285,6 +1285,74 @@ LLPointer<LLControlVariable> setting_get_control(LLControlGroup& group, const st
     return cntrl_ptr;
 }
 
+#if VS_NATIVE_VULKAN
+namespace
+{
+bool native_shared_setting_callback(const std::string& setting)
+{
+    // Reviewed shared CPU/UI/audio owners. Rendering and scene callbacks remain
+    // with their native controller; never enter legacy GL through a cascade.
+    static const char* const shared[] = {
+        "ChatConsoleFontSize",
+        "ChatPersistTime",
+        "ConsoleMaxLines",
+        "AudioLevelMaster",
+        "AudioLevelSFX",
+        "AudioLevelUI",
+        "AudioLevelAmbient",
+        "AudioLevelMusic",
+        "AudioLevelMedia",
+        "AudioLevelVoice",
+        "MuteAudio",
+        "MuteMusic",
+        "MuteMedia",
+        "MuteVoice",
+        "MuteAmbient",
+        "MuteUI",
+        "EnableVoiceChat",
+        "PTTCurrentlyEnabled",
+        "PushToTalkButton",
+        "PushToTalkToggle",
+        "VoiceEarLocation",
+        "VoiceEchoCancellation",
+        "VoiceAutomaticGainControl",
+        "VoiceNoiseSuppressionLevel",
+        "VoiceInputAudioDevice",
+        "VoiceOutputAudioDevice",
+        "AudioLevelMic",
+        "LipSyncEnabled",
+        "SpellCheck",
+        "SpellCheckDictionary",
+        "DebugViews",
+        "UserLogFile",
+        "ShowMenuBarLocation",
+        "ForceShowGrid",
+        "ShowStartLocation",
+        "ShowNavbarFavoritesPanel",
+        "ShowNavbarNavigationPanel",
+        "FSContactListShowSearch",
+        "FSStatisticsNoFocus",
+        "FSOutputDeviceUUID",
+        "FSStatusBarTimeFormat",
+        "PlainTextChatHistory",
+        "ChatFontSize",
+        "_NACL_AntiSpamGlobalQueue",
+        "_NACL_AntiSpamTime",
+        "_NACL_AntiSpamAmount",
+        "FSUseStandaloneTeleportHistoryFloater",
+        "FSUseSmallCameraFloater",
+        "FSEnableLogThrottle",
+        "SDL2IMEEnabled",
+        "FSDiskCacheSize",
+        "FSDiskCacheHighWaterPercent",
+        "FSDiskCacheLowWaterPercent",
+    };
+    return std::any_of(std::begin(shared),std::end(shared),
+                       [&](const char* name) { return setting==name; });
+}
+}
+#endif
+
 void setting_setup_signal_listener(LLControlGroup& group, const std::string& setting, std::function<void(const LLSD& newvalue)> callback)
 {
     setting_get_control(group, setting)->getSignal()->connect([callback](LLControlVariable* control, const LLSD& new_val, const LLSD& old_val)
@@ -1292,11 +1360,7 @@ void setting_setup_signal_listener(LLControlGroup& group, const std::string& set
 #if VS_NATIVE_VULKAN
         // Native owners observe admitted settings themselves. Preserve saved values
         // without activating a legacy GL/world/optional listener, including cascades.
-        if (VSNativeSession::active() && control->getName() != "FSEnableLogThrottle"
-            && control->getName() != "SDL2IMEEnabled"
-            && control->getName() != "FSDiskCacheSize"
-            && control->getName() != "FSDiskCacheHighWaterPercent"
-            && control->getName() != "FSDiskCacheLowWaterPercent") return;
+        if (VSNativeSession::active() && !native_shared_setting_callback(control->getName())) return;
 #endif
         callback(new_val);
     });
@@ -1307,11 +1371,7 @@ void setting_setup_signal_listener(LLControlGroup& group, const std::string& set
     setting_get_control(group, setting)->getSignal()->connect([callback](LLControlVariable* control, const LLSD& new_val, const LLSD& old_val)
     {
 #if VS_NATIVE_VULKAN
-        if (VSNativeSession::active() && control->getName() != "FSEnableLogThrottle"
-            && control->getName() != "SDL2IMEEnabled"
-            && control->getName() != "FSDiskCacheSize"
-            && control->getName() != "FSDiskCacheHighWaterPercent"
-            && control->getName() != "FSDiskCacheLowWaterPercent") return;
+        if (VSNativeSession::active() && !native_shared_setting_callback(control->getName())) return;
 #endif
         callback();
     });
