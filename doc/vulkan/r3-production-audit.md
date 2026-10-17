@@ -751,3 +751,25 @@ failure. Native-only miss/header-rejection diagnostics now record the actual
 cached, desired and known byte sizes at the failed transition, without global
 DEBUG logging that could mask a timing problem. Pending investigation retains
 the existing zero-network, pixel and archive requirements.
+
+## Exact disk-operation completion ownership
+
+The cache responder audit found a concrete native ownership gap independent of
+the unresolved warm-fetch trace: read/write completions looked up a worker by
+texture UUID and checked only its current state. A replacement worker or later
+operation for that same UUID could receive an older completion, including a
+failed read. Native cache operations now carry unique operation identities;
+the callbacks validate those identities under the worker mutex before changing
+any state. OpenGL operations retain their existing untagged behavior. The actual
+responder and callback implementations are exercised against stale read/write
+successes and failures, replacement operations, absent workers and the legacy
+path. Viewer compilation and these regressions pass; runtime qualification is
+pending the canonical rebuild.
+
+One diagnostic cache run also lost its Python driver's result before the matrix
+could record that driver's exit status. The matrix now streams and saves driver
+output and records the actual exit/timeout status before reading viewer results.
+Those artifacts are mandatory in the qualification archive. Actual subprocess
+regressions retain nonzero exit and timeout failures, and missing output fails
+archive qualification. This corrects failure evidence rather than accepting an
+unexplained successful rerun or changing the cache/network oracle.
