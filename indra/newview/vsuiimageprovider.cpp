@@ -80,7 +80,7 @@ struct VSUIImageProvider::Impl : std::enable_shared_from_this<VSUIImageProvider:
         U32 resolutionLimit=0;
         double retryAt=0,deadline=0,lastUsed=0;
         U64 demandFrame=0;
-        bool fetching=false,uiDemand=false,cacheChecked=false,fullRes=false;
+        bool fetching=false,uiDemand=false,cacheChecked=false,fullRes=false,exactWorld=false;
         bool preparing=false,lastCompressionRequest=false,hasUploadPolicy=false,pendingCacheHit=false;
         U64 uploadSerial=0;
         S32 pendingDiscard=-1;
@@ -98,7 +98,7 @@ struct VSUIImageProvider::Impl : std::enable_shared_from_this<VSUIImageProvider:
     VSResourceBudget masks{64 * 1024 * 1024};
     U64 nextUploadSerial=1;
     bool compressionWanted(const Remote& entry) const
-    { return !entry.uiDemand && gSavedSettings.getBOOL("RenderCompressTextures") && resources.supportsCompression(); }
+    { return !entry.uiDemand && !entry.exactWorld && gSavedSettings.getBOOL("RenderCompressTextures") && resources.supportsCompression(); }
     void cancelPreparation(Remote& entry)
     {
         entry.uploadSerial=nextUploadSerial++;entry.preparing=false;entry.prepared.reset();
@@ -243,7 +243,7 @@ void VSUIImageProvider::pumpImages()
         if(raw && discard>=0 && discard!=entry.discard)
         {
             if(!fetch->getRequestDimensions(id,entry.fullWidth,entry.fullHeight,entry.components))
-            {entry.fullWidth=raw->getWidth()<<discard;entry.fullHeight=raw->getHeight()<<discard;}
+            {entry.fullWidth=raw->getWidth()<<discard;entry.fullHeight=raw->getHeight()<<discard;entry.components=raw->getComponents();}
             LLPointer<LLImageRaw> mask;
             bool admitted=entry.components!=5 || auxiliary.notNull();
             if(auxiliary)
@@ -475,6 +475,13 @@ LLPointer<LLImageRaw> VSUIImageProvider::rawImage(const LLUUID& id) const
 bool vs_ui_image_ready(const LLUUID& id) { return sActiveProvider && sActiveProvider->imageReady(id); }
 bool vs_ui_image_failed(const LLUUID& id) { return sActiveProvider && sActiveProvider->imageFailed(id); }
 S32 vs_ui_image_discard(const LLUUID& id) {return sActiveProvider?sActiveProvider->imageDiscard(id):-1;}
+S32 vs_ui_image_components(const LLUUID& id)
+{return sActiveProvider?sActiveProvider->imageComponents(id):0;}
+S32 VSUIImageProvider::imageComponents(const LLUUID& id) const
+{
+    const auto found=mImpl->remote.find(imageID(id));
+    return found!=mImpl->remote.end() && imageReady(id)?found->second.components:0;
+}
 S32 VSUIImageProvider::imageDiscard(const LLUUID& id) const
 {
     const auto found=mImpl->remote.find(imageID(id));
@@ -507,6 +514,7 @@ void VSUIImageProvider::refreshImage(const LLUUID& id)
 }
 void VSUIImageProvider::resetAccount()
 {
+    mImpl->resources.clearWorldDerivedImages();
     const auto fallback=getUIImage("Generic_Person");
     for(auto& [id,entry]:mImpl->remote)
     {
@@ -533,18 +541,19 @@ void VSUIImageProvider::cleanUp()
     for(const auto& entry:mImpl->cache) mImpl->resources.erase("skin:"+entry.first);
     mImpl->cache.clear();
 }
-LLUIImagePtr VSUIImageProvider::requestWorldImage(const LLUUID& id,unsigned dimension)
+LLUIImagePtr VSUIImageProvider::requestWorldImage(const LLUUID& id,unsigned dimension,bool exact)
 {
     if(id.isNull()) return nullptr;
     if(!mImpl->remote.count(id) && mImpl->remote.size()>=16384 && !mImpl->evict(id)) return nullptr;
     auto& entry=mImpl->remote[id];
+    entry.exactWorld|=exact;
     const unsigned target=std::clamp(dimension,1u,4096u);
     entry.target=entry.demandFrame==mImpl->demandFrame?std::max(entry.target,target):target;
     entry.demandFrame=mImpl->demandFrame;
     return getUIImageByID(id,-1);
 }
-LLUIImagePtr vs_request_world_image(const LLUUID& id,unsigned dimension)
-{return sActiveProvider?sActiveProvider->requestWorldImage(id,dimension):nullptr;}
+LLUIImagePtr vs_request_world_image(const LLUUID& id,unsigned dimension,bool exact)
+{return sActiveProvider?sActiveProvider->requestWorldImage(id,dimension,exact):nullptr;}
 LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 priority)
 {
     if (id.isNull())

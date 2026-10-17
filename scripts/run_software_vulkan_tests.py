@@ -16,7 +16,8 @@ MATERIAL_READBACKS=('material-opaque.ppm','material-linear-factor.ppm','material
     'material-transform.ppm','normal-tangent.ppm','normal-rotated-tangent.ppm','normal-mirrored-tangent.ppm',
     'material-independent-occlusion.ppm','material-occlusion-transform.ppm','sampler-repeat.ppm',
     'sampler-clamp.ppm','sampler-mirror.ppm','sampler-mipmaps.ppm','ui-base-level.ppm',
-    'compression-policy.ppm','compression-replacement.ppm')
+    'compression-policy.ppm','compression-replacement.ppm','legacy-bump-brightness.ppm',
+    'legacy-bump-darkness.ppm','legacy-bump-standard.ppm','legacy-bump-gray.ppm')
 
 
 @contextmanager

@@ -21,6 +21,9 @@ public:
     LLUIImagePtr publishPrepared(const std::string& key,const PreparedImage&);
     std::vector<LLUIImagePtr> publishBatch(const std::vector<std::pair<std::string,PreparedImage>>&);
     bool supportsCompression() const;
+    LLUUID standardBumpSource(unsigned code) const;
+    VSUIRenderer::Image legacyBump(const LLUUID& source,unsigned code,float normalScale);
+    void clearWorldDerivedImages();
     std::shared_ptr<const VSResourceBudget::Reservation> reserveImagePreparation(std::size_t);
     LLUIImagePtr region(const std::string& key,const std::string& name,const LLRectf& uv,
                         VSUIRenderer::Sampling sampling=VSUIRenderer::Sampling::Linear);

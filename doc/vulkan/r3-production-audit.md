@@ -427,3 +427,32 @@ readback among the collected files, as well as validating its disk bytes.
 The archive validator accepted the actual complete nine-case file set and rejected
 it when a recovered ORM material readback was omitted. Viewer accounting sources
 compile; their staged viewer runtime evidence remains pending the next rebuild.
+
+
+The `2612303cfd` accounting build passed a combined production R2 and local-file
+material replay in 75.0 seconds, with source/executable qualification intact.
+
+## Legacy bump publication
+
+Native faces now bind generated normal images for legacy brightness/darkness and
+standard bump effects when no explicit legacy normal-map channel is supplied.
+The generation pass transposes `normgenF.glsl`'s luminance/inverse-luminance
+cross-product kernel and the standard alpha-height kernel, with canonical row
+conversion and the reference standard-map U8 truncation. It consumes the actual
+admitted GPU source and builds its normal mip chain on the native context.
+Standard bump sources use the existing `std_bump.ini` identities and preserve
+exact source components rather than compressing their height data.
+
+Generations are cached by source generation, effect, height component and
+`RenderNormalMapScale`, with 1024 bounded entries. Refused replacement retains
+the complete prior face publication; account reset clears derived generations.
+GPU work retains source, destination, bindings and constants through its fence.
+Derived normals charge GPU bytes without claiming a retained CPU snapshot.
+Native staging now explicitly requires the standard bump source configuration.
+
+All six software harness modes passed, including four new independent central-
+gradient pixel charts for brightness, darkness, alpha-height and scalar-height
+sources. The existing one-unit pixel bound is unchanged; source images remain
+immutable. Viewer face/publication sources compile. Actual viewer bump-face and
+account-lifecycle replay remains required. This adds the production path without
+claiming full R3 acceptance or implementing the later R5/R6 lighting/BRDF work.
