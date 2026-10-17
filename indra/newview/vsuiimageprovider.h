@@ -4,6 +4,8 @@
 #include <memory>
 class VSUIResources;
 class LLImageRaw;
+class LLSD;
+LLSD vs_ui_texture_cache_evidence();
 void vs_pump_ui_images();
 void vs_refresh_ui_image(const LLUUID&);
 LLPointer<LLUIImage> vs_publish_ui_image(const std::string&, const LLImageRaw&);
@@ -29,6 +31,7 @@ class VSUIImageProvider : public LLImageProviderInterface
     LLPointer<LLImageRaw> auxiliaryImage(const LLUUID&) const;
     bool imageReady(const LLUUID&) const;
     bool imageFailed(const LLUUID&) const;
+    LLSD textureCacheEvidence() const;
 
   private:
     struct Impl;

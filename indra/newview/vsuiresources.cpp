@@ -1,6 +1,7 @@
 // Viewer UI CPU assets, immutable publication and ordered facade draws. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsuiresources.h"
+#include "vsuiimageprovider.h"
 #include "llimage.h"
 #include "llfontgl.h"
 #include "llvector4a.h"
@@ -406,6 +407,7 @@ LLSD VSUIResources::evidence() const
 {
     const auto stats=mImpl->renderer.statistics();const auto caps=mImpl->renderer.capabilities();
     LLSD result;result["image_generations"]=S32(mImpl->assets.size());
+    result["texture_cache"] = vs_ui_texture_cache_evidence();
     result["deferred_draw_batches"]                                                            = S32(mImpl->deferred_draw_batches);
     result["resident_image_payload_bytes"]=ll_sd_from_U64(stats.residentImageBytes);
     result["image_payload_budget_bytes"]=ll_sd_from_U64(stats.imageBudgetBytes);
