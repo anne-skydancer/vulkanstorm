@@ -1436,7 +1436,7 @@ std::optional<VSWorldScene::ObjectSnapshot> VSWorldScene::objectSnapshot(const O
     LLVector3 position;LLQuaternion rotation;std::set<U32> visited;
     if(!mImpl->transform(token.local,position,rotation,visited))return {};
     ObjectSnapshot row;
-    row.object=token;row.owner=source.reportedOwner;row.ownerKnown=source.reportedOwnerKnown;
+    row.object=token;row.rootEditID=source.id;row.rootID=source.id;row.hud=mImpl->hudObject(source);row.owner=source.reportedOwner;row.ownerKnown=source.reportedOwnerKnown;
     row.nameValues=source.nameValues;row.mediaVersion=source.mediaVersion;row.updateFlags=source.updateFlags;row.rootUpdateFlags=source.updateFlags;
     row.material=source.material;row.clickAction=source.clickAction;row.rootClickAction=source.clickAction;
     row.pcode=source.pcode;row.position=from_region_handle(mImpl->handle)+LLVector3d(position);row.scale=source.scale;
@@ -1446,8 +1446,9 @@ std::optional<VSWorldScene::ObjectSnapshot> VSWorldScene::objectSnapshot(const O
     {
         const auto parent=mImpl->objects.find(ancestor->parent);
         if(parent==mImpl->objects.end())break;
+        row.rootID=parent->second.id;
         if(parent->second.pcode==LL_PCODE_LEGACY_AVATAR){row.attachment=true;break;}
-        ancestor=&parent->second;row.rootUpdateFlags=ancestor->updateFlags;row.rootClickAction=ancestor->clickAction;
+        ancestor=&parent->second;row.rootEditID=ancestor->id;row.rootUpdateFlags=ancestor->updateFlags;row.rootClickAction=ancestor->clickAction;
     }
     return row;
 }

@@ -23,6 +23,7 @@
 #include "llworld.h"
 
 #include "rlvactions.h"
+#include "vsobjectcontext.h"
 #include "rlvhelper.h"
 #include "rlvhandler.h"
 #include "rlvinventory.h"
@@ -571,9 +572,37 @@ bool RlvActions::canShowHoverText(const LLViewerObject *pObj)
 }
 
 // Handles: @touchall, @touchthis, @touchworld, @touchattach, @touchattachself, @touchattachother, @touchhud, @touchme and @fartouch
-bool RlvActions::canTouch(const LLViewerObject* pObj, const LLVector3& posOffset /*=LLVector3::zero*/)
+namespace
 {
-    static RlvCachedBehaviourModifier<float> s_nFartouchDist(RLV_MODIFIER_FARTOUCHDIST);
+const RlvCachedBehaviourModifier<float>& touchDistance()
+{
+    static RlvCachedBehaviourModifier<float> distance(RLV_MODIFIER_FARTOUCHDIST);
+    return distance;
+}
+struct ReferenceTouchObject
+{
+    const LLViewerObject* value;
+    const LLUUID& rootEditID()const {return value ? value->getRootEdit()->getID() : LLUUID::null;}
+    const LLUUID& rootID()const {return static_cast<const LLViewerObject*>(value->getRoot())->getID();}
+    bool attachment()const {return value->isAttachment();}
+    bool hud()const {return value->isHUDAttachment();}
+    bool youOwner()const {return value->permYouOwner();}
+    LLVector3d position()const {return value->getPositionGlobal();}
+};
+struct NativeTouchObject
+{
+    const VSObjectContext& value;
+    const LLUUID& rootEditID()const {return value.rootEditID;}
+    const LLUUID& rootID()const {return value.rootID;}
+    bool attachment()const {return value.attachment;}
+    bool hud()const {return value.hud;}
+    bool youOwner()const {return value.youOwner;}
+    const LLVector3d& position()const {return value.position;}
+};
+template<class Object>
+bool sharedObjectTouch(const Object& object, const LLVector3& posOffset)
+{
+    const auto& s_nFartouchDist=touchDistance();
 
     // User can touch a
     //  (1) World object if
@@ -607,36 +636,36 @@ bool RlvActions::canTouch(const LLViewerObject* pObj, const LLVector3& posOffset
     //            * @touchattachother exceptions change when they specify an avatar id (=block all) or an object id (=allow indiviual - see general @touchattach exceptions)
     //            * @touchattachself exceptions are only checked under the general @touchattach exceptions
     //            * @touchme in any object of a linkset affects that entire linkset (= if you can specifically touch one prim in a linkset you can touch that entire linkset)
-    const LLUUID& idRoot = (pObj) ? pObj->getRootEdit()->getID() : LLUUID::null;
+    const LLUUID& idRoot = object.rootEditID();
 
     RlvHandler& rlvHandler = RlvHandler::instance();
     // Short circuit test for (1/2/3/4.a) and (1/2/3/4.b)
     bool fCanTouch =
         (idRoot.notNull()) &&
-        ( (pObj->isHUDAttachment()) || (!rlvHandler.hasBehaviour(RLV_BHVR_TOUCHALL)) ) &&
+        ( (object.hud()) || (!rlvHandler.hasBehaviour(RLV_BHVR_TOUCHALL)) ) &&
         ( (!rlvHandler.hasBehaviour(RLV_BHVR_TOUCHTHIS)) || (!rlvHandler.isException(RLV_BHVR_TOUCHTHIS, idRoot, ERlvExceptionCheck::Permissive)) );
     if (fCanTouch)
     {
-        if (!pObj->isAttachment())
+        if (!object.attachment())
         {
             // Rezzed object - test for (1.c) and (1.h)
             fCanTouch =
                 ( (!rlvHandler.hasBehaviour(RLV_BHVR_TOUCHWORLD)) || (rlvHandler.isException(RLV_BHVR_TOUCHWORLD, idRoot, ERlvExceptionCheck::Permissive)) ) &&
-                ( (!rlvHandler.hasBehaviour(RLV_BHVR_FARTOUCH)) || (dist_vec_squared(gAgent.getPositionGlobal(), pObj->getPositionGlobal() + LLVector3d(posOffset)) <= s_nFartouchDist * s_nFartouchDist) );
+                ( (!rlvHandler.hasBehaviour(RLV_BHVR_FARTOUCH)) || (dist_vec_squared(gAgent.getPositionGlobal(), object.position() + LLVector3d(posOffset)) <= s_nFartouchDist * s_nFartouchDist) );
         }
-        else if (!pObj->permYouOwner())
+        else if (!object.youOwner())
         {
             // Attachment worn by other - test for (2.d), (2.e) and (2.h)
-            const LLUUID& idAttachAgent = static_cast<LLViewerObject*>(pObj->getRoot())->getID();
+            const LLUUID& idAttachAgent = object.rootID();
             fCanTouch =
                 (
                     ( (!rlvHandler.hasBehaviour(RLV_BHVR_TOUCHATTACH) && !rlvHandler.hasBehaviour(RLV_BHVR_TOUCHATTACHOTHER)) ||
                       (rlvHandler.isException(RLV_BHVR_TOUCHATTACH, idRoot, ERlvExceptionCheck::Permissive) || rlvHandler.isException(RLV_BHVR_TOUCHATTACH, idAttachAgent, ERlvExceptionCheck::Permissive)) ) &&
                     (!rlvHandler.isException(RLV_BHVR_TOUCHATTACHOTHER, idAttachAgent))
                 ) &&
-                ( (!rlvHandler.hasBehaviour(RLV_BHVR_FARTOUCH)) || (dist_vec_squared(gAgent.getPositionGlobal(), pObj->getPositionGlobal() + LLVector3d(posOffset)) <= s_nFartouchDist * s_nFartouchDist) );
+                ( (!rlvHandler.hasBehaviour(RLV_BHVR_FARTOUCH)) || (dist_vec_squared(gAgent.getPositionGlobal(), object.position() + LLVector3d(posOffset)) <= s_nFartouchDist * s_nFartouchDist) );
         }
-        else if (!pObj->isHUDAttachment())
+        else if (!object.hud())
         {
             // Regular attachment worn by this avie - test for (3.d), (3.e) and (3.h)
             fCanTouch =
@@ -646,13 +675,24 @@ bool RlvActions::canTouch(const LLViewerObject* pObj, const LLVector3& posOffset
         else
         {
             // HUD attachment - test for (4.g)
-            fCanTouch = (!hasBehaviour(RLV_BHVR_TOUCHHUD)) || (rlvHandler.isException(RLV_BHVR_TOUCHHUD, idRoot, ERlvExceptionCheck::Permissive));
+            fCanTouch = (!RlvActions::hasBehaviour(RLV_BHVR_TOUCHHUD)) || (rlvHandler.isException(RLV_BHVR_TOUCHHUD, idRoot, ERlvExceptionCheck::Permissive));
         }
     }
     // Post-check for (1/2/3/4i)
-    if ( (!fCanTouch) && (hasBehaviour(RLV_BHVR_TOUCHME)) )
+    if ( (!fCanTouch) && (RlvActions::hasBehaviour(RLV_BHVR_TOUCHME)) )
         fCanTouch = rlvHandler.hasBehaviourRoot(idRoot, RLV_BHVR_TOUCHME);
     return fCanTouch;
+}
+}
+bool RlvActions::canTouch(const LLViewerObject* object, const LLVector3& posOffset)
+{
+    // Lazy access preserves the reference short-circuit and tree-walk costs.
+    return sharedObjectTouch(ReferenceTouchObject{object},posOffset);
+}
+
+bool RlvActions::canTouch(const VSObjectContext& object, const LLVector3& posOffset)
+{
+    return sharedObjectTouch(NativeTouchObject{object},posOffset);
 }
 
 bool RlvActions::canStand()
