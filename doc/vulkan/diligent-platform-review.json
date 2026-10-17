@@ -1,5 +1,5 @@
 {
-  "source_commit": "a4eb1cb2a060e8cc963629305dfae17f341cdbdd",
+  "source_commit": "55be34026b483c2ab390efa906add131079521e8",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -9601,7 +9601,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 1,
       "end": 1,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9610,7 +9610,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 15,
       "end": 15,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9619,7 +9619,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 25,
       "end": 25,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9628,7 +9628,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 28,
       "end": 29,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9637,7 +9637,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 31,
       "end": 33,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9646,7 +9646,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 46,
       "end": 47,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9655,7 +9655,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 68,
       "end": 68,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9664,7 +9664,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 70,
       "end": 70,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9673,7 +9673,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 541,
       "end": 545,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9682,7 +9682,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 551,
       "end": 552,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9691,7 +9691,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 562,
       "end": 562,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9700,7 +9700,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 670,
       "end": 672,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9709,7 +9709,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 679,
       "end": 679,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -9717,71 +9717,71 @@
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 743,
-      "end": 751,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "end": 758,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 753,
-      "end": 788,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 760,
+      "end": 795,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 791,
-      "end": 791,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 798,
+      "end": 798,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 942,
-      "end": 952,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 949,
+      "end": 959,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 955,
-      "end": 955,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 962,
+      "end": 962,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1000,
-      "end": 1004,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1007,
+      "end": 1011,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1011,
-      "end": 1033,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1018,
+      "end": 1047,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1319,
-      "end": 1329,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1334,
+      "end": 1344,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10825,7 +10825,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 132,
       "end": 152,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10834,7 +10834,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 158,
       "end": 159,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10843,7 +10843,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 163,
       "end": 166,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10852,7 +10852,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 168,
       "end": 168,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10861,7 +10861,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 170,
       "end": 180,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10870,7 +10870,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 428,
       "end": 428,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -10879,16 +10879,16 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 430,
       "end": 430,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 930,
-      "end": 930,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 937,
+      "end": 937,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes."
@@ -15307,7 +15307,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 21,
       "end": 22,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15316,7 +15316,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 34,
       "end": 45,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15325,7 +15325,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 54,
       "end": 59,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15334,7 +15334,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 61,
       "end": 62,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15343,7 +15343,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 72,
       "end": 76,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15352,7 +15352,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 153,
       "end": 157,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15361,7 +15361,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 160,
       "end": 162,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15370,7 +15370,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 167,
       "end": 167,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15379,7 +15379,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 169,
       "end": 169,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15388,7 +15388,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 181,
       "end": 345,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15397,7 +15397,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 347,
       "end": 347,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15406,7 +15406,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 358,
       "end": 427,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15415,7 +15415,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 429,
       "end": 429,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15424,7 +15424,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 431,
       "end": 431,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15433,7 +15433,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 540,
       "end": 540,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15442,7 +15442,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 555,
       "end": 555,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15451,7 +15451,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 558,
       "end": 561,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15460,7 +15460,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 568,
       "end": 568,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15469,7 +15469,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 585,
       "end": 588,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15478,7 +15478,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 592,
       "end": 599,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15487,7 +15487,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 609,
       "end": 611,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15496,7 +15496,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 620,
       "end": 658,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15505,7 +15505,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 669,
       "end": 669,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15514,7 +15514,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 677,
       "end": 678,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15523,7 +15523,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 681,
       "end": 681,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -15532,79 +15532,79 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 735,
       "end": 739,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 752,
-      "end": 752,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 759,
+      "end": 759,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 911,
-      "end": 915,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 918,
+      "end": 922,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 919,
-      "end": 925,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 926,
+      "end": 932,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 961,
-      "end": 965,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 968,
+      "end": 972,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 971,
-      "end": 978,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 978,
+      "end": 985,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 995,
-      "end": 997,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1002,
+      "end": 1004,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1037,
-      "end": 1196,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1051,
+      "end": 1209,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1203,
-      "end": 1236,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1216,
+      "end": 1249,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged."
@@ -16468,7 +16468,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 346,
       "end": 346,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged. Context Paste failure diagnostics preserve exact oracle and record editor focus/text and independent post-failure clipboard readability/content; no retry of the action or substitution of internal clipboard data."
@@ -16477,7 +16477,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 348,
       "end": 357,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged. Context Paste failure diagnostics preserve exact oracle and record editor focus/text and independent post-failure clipboard readability/content; no retry of the action or substitution of internal clipboard data."
@@ -16664,9 +16664,9 @@
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 960,
-      "end": 960,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 967,
+      "end": 967,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged. Context Paste failure diagnostics preserve exact oracle and record editor focus/text and independent post-failure clipboard readability/content; no retry of the action or substitution of internal clipboard data. Actual skinned toolbar chat qualification uses FSNearbyChatControl common production contract: Vintage supplies fs_nearby_chat_control while other skins supply derived FSNearbyChatVoiceControl. Existing actual visible/enabled Enter/send/packet identity requirements remain unchanged. Compiled exact lookup with actual Vintage/default XUI widget types passes; rebuilt runtime pending."
@@ -17197,7 +17197,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 63,
       "end": 67,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged. Context Paste failure diagnostics preserve exact oracle and record editor focus/text and independent post-failure clipboard readability/content; no retry of the action or substitution of internal clipboard data. Actual skinned toolbar chat qualification uses FSNearbyChatControl common production contract: Vintage supplies fs_nearby_chat_control while other skins supply derived FSNearbyChatVoiceControl. Existing actual visible/enabled Enter/send/packet identity requirements remain unchanged. Compiled exact lookup with actual Vintage/default XUI widget types passes; rebuilt runtime pending. Connected replay constructs real button and textbox script notifications and requires actual encoded replies carrying connected identities, object, channel, index and text; this development-only evidence hook does not replace viewer notification integration."
@@ -17206,7 +17206,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 94,
       "end": 131,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged. Context Paste failure diagnostics preserve exact oracle and record editor focus/text and independent post-failure clipboard readability/content; no retry of the action or substitution of internal clipboard data. Actual skinned toolbar chat qualification uses FSNearbyChatControl common production contract: Vintage supplies fs_nearby_chat_control while other skins supply derived FSNearbyChatVoiceControl. Existing actual visible/enabled Enter/send/packet identity requirements remain unchanged. Compiled exact lookup with actual Vintage/default XUI widget types passes; rebuilt runtime pending. Connected replay constructs real button and textbox script notifications and requires actual encoded replies carrying connected identities, object, channel, index and text; this development-only evidence hook does not replace viewer notification integration."
@@ -17215,16 +17215,16 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 600,
       "end": 608,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged. Context Paste failure diagnostics preserve exact oracle and record editor focus/text and independent post-failure clipboard readability/content; no retry of the action or substitution of internal clipboard data. Actual skinned toolbar chat qualification uses FSNearbyChatControl common production contract: Vintage supplies fs_nearby_chat_control while other skins supply derived FSNearbyChatVoiceControl. Existing actual visible/enabled Enter/send/packet identity requirements remain unchanged. Compiled exact lookup with actual Vintage/default XUI widget types passes; rebuilt runtime pending. Connected replay constructs real button and textbox script notifications and requires actual encoded replies carrying connected identities, object, channel, index and text; this development-only evidence hook does not replace viewer notification integration."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 931,
-      "end": 931,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 938,
+      "end": 938,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay uses real authentication controls and required encoded text/protocol routes; artifacts, pinned dependencies/device and strict factory diagnostics support all-skin qualification without live-grid claims. Authentication replay stops registry iteration immediately after committing a self-destroying critical-message Continue controller; relogin proceeds on subsequent frame without traversing invalidated floater-list nodes. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Status text geometry qualification reads selected layered XUI top/height and asserts exact parent/background/text placement before allowing only its source-derived bottom overhang (default TimeText1px, balance3px); no generic tolerance or skin rewrite. Other chrome owners remain strictly contained. Navigation qualification reattaches authenticated loopback observers after relogin, sends once per account, and waits across real application frames with a10second deadline. Distinct decoded name/location/home witnesses reset per run and verify exact destination and landmark fields; unrelated duplicates cannot satisfy acceptance. No production transport semantics altered. Verified location/landmark callback booleans are appended after the transport evidence snapshot, so real passed assertions cannot be erased by report replacement; required stages and exact checks remain unchanged. Context Paste failure diagnostics preserve exact oracle and record editor focus/text and independent post-failure clipboard readability/content; no retry of the action or substitution of internal clipboard data. Actual skinned toolbar chat qualification uses FSNearbyChatControl common production contract: Vintage supplies fs_nearby_chat_control while other skins supply derived FSNearbyChatVoiceControl. Existing actual visible/enabled Enter/send/packet identity requirements remain unchanged. Compiled exact lookup with actual Vintage/default XUI widget types passes; rebuilt runtime pending. Connected replay constructs real button and textbox script notifications and requires actual encoded replies carrying connected identities, object, channel, index and text; this development-only evidence hook does not replace viewer notification integration."
@@ -21299,18 +21299,18 @@
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 821,
-      "end": 821,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 828,
+      "end": 828,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 824,
-      "end": 824,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 831,
+      "end": 831,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -22813,7 +22813,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 50,
       "end": 50,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Reviewed real two-object UDP ObjectUpdate fixture for shared Fast-decoder nonzero blocks, plus avatar world admission changes. Runtime replay still needs qualification; fixture does not substitute for connected viewer behavior. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
@@ -22822,7 +22822,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 82,
       "end": 83,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Reviewed real two-object UDP ObjectUpdate fixture for shared Fast-decoder nonzero blocks, plus avatar world admission changes. Runtime replay still needs qualification; fixture does not substitute for connected viewer behavior. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
@@ -22831,25 +22831,25 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 450,
       "end": 475,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Reviewed real two-object UDP ObjectUpdate fixture for shared Fast-decoder nonzero blocks, plus avatar world admission changes. Runtime replay still needs qualification; fixture does not substitute for connected viewer behavior. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 825,
-      "end": 825,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 832,
+      "end": 832,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Reviewed real two-object UDP ObjectUpdate fixture for shared Fast-decoder nonzero blocks, plus avatar world admission changes. Runtime replay still needs qualification; fixture does not substitute for connected viewer behavior. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 909,
-      "end": 909,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 916,
+      "end": 916,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Reviewed real two-object UDP ObjectUpdate fixture for shared Fast-decoder nonzero blocks, plus avatar world admission changes. Runtime replay still needs qualification; fixture does not substitute for connected viewer behavior. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
@@ -25990,7 +25990,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 7,
       "end": 7,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -25999,43 +25999,43 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 550,
       "end": 550,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 834,
-      "end": 836,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 841,
+      "end": 843,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 926,
-      "end": 927,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 933,
+      "end": 934,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1001,
-      "end": 1001,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1008,
+      "end": 1008,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1313,
-      "end": 1313,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1328,
+      "end": 1328,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -31750,7 +31750,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 8,
       "end": 8,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostics-only connected inventory/animation/attachment/AIS loopback and actual GPU readbacks; narrowly gated fixture transport, deterministic expected data and zero-owner retirement are required. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -31759,34 +31759,34 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 672,
       "end": 675,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostics-only connected inventory/animation/attachment/AIS loopback and actual GPU readbacks; narrowly gated fixture transport, deterministic expected data and zero-owner retirement are required. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 836,
-      "end": 837,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 843,
+      "end": 844,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostics-only connected inventory/animation/attachment/AIS loopback and actual GPU readbacks; narrowly gated fixture transport, deterministic expected data and zero-owner retirement are required. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 927,
-      "end": 928,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 934,
+      "end": 935,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostics-only connected inventory/animation/attachment/AIS loopback and actual GPU readbacks; narrowly gated fixture transport, deterministic expected data and zero-owner retirement are required. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1002,
-      "end": 1002,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1009,
+      "end": 1009,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostics-only connected inventory/animation/attachment/AIS loopback and actual GPU readbacks; narrowly gated fixture transport, deterministic expected data and zero-owner retirement are required. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -39778,7 +39778,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 17,
       "end": 19,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -39787,7 +39787,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 504,
       "end": 509,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -39796,34 +39796,34 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 536,
       "end": 539,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 838,
-      "end": 908,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 845,
+      "end": 915,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 951,
-      "end": 951,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 958,
+      "end": 958,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1133,
-      "end": 1133,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1147,
+      "end": 1147,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -40029,8 +40029,8 @@
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 1,
-      "end": 331,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "end": 340,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40038,8 +40038,8 @@
     {
       "path": "scripts/tests/test_vulkan_texture_cache_evidence.py",
       "start": 1,
-      "end": 158,
-      "sha256": "5e37b78ce315955b0d1def9522860601fa20e068ebd0c5d9c694f8d084166119",
+      "end": 175,
+      "sha256": "4f4f09ae8c59045de6bbf48b0c5b8d93f71aeb5fc4c7317b5a747dd710e43c5e",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40147,34 +40147,34 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 510,
       "end": 529,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 858,
-      "end": 860,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 865,
+      "end": 867,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 972,
-      "end": 977,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 979,
+      "end": 984,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1134,
-      "end": 1134,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1148,
+      "end": 1148,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -40624,7 +40624,7 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 145,
       "end": 145,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40633,16 +40633,16 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 147,
       "end": 154,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 162,
-      "end": 165,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 167,
+      "end": 170,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40766,18 +40766,18 @@
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 254,
-      "end": 254,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 263,
+      "end": 263,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 266,
-      "end": 266,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 275,
+      "end": 275,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40867,16 +40867,16 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 9,
       "end": 9,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 938,
-      "end": 938,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 945,
+      "end": 945,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -41245,7 +41245,7 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 42,
       "end": 42,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -41254,7 +41254,7 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 120,
       "end": 123,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -41263,7 +41263,7 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 126,
       "end": 126,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -41272,16 +41272,16 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 134,
       "end": 134,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 273,
-      "end": 273,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 282,
+      "end": 282,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -41353,34 +41353,34 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 502,
       "end": 503,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 907,
-      "end": 907,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 914,
+      "end": 914,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 951,
-      "end": 951,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 958,
+      "end": 958,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 975,
-      "end": 975,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 982,
+      "end": 982,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -41839,16 +41839,16 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 132,
       "end": 132,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 163,
-      "end": 163,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 168,
+      "end": 168,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -42881,18 +42881,18 @@
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 939,
-      "end": 939,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 946,
+      "end": 946,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1003,
-      "end": 1003,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1010,
+      "end": 1010,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -43468,7 +43468,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 533,
       "end": 535,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -43477,16 +43477,16 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 725,
       "end": 734,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1277,
-      "end": 1298,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1292,
+      "end": 1313,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -45196,25 +45196,25 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 13,
       "end": 13,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 204,
-      "end": 239,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 213,
+      "end": 248,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 282,
-      "end": 286,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 291,
+      "end": 295,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46301,18 +46301,18 @@
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 798,
-      "end": 800,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 805,
+      "end": 807,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1042,
-      "end": 1042,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1056,
+      "end": 1056,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -46339,16 +46339,16 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 13,
       "end": 13,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 929,
-      "end": 929,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 936,
+      "end": 936,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only actual viewer cache restart, range demand and immutable GPU pixel evidence. Full R3 acceptance remains open."
@@ -46537,7 +46537,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 3,
       "end": 3,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
@@ -46546,7 +46546,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 134,
       "end": 150,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
@@ -46555,7 +46555,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 231,
       "end": 253,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
@@ -46744,7 +46744,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 4,
       "end": 6,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
@@ -46753,16 +46753,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 254,
       "end": 262,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
-      "record": "I25",
-      "disposition": "test-only",
-      "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
-    },
-    {
-      "path": "indra/newview/vsnativereplay.cpp",
-      "start": 986,
-      "end": 989,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
@@ -46770,17 +46761,26 @@
     {
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 993,
-      "end": 994,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "end": 996,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 999,
-      "end": 999,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1000,
+      "end": 1001,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 1006,
+      "end": 1006,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
@@ -46949,18 +46949,18 @@
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 984,
-      "end": 984,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 991,
+      "end": 991,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 998,
-      "end": 998,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1005,
+      "end": 1005,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual shared AO editor full/compact construction and drawing, inventory-backed set activation, connected status menu commit/state restoration and ordinary account retirement in existing headless replay."
@@ -47122,7 +47122,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 563,
       "end": 563,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
@@ -47131,16 +47131,16 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 711,
       "end": 724,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 801,
-      "end": 804,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 808,
+      "end": 811,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
@@ -47266,7 +47266,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 564,
       "end": 564,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
@@ -47275,7 +47275,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 686,
       "end": 710,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
@@ -47381,18 +47381,18 @@
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1125,
-      "end": 1129,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1139,
+      "end": 1143,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1131,
-      "end": 1132,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1145,
+      "end": 1146,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
@@ -47670,8 +47670,8 @@
     {
       "path": "scripts/tests/test_terrain_materials.py",
       "start": 1,
-      "end": 157,
-      "sha256": "1a9d62bc168f8acce017c9774ae4b63a565f6a4e5fedf8a06222d27713548d8a",
+      "end": 164,
+      "sha256": "17ed8337ecae827230f2cafc4b2689bcd54f1322b36ffbac1910653c8f2fd2af",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare the actual reference terrain producer with native coordinates over 65536 samples; exercise production four-layer GPU blend seams and live scale without reupload, requiring every readback artifact. Preserve transactional ground admission and texture replacement tests."
@@ -47860,16 +47860,16 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 10,
       "end": 10,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 940,
-      "end": 940,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 947,
+      "end": 947,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48273,8 +48273,8 @@
     {
       "path": "scripts/generate_vulkan_terrain_shader.py",
       "start": 1,
-      "end": 130,
-      "sha256": "90c22717861adcab3075e9894807dd17c44ccca3c7ebcd2b1cffa13eff50943f",
+      "end": 141,
+      "sha256": "aacf5d3ee81f3d6eb5e2f897e05cc43ad32eccf6d01322ac8b1bf578ee13cc5c",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48355,7 +48355,7 @@
       "path": "scripts/tests/test_terrain_materials.py",
       "start": 34,
       "end": 82,
-      "sha256": "1a9d62bc168f8acce017c9774ae4b63a565f6a4e5fedf8a06222d27713548d8a",
+      "sha256": "17ed8337ecae827230f2cafc4b2689bcd54f1322b36ffbac1910653c8f2fd2af",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare the actual reference terrain producer with native coordinates over 65536 samples; exercise production four-layer GPU blend seams and live scale without reupload, requiring every readback artifact. Preserve transactional ground admission and texture replacement tests."
@@ -48454,7 +48454,7 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 11,
       "end": 12,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48463,43 +48463,43 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 534,
       "end": 534,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 906,
-      "end": 906,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 913,
+      "end": 913,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 941,
-      "end": 941,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 948,
+      "end": 948,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1296,
-      "end": 1297,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1311,
+      "end": 1312,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1299,
-      "end": 1305,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1314,
+      "end": 1320,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48643,34 +48643,34 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 54,
       "end": 119,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 165,
-      "end": 168,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 170,
+      "end": 173,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 274,
-      "end": 274,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 283,
+      "end": 283,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 290,
-      "end": 292,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 299,
+      "end": 301,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
@@ -48688,7 +48688,7 @@
       "path": "scripts/tests/test_vulkan_texture_cache_evidence.py",
       "start": 8,
       "end": 8,
-      "sha256": "5e37b78ce315955b0d1def9522860601fa20e068ebd0c5d9c694f8d084166119",
+      "sha256": "4f4f09ae8c59045de6bbf48b0c5b8d93f71aeb5fc4c7317b5a747dd710e43c5e",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
@@ -48697,7 +48697,7 @@
       "path": "scripts/tests/test_vulkan_texture_cache_evidence.py",
       "start": 17,
       "end": 96,
-      "sha256": "5e37b78ce315955b0d1def9522860601fa20e068ebd0c5d9c694f8d084166119",
+      "sha256": "4f4f09ae8c59045de6bbf48b0c5b8d93f71aeb5fc4c7317b5a747dd710e43c5e",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
@@ -48751,16 +48751,16 @@
       "path": "scripts/tests/test_terrain_materials.py",
       "start": 13,
       "end": 33,
-      "sha256": "1a9d62bc168f8acce017c9774ae4b63a565f6a4e5fedf8a06222d27713548d8a",
+      "sha256": "17ed8337ecae827230f2cafc4b2689bcd54f1322b36ffbac1910653c8f2fd2af",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare the actual reference terrain producer with native coordinates over 65536 samples; exercise production four-layer GPU blend seams and live scale without reupload, requiring every readback artifact. Preserve transactional ground admission and texture replacement tests."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 1314,
-      "end": 1314,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 1329,
+      "end": 1329,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48832,16 +48832,16 @@
       "path": "indra/newview/vsnativereplay.cpp",
       "start": 435,
       "end": 436,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     },
     {
       "path": "indra/newview/vsnativereplay.cpp",
-      "start": 899,
-      "end": 905,
-      "sha256": "c9ac16f3d4d651ab9f07b976f481714198cc0a32e3eaffe2d0200cb6ace887a4",
+      "start": 906,
+      "end": 912,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49201,25 +49201,25 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 110,
       "end": 117,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 274,
-      "end": 274,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 283,
+      "end": 283,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
     },
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
-      "start": 292,
-      "end": 294,
-      "sha256": "ac35ad754b7e33b432dffe7281719f4e158e005197b110537167d9c24571bf59",
+      "start": 301,
+      "end": 303,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
@@ -49228,7 +49228,7 @@
       "path": "scripts/tests/test_terrain_materials.py",
       "start": 46,
       "end": 49,
-      "sha256": "1a9d62bc168f8acce017c9774ae4b63a565f6a4e5fedf8a06222d27713548d8a",
+      "sha256": "17ed8337ecae827230f2cafc4b2689bcd54f1322b36ffbac1910653c8f2fd2af",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare the actual reference terrain producer with native coordinates over 65536 samples; exercise production four-layer GPU blend seams and live scale without reupload, requiring every readback artifact. Preserve transactional ground admission and texture replacement tests."
@@ -49237,7 +49237,7 @@
       "path": "scripts/tests/test_terrain_materials.py",
       "start": 51,
       "end": 55,
-      "sha256": "1a9d62bc168f8acce017c9774ae4b63a565f6a4e5fedf8a06222d27713548d8a",
+      "sha256": "17ed8337ecae827230f2cafc4b2689bcd54f1322b36ffbac1910653c8f2fd2af",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare the actual reference terrain producer with native coordinates over 65536 samples; exercise production four-layer GPU blend seams and live scale without reupload, requiring every readback artifact. Preserve transactional ground admission and texture replacement tests."
@@ -49246,7 +49246,7 @@
       "path": "scripts/tests/test_terrain_materials.py",
       "start": 57,
       "end": 57,
-      "sha256": "1a9d62bc168f8acce017c9774ae4b63a565f6a4e5fedf8a06222d27713548d8a",
+      "sha256": "17ed8337ecae827230f2cafc4b2689bcd54f1322b36ffbac1910653c8f2fd2af",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare the actual reference terrain producer with native coordinates over 65536 samples; exercise production four-layer GPU blend seams and live scale without reupload, requiring every readback artifact. Preserve transactional ground admission and texture replacement tests."
@@ -49255,7 +49255,7 @@
       "path": "scripts/tests/test_terrain_materials.py",
       "start": 61,
       "end": 61,
-      "sha256": "1a9d62bc168f8acce017c9774ae4b63a565f6a4e5fedf8a06222d27713548d8a",
+      "sha256": "17ed8337ecae827230f2cafc4b2689bcd54f1322b36ffbac1910653c8f2fd2af",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare the actual reference terrain producer with native coordinates over 65536 samples; exercise production four-layer GPU blend seams and live scale without reupload, requiring every readback artifact. Preserve transactional ground admission and texture replacement tests."
@@ -49264,7 +49264,7 @@
       "path": "scripts/tests/test_terrain_materials.py",
       "start": 63,
       "end": 81,
-      "sha256": "1a9d62bc168f8acce017c9774ae4b63a565f6a4e5fedf8a06222d27713548d8a",
+      "sha256": "17ed8337ecae827230f2cafc4b2689bcd54f1322b36ffbac1910653c8f2fd2af",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compare the actual reference terrain producer with native coordinates over 65536 samples; exercise production four-layer GPU blend seams and live scale without reupload, requiring every readback artifact. Preserve transactional ground admission and texture replacement tests."
@@ -49298,9 +49298,9 @@
     },
     {
       "path": "scripts/tests/test_vulkan_texture_cache_evidence.py",
-      "start": 114,
-      "end": 126,
-      "sha256": "5e37b78ce315955b0d1def9522860601fa20e068ebd0c5d9c694f8d084166119",
+      "start": 131,
+      "end": 143,
+      "sha256": "4f4f09ae8c59045de6bbf48b0c5b8d93f71aeb5fc4c7317b5a747dd710e43c5e",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
@@ -49385,10 +49385,118 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 746,
+      "end": 752,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 1022,
+      "end": 1028,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 1148,
+      "end": 1148,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "indra/newview/vsnativereplay.cpp",
+      "start": 1285,
+      "end": 1286,
+      "sha256": "9c879199a24de8f85d1b1b28c05a128b4d699e3447ca18386cbd9800cd905785",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "scripts/generate_vulkan_terrain_shader.py",
+      "start": 5,
+      "end": 5,
+      "sha256": "aacf5d3ee81f3d6eb5e2f897e05cc43ad32eccf6d01322ac8b1bf578ee13cc5c",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "scripts/generate_vulkan_terrain_shader.py",
+      "start": 119,
+      "end": 130,
+      "sha256": "aacf5d3ee81f3d6eb5e2f897e05cc43ad32eccf6d01322ac8b1bf578ee13cc5c",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "scripts/generate_vulkan_terrain_shader.py",
+      "start": 137,
+      "end": 137,
+      "sha256": "aacf5d3ee81f3d6eb5e2f897e05cc43ad32eccf6d01322ac8b1bf578ee13cc5c",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "scripts/generate_vulkan_terrain_shader.py",
+      "start": 141,
+      "end": 141,
+      "sha256": "aacf5d3ee81f3d6eb5e2f897e05cc43ad32eccf6d01322ac8b1bf578ee13cc5c",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
+    },
+    {
+      "path": "scripts/run_vulkan_texture_cache_tests.py",
+      "start": 162,
+      "end": 166,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
+    },
+    {
+      "path": "scripts/run_vulkan_texture_cache_tests.py",
+      "start": 172,
+      "end": 178,
+      "sha256": "639d85e17222a0e63b3742d793c2e19e2d2f5dd274dd609ad1c50647d4a58ada",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_terrain_materials.py",
+      "start": 83,
+      "end": 89,
+      "sha256": "17ed8337ecae827230f2cafc4b2689bcd54f1322b36ffbac1910653c8f2fd2af",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Compare the actual reference terrain producer with native coordinates over 65536 samples; exercise production four-layer GPU blend seams and live scale without reupload, requiring every readback artifact. Preserve transactional ground admission and texture replacement tests."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_texture_cache_evidence.py",
+      "start": 114,
+      "end": 130,
+      "sha256": "4f4f09ae8c59045de6bbf48b0c5b8d93f71aeb5fc4c7317b5a747dd710e43c5e",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require actual shared-policy pressure, full-resolution override, non-presenting minimized coarsening, scene-image retirement and restoration. Queue genuine shared HTTP/cache work at app shutdown and verify worker completion plus next-process GPU reuse without network. Runtime and final three-platform R3 acceptance remain required."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "739bf75f8e43bf4ea68bc6a9046012c6ad638818",
+    "previous_source_commit": "c419fe09727c0267030c92a76c2c5243edf4843e",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
