@@ -2866,7 +2866,18 @@ S32 LLTextureFetch::createRequest(FTType f_type, const std::string& url, const L
     if (mNativeConsumer && !worker && getNumRequests() >= 32)
         return CREATE_REQUEST_ERROR_DEFAULT;
     S32 desired_size;
-    std::string exten = gDirUtilp->getExtension(url);
+    std::string extension_path=url;
+    if(mNativeConsumer)
+    {
+        // Native subscribers supply capability URLs before the shared worker
+        // knows the asset dimensions. LLDir uses the platform's filesystem
+        // separator, so a Windows URL hostname must not become an extension.
+        const auto query=extension_path.find_first_of("?#");
+        if(query!=std::string::npos) extension_path.resize(query);
+        const auto separator=extension_path.find_last_of('/');
+        if(separator!=std::string::npos) extension_path.erase(0,separator+1);
+    }
+    std::string exten = gDirUtilp->getExtension(extension_path);
     //if (f_type == FTT_SERVER_BAKE)
     if ((f_type == FTT_SERVER_BAKE) && !url.empty() && !exten.empty() && (LLImageBase::getCodecFromExtension(exten) != IMG_CODEC_J2C))
     {

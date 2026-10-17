@@ -23,7 +23,11 @@ constexpr int MAX_IMAGE_DATA_SIZE=64*1024*1024,TEXTURE_CACHE_ENTRY_SIZE=600,MAX_
 #define llassert(x) assert(x)
 int fttype_to_string(FTType type){return int(type);}
 template<class T>T llmax(T a,T b){return std::max(a,b);}template<class T>T llmin(T a,T b){return std::min(a,b);}
-struct Dir{std::string getExtension(const std::string& url){return url.find("png")!=std::string::npos?"png":std::string();}}dir;
+// Deliberately emulate Windows LLDir: '/' is not its filesystem delimiter.
+struct Dir{std::string getExtension(const std::string& url){
+ auto slash=url.find_last_of('\\');auto name=url.substr(slash==std::string::npos?0:slash+1);
+ auto dot=name.find_last_of('.');return dot==std::string::npos?std::string():name.substr(dot+1);
+}}dir;
 auto* gDirUtilp=&dir;
 struct LLImageBase{static int getCodecFromExtension(const std::string& ext){return ext=="png"?2:IMG_CODEC_J2C;}};
 struct LLImageJ2C{static inline int calls=0,lastW=0,lastH=0,lastC=0,lastDiscard=0;
@@ -49,6 +53,14 @@ struct LLTextureFetch{
 };
 BODY
 int main(){
+ LLTextureFetch urls(true),legacyUrls(false);
+ const std::string capability="http://127.0.0.1:1080/asset?texture_id=example.png";
+ assert(urls.createRequest(FTT_DEFAULT,capability,1,0,12,0,0,4,5,true,true)==MAX_DISCARD_LEVEL);
+ assert(urls.getWorker(1)->mDesiredSize==600);
+ assert(urls.createRequest(FTT_DEFAULT,"https://cdn.example.org/a.b/texture.j2c?token=foo.png",2,0,12,1024,1024,4,3,true,true)==3);
+ assert(urls.getWorker(2)->mDesiredSize==1200);
+ assert(urls.createRequest(FTT_DEFAULT,"https://cdn.example.org/texture.png?token=a.j2c",3,0,12,0,0,4,5,true,true)==0);
+ assert(legacyUrls.createRequest(FTT_DEFAULT,capability,1,0,12,0,0,4,5,true,true)==0);
  LLTextureFetch native(true),legacy(false);
  assert(native.createRequest(FTT_DEFAULT,"http://texture/",1,0,12,0,0,4,3,true,true)==MAX_DISCARD_LEVEL);
  auto* first=native.getWorker(1);assert(first->mDesiredSize==600 && first->mNeedsAux && first->http);
