@@ -922,3 +922,13 @@ cases are skipped on the Linux source-CI runner. One initial parallel sweep
 also saw a loopback connection reset in the parity baseline; that unchanged
 script passes standalone. This does not establish the reset's cause or waive
 its assertions. Actual Linux builds/graphics still require the pushed CI run.
+
+
+The next Linux source run passed X11 header coexistence and the corrected
+fixtures, then exposed a codec-wrapper include dependency hidden by Windows
+standard-library/PCH includes: STB implementation mode calls global `memcpy`
+but does not include its declaration. Our `vstextureupload.h` wrapper now
+includes `<cstring>` before the pinned STB header; the vendor source, pin and
+codec policy remain unchanged. Public-header regression coverage also compiles
+the wrapper first in implementation mode. Linux CI remains decisive for the
+platform's standard-library include behavior.

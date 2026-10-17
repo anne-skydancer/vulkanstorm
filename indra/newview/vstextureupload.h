@@ -2,6 +2,8 @@
 #pragma once
 #include "vsimagemips.h"
 #include "vsworldcontracts.h"
+// stb_dxt implementation mode calls memcpy; do not rely on viewer PCHs.
+#include <cstring>
 #include "third_party/stb/stb_dxt.h"
 #include <algorithm>
 #include <array>
