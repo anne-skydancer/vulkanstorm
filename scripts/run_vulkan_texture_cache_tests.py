@@ -69,8 +69,16 @@ def validate_case(record,requests,folder,cache_directory,readonly=False):
     coarse=stages['coarse'];again=stages['coarse_after_preference']
     if not (0<coarse['discard']<=5 and coarse['width']==1024>>coarse['discard'] and coarse['height']==coarse['width']):
         raise ValueError('Projected demand did not produce the expected coarse resource')
-    if any(again[key]!=coarse[key] for key in ('width','height','discard','gpu_rgba_sha256')):
+    if any(again[key]!=coarse[key] for key in ('width','height','discard')):
         raise ValueError('Full-resolution preference did not restore normal projected demand')
+    # A partial J2C stream can legitimately refine quality at the same discard.
+    # Compare each stage to the shared reference decoder's exact input window,
+    # rather than assuming that 600 bytes and a complete codestream are equal.
+    for stage,reference in (('coarse','coarse-partial'),('coarse_after_preference','coarse-complete'),
+                            ('resolution_limit','resolution-limit')):
+        row=stages[stage]
+        expected=dict(row,gpu_rgba_file=stages['references'][reference])
+        validate_image(expected,folder)
     for name in ('full_resolution_preference','restored'):
         row=stages[name]
         if (row['width'],row['height'],row['discard'])!=(1024,1024,0) or row['gpu_rgba_sha256']!=full_pattern_sha256():
@@ -78,7 +86,10 @@ def validate_case(record,requests,folder,cache_directory,readonly=False):
     limited=stages['resolution_limit']
     if (limited['width'],limited['height'],limited['discard'])!=(512,512,1):raise ValueError('Native maximum-resolution preference was inert')
     if rows[STREAM]['gpu_rgba_sha256']!=full_pattern_sha256():raise ValueError('Final resident texture differs from the expected full-resolution pixels')
-    if u64(cache['network_requests'])!=len(texture_requests(requests)):raise ValueError('Texture HTTP evidence disagrees with the worker counter')
+    retired=record['retired_texture_cache']
+    if retired['images'] or retired['pending_fetches']!=0:raise ValueError('Retired account retained cached GPU images or fetches')
+    if retired['process_instance']!=cache['process_instance']:raise ValueError('Cache lifecycle evidence changed process identity')
+    if u64(retired['network_requests'])!=len(texture_requests(requests)):raise ValueError('Texture HTTP evidence disagrees with the worker counter')
     return rows
 
 def snapshot(cache_directory):

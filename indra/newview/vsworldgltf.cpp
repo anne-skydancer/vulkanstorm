@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "llviewercontrol.h"
 #include "vsworldgltf.h"
+#include "vsnormalbasis.h"
 #include "vsuiresources.h"
 #include "gltf/asset.h"
 #include "llassetstorage.h"
@@ -154,9 +155,23 @@ bool validate(const Asset& asset, std::size_t& bytes)
             if (!std::isfinite(glm::value_ptr(factor)[channel]) || glm::value_ptr(factor)[channel] < 0 ||
                 glm::value_ptr(factor)[channel] > 1)
                 return false;
-        const auto texture = material.mPbrMetallicRoughness.mBaseColorTexture.mIndex;
-        if (texture != INVALID_INDEX && !index(texture, asset.mTextures))
-            return false;
+        if(!std::isfinite(material.mNormalTexture.mScale) || !std::isfinite(material.mOcclusionTexture.mStrength) ||
+            material.mOcclusionTexture.mStrength<0 || material.mOcclusionTexture.mStrength>1) return false;
+        for(float value:{material.mPbrMetallicRoughness.mMetallicFactor,material.mPbrMetallicRoughness.mRoughnessFactor})
+            if(!std::isfinite(value) || value<0 || value>1) return false;
+        for(unsigned c=0;c<3;++c)
+            if(!std::isfinite(glm::value_ptr(material.mEmissiveFactor)[c]) || glm::value_ptr(material.mEmissiveFactor)[c]<0)
+                return false;
+        const TextureInfo* channels[]{&material.mPbrMetallicRoughness.mBaseColorTexture,&material.mNormalTexture,
+            &material.mPbrMetallicRoughness.mMetallicRoughnessTexture,&material.mEmissiveTexture,&material.mOcclusionTexture};
+        for(const auto* info:channels)
+        {
+            if(info->mIndex==INVALID_INDEX) continue;
+            if(!index(info->mIndex,asset.mTextures) || info->getTexCoord()<0 || info->getTexCoord()>1) return false;
+            const auto& transform=info->mTextureTransform;
+            for(float value:{transform.mScale.x,transform.mScale.y,transform.mOffset.x,transform.mOffset.y,transform.mRotation})
+                if(!std::isfinite(value)) return false;
+        }
     }
     for (const auto& accessor : asset.mAccessors)
     {
@@ -1015,7 +1030,11 @@ void VSWorldGLTF::append(std::vector<VSWorldRenderer::Packet>& packets, const LL
                             owner.error = "Nonfinite glTF geometry";
                             return;
                         }
-                if (owner.renderer.publishMesh(published.mesh, vertices, indices, topology))
+                unsigned attributes=VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0;
+                if(!primitive.mTexCoords1.empty()) attributes|=VSWorldContracts::UV1;
+                if(!primitive.mTangents.empty()) attributes|=VSWorldContracts::Tangent;
+                if(!primitive.mColors.empty()) attributes|=VSWorldContracts::Color;
+                if (owner.renderer.publishMesh(published.mesh, vertices, indices, topology,attributes))
                     published.signature = signature;
                 else
                     deferred = true;
@@ -1045,16 +1064,19 @@ void VSWorldGLTF::append(std::vector<VSWorldRenderer::Packet>& packets, const LL
                     packet.masked?VSWorldContracts::AlphaMode::Mask:VSWorldContracts::AlphaMode::Opaque;
                 surface->cutoff=packet.alphaCutoff;surface->doubleSided=packet.doubleSided;surface->fullbright=packet.fullbright;
                 surface->metallic=material.mPbrMetallicRoughness.mMetallicFactor;surface->roughness=material.mPbrMetallicRoughness.mRoughnessFactor;
+                surface->normalTangent=VSNormalBasis::imported(material.mNormalTexture.mTextureTransform.mRotation);
                 surface->normalScale=material.mNormalTexture.mScale;surface->occlusionStrength=material.mOcclusionTexture.mStrength;
                 std::copy_n(glm::value_ptr(material.mEmissiveFactor),3,surface->emissive.begin());
                 const TextureInfo* infos[]{&material.mPbrMetallicRoughness.mBaseColorTexture,&material.mNormalTexture,
-                    &material.mPbrMetallicRoughness.mMetallicRoughnessTexture,&material.mEmissiveTexture};
+                    &material.mPbrMetallicRoughness.mMetallicRoughnessTexture,&material.mEmissiveTexture,&material.mOcclusionTexture};
                 bool channelsReady=true;
-                for(unsigned channel=0;channel<4;++channel)
+                for(unsigned channel=0;channel<VSMaterial::ChannelCount;++channel)
                 {
                     const auto& info=*infos[channel];const auto texture=info.mIndex;
+                    if(texture<0) continue;
+                    if(channel==VSMaterial::Occlusion) surface->independentOcclusion=index(texture,asset.mTextures);
                     const auto set=info.getTexCoord();
-                    if(set<0 || set>1 || (set==1 && primitive.mTexCoords1.size()!=primitive.mPositions.size()))
+                    if(texture>=0 && (set<0 || set>1 || (set==1 && primitive.mTexCoords1.size()!=primitive.mPositions.size())))
                     {owner.error="glTF material requests an absent UV channel";return;}
                     surface->uvSet[channel]=unsigned(set);
                     auto& sampling=surface->samplers[channel];sampling.mipmaps=true;

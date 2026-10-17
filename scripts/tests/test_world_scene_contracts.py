@@ -29,18 +29,20 @@ struct VSWorldRenderer {
  struct Vertex {float value;};
  struct Geometry {float value;std::shared_ptr<const VSResourceBudget::Reservation> lease;};
  using Mesh=std::shared_ptr<const Geometry>;
- VSResourceBudget budget{16};unsigned refusals=0;
- Mesh upload(const std::vector<Vertex>& vertices,const std::vector<unsigned>& indices,Topology=Topology::Triangles) {
+ VSResourceBudget budget{16};unsigned refusals=0,lastAttributes=0;
+ Mesh upload(const std::vector<Vertex>& vertices,const std::vector<unsigned>& indices,Topology=Topology::Triangles,unsigned attributes=7) {
+  lastAttributes=attributes;
   auto lease=budget.reserve(vertices.size()*sizeof(Vertex)+indices.size()*sizeof(unsigned));
   if(!lease){++refusals;return {};}
   return std::make_shared<Geometry>(Geometry{vertices[0].value,std::move(lease)});
  }
- bool publishMesh(Mesh&,const std::vector<Vertex>&,const std::vector<unsigned>&,Topology=Topology::Triangles);
+ bool publishMesh(Mesh&,const std::vector<Vertex>&,const std::vector<unsigned>&,Topology=Topology::Triangles,unsigned=7);
 };
 """+publication+"""
 int main() {
  VSWorldRenderer owner;VSWorldRenderer::Mesh current;
- assert(owner.publishMesh(current,{{6}},{0}));
+ assert(owner.publishMesh(current,{{6}},{0},VSWorldRenderer::Topology::Triangles,15));
+ assert(owner.lastAttributes==15);
  auto blocker=owner.upload({{9}},{0});
  auto* original=current.get();std::weak_ptr<const VSWorldRenderer::Geometry> previous=current;
  bool dirty=!owner.publishMesh(current,{{7}},{0});

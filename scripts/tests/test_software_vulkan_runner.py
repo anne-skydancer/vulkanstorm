@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from run_software_vulkan_tests import assess, device_evidence, main, presentation_evidence, windows_manifest_registration
+from run_software_vulkan_tests import assess, device_evidence, main, presentation_evidence, windows_manifest_registration, MATERIAL_READBACKS
 import json
 import os
 
@@ -88,6 +88,7 @@ class RunnerFailureTests(unittest.TestCase):
                 if mode in ('offscreen', 'world'):
                     for name in ('first.ppm', 'replacement.ppm'): (cwd / name).write_bytes(b'readback')
                     if mode == 'world':
+                        for name in MATERIAL_READBACKS: (cwd/name).write_bytes(b'readback')
                         for name in ('near-clip.ppm', 'sky.ppm', 'water-depth.ppm', 'resource-reuse.ppm', 'ui-batch.ppm', 'budget-retained.ppm', 'budget-replacement.ppm', 'ui-blend-precision.ppm', 'ui-blend-precision-expected.ppm', 'ui-blend-precision-expected-products.ppm', *(f'texture-{i}.ppm' for i in range(4))): (cwd / name).write_bytes(b'readback')
                     log = identity + 'DILIGENT_DEVICE=SwiftShader\n' + ''.join('LOADED='+str(root/name)+'\n' for name in libraries) + 'PASS ' + mode
                     return SimpleNamespace(returncode=0, stdout=log.encode('utf-8'))

@@ -446,6 +446,26 @@ LLSD cachedImageEvidence(const LLUUID& id)
     for(const auto& row:llsd::inArray(evidence["images"])) if(row["id"].asUUID()==id) return row;
     throw std::runtime_error("R3 cached image has no GPU evidence");
 }
+void textureReference(LLImageJ2C& source,const std::filesystem::path& folder,
+                      const std::string& name,S8 discard,S32 bytes,LLSD& references)
+{
+    // Decode the exact codestream window using the reference CPU codec,
+    // independently of the native fetch subscriber and GPU publication.
+    LLPointer<LLImageJ2C> encoded=new LLImageJ2C;
+    auto* data=encoded->allocateData(bytes);
+    require(data!=nullptr,"R3 reference buffer allocation failed");
+    std::memcpy(data,source.getData(),bytes);
+    require(encoded->updateData(),"R3 reference header decode failed");
+    encoded->setDiscardLevel(discard);
+    LLPointer<LLImageRaw> raw=new LLImageRaw;
+    require(encoded->decode(raw,0.f) && raw->getComponents()==4,"R3 reference pixel decode failed");
+    const auto file="reference-"+name+".rgba";
+    std::ofstream output(folder/file,std::ios::binary);
+    for(S32 y=raw->getHeight()-1;y>=0;--y)
+        output.write(reinterpret_cast<const char*>(raw->getData()+std::size_t(y)*raw->getWidth()*4),raw->getWidth()*4);
+    require(output.good(),"R3 reference pixel write failed");
+    references[name]=(std::filesystem::path("r3")/file).generic_string();
+}
 struct Replay
 {
     unsigned step = 0;
@@ -713,6 +733,9 @@ struct Replay
                     const auto folder=std::filesystem::path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"))/"r3";
                     std::filesystem::create_directories(folder);
                     require(encoded->encode(raw,0.f) && encoded->save((folder/"texture.j2c").string()),"R3 lossless texture fixture encode failed");
+                    textureReference(*encoded,folder,"coarse-partial",5,600,textureStreaming["references"]);
+                    textureReference(*encoded,folder,"coarse-complete",5,encoded->getDataSize(),textureStreaming["references"]);
+                    textureReference(*encoded,folder,"resolution-limit",1,encoded->getDataSize(),textureStreaming["references"]);
                     textureCacheStep=1;
                 }
                 if(textureCacheStep==1)
@@ -811,6 +834,12 @@ struct Replay
                 submitted = true; return;
             }
             if (!encodedChat || !encodedToolbarChat || !encodedNegativeChat || !encodedTypingStart || !encodedTypingStop || encodedChannels != 4) return;
+            if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE"))
+            {
+                const auto cache=vs_ui_texture_cache_evidence(true);
+                if(cache["pending_fetches"].asInteger()) return;
+                imEvidence["texture_cache"]=cache;
+            }
             imEvidence["connected_toolbar_chat"] = true;
             const std::weak_ptr<VSNativeSession> weak = owner.shared_from_this();
             LL::WorkQueue::getInstance("mainloop")->post([this, weak, generation = oldGeneration]()
@@ -949,6 +978,7 @@ struct Replay
 
                 report = owner.evidence(); report["schema"] = 1; report["mode"] = "viewer-native-session-replay";
                 report["texture_cache"]=vs_ui_texture_cache_evidence(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE")!=nullptr);
+                if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE")) report["retired_texture_cache"]=report["texture_cache"];
                 // Snapshot transport evidence before appending verified fixture witnesses.
                 report["native_location_lookup"] = locationResolved;
                 report["native_landmark_v2"] = handleResolved;
