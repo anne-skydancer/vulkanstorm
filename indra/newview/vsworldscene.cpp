@@ -2635,7 +2635,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         if (o.pendingGLTF)
         {
             std::vector<VSWorldRenderer::Packet> candidate;
-            o.pendingGLTF->append(candidate, position, rotation, o.scale, eye);
+            o.pendingGLTF->append(candidate, position, rotation, o.scale, eye,viewportHeight);
             if (o.pendingGLTF->hasPublication())
                 o.gltf = std::move(o.pendingGLTF);
         }
@@ -2660,7 +2660,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                                                        });
             }
             const auto start = packets.size();
-            o.gltf->append(packets, position, rotation, o.scale, eye);
+            o.gltf->append(packets, position, rotation, o.scale, eye,viewportHeight);
             // Selection uses the exact submitted topology, including removal
             // of faces when a replacement scene contains fewer primitives.
             o.faces.clear();

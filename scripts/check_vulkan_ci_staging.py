@@ -22,7 +22,8 @@ def check(directory):
     names = ['GraphicsEngineVk_64r.dll', 'vulkan-1.dll'] if windows else ['libGraphicsEngineVk.so', 'libvulkan.so.1']
     cef_runtime = ['llplugin/vulkan-1.dll', 'llplugin/libcef.dll', 'llplugin/dullahan_host.exe'] if windows else ['lib/libcef.so', 'bin/dullahan_host']
     required = [libraries / n for n in names] + [executable[0], root / 'app_settings/message_template.msg',
-                root / 'app_settings/contributors.txt', root / 'app_settings/packages-info.txt'] + [root / n for n in cef_runtime]
+                root / 'app_settings/contributors.txt', root / 'app_settings/packages-info.txt',
+                root / 'licenses/vulkan-ghi/stb_dxt.txt'] + [root / n for n in cef_runtime]
     for path in required:
         if not path.is_file():
             raise RuntimeError(f'Missing staged file: {path}')

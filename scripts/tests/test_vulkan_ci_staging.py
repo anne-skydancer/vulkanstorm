@@ -31,7 +31,7 @@ class StagingFailureTests(unittest.TestCase):
                  'app_settings/message_template.msg', 'app_settings/contributors.txt',
                  'app_settings/packages-info.txt', 'skins/default/xui/en/test.xml',
                  'fonts/test.ttf', 'app_settings/shaders/test.glsl',
-                 'licenses/vulkan-ghi/test.txt', str(self.host.relative_to(self.stage)), str(self.media.relative_to(self.stage))]
+                 'licenses/vulkan-ghi/test.txt', 'licenses/vulkan-ghi/stb_dxt.txt', str(self.host.relative_to(self.stage)), str(self.media.relative_to(self.stage))]
         for name in files:
             path = self.stage / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'test')
         (self.build / 'CMakeCache.txt').write_text('USE_DILIGENTCORE:BOOL=ON\nPACKAGE:BOOL=OFF\nCMAKE_BUILD_TYPE:STRING=RelWithDebInfo\n')
@@ -57,6 +57,11 @@ class StagingFailureTests(unittest.TestCase):
                 finally:
                     path.write_bytes(b'test')
 
+    def test_missing_codec_license(self):
+        (self.stage / 'licenses/vulkan-ghi/stb_dxt.txt').unlink()
+        with self.assertRaisesRegex(RuntimeError, 'Missing staged file'):
+            check(self.build)
+
     def test_wrong_library_bytes(self):
         (self.library_dir / self.libraries[0]).write_bytes(b'wrong')
         with self.assertRaisesRegex(RuntimeError, 'GHI bytes differ'):
@@ -69,7 +74,7 @@ class StagingFailureTests(unittest.TestCase):
 
     def test_directories_do_not_count_as_assets(self):
         for name in ('skins/default/xui/en/test.xml', 'fonts/test.ttf',
-                     'app_settings/shaders/test.glsl', 'licenses/vulkan-ghi/test.txt'):
+                     'app_settings/shaders/test.glsl'):
             with self.subTest(asset=name):
                 path = self.stage / name
                 path.unlink()

@@ -354,3 +354,17 @@ alpha and padded edge blocks, and malformed preparation payloads were rejected.
 Focused cache/replay regressions passed. Actual viewer worker-path replay is
 pending the canonical rebuild. Embedded glTF image preparation, local PBR reload,
 terrain and the other remaining R3 acceptance requirements are still open.
+
+
+The canonical worker-path build at `94c1433fa9` passed all nine headless restart
+cases in 121.1 seconds, including the real local PNG reload exercise. Deferred
+preparation is counted alongside fetch work, so capture waits for publication.
+
+Embedded glTF images now prepare mips/compression on the same bounded General
+queue, retain the last publication during policy changes and reject retired
+scene callbacks. UUID image sources use projected world demand rather than UI
+full-resolution demand; projected size uses the admitted mesh bounds and actual
+viewport height. Decoder errors release pending prepared payloads. Selected
+sources compile; production glTF image replacement runtime acceptance is pending.
+The codec license now has an explicit native manifest entry and a mandatory
+staging-file check, with missing-license regressions for both platforms.

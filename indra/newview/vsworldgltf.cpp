@@ -4,6 +4,8 @@
 #include "vsworldgltf.h"
 #include "vsnormalbasis.h"
 #include "vsuiresources.h"
+#include "vstextureupload.h"
+#include "workqueue.h"
 #include "vsuiimageprovider.h"
 #include "gltf/asset.h"
 #include "llassetstorage.h"
@@ -465,6 +467,33 @@ struct VSWorldGLTF::Impl : std::enable_shared_from_this<Impl>
     bool                                                 publicationKnown = false;
     LLUUID                                               imageOwner;
     std::map<unsigned, std::string>                      images;
+    struct ImageUpdate
+    {
+        bool preparing=false,known=false,wanted=false;
+        VSUIResources::PreparedImage prepared;
+        std::shared_ptr<const VSResourceBudget::Reservation> residency;
+    };
+    std::map<unsigned,ImageUpdate> imageUpdates;
+    bool prepareImage(unsigned index,const LLPointer<LLImageRaw>& raw,bool wanted)
+    {
+        auto& update=imageUpdates[index];
+        auto lease=resources.reserveImagePreparation(std::size_t(raw->getWidth())*raw->getHeight()*32+16384);
+        if(!lease) return false;
+        LL::WorkQueue::ptr_t main=LL::WorkQueue::getInstance("mainloop"),general=LL::WorkQueue::getInstance("General");
+        const auto weak=weak_from_this();update.preparing=true;
+        const bool posted=main->postTo(general,[raw,wanted,lease] {
+            using Result=std::pair<VSUIResources::PreparedImage,std::string>;
+            try {return Result{VSUIResources::prepareImage(*raw,VSWorldContracts::ImageRole::RemoteAsset,wanted),{}};}
+            catch(const std::exception& failure) {return Result{{},failure.what()};}
+        },[weak,index,lease](std::pair<VSUIResources::PreparedImage,std::string> result) {
+            const auto owner=weak.lock();if(!owner || !owner->current() || !owner->error.empty()) return;
+            auto& state=owner->imageUpdates[index];state.preparing=false;
+            if(!result.first) {owner->error="glTF image preparation failed: "+result.second;return;}
+            state.prepared=std::move(result.first);state.residency=lease;
+        });
+        if(!posted) update.preparing=false;
+        return posted;
+    }
     ~Impl()
     {
         for (const auto& [index, key] : images)
@@ -598,17 +627,46 @@ struct VSWorldGLTF::Impl : std::enable_shared_from_this<Impl>
         asset->updateTransforms();
         ready = true;
     }
-    VSUIRenderer::Image image(unsigned index)
+    VSUIRenderer::Image image(unsigned index,unsigned demand)
     {
         const auto& source = asset->mImages[index];
         LLUUID      uuid;
         if (LLUUID::parseUUID(source.mUri, &uuid) && uuid.notNull())
         {
-            LLUI::getUIImageByID(uuid);
+            vs_request_world_image(uuid,demand);
             return resources.image("remote:" + vs_native_image_id(uuid).asString());
         }
-        if (const auto found = images.find(index); found != images.end())
-            return resources.image(found->second);
+        const auto key="gltf-scene-image:"+imageOwner.asString()+":"+std::to_string(index);
+        const auto previous=resources.image(key);
+        const bool wanted=gSavedSettings.getBOOL("RenderCompressTextures") && resources.supportsCompression();
+        auto& update=imageUpdates[index];
+        if(update.preparing) return previous;
+        if(update.prepared)
+        {
+            if(update.prepared->compressionRequested==wanted)
+            {
+                if(!resources.publishPrepared(key,update.prepared)) return previous;
+                images[index]=key;update.known=true;update.wanted=wanted;
+                update.prepared.reset();update.residency.reset();return resources.image(key);
+            }
+            // A preference may change while CPU preparation is in flight. Reuse
+            // the prepared CPU pixels, preserving the last published generation.
+            const auto payload=update.prepared;
+            LLPointer<LLImageRaw> raw=new LLImageRaw(payload->width,payload->height,4);
+            const auto stride=payload->width*4;
+            for(unsigned row=0;row<payload->height;++row)
+                std::copy_n(payload->pixels.data()+std::size_t(row)*stride,stride,
+                    raw->getData()+std::size_t(payload->height-1-row)*stride);
+            if(prepareImage(index,raw,wanted)) {update.prepared.reset();update.residency.reset();}
+            return previous;
+        }
+        if(previous)
+        {
+            if(update.known && update.wanted==wanted) return previous;
+            const auto raw=resources.rawImage(key);
+            if(raw) prepareImage(index,raw,wanted);
+            return previous;
+        }
         auto working = budget.reserve(64 * 1024 * 1024);
         if (!working)
             return {};
@@ -676,11 +734,8 @@ struct VSWorldGLTF::Impl : std::enable_shared_from_this<Impl>
             error = "glTF image decode failed";
             return {};
         }
-        const auto key = "gltf-scene-image:" + imageOwner.asString() + ":" + std::to_string(index);
-        if (!resources.publish(key, *raw))
-            return {};
-        images[index] = key;
-        return resources.image(key);
+        prepareImage(index,raw,wanted);
+        return {};
     }
     static void delivered(const LLUUID& id, LLAssetType::EType type, void* data, S32 status, LLExtStat)
     {
@@ -849,12 +904,13 @@ bool VSWorldGLTF::ready() const
         for (const auto& [index, key] : mImpl->images)
             mImpl->resources.erase(key);
         mImpl->images.clear();
+        mImpl->imageUpdates.clear();
     }
     return mImpl->ready && mImpl->error.empty();
 }
 VSWorldGLTF::~VSWorldGLTF() = default;
 void VSWorldGLTF::append(std::vector<VSWorldRenderer::Packet>& packets, const LLVector3& position, const LLQuaternion& rotation,
-                         const LLVector3& scale, const LLVector3& eye)
+                         const LLVector3& scale, const LLVector3& eye,unsigned viewportHeight)
 {
     auto& owner = *mImpl;
     if (!owner.current())
@@ -1098,7 +1154,12 @@ void VSWorldGLTF::append(std::vector<VSWorldRenderer::Packet>& packets, const LL
                     surface->uv[channel].offset={source.mOffset.x+r*source.mScale.y,1-source.mOffset.y-c*source.mScale.y};
                     if(index(texture,asset.mTextures) && index(asset.mTextures[texture].mSource,asset.mImages))
                     {
-                        auto image=owner.image(unsigned(asset.mTextures[texture].mSource));
+                        const auto bounds=VSWorldRenderer::bounds(packet.mesh);
+                        const LLVector3 extent(bounds[1][0]-bounds[0][0],bounds[1][1]-bounds[0][1],bounds[1][2]-bounds[0][2]);
+                        const LLVector3 center((bounds[1][0]+bounds[0][0])*.5f,(bounds[1][1]+bounds[0][1])*.5f,(bounds[1][2]+bounds[0][2])*.5f);
+                        const auto distance=std::max((center-eye).length(),1.f);
+                        const unsigned demand=unsigned(std::clamp(extent.length()*std::max(viewportHeight,1u)/distance,1.f,4096.f));
+                        auto image=owner.image(unsigned(asset.mTextures[texture].mSource),demand);
                         if(!image) {channelsReady=false;continue;}
                         if(!channel) packet.image=std::move(image);else packet.channels[channel-1]=std::move(image);
                     }
@@ -1125,6 +1186,9 @@ LLSD VSWorldGLTF::evidence() const
     result["publication_known"]    = mImpl->publicationKnown;
     result["error"]                = mImpl->error;
     result["pending_buffers"]      = S32(mImpl->pendingBuffers.size());
+    unsigned pendingImages=0;
+    for(const auto& [index,update]:mImpl->imageUpdates) if(update.preparing || update.prepared) ++pendingImages;
+    result["pending_image_uploads"]=S32(pendingImages);
     result["published_primitives"] = S32(mImpl->publications.size());
     result["resident_bytes"] =
         ll_sd_from_U64((mImpl->residency ? mImpl->residency->bytes() : 0) + (mImpl->typedResidency ? mImpl->typedResidency->bytes() : 0));
