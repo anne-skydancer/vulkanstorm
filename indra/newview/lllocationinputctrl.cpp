@@ -958,13 +958,19 @@ void LLLocationInputCtrl::refreshParcelIcons()
             !native->simulatorFeatures()["DynamicPathfindingEnabled"].asBoolean());
         mForSaleBtn->setVisible(false);
         mDamageText->setVisible(show && permissions.damage);
-        S32 x = mAddLandmarkBtn->getRect().mLeft - mAddLandmarkHPad;
-        for (S32 i = 0; i < ICON_COUNT; ++i)
+        S32 x = mAddLandmarkBtn->getRect().mLeft;
+        if (show)
         {
-            x = layout_widget(mParcelIcon[i], x);
-            if (mParcelIcon[i]->getVisible()) x -= mIconHPad;
+            // Retain the reference bar's padding, including hidden icon slots.
+            x -= mAddLandmarkHPad;
+            for (S32 i = 0; i < ICON_COUNT; ++i)
+            {
+                x = layout_widget(mParcelIcon[i], x);
+                x -= mIconHPad;
+            }
+            x = layout_widget(mDamageText, x);
+            x -= mIconHPad;
         }
-        x = layout_widget(mDamageText, x);
         if (mTextEntry)
         {
             S32 left_pad, right_pad; mTextEntry->getTextPadding(&left_pad, &right_pad);
