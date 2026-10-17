@@ -1,5 +1,5 @@
 {
-  "source_commit": "d6b769637b6cc4212f3225c5020dacfa42d74aec",
+  "source_commit": "6449d68badd524e1f4b9e41b9c58cbc5af473dc3",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -19,7 +19,7 @@
   ],
   "sources": {
     "indra/newview/llappviewer.cpp": {
-      "sha256": "f00adf415fee286914f26dd70c59f22067630e2fd84b1f6c1b525d7a0644e614",
+      "sha256": "d6bfb15a12a0b78c631caa36bdb87d665405719a83e09eef3d970664cca71e36",
       "anchors": [
         "LLAppViewer::init()",
         "LLAppViewer::initWindow()",
