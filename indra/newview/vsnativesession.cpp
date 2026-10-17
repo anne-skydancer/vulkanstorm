@@ -11,6 +11,7 @@
 #include "vscapabilities.h"
 #include "vsnativeappearance.h"
 #include "vstaskinventory.h"
+#include "vsobjectselection.h"
 #include "aoengine.h"
 #include "fsavatarrenderpersistence.h"
 #include "vsvulkancontext.h"
@@ -362,6 +363,9 @@ void VSNativeSession::install(LLMessageSystem& msg)
     for (const char* name : {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "ParcelOverlay", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
          "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
+    msg.setHandlerFunc("ObjectProperties", receiveMessage);
+    msg.setHandlerFunc("ObjectPropertiesFamily", receiveMessage);
+    msg.setHandlerFunc("ForceObjectSelect", receiveMessage);
     LLAvatarTracker::instance().registerCallbacks(&msg);
     LLInventoryModel::registerCallbacks(&msg);
     msg.setHandlerFunc("SimStats", process_sim_stats);
@@ -1214,6 +1218,8 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
     if (name=="LayerData") return mHost.isOk() && known && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
     if (name=="ParcelOverlay" || name=="CoarseLocationUpdate") return mPhase==Phase::Connected && peer!=mCircuits.end() &&
         peer->second.acknowledged && peer->second.handshake;
+    if (name=="ObjectProperties" || name=="ObjectPropertiesFamily" || name=="ForceObjectSelect")
+        return mPhase==Phase::Connected && peer!=mCircuits.end() && peer->second.acknowledged && peer->second.handshake;
     if (worldMessages.count(name)) return (mPhase==Phase::Connecting || mPhase==Phase::Connected) &&
         (sender==mHost || (peer!=mCircuits.end() && peer->second.acknowledged && peer->second.handshake));
     if (known && (name=="RegionHandshake" || name=="DisableSimulator" || name=="CloseCircuit"))
@@ -1228,6 +1234,11 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
 void VSNativeSession::receive(LLMessageSystem* msg)
 {
     const std::string name = msg->getMessageName();
+    if (name=="ObjectProperties" || name=="ObjectPropertiesFamily" || name=="ForceObjectSelect")
+    {
+        if (mObjectSelection && admit(name,msg->getSender()))mObjectSelection->receive(*msg);
+        return;
+    }
     if (worldMessages.count(name))
     {
         // Apply the same admission at the consumer boundary, including direct
@@ -1921,6 +1932,13 @@ VSTaskInventory* VSNativeSession::taskInventory()
     if (!mTaskInventory) mTaskInventory = std::make_unique<VSTaskInventory>(shared_from_this());
     return mTaskInventory.get();
 }
+VSObjectSelection* VSNativeSession::objectSelection()
+{
+    if (mPhase != Phase::Connected || !gViewerWindow || !gViewerWindow->nativeContext()) return nullptr;
+    if (!mObjectSelection) mObjectSelection = std::make_unique<VSObjectSelection>(shared_from_this());
+    return mObjectSelection.get();
+}
+
 void VSNativeSession::advanceStartup()
 {
     if (mPhase != Phase::Connected || mChangingRegion)
@@ -2174,6 +2192,7 @@ bool VSNativeSession::send(const std::string& name, const LLSD& data)
 void VSNativeSession::tick()
 {
     if (mTaskInventory) mTaskInventory->tick();
+    if (mObjectSelection) mObjectSelection->tick();
     if (mAppearance)
         mAppearance->tick();
     if (mPhase == Phase::Connected && AOEngine::instanceExists())
@@ -2342,6 +2361,7 @@ void VSNativeSession::reset()
     if(LLWorldMapMessage::instanceExists())LLWorldMapMessage::instance().resetNativeAccount();
     if(LLWorldMap::instanceExists())LLWorldMap::instance().reset();
     gViewerInput.resetNativeGlobalKeys();
+    mObjectSelection.reset();
     mTaskInventory.reset();
     mAppearance.reset();
     if (LLGestureMgr::instanceExists()) LLGestureMgr::instance().resetNativeAccount();

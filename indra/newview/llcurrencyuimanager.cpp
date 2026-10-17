@@ -493,9 +493,12 @@ void LLCurrencyUIManager::Impl::updateUI()
     mPanel.getChildView("currency_links")->setVisible( mSupportsInternationalBilling);
     mPanel.getChildView("exchange_rate_note")->setVisible( mSupportsInternationalBilling);
 
+    // The land-purchase panel has an inline error link; the currency floater
+    // reports errors through its notification controller instead.
+    const auto* error_web = mPanel.findChildView("error_web");
     if (mPanel.getChildView("buy_btn")->getEnabled()
-        ||mPanel.getChildView("currency_est")->getVisible()
-        || mPanel.getChildView("error_web")->getVisible())
+        || mPanel.getChildView("currency_est")->getVisible()
+        || (error_web && error_web->getVisible()))
     {
         mPanel.getChildView("getting_data")->setVisible(false);
     }

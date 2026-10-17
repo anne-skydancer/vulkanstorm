@@ -224,7 +224,6 @@ void LLFloaterBuyCurrencyUI::updateUI()
     getChildView("info_buying")->setVisible(false);
     getChildView("info_need_more")->setVisible(false);
     getChildView("purchase_warning_repurchase")->setVisible(false);
-    getChildView("purchase_warning_notenough")->setVisible(false);
     getChildView("contacting")->setVisible(false);
 
     if (hasError)
@@ -292,9 +291,6 @@ void LLFloaterBuyCurrencyUI::updateUI()
         getChild<LLUICtrl>("balance_amount")->setTextArg("[AMT]", balance_known ? llformat("%d", balance) : "--");
 
         S32 buying = mManager.getAmount();
-        getChildView("buying_label")->setVisible(true);
-        getChildView("buying_amount")->setVisible(true);
-        getChild<LLUICtrl>("buying_amount")->setTextArg("[AMT]", llformat("%d", buying));
 
         S32 total = balance + buying;
         getChildView("total_label")->setVisible(true);
