@@ -30,6 +30,8 @@
 #include "llbase64.h"
 
 #include <string>
+#include <limits>
+#include <stdexcept>
 
 #include "apr_base64.h"
 
@@ -75,3 +77,18 @@ std::string LLBase64::decodeAsString(const std::string &input)
     return res;
 }
 
+
+std::string LLBase64::decodeBinary(const std::string& input)
+{
+    // APR returns the binary byte count separately from its trailing NUL.
+    // A C-string assignment silently truncates valid glTF buffers and images.
+    if (input.size() > std::size_t(std::numeric_limits<int>::max() - 4))
+        throw std::length_error("Base64 input exceeds decoder size limit");
+    const int capacity = apr_base64_decode_len(input.c_str());
+    if (capacity <= 0)
+        return {};
+    std::string result(std::size_t(capacity), '\0');
+    const int bytes = apr_base64_decode_binary(reinterpret_cast<unsigned char*>(result.data()), input.c_str());
+    result.resize(std::size_t(bytes));
+    return result;
+}

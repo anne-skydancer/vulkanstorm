@@ -687,7 +687,7 @@ struct VSWorldGLTF::Impl : std::enable_shared_from_this<Impl>
                         throw std::runtime_error("Invalid glTF image data URI");
                     }
                     mime               = source.mUri.substr(5, delimiter - 5);
-                    const auto decoded = LLBase64::decodeAsString(source.mUri.substr(comma + 1));
+                    const auto decoded = LLBase64::decodeBinary(source.mUri.substr(comma + 1));
                     bytes.assign(decoded.begin(), decoded.end());
                 }
                 else if (!input->mFilename.empty() && !source.mUri.empty())

@@ -37,7 +37,7 @@ using llifstream=std::ifstream;
 struct Dir {std::string getDirName(const std::string&){return {};};std::string getDirDelimiter(){return "/";};std::string getExtension(const std::string&){return "png";}}dir;
 auto* gDirUtilp=&dir;
 struct LLURI {static std::string unescape(const std::string& s){return s;}};
-struct LLBase64 {static std::string decodeAsString(const std::string& s){return s;}};
+struct LLBase64 {static std::string decodeBinary(const std::string& s){return s;}};
 struct LLFrameTimer {static double getTotalSeconds(){return 1;}};
 struct Asset {
  struct Image {int mBufferView=0;std::string mUri,mMimeType="image/png";};

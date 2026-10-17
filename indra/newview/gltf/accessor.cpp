@@ -154,7 +154,7 @@ bool Buffer::prep(Asset& asset)
         const auto delimiter = mUri.find(";base64,");
         if (delimiter == std::string::npos || mUri.size() > 96 * 1024 * 1024 || mByteLength < 0 || mByteLength > 64 * 1024 * 1024)
             return false;
-        const auto data = LLBase64::decodeAsString(mUri.substr(delimiter + 8));
+        const auto data = LLBase64::decodeBinary(mUri.substr(delimiter + 8));
         if (data.size() != std::size_t(mByteLength))
             return false;
         mData.assign(data.begin(), data.end());
