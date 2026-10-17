@@ -448,3 +448,31 @@ The expanded world requirement and reference pass/ownership survey are tracked
 in [full-render-chain-survey.md](full-render-chain-survey.md). Text-stage exclusions
 above are historical qualification limits; they are required integration work
 under full OpenGL parity, not permanent feature exclusions.
+
+
+### Startup and window-close correction (17 October 2026)
+
+Region connection is not startup completion. Native startup now waits for the
+inventory system-folder callbacks, restores active gestures through the shared
+`LLStartUp::initActiveGestures` routine, initializes account favorites, region
+group titles and camera presets, requests lost items and reports window shape.
+Texture/cache workers and native appearance continue running beneath progress
+through the saved `PrecachingDelay`. Clothing waits for complete COF and
+resolved wearable publication, with the reference ten-second warning path;
+a timeout is recorded separately from readiness. Connected replay must observe
+inventory, miscellaneous initialization, precache and clothing stages before
+accepting the connected UI.
+
+The Win32 close contract exposed a separate logout defect: returning true from
+`LLViewerWindow::handleCloseRequest` immediately calls `handleQuit`, which
+forces exit. Native windows now use the shared confirmation/graceful quit route
+and false return. The compiled regression executes the actual callback against
+the Win32 caller's forced-quit branch. Headless return-to-login evidence alone
+does not qualify a visible window-close logout screen.
+
+These corrections do not establish complete startup or connected UI parity.
+First-login library-outfit creation, final snapshot/restore, native bridge
+attachment creation and the reported map/Places/snapshot/Quick Preferences/
+profile-image integrations still need production integration and qualification.
+The existing bridge scene-owner guard remains closed; calling its initialization
+routine is not evidence of a functioning bridge.
