@@ -625,3 +625,18 @@ recovers through a second HTTP response, and replaces all six admitted PBR faces
 with a visibly different material factor. HTTP body hashes and archived input
 files are decisive; success flags alone cannot qualify it. Focused tests and
 viewer compilation pass; actual recovery runtime acceptance is pending rebuild.
+
+The first runtime attempt exposed a fixture error: its corrected asset was still
+encoded as malformed. The viewer correctly invalidated and fetched that asset
+three times. Correcting only the fixture, with the same deadlines and acceptance
+checks, produced a source-qualified `285ac63f33` recovery pass in 18.2 seconds.
+
+That canonical viewer subsequently passed all nine cache restart cases in 125.4
+seconds, including actual malformed-asset recovery and all six PBR face
+replacements in the cold case. Its actual concurrent primary/sibling execution
+also passed (31.9 seconds for the primary including its hold, 17.8 seconds for
+the sibling). Both complete archive checks passed; omitting the corrected remote
+material input or a sibling GPU readback correctly failed qualification. Evidence
+is retained in `.tmp/r3-material-cache-final` and
+`.tmp/r3-material-cache-final-instances`. These are local Windows software-device
+results; remaining R3 production work and three-platform acceptance remain open.
