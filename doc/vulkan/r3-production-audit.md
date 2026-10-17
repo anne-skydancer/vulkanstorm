@@ -551,5 +551,18 @@ replay ownership marker; ordinary user profiles are rejected. Both viewers remai
 headless. The gate is limited to 90 seconds and the existing process deadlines
 remain decisive. The dedicated CI archives both executions, identities, cache
 hash witnesses and image readbacks, and rejects missing or mismatched evidence.
-Ownership/evidence/profile regressions and viewer compilation pass. Actual
-concurrent runtime acceptance remains pending the canonical rebuild.
+Ownership/evidence/profile regressions and viewer compilation pass. The first
+Windows attempt identified a test-runner signal-zero probe error before sibling
+launch; a read-only Windows process-handle query corrected that probe without
+changing rendering behavior.
+
+The source-qualified `bebbc07028` canonical viewer passed actual concurrent
+execution: primary PID 17096 remained alive with its marker lock while sibling
+PID 27052 completed read-only cache use. The primary took 29.6 seconds including
+the hold, and the sibling took 16.1 seconds. Both read their textures from disk,
+the GPU pixels matched, and every shared texture-cache file hash remained
+unchanged during the sibling run. Actual archive completeness passed and an
+omitted sibling GPU readback failed it. Evidence is retained under
+`.tmp/r3-concurrent-cache-qualified`; dedicated CI now requires this case on all
+three software jobs. This is local Windows software-device acceptance of actual
+multiple-instance cache arbitration, not complete R3 or cross-platform parity.
