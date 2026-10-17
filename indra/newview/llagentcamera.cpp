@@ -2548,9 +2548,6 @@ void LLAgentCamera::resetCamera()
 //-----------------------------------------------------------------------------
 void LLAgentCamera::changeCameraToMouselook(bool animate)
 {
-#if VS_NATIVE_VULKAN
-    if (const auto native = VSNativeSession::active()) { native->cameraFirstPerson(true); mCameraMode = CAMERA_MODE_MOUSELOOK; return; }
-#endif
     if (!gSavedSettings.getBOOL("EnableMouselook")
 // [RLVa:KB] - Checked: RLVa-2.0.0
         || ( (RlvActions::isRlvEnabled()) && (!RlvActions::canChangeToMouselook()) )
@@ -2560,6 +2557,10 @@ void LLAgentCamera::changeCameraToMouselook(bool animate)
     {
         return;
     }
+
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) { native->cameraFirstPerson(true); mCameraMode = CAMERA_MODE_MOUSELOOK; return; }
+#endif
 
     // visibility changes at end of animation
     gViewerWindow->getWindow()->resetBusyCount();
