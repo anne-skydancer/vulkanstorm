@@ -1,5 +1,5 @@
 {
-  "source_commit": "13b30c53ecb5212ebff3636a211f7661596b83d4",
+  "source_commit": "b09227d5b6803046e70803ab7142e15e6913be74",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -29671,7 +29671,7 @@
       "path": "indra/newview/gltf/accessor.cpp",
       "start": 32,
       "end": 32,
-      "sha256": "b37df7b1766ccafdf39391eee6ac7fae1746f65ac6229dc1edea24b5796db0f5",
+      "sha256": "ac71013f478cbbe1ed85f5a9a4275f718a3af87140cd249744900f0e1eb0dac9",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Shared CPU glTF decoding and owned scene/buffer/image admission; typed metadata/bounds checked before allocation, prepared source topologies, TRS/STEP/cubic/skin animation and last-owner publication reviewed. CPU mode avoids GL resources. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29680,7 +29680,7 @@
       "path": "indra/newview/gltf/accessor.cpp",
       "start": 154,
       "end": 160,
-      "sha256": "b37df7b1766ccafdf39391eee6ac7fae1746f65ac6229dc1edea24b5796db0f5",
+      "sha256": "ac71013f478cbbe1ed85f5a9a4275f718a3af87140cd249744900f0e1eb0dac9",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Shared CPU glTF decoding and owned scene/buffer/image admission; typed metadata/bounds checked before allocation, prepared source topologies, TRS/STEP/cubic/skin animation and last-owner publication reviewed. CPU mode avoids GL resources. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29689,7 +29689,7 @@
       "path": "indra/newview/gltf/accessor.cpp",
       "start": 194,
       "end": 194,
-      "sha256": "b37df7b1766ccafdf39391eee6ac7fae1746f65ac6229dc1edea24b5796db0f5",
+      "sha256": "ac71013f478cbbe1ed85f5a9a4275f718a3af87140cd249744900f0e1eb0dac9",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Shared CPU glTF decoding and owned scene/buffer/image admission; typed metadata/bounds checked before allocation, prepared source topologies, TRS/STEP/cubic/skin animation and last-owner publication reviewed. CPU mode avoids GL resources. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -32902,7 +32902,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1,
       "end": 1271,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Shared CPU glTF decoding and owned scene/buffer/image admission; typed metadata/bounds checked before allocation, prepared source topologies, TRS/STEP/cubic/skin animation and last-owner publication reviewed. CPU mode avoids GL resources. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -37942,7 +37942,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1092,
       "end": 1107,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -37951,7 +37951,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1192,
       "end": 1203,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -37960,7 +37960,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1205,
       "end": 1228,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -37969,7 +37969,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1230,
       "end": 1237,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -37978,7 +37978,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1240,
       "end": 1241,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -38662,7 +38662,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 3,
       "end": 3,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -38671,7 +38671,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1212,
       "end": 1223,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -40210,7 +40210,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 5,
       "end": 5,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -40219,7 +40219,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 162,
       "end": 178,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -40228,7 +40228,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1163,
       "end": 1167,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -40237,7 +40237,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1197,
       "end": 1197,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -40246,7 +40246,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1201,
       "end": 1201,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -40255,7 +40255,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1203,
       "end": 1203,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -40264,7 +40264,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1206,
       "end": 1207,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -40273,7 +40273,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1209,
       "end": 1209,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41092,7 +41092,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 9,
       "end": 9,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41101,7 +41101,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 755,
       "end": 755,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41938,7 +41938,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 7,
       "end": 8,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41947,7 +41947,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 471,
       "end": 503,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41956,7 +41956,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 748,
       "end": 748,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41965,7 +41965,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 754,
       "end": 754,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41974,7 +41974,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 757,
       "end": 796,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41983,7 +41983,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 803,
       "end": 803,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -41992,7 +41992,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 972,
       "end": 972,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -42001,7 +42001,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 986,
       "end": 986,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -42010,7 +42010,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1230,
       "end": 1235,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -42019,7 +42019,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1262,
       "end": 1264,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -43090,7 +43090,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 483,
       "end": 483,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -43099,7 +43099,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 490,
       "end": 490,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -43108,7 +43108,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 495,
       "end": 496,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -43117,7 +43117,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 976,
       "end": 983,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45610,7 +45610,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 33,
       "end": 33,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45619,7 +45619,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 473,
       "end": 473,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45628,7 +45628,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 475,
       "end": 480,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45637,7 +45637,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 637,
       "end": 747,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45646,7 +45646,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 750,
       "end": 752,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45655,7 +45655,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 755,
       "end": 755,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45664,7 +45664,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 760,
       "end": 761,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45673,7 +45673,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 763,
       "end": 771,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45682,7 +45682,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 774,
       "end": 774,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45691,7 +45691,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 777,
       "end": 777,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45700,7 +45700,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 780,
       "end": 782,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45709,7 +45709,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 784,
       "end": 784,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45718,7 +45718,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 786,
       "end": 795,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45727,7 +45727,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 797,
       "end": 803,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45736,7 +45736,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1263,
       "end": 1263,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45745,7 +45745,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 1265,
       "end": 1266,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -45754,7 +45754,7 @@
       "path": "scripts/tests/test_native_gltf_decode.py",
       "start": 1,
       "end": 130,
-      "sha256": "7324427061152c6858b65d70d4ead0c43ed031d3ec3e4ff34e1f3981d01c2210",
+      "sha256": "26c66c9cc2404a40daea1c037717b01cb4e0db09b66663a2aecb74a18db507e3",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46123,7 +46123,7 @@
       "path": "indra/newview/vsworldgltf.cpp",
       "start": 798,
       "end": 798,
-      "sha256": "c4b47d1911e29dea8ff3b49cb9a0fafe6be63f442c465923a1324cffd9c18323",
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
       "record": "I13",
       "disposition": "mapped",
       "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
@@ -47445,15 +47445,78 @@
     {
       "path": "scripts/tests/test_world_gltf_materials.py",
       "start": 1,
-      "end": 30,
-      "sha256": "f4c09ad44cccac20a1205340c59303b8b881fc96ab9d620798a9f14d06b0d7b0",
+      "end": 62,
+      "sha256": "1db78013701a8a646759e23ad3f9ef958b296023207db9cde9718dae34037f7f",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute the actual shared primitive color-factor block against native and GL consumers; independently require the same single-factor pixel input and preserve GL baking."
+    },
+    {
+      "path": "indra/llcommon/llbase64.cpp",
+      "start": 33,
+      "end": 34,
+      "sha256": "a3659dcd00b80d29263555d720164057a445d5691070bcb5cdc0ee77434fb823",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Decode embedded glTF binary buffers/images using APR binary byte counts, retaining embedded zeros while the existing text decoder keeps its contract. Native vertex colors and shader factors apply once; GL keeps its baked color path. Retain prior publications on rejected import."
+    },
+    {
+      "path": "indra/llcommon/llbase64.cpp",
+      "start": 80,
+      "end": 94,
+      "sha256": "a3659dcd00b80d29263555d720164057a445d5691070bcb5cdc0ee77434fb823",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Decode embedded glTF binary buffers/images using APR binary byte counts, retaining embedded zeros while the existing text decoder keeps its contract. Native vertex colors and shader factors apply once; GL keeps its baked color path. Retain prior publications on rejected import."
+    },
+    {
+      "path": "indra/llcommon/llbase64.h",
+      "start": 36,
+      "end": 37,
+      "sha256": "b39aed1f5f79724237af5987d2dc65bf6d7c699c0dc2f32b44246a4bbb7611c2",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Decode embedded glTF binary buffers/images using APR binary byte counts, retaining embedded zeros while the existing text decoder keeps its contract. Native vertex colors and shader factors apply once; GL keeps its baked color path. Retain prior publications on rejected import."
+    },
+    {
+      "path": "indra/newview/gltf/accessor.cpp",
+      "start": 157,
+      "end": 157,
+      "sha256": "ac71013f478cbbe1ed85f5a9a4275f718a3af87140cd249744900f0e1eb0dac9",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Decode embedded glTF binary buffers/images using APR binary byte counts, retaining embedded zeros while the existing text decoder keeps its contract. Native vertex colors and shader factors apply once; GL keeps its baked color path. Retain prior publications on rejected import."
+    },
+    {
+      "path": "indra/newview/vsworldgltf.cpp",
+      "start": 690,
+      "end": 690,
+      "sha256": "fba183939f057aa2808c3a72d8a624afa7939a047c71f981b35881c9ba601047",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Decode embedded glTF binary buffers/images using APR binary byte counts, retaining embedded zeros while the existing text decoder keeps its contract. Native vertex colors and shader factors apply once; GL keeps its baked color path. Retain prior publications on rejected import."
+    },
+    {
+      "path": "scripts/tests/test_native_gltf_decode.py",
+      "start": 40,
+      "end": 40,
+      "sha256": "26c66c9cc2404a40daea1c037717b01cb4e0db09b66663a2aecb74a18db507e3",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute the actual shared primitive color-factor block against native and GL consumers; independently require the same single-factor pixel input and preserve GL baking."
+    },
+    {
+      "path": "scripts/tests/test_world_gltf_materials.py",
+      "start": 7,
+      "end": 38,
+      "sha256": "1db78013701a8a646759e23ad3f9ef958b296023207db9cde9718dae34037f7f",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute the actual shared primitive color-factor block against native and GL consumers; independently require the same single-factor pixel input and preserve GL baking."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "6e65ff33088f8ca8e56beaf0647781bc1df9e4cc",
+    "previous_source_commit": "9064d8ba10cd1db069dafd39e102710617ada33f",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
