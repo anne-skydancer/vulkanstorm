@@ -773,3 +773,20 @@ Those artifacts are mandatory in the qualification archive. Actual subprocess
 regressions retain nonzero exit and timeout failures, and missing output fails
 archive qualification. This corrects failure evidence rather than accepting an
 unexplained successful rerun or changing the cache/network oracle.
+
+The operation-scoped cache build reached a different decisive failure in the
+cold case: the retained media observer proved that the resized plugin CPU
+buffer itself was entirely black, and Vulkan uploaded those same bytes. Thus
+this case does not demonstrate a Vulkan pixel/orientation mismatch. The
+fixture now uses a static four-cell CSS layout instead of an imperative canvas
+resize callback; the exact three independent pixel oracles, dimensions, HTTP
+receipts, immutable generations and lifetime checks are unchanged. No shared
+CEF/OpenGL code was changed to fit the test.
+
+Separately, native media publication now follows the existing OpenGL consumer's
+paint gating: an initial/resize acknowledgement without dirty pixels retains
+the previous generation rather than publishing an unpainted shared buffer.
+The actual publication regression covers both initial and resize acknowledgements,
+as well as refused uploads and subsequent dirty publication. Viewer compilation
+and focused evidence/replay tests pass; the full runtime/cache checks are pending
+the rebuilt checkpoint. The original warm-request cause remains unclaimed.

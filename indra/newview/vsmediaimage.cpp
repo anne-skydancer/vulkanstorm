@@ -24,7 +24,10 @@ LLUIImagePtr vs_update_media_image(VSUIResources& resources, const std::string& 
         std::array<unsigned, 2>{unsigned(width), unsigned(height)};
     LLRect dirty;
     const bool changed = plugin.getDirty(&dirty);
-    if (!resize && !changed) return previous;
+    // Match the shared OpenGL consumer: a resize acknowledgement makes the
+    // buffer addressable, but only dirty pixels establish paint completion.
+    // Retain the previous generation until the plugin actually supplies them.
+    if (!changed) return previous;
     const bool bottom = plugin.getTextureCoordsOpenGL();
     const bool bgra = plugin.getTextureFormatPrimary() == GL_BGRA;
     const bool opaque = plugin.getTextureFormatInternal() == GL_RGB;

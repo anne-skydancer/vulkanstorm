@@ -159,15 +159,16 @@ def local_material_contracts_passed(record,directory):
     except (OSError,ValueError,KeyError,TypeError,AttributeError):return False
 
 
-MEDIA_PAGE = b"""<!doctype html><meta charset="utf-8"><style>html,body{margin:0;overflow:hidden}canvas{display:block}</style><canvas></canvas><script>
-const canvas=document.querySelector('canvas'),context=canvas.getContext('2d',{alpha:false});
-let phase=1;
-const palettes=[['#112233','#445566','#778899','#aabbcc'],['#dd2211','#33cc55','#8811bb','#4499ee']];
-function draw(){canvas.width=innerWidth;canvas.height=innerHeight;const w=canvas.width/2,h=canvas.height/2;
-const colors=palettes[phase-1];for(let i=0;i<4;i++){context.fillStyle=colors[i];context.fillRect((i%2)*w,Math.floor(i/2)*h,w,h);}}
-addEventListener('resize',draw);draw();
+MEDIA_PAGE = b"""<!doctype html><meta charset="utf-8"><style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden}
+body{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+div:nth-child(1){background:#112233}div:nth-child(2){background:#445566}
+div:nth-child(3){background:#778899}div:nth-child(4){background:#aabbcc}
+body[data-phase="2"] div:nth-child(1){background:#dd2211}body[data-phase="2"] div:nth-child(2){background:#33cc55}
+body[data-phase="2"] div:nth-child(3){background:#8811bb}body[data-phase="2"] div:nth-child(4){background:#4499ee}
+</style><body><div></div><div></div><div></div><div></div><script>
 setInterval(async()=>{try{const value=Number(await(await fetch('/r3-media-phase',{cache:'no-store'})).text());
-if((value===1||value===2)&&value!==phase){phase=value;draw();}}catch(e){}},100);
+if(value===1||value===2)document.body.dataset.phase=String(value);}catch(e){}},100);
 </script>"""
 
 
