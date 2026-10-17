@@ -6,7 +6,7 @@ from pathlib import Path
 import stat
 import zipfile
 from run_vulkan_geometry_tests import required_checks
-from run_vulkan_session_replay import r2_contracts_passed, local_image_contracts_passed
+from run_vulkan_session_replay import r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed
 from run_software_vulkan_tests import MATERIAL_READBACKS
 from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests
 
@@ -62,7 +62,7 @@ def texture_cache_completeness(files, source, executable_digest):
             for path in paths:
                 if folder+'/'+str(path).replace('\\','/') not in files:raise ValueError('R3 readback omitted from archive: '+str(path))
             if case=='cold':
-                if not local_image_contracts_passed(child,actual):raise ValueError('Missing R3 local file/GPU evidence')
+                if not local_image_contracts_passed(child,actual) or not local_material_contracts_passed(child,actual):raise ValueError('Missing R3 local file/GPU evidence')
                 for name in ('initial','replaced','refused','recovered'):
                     path=child['r3_local_images'][name]['file']
                     if folder+'/'+str(path).replace('\\','/') not in files:raise ValueError('R3 local image omitted from archive: '+str(path))

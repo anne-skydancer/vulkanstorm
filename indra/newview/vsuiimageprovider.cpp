@@ -13,6 +13,7 @@
 #include "lleventcoro.h"
 #include "llsdutil.h"
 #include <atomic>
+#include <set>
 #include "llappviewer.h"
 #include "llxmlnode.h"
 #include "llxuiparser.h"
@@ -376,6 +377,45 @@ bool VSUIImageProvider::publishLocalImage(const LLUUID& id,const LLImageRaw& raw
     entry.fullWidth=raw.getWidth();entry.fullHeight=raw.getHeight();entry.components=raw.getComponents();
     entry.readyGeneration=VSNativeSession::active()?VSNativeSession::active()->generation():0;
     entry.facade->setNativeExtent(raw.getWidth(),raw.getHeight());entry.facade->onImageLoaded();
+    return true;
+}
+bool vs_publish_local_images(const std::vector<std::pair<LLUUID,LLPointer<LLImageRaw>>>& inputs)
+{return sActiveProvider && sActiveProvider->publishLocalImages(inputs);}
+bool VSUIImageProvider::publishLocalImages(const std::vector<std::pair<LLUUID,LLPointer<LLImageRaw>>>& inputs)
+{
+    if(mImpl->retired || inputs.size()>4) return false;
+    std::set<LLUUID> ids;
+    std::size_t bytes=0,missing=0;
+    for(const auto& [id,raw]:inputs)
+    {
+        if(id.isNull() || id==IMG_DEFAULT || !raw || raw->getWidth()<=0 || raw->getHeight()<=0 ||
+           raw->getWidth()>2048 || raw->getHeight()>2048 || !ids.insert(id).second) return false;
+        const auto found=mImpl->remote.find(id);
+        if(found!=mImpl->remote.end() && !found->second.local) return false;
+        if(found==mImpl->remote.end()) ++missing;
+        bytes+=std::size_t(raw->getWidth())*raw->getHeight()*32+16384;
+    }
+    if(mImpl->remote.size()+missing>16384) return false;
+    const auto lease=inputs.empty()?nullptr:mImpl->resources.reserveImagePreparation(bytes);
+    if(!inputs.empty() && !lease) return false;
+    std::vector<std::pair<std::string,VSUIResources::PreparedImage>> prepared;
+    for(const auto& [id,raw]:inputs)
+        prepared.emplace_back("remote:"+id.asString(),VSUIResources::prepareImage(*raw,VSWorldContracts::ImageRole::RemoteAsset,false));
+    const auto publications=mImpl->resources.publishBatch(prepared);
+    if(publications.size()!=inputs.size()) return false;
+    // Metadata and facades change only after every channel upload succeeded.
+    // No callback observes a mixture of old and new material channels.
+    for(unsigned index=0;index<inputs.size();++index)
+    {
+        const auto& [id,raw]=inputs[index];auto& entry=mImpl->remote[id];
+        entry.local=true;entry.redirect.setNull();entry.redirectLoaded.disconnect();
+        getUIImageByID(id,-1);
+        entry.pixels=publications[index];entry.discard=0;entry.auxiliary=nullptr;
+        entry.fullWidth=raw->getWidth();entry.fullHeight=raw->getHeight();entry.components=raw->getComponents();
+        entry.readyGeneration=VSNativeSession::active()?VSNativeSession::active()->generation():0;
+        entry.facade->setNativeExtent(raw->getWidth(),raw->getHeight());
+    }
+    for(const auto& [id,raw]:inputs) mImpl->remote.at(id).facade->onImageLoaded();
     return true;
 }
 void VSUIImageProvider::retireLocalImage(const LLUUID& id)

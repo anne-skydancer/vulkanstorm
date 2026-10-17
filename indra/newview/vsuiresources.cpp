@@ -50,6 +50,29 @@ struct VSUIResources::Impl
         VSUIRenderer::Image image;
     };
     struct Entry { std::shared_ptr<Asset> asset; LLUIImagePtr facade; };
+    Entry prepareEntry(const std::shared_ptr<Impl>& canvas,const std::string& key,const VSUIResources::PreparedImage& prepared)
+    {
+        const auto width=prepared->width,height=prepared->height;
+        auto asset=std::make_shared<Impl::Asset>();asset->width=width;asset->height=height;
+        asset->image=renderer.uploadPrepared(prepared);
+        if(!asset->image) return {};
+        std::weak_ptr<Impl> owner=canvas;
+        LLUIImagePtr facade=new LLUIImage(key,width,height,
+            [owner,asset](S32 x,S32 y,S32 w,S32 h,const LLColor4& color,bool solid,
+                          const LLRectf& outer,const LLRectf& center,bool inner)
+            {
+                auto canvas=owner.lock(); check(bool(canvas),"Native UI image owner has retired");
+                canvas->draw(*asset,x,y,w,h,color,solid,outer,center,inner);
+            });
+        facade->setNativeRotatedDraw([owner,asset](S32 x,S32 y,S32 w,S32 h,F32 degrees,
+                                                   const LLColor4& color,const LLRectf& uv)
+        {
+            auto canvas=owner.lock(); check(bool(canvas),"Native UI image owner has retired");
+            canvas->drawRotated(*asset,x,y,w,h,degrees,color,uv);
+        });
+        return {asset,facade};
+    }
+
     VSUIRenderer& renderer;
     VSResourceBudget imagePreparationBytes{640 * 1024 * 1024};
     std::map<std::string,Entry> assets;
@@ -208,26 +231,35 @@ LLUIImagePtr VSUIResources::publishPrepared(const std::string& key,const Prepare
 {
     check(!key.empty() && prepared && VSTextureUpload::valid(*prepared),"Invalid prepared UI image publication");
     check(imageRole(key)==prepared->role,"Prepared native image has the wrong resource role");
-    const auto width=prepared->width,height=prepared->height;
-    auto asset=std::make_shared<Impl::Asset>();asset->width=width;asset->height=height;
-    asset->image=mImpl->renderer.uploadPrepared(prepared);
-    if(!asset->image) return nullptr;
-    std::weak_ptr<Impl> owner=mImpl;
-    LLUIImagePtr facade=new LLUIImage(key,width,height,
-        [owner,asset](S32 x,S32 y,S32 w,S32 h,const LLColor4& color,bool solid,
-                      const LLRectf& outer,const LLRectf& center,bool inner)
-        {
-            auto canvas=owner.lock(); check(bool(canvas),"Native UI image owner has retired");
-            canvas->draw(*asset,x,y,w,h,color,solid,outer,center,inner);
-        });
-    facade->setNativeRotatedDraw([owner,asset](S32 x,S32 y,S32 w,S32 h,F32 degrees,
-                                               const LLColor4& color,const LLRectf& uv)
-    {
-        auto canvas=owner.lock(); check(bool(canvas),"Native UI image owner has retired");
-        canvas->drawRotated(*asset,x,y,w,h,degrees,color,uv);
-    });
-    mImpl->assets.insert_or_assign(key,Impl::Entry{asset,facade});
+    auto entry=mImpl->prepareEntry(mImpl,key,prepared);
+    if(!entry.asset) return nullptr;
+    const auto facade=entry.facade;
+    mImpl->assets.insert_or_assign(key,std::move(entry));
     return facade;
+}
+std::vector<LLUIImagePtr> VSUIResources::publishBatch(const std::vector<std::pair<std::string,PreparedImage>>& inputs)
+{
+    std::map<std::string,Impl::Entry> staged;
+    std::vector<LLUIImagePtr> facades;facades.reserve(inputs.size());
+    for(const auto& [key,prepared]:inputs)
+    {
+        check(!key.empty() && prepared && VSTextureUpload::valid(*prepared) && imageRole(key)==prepared->role,
+              "Invalid native image batch publication");
+        auto entry=mImpl->prepareEntry(mImpl,key,prepared);
+        if(!entry.asset) return {};
+        facades.push_back(entry.facade);
+        check(staged.emplace(key,std::move(entry)).second,"Duplicate native batch image identity");
+    }
+    // All allocations and uploads precede publication. Existing nodes are
+    // replaced without allocation; new map nodes transfer from the staged map.
+    for(auto found=staged.begin();found!=staged.end();)
+    {
+        if(auto old=mImpl->assets.find(found->first);old!=mImpl->assets.end())
+        {old->second=std::move(found->second);found=staged.erase(found);}
+        else ++found;
+    }
+    mImpl->assets.merge(staged);
+    return facades;
 }
 LLUIImagePtr VSUIResources::region(const std::string& key,const std::string& name,const LLRectf& uv,
                                   VSUIRenderer::Sampling sampling)

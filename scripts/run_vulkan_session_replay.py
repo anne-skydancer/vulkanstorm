@@ -132,6 +132,32 @@ def local_image_contracts_passed(record,directory):
         return False
 
 
+def local_material_contracts_passed(record,directory):
+    """Verify production local PBR packing and immutable reload generations."""
+    from run_vulkan_texture_cache_tests import u64
+    try:
+        data=record['r3_local_material'];folder=Path(directory).resolve()
+        if any(data.get(key) is not True for key in
+               ('stable_identities','retired','retained_generations_unchanged','native_only')):return False
+        identities=None;generations=[]
+        for name,phase in (('initial',0),('replaced',1),('refused',1),('recovered',1)):
+            rows=data[name]
+            if not isinstance(rows,list) or len(rows)!=4:return False
+            ids=[row['id'] for row in rows]
+            if len(set(ids))!=4 or any(str(UUID(value))=='00000000-0000-0000-0000-000000000000' for value in ids):return False
+            if identities is None:identities=ids
+            if identities!=ids:return False
+            colors=((73,121,199,255) if not phase else (199,73,121,255),
+                    (128,128,255,255),(77,64,192,255),(9,19,29,255))
+            generations.append([u64(row['generation']) for row in rows])
+            for row,color in zip(rows,colors):
+                relative=Path(row['file']);path=(folder/relative).resolve()
+                if relative.is_absolute() or '..' in relative.parts or not path.is_relative_to(folder) or (folder/relative).is_symlink():return False
+                if path.read_bytes()!=bytes(color)*(16*16):return False
+        return all(0<generations[0][i]<generations[1][i]==generations[2][i]<generations[3][i] for i in range(4))
+    except (OSError,ValueError,KeyError,TypeError,AttributeError):return False
+
+
 def r2_contracts_passed(record, requests, directory=None, *, write_manifest=True):
     """Never promote a passing R1/UI replay into R2 qualification."""
     if not isinstance(requests, list) or any(not isinstance(request, dict) for request in requests):
@@ -1122,8 +1148,8 @@ def main():
                 raise RuntimeError('Missing production R1 ownership/lifecycle or actual mesh replacement evidence')
             if args.r2_contracts and not r2_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing complete production R2 geometry/appearance/lifecycle evidence')
-            if args.local_image_contracts and not local_image_contracts_passed(report,directory):
-                raise RuntimeError('Missing production local bitmap reload, immutable generation or GPU pixel evidence')
+            if args.local_image_contracts and (not local_image_contracts_passed(report,directory) or not local_material_contracts_passed(report,directory)):
+                raise RuntimeError('Missing production local bitmap/material reload, immutable generation or GPU pixel evidence')
             report['conference_start_request'] = conference_start_observed(server.requests)
             if not report['conference_start_request']:
                 raise RuntimeError('Missing or incorrect actual authenticated conference start request')

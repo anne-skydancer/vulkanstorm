@@ -379,3 +379,31 @@ passes with those explicit sizes; byte equality, two refusal checks, two invalid
 input checks and zero retained allocations remain required. The original replay
 result remains recorded as failed by the old validator; a fresh source-qualified
 run with the corrected checker is still required.
+
+## Native local PBR material reload
+
+Local PBR files now retain `LLLocalGLTFMaterial`'s parser, timestamp watcher,
+material registry, factors, overrides and retry behavior. The shared CPU
+preparation function performs the reference normal/emissive alpha removal and
+occlusion-to-ORM packing before the selected backend creates textures. Native
+loads use stable channel UUIDs and construct a candidate material without GL
+fetched textures. All GPU channels are admitted before any resource-map update;
+upload refusal preserves the complete previous channel set and material. Deleted
+channels/materials retire native resources while held packets retain their own
+generations. Local-texture replacement on a native fetched material uses shared
+CPU identity replacement rather than the GL fetch helper.
+
+Native TinyGLTF loads limit individual files to 16 MiB, aggregate file reads to
+64 MiB, image dimensions to 2048 and decoded image admission to 64 MiB before
+calling the existing image decoder. These guards apply only to native sessions.
+The ordinary OpenGL backend continues to create its existing fetched textures.
+
+Production sources compile. A regression executes the actual batch transaction
+with refusal on its second upload, duplicate identities and invalid roles; old
+publications remain intact. The actual viewer diagnostic exercises material file
+load, four GPU channel readbacks, distinct occlusion packing, stable-identity
+reload, incomplete image refusal, recovery and deletion. Independent artifact
+validation requires every channel's expected pixels and generation transitions.
+This runtime exercise is staged for the next canonical rebuild; it is not yet a
+runtime qualification claim. Remaining terrain/material transport, settings,
+media and cache-lifecycle acceptance are still open.

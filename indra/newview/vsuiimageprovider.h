@@ -10,6 +10,7 @@ void vs_pump_ui_images();
 LLPointer<LLUIImage> vs_request_world_image(const LLUUID&,unsigned dimension);
 void vs_refresh_ui_image(const LLUUID&);
 bool vs_publish_local_image(const LLUUID&,const LLImageRaw&);
+bool vs_publish_local_images(const std::vector<std::pair<LLUUID,LLPointer<LLImageRaw>>>&);
 void vs_retire_local_image(const LLUUID&);
 LLUUID vs_native_image_id(const LLUUID&);
 LLPointer<LLUIImage> vs_publish_ui_image(const std::string&, const LLImageRaw&);
@@ -32,6 +33,7 @@ class VSUIImageProvider : public LLImageProviderInterface
     LLPointer<LLUIImage> requestWorldImage(const LLUUID&,unsigned dimension);
     void refreshImage(const LLUUID&);
     bool publishLocalImage(const LLUUID&,const LLImageRaw&);
+    bool publishLocalImages(const std::vector<std::pair<LLUUID,LLPointer<LLImageRaw>>>&);
     void retireLocalImage(const LLUUID&);
     LLUUID imageID(const LLUUID&) const;
     LLPointer<LLUIImage> publishImage(const std::string&, const LLImageRaw&);

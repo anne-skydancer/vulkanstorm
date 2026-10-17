@@ -50,7 +50,7 @@ namespace LLTinyGLTFHelper
         S32 mat_index,
         LLFetchedGLTFMaterial* material,
         std::string& material_name,
-        bool flip = true);
+        bool flip = true,const std::array<LLUUID,4>* native_images=nullptr);
 
     void initFetchedTextures(tinygltf::Material& material,
         LLPointer<LLImageRaw>& base_color_img,
