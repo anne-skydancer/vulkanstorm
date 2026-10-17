@@ -616,8 +616,11 @@ struct Replay : public LLAvatarPropertiesObserver
                 else
                 {
                     require(utilityFloater.get() != nullptr, "Shared utility/currency floater retired before drawing");
-                    LLFloaterReg::destroyInstance(name);
-                    require(utilityFloater.isDead(), "Shared utility/currency floater retained a stale owner");
+                    const LLSD key = utilityFloater.get()->getKey();
+                    require(LLFloaterReg::destroyInstance(name, key),
+                        (std::string("Shared utility/currency floater registry retirement failed: ") + name).c_str());
+                    require(utilityFloater.isDead(),
+                        (std::string("Shared utility/currency floater retained a stale owner: ") + name).c_str());
                     evidence["connected_utility_floater_names"].append(name);
                 }
                 ++utilityCheck;
