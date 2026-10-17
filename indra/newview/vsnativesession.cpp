@@ -115,6 +115,13 @@ namespace
 {
 std::weak_ptr<VSNativeSession> sOwner;
 double now() { return LLFrameTimer::getTotalSeconds(); }
+void notify_native_startup(const char* name)
+{
+    LLSD payload;
+    vs_native_im_stamp_notification(payload);
+    LLNotificationsUtil::add(name, LLSD(), payload);
+}
+
 void restore_native_account_policies()
 {
     // LLAgent::init performs these same account-only transitions for OpenGL.
@@ -1210,7 +1217,7 @@ bool VSNativeSession::cancelTeleport()
     gMessageSystem->addUUID("AgentID",mAgent);gMessageSystem->addUUID("SessionID",mSession);
     if(gMessageSystem->sendReliable(mHost)<=0)return false;
     ++mSent;mRequestedRegion.clear();mNavigationDeadline=0;
-    if(gViewerWindow)gViewerWindow->setShowProgress(false,true);
+    if(gViewerWindow && mStartup == Startup::Complete)gViewerWindow->setShowProgress(false,true);
     return true;
 }
 
@@ -1609,7 +1616,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         if (body["agent"].asUUID() != mAgent || !body["position"].isArray() || body["position"].size() != 3) return false;
         const auto pos = ll_vector3_from_sd(body["position"]); if (!pos.isFinite()) return false;
         mPosition = pos; gAgent.setPositionAgent(pos); releaseMovement(); mNavigationDeadline = 0;
-        if(gViewerWindow)gViewerWindow->setShowProgress(false,true);
+        if(gViewerWindow && mStartup == Startup::Complete)gViewerWindow->setShowProgress(false,true);
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
         requestParcel();
     }
@@ -1617,7 +1624,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
     {
         if (body["agent"].asUUID() != mAgent) return false;
         mRequestedRegion.clear(); mNavigationDeadline = 0;
-        if(gViewerWindow)gViewerWindow->setShowProgress(false,true);
+        if(gViewerWindow && mStartup == Startup::Complete)gViewerWindow->setShowProgress(false,true);
         LLSD args; args["ERROR_MESSAGE"] = body["text"].asString().substr(0, 4096); LLNotificationsUtil::add("ErrorMessage", args);
     }
     else if ((name == "TeleportStart" || name == "TeleportProgress") && mPhase==Phase::Connected)
@@ -1649,7 +1656,7 @@ void VSNativeSession::connected()
     if (mChangingRegion)
     {
         mChangingRegion = false; mNavigationDeadline = 0; mDeadline = now() + 1;
-        if(gViewerWindow)gViewerWindow->setShowProgress(false,true);
+        if(gViewerWindow && mStartup == Startup::Complete)gViewerWindow->setShowProgress(false,true);
         // The former current simulator remains an independently owned neighbour.
         // DisableSimulator or circuit retirement, not crossing, removes its scene.
         mPreviousHost = LLHost();
@@ -1675,7 +1682,7 @@ void VSNativeSession::connected()
     mStartupTimedOut = false;
     LLStartUp::setStartupState(STATE_INVENTORY_CALLBACKS);
     if (!gInventory.isInventoryUsable())
-        LLNotificationsUtil::add("InventoryUnusable");
+        notify_native_startup("InventoryUnusable");
     else
         gInventory.createCommonSystemCategories();
     restore_native_account_policies();
@@ -1825,7 +1832,7 @@ void VSNativeSession::advanceStartup()
             if (now() - mStartupTime < 10.0)
                 return;
             mStartupTimedOut = true;
-            LLNotificationsUtil::add("ClothingLoading");
+            notify_native_startup("ClothingLoading");
             LL_WARNS("NativeSession") << "Startup clothing wait exceeded; appearance continues loading" << LL_ENDL;
         }
         LLStartUp::setStartupState(STATE_CLEANUP);
