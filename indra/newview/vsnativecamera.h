@@ -13,7 +13,7 @@ class VSNativeCamera
 public:
     struct State
     {
-        LLVector3 center, at, left, up;
+        LLVector3 center, focus, at, left, up;
         LLQuaternion bodyRotation, headRotation;
         bool firstPerson = false;
     };
@@ -120,6 +120,7 @@ public:
         const LLVector3 focus(focusOffset.mV[VX] * bodyCos - focusOffset.mV[VY] * bodySin,
                              focusOffset.mV[VX] * bodySin + focusOffset.mV[VY] * bodyCos, focusOffset.mV[VZ]);
         const F32 distance = std::clamp(std::sqrt(radial.magVecSquared()) * mDistance, .1f, 128.f);
+        result.focus = agent + focus + mPan;
         result.center = firstPerson() ? agent + LLVector3(0,0,1) : agent + focus + mPan - result.at * distance;
         result.bodyRotation = LLQuaternion(mBodyYaw, LLVector3::z_axis);
         result.headRotation = LLQuaternion(-pitch, LLVector3::y_axis) * LLQuaternion(yaw, LLVector3::z_axis);
