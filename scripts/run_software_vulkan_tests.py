@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MATERIAL_READBACKS=('material-opaque.ppm','material-linear-factor.ppm','material-emissive.ppm',
     'material-transform.ppm','normal-tangent.ppm','normal-rotated-tangent.ppm','normal-mirrored-tangent.ppm',
     'material-independent-occlusion.ppm','material-occlusion-transform.ppm','sampler-repeat.ppm',
-    'sampler-clamp.ppm','sampler-mirror.ppm','sampler-mipmaps.ppm','ui-base-level.ppm')
+    'sampler-clamp.ppm','sampler-mirror.ppm','sampler-mipmaps.ppm','ui-base-level.ppm',
+    'compression-policy.ppm','compression-replacement.ppm')
 
 
 @contextmanager

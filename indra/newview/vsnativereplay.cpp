@@ -441,6 +441,8 @@ void udpChat(const LLHost& host)
     msg->addU8("Audible", CHAT_AUDIBLE_FULLY); msg->addVector3("Position", LLVector3(10, 20, 30));
     msg->addString("Message", "Native nearby: \xCE\xA9 \xE6\x97\xA5\xE6\x9C\xAC"); msg->sendReliable(host);
 }
+bool imageWorkPending(const LLSD& state)
+{ return state["pending_fetches"].asInteger()!=0 || state["pending_uploads"].asInteger()!=0; }
 LLSD cachedImageEvidence(const LLUUID& id)
 {
     const auto evidence=vs_ui_texture_cache_evidence(true);
@@ -775,7 +777,7 @@ struct Replay
                     gSavedSettings.setBOOL("TextureLoadFullRes",originalFullRes);
                     textureCacheStep=6;
                 }
-                if(vs_ui_texture_cache_evidence()["pending_fetches"].asInteger()) return;
+                if(imageWorkPending(vs_ui_texture_cache_evidence())) return;
             }
             if (gViewerWindow->nativeContext()->world().evidence()["objects"].asInteger()<2) return;
             auto* chat = gViewerWindow->nativeChat();
@@ -815,7 +817,7 @@ struct Replay
                 imCaptureRequested = true; return;
             }
             if (!*imReadback) return;
-            if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE") && vs_ui_texture_cache_evidence()["pending_fetches"].asInteger()) return;
+            if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE") && imageWorkPending(vs_ui_texture_cache_evidence())) return;
             imEvidence["im_readback"] = true;
             if (!submitted)
             {
@@ -839,7 +841,7 @@ struct Replay
             if(std::getenv("VS_VULKAN_REPLAY_TEXTURE_CACHE"))
             {
                 const auto cache=vs_ui_texture_cache_evidence(true);
-                if(cache["pending_fetches"].asInteger()) return;
+                if(imageWorkPending(cache)) return;
                 imEvidence["texture_cache"]=cache;
             }
             imEvidence["connected_toolbar_chat"] = true;

@@ -2,6 +2,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "vsuirenderer.h"
 #include "vsimagemips.h"
+#define STB_DXT_IMPLEMENTATION
+#include "vstextureupload.h"
 #include <tuple>
 #include <map>
 #include "vsresourcebudget.h"
@@ -68,6 +70,7 @@ struct VSUIRenderer::Impl
     RefCntAutoPtr<IFence> fence;
     Uint64 next_completion = 1;
     std::deque<Submission> submitted;
+    std::vector<Image> pendingUploads;
     Statistics statistics;
     VSResourceBudget coreImages{256 * 1024 * 1024},remoteImages{512 * 1024 * 1024};
     // Eleven maximum-size local bakes cost 322 MiB including independent CPU
@@ -168,8 +171,21 @@ const std::vector<std::uint8_t>& VSUIRenderer::imagePixels(const Image& image) {
 std::array<unsigned,2> VSUIRenderer::imageExtent(const Image& image)
 { const auto& d=image->resource->GetDesc();return {d.Width,d.Height}; }
 VSUIRenderer::Image VSUIRenderer::upload(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba,
-                                       VSWorldContracts::ImageRole role)
-{ return uploadTexture(width, height, rgba, role, false); }
+                                       VSWorldContracts::ImageRole role,bool compress)
+{ return uploadPrepared(VSTextureUpload::prepare(width,height,rgba,role,compress && supportsCompression())); }
+bool VSUIRenderer::supportsCompression() const
+{
+    if(mImpl->device->GetDeviceInfo().Features.TextureCompressionBC!=DEVICE_FEATURE_STATE_ENABLED) return false;
+    const auto& info=mImpl->device->GetTextureFormatInfoExt(TEX_FORMAT_BC3_UNORM);
+    return (info.BindFlags&BIND_SHADER_RESOURCE)!=0 && (info.Dimensions&RESOURCE_DIMENSION_SUPPORT_TEX_2D)!=0;
+}
+VSUIRenderer::Image VSUIRenderer::uploadPrepared(const std::shared_ptr<const VSTextureUpload::Prepared>& prepared)
+{
+    check(prepared && VSTextureUpload::valid(*prepared),"Invalid prepared native image");
+    if(prepared->compressed && !supportsCompression())
+        return upload(prepared->width,prepared->height,prepared->pixels,prepared->role,false);
+    return uploadPreparedTexture(*prepared,false);
+}
 VSUIRenderer::FontAtlas VSUIRenderer::createFontAtlas(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba)
 {
     auto atlas = uploadTexture(width, height, rgba, VSWorldContracts::ImageRole::CoreUI, true);
@@ -179,14 +195,19 @@ VSUIRenderer::FontAtlas VSUIRenderer::createFontAtlas(unsigned width, unsigned h
 VSUIRenderer::FontAtlas VSUIRenderer::uploadTexture(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba,
                                                     VSWorldContracts::ImageRole role, bool fontAtlas)
 {
-    check(width && height && width <= 16384 && height <= 16384 &&
-          rgba.size() == std::size_t(width) * height * 4, "Invalid native UI upload extent or byte count");
+    return uploadPreparedTexture(*VSTextureUpload::prepare(width,height,rgba,role,false),fontAtlas);
+}
+VSUIRenderer::FontAtlas VSUIRenderer::uploadPreparedTexture(const VSTextureUpload::Prepared& prepared,bool fontAtlas)
+{
+    check(VSTextureUpload::valid(prepared),"Invalid native UI upload extent or byte count");
+    const auto width=prepared.width,height=prepared.height;
+    const auto role=prepared.role;
+    const auto& rgba=prepared.pixels;
     const auto maximum=mImpl->device->GetAdapterInfo().Texture.MaxTexture2DDimension;
     if (width>maximum || height>maximum) {++mImpl->imageAllocationRefusals;return {};}
     auto& budget = mImpl->imageBudget(role);
     // Charge both the GPU payload and the retained independent CPU snapshot.
-    const bool mipmaps=!fontAtlas && (role==VSWorldContracts::ImageRole::RemoteAsset || role==VSWorldContracts::ImageRole::AvatarComposite);
-    const auto gpuBytes=VSImageMips::bytes(width,height,mipmaps);
+    const auto gpuBytes=prepared.gpuBytes;
     auto residency=budget.reserve(rgba.size()+gpuBytes);
     if (!residency) {++mImpl->imageAllocationRefusals;return {};}
     auto image = std::make_shared<Texture>();
@@ -194,14 +215,17 @@ VSUIRenderer::FontAtlas VSUIRenderer::uploadTexture(unsigned width, unsigned hei
     image->owner=mImpl->device;
     TextureDesc desc{}; desc.Name = "Native UI texture generation";
     desc.Type = RESOURCE_DIM_TEX_2D; desc.Width = width; desc.Height = height;
-    desc.Format                                                      = TEX_FORMAT_RGBA8_UNORM;
+    desc.Format                                                      = prepared.compressed?TEX_FORMAT_BC3_UNORM:TEX_FORMAT_RGBA8_UNORM;
     desc.Usage                                                       = fontAtlas ? USAGE_DEFAULT : USAGE_IMMUTABLE;
     desc.BindFlags                                                   = BIND_SHADER_RESOURCE;
     image->fontAtlas                                                 = fontAtlas;
-    const auto levels=VSImageMips::build(width,height,rgba,mipmaps);
-    desc.MipLevels=static_cast<Uint32>(levels.size());
+    desc.MipLevels=static_cast<Uint32>(prepared.levels.size());
     std::vector<TextureSubResData> subresources;
-    for(const auto& level:levels) {TextureSubResData sub{};sub.pData=level.pixels.data();sub.Stride=Uint64(level.width)*4;subresources.push_back(sub);}
+    for(const auto& level:prepared.levels)
+    {
+        TextureSubResData sub{};sub.pData=level.bytes.data();sub.Stride=level.rowBytes;
+        subresources.push_back(sub);
+    }
     TextureData data{subresources.data(),static_cast<Uint32>(subresources.size())};mImpl->device->CreateTexture(desc,&data,&image->resource);
     check(image->resource != nullptr, "Native UI texture upload failed");
     image->generation = mImpl->next_generation++;
@@ -209,7 +233,12 @@ VSUIRenderer::FontAtlas VSUIRenderer::uploadTexture(unsigned width, unsigned hei
         VSWorldContracts::ColorEncoding::EncodedSRGB,VSWorldContracts::AlphaMode::Blend,role,image->generation};
     image->description.alpha=alphaMode(rgba);
     image->description.mipLevels=desc.MipLevels;
+    image->description.compression=prepared.compressed?VSWorldContracts::ImageCompression::BC3:VSWorldContracts::ImageCompression::None;
+    image->description.gpuBytes=gpuBytes;
     image->pixels=rgba;
+    // A newly uploaded image may be replaced or refused by its producer before
+    // its first draw. Keep its charged owner through an upload-completion fence.
+    mImpl->pendingUploads.push_back(image);
     return image;
 }
 std::uint64_t VSUIRenderer::generation(const Image& image) { return image ? image->generation : 0; }
@@ -244,12 +273,13 @@ VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y
     auto desc=old->resource->GetDesc();
     check(width && height && x<=desc.Width && y<=desc.Height && width<=desc.Width-x && height<=desc.Height-y &&
           rgba.size()==std::size_t(width)*height*4,"Invalid native UI replacement patch");
-    if(desc.MipLevels>1)
+    if(desc.MipLevels>1 || old->description.compression==VSWorldContracts::ImageCompression::BC3)
     {
         auto replacement=old->pixels;
         for(unsigned row=0;row<height;++row)
             std::copy_n(rgba.data()+std::size_t(row)*width*4,width*4,replacement.data()+(std::size_t(y+row)*desc.Width+x)*4);
-        return upload(desc.Width,desc.Height,replacement,old->description.role);
+        return upload(desc.Width,desc.Height,replacement,old->description.role,
+                      old->description.compression==VSWorldContracts::ImageCompression::BC3);
     }
     auto& budget   = mImpl->imageBudget(old->description.role);
     auto residency=budget.reserve(old->pixels.size()*2);
@@ -471,8 +501,18 @@ VSWorldContracts::Capabilities VSUIRenderer::capabilities() const
     result.depth32=mImpl->device->GetTextureFormatInfo(TEX_FORMAT_D32_FLOAT).Supported;
     return result;
 }
+void VSUIRenderer::flushUploads()
+{
+    if(!mImpl->pendingUploads.empty())
+    {
+        mImpl->submitted.emplace_back();auto& uploads=mImpl->submitted.back();
+        uploads.images=std::move(mImpl->pendingUploads);uploads.completion=mImpl->next_completion++;
+        mImpl->context->EnqueueSignal(mImpl->fence,uploads.completion);
+    }
+}
 void VSUIRenderer::retire()
 {
+    flushUploads();
     const auto completed=mImpl->fence->GetCompletedValue();
     while (!mImpl->submitted.empty() && mImpl->submitted.front().completion &&
            mImpl->submitted.front().completion <= completed) mImpl->submitted.pop_front();

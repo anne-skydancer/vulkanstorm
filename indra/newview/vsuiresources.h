@@ -2,6 +2,7 @@
 #pragma once
 #include "vsuirenderer.h"
 #include "lluiimage.h"
+#include "vsresourcebudget.h"
 #include <memory>
 
 class LLImageRaw;
@@ -15,6 +16,11 @@ public:
     VSUIResources& operator=(const VSUIResources&) = delete;
     // LLImageRaw uses bottom-row-first storage; publication canonicalizes it.
     LLUIImagePtr publish(const std::string& key, const LLImageRaw&);
+    using PreparedImage=std::shared_ptr<const VSTextureUpload::Prepared>;
+    static PreparedImage prepareImage(const LLImageRaw&,VSWorldContracts::ImageRole,bool compress);
+    LLUIImagePtr publishPrepared(const std::string& key,const PreparedImage&);
+    bool supportsCompression() const;
+    std::shared_ptr<const VSResourceBudget::Reservation> reserveImagePreparation(std::size_t);
     LLUIImagePtr region(const std::string& key,const std::string& name,const LLRectf& uv,
                         VSUIRenderer::Sampling sampling=VSUIRenderer::Sampling::Linear);
     // Top-left canonical RGBA patch. Replacement never mutates queued packets.

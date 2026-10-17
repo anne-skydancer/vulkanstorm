@@ -8,6 +8,7 @@
 #include "vsworldcontracts.h"
 
 namespace Diligent { struct IRenderDevice; struct IDeviceContext; struct ITextureView; }
+namespace VSTextureUpload { struct Prepared; }
 
 class VSUIRenderer
 {
@@ -41,7 +42,9 @@ public:
     VSUIRenderer(const VSUIRenderer&) = delete;
     VSUIRenderer& operator=(const VSUIRenderer&) = delete;
     Image upload(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba,
-                 VSWorldContracts::ImageRole role=VSWorldContracts::ImageRole::CoreUI);
+                 VSWorldContracts::ImageRole role=VSWorldContracts::ImageRole::CoreUI,bool compress=false);
+    Image uploadPrepared(const std::shared_ptr<const VSTextureUpload::Prepared>&);
+    bool supportsCompression() const;
     Image replace(const Image& old,unsigned x,unsigned y,unsigned width,unsigned height,
                   const std::vector<std::uint8_t>& rgba);
     FontAtlas     createFontAtlas(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba);
@@ -53,6 +56,9 @@ public:
     // Nonblocking: release only submissions whose GPU fence has completed.
     // The owner waits for idle before destroying this renderer.
     void retire();
+    // World-only clients enqueue upload completion before their own idle/fence
+    // boundary. UI draw/retire calls do this automatically without waiting.
+    void flushUploads();
     Statistics statistics() const;
     static std::uint64_t generation(const Image&);
     // CPU pixels for an independent diagnostic raster oracle. Font atlas pixels
@@ -71,6 +77,7 @@ public:
 private:
     FontAtlas uploadTexture(unsigned width, unsigned height, const std::vector<std::uint8_t>& rgba, VSWorldContracts::ImageRole role,
                             bool fontAtlas);
+    FontAtlas uploadPreparedTexture(const VSTextureUpload::Prepared&,bool fontAtlas);
     struct Impl;
     std::unique_ptr<Impl> mImpl;
 };

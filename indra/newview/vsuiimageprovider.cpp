@@ -17,6 +17,7 @@
 #include "llxmlnode.h"
 #include "llxuiparser.h"
 #include "vsuiresources.h"
+#include "vstextureupload.h"
 #include "vsnativesession.h"
 #include "llcorehttputil.h"
 #include "llcoros.h"
@@ -63,7 +64,7 @@ struct Images : LLInitParam::Block<Images>
     }
 };
 } // namespace
-struct VSUIImageProvider::Impl
+struct VSUIImageProvider::Impl : std::enable_shared_from_this<VSUIImageProvider::Impl>
 {
     VSUIResources &resources;
     std::map<std::string, Image> declarations;
@@ -79,6 +80,12 @@ struct VSUIImageProvider::Impl
         double retryAt=0,deadline=0,lastUsed=0;
         U64 demandFrame=0;
         bool fetching=false,uiDemand=false,cacheChecked=false,fullRes=false;
+        bool preparing=false,lastCompressionRequest=false,hasUploadPolicy=false,pendingCacheHit=false;
+        U64 uploadSerial=0;
+        S32 pendingDiscard=-1;
+        VSUIResources::PreparedImage prepared;
+        std::shared_ptr<const VSResourceBudget::Reservation> uploadResidency;
+        LLPointer<LLImageRaw> pendingAuxiliary;
         bool local=false;
         LLUUID redirect;
         boost::signals2::connection redirectLoaded;
@@ -88,13 +95,59 @@ struct VSUIImageProvider::Impl
     bool retired = false;
     U64 regionEpoch=0,clock=0,demandFrame=0;
     VSResourceBudget masks{64 * 1024 * 1024};
+    U64 nextUploadSerial=1;
+    bool compressionWanted(const Remote& entry) const
+    { return !entry.uiDemand && gSavedSettings.getBOOL("RenderCompressTextures") && resources.supportsCompression(); }
+    void cancelPreparation(Remote& entry)
+    {
+        entry.uploadSerial=nextUploadSerial++;entry.preparing=false;entry.prepared.reset();
+        entry.uploadResidency.reset();entry.pendingAuxiliary=nullptr;
+    }
+    template<class Build> bool beginPreparation(const LLUUID& id,Remote& entry,unsigned width,unsigned height,Build build)
+    {
+        const auto owner=VSNativeSession::active();
+        if(!owner || owner->phase()!=VSNativeSession::Phase::Connected || entry.preparing) return false;
+        if(!entry.uploadResidency)
+            entry.uploadResidency=resources.reserveImagePreparation(std::size_t(width)*height*32+16384);
+        if(!entry.uploadResidency) return false;
+        LL::WorkQueue::ptr_t main=LL::WorkQueue::getInstance("mainloop"),general=LL::WorkQueue::getInstance("General");
+        const auto serial=nextUploadSerial++;entry.uploadSerial=serial;entry.preparing=true;
+        const auto generation=owner->generation(),epoch=owner->regionEpoch();
+        const auto weak=weak_from_this();
+        const auto lease=entry.uploadResidency;
+        const bool posted=main->postTo(general,[build=std::move(build),lease]() {
+            using Result=std::pair<VSUIResources::PreparedImage,std::string>;
+            try {return Result{build(),{}};}
+            catch(const std::exception& error) {return Result{{},error.what()};}
+        },[weak,id,serial,generation,epoch,lease](std::pair<VSUIResources::PreparedImage,std::string> result) {
+            const auto target=weak.lock();const auto account=VSNativeSession::active();
+            if(!target || target->retired || !account || account->phase()!=VSNativeSession::Phase::Connected ||
+                account->generation()!=generation || account->regionEpoch()!=epoch) return;
+            const auto found=target->remote.find(id);
+            if(found==target->remote.end() || found->second.uploadSerial!=serial) return;
+            auto& current=found->second;current.preparing=false;current.prepared=std::move(result.first);
+            if(!current.prepared)
+            {
+                LL_WARNS("NativeImage")<<"Native image preparation failed: "<<result.second<<LL_ENDL;
+                current.uploadResidency.reset();current.pendingAuxiliary=nullptr;
+                ++current.attempts;current.retryAt=LLTimer::getTotalSeconds()+5*current.attempts;
+                if(current.attempts>=3) current.failedGeneration=generation;
+            }
+        });
+        if(!posted) {entry.preparing=false;if(!entry.prepared) entry.uploadResidency.reset();}
+        return posted;
+    }
     bool evict(const LLUUID& preserve)
     {
         auto victim=remote.end();
         for (auto found=remote.begin();found!=remote.end();++found)
         {
-            if (found->first==preserve || found->second.local || found->second.fetching ||
+            if (found->first==preserve || found->second.local || found->second.fetching || found->second.preparing || found->second.prepared ||
                 (found->second.facade && found->second.facade->getNumRefs()>1)) continue;
+            // Dropping a cache entry cannot free bytes held by scene packets or
+            // queued uploads. Keep that entry rather than churn through the cache.
+            const auto image=resources.image("remote:"+found->first.asString());
+            if(image && image.use_count()>2) continue;
             if (victim==remote.end() || found->second.touched<victim->second.touched) victim=found;
         }
         if (victim==remote.end()) return false;
@@ -144,6 +197,7 @@ void VSUIImageProvider::pumpImages()
         for(auto& [id,entry]:mImpl->remote)
         {
             if(entry.local) continue;
+            mImpl->cancelPreparation(entry);
             if(entry.fetching) fetch->deleteRequest(id,true);
             entry.fetching=false;
             if(entry.readyGeneration!=generation)
@@ -152,7 +206,35 @@ void VSUIImageProvider::pumpImages()
     }
     for(auto& [id,entry]:mImpl->remote)
     {
-        if(entry.local || !entry.fetching) continue;
+        if(entry.local) continue;
+        if(entry.prepared)
+        {
+            const bool wanted=mImpl->compressionWanted(entry);
+            if(entry.prepared->compressionRequested!=wanted)
+            {
+                const auto previous=entry.prepared;
+                if(mImpl->beginPreparation(id,entry,previous->width,previous->height,[previous,wanted] {
+                    return VSTextureUpload::prepare(previous->width,previous->height,previous->pixels,previous->role,wanted);
+                })) entry.prepared.reset();
+            }
+            else
+            {
+                auto image=mImpl->resources.publishPrepared("remote:"+id.asString(),entry.prepared);
+                while(!image && mImpl->evict(id)) image=mImpl->resources.publishPrepared("remote:"+id.asString(),entry.prepared);
+                if(image)
+                {
+                    if(!entry.cacheChecked)
+                    {if(entry.pendingCacheHit) ++mImpl->diskHits;else ++mImpl->diskMisses;entry.cacheChecked=true;}
+                    entry.pixels=entry.prepared->compressed && !entry.uiDemand?getUIImage("Generic_Person"):image;
+                    entry.auxiliary=entry.pendingAuxiliary;entry.discard=entry.pendingDiscard;
+                    entry.readyGeneration=generation;entry.failedGeneration=0;entry.attempts=0;entry.retryAt=0;
+                    entry.hasUploadPolicy=true;entry.lastCompressionRequest=entry.prepared->compressionRequested;
+                    entry.facade->setNativeExtent(entry.prepared->width,entry.prepared->height);entry.facade->onImageLoaded();
+                    entry.prepared.reset();entry.uploadResidency.reset();entry.pendingAuxiliary=nullptr;
+                }
+            }
+        }
+        if(!entry.fetching) continue;
         if(entry.generation!=generation || entry.epoch!=epoch)
         {fetch->deleteRequest(id,true);entry.fetching=false;continue;}
         S32 discard=-1,state=0;LLPointer<LLImageRaw> raw,auxiliary;LLCore::HttpStatus status;
@@ -171,19 +253,16 @@ void VSUIImageProvider::pumpImages()
                 {mask=new NativeMaskImage(std::move(residency),auxiliary->getWidth(),auxiliary->getHeight());mask->copy(auxiliary);}
                 else admitted=false;
             }
-            LLUIImagePtr image;
-            if(admitted)
+            if(admitted && !entry.preparing && !entry.prepared)
             {
-                image=mImpl->resources.publish("remote:"+id.asString(),*raw);
-                while(!image && mImpl->evict(id)) image=mImpl->resources.publish("remote:"+id.asString(),*raw);
-            }
-            if(image)
-            {
-                if(!entry.cacheChecked)
-                {if(fetch->isFromLocalCache(id)) ++mImpl->diskHits;else ++mImpl->diskMisses;entry.cacheChecked=true;}
-                entry.pixels=image;entry.auxiliary=mask;entry.discard=discard;
-                entry.readyGeneration=generation;entry.failedGeneration=0;entry.attempts=0;entry.retryAt=0;
-                entry.facade->setNativeExtent(raw->getWidth(),raw->getHeight());entry.facade->onImageLoaded();
+                const bool wanted=mImpl->compressionWanted(entry);
+                if(mImpl->beginPreparation(id,entry,raw->getWidth(),raw->getHeight(),[raw,wanted] {
+                    return VSUIResources::prepareImage(*raw,VSWorldContracts::ImageRole::RemoteAsset,wanted);
+                }))
+                {
+                    entry.pendingAuxiliary=mask;entry.pendingDiscard=discard;
+                    entry.pendingCacheHit=fetch->isFromLocalCache(id);
+                }
             }
         }
         if(done || LLTimer::getTotalSeconds()>=entry.deadline)
@@ -197,7 +276,7 @@ void VSUIImageProvider::pumpImages()
     if(!owner->regionReady()) return;
     std::vector<LLUUID> pending;
     for(const auto& [id,entry]:mImpl->remote)
-        if(!entry.local && !entry.fetching && entry.attempts<3 && LLTimer::getTotalSeconds()>=entry.retryAt &&
+        if(!entry.local && !entry.fetching && !entry.preparing && !entry.prepared && entry.attempts<3 && LLTimer::getTotalSeconds()>=entry.retryAt &&
             ((entry.uiDemand && entry.facade && entry.facade->getNumRefs()>1) || LLTimer::getTotalSeconds()-entry.lastUsed<1.0))
             pending.push_back(id);
     for(const auto& id:pending) getUIImageByID(id,-2);
@@ -215,6 +294,9 @@ LLSD VSUIImageProvider::textureCacheEvidence(bool includePixels) const
         result["network_requests"]=ll_sd_from_U64(fetch->getTotalNumHTTPRequests());
         result["pending_fetches"]=fetch->getNumRequests();
     }
+    S32 pendingUploads=0;
+    for(const auto& [id,entry]:mImpl->remote) if(entry.preparing || entry.prepared) ++pendingUploads;
+    result["pending_uploads"]=pendingUploads;
     result["disk_read_attempts"]=ll_sd_from_U64(reads);
     result["disk_writes_started"]=ll_sd_from_U64(writes);
     result["cache_policy"]="shared_LLTextureFetch";
@@ -368,11 +450,13 @@ bool VSUIImageProvider::imageReady(const LLUUID& id) const
     const auto owner = VSNativeSession::active();
     const auto image = mImpl->remote.find(imageID(id));
     return image!=mImpl->remote.end() && (image->second.local ||
-        (owner && owner->phase()==VSNativeSession::Phase::Connected && image->second.readyGeneration==owner->generation()));
+        (owner && owner->phase()==VSNativeSession::Phase::Connected && image->second.readyGeneration==owner->generation() &&
+         (!image->second.uiDemand || VSUIRenderer::imageDescription(mImpl->resources.image("remote:"+imageID(id).asString())).compression==VSWorldContracts::ImageCompression::None)));
 }
 void VSUIImageProvider::refreshImage(const LLUUID& id)
 {
     if(const auto entry=mImpl->remote.find(id);entry!=mImpl->remote.end() && entry->second.local) return;
+    if(const auto entry=mImpl->remote.find(id);entry!=mImpl->remote.end()) mImpl->cancelPreparation(entry->second);
     if(auto* fetch=LLAppViewer::getTextureFetch()) fetch->deleteRequest(id,true);
     if(auto* cache=LLAppViewer::getTextureCache()) cache->removeFromCache(id);
     auto& entry=mImpl->remote[id];entry.fetching=false;entry.generation=entry.readyGeneration=entry.failedGeneration=0;
@@ -385,6 +469,7 @@ void VSUIImageProvider::resetAccount()
     for(auto& [id,entry]:mImpl->remote)
     {
         if(entry.local) continue;
+        mImpl->cancelPreparation(entry);
         if(entry.fetching) if(auto* fetch=LLAppViewer::getTextureFetch()) fetch->deleteRequest(id,true);
         mImpl->resources.erase("remote:"+id.asString());
         entry.pixels=fallback;entry.auxiliary=nullptr;entry.fetching=false;
@@ -449,6 +534,20 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
         return entry.facade;
     }
     if(priority>=0) entry.uiDemand=true;
+    if(owner && owner->phase()==VSNativeSession::Phase::Connected && entry.readyGeneration==generation &&
+        entry.hasUploadPolicy && entry.attempts<3 && !entry.preparing && !entry.prepared &&
+        entry.lastCompressionRequest!=mImpl->compressionWanted(entry))
+    {
+        const auto raw=mImpl->resources.rawImage("remote:"+id.asString());
+        if(raw)
+        {
+            const bool wanted=mImpl->compressionWanted(entry);
+            if(mImpl->beginPreparation(id,entry,raw->getWidth(),raw->getHeight(),[raw,wanted] {
+                return VSUIResources::prepareImage(*raw,VSWorldContracts::ImageRole::RemoteAsset,wanted);
+            })) {entry.pendingAuxiliary=entry.auxiliary;entry.pendingDiscard=entry.discard;entry.pendingCacheHit=true;}
+        }
+    }
+    if(entry.preparing || entry.prepared) return entry.facade;
     auto* fetch=LLAppViewer::getTextureFetch();
     if(!owner || owner->phase()!=VSNativeSession::Phase::Connected || !owner->regionReady() || !fetch || entry.fetching)
         return entry.facade;
