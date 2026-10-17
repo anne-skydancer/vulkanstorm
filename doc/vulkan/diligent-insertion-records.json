@@ -1,5 +1,5 @@
 {
-  "source_commit": "126394a1b2e886885cd613a9284a6591b9488d52",
+  "source_commit": "26345f619f6944f064ebc917d132abb345a570bf",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -53898,8 +53898,8 @@
     {
       "path": "scripts/run_vulkan_texture_cache_instances.py",
       "start": 1,
-      "end": 126,
-      "sha256": "01e67b5eb6fb367b7e48f15b1387850f203fac9e04976c7c72c64a2d32b73ca0",
+      "end": 156,
+      "sha256": "d7968af3c22650d3b409df7295b6071ca1d37b8ee76638df5a62704252fdc595",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -53916,8 +53916,62 @@
     {
       "path": "scripts/tests/test_vulkan_texture_cache_instances.py",
       "start": 1,
+      "end": 52,
+      "sha256": "a773556da1f4ba07d3aeb7e984cff102b3345a18b3e4e9f0ccd9d74d9b699696",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/run_vulkan_texture_cache_instances.py",
+      "start": 17,
       "end": 46,
-      "sha256": "bd728a35bdcdd812a1d4ea02f7858ea33e5c6f59095638b1a5e6dbe953c87f5c",
+      "sha256": "d7968af3c22650d3b409df7295b6071ca1d37b8ee76638df5a62704252fdc595",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/run_vulkan_texture_cache_instances.py",
+      "start": 112,
+      "end": 112,
+      "sha256": "d7968af3c22650d3b409df7295b6071ca1d37b8ee76638df5a62704252fdc595",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/run_vulkan_texture_cache_instances.py",
+      "start": 119,
+      "end": 119,
+      "sha256": "d7968af3c22650d3b409df7295b6071ca1d37b8ee76638df5a62704252fdc595",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_texture_cache_instances.py",
+      "start": 8,
+      "end": 8,
+      "sha256": "a773556da1f4ba07d3aeb7e984cff102b3345a18b3e4e9f0ccd9d74d9b699696",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_texture_cache_instances.py",
+      "start": 12,
+      "end": 12,
+      "sha256": "a773556da1f4ba07d3aeb7e984cff102b3345a18b3e4e9f0ccd9d74d9b699696",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_texture_cache_instances.py",
+      "start": 16,
+      "end": 20,
+      "sha256": "a773556da1f4ba07d3aeb7e984cff102b3345a18b3e4e9f0ccd9d74d9b699696",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
