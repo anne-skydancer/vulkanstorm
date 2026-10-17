@@ -56,7 +56,8 @@ struct LLPluginClassMedia {
 BODY
 int main(){
  VSUIResources resources;LLPluginClassMedia plugin;
- resources.refuse=true;assert(!vs_update_media_image(resources,"media:test",plugin));
+ plugin.dirty=false;assert(!vs_update_media_image(resources,"media:test",plugin) && resources.publishes==0);
+ plugin.dirty=true;resources.refuse=true;assert(!vs_update_media_image(resources,"media:test",plugin));
  assert(plugin.dirty && plugin.resets==0);
  resources.refuse=false;auto first=vs_update_media_image(resources,"media:test",plugin);
  assert(first && !plugin.dirty && plugin.resets==1 && resources.publishes==1);
@@ -66,7 +67,9 @@ int main(){
  resources.refuse=false;vs_update_media_image(resources,"media:test",plugin);
  assert(!plugin.dirty && resources.patches==1 && first->pixels[4]==50);
  assert(resources.current->pixels[12]==99); // bottom source row -> canonical final row
- auto second=resources.current;plugin.width=1;plugin.height=1;plugin.dirty=true;resources.refuse=true;
+ auto second=resources.current;plugin.width=1;plugin.height=1;plugin.dirty=false;
+ assert(vs_update_media_image(resources,"media:test",plugin)==second && resources.publishes==1);
+ plugin.dirty=true;resources.refuse=true;
  assert(vs_update_media_image(resources,"media:test",plugin)==second && plugin.dirty);
  resources.refuse=false;vs_update_media_image(resources,"media:test",plugin);
  assert(resources.publishes==2 && resources.current->w==1 && !plugin.dirty);
