@@ -83,6 +83,7 @@
 #include "llchannelmanager.h"
 #include "llscreenchannel.h"
 #include "lltoast.h"
+#include "lltoastalertpanel.h"
 #include "llconsole.h"
 #include "vsplainchat.h"
 #include "llviewerwindow.h"

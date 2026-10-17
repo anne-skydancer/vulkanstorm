@@ -31,6 +31,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llregionflags.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
 #endif
@@ -654,7 +655,7 @@ void LLFloaterWorldMap::draw()
     LLViewerRegion* regionp = gAgent.getRegion();
     bool agent_on_prelude = (regionp && regionp->isPrelude());
 #if VS_NATIVE_VULKAN
-    if(auto owner=VSNativeSession::active())agent_on_prelude=(owner->regionFlags()&REGION_FLAGS_PRELUDE)!=0;
+    if(auto owner=VSNativeSession::active())agent_on_prelude=is_prelude(owner->regionFlags());
 #endif
     bool enable_go_home = gAgent.isGodlike() || !agent_on_prelude;
     mGoHomeButton->setEnabled(enable_go_home);
