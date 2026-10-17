@@ -55,6 +55,7 @@ public:
     /* whether in free camera mode */
     static bool inFreeCameraMode();
     static bool isNativeWidgetType(const std::type_info&);
+    static void updateNativeControls();
     /* callback for camera items selection changing */
     static void onClickCameraItem(const LLSD& param);
 
