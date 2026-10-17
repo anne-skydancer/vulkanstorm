@@ -1,5 +1,5 @@
 {
-  "source_commit": "edfe34016148700a064d28aeb239bab37ae10d5f",
+  "source_commit": "9abc97540fbe029f7dcdbca12630f2d9f9b8835f",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -25495,7 +25495,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 56,
       "end": 56,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -25504,16 +25504,16 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 392,
       "end": 406,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 470,
-      "end": 470,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "start": 486,
+      "end": 486,
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28357,7 +28357,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 145,
       "end": 148,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28411,7 +28411,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 397,
       "end": 402,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28420,7 +28420,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 406,
       "end": 406,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28429,25 +28429,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 40,
       "end": 40,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 453,
-      "end": 463,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "start": 469,
+      "end": 479,
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 470,
-      "end": 470,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "start": 486,
+      "end": 486,
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28474,7 +28474,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 88,
       "end": 88,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28753,7 +28753,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 55,
       "end": 55,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28843,7 +28843,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 57,
       "end": 85,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28852,7 +28852,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 147,
       "end": 147,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28861,7 +28861,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 318,
       "end": 320,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28870,7 +28870,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 407,
       "end": 419,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -35332,7 +35332,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 123,
       "end": 123,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -35656,7 +35656,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 124,
       "end": 124,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36034,7 +36034,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 125,
       "end": 125,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36466,7 +36466,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36475,7 +36475,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 125,
       "end": 125,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36484,7 +36484,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 182,
       "end": 182,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36493,7 +36493,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 218,
       "end": 218,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36502,7 +36502,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 289,
       "end": 289,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36511,7 +36511,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 298,
       "end": 298,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36520,7 +36520,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 302,
       "end": 302,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36529,7 +36529,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 318,
       "end": 318,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37006,7 +37006,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 307,
       "end": 307,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37258,7 +37258,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 126,
       "end": 126,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37465,7 +37465,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37474,7 +37474,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 125,
       "end": 125,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37483,7 +37483,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 289,
       "end": 289,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37492,7 +37492,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 293,
       "end": 293,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37501,7 +37501,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 298,
       "end": 298,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37510,7 +37510,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 302,
       "end": 302,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37519,7 +37519,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 318,
       "end": 318,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37609,7 +37609,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 89,
       "end": 89,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and run actual native cache bridge against controlled complete/partial/corrupt/timeout/shutdown and late-callback states; retain encoded writer memory/budget until retirement. Add to existing source-evidence job. This fixture does not qualify real disk restart reuse or R3 as a whole."
@@ -38734,7 +38734,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 132,
       "end": 132,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -38887,7 +38887,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 136,
       "end": 137,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -39751,7 +39751,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 111,
       "end": 111,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40075,7 +40075,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 94,
       "end": 94,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40722,8 +40722,8 @@
     {
       "path": ".github/workflows/software_vulkan.yml",
       "start": 420,
-      "end": 432,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "end": 436,
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40804,7 +40804,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 102,
       "end": 110,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -41317,7 +41317,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 96,
       "end": 96,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -42109,7 +42109,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 97,
       "end": 97,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -42460,7 +42460,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 98,
       "end": 98,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43009,7 +43009,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 99,
       "end": 99,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43198,7 +43198,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 103,
       "end": 103,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43450,16 +43450,16 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 109,
       "end": 109,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 433,
-      "end": 436,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "start": 437,
+      "end": 452,
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43684,7 +43684,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 105,
       "end": 105,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43954,7 +43954,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 106,
       "end": 106,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44386,7 +44386,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 107,
       "end": 107,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44584,7 +44584,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 108,
       "end": 108,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44611,7 +44611,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 133,
       "end": 135,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44791,7 +44791,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 134,
       "end": 134,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44998,7 +44998,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 90,
       "end": 93,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45367,7 +45367,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 91,
       "end": 91,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45412,7 +45412,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 92,
       "end": 92,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45601,7 +45601,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 100,
       "end": 100,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45763,7 +45763,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 101,
       "end": 101,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45898,7 +45898,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 95,
       "end": 95,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -46321,7 +46321,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 419,
       "end": 419,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -47401,7 +47401,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 65,
       "end": 65,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -47518,7 +47518,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 60,
       "end": 60,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -47806,7 +47806,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 61,
       "end": 61,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -48409,7 +48409,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 104,
       "end": 104,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -49696,7 +49696,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 43,
       "end": 44,
-      "sha256": "2bc4ef72431d23fefa2b9964c93cfaaacc35dd199d4008333b00b9d855b70bc2",
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -50834,10 +50834,46 @@
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 426,
+      "end": 426,
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 429,
+      "end": 431,
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 433,
+      "end": 433,
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 437,
+      "end": 449,
+      "sha256": "56ebcdcaaa3e85123fb3783b6866fce610986b0eb51cc91d48f39867eb7bf7bd",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "2fb104fe40bc94b938cafa9448a64c306713d6fa",
+    "previous_source_commit": "7f0480046ccb4c905921e5e25d11f94f134db55f",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
