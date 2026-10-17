@@ -1,5 +1,5 @@
 {
-  "source_commit": "ec8ee523382f46110f3369d2e475bb6003bc4607",
+  "source_commit": "3de5e8be7a2d4b5d68eabd76b7d8418ec6054469",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -27997,7 +27997,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 3,
       "end": 3,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28006,7 +28006,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 8,
       "end": 8,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28015,7 +28015,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 30,
       "end": 30,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28024,7 +28024,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 37,
       "end": 81,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28033,7 +28033,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 697,
       "end": 698,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28042,7 +28042,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 814,
       "end": 823,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28051,7 +28051,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1134,
       "end": 1139,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28060,7 +28060,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1269,
       "end": 1283,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28069,7 +28069,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1333,
       "end": 1336,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28078,7 +28078,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1377,
       "end": 1378,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28087,7 +28087,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1406,
       "end": 1411,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28096,7 +28096,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1454,
       "end": 1454,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28105,7 +28105,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1472,
       "end": 1473,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28114,7 +28114,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1577,
       "end": 1577,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -34405,7 +34405,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 24,
       "end": 25,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34414,7 +34414,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 83,
       "end": 459,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34423,7 +34423,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 475,
       "end": 502,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34432,7 +34432,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 675,
       "end": 675,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34441,7 +34441,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 679,
       "end": 683,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34450,7 +34450,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 814,
       "end": 815,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34459,7 +34459,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 822,
       "end": 822,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34468,7 +34468,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 957,
       "end": 967,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34477,7 +34477,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 985,
       "end": 987,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34486,7 +34486,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1025,
       "end": 1026,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34495,7 +34495,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1080,
       "end": 1080,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34504,7 +34504,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1083,
       "end": 1083,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34513,7 +34513,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1134,
       "end": 1137,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34522,7 +34522,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1146,
       "end": 1150,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34531,7 +34531,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1162,
       "end": 1167,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34540,7 +34540,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1175,
       "end": 1176,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34549,7 +34549,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1184,
       "end": 1184,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34558,7 +34558,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1188,
       "end": 1193,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34567,7 +34567,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1285,
       "end": 1285,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34576,7 +34576,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1337,
       "end": 1337,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34585,7 +34585,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1411,
       "end": 1411,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34594,7 +34594,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1455,
       "end": 1458,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34603,7 +34603,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1476,
       "end": 1477,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34612,7 +34612,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1563,
       "end": 1575,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -39589,7 +39589,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1438,
       "end": 1438,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -39958,7 +39958,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 848,
       "end": 866,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -39967,7 +39967,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1270,
       "end": 1282,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -39976,7 +39976,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1293,
       "end": 1298,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -39985,7 +39985,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1411,
       "end": 1411,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -39994,7 +39994,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1419,
       "end": 1428,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40003,7 +40003,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1437,
       "end": 1440,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40012,7 +40012,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1442,
       "end": 1445,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40021,7 +40021,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1450,
       "end": 1453,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -41209,7 +41209,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 108,
       "end": 133,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -41218,7 +41218,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1278,
       "end": 1278,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -41227,7 +41227,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1411,
       "end": 1411,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -41236,7 +41236,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1478,
       "end": 1479,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -42091,7 +42091,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 383,
       "end": 385,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -42100,7 +42100,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 413,
       "end": 413,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -42406,7 +42406,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 135,
       "end": 321,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -42415,7 +42415,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1478,
       "end": 1479,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -42973,7 +42973,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 213,
       "end": 320,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -42982,7 +42982,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1478,
       "end": 1478,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43153,7 +43153,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 289,
       "end": 289,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43531,7 +43531,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 639,
       "end": 639,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43540,7 +43540,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 643,
       "end": 656,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43549,7 +43549,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 661,
       "end": 661,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43558,7 +43558,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 665,
       "end": 665,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43567,7 +43567,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 669,
       "end": 669,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43576,7 +43576,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1280,
       "end": 1281,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43585,7 +43585,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1385,
       "end": 1394,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43594,7 +43594,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1435,
       "end": 1436,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43900,7 +43900,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 249,
       "end": 280,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43909,7 +43909,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 867,
       "end": 874,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43918,7 +43918,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 889,
       "end": 889,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43927,7 +43927,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1452,
       "end": 1452,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -43936,7 +43936,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1480,
       "end": 1481,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44188,7 +44188,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 255,
       "end": 256,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44197,7 +44197,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 258,
       "end": 258,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44206,7 +44206,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 266,
       "end": 269,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44215,7 +44215,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 273,
       "end": 273,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44224,7 +44224,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 277,
       "end": 277,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44233,7 +44233,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 868,
       "end": 868,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44242,7 +44242,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 875,
       "end": 876,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44521,7 +44521,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 6,
       "end": 6,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44530,7 +44530,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 214,
       "end": 248,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44539,7 +44539,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 803,
       "end": 813,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44548,7 +44548,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1129,
       "end": 1131,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44557,7 +44557,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1278,
       "end": 1278,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44566,7 +44566,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1490,
       "end": 1491,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44710,7 +44710,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 160,
       "end": 212,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44719,7 +44719,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 795,
       "end": 802,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44728,7 +44728,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1488,
       "end": 1489,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44872,7 +44872,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 174,
       "end": 187,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -44881,7 +44881,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1482,
       "end": 1483,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -45268,7 +45268,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 163,
       "end": 170,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -45277,7 +45277,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 172,
       "end": 172,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -45853,7 +45853,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 26,
       "end": 26,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -45862,7 +45862,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1380,
       "end": 1380,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -45871,7 +45871,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1484,
       "end": 1485,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46420,7 +46420,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 593,
       "end": 605,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46429,7 +46429,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 824,
       "end": 832,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46438,7 +46438,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1284,
       "end": 1284,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46447,7 +46447,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1411,
       "end": 1411,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46456,7 +46456,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1451,
       "end": 1451,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -46465,7 +46465,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1474,
       "end": 1475,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -48292,7 +48292,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 558,
       "end": 590,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48301,7 +48301,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1288,
       "end": 1290,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48310,7 +48310,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1486,
       "end": 1487,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48571,7 +48571,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 760,
       "end": 760,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48580,7 +48580,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 836,
       "end": 842,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48589,7 +48589,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 849,
       "end": 850,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48598,7 +48598,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1277,
       "end": 1277,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48607,7 +48607,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1291,
       "end": 1292,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48616,7 +48616,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1411,
       "end": 1411,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48625,7 +48625,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1466,
       "end": 1466,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48634,7 +48634,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1559,
       "end": 1559,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48733,7 +48733,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 543,
       "end": 557,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -48742,7 +48742,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1411,
       "end": 1411,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49021,7 +49021,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 521,
       "end": 522,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49030,7 +49030,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 560,
       "end": 560,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49039,7 +49039,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 567,
       "end": 576,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49048,7 +49048,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 750,
       "end": 751,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49057,7 +49057,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 779,
       "end": 783,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49066,7 +49066,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 786,
       "end": 786,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49075,7 +49075,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 803,
       "end": 807,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49084,7 +49084,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 843,
       "end": 847,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49093,7 +49093,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 907,
       "end": 907,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49102,7 +49102,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 923,
       "end": 923,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49111,7 +49111,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 937,
       "end": 937,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49120,7 +49120,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 971,
       "end": 971,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49129,7 +49129,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1073,
       "end": 1073,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49138,7 +49138,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1132,
       "end": 1133,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49147,7 +49147,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1245,
       "end": 1245,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49156,7 +49156,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1271,
       "end": 1272,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49165,7 +49165,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1434,
       "end": 1434,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49174,7 +49174,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1447,
       "end": 1449,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49183,7 +49183,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1486,
       "end": 1486,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49192,7 +49192,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 1530,
       "end": 1530,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49570,7 +49570,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 830,
       "end": 830,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -49669,7 +49669,7 @@
       "path": "scripts/run_vulkan_session_replay.py",
       "start": 888,
       "end": 890,
-      "sha256": "2912a96fcc7c9b63864c0e954383692bb7beba05eca0d6d2544923957ff5c27f",
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
@@ -50708,10 +50708,19 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual production native rear-view state and AgentUpdate with shared settings, requested offsets/scale and live changes; verify logout presentation ordering, duplicate frames and existing progress policy headlessly."
+    },
+    {
+      "path": "scripts/run_vulkan_session_replay.py",
+      "start": 526,
+      "end": 526,
+      "sha256": "3a2edc745a87a464b511d2aab29143a461d4148f588d0a1c287673c3fddfd78d",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Require current reference sampler embedding, actual production terrain packets with four local material layers, GPU readbacks, live transforms and local paint quantization/deletion. Continue headless-only local graphics tests and strict required artifact validation. Full R3 and three-platform qualification remain open."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "3a08f12174de537d10a03665fd6e4ba808457de0",
+    "previous_source_commit": "ec8ee523382f46110f3369d2e475bb6003bc4607",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
