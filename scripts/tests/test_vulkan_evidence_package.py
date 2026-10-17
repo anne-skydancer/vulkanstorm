@@ -10,11 +10,49 @@ from unittest.mock import patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from package_vulkan_evidence import package, completeness
+from package_vulkan_evidence import package, completeness, texture_cache_completeness
+from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES
 from run_vulkan_geometry_tests import required_checks
 
 
 class EvidencePackageTest(unittest.TestCase):
+    def test_r3_matrix_rejects_missing_cases_and_unsafe_paths(self):
+        self.assertTrue(texture_cache_completeness({},'revision','digest'))
+        with tempfile.TemporaryDirectory() as temporary:
+            summary=Path(temporary)/'results.json'
+            files={'.ci/r3-texture-cache-evidence/results.json':summary}
+            summary.write_text(json.dumps(dict(passed=True,complete=True,planned_cases=[],cases={})))
+            self.assertIn('Incomplete',texture_cache_completeness(files,'revision','digest')[0])
+            for path in ('../outside/cold','/outside/cold','C:/outside/cold'):
+                cases={case:dict(passed=True,source_commit='revision',evidence=path) for case in TEXTURE_CACHE_CASES}
+                summary.write_text(json.dumps(dict(passed=True,complete=True,planned_cases=list(TEXTURE_CACHE_CASES),cases=cases)))
+                with patch('package_vulkan_evidence.validate_texture_cache_case') as validate:
+                    self.assertIn('Unsafe',texture_cache_completeness(files,'revision','digest')[0])
+                    validate.assert_not_called()
+
+    def test_r3_readbacks_must_actually_enter_the_archive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);prefix='.ci/r3-texture-cache-evidence';folder=prefix+'/run-unit/cold'
+            files={}
+            def put(name,value):
+                path=root/name;path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_text(json.dumps(value));files[name]=path
+            cases={case:dict(passed=True,source_commit='revision',evidence='run-unit/'+case,
+                            process_instance='unit-process',texture_requests=1) for case in TEXTURE_CACHE_CASES}
+            put(prefix+'/results.json',dict(passed=True,complete=True,planned_cases=list(TEXTURE_CACHE_CASES),cases=cases))
+            stages={name:dict(gpu_rgba_file='r3/missing.rgba') for name in
+                    ('coarse','full_resolution_preference','coarse_after_preference','resolution_limit','restored')}
+            stages['references']={}
+            put(folder+'/results.json',dict(source_commit='revision',viewer_executable_sha256='digest',
+                texture_cache=dict(process_instance='unit-process',images=[]),r3_texture_streaming=stages))
+            for name in ('session-replay.xml','viewer.log','vk_layer_settings.txt','r3/texture.j2c'):put(folder+'/'+name,{})
+            put(folder+'/http-replay.json',[dict(query=dict(texture_id=['unit-texture']))])
+            # Isolate archive membership from the independently tested pixel validator.
+            with patch('package_vulkan_evidence.validate_texture_cache_case') as validate:
+                errors=texture_cache_completeness(files,'revision','digest')
+                validate.assert_called_once()
+                self.assertIn('omitted from archive',errors[0])
+
     def test_regular_bytes_and_hashes_round_trip(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

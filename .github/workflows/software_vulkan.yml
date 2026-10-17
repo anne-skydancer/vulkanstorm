@@ -388,6 +388,19 @@ jobs:
             --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
             --harness-evidence .ci/evidence/results.json --evidence .ci/r2-session-evidence \
             --skin ansastorm_modern --ui-scale 1.5 --headless --r2-contracts "${manifest_args[@]}"
+      - name: Production R3 texture streaming and persistent-cache restart matrix
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            manifest_args+=(--register-windows-manifests)
+          fi
+          python scripts/run_vulkan_texture_cache_tests.py \
+            --build-directory '${{ matrix.viewer_directory }}' --runtime .ci/runtime/runtime.json \
+            --harness-evidence .ci/evidence/results.json --evidence .ci/r3-texture-cache-evidence \
+            "${manifest_args[@]}"
       - name: Record source and build environment
         if: always()
         shell: bash
