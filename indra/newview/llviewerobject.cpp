@@ -25,7 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
-#include "vsobjectcontext.h"
+#include "vsobjectinteraction.h"
 
 #include "llviewerobject.h"
 
@@ -7001,7 +7001,10 @@ bool LLViewerObject::permYouOwner() const
 {
     if (isRootEdit())
     {
-        return VSObjectContext::ownedByAgent(mFlags);
+        return vs_object_you_owner(flagObjectYouOwner(),[]
+        {
+            return LLGridManager::getInstance()->isInSLBeta() && gAgent.getGodLevel()>=GOD_MAINTENANCE;
+        });
     }
     else
     {

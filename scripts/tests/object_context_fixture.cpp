@@ -7,8 +7,8 @@
 using U8=uint8_t;using U32=uint32_t;using LLUUID=int;using LLHost=int;
 struct LLVector3d {double x=0;};
 constexpr U32 FLAGS_OBJECT_YOU_OWNER=16;constexpr U8 GOD_MAINTENANCE=250;
-constexpr U8 CLICK_ACTION_TOUCH=0;
-U8 vs_object_click_action(U8 object,U8 parent,bool attached){return attached?0:object?object:parent;}
+constexpr U8 CLICK_ACTION_TOUCH=0,CLICK_ACTION_DISABLED=8,CLICK_ACTION_NONE=9;
+INTERACTION
 struct LLXform {virtual ~LLXform()=default;};
 struct LLViewerRegion {int host=4;int getHost()const{return host;}};
 struct LLViewerObject:LLXform {

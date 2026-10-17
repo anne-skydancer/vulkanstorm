@@ -17,6 +17,7 @@ def clean(path):
 class ObjectContext(unittest.TestCase):
     def test_real_peer_resolution_retirement_reparenting_and_owner_policy(self):
         source = (HERE / 'object_context_fixture.cpp').read_text(encoding='utf-8')
+        source = source.replace('INTERACTION', clean(ROOT / 'indra/newview/vsobjectinteraction.h'))
         source = source.replace('CONTEXT_HEADER', clean(ROOT / 'indra/newview/vsobjectcontext.h'))
         source = source.replace('CONTEXT_SOURCE', clean(ROOT / 'indra/newview/vsobjectcontext.cpp'))
         compiler = shutil.which('clang++') or shutil.which('g++')
