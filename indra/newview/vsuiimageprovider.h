@@ -1,6 +1,7 @@
 // CPU skin assets published through native UI facades. LGPL-2.1.
 #pragma once
 #include "llrender2dutils.h"
+#include "lluiimage.h"
 #include <memory>
 class VSUIResources;
 class LLImageRaw;
@@ -8,6 +9,10 @@ class LLSD;
 LLSD vs_ui_texture_cache_evidence(bool includePixels=false);
 void vs_pump_ui_images();
 LLPointer<LLUIImage> vs_request_world_image(const LLUUID&,unsigned dimension,bool exact=false);
+struct VSMapImage { LLPointer<LLUIImage> image; bool missing=false; };
+VSMapImage vs_request_map_image(const std::string&, bool load=true);
+void vs_retry_map_image(const std::string&);
+void vs_set_map_image_visible(const std::string&,bool);
 void vs_refresh_ui_image(const LLUUID&);
 bool vs_publish_local_image(const LLUUID&,const LLImageRaw&);
 bool vs_publish_local_images(const std::vector<std::pair<LLUUID,LLPointer<LLImageRaw>>>&);
@@ -33,6 +38,9 @@ class VSUIImageProvider : public LLImageProviderInterface
     void resetAccount();
     void pumpImages();
     LLPointer<LLUIImage> requestWorldImage(const LLUUID&,unsigned dimension,bool exact=false);
+    VSMapImage requestMapImage(const std::string&,bool load);
+    void retryMapImage(const std::string&);
+    void setMapImageVisible(const std::string&,bool);
     void refreshImage(const LLUUID&);
     bool publishLocalImage(const LLUUID&,const LLImageRaw&);
     bool publishLocalImages(const std::vector<std::pair<LLUUID,LLPointer<LLImageRaw>>>&);

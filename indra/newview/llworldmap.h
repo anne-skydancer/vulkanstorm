@@ -241,6 +241,10 @@ public:
     void dump();    // Print the world info to the standard output
 
     // Track handling
+#if VS_NATIVE_VULKAN
+    VSMapImage getNativeObjectsTile(U32 x,U32 y,S32 level,bool load=true)
+    { return mWorldMipmap.getNativeObjectsTile(x,y,level,load); }
+#endif
     void cancelTracking() { mIsTrackingLocation = false; mIsTrackingFound = false; mIsInvalidLocation = false; mIsTrackingDoubleClick = false; mIsTrackingCommit = false; }
 
     void setTracking(const LLVector3d& loc) { mIsTrackingLocation = true; mTrackingLocation = loc; mIsTrackingFound = false; mIsInvalidLocation = false; mIsTrackingDoubleClick = false; mIsTrackingCommit = false;}

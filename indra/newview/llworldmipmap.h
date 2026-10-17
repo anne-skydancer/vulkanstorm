@@ -28,12 +28,16 @@
 #define LL_LLWORLDMIPMAP_H
 
 #include <map>
+#include <string>
 
 #include "llmemory.h"           // LLPointer
 #include "indra_constants.h"    // REGION_WIDTH_UNITS
 #include "llregionhandle.h"     // to_region_handle()
 
 class LLViewerFetchedTexture;
+#if VS_NATIVE_VULKAN
+#include "vsuiimageprovider.h"
+#endif
 
 // LLWorldMipmap : Mipmap handling of all the tiles used to render the world at any resolution.
 // This class provides a clean structured access to the hierarchy of tiles stored in the
@@ -66,6 +70,10 @@ public:
     // Drop the boost levels to none (used when hiding the map)
     void    dropBoostLevels();
     // Get the tile smart pointer, does the loading if necessary
+#if VS_NATIVE_VULKAN
+    VSMapImage getNativeObjectsTile(U32 grid_x,U32 grid_y,S32 level,bool load=true);
+#endif
+    static std::string objectsTileURL(U32 grid_x,U32 grid_y,S32 level);
     LLPointer<LLViewerFetchedTexture> getObjectsTile(U32 grid_x, U32 grid_y, S32 level, bool load = true);
 
     // Helper functions: those are here as they depend solely on the topology of the mipmap though they don't access it
@@ -90,6 +98,9 @@ private:
     sublevel_tiles_t mWorldObjectsMipMap[MAP_LEVELS];
 //  sublevel_tiles_t mWorldTerrainMipMap[MAP_LEVELS];
 
+#if VS_NATIVE_VULKAN
+    std::map<U64,std::string> mNativeTiles[MAP_LEVELS];
+#endif
     S32 mCurrentLevel;      // The level last accessed by a getObjectsTile()
 };
 

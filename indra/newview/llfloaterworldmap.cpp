@@ -31,6 +31,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llfloaterworldmap.h"
 
@@ -322,7 +325,7 @@ void LLMapFriendObserver::changed(U32 mask)
     // if there's a change we're interested in.
     if((mask & (LLFriendObserver::ADD | LLFriendObserver::REMOVE | LLFriendObserver::ONLINE | LLFriendObserver::POWERS)) != 0)
     {
-        gFloaterWorldMap->friendsChanged();
+        if(gFloaterWorldMap)gFloaterWorldMap->friendsChanged();
     }
 }
 
@@ -650,6 +653,9 @@ void LLFloaterWorldMap::draw()
     // area (infohub) and they get confused. JC
     LLViewerRegion* regionp = gAgent.getRegion();
     bool agent_on_prelude = (regionp && regionp->isPrelude());
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active())agent_on_prelude=(owner->regionFlags()&REGION_FLAGS_PRELUDE)!=0;
+#endif
     bool enable_go_home = gAgent.isGodlike() || !agent_on_prelude;
     mGoHomeButton->setEnabled(enable_go_home);
 
@@ -774,35 +780,25 @@ void LLFloaterWorldMap::processParcelInfo(const LLParcelData& parcel_data, const
 
 void LLFloaterWorldMap::requestParcelInfo(const LLVector3d& pos_global, const LLVector3d& region_origin)
 {
-    if (pos_global == mRequestedGlobalPos)
+    if(pos_global==mRequestedGlobalPos || !pos_global.isFinite() || !region_origin.isFinite())return;
+    const std::string url=gAgent.getRegionCapability("RemoteParcelRequest");
+    if(url.empty()){LL_WARNS()<<"Cannot request parcel details: Cap not found"<<LL_ENDL;return;}
+    LLUUID region_id;
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active())
     {
-        return;
-    }
-
-    LLViewerRegion* region = gAgent.getRegion();
-    if (!region)
-    {
-        return;
-    }
-
-    if (std::string url = region->getCapability("RemoteParcelRequest"); !url.empty())
-    {
-        mRequestedGlobalPos = pos_global;
-        if (mParcelInfoObserver)
-        {
-            delete mParcelInfoObserver;
-        }
-        mParcelInfoObserver = new LLWorldMapParcelInfoObserver(pos_global);
-
-        auto pos_region = LLVector3(pos_global - region_origin);
-        LLRemoteParcelInfoProcessor::instance().requestRegionParcelInfo(url,
-            region->getRegionID(), pos_region, pos_global,
-            mParcelInfoObserver->getObserverHandle());
+        if(owner->phase()!=VSNativeSession::Phase::Connected)return;
+        for(const auto& region:owner->regionSnapshots())
+            if(from_region_handle(region.handle)==region_origin){region_id=region.id;break;}
     }
     else
-    {
-        LL_WARNS() << "Cannot request parcel details: Cap not found" << LL_ENDL;
-    }
+#endif
+    if(auto region=gAgent.getRegion())region_id=region->getRegionID();
+    mRequestedGlobalPos=pos_global;
+    delete mParcelInfoObserver;
+    mParcelInfoObserver=new LLWorldMapParcelInfoObserver(pos_global);
+    LLRemoteParcelInfoProcessor::instance().requestRegionParcelInfo(url,region_id,
+        LLVector3(pos_global-region_origin),pos_global,mParcelInfoObserver->getObserverHandle());
 }
 
 void LLFloaterWorldMap::trackAvatar(const LLUUID& avatar_id, const std::string& name)

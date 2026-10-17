@@ -56,6 +56,10 @@ LLWorldMipmap::~LLWorldMipmap()
 // Delete all sublevel maps and clean them
 void LLWorldMipmap::reset()
 {
+#if VS_NATIVE_VULKAN
+    for(auto& level:mNativeTiles)level.clear();
+    mCurrentLevel=0;
+#endif
     for (int level = 0; level < MAP_LEVELS; level++)
     {
         mWorldObjectsMipMap[level].clear();
@@ -68,6 +72,9 @@ void LLWorldMipmap::reset()
 // The result of this strategy is that if a tile is not used during 2 consecutive loops, its boost level drops to 0.
 void LLWorldMipmap::equalizeBoostLevels()
 {
+#if VS_NATIVE_VULKAN
+    for(const auto& level:mNativeTiles)for(const auto& [handle,url]:level)vs_set_map_image_visible(url,false);
+#endif
 #if DEBUG_TILES_STAT
     S32 nb_missing = 0;
     S32 nb_tiles = 0;
@@ -115,6 +122,9 @@ void LLWorldMipmap::equalizeBoostLevels()
 // This method should be used when the mipmap is not actively used for a while, e.g., the map UI is hidden
 void LLWorldMipmap::dropBoostLevels()
 {
+#if VS_NATIVE_VULKAN
+    for(const auto& level:mNativeTiles)for(const auto& [handle,url]:level)vs_set_map_image_visible(url,false);
+#endif
     // For each level
     for (S32 level = 0; level < MAP_LEVELS; level++)
     {
@@ -192,7 +202,7 @@ LLPointer<LLViewerFetchedTexture> LLWorldMipmap::loadObjectsTile(U32 grid_x, U32
     // Get the grid coordinates
     // <FS:CR> HG Maps
     //std::string imageurl = gSavedSettings.getString("CurrentMapServerURL") + llformat("map-%d-%d-%d-objects.jpg", level, grid_x, grid_y);
-    std::string imageurl = LFSimFeatureHandler::instance().mapServerURL() + llformat("map-%d-%d-%d-objects.jpg", level, grid_x, grid_y);
+    std::string imageurl = objectsTileURL(grid_x,grid_y,level);
     // </FS:CR>
 
     // DO NOT COMMIT!! DEBUG ONLY!!!
@@ -280,3 +290,30 @@ void LLWorldMipmap::globalToMipmap(F64 global_x, F64 global_y, S32 level, U32* g
 }
 
 
+std::string LLWorldMipmap::objectsTileURL(U32 grid_x,U32 grid_y,S32 level)
+{
+    return LFSimFeatureHandler::instance().mapServerURL()+llformat("map-%d-%d-%d-objects.jpg",level,grid_x,grid_y);
+}
+#if VS_NATIVE_VULKAN
+VSMapImage LLWorldMipmap::getNativeObjectsTile(U32 grid_x,U32 grid_y,S32 level,bool load)
+{
+    if(level<1 || level>MAP_LEVELS)return {};
+    auto& tiles=mNativeTiles[level-1];
+    if(load && level!=mCurrentLevel)
+    {
+        for(const auto& [handle,url]:tiles)
+            if(vs_request_map_image(url,false).missing)vs_retry_map_image(url);
+        mCurrentLevel=level;
+    }
+    const U64 handle=convertGridToHandle(grid_x,grid_y);
+    auto found=tiles.find(handle);
+    const std::string url=objectsTileURL(grid_x,grid_y,level);
+    if(found!=tiles.end() && found->second!=url){tiles.erase(found);found=tiles.end();}
+    if(found==tiles.end())
+    {
+        if(!load)return {};
+        found=tiles.emplace(handle,url).first;
+    }
+    return vs_request_map_image(found->second,load);
+}
+#endif

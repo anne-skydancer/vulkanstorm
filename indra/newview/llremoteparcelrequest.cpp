@@ -114,37 +114,21 @@ void LLRemoteParcelInfoProcessor::processParcelInfoReply(LLMessageSystem* msg, v
 
     LLRemoteParcelInfoProcessor::observer_multimap_t & observers = inst->mObservers;
 
-    typedef std::vector<observer_multimap_t::iterator> deadlist_t;
-    deadlist_t dead_iters;
-
-    observer_multimap_t::iterator oi = observers.lower_bound(parcel_data.parcel_id);
-    observer_multimap_t::iterator end = observers.upper_bound(parcel_data.parcel_id);
-
-    while (oi != end)
+    // A notification may destroy another observer or retire the entire account.
+    // Keep weak observer handles, never iterators into callback-owned storage.
+    const auto current=vs_native_im_guard();
+    std::vector<LLHandle<LLRemoteParcelInfoObserver>> targets;
+    for(auto item=observers.lower_bound(parcel_data.parcel_id);item!=observers.upper_bound(parcel_data.parcel_id);)
     {
-        // increment the loop iterator now since it may become invalid below
-        observer_multimap_t::iterator cur_oi = oi++;
-
-        LLRemoteParcelInfoObserver * observer = cur_oi->second.get();
-        if(observer)
-        {
-            // may invalidate cur_oi if the observer removes itself
-            observer->processParcelInfo(parcel_data);
-        }
-        else
-        {
-            // the handle points to an expired observer, so don't keep it
-            // around anymore
-            dead_iters.push_back(cur_oi);
-        }
+        if(item->second.isDead())item=observers.erase(item);
+        else {targets.push_back(item->second);++item;}
     }
-
-    deadlist_t::iterator i;
-    deadlist_t::iterator end_dead = dead_iters.end();
-    for(i = dead_iters.begin(); i != end_dead; ++i)
+    for(const auto& target:targets)
     {
-        observers.erase(*i);
+        if(!current())return;
+        if(auto observer=target.get())observer->processParcelInfo(parcel_data);
     }
+    if(!current())return;
 
     LLUrlEntryParcel::LLParcelData url_data;
     url_data.parcel_id = parcel_data.parcel_id;

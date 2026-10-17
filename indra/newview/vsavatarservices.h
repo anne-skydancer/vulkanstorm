@@ -29,5 +29,6 @@ std::vector<VSAvatarAttachment> vs_avatar_attachments();
 
 bool vs_avatar_attachment_name(const LLUUID& item, std::string& name);
 
+bool vs_avatar_precise_location(const LLUUID&,LLVector3d&);
 struct VSAvatarLocation { LLUUID id; LLVector3d position; };
 std::vector<VSAvatarLocation> vs_avatar_locations(const LLVector3d& relativeTo, F32 radius);

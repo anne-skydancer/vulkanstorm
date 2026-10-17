@@ -25,6 +25,11 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include <memory>
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsuiimageprovider.h"
+#endif
 
 #include "llworldmapview.h"
 
@@ -212,6 +217,7 @@ LLWorldMapView::LLWorldMapView() :
 
 bool LLWorldMapView::postBuild()
 {
+    if(LLRender2D::isNativeUI()){initClass();sVisibleTilesLoaded=false;}
     mTextBoxNorth = getChild<LLTextBox> ("floater_map_north");
     mTextBoxEast = getChild<LLTextBox> ("floater_map_east");
     mTextBoxWest = getChild<LLTextBox> ("floater_map_west");
@@ -368,6 +374,14 @@ bool LLWorldMapView::showRegionInfo() { return LLWorldMipmap::scaleToLevel(mMapS
 ///////////////////////////////////////////////////////////////////////////////////
 // HELPERS
 
+bool is_agent_in_map_region(const LLSimInfo* info)
+{
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active())return info && owner->regionReady() && owner->handle()==info->getHandle();
+#endif
+    auto* region=gAgent.getRegion();return region && info && region->getHandle()==info->getHandle();
+}
+
 bool is_agent_in_region(LLViewerRegion* region, LLSimInfo* info)
 {
     return (region && info && info->isName(region->getName()));
@@ -417,15 +431,10 @@ void LLWorldMapView::draw()
 
     S32 level = LLWorldMipmap::scaleToLevel(mMapScale);
 
-    LLLocalClipRect clip(getLocalRect());
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
-
-    gGL.matrixMode(LLRender::MM_MODELVIEW);
-
-    // Draw background rectangle
-    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
-    gGL.color4fv(mBackgroundColor.mV);
-    gl_rect_2d(0, height, width, 0);
+    auto clip=std::make_unique<LLLocalClipRect>(getLocalRect());
+    if(!LLRender2D::isNativeUI())
+    {gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);gGL.matrixMode(LLRender::MM_MODELVIEW);}
+    gl_rect_2d(0,height,width,0,mBackgroundColor);
 
     // Draw the image tiles
 // <FS:CR> Aurora Sim
@@ -486,6 +495,10 @@ void LLWorldMapView::draw()
         if (info->isDown())
         {
             // Draw a transparent red square over down sims
+            if(LLRender2D::isNativeUI())
+                gl_rect_2d(ll_round(left),ll_round(top),ll_round(right),ll_round(bottom),LLColor4(.2f,0,0,.4f));
+            else
+            {
             gGL.color4f(0.2f, 0.0f, 0.0f, 0.4f);
 
             gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
@@ -500,6 +513,7 @@ void LLWorldMapView::draw()
                 gGL.vertex2f(right, top);
             }
             gGL.end();
+            }
         }
 // <FS:CR> Aurora Sim
 #ifdef OPENSIM
@@ -510,6 +524,16 @@ void LLWorldMapView::draw()
 
         {
             // Draw the overlay image "Land for Sale / Land for Auction"
+#if VS_NATIVE_VULKAN
+            if(LLRender2D::isNativeUI())
+            {
+                const auto id=info->getLandForSaleImageID();
+                const auto image=LLUI::getUIImageByID(id);
+                if(image && vs_ui_image_ready(id))image->draw(ll_round(left),ll_round(bottom),ll_round(right)-ll_round(left),ll_round(top)-ll_round(bottom));
+            }
+            else
+#endif
+            {
             LLViewerFetchedTexture* overlayimage = info->getLandForSaleImage();
             if (overlayimage)
             {
@@ -548,6 +572,7 @@ void LLWorldMapView::draw()
                     gGL.end();
                 }
             }
+        }
         }
         else
         {
@@ -608,8 +633,7 @@ void LLWorldMapView::draw()
                     if (!info->isDown())
                     {
                         S32 agent_count = info->getAgentCount();
-                        LLViewerRegion *region = gAgent.getRegion();
-                        if (region && region->getHandle() == info->getHandle())
+                        if (is_agent_in_map_region(info))
                         {
                             ++agent_count; // Bump by 1 if we're in this region
                         }
@@ -722,7 +746,9 @@ void LLWorldMapView::draw()
 
 
     // turn off the scissor
-    LLGLDisable no_scissor(GL_SCISSOR_TEST);
+    std::unique_ptr<LLGLDisable> no_scissor;
+    if(LLRender2D::isNativeUI())clip.reset();
+    else no_scissor=std::make_unique<LLGLDisable>(GL_SCISSOR_TEST);
 
     updateDirections();
 
@@ -817,6 +843,24 @@ bool LLWorldMapView::drawMipmapLevel(S32 width, S32 height, S32 level, bool load
             // Get the tile. Note: NULL means that the image does not exist (so it's considered "complete" as far as fetching is concerned)
             // <FS:Ansariel> Performance tweak
             //LLPointer<LLViewerFetchedTexture> simimage = LLWorldMap::getInstance()->getObjectsTile(grid_x, grid_y, level, load);
+#if VS_NATIVE_VULKAN
+            if(LLRender2D::isNativeUI())
+            {
+                const auto tile=world_map->getNativeObjectsTile(grid_x,grid_y,level,load);
+                if(tile.image)
+                {
+                    pos_global[VX]=grid_x*REGION_WIDTH_METERS;pos_global[VY]=grid_y*REGION_WIDTH_METERS;
+                    const auto low=globalPosToView(pos_global);
+                    pos_global[VX]+=tile_width;pos_global[VY]+=tile_width;
+                    const auto high=globalPosToView(pos_global);
+                    tile.image->draw(ll_round(low[VX]),ll_round(low[VY]),ll_round(high[VX])-ll_round(low[VX]),ll_round(high[VY])-ll_round(low[VY]));
+                    ++completed_tiles;
+                }
+                else if(tile.missing)++completed_tiles;
+            }
+            else
+#endif
+            {
             LLPointer<LLViewerFetchedTexture> simimage = world_map->getObjectsTile(grid_x, grid_y, level, load);
             // </FS:Ansariel>
             if (simimage)
@@ -880,6 +924,7 @@ bool LLWorldMapView::drawMipmapLevel(S32 width, S32 height, S32 level, bool load
                 // Unexistent tiles are counted as "completed"
                 completed_tiles++;
             }
+            }
             // Increment the number of tiles in that level / screen
             total_tiles++;
         }
@@ -891,6 +936,14 @@ bool LLWorldMapView::drawMipmapLevel(S32 width, S32 height, S32 level, bool load
 // Used for debug only
 void LLWorldMapView::drawTileOutline(S32 level, F32 top, F32 left, F32 bottom, F32 right)
 {
+    if(LLRender2D::isNativeUI())
+    {
+        static const LLColor4 colors[]={LLColor4(0,0,0,1),LLColor4(1,0,0,1),LLColor4(0,1,0,1),LLColor4(0,0,1,1),LLColor4(1,1,0,1),LLColor4(1,0,1,1),LLColor4(0,1,1,1),LLColor4(1,1,1,1)};
+        const auto& color=colors[level>=1 && level<=7?level:0];
+        const std::array<LLVector2,8> points={LLVector2(left,top),LLVector2(right,bottom),LLVector2(left,bottom),LLVector2(right,top),LLVector2(left,top),LLVector2(left,bottom),LLVector2(right,bottom),LLVector2(right,top)};
+        for(unsigned i=1;i<points.size();++i)gl_line_2d(ll_round(points[i-1].mV[0]),ll_round(points[i-1].mV[1]),ll_round(points[i].mV[0]),ll_round(points[i].mV[1]),color);
+        return;
+    }
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
     if (level == 1)
         gGL.color3f(1.f, 0.f, 0.f);     // red
@@ -1050,6 +1103,28 @@ void LLWorldMapView::drawAgents()
 
 void LLWorldMapView::drawFrustum()
 {
+#if VS_NATIVE_VULKAN
+    if(LLRender2D::isNativeUI())
+    {
+        const auto owner=VSNativeSession::active();
+        if(!owner || !owner->regionReady())return;
+        const auto camera=owner->cameraState();
+        LLVector3 at=camera.at,left=camera.left;
+        LLVector2 look(at.mV[VX],at.mV[VY]),side(left.mV[VX],left.mV[VY]);
+        if(is_approx_zero(look.magVecSquared())){look=LLVector2(1.f,0.f);side=LLVector2(0.f,1.f);}
+        look.normVec();side.normVec();
+        const auto viewport=gViewerWindow->getWindowRectScaled();
+        if(viewport.getHeight()<=0)return;
+        const F32 fov=F_PI/3.f*F32(viewport.getWidth())/viewport.getHeight();
+        const F32 distance=llclamp(gSavedSettings.getF32("RenderFarClip"),16.f,1024.f)*mMapRatio;
+        const F32 half=distance*std::tan(fov*.5f);
+        const LLVector2 center(getLocalRect().getWidth()*.5f+mPanX,getLocalRect().getHeight()*.5f+mPanY);
+        const LLVector2 a=center+look*distance+side*half,b=center+look*distance-side*half;
+        LLRender2D::nativeTriangle({{{center.mV[0],center.mV[1],1,1,1,.25f},{a.mV[0],a.mV[1],1,1,1,.02f},{b.mV[0],b.mV[1],1,1,1,.02f}}});
+        return;
+    }
+#endif
+
     // Draw frustum
     F32 horiz_fov = LLViewerCamera::getInstance()->getView() * LLViewerCamera::getInstance()->getAspect();
     F32 far_clip_meters = LLViewerCamera::getInstance()->getFar();
@@ -1232,7 +1307,6 @@ bool LLWorldMapView::handleToolTip( S32 x, S32 y, MASK mask )
     LLSimInfo* info = LLWorldMap::getInstance()->simInfoFromHandle(handle);
     if (info)
     {
-        LLViewerRegion *region = gAgent.getRegion();
 
 // [RLVa:KB] - Checked: 2010-04-19 (RLVa-1.4.5) | Modified: RLVa-1.4.5
         std::string message = llformat("%s (%s)",
@@ -1244,7 +1318,7 @@ bool LLWorldMapView::handleToolTip( S32 x, S32 y, MASK mask )
         if (!info->isDown())
         {
             S32 agent_count = info->getAgentCount();
-            if (region && (region->getHandle() == handle))
+            if (is_agent_in_map_region(info))
             {
                 ++agent_count; // Bump by 1 if we're here
             }
@@ -1311,6 +1385,15 @@ static void drawDot(F32 x_pixels, F32 y_pixels,
         F32 top =       y_pixels + dot_radius;
         F32 bottom =    y_pixels - dot_radius;
 
+        if(LLRender2D::isNativeUI())
+        {
+            const F32 point=relative_z>HEIGHT_THRESHOLD?top:bottom;
+            const F32 back=relative_z>HEIGHT_THRESHOLD?bottom:top;
+            LLRender2D::setLineWidth(3.f);
+            gl_line_2d(ll_round(left),ll_round(back),ll_round(center),ll_round(point),color);
+            gl_line_2d(ll_round(center),ll_round(point),ll_round(right),ll_round(back),color);
+            LLRender2D::setLineWidth(1.f);return;
+        }
         gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
         gGL.color4fv( color.mV );
         LLUI::setLineWidth(3.0f);
@@ -1500,6 +1583,21 @@ void LLWorldMapView::drawTrackingCircle( const LLRect& rect, S32 x, S32 y, const
         end_theta -= angle_adjust_y;
     }
 
+    if(LLRender2D::isNativeUI())
+    {
+        const F32 delta=(end_theta-start_theta)/40.f;
+        const auto vertex=[&](F32 radius,F32 theta){return std::array<F32,6>{F32(x)+radius*std::cos(theta),F32(y)+radius*std::sin(theta),color.mV[0],color.mV[1],color.mV[2],color.mV[3]};};
+        // Same radii, angular interval, segmentation and color as the reference
+        // washer strip, emitted as explicit native triangle pairs.
+        for(S32 i=0;i<40;++i)
+        {
+            const F32 a=start_theta+i*delta,b=a+delta;
+            const auto ao=vertex(inner_radius,a),ai=vertex(outer_radius,a),bo=vertex(inner_radius,b),bi=vertex(outer_radius,b);
+            LLRender2D::nativeTriangle({ao,ai,bo});LLRender2D::nativeTriangle({bo,ai,bi});
+        }
+        return;
+    }
+
     gGL.matrixMode(LLRender::MM_MODELVIEW);
     gGL.pushMatrix();
     gGL.translatef((F32)x * LLUI::getScaleFactor().mV[VX], (F32)y * LLUI::getScaleFactor().mV[VY], 0.f);
@@ -1548,13 +1646,8 @@ void LLWorldMapView::drawTrackingArrow(const LLRect& rect, S32 x, S32 y,
     sTrackingArrowX = llfloor(x_clamped);
     sTrackingArrowY = llfloor(y_clamped);
 
-    gl_draw_scaled_rotated_image(
-        sTrackingArrowX,
-        sTrackingArrowY,
-        arrow_size, arrow_size,
-        RAD_TO_DEG * angle,
-        sTrackArrowImage->getImage(),
-        color);
+    if(LLRender2D::isNativeUI())sTrackArrowImage->drawRotated(sTrackingArrowX,sTrackingArrowY,arrow_size,arrow_size,RAD_TO_DEG*angle,color);
+    else gl_draw_scaled_rotated_image(sTrackingArrowX,sTrackingArrowY,arrow_size,arrow_size,RAD_TO_DEG*angle,sTrackArrowImage->getImage(),color);
 }
 
 void LLWorldMapView::setDirectionPos( LLTextBox* text_box, F32 rotation )

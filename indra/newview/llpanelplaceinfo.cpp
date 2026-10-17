@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "llworldmap.h"
+#endif
 
 #include "llpanelplaceinfo.h"
 #include "llfloaterprofile.h"
@@ -167,16 +171,32 @@ void LLPanelPlaceInfo::sendParcelInfoRequest()
 void LLPanelPlaceInfo::displayParcelInfo(const LLUUID& region_id,
                                          const LLVector3d& pos_global)
 {
-    LLViewerRegion* region = gAgent.getRegion();
-    if (!region)
-        return;
+    if(!pos_global.isFinite())return;
 
     mPosRegion.setVec((F32)fmod(pos_global.mdV[VX], (F64)REGION_WIDTH_METERS),
                       (F32)fmod(pos_global.mdV[VY], (F64)REGION_WIDTH_METERS),
                       (F32)pos_global.mdV[VZ]);
 
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active())
+    {
+        if(owner->phase()!=VSNativeSession::Phase::Connected)return;
+        bool found=false;
+        for(const auto& region:owner->regionSnapshots())
+        {
+            const auto origin=from_region_handle(region.handle);
+            const auto local=pos_global-origin;
+            if((region_id.notNull() && region.id==region_id) ||
+               (region_id.isNull() && local.mdV[VX]>=0 && local.mdV[VY]>=0 && local.mdV[VX]<region.width && local.mdV[VY]<region.height))
+            {mPosRegion.setVec(local);found=true;break;}
+        }
+        if(!found && LLWorldMap::instanceExists())
+            if(auto info=LLWorldMap::instance().simInfoFromPosGlobal(pos_global))
+                mPosRegion.setVec(pos_global-from_region_handle(info->getHandle()));
+    }
+#endif
     LLSD body;
-    std::string url = region->getCapability("RemoteParcelRequest");
+    std::string url = gAgent.getRegionCapability("RemoteParcelRequest");
     if (!url.empty())
     {
         LLRemoteParcelInfoProcessor::getInstance()->requestRegionParcelInfo(url,
@@ -194,11 +214,9 @@ void LLPanelPlaceInfo::displayParcelInfo(const LLUUID& region_id,
 {
     auto region_origin = from_region_handle(region_handle);
     mPosRegion.setVec(LLVector3(pos_global - region_origin));
-    LLViewerRegion* region = gAgent.getRegion();
-    if (!region)
-        return;
+    if(!pos_global.isFinite())return;
     LLSD body;
-    std::string url = region->getCapability("RemoteParcelRequest");
+    std::string url = gAgent.getRegionCapability("RemoteParcelRequest");
     if (!url.empty())
     {
         LLRemoteParcelInfoProcessor::getInstance()->requestRegionParcelInfo(url,

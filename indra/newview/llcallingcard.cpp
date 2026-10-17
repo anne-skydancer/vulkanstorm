@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsavatarservices.h"
+#endif
 
 #include "llcallingcard.h"
 
@@ -180,6 +184,15 @@ LLVector3d LLAvatarTracker::getGlobalPos()
     if(!mTrackedAgentValid || !mTrackingData) return LLVector3d();
     LLVector3d global_pos;
 
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())
+    {
+        LLVector3d position;
+        if(vs_avatar_precise_location(mTrackingData->mAvatarID,position))
+        {mTrackingData->mGlobalPositionEstimate=position;return position;}
+        return mTrackingData->mGlobalPositionEstimate;
+    }
+#endif
     LLViewerObject* object = gObjectList.findObject(mTrackingData->mAvatarID);
     if(object && !object->isDead())
     {
@@ -217,6 +230,9 @@ void LLAvatarTracker::getDegreesAndDist(F32& rot,
     {
         global_pos = mTrackingData->mGlobalPositionEstimate;
     }
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())global_pos=getGlobalPos();
+#endif
     LLVector3d to_vec = global_pos - gAgent.getPositionGlobal();
     horiz_dist = sqrt(to_vec.mdV[VX] * to_vec.mdV[VX] + to_vec.mdV[VY] * to_vec.mdV[VY]);
     vert_dist = to_vec.mdV[VZ];
@@ -682,18 +698,22 @@ void LLAvatarTracker::registerCallbacks(LLMessageSystem* msg)
 // static
 void LLAvatarTracker::processAgentFound(LLMessageSystem* msg, void**)
 {
-    LLUUID id;
-
-
-    msg->getUUIDFast(_PREHASH_AgentBlock, _PREHASH_Hunter, id);
-    msg->getUUIDFast(_PREHASH_AgentBlock, _PREHASH_Prey, id);
-    // *FIX: should make sure prey id matches.
-    LLVector3d estimated_global_pos;
-    msg->getF64Fast(_PREHASH_LocationBlock, _PREHASH_GlobalX,
-                 estimated_global_pos.mdV[VX]);
-    msg->getF64Fast(_PREHASH_LocationBlock, _PREHASH_GlobalY,
-                 estimated_global_pos.mdV[VY]);
-    LLAvatarTracker::instance().agentFound(id, estimated_global_pos);
+    LLUUID hunter,prey;
+    msg->getUUIDFast(_PREHASH_AgentBlock,_PREHASH_Hunter,hunter);
+    msg->getUUIDFast(_PREHASH_AgentBlock,_PREHASH_Prey,prey);
+    LLVector3d position;
+    msg->getF64Fast(_PREHASH_LocationBlock,_PREHASH_GlobalX,position.mdV[VX]);
+    msg->getF64Fast(_PREHASH_LocationBlock,_PREHASH_GlobalY,position.mdV[VY]);
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active())
+    {
+        // The installed shared callback is also callable directly: retain the
+        // authenticated circuit and current tracking-owner checks here.
+        if(owner->phase()!=VSNativeSession::Phase::Connected || owner->host()!=msg->getSender() ||
+           hunter!=gAgentID || prey.isNull() || prey!=instance().getAvatarID() || !position.isFinite())return;
+    }
+#endif
+    instance().agentFound(prey,position);
 }
 
 void LLAvatarTracker::agentFound(const LLUUID& prey,
@@ -1012,6 +1032,19 @@ void LLTrackingData::agentFound(const LLUUID& prey,
 
 bool LLTrackingData::haveTrackingInfo()
 {
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active())
+    {
+        LLVector3d position;
+        if(vs_avatar_precise_location(mAvatarID,position))
+            {
+                mGlobalPositionEstimate=position;
+                mCoarseLocationTimer.checkExpirationAndReset(COARSE_FREQUENCY);
+                mUpdateTimer.setTimerExpirySec(FIND_FREQUENCY);
+                mAgentGone.setTimerExpirySec(OFFLINE_SECONDS);mHaveInfo=true;return true;
+            }
+    }
+#endif
     LLViewerObject* object = gObjectList.findObject(mAvatarID);
     if(object && !object->isDead())
     {

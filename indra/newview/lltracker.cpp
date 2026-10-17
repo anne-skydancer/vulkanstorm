@@ -760,7 +760,7 @@ void LLTracker::stopTrackingAvatar(bool clear_ui)
     }
 
     purgeBeaconText();
-    gFloaterWorldMap->clearAvatarSelection(clear_ui);
+    if(gFloaterWorldMap)gFloaterWorldMap->clearAvatarSelection(clear_ui);
     mTrackingStatus = TRACKING_NOTHING;
 }
 
@@ -775,7 +775,7 @@ void LLTracker::stopTrackingLandmark(bool clear_ui)
     mHasLandmarkPosition = false;
     mHasReachedLandmark = false;
     mLandmarkHasBeenVisited = true;
-    gFloaterWorldMap->clearLandmarkSelection(clear_ui);
+    if(gFloaterWorldMap)gFloaterWorldMap->clearLandmarkSelection(clear_ui);
     mTrackingStatus = TRACKING_NOTHING;
 }
 
@@ -786,7 +786,7 @@ void LLTracker::stopTrackingLocation(bool clear_ui, bool dest_reached)
     mTrackedLocationName.assign("");
     mIsTrackingLocation = false;
     mTrackedPositionGlobal.zeroVec();
-    gFloaterWorldMap->clearLocationSelection(clear_ui, dest_reached);
+    if(gFloaterWorldMap)gFloaterWorldMap->clearLocationSelection(clear_ui, dest_reached);
     mTrackingStatus = TRACKING_NOTHING;
     mTrackingLocationType = LOCATION_NOTHING;
 }
