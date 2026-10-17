@@ -878,8 +878,9 @@ void LLMediaCtrl::draw()
         }
         else
         {
+            // A temporarily invalid plugin buffer (for example during resize)
+            // must not erase the generation owned by the shared media source.
             mNativeMediaImage = nullptr;
-            resources->erase("media:" + mMediaTextureID.asString());
         }
         if (mBorder && mBorder->getVisible()) mBorder->setKeyboardFocusHighlight(gFocusMgr.childHasKeyboardFocus(this));
         const bool background = isBackgroundVisible();

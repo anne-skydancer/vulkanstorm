@@ -25,7 +25,8 @@ struct Media
 {
     LLHandle<LLView> control;
     viewer_media_t consumer;
-    U64 previousGeneration=0;
+    U64 previousGeneration=0, observedGeneration=0;
+    unsigned observedStage=~0u;
     unsigned stage=0;
     double deadline=0;
     VSUIRenderer::Image original;
@@ -81,6 +82,20 @@ bool vs_r3_media_replay(LLSD& report)
     auto& resources=gViewerWindow->nativeContext()->resources();
     const auto key="media:"+control->getTextureID().asString();const auto image=resources.image(key);
     const unsigned width=state.stage==2?78:64,height=state.stage==2?46:64;
+    if(image && (state.observedGeneration!=VSUIRenderer::generation(image) || state.observedStage!=state.stage))
+    {
+        state.observedGeneration=VSUIRenderer::generation(image);state.observedStage=state.stage;
+        const auto size=VSUIRenderer::imageExtent(image);const auto& bytes=VSUIRenderer::imagePixels(image);
+        LL_INFOS("NativeR3Media")<<"Stage "<<state.stage<<" plugin "<<plugin->getWidth()<<"x"<<plugin->getHeight()
+            <<" bits "<<plugin->getBitsWidth()<<"x"<<plugin->getBitsHeight()<<" image "<<size[0]<<"x"<<size[1]
+            <<" generation "<<state.observedGeneration<<LL_ENDL;
+        if(state.stage==2 && size==std::array<unsigned,2>{width,height})
+        {
+            std::ofstream output(root()/"r3/media-resize-observed.rgba",std::ios::binary);
+            output.write(reinterpret_cast<const char*>(bytes.data()),bytes.size());
+        }
+    }
+
     if(!image || VSUIRenderer::imageExtent(image)!=std::array<unsigned,2>{width,height}) return false;
     const auto& pixels=VSUIRenderer::imagePixels(image);
     require(pixels.size()==std::size_t(width)*height*4,"Media CPU publication size differs");
