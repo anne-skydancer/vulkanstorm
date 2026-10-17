@@ -35036,7 +35036,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatercamerapresets.cpp"
+        "indra/newview/llfloatercamerapresets.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -35068,7 +35069,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatercamerapresets.cpp"
+        "indra/newview/llfloatercamerapresets.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -35104,7 +35106,8 @@
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
         "indra/newview/llfloatercamera.cpp",
-        "indra/newview/llfloaterpreferenceviewadvanced.cpp"
+        "indra/newview/llfloaterpreferenceviewadvanced.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -35139,7 +35142,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llfloatercamera.cpp"
+        "indra/newview/llfloatercamera.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -57378,7 +57382,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelpresetscamerapulldown.cpp"
+        "indra/newview/llpanelpresetscamerapulldown.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",
@@ -57410,7 +57415,8 @@
       "evidence": [],
       "remaining_gap": "Exercise callback and actual owner/output, including enabled/disabled and error behavior.",
       "shared_source_references": [
-        "indra/newview/llpanelpresetscamerapulldown.cpp"
+        "indra/newview/llpanelpresetscamerapulldown.cpp",
+        "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
         "indra/newview/vsstartupui.cpp",

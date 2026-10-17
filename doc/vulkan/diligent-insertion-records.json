@@ -1,5 +1,5 @@
 {
-  "source_commit": "24f20c60f81207d7c1611ccbbd3e0ee507fa4de8",
+  "source_commit": "ec8ee523382f46110f3369d2e475bb6003bc4607",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -3134,7 +3134,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2310,
       "end": 2310,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md. R1 mesh resource review: mainloop publication rechecks account/region/request/asset revision; same-account region changes retain immutable decoded data and cancel unfinished requests; bounded retries/LRU and last-owner CPU/GPU payload reservations preserve in-flight retirement. Mesh allocation refusal publishes no null packet. No whole R1 or runtime parity acceptance."
@@ -12422,7 +12422,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2290,
       "end": 2290,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "New vs-owned production IM/group UI and development-only replay sources use existing Autobuild dependencies and Vulkan compile flags; no release baseline dependency or publishing behavior is added. Source review only; no expanded runtime acceptance claim."
@@ -12431,7 +12431,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2311,
       "end": 2311,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "New vs-owned production IM/group UI and development-only replay sources use existing Autobuild dependencies and Vulkan compile flags; no release baseline dependency or publishing behavior is added. Source review only; no expanded runtime acceptance claim."
@@ -31835,7 +31835,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2291,
       "end": 2291,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -33410,7 +33410,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2292,
       "end": 2293,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Builds native avatar/mesh producers with existing Autobuild viewer dependencies; canonical RelWithDebInfo build and full staging passed. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
@@ -34562,7 +34562,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2308,
       "end": 2308,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -35066,7 +35066,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2309,
       "end": 2309,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35939,7 +35939,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2293,
       "end": 2296,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -35948,7 +35948,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2299,
       "end": 2299,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -39404,7 +39404,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 327,
       "end": 331,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -39413,7 +39413,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 1197,
       "end": 1211,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -39422,7 +39422,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2293,
       "end": 2295,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -39431,7 +39431,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2299,
       "end": 2307,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -39440,7 +39440,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 3271,
       "end": 3280,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45056,7 +45056,7 @@
       "path": "scripts/tests/test_native_camera_transport.py",
       "start": 47,
       "end": 49,
-      "sha256": "22213a13afff654a5672e802cc81e2e112ad2cd2826c07e8f19c7d3b06c34e95",
+      "sha256": "f49a2121b394ff89a5159f8991b0d91920c4cd4033f6b828f50a543444febbd4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45065,7 +45065,7 @@
       "path": "scripts/tests/test_native_camera_transport.py",
       "start": 125,
       "end": 125,
-      "sha256": "22213a13afff654a5672e802cc81e2e112ad2cd2826c07e8f19c7d3b06c34e95",
+      "sha256": "f49a2121b394ff89a5159f8991b0d91920c4cd4033f6b828f50a543444febbd4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45074,7 +45074,7 @@
       "path": "scripts/tests/test_native_camera_transport.py",
       "start": 149,
       "end": 152,
-      "sha256": "22213a13afff654a5672e802cc81e2e112ad2cd2826c07e8f19c7d3b06c34e95",
+      "sha256": "f49a2121b394ff89a5159f8991b0d91920c4cd4033f6b828f50a543444febbd4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -45641,7 +45641,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 1205,
       "end": 1205,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -47252,7 +47252,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2330,
       "end": 2331,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -48143,7 +48143,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2292,
       "end": 2292,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -49043,7 +49043,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2286,
       "end": 2286,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -49196,7 +49196,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2292,
       "end": 2292,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -51113,7 +51113,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2300,
       "end": 2300,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -54920,7 +54920,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2301,
       "end": 2301,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -56072,7 +56072,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2302,
       "end": 2302,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -56630,7 +56630,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2306,
       "end": 2306,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -57215,7 +57215,7 @@
       "path": "scripts/tests/test_native_camera_transport.py",
       "start": 50,
       "end": 51,
-      "sha256": "22213a13afff654a5672e802cc81e2e112ad2cd2826c07e8f19c7d3b06c34e95",
+      "sha256": "f49a2121b394ff89a5159f8991b0d91920c4cd4033f6b828f50a543444febbd4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual production native rear-view state and AgentUpdate with shared settings, requested offsets/scale and live changes; verify logout presentation ordering, duplicate frames and existing progress policy headlessly."
@@ -57224,7 +57224,7 @@
       "path": "scripts/tests/test_native_camera_transport.py",
       "start": 119,
       "end": 119,
-      "sha256": "22213a13afff654a5672e802cc81e2e112ad2cd2826c07e8f19c7d3b06c34e95",
+      "sha256": "f49a2121b394ff89a5159f8991b0d91920c4cd4033f6b828f50a543444febbd4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual production native rear-view state and AgentUpdate with shared settings, requested offsets/scale and live changes; verify logout presentation ordering, duplicate frames and existing progress policy headlessly."
@@ -57233,7 +57233,7 @@
       "path": "scripts/tests/test_native_camera_transport.py",
       "start": 127,
       "end": 127,
-      "sha256": "22213a13afff654a5672e802cc81e2e112ad2cd2826c07e8f19c7d3b06c34e95",
+      "sha256": "f49a2121b394ff89a5159f8991b0d91920c4cd4033f6b828f50a543444febbd4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual production native rear-view state and AgentUpdate with shared settings, requested offsets/scale and live changes; verify logout presentation ordering, duplicate frames and existing progress policy headlessly."
@@ -57242,7 +57242,7 @@
       "path": "scripts/tests/test_native_camera_transport.py",
       "start": 136,
       "end": 142,
-      "sha256": "22213a13afff654a5672e802cc81e2e112ad2cd2826c07e8f19c7d3b06c34e95",
+      "sha256": "f49a2121b394ff89a5159f8991b0d91920c4cd4033f6b828f50a543444febbd4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual production native rear-view state and AgentUpdate with shared settings, requested offsets/scale and live changes; verify logout presentation ordering, duplicate frames and existing progress policy headlessly."
@@ -57827,7 +57827,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 1200,
       "end": 1200,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -58115,7 +58115,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 1199,
       "end": 1199,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -58124,7 +58124,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2292,
       "end": 2292,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -58133,7 +58133,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2303,
       "end": 2303,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -58745,7 +58745,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2304,
       "end": 2305,
-      "sha256": "b5fbf866ab3a8032438321c5051b303c161b4d917ab9849276f5ac9e1fb275ff",
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -60185,16 +60185,16 @@
       "path": "indra/newview/llfloatercamera.cpp",
       "start": 190,
       "end": 194,
-      "sha256": "82056c744ddaf3281e495c31683c83fed1452581e1bb644f64186d33ee1c3a95",
+      "sha256": "f9ac4663a808a3a09e0c2e3250a995c6d4420d018ef9c21838d7e40be25f6f9d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
     },
     {
       "path": "indra/newview/llfloatercamera.h",
-      "start": 56,
-      "end": 56,
-      "sha256": "59be81b38f1abea356ae58dfb24e5cfb85e292bad6bf441dee1b14beaa28e240",
+      "start": 57,
+      "end": 57,
+      "sha256": "ef414f265d79ef808730e43837cc5149ca9026685ff94e30c5989522946fc819",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -60544,8 +60544,8 @@
     {
       "path": "scripts/tests/test_native_camera_transport.py",
       "start": 170,
-      "end": 182,
-      "sha256": "22213a13afff654a5672e802cc81e2e112ad2cd2826c07e8f19c7d3b06c34e95",
+      "end": 189,
+      "sha256": "f49a2121b394ff89a5159f8991b0d91920c4cd4033f6b828f50a543444febbd4",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual production native rear-view state and AgentUpdate with shared settings, requested offsets/scale and live changes; verify logout presentation ordering, duplicate frames and existing progress policy headlessly."
@@ -60626,7 +60626,7 @@
       "path": "indra/newview/llfloatercamera.cpp",
       "start": 442,
       "end": 443,
-      "sha256": "82056c744ddaf3281e495c31683c83fed1452581e1bb644f64186d33ee1c3a95",
+      "sha256": "f9ac4663a808a3a09e0c2e3250a995c6d4420d018ef9c21838d7e40be25f6f9d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -60635,7 +60635,7 @@
       "path": "indra/newview/llfloatercamera.cpp",
       "start": 592,
       "end": 594,
-      "sha256": "82056c744ddaf3281e495c31683c83fed1452581e1bb644f64186d33ee1c3a95",
+      "sha256": "f9ac4663a808a3a09e0c2e3250a995c6d4420d018ef9c21838d7e40be25f6f9d",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
@@ -60882,6 +60882,132 @@
       "record": "I01",
       "disposition": "mapped",
       "reason": "Admit GenericStreamingMessage material overrides through existing region/account world-message ownership; request regional material capabilities, including peer circuits. Late or retired circuit responses cannot mutate the native scene."
+    },
+    {
+      "path": "indra/newview/CMakeLists.txt",
+      "start": 2293,
+      "end": 2293,
+      "sha256": "5261ca2980362592f31405ad378432bc7c5d933181cc6f2974468e9fcfb0144c",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
+    },
+    {
+      "path": "indra/newview/llfloatercamera.cpp",
+      "start": 631,
+      "end": 631,
+      "sha256": "f9ac4663a808a3a09e0c2e3250a995c6d4420d018ef9c21838d7e40be25f6f9d",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llfloatercamera.h",
+      "start": 30,
+      "end": 30,
+      "sha256": "ef414f265d79ef808730e43837cc5149ca9026685ff94e30c5989522946fc819",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llfloatercamera.h",
+      "start": 147,
+      "end": 147,
+      "sha256": "ef414f265d79ef808730e43837cc5149ca9026685ff94e30c5989522946fc819",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llfloatercamerapresets.cpp",
+      "start": 46,
+      "end": 46,
+      "sha256": "e886e6e06635c5448d6f922ad8942c1f304d93a96d8f187f0c2b6294906bafa7",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llfloatercamerapresets.h",
+      "start": 28,
+      "end": 28,
+      "sha256": "9b1e636000c61706cdef17d36d71b7ef22db75f429d42cf4b9d533a10afb738e",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llfloatercamerapresets.h",
+      "start": 48,
+      "end": 48,
+      "sha256": "9b1e636000c61706cdef17d36d71b7ef22db75f429d42cf4b9d533a10afb738e",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llfloatersavecamerapreset.cpp",
+      "start": 67,
+      "end": 67,
+      "sha256": "9ef545514cfb70f3b40b76fa1602450deda0f094f56f8e0f6a00b5eff85ffb3b",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llfloatersavecamerapreset.h",
+      "start": 31,
+      "end": 31,
+      "sha256": "d3bc279d33d075a3a118f0d04dcb4d52e799a4271866473892399e3537fcaac3",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llfloatersavecamerapreset.h",
+      "start": 55,
+      "end": 55,
+      "sha256": "d3bc279d33d075a3a118f0d04dcb4d52e799a4271866473892399e3537fcaac3",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llpanelpresetscamerapulldown.cpp",
+      "start": 68,
+      "end": 68,
+      "sha256": "e32ab0aef52439ffb4caee8b1dc8b7c1fe4637abb941921d81d18c70af634cfc",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llpanelpresetscamerapulldown.h",
+      "start": 30,
+      "end": 30,
+      "sha256": "493b6a10c80c7a0f0080f401f14cf0cd08121d0f138eec59e9b939e1f6fe65a1",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "indra/newview/llpanelpresetscamerapulldown.h",
+      "start": 46,
+      "end": 46,
+      "sha256": "493b6a10c80c7a0f0080f401f14cf0cd08121d0f138eec59e9b939e1f6fe65a1",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Wire shared camera controls, native rotated joystick images, orbit/pan/zoom/roll/reset and shared rear-view preferences. Retain authenticated parcel flags and avatar visibility, publish reference region/parcel permission policy in both location bars, refresh on movement, and enforce reference native flying permissions. Preserve peer OpenGL controllers and account/circuit retirement."
+    },
+    {
+      "path": "scripts/tests/test_native_camera_transport.py",
+      "start": 174,
+      "end": 180,
+      "sha256": "f49a2121b394ff89a5159f8991b0d91920c4cd4033f6b828f50a543444febbd4",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute actual production native rear-view state and AgentUpdate with shared settings, requested offsets/scale and live changes; verify logout presentation ordering, duplicate frames and existing progress policy headlessly."
     }
   ]
 }
