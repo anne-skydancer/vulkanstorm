@@ -39,6 +39,7 @@ public:
     void reset();
     void shutdown();
     void requestLogout(bool quit);
+    void logoutFramePresented();
     void disconnect(const std::string& reason);
     bool admit(const std::string&, const LLHost&);
     bool sendChat(const std::string&, U8 type = 1, S32 channel = 0);
@@ -75,7 +76,7 @@ public:
     const LLVector3& position() const { return mPosition; }
     U64 regionEpoch() const { return mRegionEpoch; }
     bool regionReady() const { return mPhase == Phase::Connected && !mChangingRegion && mSeedReady && mHandshake && mCircuitAck; }
-    VSNativeCamera::State cameraState() const { return mCamera.state(mPosition); }
+    VSNativeCamera::State cameraState() const;
     bool movementAction(U32 key, const std::string& action, bool down, bool repeated = false);
     void releaseMovement();
     void                  setFlying(bool);
@@ -146,6 +147,7 @@ private:
     void unbind();
     Phase mPhase = Phase::Login;
     bool mShutdown = false;
+    bool mLogoutPresented = false, mLogoutReply = false;
     U64 mGeneration = 1;
     U64 mRegionEpoch = 1;
     bool mChangingRegion = false;

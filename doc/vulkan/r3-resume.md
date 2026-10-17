@@ -210,3 +210,28 @@ actual HTTP/fetch/cache path, and verifies the textured and erased-publication
 frames. The runner and evidence packager independently reject missing/wrong
 pixels. CI's existing R2 replay enables this focused regression with
 --terrain-contracts; it is not a substitute for completing R3 terrain materials.
+
+
+### Rear-view defaults and logout presentation (17 October)
+
+Native rear view now uses the reference camera/focus offset settings and scale,
+instead of a fixed three-metre orbit and 1.5-metre pivot. The default camera offset
+is (0, 0, -0.2), focus offset is (1, 0, 0.2), and camera offset scale is 0.75.
+The shipped focus Y default was corrected from 1 to 0. Saved user values remain
+in force; native view reads the same reference setting accessors during camera
+state production and panning. Reset returns to those settings. This does not
+qualify all reference camera modes, collision, smoothing or camera controls.
+
+Native application quit now sets the shared quit-request flag before requesting
+logout, allowing the existing progress view to show immediately. An authenticated
+LogoutReply received before the first complete presented logout UI frame is held
+until that frame has been presented. Minimized/unpresentable windows retain the
+existing bounded logout timeout. Font-upload deferral does not count as a complete
+logout UI frame. The existing fullscreen/mini preference is retained. The replay
+checks shared localized progress text and fast-reply ordering; reference final
+snapshot and cache shutdown parity remain separate work.
+
+The expanded connected UI replay also dismisses its own informational status
+alerts before exercising unrelated mouse interaction, as an ordinary user does.
+The first combined run correctly rejected attachment input while those newly
+created alert floaters covered it; production input routing is unchanged.

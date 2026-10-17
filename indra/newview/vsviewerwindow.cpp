@@ -315,7 +315,10 @@ void LLViewerWindow::drawNativeUI()
     // Later connected popups/chrome must not cover its skinned controls.
     if (mProgressView && mProgressView->getVisible()) mRootView->sendChildToFront(mProgressView);
     if (mProgressViewMini && mProgressViewMini->getVisible()) mRootView->sendChildToFront(mProgressViewMini);
-    mVulkanContext->present(mDisplayScale.mV[VX], [&] { mRootView->draw(); });
+    if (mVulkanContext->present(mDisplayScale.mV[VX], [&] { mRootView->draw(); }))
+        if (const auto session = VSNativeSession::active(); session && session->phase() == VSNativeSession::Phase::Logout &&
+            mVulkanContext->resources().evidence()["deferred_draw_batches"].asInteger() == 0)
+            session->logoutFramePresented();
 }
 void LLViewerWindow::refreshNativeFonts()
 {

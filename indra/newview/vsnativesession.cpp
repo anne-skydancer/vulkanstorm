@@ -1,5 +1,6 @@
 // Native CPU session and nearby transport. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
+#include "llagentcamera.h"
 #include "lleventnotifier.h"
 #include "lfsimfeaturehandler.h"
 #include "llviewergenericmessage.h"
@@ -1005,6 +1006,11 @@ void VSNativeSession::parcelMediaCommand(U32 flags, U32 command, F32 time)
     }
 }
 
+VSNativeCamera::State VSNativeSession::cameraState() const
+{
+    return mCamera.state(mPosition, gAgentCamera.getCameraOffsetInitial(),
+        LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
+}
 bool VSNativeSession::movementAction(U32 key, const std::string& action, bool down, bool repeated)
 {
     if (!down) { const bool handled = mCamera.action(key, action, false, repeated); if (handled) mAgentUpdateTime = 0; return handled; }
@@ -1517,7 +1523,11 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
     }
     else if (name == "ChatFromSimulator" && mPhase == Phase::Connected) appendChat(body, generation);
     else if (name == "LogoutReply" && mPhase == Phase::Logout)
-    { if (body["agent"].asUUID() != mAgent || body["session"].asUUID() != mSession) return false; finishLogout(); }
+    {
+        if (body["agent"].asUUID() != mAgent || body["session"].asUUID() != mSession) return false;
+        mLogoutReply = true;
+        if (mLogoutPresented) finishLogout();
+    }
     else if (name == "KickUser")
     { if (body["agent"].asUUID() != mAgent || body["session"].asUUID() != mSession) return false; disconnect(body["text"].asString()); }
     else if (name == "ViewerFrozenMessage")
@@ -1952,7 +1962,8 @@ void VSNativeSession::tick()
     if (mPhase == Phase::Connected && !mChangingRegion)
     {
         if (mCameraTime > 0)
-            mCamera.step(F32(cameraTime - mCameraTime), gAgent.rotateGrabbed());
+            mCamera.step(F32(cameraTime - mCameraTime), gAgent.rotateGrabbed(),
+                gAgentCamera.getCameraOffsetInitial(), LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
         if (cameraTime >= mAgentUpdateTime)
         { send("AgentUpdate", LLSD()); mAgentUpdateTime = cameraTime + .1; }
     }
@@ -1998,6 +2009,7 @@ void VSNativeSession::requestLogout(bool quit)
     if (mPhase == Phase::Logout) return;
     if (mPhase == Phase::Connected || mPhase == Phase::Connecting)
     {
+        mLogoutPresented = mLogoutReply = false;
         typing(false);
         releaseMovement(); send("AgentUpdate", LLSD());
         clearParcelPlayback();
@@ -2009,6 +2021,13 @@ void VSNativeSession::requestLogout(bool quit)
         gViewerWindow->setProgressString(LLTrans::getString("LoggingOut"));
     }
     else if (mQuit) LLAppViewer::instance()->forceQuit();
+}
+void VSNativeSession::logoutFramePresented()
+{
+    if (mPhase != Phase::Logout) return;
+    mLogoutPresented = true;
+    // A fast authenticated reply must not retire the UI before its first frame.
+    if (mLogoutReply) finishLogout();
 }
 void VSNativeSession::finishLogout()
 {
@@ -2041,6 +2060,7 @@ void VSNativeSession::reset()
     gAgent.clearScriptControlState();
     gAgent.clearControlFlags(std::numeric_limits<U32>::max());
     mCamera.reset(); mCameraTime = mAgentUpdateTime = 0;
+    mLogoutPresented = mLogoutReply = false;
     if (mAgent.notNull() && (mPhase == Phase::Connected || mPhase == Phase::Logout || mPhase == Phase::Disconnected))
     {
         if (LLPersistentNotificationStorage::instanceExists()) LLPersistentNotificationStorage::getInstance()->saveNotifications();

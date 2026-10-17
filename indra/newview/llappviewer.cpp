@@ -5349,7 +5349,13 @@ void LLAppViewer::fastQuit(S32 error_code)
 void LLAppViewer::requestQuit()
 {
 #if VS_NATIVE_VULKAN
-    if (auto session = VSNativeSession::active()) { session->requestLogout(true); return; }
+    if (auto session = VSNativeSession::active())
+    {
+        // Shared progress views use this flag to display logout immediately.
+        mQuitRequested = true;
+        session->requestLogout(true);
+        return;
+    }
 #endif
     LL_INFOS() << "requestQuit" << LL_ENDL;
 

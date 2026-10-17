@@ -47,6 +47,8 @@ struct LLSD{const LLSD& operator[](const char*)const{return *this;}std::string a
 struct Agent{LLVector3 position;U32 flags=0;bool flying=false;
  void setPositionAgent(LLVector3 p){position=p;}void setFlying(bool value){flying=value;}bool getFlying()const{return flying;}
  U32 getControlFlags(){return flags;}void resetControlFlags(){flags=0;}}gAgent;
+struct AgentCamera{LLVector3 offset{0,0,-.2f},focus{1,0,.2f};float scale=.75f;
+ LLVector3 getCameraOffsetInitial(){return offset;}LLVector3 getFocusOffsetInitial(){return focus;}float getCameraOffsetScale(){return scale;}}gAgentCamera;
 struct Settings{float getF32(const char*){return 128;}}gSavedSettings;
 template<class T>T llclamp(T v,T a,T b){return std::clamp(v,a,b);}
 struct LLMessageSystem{
@@ -114,7 +116,7 @@ int main(){
         constants = '\n'.join(line for line in constants.splitlines() if line.startswith('constexpr U32 CONTROL_') or line.startswith('constexpr U32 AGENT_CONTROL_'))
         session = (ROOT / 'indra/newview/vsnativesession.cpp').read_text()
         functions = '\n'.join(method(session, declaration) for declaration in (
-            'bool VSNativeSession::movementAction(', 'void VSNativeSession::releaseMovement()',
+            'VSNativeCamera::State VSNativeSession::cameraState()', 'bool VSNativeSession::movementAction(', 'void VSNativeSession::releaseMovement()',
             'void VSNativeSession::cameraOrbit(', 'void VSNativeSession::cameraZoom(',
             'bool VSNativeSession::updateAgentPosition(', 'bool VSNativeSession::send('))
         fixture = STUBS + constants + header + r'''
@@ -122,7 +124,7 @@ struct VSNativeSession{
  enum class Phase{Login,Connected,Disconnected};Phase mPhase=Phase::Connected;bool mChangingRegion=false,mFrozen=false;
  LLHost mHost;LLUUID mAgent,mSession;U32 mCircuit=99,mMouseControls=0;U64 mGeneration=3,mRegionEpoch=7,mSent=0;
  VSNativeCamera mCamera;LLVector3 mPosition{100,100,20};double mAgentUpdateTime=1;
- VSNativeCamera::State cameraState()const{return mCamera.state(mPosition);}
+ VSNativeCamera::State cameraState()const;
  bool movementAction(U32,const std::string&,bool,bool=false);void releaseMovement();void cameraOrbit(F32,F32);void cameraZoom(S32);
  bool updateAgentPosition(const LLVector3&,const LLHost&,U64,U64);bool send(const std::string&,const LLSD&);
 };
@@ -131,7 +133,13 @@ float dot(LLVector3 a,LLVector3 b){return a.mV[0]*b.mV[0]+a.mV[1]*b.mV[1]+a.mV[2
 bool close(float a,float b){return std::abs(a-b)<.001;}
 int main(){
  VSNativeSession owner;auto initial=owner.cameraState();
- assert(initial.center.mV[0]<100&&initial.center.mV[2]>21.5f);
+ assert(close(initial.center.mV[0],100)&&close(initial.center.mV[1],100)&&close(initial.center.mV[2],20.85f));
+ assert(close(initial.at.mV[1],0)&&initial.at.mV[0]>0&&initial.at.mV[2]<0);
+ // These are the shared reference settings, not a private Vulkan preference.
+ gAgentCamera.offset={-3,.4f,.8f};gAgentCamera.scale=.5f;
+ auto configured=owner.cameraState();
+ assert(close(configured.center.mV[0],98.5f)&&close(configured.center.mV[1],100.2f)&&close(configured.center.mV[2],21.4f));
+ gAgentCamera.offset={0,0,-.2f};gAgentCamera.scale=.75f;
  assert(owner.movementAction(1,"push_forward",true));assert(owner.mCamera.controls()&AGENT_CONTROL_AT_POS);
  assert(owner.movementAction(2,"push_forward",true));owner.movementAction(1,"",false);assert(owner.mCamera.controls()&AGENT_CONTROL_AT_POS);
  assert(owner.send("AgentUpdate",{}));assert(!messages.reliable&&messages.message=="AgentUpdate"&&messages.host.id==1&&messages.ints["ControlFlags"]&AGENT_CONTROL_AT_POS);
