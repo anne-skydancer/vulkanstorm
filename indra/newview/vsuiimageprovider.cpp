@@ -267,6 +267,7 @@ void VSUIImageProvider::pumpImages()
         {fetch->deleteRequest(id,true);entry.fetching=false;continue;}
         S32 discard=-1,state=0;LLPointer<LLImageRaw> raw,auxiliary;LLCore::HttpStatus status;
         const bool done=fetch->getRequestFinished(id,discard,state,raw,auxiliary,status);
+        bool uploadDeferred = false;
         if(raw && discard>=0 && discard!=entry.discard)
         {
             if(!fetch->getRequestDimensions(id,entry.fullWidth,entry.fullHeight,entry.components))
@@ -279,7 +280,7 @@ void VSUIImageProvider::pumpImages()
                 while(!residency && mImpl->evict(id)) residency=mImpl->masks.reserve(std::size_t(auxiliary->getWidth())*auxiliary->getHeight());
                 if(residency)
                 {mask=new NativeMaskImage(std::move(residency),auxiliary->getWidth(),auxiliary->getHeight());mask->copy(auxiliary);}
-                else admitted=false;
+                else { admitted=false; uploadDeferred=true; }
             }
             if(admitted && !entry.preparing && !entry.prepared)
             {
@@ -291,14 +292,22 @@ void VSUIImageProvider::pumpImages()
                     entry.pendingAuxiliary=mask;entry.pendingDiscard=discard;
                     entry.pendingCacheHit=fetch->isFromLocalCache(id);
                 }
+                else uploadDeferred = true;
             }
         }
-        if(done || LLTimer::getTotalSeconds()>=entry.deadline)
+        // Match the reference subscriber: the fetch worker owns HTTP/cache/
+        // decode timeouts. Elapsed wall time is not a failed image. Retain its
+        // decoded result until bounded GPU preparation can accept it.
+        if(done && !uploadDeferred)
         {
             fetch->deleteRequest(id,true);entry.fetching=false;
             if(status==LLCore::HttpStatus(LLCore::HttpStatus::LLCORE,LLCore::HE_RESPONSE_TOO_LARGE))
             {entry.failedGeneration=generation;entry.attempts=3;}
-            if(!raw && entry.attempts>=3) entry.failedGeneration=generation;
+            if(!raw && entry.attempts>=3)
+            {
+                entry.failedGeneration=generation;
+                LL_WARNS("NativeImage") << "Texture fetch exhausted: " << id << " state=" << state << " status=" << status.toString() << LL_ENDL;
+            }
         }
     }
     if(!owner->regionReady()) return;

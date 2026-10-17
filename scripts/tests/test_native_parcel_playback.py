@@ -137,7 +137,8 @@ struct LLSD {
  LLSD()=default;LLSD(S32 x):kind(Integer),number(x){}LLSD(const char* x):kind(String),text(x){}LLSD(const std::string& x):kind(String),text(x){}
  LLSD& operator[](const char* key){kind=Map;return values[key];}
  const LLSD& operator[](const char* key)const{static const LLSD empty;auto i=values.find(key);return i==values.end()?empty:i->second;}
- S32 asInteger()const{return number;}std::string asString()const{return text;}
+ int asUUID()const{return number;}S32 asInteger()const{return number;}std::string asString()const{return text;}
+ bool isBoolean()const{return kind==Integer;}bool asBoolean()const{return number!=0;}
  bool isInteger()const{return kind==Integer;}bool isString()const{return kind==String;}bool isMap()const{return kind==Map;}
  bool has(const char* key)const{return values.count(key);}
 };
@@ -146,6 +147,7 @@ struct LLHost {int id=1;bool isOk()const{return id!=0;}bool operator==(const LLH
 const std::set<std::string> transport={"PacketAck"};
 const std::set<std::string> session={"ParcelProperties","ParcelMediaUpdate","ParcelMediaCommandMessage"};
 namespace LLStringUtil {void trim(std::string& value){auto a=value.find_first_not_of(' ');auto b=value.find_last_not_of(' ');value=a==std::string::npos?"":value.substr(a,b-a+1);}}
+double now(){return 100.;}
 bool webURL(const std::string& value){return value.rfind("http://",0)==0||value.rfind("https://",0)==0;}
 struct Settings {std::map<std::string,int> values;bool getBOOL(const char* key)const{auto i=values.find(key);return i!=values.end()&&i->second;}int getS32(const char* key)const{auto i=values.find(key);return i==values.end()?0:i->second;}}gSavedSettings;
 struct Vector {F32 mV[3]={128,64,20};bool isFinite()const{return std::isfinite(mV[0])&&std::isfinite(mV[1])&&std::isfinite(mV[2]);}};
@@ -174,6 +176,9 @@ struct VSNativeSession {
  LLHost mHost;bool mChangingRegion=false;Vector mPosition;U32 mWidth=256,mHeight=256;
  struct Circuit {bool acknowledged=false,handshake=false;};std::map<LLHost,Circuit> mCircuits;
  U64 mGeneration=7,mRegionEpoch=3,mParcelRevision=1,mMusicRequest=1,mMediaRequest=1,mSent=0,mRejected=0,mExpired=0;
+ struct UUID {int id=0;UUID& operator=(int value){id=value;return *this;}void setNull(){id=0;}}mParcelOwner;
+ U32 mParcelFlags=0;bool mParcelPermissionsKnown=false,mParcelSeeAvatars=true;
+ S32 mParcelCellX=-1,mParcelCellY=-1;double mParcelQueryTime=0;
  S32 mParcelSequence=11,mParcelID=-1;int mAgent=23,mSession=24;
  bool mMusicRequested=false,mMediaRequested=false,mMusicUserStopped=false,mMediaUserStopped=false,mMediaPresented=false;
  bool mMediaLoop=false,mMediaAutoScale=true,mMediaPaused=false,mMediaStateDirty=false;S32 mMediaWidth=0,mMediaHeight=0;F32 mMediaPendingSeek=-1.f;
@@ -189,7 +194,7 @@ struct VSNativeSession {
 """
 
 CHECKS = r"""
-LLSD parcel(){LLSD p;p["result"]=0;p["sequence"]=11;p["id"]=31;p["name"]="CPU parcel";p["music"]="http://127.0.0.1/music";p["media"]="http://127.0.0.1/video";p["type"]="video/mp4";return p;}
+LLSD parcel(){LLSD p;p["parcel_flags"]=123;p["see_avatars"]=0;p["result"]=0;p["sequence"]=11;p["id"]=31;p["name"]="CPU parcel";p["music"]="http://127.0.0.1/music";p["media"]="http://127.0.0.1/video";p["type"]="video/mp4";return p;}
 int main(){
  VSNativeSession owner;auto p=parcel();
  assert(!owner.deliver("ParcelProperties",p,LLHost{2},7));assert(owner.mMusicURL.empty());
@@ -200,6 +205,7 @@ int main(){
  bad=p;bad["music"]="file:///private";assert(!owner.deliver("ParcelProperties",bad,LLHost{1},7));
  bad=p;bad["id"]="31";assert(!owner.deliver("ParcelProperties",bad,LLHost{1},7));
  assert(owner.deliver("ParcelProperties",p,LLHost{1},7));assert(owner.mMusicURL==p["music"].asString());assert(owner.mMediaType=="video/mp4");
+ assert(owner.mParcelPermissionsKnown&&owner.mParcelFlags==123&&!owner.mParcelSeeAvatars);
  // Metadata does not itself bypass explicit enable settings or fetch a URL.
  assert(owner.musicRequests==0&&owner.mediaRequests==0);
  assert(!owner.setMusicEnabled(true));assert(!owner.mMusicRequested);

@@ -996,6 +996,9 @@ bool LLAgent::canFly()
     }
     // </FS>
 
+#if VS_NATIVE_VULKAN
+    if (const auto native = VSNativeSession::active()) return native->canFly();
+#endif
     LLViewerRegion* regionp = getRegion();
     if (regionp && regionp->getBlockFly()) return false;
 

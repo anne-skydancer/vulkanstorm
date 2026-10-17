@@ -7,6 +7,9 @@
 #include "vsnativesession.h"
 #include "vsuiimageprovider.h"
 #include "llfloaterprofiletexture.h"
+#include "llfloatercamera.h"
+#include "lljoystickbutton.h"
+#include "llagentcamera.h"
 #include "llfloaterprofile.h"
 #include "llpanelprofile.h"
 #include "llavatarpropertiesprocessor.h"
@@ -196,6 +199,9 @@ void incoming(VSNativeSession& owner, EInstantMessage dialog, const LLUUID& id, 
 struct Replay : public LLAvatarPropertiesObserver
 {
     unsigned step = 0;
+    unsigned cameraCheck = 0;
+    VSNativeCamera::State cameraBefore;
+    LLHandle<LLFloater> cameraFloater;
     unsigned loggedStep = ~0u;
     bool contextInspectorOpened = false;
     bool namesSent = false;
@@ -575,6 +581,32 @@ struct Replay : public LLAvatarPropertiesObserver
         if (step == 0)
         {
             require(owner.phase() == VSNativeSession::Phase::Connected && gIMMgr, "IM replay requires connected shared services");
+            if (cameraCheck < 6)
+            {
+                const char* names[] = {"camera", "fs_camera_small", "phototools_camera"};
+                if (!(cameraCheck & 1))
+                {
+                    auto* floater = LLFloaterReg::showInstance(names[cameraCheck / 2]);
+                    require(floater != nullptr, "Actual camera floater was not admitted");
+                    cameraFloater = floater->getHandle();
+                    cameraBefore = owner.cameraState();
+                    floater->getChild<LLJoystickCameraRotate>("cam_rotate_stick")->setToggleState(true, false, false, false);
+                    gAgentCamera.setOrbitLeftKey(1);
+                    owner.cameraControls(.1f);
+                }
+                else
+                {
+                    const auto after = owner.cameraState();
+                    require((after.at - cameraBefore.at).magVecSquared() > .001f, "Shared camera controls did not change native view");
+                    require(gAgentCamera.getOrbitLeftKey() == 0, "Native camera held intent remained stuck");
+                    require(cameraFloater.get() != nullptr, "Actual camera floater retired before drawing");
+                    cameraFloater.get()->closeFloater();
+                    owner.cameraReset();
+                }
+                ++cameraCheck;
+                return false;
+            }
+            evidence["connected_camera_controls"] = true;
             if (!qualifyFriendStatus(owner, evidence)) return false;
             if (!membershipSent)
             {

@@ -167,6 +167,19 @@ int main(){
  owner.mChangingRegion=false;owner.mFrozen=true;assert(!owner.movementAction(5,"push_forward",true));
  owner.send("AgentUpdate",{});assert(messages.ints["ControlFlags"]==0);
  owner.mCamera.reset();assert(owner.mCamera.controls()==0&&!owner.cameraState().firstPerson);
+ // Floater axes use reference rates, zoom polarity and independent pan/roll.
+ auto beforeControls=owner.cameraState();
+ owner.mCamera.controls(.1f,1,0,1,{0,1,0},1,gAgentCamera.offset,gAgentCamera.focus,gAgentCamera.scale);
+ auto afterControls=owner.cameraState();assert(afterControls.at.mV[1]>beforeControls.at.mV[1]);
+ assert(owner.mCamera.zoomFraction()> (8.f-1.f)/7.75f);
+ owner.mCamera.resetView();assert(close(owner.cameraState().center.mV[0],beforeControls.center.mV[0]));
+ owner.mCamera.setZoomFraction(0);assert(close(owner.mCamera.zoomFraction(),0));
+ owner.mCamera.setZoomFraction(1);assert(close(owner.mCamera.zoomFraction(),1));
+ owner.mCamera.setFirstPerson(true);
+ owner.mCamera.controls(.1f,0,0,0,{0,0,0},0,gAgentCamera.offset,gAgentCamera.focus,gAgentCamera.scale);
+ assert(owner.cameraState().firstPerson); // Idle controls must not eject mouselook.
+ owner.mCamera.setFirstPerson(false);assert(!owner.cameraState().firstPerson);
+
  owner.mPhase=VSNativeSession::Phase::Login;assert(!owner.movementAction(6,"push_forward",true));
 }
 '''.replace('FUNCTIONS', functions)

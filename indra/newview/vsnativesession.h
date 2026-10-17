@@ -2,6 +2,7 @@
 #pragma once
 #include "llhost.h"
 #include "vsnativecamera.h"
+#include "vsparcelpermissions.h"
 #include "vsworldscene.h"
 #include "llsd.h"
 #include "lluuid.h"
@@ -83,10 +84,24 @@ public:
     void                  mouseButton(bool down);
     void cameraOrbit(F32 yaw, F32 pitch);
     void cameraZoom(S32 clicks);
+    void cameraPan(const LLVector3&);
+    void cameraRoll(F32);
+    void cameraReset();
+    void cameraResetOrbit();
+    void cameraResetPan();
+    void cameraResetRoll();
+    void cameraFirstPerson(bool);
+    F32 cameraZoomFraction() const { return mCamera.zoomFraction(); }
+    void cameraZoomFraction(F32 value) { mCamera.setZoomFraction(value); mAgentUpdateTime = 0; }
+    void cameraControls(F32 dt);
+    bool canFly() const;
     bool updateAgentPosition(const LLVector3&, const LLHost&, U64 generation, U64 regionEpoch);
 
     U64 handle() const { return mHandle; }
     U8 access() const { return mAccess; }
+    U64 regionFlags() const { return mFlags; }
+    VSParcelPermissions parcelPermissions() const
+    { return regionReady() && mParcelPermissionsKnown ? VSParcelPermissions::from(mFlags, mParcelFlags, mParcelSeeAvatars) : VSParcelPermissions{}; }
     std::string locationURL() const;
     using LocationCallback = std::function<void(const std::string&, const LLVector3&)>;
     bool resolveLocation(const LLVector3d&, LocationCallback);
@@ -180,6 +195,11 @@ private:
     std::vector<LocationRequest> mLocationRequests;
     S32 mParcelSequence = 0;
     S32 mParcelID = -1;
+    S32 mParcelCellX = -1, mParcelCellY = -1;
+    double mParcelQueryTime = 0;
+    LLUUID mParcelOwner;
+    U32 mParcelFlags = 0;
+    bool mParcelPermissionsKnown = false, mParcelSeeAvatars = true;
     U64 mParcelRevision = 1, mMusicRequest = 0, mMediaRequest = 0;
     bool mMusicRequested = false, mMediaRequested = false;
     bool mMusicUserStopped = false, mMediaUserStopped = false;

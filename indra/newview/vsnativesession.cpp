@@ -772,6 +772,7 @@ void VSNativeSession::requestParcel()
     mParcelSequence = mParcelSequence == std::numeric_limits<S32>::max() ? 1 : mParcelSequence + 1;
     const F32 west = llclamp(mPosition.mV[VX], 0.f, F32(mWidth) - .01f);
     const F32 south = llclamp(mPosition.mV[VY], 0.f, F32(mHeight) - .01f);
+    mParcelCellX = S32(west / 4); mParcelCellY = S32(south / 4); mParcelQueryTime = now();
     LLMessageSystem* msg = gMessageSystem;
     msg->newMessage("ParcelPropertiesRequest"); msg->nextBlock("AgentData");
     msg->addUUID("AgentID", mAgent); msg->addUUID("SessionID", mSession);
@@ -790,6 +791,7 @@ void VSNativeSession::clearParcelPlayback()
     mParcelMediaWindow.markDead(); mMediaPresented = false;
     mMediaLoop = mMediaPaused = mMediaStateDirty = false; mMediaAutoScale = true;
     mMediaWidth = mMediaHeight = 0; mMediaPendingSeek = -1.f;
+    mParcelPermissionsKnown = false; mParcelOwner.setNull(); mParcelFlags = 0; mParcelSeeAvatars = true;
     mParcelID = -1; mParcelName.clear(); mMusicURL.clear(); mMediaURL.clear(); mMediaType.clear();
 }
 void VSNativeSession::updateParcelPlayback()
@@ -1056,6 +1058,12 @@ bool VSNativeSession::movementAction(U32 key, const std::string& action, bool do
     return handled;
 }
 void VSNativeSession::releaseMovement() { mCamera.release(); mAgentUpdateTime = 0; }
+bool VSNativeSession::canFly() const
+{
+    if (!regionReady() || !mParcelPermissionsKnown || (mFlags & REGION_FLAGS_BLOCK_FLY)) return false;
+    return bool(mParcelFlags & PF_ALLOW_FLY) || (mParcelOwner.notNull() &&
+        (mParcelOwner == gAgent.getID() || gAgent.hasPowerInGroup(mParcelOwner, GP_LAND_ALLOW_FLY)));
+}
 void VSNativeSession::setFlying(bool flying)
 {
     mCamera.setFlying(flying);
@@ -1076,6 +1084,32 @@ void VSNativeSession::cameraOrbit(F32 yaw, F32 pitch)
 { if (mPhase == Phase::Connected && !mChangingRegion) { mCamera.orbit(yaw, pitch); mAgentUpdateTime = 0; } }
 void VSNativeSession::cameraZoom(S32 clicks)
 { if (mPhase == Phase::Connected && !mChangingRegion) { mCamera.zoom(clicks); mAgentUpdateTime = 0; } }
+void VSNativeSession::cameraPan(const LLVector3& displacement)
+{
+    if (!regionReady()) return;
+    mCamera.pan(displacement, gAgentCamera.getCameraOffsetInitial(), LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
+    mAgentUpdateTime = 0;
+}
+void VSNativeSession::cameraRoll(F32 angle) { if (regionReady()) { mCamera.roll(angle); mAgentUpdateTime = 0; } }
+void VSNativeSession::cameraReset() { mCamera.resetView(); mAgentUpdateTime = 0; }
+void VSNativeSession::cameraResetOrbit() { mCamera.resetOrbit(); mAgentUpdateTime = 0; }
+void VSNativeSession::cameraResetPan() { mCamera.resetPan(); mAgentUpdateTime = 0; }
+void VSNativeSession::cameraResetRoll() { mCamera.resetRoll(); mAgentUpdateTime = 0; }
+void VSNativeSession::cameraFirstPerson(bool first) { mCamera.setFirstPerson(first); mAgentUpdateTime = 0; }
+void VSNativeSession::cameraControls(F32 dt)
+{
+    mCamera.controls(dt, gAgentCamera.getOrbitLeftKey() - gAgentCamera.getOrbitRightKey(),
+        gAgentCamera.getOrbitUpKey() - gAgentCamera.getOrbitDownKey(),
+        gAgentCamera.getOrbitInKey() - gAgentCamera.getOrbitOutKey(),
+        LLVector3(gAgentCamera.getPanInKey() - gAgentCamera.getPanOutKey(),
+                  gAgentCamera.getPanLeftKey() - gAgentCamera.getPanRightKey(),
+                  gAgentCamera.getPanUpKey() - gAgentCamera.getPanDownKey()),
+        gAgentCamera.getRollRightKey() - gAgentCamera.getRollLeftKey(),
+        gAgentCamera.getCameraOffsetInitial(), LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
+    // Floater held callbacks republish intent each frame, exactly as in updateCamera.
+    gAgentCamera.clearOrbitKeys();
+    gAgentCamera.clearPanKeys();
+}
 bool VSNativeSession::updateAgentPosition(const LLVector3& position, const LLHost& sender, U64 generation, U64 epoch)
 {
     if (mPhase != Phase::Connected || mChangingRegion || sender != mHost || generation != mGeneration || epoch != mRegionEpoch || !position.isFinite()) return false;
@@ -1290,6 +1324,13 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         msg->getString("ParcelData", "MusicURL", music); msg->getString("ParcelData", "MediaURL", media);
         body["result"] = result; body["sequence"] = sequence; body["id"] = id;
         body["name"] = parcel; body["music"] = music; body["media"] = media;
+        U32 flags; msg->getU32("ParcelData", "ParcelFlags", flags);
+        body["parcel_flags"] = LLSD::Integer(flags);
+        LLUUID owner; msg->getUUID("ParcelData", "OwnerID", owner); body["parcel_owner"] = owner;
+        // As in LLParcel::unpackMessage, legacy servers default SeeAVs to true.
+        bool seeAvatars = true;
+        if (msg->getSize("ParcelData", "SeeAVs") > 0) msg->getBOOL("ParcelData", "SeeAVs", seeAvatars);
+        body["see_avatars"] = seeAvatars;
         U8 autoscale; msg->getU8("ParcelData", "MediaAutoScale", autoscale); body["autoscale"] = LLSD::Integer(autoscale);
         if (msg->getNumberOfBlocks("MediaData"))
         {
@@ -1466,6 +1507,8 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         if (!body["result"].isInteger() || !body["sequence"].isInteger() || !body["id"].isInteger() ||
             !body["name"].isString() || !body["music"].isString() || !body["media"].isString() ||
             (body.has("type") && !body["type"].isString())) return false;
+        if ((body.has("parcel_flags") && !body["parcel_flags"].isInteger()) ||
+            (body.has("see_avatars") && !body["see_avatars"].isBoolean())) return false;
         const S32 sequence = body["sequence"].asInteger();
         // Negative sequences describe selection/hover/collision, not the
         // agent parcel. Positive replies match the current location request.
@@ -1483,6 +1526,10 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         const bool pausedMedia = mMediaPaused;
         if (changed) clearParcelPlayback();
         mParcelID = body["id"].asInteger(); mParcelName = body["name"].asString();
+        mParcelPermissionsKnown = body.has("parcel_flags");
+        mParcelFlags = U32(body["parcel_flags"].asInteger());
+        mParcelOwner = body["parcel_owner"].asUUID();
+        mParcelSeeAvatars = !body.has("see_avatars") || body["see_avatars"].asBoolean();
         mMusicURL = music; mMediaURL = media; mMediaType = body["type"].asString();
         updateParcelMediaMetadata(body);
         if (changed && (resumeMusic || (!mMusicUserStopped && gSavedSettings.getBOOL("FSParcelMusicAutoPlay") && gSavedSettings.getBOOL("MediaTentativeAutoPlay")))) setMusicEnabled(true);
@@ -2080,6 +2127,18 @@ void VSNativeSession::tick()
         if (mCameraTime > 0)
             mCamera.step(F32(cameraTime - mCameraTime), gAgent.rotateGrabbed(),
                 gAgentCamera.getCameraOffsetInitial(), LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
+        cameraControls(mCameraTime > 0 ? F32(cameraTime - mCameraTime) : 0.f);
+        if (cameraTime - mParcelQueryTime >= 1 &&
+            (S32(mPosition.mV[VX] / 4) != mParcelCellX || S32(mPosition.mV[VY] / 4) != mParcelCellY))
+        {
+            mParcelPermissionsKnown = false;
+            requestParcel();
+        }
+        if (mCamera.firstPerson() != gAgentCamera.cameraMouselook())
+        {
+            if (mCamera.firstPerson()) gAgentCamera.changeCameraToMouselook(false);
+            else gAgentCamera.changeCameraToThirdPerson(false);
+        }
         if (cameraTime >= mAgentUpdateTime)
         { send("AgentUpdate", LLSD()); mAgentUpdateTime = cameraTime + .1; }
     }

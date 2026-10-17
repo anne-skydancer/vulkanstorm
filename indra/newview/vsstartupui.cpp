@@ -6,6 +6,8 @@
 #include "llfloaterlinkreplace.h"
 #include "llfloaterevent.h"
 #include "llfloateremojipicker.h"
+#include "llfloatercamera.h"
+#include "lljoystickbutton.h"
 #include "llfloaterexperiences.h"
 #include "llfloaterexperienceprofile.h"
 #include "llfloaterexperiencepicker.h"
@@ -318,6 +320,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                    t == typeid(LLNotificationsUI::LLScreenChannel) || t == typeid(LLNotificationsUI::LLScreenChannelBase) ||
                    t == typeid(LLWindowShade) || t == typeid(LLResizeBar) || t == typeid(LLResizeHandle) ||
                    t == typeid(LLDragHandleTop) || t == typeid(LLDragHandleLeft) || t == typeid(LLMediaCtrl) || t == typeid(LLRadioGroup) || t == LLRadioGroup::itemType();
+            if (!admitted && (LLFloaterCamera::isNativeWidgetType(t) || t == typeid(LLJoystickCameraRotate) || t == typeid(LLJoystickCameraTrack))) return true;
             if (!admitted) LL_WARNS("NativeUI") << "Rejected native widget type: " << t.name() << LL_ENDL;
             return admitted;
         },
@@ -332,7 +335,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
             name == "fs_partial_inventory" || name == "properties" || name == "item_properties" ||
             name == "change_item_thumbnail" || name == "preview_sound" || name == "preview_script" ||
             name == "script_colors" || name == "upload_image" || name == "upload_sound" ||
-            name == "pay_resident" || name == "display_name" || name == "animation_overrider"; },
+            name == "pay_resident" || name == "display_name" || name == "animation_overrider" || name == "camera" || name == "fs_camera_small" || name == "phototools_camera"; },
         [](std::string_view name) { return name == "experiences_panel" || name == "llpanelexperiencepicker" || name == "experience_log" || name == "llpanelmarketplacelistings" || name == "marketplace_listings_panel" || name == "panel_people" || name == "sidepanel_inventory" || name == "panel_main_inventory" ||
             name == "panel_marketplace_inbox" || name == "inventory_gallery" || name == "progress_view" || name == "progress_view_mini" || name == "popup_holder" ||
             name == "status" || name == "volumepulldown_floater" || name == "navigation_bar" || name == "toolbar_view" || name == "toolbar view" || name == "native_nearby_chat" || name == "script panel" || name == "sidepanel_item_info" || name == "fs_panel_block_list_sidetray" || name == "panel_im_control_panel" || name == "panel_dir_groups" || name == "contact_sets_panel" ||
@@ -355,7 +358,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view name)
         {
-            return name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
+            return name == "view" || name == "animationoverride" || name == "settings_debug" || name == "webbrowser" || name == "defaultchatbar" || name == "howto" || name == "marketplace" || name == "gridstatus" || name == "destinations" || name == "teleport_history" || name == "statistics" || name == "search" || name == "picks" || name == "chat" || name == "inventory" || name == "people" ||
                    name == "preferences" || name == "profile" || name == "contact_sets" ||
                    name == "conversation_log" || name == "block_list" || name == "group_titles";
         },
@@ -428,6 +431,8 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
                 "Marketplace.ViewSort.Action", "Marketplace.ViewSort.CheckItem", "Avatar.OpenMarketplace", "LoadSLMarketplace", "OpenGridStatus",
                 "TeleportHistory.TimeZone.Set", "TeleportHistory.TimeZone.Check",
                 "TeleportHistory.TabOpen", "TeleportHistory.TabClose",
+                "CameraPresets.ChangeView", "Zoom.minus", "Zoom.plus", "Slider.value_changed", "Camera.track", "Camera.rotate", "Camera.roll_left", "Camera.roll_right",
+                "View.ResetView", "View.ToggleCameraFloater", "View.CheckCameraFloater",
                 "Toybox.RestoreDefaults", "Toybox.ClearAll", "Toolbars.RemoveSelectedCommand",
                 "File.Quit", "File.CloseWindow", "File.EnableCloseWindow", "File.CloseAllWindows",
                 "File.EnableCloseAllWindows", "File.CloseWindowGroup", "File.EnableCloseWindowGroup",

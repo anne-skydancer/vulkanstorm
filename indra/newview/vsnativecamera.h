@@ -19,6 +19,34 @@ public:
     };
     void reset() { mHeld.clear(); mYaw = mBodyYaw = mRoll = mPitch = 0; mDistance = 1.f; mPan.clear(); mFlying = false; }
     void release() { mHeld.clear(); }
+    void resetView() { mYaw = mBodyYaw; mPitch = mRoll = 0; mDistance = 1.f; mPan.clear(); }
+    void resetOrbit() { mYaw = mBodyYaw; mPitch = mRoll = 0; }
+    void resetPan() { mPan.clear(); }
+    void resetRoll() { mRoll = 0; }
+    F32 zoomFraction() const { return std::clamp((8.f - mDistance) / 7.75f, 0.f, 1.f); }
+    void setZoomFraction(F32 fraction)
+    { if (std::isfinite(fraction)) mDistance = 8.f - std::clamp(fraction, 0.f, 1.f) * 7.75f; }
+    void setFirstPerson(bool first) { if (first) { mDistance = 0; mPan.clear(); mBodyYaw = mYaw; } else if (firstPerson()) mDistance = 1.f; }
+    void roll(F32 angle) { if (std::isfinite(angle)) mRoll = wrap(mRoll + angle); }
+    void pan(const LLVector3& displacement, const LLVector3& cameraOffset, const LLVector3& focusOffset, F32 scale)
+    {
+        if (!displacement.isFinite()) return;
+        const auto view = state(LLVector3::zero, cameraOffset, focusOffset, scale);
+        mPan += view.at * displacement.mV[VX] + view.left * displacement.mV[VY] + view.up * displacement.mV[VZ];
+        if (mPan.magVecSquared() > 128.f * 128.f) { mPan.normalize(); mPan *= 128.f; }
+    }
+    void controls(F32 dt, F32 yaw, F32 pitch, F32 zoomIn, const LLVector3& track, F32 rollRate,
+                  const LLVector3& cameraOffset, const LLVector3& focusOffset, F32 scale)
+    {
+        if (!std::isfinite(dt) || dt <= 0) return;
+        dt = std::min(dt, .1f);
+        // LLAgentCamera's reference rates: 90 degrees/s orbit, 45 roll,
+        // five metres/s pan and distance-proportional zoom.
+        orbit(yaw * dt * 1.57079632679f, pitch * dt * 1.57079632679f);
+        roll(rollRate * dt * .78539816339f);
+        if (zoomIn != 0) mDistance = std::clamp(mDistance - zoomIn * mDistance * dt, .25f, 128.f);
+        if (track.magVecSquared() > 0) pan(track * (dt * 5.f), cameraOffset, focusOffset, scale);
+    }
     void setFlying(bool flying) { mFlying = flying; }
     void face(const LLVector3& direction)
     { if (direction.isFinite() && direction.magVecSquared() > .001f) mYaw = mBodyYaw = std::atan2(direction.mV[VY], direction.mV[VX]); }

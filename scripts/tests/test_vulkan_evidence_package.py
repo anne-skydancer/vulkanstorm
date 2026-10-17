@@ -96,6 +96,31 @@ class EvidencePackageTest(unittest.TestCase):
                              hashlib.sha256(payload).hexdigest())
             self.assertIsNone(result['complete'])  # Partial failure evidence is not acceptance.
 
+    def test_locked_instance_marker_is_recorded_without_skipping_readbacks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            folder = root / '.ci/replay/profile/roaming/Vulkanstorm_x64/logs'
+            folder.mkdir(parents=True)
+            marker = folder / 'Vulkanstorm.exec_marker'
+            marker.write_bytes(b'locked instance coordination')
+            readback = root / '.ci/replay/actual.rgba'
+            readback.write_bytes(b'pixels')
+            original = Path.open
+            def locked(path, *args, **kwargs):
+                if path.resolve() == marker.resolve():
+                    raise PermissionError('mandatory viewer marker lock')
+                return original(path, *args, **kwargs)
+            with patch.object(Path, 'open', locked):
+                result = package(root, root/'upload', ['.ci/replay'], 'build', False)
+            self.assertEqual(result['excluded'], [dict(path=marker.relative_to(root).as_posix(), type='viewer-instance-marker')])
+            self.assertIn('.ci/replay/actual.rgba', result['files'])
+            def unreadable_pixels(path, *args, **kwargs):
+                if path.resolve() == readback.resolve():
+                    raise PermissionError('unreadable required image')
+                return original(path, *args, **kwargs)
+            with patch.object(Path, 'open', unreadable_pixels), self.assertRaises(PermissionError):
+                package(root, root/'upload', ['.ci/replay'], 'build', False)
+
     def test_special_entries_are_named_and_never_read(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
