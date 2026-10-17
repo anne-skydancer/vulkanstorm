@@ -76,7 +76,7 @@ class TextureCacheEvidenceTests(unittest.TestCase):
                     full.extend((255*((x//32)&1),255*((y//32)&1),255*(((x//32)+(y//32))&1),255))
             def image(name,width,discard,data,bias):
                 (folder/name).write_bytes(data)
-                return dict(width=width,height=width,discard=discard,gpu_matches_cpu=True,
+                return dict(id=cache.STREAM,width=width,height=width,discard=discard,gpu_matches_cpu=True,
                             gpu_rgba_file=name,gpu_rgba_sha256=hashlib.sha256(data).hexdigest(),bias=bias)
             pressure=dict(complete=True,object_retired=True)
             for name,bias in (('initial',1),('full_resolution_preference',4),('restored',1)):
@@ -84,7 +84,21 @@ class TextureCacheEvidenceTests(unittest.TestCase):
             pressure['pressure']=image('low.rgba',128,3,bytes((0,255,0,255))*128*128,4)
             pressure['minimized']=image('mini.rgba',256,2,bytes((0,255,0,255))*256*256,4)
             pressure['minimized']['previous_scene_images_retired']=True
-            record={'r3_pressure':pressure};cache.validate_pressure(record,folder)
+            references={};(folder/'r3').mkdir()
+            for name in ('pressure','minimized'):
+                row=pressure[name];key='pressure-discard-'+str(row['discard'])
+                relative='r3/reference-'+key+'.rgba'
+                (folder/relative).write_bytes((folder/row['gpu_rgba_file']).read_bytes());references[key]=relative
+            record={'r3_pressure':pressure,'r3_texture_streaming':dict(references=references)}
+            cache.validate_pressure(record,folder)
+            pressure['minimized']['id']='a different image'
+            with self.assertRaisesRegex(ValueError,'identity'):cache.validate_pressure(record,folder)
+            pressure['minimized']['id']=cache.STREAM
+            reference=folder/references['pressure-discard-2'];original=reference.read_bytes()
+            # Change a nonzero byte so the independent codec comparison is decisive.
+            reference.write_bytes(original[:1]+b'\x00'+original[2:])
+            with self.assertRaisesRegex(ValueError,'checksum'):cache.validate_pressure(record,folder)
+            reference.write_bytes(original)
             pressure['minimized']['previous_scene_images_retired']=False
             with self.assertRaisesRegex(ValueError,'retained'):cache.validate_pressure(record,folder)
             pressure['minimized']['previous_scene_images_retired']=True
@@ -140,6 +154,23 @@ class TextureCacheEvidenceTests(unittest.TestCase):
                 changed=copy.deepcopy(warm);changed['texture_cache'][key]=invalid
                 with self.subTest(key=key,invalid=invalid),self.assertRaises(ValueError):
                     cache.validate_identity_transition(cold,changed)
+
+    def test_terrain_fetch_enters_the_same_http_counter_receipts(self):
+        with tempfile.TemporaryDirectory() as temporary,SimulatorHTTP() as server:
+            fixture=Path(temporary)/'ground.j2c';fixture.write_bytes(b'actual ground input')
+            server.terrain_fixture=fixture
+            worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
+            try:
+                client=http.client.HTTPConnection(*server.server_address)
+                identity='c3800000-0000-0000-0000-000000000001'
+                client.request('GET','/asset?texture_id='+identity)
+                response=client.getresponse();self.assertEqual(response.read(),fixture.read_bytes());client.close()
+                rows=cache.texture_requests(server.requests)
+                self.assertEqual(len(rows),1)
+                self.assertEqual(rows[0]['query'],dict(texture_id=[identity]))
+                self.assertEqual(rows[0]['method'],'GET');self.assertIs(rows[0]['terrain'],True)
+            finally:
+                server.shutdown();worker.join()
 
     def test_loopback_texture_ranges_are_real_partial_content(self):
         with tempfile.TemporaryDirectory() as temporary,SimulatorHTTP() as server:

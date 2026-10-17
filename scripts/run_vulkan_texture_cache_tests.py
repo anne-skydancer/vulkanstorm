@@ -93,10 +93,16 @@ def validate_pressure(record,folder):
         raise ValueError('Incomplete pressure lifecycle')
     for name in ('initial','pressure','full_resolution_preference','minimized','restored'):
         validate_image(pressure[name],folder)
+        if pressure[name].get('id')!=STREAM:raise ValueError('Pressure observed a different texture identity')
     for name in ('initial','full_resolution_preference','restored'):
         row=pressure[name]
         if (row['width'],row['height'],row['discard'])!=(1024,1024,0) or row['gpu_rgba_sha256']!=full_pattern_sha256():
             raise ValueError('Pressure restoration/full-resolution pixels differ from expected source')
+    for name in ('pressure','minimized'):
+        row=pressure[name];key='pressure-discard-'+str(row['discard'])
+        relative=record['r3_texture_streaming']['references'][key]
+        if relative!='r3/reference-'+key+'.rgba':raise ValueError('Unexpected pressure reference-codec input')
+        validate_image(dict(row,gpu_rgba_file=relative),folder)
     low=pressure['pressure']
     if low.get('bias',0)<2 or low['discard']<=0 or low['width']!=1024>>low['discard'] or low['height']!=low['width']:
         raise ValueError('Pressure did not coarsen the actual world texture')

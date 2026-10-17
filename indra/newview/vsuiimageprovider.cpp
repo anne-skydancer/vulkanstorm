@@ -369,7 +369,7 @@ LLSD VSUIImageProvider::textureCacheEvidence(bool includePixels) const
             const auto* destination=std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY");
             if(!destination) throw std::runtime_error("Missing cached texture evidence destination");
             const auto root=std::filesystem::path(destination);
-            const auto relative=std::filesystem::path("r3")/"readbacks"/(id.asString()+"-"+std::to_string(entry.discard)+"-"+hex+".rgba");
+            const auto relative=std::filesystem::path("r3")/"readbacks"/(hex+".rgba");
             std::filesystem::create_directories((root/relative).parent_path());
             std::ofstream artifact(root/relative,std::ios::binary);
             artifact.write(reinterpret_cast<const char*>(gpu.data()),std::streamsize(gpu.size()));

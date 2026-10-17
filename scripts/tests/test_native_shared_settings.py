@@ -47,6 +47,7 @@ int main(){
         self.assertEqual(len(rows),len(records))
         self.assertEqual({row['registration'] for row in rows},{row['call'] for row in records})
         self.assertTrue(all(row['effect_owner'] and row['roadmap_stage'] and row['status'] in ('shared-callback','native-poll','open','later-owner') for row in rows))
+        self.assertTrue(all(row['status'] in ('shared-callback','native-poll') for row in rows if 'R3' in row['roadmap_stage'].split('/')))
 
     def test_real_wrappers_route_shared_effects_and_block_gl_cascades(self):
         compiler=shutil.which('clang++') or shutil.which('g++');self.assertIsNotNone(compiler)

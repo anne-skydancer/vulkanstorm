@@ -827,7 +827,7 @@ class Handler(BaseHTTPRequestHandler):
             while not terrain.is_file() and time.monotonic()<deadline:time.sleep(.02)
             if not terrain.is_file():self.send_error(503);return
             data=terrain.read_bytes()
-            self.server.requests.append(dict(path=path,texture_id='c3800000-0000-0000-0000-000000000001',terrain=True,bytes=len(data)))
+            self.server.requests.append(dict(path=path,method='GET',query={'texture_id':['c3800000-0000-0000-0000-000000000001']},texture_id='c3800000-0000-0000-0000-000000000001',terrain=True,bytes=len(data)))
             self.send_response(200);self.send_header('Content-Type','image/jp2');self.send_header('Content-Length',str(len(data)))
             self.end_headers();self.wfile.write(data);return
         if path.rstrip('/') == '/asset':
