@@ -368,3 +368,14 @@ viewport height. Decoder errors release pending prepared payloads. Selected
 sources compile; production glTF image replacement runtime acceptance is pending.
 The codec license now has an explicit native manifest entry and a mandatory
 staging-file check, with missing-license regressions for both platforms.
+
+
+The staged `e15d79a2b2` viewer completed all 52 production R2 replay steps and
+normal cleanup in 75.2 seconds. Its evidence checker exposed stale R2 constants:
+three R3 vertices now occupy 216 bytes (72 each), plus 12 index bytes, rather
+than the old 96+12 layout. The fixed expected sizes are corrected to 216/12 and
+228 total. Revalidating the retained real GPU readbacks and all R2 archive files
+passes with those explicit sizes; byte equality, two refusal checks, two invalid
+input checks and zero retained allocations remain required. The original replay
+result remains recorded as failed by the old validator; a fresh source-qualified
+run with the corrected checker is still required.
