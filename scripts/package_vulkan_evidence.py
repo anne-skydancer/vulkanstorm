@@ -6,7 +6,7 @@ from pathlib import Path
 import stat
 import zipfile
 from run_vulkan_geometry_tests import required_checks
-from run_vulkan_session_replay import r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed, world_bump_contracts_passed, remote_material_contracts_passed
+from run_vulkan_session_replay import r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed, world_bump_contracts_passed, remote_material_contracts_passed, legacy_material_contracts_passed
 from run_software_vulkan_tests import MATERIAL_READBACKS
 from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests
 from run_vulkan_texture_cache_instances import validate_instances
@@ -104,6 +104,9 @@ def texture_cache_completeness(files, source, executable_digest):
             if case=='cold':
                 if not local_image_contracts_passed(child,actual) or not local_material_contracts_passed(child,actual) or not world_bump_contracts_passed(child,actual):raise ValueError('Missing R3 local file/GPU evidence')
                 if not remote_material_contracts_passed(child,traffic,actual):raise ValueError('Missing actual remote PBR asset evidence')
+                if not legacy_material_contracts_passed(child,traffic,actual):raise ValueError('Missing actual legacy material capability evidence')
+                for path in ['r3/legacy-materials.xml','r3/legacy-materials.bin',*child['r3_legacy_material']['readbacks']]:
+                    if folder+'/'+path not in files:raise ValueError('Legacy material artifact omitted from archive: '+path)
                 for image in child['r3_remote_materials']['assets']:
                     if folder+'/'+image['file'] not in files:raise ValueError('Remote PBR input omitted from archive: '+image['file'])
                 for name in ('initial','replaced','refused','recovered'):

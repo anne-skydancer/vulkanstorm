@@ -3,6 +3,7 @@ import argparse
 import base64
 from datetime import datetime, timezone
 import hashlib
+import zlib
 import json
 import math
 import os
@@ -156,6 +157,41 @@ def local_material_contracts_passed(record,directory):
                 if path.read_bytes()!=bytes(color)*(16*16):return False
         return all(0<generations[0][i]<generations[1][i]==generations[2][i]<generations[3][i] for i in range(4))
     except (OSError,ValueError,KeyError,TypeError,AttributeError):return False
+
+
+def legacy_material_contracts_passed(record,requests,directory):
+    try:
+        data=record['r3_legacy_material'];root=Path(directory).resolve()
+        if data.get('faces')!=6 or any(data.get(key) is not True for key in ('object_retired','account_retired')):return False
+        variants=data['variants']
+        if not isinstance(variants,list) or len(variants)!=6:return False
+        for index,row in enumerate(variants):
+            if row['fullbright'] is not (index in (2,5)) or row['emissive_alpha'] is not (index==3):return False
+            if row['shiny']!=[1,2,0,3,0,0][index] or row['alpha']!=['opaque','opaque','mask','opaque','blend','opaque'][index]:return False
+            if abs(row['base_alpha']-(128/255 if index==4 else 1))>1.e-5:return False
+        def close(a,b):return len(a)==len(b) and all(math.isfinite(x) and abs(x-y)<1.e-5 for x,y in zip(a,b))
+        def uv(s,t,x,y,angle):
+            c,r=math.cos(angle),math.sin(angle)
+            return [s*c,-t*r,s*r,t*c,x+.5-.5*(s*c+s*r),y+.5-.5*(-t*r+t*c)]
+        if not close(data['normal_uv'],uv(2,3,.125,-.25,.25)) or not close(data['specular_uv'],uv(.75,1.25,-.125,.375,-.5)):return False
+        if not close(data['specular'],[64/255,128/255,192/255,32/255]):return False
+        if abs(data['roughness']-(1-128/255))>1.e-5 or abs(data['cutoff']-64/255)>1.e-5:return False
+        source=root/'r3/legacy-materials.xml';binary=root/'r3/legacy-materials.bin'
+        if source.is_symlink() or binary.is_symlink():return False
+        payload=source.read_bytes();raw=binary.read_bytes()
+        if len(payload)>2*1024*1024 or len(raw)>4*1024*1024:return False
+        wrapped=read_llsd(ET.fromstring(payload))
+        if zlib.decompress(base64.b64decode(wrapped['Zipped'],validate=True))!=raw:return False
+        if UUID('b3400000-0000-0000-0000-000000000001').bytes not in raw:return False
+        received=[row for row in requests if row.get('path')=='/r3-legacy-materials']
+        if len(received)!=1 or received[0].get('bytes')!=len(payload) or received[0].get('sha256')!=hashlib.sha256(payload).hexdigest():return False
+        if data['readbacks']!=['r3/legacy-0.rgba','r3/legacy-1.rgba']:return False
+        for index,(identity,color) in enumerate(zip((data['normal_source'],data['specular_source']),((128,128,255,255),(11,22,33,255))),1):
+            if identity!=f'b3600000-0000-0000-0000-{index:012d}' or UUID(identity).bytes not in raw:return False
+            path=root/data['readbacks'][index-1]
+            if path.is_symlink() or path.read_bytes()!=bytes(color)*256:return False
+        return True
+    except (OSError,ValueError,KeyError,TypeError,ET.ParseError,zlib.error):return False
 
 
 def remote_material_contracts_passed(record,requests,directory):
@@ -632,6 +668,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path=='/r3-legacy-materials' and getattr(self.server,'r3_directory',None):
+            source=self.server.r3_directory/'legacy-materials.xml'
+            if not source.is_file() or source.stat().st_size>2*1024*1024:self.send_error(404);return
+            payload=source.read_bytes()
+            self.server.requests.append(dict(path=path,method='GET',bytes=len(payload),sha256=hashlib.sha256(payload).hexdigest()))
+            self.send_response(200);self.send_header('Content-Type','application/llsd+xml')
+            self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return
         if r2_fixture.get(self,path,parse_qs(urlsplit(self.path).query)):return
         if path in ('/r1-mesh', '/r2-mesh') and getattr(self.server,'r1_directory',None):
             if parse_qs(urlsplit(self.path).query).get('mesh_id') != ['a1000000-0000-0000-0000-000000000001']:
@@ -924,6 +967,9 @@ class Handler(BaseHTTPRequestHandler):
                                 ('GetMetadata', '/metadata')]:
                 ET.SubElement(mapping, 'key').text = name
                 ET.SubElement(mapping, 'string').text = self.server.url + route
+            if getattr(self.server,'r3_directory',None):
+                ET.SubElement(mapping,'key').text='RenderMaterials'
+                ET.SubElement(mapping,'string').text=self.server.url+'/r3-legacy-materials'
             if getattr(self.server,'r2_directory',None):
                 ET.SubElement(mapping,'key').text='GetMesh2'
                 ET.SubElement(mapping,'string').text=self.server.url+'/r2-mesh'
@@ -1065,7 +1111,7 @@ def main():
     parser.add_argument('--cache-size', type=int, help='Texture cache size in MiB for qualification')
     parser.add_argument('--cache-clear', action='store_true', help='Exercise the normal next-startup cache purge setting')
     parser.add_argument('--texture-cache-contracts', action='store_true', help='Exercise native streaming/preferences and archive GPU image readbacks')
-    parser.add_argument('--local-image-contracts', action='store_true', help='Exercise actual local bitmap decode, reload, replacement and retirement')
+    parser.add_argument('--local-image-contracts','--r3-image-contracts',dest='local_image_contracts',action='store_true',help='Exercise production R3 local/remote material, image, bump, replacement and retirement contracts')
     parser.add_argument('--texture-cache-read-only', action='store_true', help='Exercise the native sibling texture-cache policy in an isolated headless replay')
     parser.add_argument('--profile-directory', type=Path, help='Dedicated shared credential-free profile for concurrent headless viewer qualification')
     parser.add_argument('--completion-gate', type=Path, help='Retain the headless viewer marker lock after replay until this file exists')
@@ -1263,6 +1309,8 @@ def main():
                 raise RuntimeError('Missing production local bitmap/material reload, immutable generation or GPU pixel evidence')
             if args.local_image_contracts and not remote_material_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing production remote PBR transport, parse failure or account retirement evidence')
+            if args.local_image_contracts and not legacy_material_contracts_passed(report,server.requests,directory):
+                raise RuntimeError('Missing actual legacy material capability, UV/factor or channel GPU evidence')
             report['conference_start_request'] = conference_start_observed(server.requests)
             if not report['conference_start_request']:
                 raise RuntimeError('Missing or incorrect actual authenticated conference start request')

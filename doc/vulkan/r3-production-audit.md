@@ -622,7 +622,7 @@ Production regressions cover corrupt-data invalidation/retry, preparation and
 publication exceptions, cache-owner retention and inactive PBR references. The
 actual viewer replay now includes an asset that initially arrives malformed,
 recovers through a second HTTP response, and replaces all six admitted PBR faces
-with a visibly different material factor. HTTP body hashes and archived input
+with a different base-color factor. HTTP body hashes and archived input
 files are decisive; success flags alone cannot qualify it. Focused tests and
 viewer compilation pass; actual recovery runtime acceptance is pending rebuild.
 
@@ -640,3 +640,23 @@ material input or a sibling GPU readback correctly failed qualification. Evidenc
 is retained in `.tmp/r3-material-cache-final` and
 `.tmp/r3-material-cache-final-instances`. These are local Windows software-device
 results; remaining R3 production work and three-platform acceptance remain open.
+
+## Actual legacy material capability and variants
+
+The viewer replay now acquires a real compressed `RenderMaterials` response
+through its requested seed capability, the native regional material owner and
+the shared LLMaterial decoder. One ObjectUpdate carries six distinct face
+contracts: unmaterialed diffuse/shiny, normal/specular opaque, masked fullbright,
+emissive alpha, blended alpha and default-alpha fullbright. All three nonzero
+legacy shiny values are checked. Independent normal and specular source images
+must reach their correct native bindings and GPU readbacks.
+
+The evidence verifier checks actual HTTP body hashes, compressed-to-binary LLSD
+equivalence, independent per-channel UV calculations, specular/environment and
+roughness/cutoff values, all six alpha/fullbright/emissive/shiny variants and
+object/account retirement. The archive must retain the capability body, binary
+payload and both channel readbacks. Negative evidence tests reject altered UVs,
+missing HTTP proof, changed payloads and omitted GPU files. The expanded image
+exercise also accepts the clearer `--r3-image-contracts` alias. Compiler and
+focused evidence/replay regressions pass; actual capability runtime acceptance
+is pending its canonical rebuild. Final BRDF/probe appearance remains R5/R6.
