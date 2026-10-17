@@ -229,3 +229,12 @@ cache implementations. Selected viewer sources compile, and range/artifact/
 mutation regressions pass. Actual restart acceptance requires the committed,
 rebuilt and staged viewer; no restart result is claimed yet. The remaining R3
 production requirements listed above remain open.
+
+The first actual cold run failed the coarse-resource assertion. It exposed
+Windows filesystem extension parsing of explicit capability URLs: hostname dots
+were treated as a non-J2C extension, forcing discard zero. Native requests now
+strip query/fragment and filesystem-independent URL path components before the
+existing codec/size policy. Legacy callers retain their previous behavior. The
+compiled request regression includes dotted hosts, dotted parent paths, query
+suffixes and actual PNG/J2C extensions. Restart acceptance remains pending the
+corrected staged executable; the failed cold-run evidence is retained.
