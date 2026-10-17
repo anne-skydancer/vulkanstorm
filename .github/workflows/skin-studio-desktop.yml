@@ -5,9 +5,6 @@ on:
   push:
     branches:
       - vkstorm-tools
-    paths:
-      - tools/skin-editor/**
-      - .github/workflows/skin-studio-desktop.yml
   pull_request:
     paths:
       - tools/skin-editor/**

@@ -705,6 +705,10 @@ mod tests {
             let mut command = Command::new("sleep");
             command.arg("60");
             install_parent_death_signal(&mut command);
+            #[allow(
+                clippy::zombie_processes,
+                reason = "The probe must exit without waiting to test parent-death cleanup."
+            )]
             let child = command.spawn().unwrap();
             fs::write(pid_file, child.id().to_string()).unwrap();
             return;

@@ -1,7 +1,7 @@
 # Vulkanstorm tools
 
 Independent, standalone tools for Vulkanstorm viewers. This branch contains no
-viewer source code, viewer build system, or viewer development hooks. It is not
+viewer application code, viewer build system, or viewer development hooks. It is not
 a viewer release or development branch.
 
 ## Skin Studio
