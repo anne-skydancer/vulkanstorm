@@ -86,7 +86,7 @@ constexpr int IMG_CODEC_J2C=1,INIT=1,DONE=2;
 struct Cache{unsigned removed=0;void removeFromCache(int){++removed;}};
 struct Fetcher{bool mNativeConsumer=true;VSResourceBudget mNativeDecodeBytes{128};Cache cache;Cache* mTextureCache=&cache;};
 struct Formatted{
- bool valid=true;int w=2,h=2,bytes=16,codec=IMG_CODEC_J2C,components=4;
+ bool valid=true;int w=2,h=2,bytes=16,codec=IMG_CODEC_J2C,components=5;
  bool updateData(){return valid;}int getCodec(){return codec;}int getWidth(){return w;}int getHeight(){return h;}int getDataSize(){return bytes;}int getComponents(){return components;}
 };
 struct Worker{
@@ -113,6 +113,8 @@ int main(){
   if(invalid==4)bad.mFormattedImage->components=6;
   assert(bad.validate() && bad.state==DONE && !bad.mNativeDecodeResidency);
  }
+ Worker rgba(fetch);rgba.mFormattedImage->components=4;assert(rgba.validate() && !rgba.mNeedsAux);
+ assert(fetch.mNativeDecodeBytes.used()==32);rgba.mNativeDecodeResidency.reset();
  fetch.mNativeConsumer=false;Worker legacy(fetch);legacy.mFormattedImage->w=9999;
  assert(legacy.validate() && legacy.state==7 && fetch.mNativeDecodeBytes.used()==0);
 }

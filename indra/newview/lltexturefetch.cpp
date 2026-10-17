@@ -2030,6 +2030,7 @@ bool LLTextureFetchWorker::doWork(S32 param)
             }
             // The encoded response queue remains bounded by 32 x 16 MiB;
             // decoded image/mask publication retains the previous native cap.
+            mNeedsAux=mFormattedImage->getComponents()==5;
             mRawImage=NULL;mAuxImage=NULL;mNativeDecodeResidency.reset();
             const auto width=std::max(1,mFormattedImage->getWidth()>>discard);
             const auto height=std::max(1,mFormattedImage->getHeight()>>discard);
