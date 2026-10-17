@@ -23,6 +23,16 @@ Build instructions for each operating system can be found using the links below 
 > [!NOTE]
 > We do not provide support for compiling the viewer or issues resulting from using a self-compiled viewer. However, there is a self-compilers group within Second Life that can be joined to ask questions related to compiling the viewer: [Firestorm Self Compilers](https://tinyurl.com/firestorm-self-compilers)
 
+## Skin and toolbar authoring
+
+[Skin Studio](tools/skin-editor/README.md) is a local browser tool for editing
+logged-in viewer skin colours and toolbar layouts, with meaning-based controls
+for links, errors, chat, name tags and highlights, plus an interactive preview.
+It exports native skin assets
+without modifying installed viewer or account settings.
+An optional [Rust desktop app](tools/skin-editor/desktop/README.md) bundles Python
+and the editor assets for a standalone Windows or Linux window.
+
 ## Contribute
 
 Help make Firestorm better! You can get involved with improvements by filing bugs and suggesting enhancements via [JIRA](https://jira.firestormviewer.org) or [creating pull requests](CONTRIBUTING.md).
