@@ -892,6 +892,27 @@ void VSNativeAppearance::tick()
     state.bake();
     state.legacyBake(*avatar);
 }
+bool VSNativeAppearance::startupReady() const
+{
+    // Match the reference wearables-loaded condition: a complete authoritative
+    // outfit, resolved local wearable assets, and their publication to self.
+    // Background bake textures and attachments continue loading after login.
+    const auto& state = *mImpl;
+    if (!state.current() || state.cof.isNull() || state.version < 0 || state.dirty ||
+        !gInventory.isCategoryComplete(state.cof))
+        return false;
+    const auto* category = gInventory.getCategory(state.cof);
+    if (!category || category->getVersion() != state.version)
+        return false;
+    return std::all_of(state.entries.begin(), state.entries.end(),
+        [&state](const auto& row)
+        {
+            const auto& entry = row.second;
+            const auto applied = state.applied.find(entry.item);
+            return entry.wearable && applied != state.applied.end() && applied->second == entry.asset;
+        });
+}
+
 bool VSNativeAppearance::isWorn(const LLUUID& id) const
 {
     if (!mImpl->current() || id.isNull())

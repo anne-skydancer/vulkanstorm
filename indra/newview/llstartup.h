@@ -116,6 +116,7 @@ public:
 
     static void initNameCache();
     static void initExperiences();
+    static void initActiveGestures();
 
     static void cleanupNameCache();
 

@@ -33,6 +33,7 @@
 #include "llpersistentnotificationstorage.h"
 #if VS_NATIVE_VULKAN
 #include "vsnativesession.h"
+#include "vsavatarservices.h"
 #include "vsvulkancontext.h"
 #endif
 
@@ -1674,9 +1675,8 @@ static void pump_native_account_services(bool connected)
     // an existing queue of account inventory actions.
     LLMarketplaceInventoryImporter::update();
     LLMarketplaceInventoryNotifications::update();
-    // Gesture playback needs an initialized avatar as well as its manager.
-    // Text-only accounts must not instantiate an appearance owner here.
-    if (LLGestureMgr::instanceExists() && isAgentAvatarValid())
+    // Use the shared character adapter: native self is not gAgentAvatarp.
+    if (LLGestureMgr::instanceExists() && vs_avatar_character())
         LLGestureMgr::instance().update();
 }
 #endif

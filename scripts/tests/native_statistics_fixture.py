@@ -14,6 +14,109 @@ def function(source,signature):
     return source[start:end]
 
 class NativeStatisticsTests(unittest.TestCase):
+    def test_window_close_does_not_bypass_graceful_logout(self):
+        source=(ROOT/'indra/newview/llviewerwindow.cpp').read_text()
+        close=function(source,'bool LLViewerWindow::handleCloseRequest(')
+        self.compile(r'''
+#include <cassert>
+struct LLWindow{};
+struct LLApp {static inline bool exiting=false,stopped=false;
+ static bool isExiting(){return exiting;}static bool isStopped(){return stopped;}};
+struct LLAppViewer {int requests=0,confirmations=0,forced=0;
+ static LLAppViewer* instance(){static LLAppViewer app;return &app;}
+ void requestQuit(){++requests;}void userQuit(){++confirmations;}void forceQuit(){++forced;}};
+struct LLViewerWindow {bool mNativeVulkan=false;bool handleCloseRequest(LLWindow*,bool);};
+PRODUCTION_CLOSE_BODY
+int main(){
+ for(bool native:{false,true}){
+  LLViewerWindow window;window.mNativeVulkan=native;
+  auto* app=LLAppViewer::instance();*app={};
+  // This is the WM_CLOSE caller's contract, including its forced-quit branch.
+  if(window.handleCloseRequest(nullptr,true))app->forceQuit();
+  assert(app->confirmations==1 && app->requests==0 && app->forced==0);
+  if(window.handleCloseRequest(nullptr,false))app->forceQuit();
+  assert(app->requests==1 && app->forced==0);
+  LLApp::exiting=true;
+  assert(!window.handleCloseRequest(nullptr,true));assert(app->confirmations==1);
+  LLApp::exiting=false;
+ }
+}
+'''.replace('PRODUCTION_CLOSE_BODY',close).replace('#include <cassert>','#include <cassert>\n#include <initializer_list>'))
+
+    def test_startup_waits_for_real_account_and_appearance_work(self):
+        source=(ROOT/'indra/newview/vsnativesession.cpp').read_text()
+        advance=function(source,'void VSNativeSession::advanceStartup(')
+        self.compile(r'''
+#include <cassert>
+#include <string>
+#include <sstream>
+#include <algorithm>
+using F32=float; using S32=int;
+double clockValue=0;double now(){return clockValue;}
+template<class T>T llmax(T a,T b){return std::max(a,b);}
+template<class T>T llmin(T a,T b){return std::min(a,b);}
+#define LL_WARNS(x) std::ostringstream()
+#define LL_ENDL ""
+struct LLUUID {static int null;};int LLUUID::null=0;
+struct LLInventoryObserver {enum {ALL};};
+struct Inventory {bool usable=false;int notices=0;bool isInventoryUsable(){return usable;}
+ void addChangedMask(int,int){}void notifyObservers(){++notices;}}gInventory;
+struct LLInventoryModel {static inline bool ready=false;static bool isSysFoldersReady(){return ready;}};
+#define SINGLETON(T) static T& instance(){static T value;return value;}
+struct LLAppearanceMgr {SINGLETON(LLAppearanceMgr) int calls=0;void initCOFID(){++calls;}};
+struct LLInventoryModelBackgroundFetch {SINGLETON(LLInventoryModelBackgroundFetch) int lost=0;void findLostItems(){++lost;}};
+struct FSGroupTitleRegionMgr {static FSGroupTitleRegionMgr* getInstance(){static FSGroupTitleRegionMgr v;return &v;}void loadFromDisk(){}};
+struct FSFavoriteGroups {static FSFavoriteGroups* getInstance(){static FSFavoriteGroups v;return &v;}void loadFavorites(){}};
+struct LLPresetsManager {static LLPresetsManager* getInstance(){static LLPresetsManager v;return &v;}void createMissingDefault(int){}};
+constexpr int PRESETS_CAMERA=0;
+enum {STATE_INVENTORY_CALLBACKS,STATE_MISC,STATE_PRECACHE,STATE_WEARABLES_WAIT,STATE_CLEANUP,STATE_STARTED};
+struct LLStartUp {static inline int state=0,gestures=0;static void setStartupState(int s){state=s;}static void initActiveGestures(){++gestures;}};
+struct Settings {float getF32(const char*){return 2.f;}bool getBOOL(const char*){return false;}}gSavedSettings;
+struct Timer {void reset(){}}gRenderStartTime,gForegroundTime;
+int audioCalls=0;void init_audio(){++audioCalls;}
+struct LLTrans {static std::string getString(const char* s){return s;}};
+struct LLNotificationsUtil {static inline int clothing=0;static void add(const char*){++clothing;}};
+struct FSLSLBridge {SINGLETON(FSLSLBridge) bool getBridgeCreating(){return false;}void initBridge(){}};
+struct FSFloaterWearableFavorites {static void initCategory(){}};
+struct LLFriendCardsManager {static void createAgentCallingCard(){}};
+struct Agent {void observeFriends(){}}gAgent;
+struct FSAvatarRenderPersistence {SINGLETON(FSAvatarRenderPersistence) void init(){}};
+struct AOEngine {static void onLoginComplete(){}};
+struct LLAppViewer {int completed=0;static LLAppViewer* instance(){static LLAppViewer v;return &v;}void handleLoginComplete(){++completed;}};
+struct Window {void resetBusyCount(){}void setCursor(int){}};
+constexpr int UI_CURSOR_ARROW=0;
+struct World {bool avatar=true;void* selfAvatar(){return avatar?this:nullptr;}};
+struct Context {World value;World& world(){return value;}};
+struct Viewer {int completed=0;float percent=0;std::string message;Context context;Window window;
+ Context* nativeContext(){return &context;}void sendShapeToSim(){}void setProgressPercent(float p){percent=p;}
+ void setProgressString(std::string s){message=s;}void showCursor(){}Window* getWindow(){return &window;}
+ void setStartupComplete(){++completed;}void setProgressCancelButtonVisible(bool){}} viewer,*gViewerWindow=&viewer;
+struct Appearance {bool ready=false;bool startupReady(){return ready;}};
+struct VSNativeSession {enum class Phase{Connected,Logout};enum class Startup{Idle,Inventory,Misc,Precache,Wearables,Complete};
+ Phase mPhase=Phase::Connected;Startup mStartup=Startup::Inventory;bool mChangingRegion=false,mStartupTimedOut=false;
+ double mStartupTime=0;Appearance appearance,*mAppearance=&appearance;void advanceStartup();};
+PRODUCTION_STARTUP_BODY
+int main(){
+ VSNativeSession owner;owner.advanceStartup();assert(owner.mStartup==VSNativeSession::Startup::Inventory);
+ gInventory.usable=true;owner.advanceStartup();assert(viewer.completed==0);
+ LLInventoryModel::ready=true;owner.advanceStartup();assert(gInventory.notices==1 && viewer.completed==0);
+ owner.advanceStartup();assert(audioCalls==1 && LLStartUp::gestures==1 && viewer.completed==0);
+ owner.advanceStartup();assert(viewer.message=="LoginPrecaching" && viewer.percent==60);
+ clockValue=2;owner.advanceStartup();assert(LLStartUp::state==STATE_WEARABLES_WAIT && viewer.completed==0);
+ owner.advanceStartup();assert(viewer.message=="LoginDownloadingClothing" && viewer.completed==0);
+ clockValue=11.9;owner.advanceStartup();assert(viewer.completed==0);
+ owner.appearance.ready=true;owner.advanceStartup();assert(viewer.completed==1 && !owner.mStartupTimedOut);
+ owner.advanceStartup();assert(viewer.completed==1 && audioCalls==1);
+ // A new account gets its own wait interval; timeout is explicit, not success.
+ VSNativeSession next;clockValue=100;next.advanceStartup();next.advanceStartup();
+ clockValue=102;next.advanceStartup();next.advanceStartup();assert(viewer.completed==1);
+ clockValue=112;next.advanceStartup();assert(viewer.completed==2 && next.mStartupTimedOut && LLNotificationsUtil::clothing==1);
+ // A quit or region transition cannot run account completion callbacks.
+ next.mStartup=VSNativeSession::Startup::Wearables;next.mPhase=VSNativeSession::Phase::Logout;
+ next.advanceStartup();assert(viewer.completed==2);
+}
+'''.replace('PRODUCTION_STARTUP_BODY',advance))
+
     def compile(self,fixture):
         compiler=shutil.which('clang++') or shutil.which('g++');self.assertIsNotNone(compiler)
         with tempfile.TemporaryDirectory() as directory:

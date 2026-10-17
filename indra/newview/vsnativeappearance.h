@@ -14,6 +14,7 @@ public:
     explicit VSNativeAppearance(std::shared_ptr<VSNativeSession>);
     ~VSNativeAppearance();
     void tick();
+    bool startupReady() const;
     void fallback(const LLSD& wearables);
     void refresh();
     bool canWear(const std::vector<LLUUID>&, bool replace = false, bool replaceOutfit = false) const;
