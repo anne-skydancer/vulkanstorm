@@ -6,7 +6,7 @@ from pathlib import Path
 import stat
 import zipfile
 from run_vulkan_geometry_tests import required_checks
-from run_vulkan_session_replay import r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed, world_bump_contracts_passed, remote_material_contracts_passed, legacy_material_contracts_passed, media_contracts_passed, shared_settings_contracts_passed
+from run_vulkan_session_replay import terrain_contracts_passed, r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed, world_bump_contracts_passed, remote_material_contracts_passed, legacy_material_contracts_passed, media_contracts_passed, shared_settings_contracts_passed
 import vulkan_r3_gltf_fixture as r3_gltf_fixture
 from run_software_vulkan_tests import MATERIAL_READBACKS
 from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests, validate_driver
@@ -304,6 +304,11 @@ def completeness(files, viewer):
             for name in ('r1/contracts.xml', 'r1/mesh-1.bin', 'r1/mesh-2.bin', 'r1/mesh-generation.txt'):
                 require(folder + '/' + name)
         if folder.endswith('r2-session-evidence'):
+            for name in ('terrain/pending.rgba','terrain/published.rgba','terrain/retired.rgba','terrain/detail.j2c'):
+                require(folder+'/'+name)
+            summary=files.get(folder+'/results.json')
+            if summary is None or not terrain_contracts_passed(result,summary.parent):
+                errors.append('Missing or inconsistent terrain publication GPU evidence')
             manifest = read(folder + '/r2/artifact-hashes.json')
             artifacts = manifest.get('artifacts', [])
             if not isinstance(artifacts, list): artifacts = []

@@ -540,6 +540,19 @@ REQUIRED = ('connected_native_statistics', 'connected_script_notification_contro
             'partial_init_cleanup', 'connection_timeout', 'encoded_chat', 'encoded_typing', 'ui_gate', 'logout_timeout', 'native_people_account_ui', 'native_navigation_request', 'native_navigation_transition', 'native_navigation_epoch', 'native_navigation_identity', 'native_navigation_local', 'native_location_lookup', 'native_landmark_v2', 'encoded_channels', 'queued_http_chat', 'mute_request', 'mute_transfer_cleanup', 'input_history', 'status_messages', 'connected_timeout', 'reliable_failure')
 
 
+def terrain_contracts_passed(report,directory):
+    try:
+        terrain=report['terrain_publication']
+        if terrain.get('complete') is not True:return False
+        for phase,color in (('pending',(127,127,127,255)),('published',(32,160,64,255)),('retired',(127,127,127,255))):
+            row=terrain[phase]
+            if row.get('file')!='terrain/'+phase+'.rgba' or row.get('draw_packets')!=1 or row.get('pixels_verified') is not True:return False
+            pixels=(Path(directory)/row['file']).read_bytes()
+            if len(pixels)!=64*64*4 or any(abs(value-color[index%4])>1 for index,value in enumerate(pixels)):return False
+        return (Path(directory)/'terrain/detail.j2c').is_file()
+    except (KeyError,TypeError,ValueError,OSError):return False
+
+
 def read_llsd(element):
     if element.tag == 'llsd':
         return read_llsd(list(element)[0])
@@ -747,6 +760,15 @@ class Handler(BaseHTTPRequestHandler):
             data=(directory/f'mesh-{revision}.bin').read_bytes()
             self.server.requests.append({'path':'/r1-mesh','revision':revision,'bytes':len(data)})
             self.send_response(200);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data);return
+        terrain=getattr(self.server,'terrain_fixture',None)
+        if terrain and parse_qs(urlsplit(self.path).query).get('texture_id')==['c3800000-0000-0000-0000-000000000001']:
+            deadline=time.monotonic()+60
+            while not terrain.is_file() and time.monotonic()<deadline:time.sleep(.02)
+            if not terrain.is_file():self.send_error(503);return
+            data=terrain.read_bytes()
+            self.server.requests.append(dict(path=path,texture_id='c3800000-0000-0000-0000-000000000001',terrain=True,bytes=len(data)))
+            self.send_response(200);self.send_header('Content-Type','image/jp2');self.send_header('Content-Length',str(len(data)))
+            self.end_headers();self.wfile.write(data);return
         if path.rstrip('/') == '/asset':
             query = parse_qs(urlsplit(self.path).query)
             if query.get('texture_id'):
@@ -1179,6 +1201,7 @@ def main():
     parser.add_argument('--completion-gate', type=Path, help='Retain the headless viewer marker lock after replay until this file exists')
     parser.add_argument('--texture-fixture', type=Path, help='Nontransparent local J2C fixture for ordinary replay image requests')
     parser.add_argument('--r1-contracts', action='store_true', help='Replay R1 owner, region, resource and lifecycle contracts through production viewer code')
+    parser.add_argument('--terrain-contracts',action='store_true',help='Qualify actual terrain geometry during pending, published and retired detail textures')
     parser.add_argument('--r2-contracts',action='store_true',help='Replay production R2 geometry and connected appearance actions')
     parser.add_argument('--native-backtrace', action='store_true', help='Run Linux replay under GDB; ordinary qualification runs directly')
     args = parser.parse_args()
@@ -1307,6 +1330,8 @@ def main():
         else:env.pop(key,None)
     if args.r2_contracts:env['VS_VULKAN_REPLAY_R2']='1'
     else:env.pop('VS_VULKAN_REPLAY_R2',None)
+    if args.terrain_contracts:env['VS_VULKAN_REPLAY_TERRAIN']='1'
+    else:env.pop('VS_VULKAN_REPLAY_TERRAIN',None)
     if args.r1_contracts:env['VS_VULKAN_REPLAY_R1']='1'
     else:env.pop('VS_VULKAN_REPLAY_R1',None)
     layer = directory / 'vk_layer_settings.txt'; layer.write_text('khronos_validation.validate_sync = true\n')
@@ -1345,6 +1370,7 @@ def main():
     report = {}; log = ''; code = None; passed = False
     with SimulatorHTTP() as server:
         server.texture_fixture=args.texture_fixture.resolve() if args.texture_fixture else None
+        server.terrain_fixture=directory/'terrain/detail.j2c' if args.terrain_contracts else None
         server.r3_directory=directory/'r3' if args.local_image_contracts else None
         server.stream_texture=directory/'r3/texture.j2c' if args.texture_cache_contracts else None
         server.r1_directory=directory/'r1' if args.r1_contracts else None
@@ -1366,6 +1392,8 @@ def main():
             passed = assess(report, code, log)
             if args.r1_contracts and not r1_contracts_passed(report,server.requests):
                 raise RuntimeError('Missing production R1 ownership/lifecycle or actual mesh replacement evidence')
+            if args.terrain_contracts and not terrain_contracts_passed(report,directory):
+                raise RuntimeError('Terrain pending/replacement GPU pixel contracts failed')
             if args.r2_contracts and not r2_contracts_passed(report,server.requests,directory):
                 raise RuntimeError('Missing complete production R2 geometry/appearance/lifecycle evidence')
             if args.local_image_contracts and (not local_image_contracts_passed(report,directory) or not local_material_contracts_passed(report,directory) or not world_bump_contracts_passed(report,directory)):

@@ -790,7 +790,13 @@ struct VSWorldScene::Impl
             p.terrain                                      = true;
             p.terrainKey                                   = key;
             p.objectGeneration                             = incarnation;
-            if (!p.image) continue; // Unknown resources are not a substitute terrain material.
+            if (!p.image)
+            {
+                p.image=resources.defaultWorldImage();
+                // Match the reference default even if its small upload must
+                // retry. The renderer already owns a white fallback binding.
+                if (!p.image) p.color={127.f/255,127.f/255,127.f/255,1};
+            }
             packets.push_back(std::move(p));
         }
         if (waterKnown)

@@ -186,3 +186,27 @@ kept the progress overlay's wait cursor. The old replay immediately attempted
 editor hover underneath that overlay. Update the replay driver to wait for the
 real shared fade/input release on initial login and relogin before exercising
 connected controls; keep the hover assertions and all pixel oracles unchanged.
+
+## Missing-ground production correction
+
+The terrain surface producer discarded each received/published patch whenever
+its detail image was absent. This differs from LLDrawPoolTerrain using
+LLTexUnit::bind -> LLViewerTexture::bindDefaultImage: the OpenGL peer keeps
+geometry visible with the 128x128 0x7f default image created by
+LLViewerTextureManager::init while the real image is pending. Transpose that
+local default image in VSUIResources and keep the real terrain mesh in the draw
+packets. If even that small upload is refused, use the renderer's existing
+white binding with the same grey tint and retry; do not invent terrain heights.
+The actual detail publication automatically replaces the default. Remote image
+readiness remains false while using the default; full terrain-material parity
+and the causal attribution to the null-handle crash correction remain separate.
+
+A compiled regression executing the actual surfaces method failed before the
+change, then passes pending, loaded, erased, allocation-refused and no-geometry
+cases. The new diagnostic terrain replay sends encoded standard LayerData
+through the real session, verifies the produced mesh's Vulkan pixels while its
+network image is deliberately withheld, releases a lossless J2C through the
+actual HTTP/fetch/cache path, and verifies the textured and erased-publication
+frames. The runner and evidence packager independently reject missing/wrong
+pixels. CI's existing R2 replay enables this focused regression with
+--terrain-contracts; it is not a substitute for completing R3 terrain materials.

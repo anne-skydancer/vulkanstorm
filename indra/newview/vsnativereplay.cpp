@@ -3,6 +3,7 @@
 #include "vsr1replay.h"
 #include "vsr2replay.h"
 #include "vsr3replay.h"
+#include "vsterrainreplay.h"
 #include "vsnativereplay.h"
 #include "vsnativeimreplay.h"
 #include "vsnativesession.h"
@@ -814,6 +815,7 @@ struct Replay
                 r1Started=true;
                 if (!vs_r1_replay_tick(owner, imEvidence) || !vs_r2_replay_tick(owner, imEvidence))
                     return;
+                if (!imEvidence["terrain_publication"]["complete"].asBoolean() && !vs_terrain_replay_tick(owner,imEvidence)) return;
                 qualifyConnectedSkinGeometry(imEvidence);
                 qualifyScriptNotifications(imEvidence, owner.host());
                 const std::string path(std::getenv("VS_VULKAN_DIAGNOSTIC_REPLAY"));
