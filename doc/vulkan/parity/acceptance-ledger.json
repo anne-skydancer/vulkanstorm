@@ -20654,17 +20654,13 @@
         "R1"
       ],
       "variants": [],
-      "implementation": "native-reference-present/effect-unqualified",
+      "implementation": "native-controller-pending",
       "source_qualified": false,
       "software_runtime_qualified": false,
       "authenticated_runtime_qualified": false,
       "evidence": [],
       "remaining_gap": "Review reference callback handleRenderFarClipChanged; saving a value is not applying its effect.",
-      "native_source_references": [
-        "indra/newview/vsnativesession.cpp",
-        "indra/newview/vsviewerwindow.cpp",
-        "indra/newview/vsvulkancontext.cpp"
-      ],
+      "native_source_references": [],
       "native_integration_hosts": [
         "indra/newview/vsuiimageprovider.cpp",
         "indra/newview/vsuiresources.cpp",
