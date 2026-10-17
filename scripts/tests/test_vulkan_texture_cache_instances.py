@@ -5,13 +5,19 @@ import sys
 import unittest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from run_vulkan_texture_cache_instances import validate_instances
+from run_vulkan_texture_cache_instances import validate_instances, require_live_process
 from package_vulkan_evidence import concurrent_cache_completeness
 import json
 import tempfile
+import os
 
 
 class ConcurrentCacheTests(unittest.TestCase):
+    def test_actual_current_process_is_alive_and_invalid_ids_are_rejected(self):
+        require_live_process(os.getpid())
+        for value in (0,-1,True,'process'):
+            with self.assertRaises(ValueError):require_live_process(value)
+
     def test_archive_requires_the_concurrent_case_and_safe_artifact_paths(self):
         self.assertTrue(concurrent_cache_completeness({},'revision','binary'))
         with tempfile.TemporaryDirectory() as temporary:
