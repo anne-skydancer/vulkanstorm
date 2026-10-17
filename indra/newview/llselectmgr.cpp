@@ -30,6 +30,7 @@
 // file include
 #define LLSELECTMGR_CPP
 #include "llselectmgr.h"
+#include "vsobjectproperties.h"
 #include "llmaterialmgr.h"
 
 // library includes
@@ -6174,76 +6175,35 @@ void LLSelectMgr::processObjectProperties(LLMessageSystem* msg, void** user_data
     S32 count = msg->getNumberOfBlocksFast(_PREHASH_ObjectData);
     for (i = 0; i < count; i++)
     {
-        LLUUID id;
-        msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_ObjectID, id, i);
-
-        LLUUID creator_id;
-        LLUUID owner_id;
-        LLUUID group_id;
-        LLUUID last_owner_id;
-        U64 creation_date;
-        LLUUID extra_id;
-        U32 base_mask, owner_mask, group_mask, everyone_mask, next_owner_mask;
-        LLSaleInfo sale_info;
-        LLCategory category;
-        LLAggregatePermissions ag_perms;
-        LLAggregatePermissions ag_texture_perms;
-        LLAggregatePermissions ag_texture_perms_owner;
-
-        msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_CreatorID, creator_id, i);
-        msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_OwnerID, owner_id, i);
-        msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_GroupID, group_id, i);
-        msg->getU64Fast(_PREHASH_ObjectData, _PREHASH_CreationDate, creation_date, i);
-        msg->getU32Fast(_PREHASH_ObjectData, _PREHASH_BaseMask, base_mask, i);
-        msg->getU32Fast(_PREHASH_ObjectData, _PREHASH_OwnerMask, owner_mask, i);
-        msg->getU32Fast(_PREHASH_ObjectData, _PREHASH_GroupMask, group_mask, i);
-        msg->getU32Fast(_PREHASH_ObjectData, _PREHASH_EveryoneMask, everyone_mask, i);
-        msg->getU32Fast(_PREHASH_ObjectData, _PREHASH_NextOwnerMask, next_owner_mask, i);
-        sale_info.unpackMultiMessage(msg, _PREHASH_ObjectData, i);
-
-        ag_perms.unpackMessage(msg, _PREHASH_ObjectData, _PREHASH_AggregatePerms, i);
-        ag_texture_perms.unpackMessage(msg, _PREHASH_ObjectData, _PREHASH_AggregatePermTextures, i);
-        ag_texture_perms_owner.unpackMessage(msg, _PREHASH_ObjectData, _PREHASH_AggregatePermTexturesOwner, i);
-        category.unpackMultiMessage(msg, _PREHASH_ObjectData, i);
-
-        S16 inv_serial = 0;
-        msg->getS16Fast(_PREHASH_ObjectData, _PREHASH_InventorySerial, inv_serial, i);
-
-        LLUUID item_id;
-        msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_ItemID, item_id, i);
-        LLUUID folder_id;
-        msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_FolderID, folder_id, i);
-        LLUUID from_task_id;
-        msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_FromTaskID, from_task_id, i);
-
-        msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_LastOwnerID, last_owner_id, i);
-
-        std::string name;
-        msg->getStringFast(_PREHASH_ObjectData, _PREHASH_Name, name, i);
-        std::string desc;
-        msg->getStringFast(_PREHASH_ObjectData, _PREHASH_Description, desc, i);
-
-        std::string touch_name;
-        msg->getStringFast(_PREHASH_ObjectData, _PREHASH_TouchName, touch_name, i);
-        std::string sit_name;
-        msg->getStringFast(_PREHASH_ObjectData, _PREHASH_SitName, sit_name, i);
-
-        //unpack TE IDs
-        uuid_vec_t texture_ids;
-        S32 size = msg->getSizeFast(_PREHASH_ObjectData, i, _PREHASH_TextureID);
-        if (size > 0)
-        {
-            S8 packed_buffer[SELECT_MAX_TES * UUID_BYTES];
-            msg->getBinaryDataFast(_PREHASH_ObjectData, _PREHASH_TextureID, packed_buffer, 0, i, SELECT_MAX_TES * UUID_BYTES);
-
-            for (S32 buf_offset = 0; buf_offset < size; buf_offset += UUID_BYTES)
-            {
-                LLUUID tid;
-                memcpy(tid.mData, packed_buffer + buf_offset, UUID_BYTES);      /* Flawfinder: ignore */
-                texture_ids.push_back(tid);
-            }
-        }
-
+        static_assert(SELECT_MAX_TES == VS_OBJECT_PROPERTIES_MAX_TEXTURES);
+        const auto decoded = vs_read_object_properties(*msg, i);
+        if (!decoded) continue;
+        const auto& properties = *decoded;
+        const auto& id = properties.id;
+        const auto& creator_id = properties.creator_id;
+        const auto& owner_id = properties.owner_id;
+        const auto& group_id = properties.group_id;
+        const auto& last_owner_id = properties.last_owner_id;
+        const auto& creation_date = properties.creation_date;
+        const auto& base_mask = properties.base_mask;
+        const auto& owner_mask = properties.owner_mask;
+        const auto& group_mask = properties.group_mask;
+        const auto& everyone_mask = properties.everyone_mask;
+        const auto& next_owner_mask = properties.next_owner_mask;
+        const auto& sale_info = properties.sale_info;
+        const auto& category = properties.category;
+        const auto& ag_perms = properties.ag_perms;
+        const auto& ag_texture_perms = properties.ag_texture_perms;
+        const auto& ag_texture_perms_owner = properties.ag_texture_perms_owner;
+        const auto& inv_serial = properties.inv_serial;
+        const auto& item_id = properties.item_id;
+        const auto& folder_id = properties.folder_id;
+        const auto& from_task_id = properties.from_task_id;
+        const auto& name = properties.name;
+        const auto& desc = properties.desc;
+        const auto& touch_name = properties.touch_name;
+        const auto& sit_name = properties.sit_name;
+        const auto& texture_ids = properties.texture_ids;
 
         // Iterate through nodes at end, since it can be on both the regular AND hover list
         struct f : public LLSelectedNodeFunctor
@@ -6406,38 +6366,21 @@ void LLSelectMgr::processObjectProperties(LLMessageSystem* msg, void** user_data
 // static
 void LLSelectMgr::processObjectPropertiesFamily(LLMessageSystem* msg, void** user_data)
 {
-    LLUUID id;
-
-    U32 request_flags;
-    LLUUID creator_id;
-    LLUUID owner_id;
-    LLUUID group_id;
-    LLUUID extra_id;
-    U32 base_mask, owner_mask, group_mask, everyone_mask, next_owner_mask;
-    LLSaleInfo sale_info;
-    LLCategory category;
-
-    msg->getU32Fast(_PREHASH_ObjectData, _PREHASH_RequestFlags, request_flags );
-    msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_ObjectID,        id );
-    msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_OwnerID,     owner_id );
-    msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_GroupID,     group_id );
-    msg->getU32Fast(_PREHASH_ObjectData, _PREHASH_BaseMask,     base_mask );
-    msg->getU32Fast(_PREHASH_ObjectData, _PREHASH_OwnerMask,        owner_mask );
-    msg->getU32Fast(_PREHASH_ObjectData,_PREHASH_GroupMask,     group_mask );
-    msg->getU32Fast(_PREHASH_ObjectData, _PREHASH_EveryoneMask, everyone_mask );
-    msg->getU32Fast(_PREHASH_ObjectData, _PREHASH_NextOwnerMask, next_owner_mask);
-    sale_info.unpackMessage(msg, _PREHASH_ObjectData);
-    category.unpackMessage(msg, _PREHASH_ObjectData);
-
-    LLUUID last_owner_id;
-    msg->getUUIDFast(_PREHASH_ObjectData, _PREHASH_LastOwnerID, last_owner_id );
-
-    // unpack name & desc
-    std::string name;
-    msg->getStringFast(_PREHASH_ObjectData, _PREHASH_Name, name);
-
-    std::string desc;
-    msg->getStringFast(_PREHASH_ObjectData, _PREHASH_Description, desc);
+    const auto properties = vs_read_object_properties_family(*msg);
+    const auto& id = properties.id;
+    const auto& request_flags = properties.request_flags;
+    const auto& owner_id = properties.owner_id;
+    const auto& group_id = properties.group_id;
+    const auto& last_owner_id = properties.last_owner_id;
+    const auto& base_mask = properties.base_mask;
+    const auto& owner_mask = properties.owner_mask;
+    const auto& group_mask = properties.group_mask;
+    const auto& everyone_mask = properties.everyone_mask;
+    const auto& next_owner_mask = properties.next_owner_mask;
+    const auto& sale_info = properties.sale_info;
+    const auto& category = properties.category;
+    const auto& name = properties.name;
+    const auto& desc = properties.desc;
 
     // the reporter widget askes the server for info about picked objects
     if (request_flags & COMPLAINT_REPORT_REQUEST )

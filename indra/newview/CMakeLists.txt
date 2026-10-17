@@ -728,6 +728,7 @@ set(viewer_SOURCE_FILES
     llsecapi.cpp
     llsechandler_basic.cpp
     llselectmgr.cpp
+    vsobjectproperties.cpp
     llsetkeybinddialog.cpp
     llsettingspicker.cpp
     llsettingsvo.cpp
@@ -1612,6 +1613,7 @@ set(viewer_HEADER_FILES
     llsecapi.h
     llsechandler_basic.h
     llselectmgr.h
+    vsobjectproperties.h
     llsetkeybinddialog.h
     llsettingspicker.h
     llsettingsvo.h
