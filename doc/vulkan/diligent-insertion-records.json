@@ -1,5 +1,5 @@
 {
-  "source_commit": "5a46d8b00c3ecb6e8487cd2df3f174a21e927e8a",
+  "source_commit": "81cc2dc91f0a110c11ed811073ae28bb70c2608d",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -19937,7 +19937,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 1,
       "end": 23,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Reviewed initial recursive account inventory fetch before connected UI admission, plus explicit connected replay startup requirement; existing filtering assertion, request lifetime guards and OpenGL startup are retained."
@@ -19946,7 +19946,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 25,
       "end": 27,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -19955,7 +19955,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 33,
       "end": 33,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -19964,7 +19964,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 36,
       "end": 49,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -19973,7 +19973,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 52,
       "end": 68,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -19982,7 +19982,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 73,
       "end": 78,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -19991,7 +19991,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 80,
       "end": 81,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -20000,7 +20000,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 95,
       "end": 101,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -20009,7 +20009,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 103,
       "end": 123,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -20018,7 +20018,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 125,
       "end": 150,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -20027,7 +20027,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 182,
       "end": 220,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -20036,7 +20036,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 222,
       "end": 226,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -20045,7 +20045,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 237,
       "end": 256,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -20054,7 +20054,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 296,
       "end": 312,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -20062,89 +20062,80 @@
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 314,
-      "end": 394,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "end": 395,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 407,
-      "end": 467,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 408,
+      "end": 468,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 507,
-      "end": 551,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 508,
+      "end": 552,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 590,
-      "end": 599,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 591,
+      "end": 600,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 771,
-      "end": 841,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 772,
+      "end": 842,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 844,
-      "end": 845,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 845,
+      "end": 846,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 855,
-      "end": 882,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 856,
+      "end": 883,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 894,
-      "end": 978,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 895,
+      "end": 979,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 987,
-      "end": 1057,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
-      "record": "I25",
-      "disposition": "mapped",
-      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
-    },
-    {
-      "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1077,
-      "end": 1077,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 988,
+      "end": 1058,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -20152,53 +20143,53 @@
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 1078,
-      "end": 1114,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "end": 1078,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1138,
-      "end": 1139,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1079,
+      "end": 1115,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1142,
-      "end": 1147,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1139,
+      "end": 1140,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1156,
-      "end": 1156,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1143,
+      "end": 1148,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1165,
-      "end": 1170,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1157,
+      "end": 1157,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1187,
-      "end": 1187,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1166,
+      "end": 1171,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -20207,79 +20198,88 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 1188,
       "end": 1188,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1191,
-      "end": 1191,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1189,
+      "end": 1189,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1206,
-      "end": 1599,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1192,
+      "end": 1192,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1616,
-      "end": 1621,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1207,
+      "end": 1600,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1634,
-      "end": 1900,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1617,
+      "end": 1622,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1902,
-      "end": 1926,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1635,
+      "end": 1911,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2377,
-      "end": 2397,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1913,
+      "end": 1937,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2417,
-      "end": 2450,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 2388,
+      "end": 2408,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2453,
-      "end": 2455,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 2428,
+      "end": 2461,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
+      "record": "I25",
+      "disposition": "mapped",
+      "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 2464,
+      "end": 2466,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims."
@@ -22046,7 +22046,7 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
@@ -22055,7 +22055,7 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
@@ -22064,79 +22064,79 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1115,
-      "end": 1137,
+      "start": 1116,
+      "end": 1138,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1140,
-      "end": 1141,
+      "start": 1141,
+      "end": 1142,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1148,
-      "end": 1155,
+      "start": 1149,
+      "end": 1156,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1157,
-      "end": 1164,
+      "start": 1158,
+      "end": 1165,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1171,
-      "end": 1186,
+      "start": 1172,
+      "end": 1187,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1189,
-      "end": 1190,
+      "start": 1190,
+      "end": 1191,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1192,
-      "end": 1205,
+      "start": 1193,
+      "end": 1206,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1901,
-      "end": 1901,
+      "start": 1912,
+      "end": 1912,
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only preferences replay traverses admitted nested tab paths across frames, repeated Apply/Cancel/reopen and fresh disk settings readback. Does not admit world owners or change render backend; script bytes preserve canonical editor serialization.",
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5"
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9"
     },
     {
       "path": "indra/newview/llcallingcard.cpp",
@@ -22169,7 +22169,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 82,
       "end": 82,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only decoded OnlineNotification/OfflineNotification replay checks native transcript delivery across asynchronous name-cache work, both history modes, saved-setting restoration and unchanged prior notification-manager existence. Does not construct a scene or submit live-grid traffic."
@@ -22178,7 +22178,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 88,
       "end": 89,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only decoded OnlineNotification/OfflineNotification replay checks native transcript delivery across asynchronous name-cache work, both history modes, saved-setting restoration and unchanged prior notification-manager existence. Does not construct a scene or submit live-grid traffic."
@@ -22187,25 +22187,25 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 94,
       "end": 94,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only decoded OnlineNotification/OfflineNotification replay checks native transcript delivery across asynchronous name-cache work, both history modes, saved-setting restoration and unchanged prior notification-manager existence. Does not construct a scene or submit live-grid traffic."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 552,
-      "end": 589,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 553,
+      "end": 590,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only decoded OnlineNotification/OfflineNotification replay checks native transcript delivery across asynchronous name-cache work, both history modes, saved-setting restoration and unchanged prior notification-manager existence. Does not construct a scene or submit live-grid traffic."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 770,
-      "end": 770,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 771,
+      "end": 771,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only decoded OnlineNotification/OfflineNotification replay checks native transcript delivery across asynchronous name-cache work, both history modes, saved-setting restoration and unchanged prior notification-manager existence. Does not construct a scene or submit live-grid traffic."
@@ -25778,7 +25778,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 24,
       "end": 24,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25787,7 +25787,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 28,
       "end": 32,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25796,7 +25796,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 34,
       "end": 35,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25805,7 +25805,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 50,
       "end": 51,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25814,7 +25814,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 69,
       "end": 69,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25823,7 +25823,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 79,
       "end": 79,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25832,7 +25832,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 83,
       "end": 87,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25841,7 +25841,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 91,
       "end": 93,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25850,7 +25850,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 151,
       "end": 181,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25859,7 +25859,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 221,
       "end": 221,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25868,7 +25868,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 233,
       "end": 236,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -25877,124 +25877,124 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 313,
       "end": 313,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 395,
-      "end": 406,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 396,
+      "end": 407,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 842,
-      "end": 843,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 843,
+      "end": 844,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 846,
-      "end": 854,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 847,
+      "end": 855,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 883,
-      "end": 893,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 884,
+      "end": 894,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 979,
-      "end": 986,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 980,
+      "end": 987,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1058,
-      "end": 1076,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1059,
+      "end": 1077,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1600,
-      "end": 1615,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1601,
+      "end": 1616,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1622,
-      "end": 1633,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1623,
+      "end": 1634,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1927,
-      "end": 2173,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1938,
+      "end": 2184,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2180,
-      "end": 2194,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 2191,
+      "end": 2205,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2200,
-      "end": 2239,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 2211,
+      "end": 2250,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2398,
-      "end": 2416,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 2409,
+      "end": 2427,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2451,
-      "end": 2452,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 2462,
+      "end": 2463,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -27117,18 +27117,18 @@
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2174,
-      "end": 2179,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 2185,
+      "end": 2190,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2195,
-      "end": 2199,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 2206,
+      "end": 2210,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately."
@@ -27236,25 +27236,25 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 227,
       "end": 232,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Actual LLAvatarActions text conference creation, authenticated installed ChatterBoxSessionStartReply dispatch, shared tab-host identity remap, real Send/Close with encoded UUID/recipient/account checks, expired panel weak handle, delayed shared notification safety, orphan post-Leave text discard, real authenticated reinvitation and incoming restored model. Mandatory connected_conference_remap_retirement flag; real ChatSessionRequest HTTP start request separately required by pending runner patch. Runtime acceptance pending rebuilt image."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 468,
-      "end": 506,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 469,
+      "end": 507,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Actual LLAvatarActions text conference creation, authenticated installed ChatterBoxSessionStartReply dispatch, shared tab-host identity remap, real Send/Close with encoded UUID/recipient/account checks, expired panel weak handle, delayed shared notification safety, orphan post-Leave text discard, real authenticated reinvitation and incoming restored model. Mandatory connected_conference_remap_retirement flag; real ChatSessionRequest HTTP start request separately required by pending runner patch. Runtime acceptance pending rebuilt image."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2240,
-      "end": 2335,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 2251,
+      "end": 2346,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Actual LLAvatarActions text conference creation, authenticated installed ChatterBoxSessionStartReply dispatch, shared tab-host identity remap, real Send/Close with encoded UUID/recipient/account checks, expired panel weak handle, delayed shared notification safety, orphan post-Leave text discard, real authenticated reinvitation and incoming restored model. Mandatory connected_conference_remap_retirement flag; real ChatSessionRequest HTTP start request separately required by pending runner patch. Runtime acceptance pending rebuilt image."
@@ -28469,16 +28469,16 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 70,
       "end": 72,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Actual LLAvatarActions text conference creation, authenticated installed ChatterBoxSessionStartReply dispatch, shared tab-host identity remap, real Send/Close with encoded UUID/recipient/account checks, expired panel weak handle, delayed shared notification safety, orphan post-Leave text discard, real authenticated reinvitation and incoming restored model. Mandatory connected_conference_remap_retirement flag; real ChatSessionRequest HTTP start request separately required by pending runner patch. Runtime acceptance pending rebuilt image. Native CPU frame-period/jitter sampling and current-circuit ping/loss/bandwidth are generation and host scoped, reset on account change, and never construct scene owners. Actual shared Statistics/Lag Meter/FPS controllers are admitted and retired; empty recordings remain unavailable, native history triangles retain shared geometry, and trusted SimStats uses the existing CPU decoder. Real floater, sample and shrink/restore replay is added; runtime qualification remains pending."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 2336,
-      "end": 2376,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 2347,
+      "end": 2387,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Development replay exercises production skin controls and real decoded/account-owned messaging, inventory offers, profiles, group roles/titles and directory request IDs. Assertions and evidence flags are test instrumentation, not runtime acceptance claims. Connected native account controls and test integration preserve reviewed CPU owners, authenticated callbacks and native drawing while guarding deferred scene functionality. Build, runtime and live-account acceptance are recorded separately. Actual LLAvatarActions text conference creation, authenticated installed ChatterBoxSessionStartReply dispatch, shared tab-host identity remap, real Send/Close with encoded UUID/recipient/account checks, expired panel weak handle, delayed shared notification safety, orphan post-Leave text discard, real authenticated reinvitation and incoming restored model. Mandatory connected_conference_remap_retirement flag; real ChatSessionRequest HTTP start request separately required by pending runner patch. Runtime acceptance pending rebuilt image. Native CPU frame-period/jitter sampling and current-circuit ping/loss/bandwidth are generation and host scoped, reset on account change, and never construct scene owners. Actual shared Statistics/Lag Meter/FPS controllers are admitted and retired; empty recordings remain unavailable, native history triangles retain shared geometry, and trusted SimStats uses the existing CPU decoder. Real floater, sample and shrink/restore replay is added; runtime qualification remains pending."
@@ -42014,34 +42014,34 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 3,
       "end": 3,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostics-only connected inventory/animation/attachment/AIS loopback and actual GPU readbacks; narrowly gated fixture transport, deterministic expected data and zero-owner retirement are required. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1821,
-      "end": 1823,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1832,
+      "end": 1834,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostics-only connected inventory/animation/attachment/AIS loopback and actual GPU readbacks; narrowly gated fixture transport, deterministic expected data and zero-owner retirement are required. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1846,
-      "end": 1848,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1857,
+      "end": 1859,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostics-only connected inventory/animation/attachment/AIS loopback and actual GPU readbacks; narrowly gated fixture transport, deterministic expected data and zero-owner retirement are required. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1851,
-      "end": 1851,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1862,
+      "end": 1862,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostics-only connected inventory/animation/attachment/AIS loopback and actual GPU readbacks; narrowly gated fixture transport, deterministic expected data and zero-owner retirement are required. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -60302,7 +60302,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 10,
       "end": 14,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Admit GenericStreamingMessage material overrides through existing region/account world-message ownership; request regional material capabilities, including peer circuits. Late or retired circuit responses cannot mutate the native scene."
@@ -60311,16 +60311,16 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 215,
       "end": 219,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Admit GenericStreamingMessage material overrides through existing region/account world-message ownership; request regional material capabilities, including peer circuits. Late or retired circuit responses cannot mutate the native scene."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 714,
-      "end": 739,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 715,
+      "end": 740,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Admit GenericStreamingMessage material overrides through existing region/account world-message ownership; request regional material capabilities, including peer circuits. Late or retired circuit responses cannot mutate the native scene."
@@ -60725,7 +60725,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 11,
       "end": 12,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Admit GenericStreamingMessage material overrides through existing region/account world-message ownership; request regional material capabilities, including peer circuits. Late or retired circuit responses cannot mutate the native scene."
@@ -60734,16 +60734,16 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 216,
       "end": 217,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Admit GenericStreamingMessage material overrides through existing region/account world-message ownership; request regional material capabilities, including peer circuits. Late or retired circuit responses cannot mutate the native scene."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 740,
-      "end": 769,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 741,
+      "end": 770,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Admit GenericStreamingMessage material overrides through existing region/account world-message ownership; request regional material capabilities, including peer circuits. Late or retired circuit responses cannot mutate the native scene."
@@ -60876,9 +60876,9 @@
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 734,
-      "end": 734,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 735,
+      "end": 735,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Admit GenericStreamingMessage material overrides through existing region/account world-message ownership; request regional material capabilities, including peer circuits. Late or retired circuit responses cannot mutate the native scene."
@@ -61022,7 +61022,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 90,
       "end": 90,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Admit GenericStreamingMessage material overrides through existing region/account world-message ownership; request regional material capabilities, including peer circuits. Late or retired circuit responses cannot mutate the native scene."
@@ -62192,7 +62192,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 15,
       "end": 19,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
@@ -62201,16 +62201,16 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 214,
       "end": 214,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 651,
-      "end": 713,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 652,
+      "end": 714,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
@@ -63218,34 +63218,34 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 212,
       "end": 213,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 600,
-      "end": 650,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 601,
+      "end": 651,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 663,
-      "end": 665,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 664,
+      "end": 666,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 668,
-      "end": 671,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 669,
+      "end": 672,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
@@ -64062,9 +64062,9 @@
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 640,
-      "end": 644,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 641,
+      "end": 645,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
@@ -64611,9 +64611,9 @@
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 622,
-      "end": 639,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 623,
+      "end": 640,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
@@ -64946,7 +64946,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 86,
       "end": 86,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
@@ -65556,9 +65556,9 @@
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 631,
-      "end": 631,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 632,
+      "end": 632,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
@@ -66071,7 +66071,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 104,
       "end": 104,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
@@ -66080,7 +66080,7 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 311,
       "end": 311,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
@@ -66089,52 +66089,52 @@
       "path": "indra/newview/vsnativeimreplay.cpp",
       "start": 315,
       "end": 315,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1576,
-      "end": 1576,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1577,
+      "end": 1577,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1653,
-      "end": 1656,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1654,
+      "end": 1657,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1693,
-      "end": 1694,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1694,
+      "end": 1695,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1700,
-      "end": 1707,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1719,
+      "end": 1719,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
     },
     {
       "path": "indra/newview/vsnativeimreplay.cpp",
-      "start": 1722,
-      "end": 1722,
-      "sha256": "391edd8898c494d58786567086c5197c885c552bb82caa45c63fa9cb281b4ab5",
+      "start": 1733,
+      "end": 1733,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
@@ -66930,6 +66930,42 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute real startup sequencing with delayed inventory/appearance readiness, account timeout and cancellation; require actual replay loading stages. Compile actual window-close callback against Win32 forced-quit caller contract and verify native character gesture pumping."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 316,
+      "end": 316,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 1696,
+      "end": 1696,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 1700,
+      "end": 1717,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
+    },
+    {
+      "path": "indra/newview/vsnativeimreplay.cpp",
+      "start": 1719,
+      "end": 1719,
+      "sha256": "3d7c58f608d206882bb3ff968eb4bb3c13d578c536cdad8c69c9727c08cd52e9",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Exercise actual platform keyboard to window/shared-action callbacks for turn/release, no-focus Enter, editor deletion/Unicode and release-only gesture activation in connected headless replay. Preserve existing capture and network acceptance; complete keyboard and utility qualification remain open."
     }
   ]
 }
