@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="buy land" title="土地の購入">
+    <floater.string name="estimated_zero">
+        US$ 0.00
+    </floater.string>
 	<floater.string name="can_resell">
 		再販可能
 	</floater.string>
@@ -217,7 +220,7 @@
 		追加でL$の購入
 	</text>
 	<text name="currency_est">
-		約[LOCAL_AMOUNT]
+		約[LOCALAMOUNT]
 	</text>
 	<text name="currency_balance">
 		所持金はL$ 2,100です。
@@ -225,4 +228,14 @@
 	<check_box label="グループから[AMOUNT]㎡の貢献を取り除きます。" name="remove_contribution"/>
 	<button label="購入" name="buy_btn"/>
 	<button label="キャンセル" name="cancel_btn"/>
+
+    <text name="getting_data">
+				見積もりを出しています…
+			</text>
+    <text name="currency_links">
+				[https://accounts.secondlife.com/billing_information/?lang=ja-JP 支払い情報]｜[https://www.secondlife.com/my/lindex/buy.php?lang=ja-JP L$の購入]
+			</text>
+    <text name="exchange_rate_note">
+				金額を再入力して、最新の為替レートを確認してください。
+			</text>
 </floater>

@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="buy land" title="Покупка земли">
+    <floater.string name="estimated_zero">
+        US$ 0.00
+    </floater.string>
 	<floater.string name="can_resell">
 		Может быть перепродана.
 	</floater.string>
@@ -222,7 +225,7 @@
 		1000
 	</line_editor>
 	<text name="currency_est">
-		обойдется примерно в [LOCAL_AMOUNT]
+		обойдется примерно в [LOCALAMOUNT]
 	</text>
 	<text name="currency_balance">
 		У вас L$ 2100.
@@ -230,4 +233,14 @@
 	<check_box label="Удалить [AMOUNT] м² взноса из группы." name="remove_contribution"/>
 	<button label="Купить" name="buy_btn"/>
 	<button label="Отмена" name="cancel_btn"/>
+
+    <text name="getting_data">
+				Подсчет...
+			</text>
+    <text name="currency_links">
+				[http://www.secondlife.com/my/account/payment_method_management.php способ оплаты] | [http://www.secondlife.com/my/account/currency.php деньги]
+			</text>
+    <text name="exchange_rate_note">
+				Повторно введите сумму, чтобы увидеть новый обменный курс.
+			</text>
 </floater>

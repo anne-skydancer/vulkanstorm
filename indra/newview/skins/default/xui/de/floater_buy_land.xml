@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="buy land" title="Land kaufen">
+    <floater.string name="estimated_zero">
+        US$ 0.00
+    </floater.string>
 	<floater.string name="can_resell">
 		Verkauf möglich.
 	</floater.string>
@@ -223,7 +226,7 @@ Diese Parzelle ist 512 m² gross.
 		1000
 	</line_editor>
 	<text name="currency_est">
-		für ca. [LOCAL_AMOUNT]
+		für ca. [LOCALAMOUNT]
 	</text>
 	<text name="currency_balance">
 		Sie haben 2.100 L$.
@@ -231,4 +234,14 @@ Diese Parzelle ist 512 m² gross.
 	<check_box label="[AMOUNT] m² Beitrag von der Gruppe entfernen." name="remove_contribution"/>
 	<button label="Kaufen" name="buy_btn"/>
 	<button label="Abbrechen" name="cancel_btn"/>
+
+    <text name="getting_data">
+				Schätzung erfolgt...
+			</text>
+    <text name="currency_links">
+				[http://www.secondlife.com/my/account/payment_method_management.php Zahlungsart] | [https://www.secondlife.com/my/account/currency.php Währung]
+			</text>
+    <text name="exchange_rate_note">
+				Geben Sie den Betrag erneut ein, um die aktuellste Umtauschrate anzuzeigen.
+			</text>
 </floater>

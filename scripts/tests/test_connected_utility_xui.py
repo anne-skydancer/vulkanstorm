@@ -8,6 +8,39 @@ ROOT = Path(__file__).resolve().parents[2]
 SKINS = ROOT / 'indra/newview/skins'
 
 class ConnectedUtilityXUI(unittest.TestCase):
+    def test_all_land_and_currency_host_string_field_and_substitution_contracts(self):
+        # The reusable currency controller is hosted by both real floaters.
+        # Their direct root strings are separate from LLTrans global strings.
+        for kind, files in (
+            ('buy_land', ('llfloaterbuyland.cpp', 'llcurrencyuimanager.cpp')),
+            ('sell_land', ('llfloatersellland.cpp',)),
+            ('buy_currency', ('llfloaterbuycurrency.cpp', 'llcurrencyuimanager.cpp')),
+        ):
+            base=ET.parse(SKINS/f'default/xui/en/floater_{kind}.xml').getroot()
+            names={node.get('name') for node in base.iter() if node.get('name')}
+            strings={node.get('name') for node in base if node.tag in ('floater.string','string')}
+            texts={node.get('name'):''.join(node.itertext()) for node in base.iter() if node.get('name')}
+            for file in files:
+                source=(ROOT/'indra/newview'/file).read_text(encoding='utf-8')
+                # Ignore comments, retaining string literals and actual LLTrans qualification.
+                source=re.sub(r'/\*[\s\S]*?\*/|//[^\n]*','',source)
+                fields=re.findall(r'getChild(?:View|<[^>]+>)\(\s*"([^"]+)"',source)
+                root_strings=re.findall(r'(?<!::)\bgetString\(\s*"([^"]+)"',source)
+                substitutions=re.findall(r'getChild<[^>]+>\("([^"]+)"\)->setTextArg\("([^"]+)"',source)
+                for field in fields:
+                    with self.subTest(kind=kind,file=file,field=field):self.assertIn(field,names)
+                for string in root_strings:
+                    with self.subTest(kind=kind,file=file,string=string):self.assertIn(string,strings)
+                for field,parameter in substitutions:
+                    with self.subTest(kind=kind,file=file,field=field,parameter=parameter):
+                        self.assertIn(parameter,texts[field])
+            # Every localization that overrides an estimate keeps the same binding.
+            for path in SKINS.rglob(f'floater_{kind}.xml'):
+                for node in ET.parse(path).getroot().iter():
+                    if node.get('name')=='currency_est' and ''.join(node.itertext()).strip():
+                        with self.subTest(path=str(path.relative_to(SKINS))):
+                            self.assertIn('[LOCALAMOUNT]',''.join(node.itertext()))
+
     def test_land_purchase_controller_fields_and_every_shipped_overlay(self):
         for kind in ('buy', 'sell'):
             base_path=SKINS/f'default/xui/en/floater_{kind}_land.xml'

@@ -87,6 +87,7 @@ jobs:
       - run: python scripts/tests/test_native_keyboard_dispatch.py
       - run: python scripts/tests/test_native_utility_lifecycle.py
       - run: python scripts/tests/test_native_currency_lifecycle.py
+      - run: python scripts/tests/test_native_currency_ui_contract.py
       - run: python scripts/tests/test_native_pipette.py
       - run: python scripts/tests/test_native_spatial_roots.py
       - run: python scripts/tests/test_native_map_images.py

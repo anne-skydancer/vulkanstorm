@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <floater name="buy land" title="Achat de terrain">
+    <floater.string name="estimated_zero">
+        US$ 0.00
+    </floater.string>
 	<floater.string name="can_resell">Peuvent être revendus.</floater.string>
 	<floater.string name="can_not_resell">Ne peuvent être revendu.</floater.string>
 	<floater.string name="can_change">Ne peuvent être fusionnés ou subdivisés.</floater.string>
@@ -98,9 +101,19 @@ Ce terrain est de 512 m² de surface.
 	<text name="currency_reason">Vous avez L$ 2,100.</text>
 	<text name="currency_action">Acheter des L$ supplémentaires</text>
 	<line_editor name="currency_amt">1000</line_editor>
-	<text name="currency_est">Pour approximativement. [LOCAL_AMOUNT]</text>
+	<text name="currency_est">Pour approximativement. [LOCALAMOUNT]</text>
 	<text name="currency_balance">Vous avez L$ 2,100.</text>
 	<check_box label="Supprimer [AMOUNT] m² de la contribution du groupe." name="remove_contribution"/>
 	<button label="Achat" name="buy_btn"/>
 	<button label="Annuler" name="cancel_btn"/>
+
+    <text name="getting_data">
+				Estimation en cours...
+			</text>
+    <text name="currency_links">
+				[http://www.secondlife.com/my/account/payment_method_management.php mode de paiement] | [http://www.secondlife.com/my/account/currency.php devise]
+			</text>
+    <text name="exchange_rate_note">
+				Saisissez à nouveau le montant pour voir le taux de change actuel.
+			</text>
 </floater>

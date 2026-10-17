@@ -1270,7 +1270,7 @@ void LLFloaterBuyLandUI::refreshUI()
 
             getChild<LLUICtrl>("currency_reason")->setValue(getString("not_enough_lindens", string_args));
 
-            getChild<LLUICtrl>("currency_est")->setTextArg("[LOCAL_AMOUNT]", mCurrency.getLocalEstimate());
+            getChild<LLUICtrl>("currency_est")->setTextArg("[LOCALAMOUNT]", mCurrency.getLocalEstimate());
         }
 
         if (willHaveEnough)
