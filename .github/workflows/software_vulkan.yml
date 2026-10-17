@@ -58,6 +58,7 @@ jobs:
       - run: python scripts/tests/test_world_gltf_ownership.py
       - run: python scripts/tests/test_world_gltf_publication.py
       - run: python scripts/tests/test_world_gltf_topology.py
+      - run: python scripts/tests/test_world_gltf_materials.py
       - run: python scripts/tests/test_world_wind.py
       - run: python scripts/tests/test_control_constraints.py
       - run: python scripts/tests/test_avatar_cpu_compositor.py
