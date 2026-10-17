@@ -523,7 +523,9 @@ def append_llsd(parent, value):
     else:
         ET.SubElement(parent, 'string').text = str(value)
 
-REQUIRED = ('connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
+DEFAULT_ENVIRONMENT_ASSET = '5646d39e-d3d7-6aff-ed71-30fc87d64a91'
+
+REQUIRED = ('connected_default_environment_asset', 'connected_land_buy_policy_cancel', 'connected_land_sell_stale_intent_cancel', 'connected_utility_floaters', 'connected_keyboard_window_dispatch', 'connected_camera_controls', 'connected_land_permissions', 'connected_native_statistics', 'connected_script_notification_controls', 'connected_script_dialog_encoded', 'connected_script_textbox_encoded', 'connected_conference_remap_retirement', 'connected_favorites_modal_acknowledgement', 'connected_notification_console', 'connected_account_context_actions', 'connected_nearby_frontend', 'connected_text_context_menu', 'connected_favorites_context', 'connected_native_cursor', 'connected_native_chrome', 'connected_toolbar_customization', 'connected_inventory_main', 'connected_toolbar_chat', 'im_nearby_forwarding', 'connected_window_pause_resume', 'connected_skin_geometry', 'connected_account_benefits', 'connected_inventory_script_edit_save', 'connected_inventory_properties', 'connected_inventory_sound_preview',
             'connected_inventory_texture_upload', 'connected_inventory_sound_upload',
             'connected_group_titles', 'connected_group_directory_search',
             'connected_inventory_share', 'connected_resident_pay', 'connected_payment_balance_gate',
@@ -761,6 +763,17 @@ def conference_start_observed(requests):
     return temporary.int != 0 and temporary != UUID('84000000-0000-0000-0000-000000000008')
 
 
+def default_environment_asset_observed(requests, fixture):
+    if not fixture.is_file():
+        return False
+    data = fixture.read_bytes()
+    return bool(data) and any(
+        row.get('path', '').rstrip('/') == '/asset' and
+        row.get('query', {}).get('settings_id') == [DEFAULT_ENVIRONMENT_ASSET] and
+        row.get('bytes') == len(data) and row.get('sha256') == hashlib.sha256(data).hexdigest()
+        for row in requests)
+
+
 class SimulatorHTTP(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -881,6 +894,12 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_response(206);self.send_header('Content-Type','image/jp2')
                     self.send_header('Content-Range',f'bytes {start}-{end}/{len(data)}')
                     self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return
+            elif query.get('settings_id'):
+                fixture = getattr(self.server, 'environment_fixture', None)
+                if (query['settings_id'] != [DEFAULT_ENVIRONMENT_ASSET] or not fixture or
+                        not fixture.is_file() or fixture.stat().st_size > 2 * 1024 * 1024):
+                    self.send_response(404); self.send_header('Content-Length', '0'); self.end_headers(); return
+                data = fixture.read_bytes()
             elif query.get('material_id') and getattr(self.server,'r3_directory',None):
                 identities=[f'b3100000-0000-0000-0000-{index:012d}' for index in range(1,5)]
                 if len(query['material_id'])!=1 or query['material_id'][0] not in identities:
@@ -903,7 +922,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             receipt=dict(path=path, method='GET', query=query, bytes=len(data))
-            if query.get('material_id'):receipt['sha256']=hashlib.sha256(data).hexdigest()
+            if query.get('material_id') or query.get('settings_id'):receipt['sha256']=hashlib.sha256(data).hexdigest()
             self.server.requests.append(receipt)
             self.send_response(200)
             self.send_header('Content-Type', 'application/octet-stream')
@@ -1471,6 +1490,7 @@ def main():
         server.r2_baseline_items = baseline_inventory_items
         server.r2_baseline_item = baseline_inventory_item
         server.upload_directory = directory / 'upload-bodies'
+        server.environment_fixture = directory / 'default-environment.llsd'
         worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
         env['VS_VULKAN_REPLAY_SEED'] = server.url + '/seed'
         env['VS_VULKAN_REPLAY_LOGIN'] = server.url + '/login'
@@ -1483,6 +1503,8 @@ def main():
             report['process_isolation'] = process_isolation_evidence(process)
             report['native_debugger'] = getattr(process, 'native_debugger', None)
             passed = assess(report, code, log)
+            if not default_environment_asset_observed(server.requests, server.environment_fixture):
+                raise RuntimeError('Missing real shared default environment asset HTTP acquisition')
             if args.r1_contracts and not r1_contracts_passed(report,server.requests):
                 raise RuntimeError('Missing production R1 ownership/lifecycle or actual mesh replacement evidence')
             if args.terrain_contracts and not terrain_contracts_passed(report,directory):
