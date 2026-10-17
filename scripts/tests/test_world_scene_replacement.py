@@ -25,6 +25,74 @@ class WorldSceneReplacement(unittest.TestCase):
             run = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
+    def test_texture_cost_before_upload_after_publication_and_retirement(self):
+        body = method(SOURCE.read_text(encoding='utf-8'), 'F32 textureCost(')
+        self.compile(r'''
+#include <array>
+#include <cassert>
+#include <map>
+#include <memory>
+#include <string>
+using F32=float;using S32=int;
+struct LLUUID {std::string value;std::string asString()const{return value;}};
+LLUUID vs_native_image_id(const LLUUID& id){return id;}
+struct Image {unsigned width,height;};
+struct VSUIRenderer {
+ static inline unsigned extentReads=0;
+ static std::array<unsigned,2> imageExtent(const std::shared_ptr<Image>& image){
+  assert(image && "Pending or retired images have no GPU dimensions");
+  ++extentReads;return {image->width,image->height};
+ }
+};
+struct Resources {
+ std::map<std::string,std::shared_ptr<Image>> images;
+ std::shared_ptr<Image> image(const std::string& key)const{
+  auto found=images.find(key);return found==images.end()?nullptr:found->second;
+ }
+};
+struct Scene {Resources resources;
+''' + body + r'''
+};
+int main(){
+ Scene scene;LLUUID id{"pending"};
+ assert(scene.textureCost(id)==256);assert(VSUIRenderer::extentReads==0);
+ scene.resources.images["remote:pending"]=nullptr;
+ assert(scene.textureCost(id)==256);assert(VSUIRenderer::extentReads==0);
+ scene.resources.images["remote:pending"]=std::make_shared<Image>(Image{512,256});
+ assert(scene.textureCost(id)==352);assert(VSUIRenderer::extentReads==1);
+ scene.resources.images["remote:pending"]=std::make_shared<Image>(Image{1024,1024});
+ assert(scene.textureCost(id)==512);assert(VSUIRenderer::extentReads==2);
+ scene.resources.images.clear();
+ assert(scene.textureCost(id)==256);assert(VSUIRenderer::extentReads==2);
+}
+''')
+
+    def test_embedded_image_limit_check_accepts_pending_publication(self):
+        body = method((ROOT / 'indra/newview/vsworldgltf.cpp').read_text(),
+                      'VSUIRenderer::Image image(unsigned index,unsigned demand)')
+        check = body[body.index('        const auto extent='):body.index('        if(previous &&')]
+        self.compile(r'''
+#include <array>
+#include <cassert>
+#include <memory>
+struct Image {unsigned width,height;};
+struct VSUIRenderer {
+ static std::array<unsigned,2> imageExtent(const std::shared_ptr<Image>& image){
+  assert(image);return {image->width,image->height};
+ }
+};
+bool overLimit(const std::shared_ptr<Image>& previous,bool fullRes,unsigned limit){
+''' + check + r'''
+ return overLimit;
+}
+int main(){
+ assert(!overLimit(nullptr,false,512));
+ auto image=std::make_shared<Image>(Image{1024,512});
+ assert(overLimit(image,false,512));assert(!overLimit(image,true,512));
+ assert(!overLimit(image,false,1024));
+}
+''')
+
     def test_actual_object_replacement_preserves_only_compatible_owner_meshes(self):
         scene = SOURCE.read_text(encoding='utf-8')
         bodies = '\n'.join(method(scene, signature) for signature in (

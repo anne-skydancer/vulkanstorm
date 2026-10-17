@@ -1183,7 +1183,10 @@ struct VSWorldScene::Impl
     F32 textureCost(const LLUUID& id) const
     {
         const auto image  = resources.image("remote:" + vs_native_image_id(id).asString());
-        const auto extent = VSUIRenderer::imageExtent(image);
+        // Complexity is evaluated before asynchronous images are published and
+        // after their owners retire. Keep the reference base cost while the
+        // resolution is unknown; never query an absent GPU resource.
+        const auto extent = image ? VSUIRenderer::imageExtent(image) : std::array<unsigned, 2>{};
         return F32(256 + S32(16 * (extent[0] / 128.f + extent[1] / 128.f)));
     }
     void dirtyChildren(U32 parent)

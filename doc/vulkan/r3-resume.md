@@ -1,4 +1,4 @@
-# R3 reboot checkpoint — 17 October 2026
+# R3 reboot checkpoint â€” 17 October 2026
 
 Work continues on `vkstorm-vulkan` in
 `C:\Dev\vulkanstorm\worktrees\vkstorm-vulkan`. R3 is **not complete**.
@@ -133,3 +133,22 @@ R3 imported-glTF diagnostic fixture rejection for this live-login failure.
 The latest Linux source gate also detected stale discovery references in the
 R0 ledger after recent R3 changes. Regeneration updates only source-reference
 metadata; all runtime/authenticated qualification flags remain false.
+
+### Captured live-login failure and correction
+
+The user's manual capture at 12:10 local time produced a matching stack and
+minidump in .tmp/live-login-capture. VSWorldScene::Impl::textureCost queried
+VSUIRenderer::imageExtent on an empty remote image before GPU publication;
+the access violation occurs in imageExtent, called from scene complexity
+accounting during present. The scene now keeps the reference formula's base
+256 cost while dimensions are unknown, then computes the resolution cost as
+soon as the immutable image is published. The renderer/fetch upload pipeline
+and OpenGL behavior are unchanged. An equivalent unguarded extent query in
+local glTF image limit handling is guarded as well.
+
+Both compiled production-source regressions failed on the empty image before
+the guards, then pass with them: missing/pending, publication, replacement
+and retirement for scene cost; pending, limited and full-resolution states
+for embedded image limits. Matching live-login acceptance still needs a user
+retry of the rebuilt canonical executable; a headless replay alone cannot
+prove the real account no longer crashes. Preserve private dump/log evidence.
