@@ -1324,6 +1324,7 @@ bool native_shared_setting_callback(const std::string& setting)
         "SpellCheck",
         "SpellCheckDictionary",
         "DebugViews",
+        "FSOverrideVRAMDetection",
         "UserLogFile",
         "ShowMenuBarLocation",
         "ForceShowGrid",
