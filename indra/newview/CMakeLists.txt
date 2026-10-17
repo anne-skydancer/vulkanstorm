@@ -2323,6 +2323,7 @@ if(USE_DILIGENTCORE)
           vswearable.cpp vswearable.h
           vsnativeappearance.cpp vsnativeappearance.h
           vstaskinventory.cpp vstaskinventory.h
+          vsobjectselection.cpp vsobjectselection.h
           vsbridgeadapter.cpp vsbridgeadapter.h
           vsnativecircuits.cpp vsworldcontracts.h)
 endif()
