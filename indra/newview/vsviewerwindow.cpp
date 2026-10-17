@@ -35,6 +35,7 @@
 #include "lllocationinputctrl.h"
 #include "vsnativesession.h"
 #include "llagentcamera.h"
+#include "llfloatercamera.h"
 #include "llagent.h"
 #include "llbutton.h"
 #include "llimview.h"
@@ -421,7 +422,7 @@ bool LLViewerWindow::nativeMouse(LLCoordGL pos, MASK mask, EMouseClickType type,
     {
         gFocusMgr.setKeyboardFocus(nullptr);
         owner->releaseMovement();
-        if (down && ((type == CLICK_LEFT && (mask & MASK_ALT)) || type == CLICK_RIGHT))
+        if (down && ((type == CLICK_LEFT && ((mask & MASK_ALT) || LLFloaterCamera::inFreeCameraMode())) || type == CLICK_RIGHT))
         { mNativeCameraDrag = true; return true; }
         if (down && type == CLICK_LEFT)
         {
@@ -451,7 +452,12 @@ void LLViewerWindow::nativeHover(LLCoordGL pos, MASK mask)
     mMouseInWindow     = true;
     if (mNativeCameraDrag)
         if (auto owner = VSNativeSession::active())
-            owner->cameraOrbit(F32(previous.mX - pos.mX) * .005f, F32(pos.mY - previous.mY) * .005f);
+        {
+            if (mask & MASK_SHIFT)
+                owner->cameraPan(LLVector3(0, F32(pos.mX - previous.mX) * .01f, F32(previous.mY - pos.mY) * .01f));
+            else
+                owner->cameraOrbit(F32(previous.mX - pos.mX) * .005f, F32(pos.mY - previous.mY) * .005f);
+        }
     nativeHoverUpdate(mask);
 }
 void LLViewerWindow::nativeHoverUpdate(MASK mask)

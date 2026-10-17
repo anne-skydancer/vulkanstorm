@@ -8,6 +8,8 @@
 #include "vsuiimageprovider.h"
 #include "llfloaterprofiletexture.h"
 #include "llfloatercamera.h"
+#include "llstatusbar.h"
+#include "lllocationinputctrl.h"
 #include "lljoystickbutton.h"
 #include "llagentcamera.h"
 #include "llfloaterprofile.h"
@@ -200,6 +202,8 @@ struct Replay : public LLAvatarPropertiesObserver
 {
     unsigned step = 0;
     unsigned cameraCheck = 0;
+    unsigned landCheck = 0;
+    bool savedLandIndicators = false;
     VSNativeCamera::State cameraBefore;
     LLHandle<LLFloater> cameraFloater;
     unsigned loggedStep = ~0u;
@@ -607,6 +611,36 @@ struct Replay : public LLAvatarPropertiesObserver
                 return false;
             }
             evidence["connected_camera_controls"] = true;
+            if (landCheck < 3)
+            {
+                if (!landCheck) savedLandIndicators = gSavedSettings.getBOOL("NavBarShowParcelProperties");
+                gSavedSettings.setBOOL("NavBarShowParcelProperties", true);
+                LLSD parcel;
+                parcel["result"] = PARCEL_RESULT_SUCCESS; parcel["sequence"] = 0; parcel["id"] = 31;
+                parcel["name"] = "Replay parcel"; parcel["music"] = ""; parcel["media"] = "";
+                parcel["parcel_flags"] = LLSD::Integer(landCheck == 1 ?
+                    PF_ALLOW_FLY | PF_ALLOW_VOICE_CHAT | PF_CREATE_OBJECTS | PF_ALLOW_OTHER_SCRIPTS : PF_RESTRICT_PUSHOBJECT | PF_ALLOW_DAMAGE);
+                parcel["see_avatars"] = landCheck == 1;
+                require(owner.deliver("ParcelProperties", parcel, owner.host(), owner.generation()), "Authenticated parcel permission update was rejected");
+                const auto rights = owner.parcelPermissions();
+                require(rights.known, "Parcel permissions remained unknown after delivery");
+                auto* location = gViewerWindow->getRootView()->findChild<LLLocationInputCtrl>("location_combo");
+                require(gStatusBar && location, "Connected land permission consumers were not constructed");
+                gStatusBar->updateParcelIcons(); location->refresh();
+                for (auto* view : {static_cast<LLView*>(gStatusBar), static_cast<LLView*>(location)})
+                {
+                    require(view->getChild<LLIconCtrl>("fly_icon")->getVisible() == !rights.fly, "Flight indicator ignored current parcel permissions");
+                    require(view->getChild<LLIconCtrl>("build_icon")->getVisible() == !rights.build, "Build indicator ignored current parcel permissions");
+                    require(view->getChild<LLIconCtrl>("scripts_icon")->getVisible() == !rights.scripts, "Scripts indicator ignored current parcel permissions");
+                    require(view->getChild<LLIconCtrl>("voice_icon")->getVisible() == !rights.voice, "Voice indicator ignored region/parcel permissions");
+                    require(view->getChild<LLIconCtrl>("damage_icon")->getVisible() == rights.damage, "Damage indicator ignored current parcel permissions");
+                }
+                ++landCheck;
+                if (landCheck < 3) return false; // Draw both restricted and permissive states.
+                gSavedSettings.setBOOL("NavBarShowParcelProperties", savedLandIndicators);
+                evidence["connected_land_permissions"] = true;
+            }
+
             if (!qualifyFriendStatus(owner, evidence)) return false;
             if (!membershipSent)
             {
