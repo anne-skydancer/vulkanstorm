@@ -4,6 +4,7 @@
 #include "vsuiimageprovider.h"
 #include "lldir.h"
 #include "llimage.h"
+#include "indra_constants.h"
 #include "llimagej2c.h"
 #include "llimageworker.h"
 #include "lltexturecache.h"
@@ -78,6 +79,9 @@ struct VSUIImageProvider::Impl
         double retryAt=0,deadline=0,lastUsed=0;
         U64 demandFrame=0;
         bool fetching=false,uiDemand=false,cacheChecked=false,fullRes=false;
+        bool local=false;
+        LLUUID redirect;
+        boost::signals2::connection redirectLoaded;
     };
     std::map<LLUUID,Remote> remote;
     U64 diskHits=0,diskMisses=0;
@@ -89,7 +93,7 @@ struct VSUIImageProvider::Impl
         auto victim=remote.end();
         for (auto found=remote.begin();found!=remote.end();++found)
         {
-            if (found->first==preserve || found->second.fetching ||
+            if (found->first==preserve || found->second.local || found->second.fetching ||
                 (found->second.facade && found->second.facade->getNumRefs()>1)) continue;
             if (victim==remote.end() || found->second.touched<victim->second.touched) victim=found;
         }
@@ -139,6 +143,7 @@ void VSUIImageProvider::pumpImages()
         mImpl->regionEpoch=epoch;
         for(auto& [id,entry]:mImpl->remote)
         {
+            if(entry.local) continue;
             if(entry.fetching) fetch->deleteRequest(id,true);
             entry.fetching=false;
             if(entry.readyGeneration!=generation)
@@ -147,7 +152,7 @@ void VSUIImageProvider::pumpImages()
     }
     for(auto& [id,entry]:mImpl->remote)
     {
-        if(!entry.fetching) continue;
+        if(entry.local || !entry.fetching) continue;
         if(entry.generation!=generation || entry.epoch!=epoch)
         {fetch->deleteRequest(id,true);entry.fetching=false;continue;}
         S32 discard=-1,state=0;LLPointer<LLImageRaw> raw,auxiliary;LLCore::HttpStatus status;
@@ -192,7 +197,7 @@ void VSUIImageProvider::pumpImages()
     if(!owner->regionReady()) return;
     std::vector<LLUUID> pending;
     for(const auto& [id,entry]:mImpl->remote)
-        if(!entry.fetching && entry.attempts<3 && LLTimer::getTotalSeconds()>=entry.retryAt &&
+        if(!entry.local && !entry.fetching && entry.attempts<3 && LLTimer::getTotalSeconds()>=entry.retryAt &&
             ((entry.uiDemand && entry.facade && entry.facade->getNumRefs()>1) || LLTimer::getTotalSeconds()-entry.lastUsed<1.0))
             pending.push_back(id);
     for(const auto& id:pending) getUIImageByID(id,-2);
@@ -263,6 +268,58 @@ LLSD VSUIImageProvider::textureCacheEvidence(bool includePixels) const
 }
 LLSD vs_ui_texture_cache_evidence(bool includePixels)
 { return sActiveProvider ? sActiveProvider->textureCacheEvidence(includePixels) : LLSD(); }
+LLUUID vs_native_image_id(const LLUUID& id)
+{ return sActiveProvider?sActiveProvider->imageID(id):id; }
+bool vs_publish_local_image(const LLUUID& id,const LLImageRaw& raw)
+{ return sActiveProvider && sActiveProvider->publishLocalImage(id,raw); }
+void vs_retire_local_image(const LLUUID& id)
+{ if(sActiveProvider) sActiveProvider->retireLocalImage(id); }
+LLUUID VSUIImageProvider::imageID(const LLUUID& id) const
+{
+    const auto entry=mImpl->remote.find(id);
+    return entry!=mImpl->remote.end() && entry->second.local && entry->second.redirect.notNull()
+        ? entry->second.redirect:id;
+}
+bool VSUIImageProvider::publishLocalImage(const LLUUID& id,const LLImageRaw& raw)
+{
+    if(mImpl->retired || id.isNull() || id==IMG_DEFAULT) return false;
+    auto found=mImpl->remote.find(id);
+    if(found!=mImpl->remote.end() && !found->second.local) return false;
+    if(found==mImpl->remote.end() && mImpl->remote.size()>=16384 && !mImpl->evict(id)) return false;
+    const auto pixels=mImpl->resources.publish("remote:"+id.asString(),raw);
+    if(!pixels) return false;
+    auto& entry=mImpl->remote[id];entry.local=true;entry.redirect.setNull();entry.redirectLoaded.disconnect();
+    getUIImageByID(id,-1);
+    entry.pixels=pixels;entry.discard=0;entry.auxiliary=nullptr;
+    entry.fullWidth=raw.getWidth();entry.fullHeight=raw.getHeight();entry.components=raw.getComponents();
+    entry.readyGeneration=VSNativeSession::active()?VSNativeSession::active()->generation():0;
+    entry.facade->setNativeExtent(raw.getWidth(),raw.getHeight());entry.facade->onImageLoaded();
+    return true;
+}
+void VSUIImageProvider::retireLocalImage(const LLUUID& id)
+{
+    const auto found=mImpl->remote.find(id);
+    if(found==mImpl->remote.end() || !found->second.local) return;
+    // A single bounded alias preserves references already held by native faces;
+    // the ordinary default asset is fetched through the shared fetcher.
+    found->second.redirect=IMG_DEFAULT;
+    found->second.pixels=getUIImageByID(IMG_DEFAULT,-1);found->second.auxiliary=nullptr;
+    auto& entry=found->second;
+    entry.facade->setNativeExtent(entry.pixels->getWidth(),entry.pixels->getHeight());
+    entry.redirectLoaded.disconnect();
+    const auto weak=std::weak_ptr<Impl>(mImpl);
+    entry.redirectLoaded=entry.pixels->addLoadedCallback([weak,id]() {
+        if(const auto owner=weak.lock();owner && !owner->retired)
+            if(const auto item=owner->remote.find(id);item!=owner->remote.end() && item->second.redirect.notNull())
+            {
+                auto& image=item->second;
+                image.facade->setNativeExtent(image.pixels->getWidth(),image.pixels->getHeight());
+                image.facade->onImageLoaded();
+            }
+    });
+    entry.facade->onImageLoaded();
+    mImpl->resources.erase("remote:"+id.asString());
+}
 void vs_refresh_ui_image(const LLUUID& id)
 {
     if (sActiveProvider) sActiveProvider->refreshImage(id);
@@ -286,35 +343,36 @@ LLPointer<LLImageRaw> vs_ui_image_aux(const LLUUID& id)
 { return sActiveProvider ? sActiveProvider->auxiliaryImage(id) : nullptr; }
 LLPointer<LLImageRaw> VSUIImageProvider::auxiliaryImage(const LLUUID& id) const
 {
-    const auto found=mImpl->remote.find(id);
+    const auto found=mImpl->remote.find(imageID(id));
     return found!=mImpl->remote.end() && imageReady(id) ? found->second.auxiliary : nullptr;
 }
 LLPointer<LLImageRaw> VSUIImageProvider::rawImage(const LLUUID& id) const
-{ return imageReady(id) ? mImpl->resources.rawImage("remote:" + id.asString()) : nullptr; }
+{ return imageReady(id) ? mImpl->resources.rawImage("remote:" + imageID(id).asString()) : nullptr; }
 bool vs_ui_image_ready(const LLUUID& id) { return sActiveProvider && sActiveProvider->imageReady(id); }
 bool vs_ui_image_failed(const LLUUID& id) { return sActiveProvider && sActiveProvider->imageFailed(id); }
 S32 vs_ui_image_discard(const LLUUID& id) {return sActiveProvider?sActiveProvider->imageDiscard(id):-1;}
 S32 VSUIImageProvider::imageDiscard(const LLUUID& id) const
 {
-    const auto found=mImpl->remote.find(id);
+    const auto found=mImpl->remote.find(imageID(id));
     return found!=mImpl->remote.end() && imageReady(id)?found->second.discard:-1;
 }
 bool VSUIImageProvider::imageFailed(const LLUUID& id) const
 {
     const auto owner = VSNativeSession::active();
-    const auto image = mImpl->remote.find(id);
+    const auto image = mImpl->remote.find(imageID(id));
     return owner && owner->phase() == VSNativeSession::Phase::Connected && image != mImpl->remote.end() &&
         image->second.failedGeneration == owner->generation();
 }
 bool VSUIImageProvider::imageReady(const LLUUID& id) const
 {
     const auto owner = VSNativeSession::active();
-    const auto image = mImpl->remote.find(id);
-    return owner && owner->phase() == VSNativeSession::Phase::Connected && image != mImpl->remote.end() &&
-        image->second.readyGeneration == owner->generation();
+    const auto image = mImpl->remote.find(imageID(id));
+    return image!=mImpl->remote.end() && (image->second.local ||
+        (owner && owner->phase()==VSNativeSession::Phase::Connected && image->second.readyGeneration==owner->generation()));
 }
 void VSUIImageProvider::refreshImage(const LLUUID& id)
 {
+    if(const auto entry=mImpl->remote.find(id);entry!=mImpl->remote.end() && entry->second.local) return;
     if(auto* fetch=LLAppViewer::getTextureFetch()) fetch->deleteRequest(id,true);
     if(auto* cache=LLAppViewer::getTextureCache()) cache->removeFromCache(id);
     auto& entry=mImpl->remote[id];entry.fetching=false;entry.generation=entry.readyGeneration=entry.failedGeneration=0;
@@ -326,6 +384,7 @@ void VSUIImageProvider::resetAccount()
     const auto fallback=getUIImage("Generic_Person");
     for(auto& [id,entry]:mImpl->remote)
     {
+        if(entry.local) continue;
         if(entry.fetching) if(auto* fetch=LLAppViewer::getTextureFetch()) fetch->deleteRequest(id,true);
         mImpl->resources.erase("remote:"+id.asString());
         entry.pixels=fallback;entry.auxiliary=nullptr;entry.fetching=false;
@@ -339,6 +398,7 @@ void VSUIImageProvider::cleanUp()
     mImpl->retired=true;
     for(const auto& [id,entry]:mImpl->remote)
     {
+        entry.redirectLoaded.disconnect();
         if(entry.fetching) if(auto* fetch=LLAppViewer::getTextureFetch()) fetch->deleteRequest(id,true);
         mImpl->resources.erase("remote:"+id.asString());
     }
@@ -382,6 +442,11 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
                         else found->second.pixels->draw(x, y, w, h, color);
                     }
             });
+    }
+    if(entry.local)
+    {
+        if(entry.redirect.notNull()) entry.pixels=getUIImageByID(entry.redirect,priority);
+        return entry.facade;
     }
     if(priority>=0) entry.uiDemand=true;
     auto* fetch=LLAppViewer::getTextureFetch();

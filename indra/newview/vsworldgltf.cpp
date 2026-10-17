@@ -4,6 +4,7 @@
 #include "vsworldgltf.h"
 #include "vsnormalbasis.h"
 #include "vsuiresources.h"
+#include "vsuiimageprovider.h"
 #include "gltf/asset.h"
 #include "llassetstorage.h"
 #include "llfilesystem.h"
@@ -604,7 +605,7 @@ struct VSWorldGLTF::Impl : std::enable_shared_from_this<Impl>
         if (LLUUID::parseUUID(source.mUri, &uuid) && uuid.notNull())
         {
             LLUI::getUIImageByID(uuid);
-            return resources.image("remote:" + uuid.asString());
+            return resources.image("remote:" + vs_native_image_id(uuid).asString());
         }
         if (const auto found = images.find(index); found != images.end())
             return resources.image(found->second);
