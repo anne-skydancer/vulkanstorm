@@ -16,6 +16,7 @@
 #include "vsnativesession.h"
 #include "vsuiimageprovider.h"
 #include "llimagej2c.h"
+#include "lltexturecache.h"
 #include "llsdutil.h"
 #include "vsplainchat.h"
 #include "fsnearbychatvoicemonitor.h"
@@ -867,7 +868,14 @@ struct Replay
                     textureReference(*encoded,folder,"resolution-limit",1,encoded->getDataSize(),textureStreaming["references"]);
                     if(std::getenv("VS_VULKAN_REPLAY_LOCAL_IMAGES"))
                         for(S8 level=1;level<=MAX_DISCARD_LEVEL;++level)
-                            textureReference(*encoded,folder,"pressure-discard-"+std::to_string(level),level,encoded->getDataSize(),textureStreaming["references"]);
+                        {
+                            // The reference fetcher reads only its estimated byte
+                            // budget from a resident cache entry. A complete file
+                            // can decode higher quality at the same discard.
+                            const S32 bytes=llmin(encoded->getDataSize(),
+                                llmax(LLImageJ2C::calcDataSizeJ2C(1024,1024,4,level),TEXTURE_CACHE_ENTRY_SIZE));
+                            textureReference(*encoded,folder,"pressure-discard-"+std::to_string(level),level,bytes,textureStreaming["references"]);
+                        }
                     textureCacheStep=1;
                 }
                 if(textureCacheStep==1)

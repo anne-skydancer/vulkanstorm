@@ -4,6 +4,41 @@ import shutil,subprocess,tempfile,unittest
 from test_native_simulator_features import method
 ROOT=Path(__file__).resolve().parents[2]
 class NativeTextureCacheTest(unittest.TestCase):
+    def test_pressure_oracle_uses_the_shared_bounded_cache_window(self):
+        text=(ROOT/'indra/newview/vsnativereplay.cpp').read_text()
+        loop=method(text,'for(S8 level=1;level<=MAX_DISCARD_LEVEL;++level)')
+        source=r"""
+#include <algorithm>
+#include <cassert>
+#include <map>
+#include <memory>
+#include <string>
+using S8=signed char;using S32=int;
+constexpr S32 MAX_DISCARD_LEVEL=5,TEXTURE_CACHE_ENTRY_SIZE=600;
+template<class T>T llmin(T a,T b){return std::min(a,b);}template<class T>T llmax(T a,T b){return std::max(a,b);}
+struct LLImageJ2C {int bytes;int getDataSize(){return bytes;}
+ static int calcDataSizeJ2C(int w,int h,int c,int d){assert(w==1024&&h==1024&&c==4);return 500*d;}};
+using Refs=std::map<std::string,int>;
+void textureReference(LLImageJ2C&,int,const std::string& name,S8 level,S32 bytes,Refs& refs){
+ assert(name=="pressure-discard-"+std::to_string(level));refs[name]=bytes;}
+void collect(int size,Refs& references){
+ auto encoded=std::make_shared<LLImageJ2C>();encoded->bytes=size;int folder=0;
+ std::map<std::string,Refs> textureStreaming;LOOP
+ references=textureStreaming["references"];
+}
+int main(){for(int size:{1000,10000}){
+ Refs refs;collect(size,refs);assert(refs.size()==5);
+ for(int d=1;d<=5;++d)assert(refs["pressure-discard-"+std::to_string(d)]==std::min(size,std::max(600,500*d)));
+}}
+""".replace('LOOP',loop)
+        compiler=shutil.which('clang++') or shutil.which('g++');self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'reference_window.cpp';path.write_text(source);exe=Path(temp)/'reference_window.exe'
+            built=subprocess.run([compiler,'-std=c++17','-Wall','-Wextra','-Werror',str(path),'-o',str(exe)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stdout+built.stderr)
+            ran=subprocess.run([str(exe)],capture_output=True,text=True)
+            self.assertEqual(ran.returncode,0,ran.stdout+ran.stderr)
+
     def test_native_request_discard_ranges_bounds_and_legacy_default(self):
         source=(ROOT/'indra/newview/lltexturefetch.cpp').read_text()
         body=method(source,'S32 LLTextureFetch::createRequest(')
