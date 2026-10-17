@@ -35,6 +35,7 @@
 #include "lllocationinputctrl.h"
 #include "vsnativesession.h"
 #include "llagentcamera.h"
+#include "llviewercamera.h"
 #include "llfloatercamera.h"
 #include "llagent.h"
 #include "llbutton.h"
@@ -372,7 +373,7 @@ bool LLViewerWindow::nativePick(LLPickInfo& info)
     const auto  camera    = owner->cameraState();
     const float x         = 2.f * float(info.mMousePt.mX - rect.mLeft) / rect.getWidth() - 1;
     const float y         = 2.f * float(info.mMousePt.mY - rect.mBottom) / rect.getHeight() - 1;
-    const float tangent   = std::tan(F_PI / 6);
+    const float tangent   = std::tan(LLViewerCamera::getInstance()->getView() * .5f);
     LLVector3   direction = camera.at - camera.left * (x * tangent * float(rect.getWidth()) / rect.getHeight()) + camera.up * (y * tangent);
     if (direction.normalize() < 1.e-6f)
         return false;

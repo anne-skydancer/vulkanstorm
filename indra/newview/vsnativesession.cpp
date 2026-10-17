@@ -1066,9 +1066,8 @@ bool VSNativeSession::publishCamera()
     if(!LLViewerCamera::instanceExists())LLViewerCamera::createInstance();
     auto* camera=LLViewerCamera::getInstance();
     camera->setOrigin(state.center);camera->setAxes(state.at,state.left,state.up);
-    // Exactly match VSWorldScene::cameraView and nativePick's current lens.
-    // Publishing CameraAngle here before native projection supports it would lie.
-    camera->setViewNoBroadcast(F_PI/3.f);
+    // The shared CameraAngle observer and FOV/RLVa clamps own the lens.
+    // Rendering, UI projection and native picking all consume that same view.
     camera->setNear(.1f);camera->setFar(llclamp(gSavedSettings.getF32("RenderFarClip"),16.f,1024.f));
     camera->setAspect(F32(viewport.getWidth())/viewport.getHeight());
     camera->setViewHeightInPixels(viewport.getHeight());
@@ -1514,6 +1513,8 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         U64 extended = flags;
         if (msg->getNumberOfBlocks("RegionInfo4") > 0) msg->getU64("RegionInfo4", "RegionFlagsExtended", extended);
         body["flags64"] = ll_sd_from_U64(extended);
+        bool estateManager;msg->getBOOL("RegionInfo","IsEstateManager",estateManager);
+        body["estate_manager"]=estateManager;
         F32 water; msg->getF32("RegionInfo", "WaterHeight", water); body["water_height"] = water;
         const char* details[]={"TerrainDetail0","TerrainDetail1","TerrainDetail2","TerrainDetail3"};
         const char* starts[]={"TerrainStartHeight00","TerrainStartHeight01","TerrainStartHeight10","TerrainStartHeight11"};
@@ -1592,6 +1593,7 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
 {
     if (generation != mGeneration) { ++mExpired; return false; }
     if (!body.isMap() || !admit(name, sender)) return false;
+    if(name=="RegionHandshake" && body.has("estate_manager") && !body["estate_manager"].isBoolean())return false;
     if (name=="EnableSimulator")
     {
         if (sender!=mHost) return false;
@@ -1613,6 +1615,8 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         region->second.access=U8(body["access"].asInteger());
         region->second.waterHeight=F32(body["water_height"].asReal());
         region->second.waterKnown=body["water_height"].isReal()&&std::isfinite(region->second.waterHeight);
+        region->second.estateManagerKnown=body["estate_manager"].isBoolean();
+        region->second.estateManager=region->second.estateManagerKnown && body["estate_manager"].asBoolean();
         region->second.handshake=true;if (region->second.acknowledged) region->second.deadline=0;
         gMessageSystem->newMessage("RegionHandshakeReply");gMessageSystem->nextBlock("AgentData");
         gMessageSystem->addUUID("AgentID",mAgent);gMessageSystem->addUUID("SessionID",mSession);
@@ -1693,6 +1697,8 @@ bool VSNativeSession::deliver(const std::string& name, const LLSD& body, const L
         region->second.access=U8(body["access"].asInteger());
         region->second.waterHeight=F32(body["water_height"].asReal());
         region->second.waterKnown=body["water_height"].isReal()&&std::isfinite(region->second.waterHeight);
+        region->second.estateManagerKnown=body["estate_manager"].isBoolean();
+        region->second.estateManager=region->second.estateManagerKnown && body["estate_manager"].asBoolean();
             region->second.handshake=true;
         }
         mHandshake = true; send("RegionHandshakeReply", LLSD()); connected();
@@ -1848,6 +1854,14 @@ void VSNativeSession::connected()
         return;
     }
     mPhase = Phase::Connected; mDeadline = now() + 1;
+    if (gViewerWindow)
+    {
+        // Same startup order as STATE_AGENT_SEND: aspect affects FOV limits.
+        auto* camera = LLViewerCamera::getInstance();
+        camera->setViewHeightInPixels(gViewerWindow->getWorldViewHeightRaw());
+        camera->setAspect(gViewerWindow->getWorldViewAspectRatio());
+        camera->setDefaultFOV(gSavedSettings.getF32("CameraAngle"));
+    }
     if (!mAppearance)
     {
         mAppearance = std::make_unique<VSNativeAppearance>(shared_from_this());

@@ -1694,6 +1694,8 @@ bool FSLSLBridge::isItemAttached(const LLUUID& id)
 
 void FSLSLBridge::setupFSCategory(inventory_func_type callback)
 {
+    const auto current = fs_bridge_account_guard();
+    if (!current()) return;
     if (LLUUID fsCatID = gInventory.findCategoryByName(ROOT_FIRESTORM_FOLDER); !fsCatID.isNull())
     {
         LLInventoryModel::item_array_t* items;
@@ -1712,18 +1714,21 @@ void FSLSLBridge::setupFSCategory(inventory_func_type callback)
             }
         }
 
-        gInventory.createNewCategory(fsCatID, LLFolderType::FT_NONE, FS_BRIDGE_FOLDER, [this, callback](const LLUUID& new_cat_id)
+        gInventory.createNewCategory(fsCatID, LLFolderType::FT_NONE, FS_BRIDGE_FOLDER, [this, callback, current](const LLUUID& new_cat_id)
             {
+                if (!current()) return;
                 mBridgeFolderID = new_cat_id;
                 callback(mBridgeFolderID);
             });
     }
     else
     {
-        gInventory.createNewCategory(gInventory.getRootFolderID(), LLFolderType::FT_NONE, ROOT_FIRESTORM_FOLDER, [this, callback](const LLUUID& new_cat_id)
+        gInventory.createNewCategory(gInventory.getRootFolderID(), LLFolderType::FT_NONE, ROOT_FIRESTORM_FOLDER, [this, callback, current](const LLUUID& new_cat_id)
             {
-                gInventory.createNewCategory(new_cat_id, LLFolderType::FT_NONE, FS_BRIDGE_FOLDER, [this, callback](const LLUUID& new_cat_id)
+                if (!current()) return;
+                gInventory.createNewCategory(new_cat_id, LLFolderType::FT_NONE, FS_BRIDGE_FOLDER, [this, callback, current](const LLUUID& new_cat_id)
                     {
+                        if (!current()) return;
                         mBridgeFolderID = new_cat_id;
                         callback(mBridgeFolderID);
                     });

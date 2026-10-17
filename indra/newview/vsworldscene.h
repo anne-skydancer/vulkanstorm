@@ -62,6 +62,16 @@ public:
     };
     std::optional<ObjectSnapshot> objectSnapshot(const ObjectHandle&) const;
     std::vector<ObjectSnapshot> objectSnapshots() const;
+    struct MapObjectSnapshot
+    {
+        ObjectHandle object;
+        U32 updateFlags=0,rootUpdateFlags=0;
+        U8 pcode=0;
+        LLVector3d position;
+        LLVector3 scale;
+        bool attachment=false;
+    };
+    std::vector<MapObjectSnapshot> mapObjectSnapshots() const;
     std::shared_ptr<const VSResourceBudget::Reservation> reserveSpatialBytes(std::size_t);
     struct Pick
     {
@@ -101,7 +111,7 @@ public:
                                                  unsigned viewportWidth = 0);
     static VSWorldRenderer::View view(const LLVector3& eye, unsigned width, unsigned height, float farClip);
     static VSWorldRenderer::View cameraView(const LLVector3& eye,const LLVector3& at,const LLVector3& up,
-                                            unsigned width,unsigned height,float farClip);
+                                            unsigned width,unsigned height,float farClip,float verticalFov = 1.0471975512f);
     bool agentPosition(LLVector3&) const;
     VSWorldAvatar*                       selfAvatar() const;
     VSWorldAvatar*                       avatarForObject(const LLUUID&) const;

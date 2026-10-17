@@ -1467,6 +1467,39 @@ std::vector<VSWorldScene::ObjectSnapshot> VSWorldScene::objectSnapshots() const
     return result;
 }
 
+std::vector<VSWorldScene::MapObjectSnapshot> VSWorldScene::mapObjectSnapshots() const
+{
+    std::vector<MapObjectSnapshot> result;
+    if(mImpl->retired)return result;
+    result.reserve(mImpl->objects.size());
+    for(const auto& [local,source]:mImpl->objects)
+    {
+        if(!mImpl->linksCurrent(source) || source.pcode==LL_PCODE_LEGACY_AVATAR)continue;
+        auto token=object(mImpl->host,local);if(!token)continue;
+        LLVector3 position;LLQuaternion rotation;std::set<U32> visited;
+        if(!mImpl->transform(local,position,rotation,visited))continue;
+        MapObjectSnapshot row;
+        row.object=*token;row.updateFlags=source.updateFlags;row.rootUpdateFlags=source.updateFlags;
+        row.pcode=source.pcode;row.position=from_region_handle(mImpl->handle)+LLVector3d(position);row.scale=source.scale;
+        const Impl::Object* ancestor=&source;
+        std::set<U32> ancestors;
+        while(ancestor->parent && ancestors.insert(ancestor->parent).second && ancestors.size()<=256)
+        {
+            const auto parent=mImpl->objects.find(ancestor->parent);
+            if(parent==mImpl->objects.end())break;
+            if(parent->second.pcode==LL_PCODE_LEGACY_AVATAR){row.attachment=true;break;}
+            ancestor=&parent->second;row.rootUpdateFlags=ancestor->updateFlags;
+        }
+        if(!row.attachment)result.push_back(std::move(row));
+    }
+    for(const auto& [host,region]:mNeighbours)
+    {
+        auto nearby=region->mapObjectSnapshots();
+        result.insert(result.end(),std::make_move_iterator(nearby.begin()),std::make_move_iterator(nearby.end()));
+    }
+    return result;
+}
+
 std::vector<VSWorldScene::AvatarLocation> VSWorldScene::avatarLocations() const
 {
     std::vector<AvatarLocation> result;
@@ -3559,15 +3592,16 @@ VSWorldRenderer::View VSWorldScene::view(const LLVector3& eye,unsigned width,uns
     result.projection={0,0,a,1, -x,0,0,0, 0,y,0,0, x*eye.mV[1],-y*eye.mV[2],b-a*eye.mV[0],-eye.mV[0]};return result;
 }
 VSWorldRenderer::View VSWorldScene::cameraView(const LLVector3& eye,const LLVector3& direction,const LLVector3& vertical,
-                                             unsigned width,unsigned height,float farClip)
+                                             unsigned width,unsigned height,float farClip,float verticalFov)
 {
     VSWorldRenderer::View result;
+    if (!std::isfinite(verticalFov) || verticalFov <= 0.f || verticalFov >= F_PI) return result;
     if (!width || !height || !finiteVector(eye) || !finiteVector(direction) || !finiteVector(vertical) || !std::isfinite(farClip)) return result;
     LLVector3 at=direction,up=vertical;
     if (at.normalize()<1.e-6f || up.normalize()<1.e-6f) return result;
     LLVector3 left=up%at;if (left.normalize()<1.e-6f) return result;
     up=at%left;up.normalize();
-    const float nearClip=.1f,farDistance=llclamp(farClip,16.f,1024.f),cot=1/std::tan(F_PI/6);
+    const float nearClip=.1f,farDistance=llclamp(farClip,16.f,1024.f),cot=1/std::tan(verticalFov*.5f);
     const float x=cot*height/width,y=cot,a=(farDistance+nearClip)/(farDistance-nearClip),b=-2*farDistance*nearClip/(farDistance-nearClip);
     for (unsigned column=0;column<3;++column)
     {

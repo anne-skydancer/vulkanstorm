@@ -13,6 +13,7 @@
 #include "vsworldscene.h"
 #include "vsnativesession.h"
 #include "llagentcamera.h"
+#include "llviewercamera.h"
 #include "llviewertexture.h"
 #include "llframetimer.h"
 #include "llmemory.h"
@@ -400,7 +401,8 @@ struct VSVulkanContext::Impl
         {
             const auto camera=session->cameraState();const LLVector3 eye=camera.center;
             const float distance=gSavedSettings.getF32("RenderFarClip");
-            auto view    = VSWorldScene::cameraView(eye, camera.at, camera.up, size.mX, size.mY, distance);
+            auto view    = VSWorldScene::cameraView(eye, camera.at, camera.up, size.mX, size.mY, distance,
+                LLViewerCamera::getInstance()->getView());
             view.hudZoom = gAgentCamera.mHUDCurZoom;
 #if VS_VULKAN_DIAGNOSTICS
             const auto packetStart = profileFrames ? ProfileClock::now() : ProfileClock::time_point{};

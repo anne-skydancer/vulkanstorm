@@ -5284,6 +5284,15 @@ void process_sim_stats(LLMessageSystem *msg, void **user_data)
         region_flags = flags;
     }
 
+#if VS_NATIVE_VULKAN
+    if(auto owner=VSNativeSession::active())
+    {
+        const bool was_flying=gAgent.getFlying();
+        if(owner->applyRegionStats(msg->getSender(),owner->generation(),owner->circuitGeneration(msg->getSender()),region_flags,max_tasks_per_region) &&
+           was_flying && (region_flags&REGION_FLAGS_BLOCK_FLY))gAgent.setFlying(gAgent.canFly());
+        return;
+    }
+#endif
     LLViewerRegion* regionp = gAgent.getRegion();
     if (regionp)
     {

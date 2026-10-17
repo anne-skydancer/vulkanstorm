@@ -101,6 +101,7 @@
 #include "lllineeditor.h"
 #include "llcombobox.h"
 #include "llfloaterpreference.h"
+#include "llfloaterbuycurrency.h"
 #include "llfloaterconversationpreview.h"
 #include "fschathistory.h"
 #include "lggcontactsets.h"
@@ -307,10 +308,11 @@ struct Replay : public LLAvatarPropertiesObserver
     bool scriptRequested = false;
     LLHandle<LLFloater> textureUpload, soundUpload;
     std::string waveFilename;
-    LLUUID shareConfirmation, payConfirmation, unknownBalanceAlert, insufficientBalanceAlert;
+    LLUUID shareConfirmation, payConfirmation, unknownBalanceAlert;
     LLHandle<LLFloater> shareInventory, payFloater;
     unsigned inventoryTabVisit = 0;
     bool savedPaymentConfirm = false;
+    bool savedQuickBuyCurrency = false;
     S32 savedPaymentThreshold = 0;
     boost::signals2::scoped_connection accountNotifications;
     void openResidentPay()
@@ -1571,7 +1573,6 @@ struct Replay : public LLAvatarPropertiesObserver
                 if (n->getName() == "ShareItemsConfirmation") shareConfirmation = n->getID();
                 if (n->getName() == "PayConfirmation") payConfirmation = n->getID();
                 if (n->getName() == "NativePaymentBalanceUnavailable") unknownBalanceAlert = n->getID();
-                if (n->getName() == "NativePaymentInsufficientFunds") insufficientBalanceAlert = n->getID();
                 return false;
             });
             auto* profile = residentFloater.get();
@@ -1649,6 +1650,10 @@ struct Replay : public LLAvatarPropertiesObserver
             evidence["connected_inventory_share"] = true;
             gMessageSystem->setHandlerFunc("ImprovedInstantMessage", vs_native_im_receive);
             savedPaymentConfirm = gSavedSettings.getBOOL("FSConfirmPayments");
+            savedQuickBuyCurrency = gSavedSettings.getBOOL("QuickBuyCurrency");
+            // Exercise the ordinary profile/payment-info branch without
+            // navigating a payment website or performing a currency purchase.
+            gSavedSettings.setBOOL("QuickBuyCurrency", false);
             savedPaymentThreshold = gSavedSettings.getS32("FSPaymentConfirmationThreshold");
             gSavedSettings.setBOOL("FSConfirmPayments", true); gSavedSettings.setS32("FSPaymentConfirmationThreshold", 0);
             sendBalance(owner, 100); ++step; return false;
@@ -1685,14 +1690,21 @@ struct Replay : public LLAvatarPropertiesObserver
         {
             if (!owner.balanceKnown() || owner.balance() != 0) return false;
             openResidentPay(); payFloater.get()->getChild<LLButton>("fastpay 1")->onCommit();
-            require(insufficientBalanceAlert.notNull(), "Insufficient account funds did not gate actual Pay control");
-            if (auto n = LLNotifications::instance().find(insufficientBalanceAlert))
-                n->respond(n->getResponseTemplate(LLNotification::WITH_DEFAULT_BUTTON));
+            require(LLFloaterBuyCurrency::sPropertiesRequest != nullptr && outgoingPayments == 1,
+                "Insufficient funds did not enter the shared currency/payment-info controller");
             sendBalance(owner, 100); ++step; return false;
         }
         if (step == 36)
         {
             if (!owner.balanceKnown() || owner.balance() != 100) return false;
+            // The actual HTTP profile fixture reports no payment information.
+            // Wait for that shared observer to open its real payment-method UI.
+            auto* payment = LLFloaterReg::findInstance("add_payment_method");
+            if (!payment || !payment->isInVisibleChain()) return false;
+            require(LLFloaterBuyCurrency::sPropertiesRequest == nullptr && outgoingPayments == 1,
+                "Shared insufficient-funds flow did not retire its request safely");
+            evidence["connected_payment_insufficient_funds_shared_currency"] = true;
+            LLFloaterReg::destroyInstance("add_payment_method");
             payConfirmation.setNull(); openResidentPay(); payFloater.get()->getChild<LLButton>("fastpay 1")->onCommit();
             auto n = LLNotifications::instance().find(payConfirmation);
             require(n != nullptr, "Payment lifetime fixture lacks real confirmation");
@@ -1707,6 +1719,7 @@ struct Replay : public LLAvatarPropertiesObserver
             require(option == 0, "Real payment confirmation response does not select Pay");
             n->respond(response);
             gSavedSettings.setBOOL("FSConfirmPayments", savedPaymentConfirm);
+            gSavedSettings.setBOOL("QuickBuyCurrency", savedQuickBuyCurrency);
             gSavedSettings.setS32("FSPaymentConfirmationThreshold", savedPaymentThreshold);
             ++step; return false;
         }

@@ -33,6 +33,11 @@ class NativeBridgeLifecycleTest(unittest.TestCase):
             result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_folder_creation_retires_before_mutating_bridge_or_creating_children(self):
+        source = (ROOT / "indra/newview/fslslbridge.cpp").read_text()
+        fixture = (ROOT / "scripts/tests/native_bridge_folder_fixture.cpp").read_text()
+        self.compile_run(fixture.replace("METHOD", body(source, "void FSLSLBridge::setupFSCategory(")))
+
     def test_actual_bridge_account_region_and_operation_guard(self):
         source = (ROOT / "indra/newview/fslslbridge.cpp").read_text()
         fixture = r'''

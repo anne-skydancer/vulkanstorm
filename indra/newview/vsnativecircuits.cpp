@@ -35,6 +35,8 @@ std::vector<VSNativeSession::RegionSnapshot> VSNativeSession::regionSnapshots() 
         row.account=account();row.host=host;row.handle=region.handle;row.circuit=region.incarnation;
         row.width=region.width;row.height=region.height;row.id=region.id;row.owner=region.owner;
         row.name=region.name;row.flags=region.flags;row.access=region.access;
+        row.estateManager=region.estateManager;row.estateManagerKnown=region.estateManagerKnown;
+        row.objectCapacity=region.objectCapacity;row.objectCapacityKnown=region.objectCapacityKnown;
         row.waterHeight=region.waterHeight;row.waterKnown=region.waterKnown;row.current=host==mHost;
         row.coarse=region.coarse.avatars;row.parcelOverlay=region.parcelOverlay;
         result.push_back(std::move(row));
@@ -61,6 +63,17 @@ bool VSNativeSession::receiveParcelOverlay(const LLHost& host,U64 account,U64 in
         sequence,bytes.data(),bytes.size(),[&world](std::size_t amount){return world.reserveSpatialBytes(amount);});
     if(!next)return false;
     found->second.parcelOverlay=next;
+    return true;
+}
+
+bool VSNativeSession::applyRegionStats(const LLHost& host,U64 account,U64 incarnation,U64 flags,U32 capacity)
+{
+    const auto found=mCircuits.find(host);
+    if(mShutdown || mPhase!=Phase::Connected || mChangingRegion || account!=mGeneration || host!=mHost || !incarnation ||
+       found==mCircuits.end() || found->second.incarnation!=incarnation ||
+       !found->second.acknowledged || !found->second.handshake)return false;
+    mFlags=flags;
+    found->second.flags=flags;found->second.objectCapacity=capacity;found->second.objectCapacityKnown=true;
     return true;
 }
 
