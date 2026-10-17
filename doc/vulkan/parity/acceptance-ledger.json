@@ -35653,6 +35653,7 @@
       "shared_source_references": [
         "indra/newview/llfloatersettingscolor.cpp",
         "indra/newview/llfloatersettingsdebug.cpp",
+        "indra/newview/rlvfloaters.cpp",
         "indra/newview/vsstartupui.cpp"
       ],
       "native_integration_hosts": [
