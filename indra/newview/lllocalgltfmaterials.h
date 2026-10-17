@@ -69,6 +69,10 @@ private: /* private enums */
     };
 
 private: /* members */
+#if VS_NATIVE_VULKAN
+    bool mNative=false;
+    std::array<LLUUID,4> mNativeImages;
+#endif
     std::string mFilename;
     std::string mShortName;
     LLUUID      mTrackingID;

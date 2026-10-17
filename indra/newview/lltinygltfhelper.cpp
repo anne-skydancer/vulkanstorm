@@ -30,6 +30,12 @@
 #include "llimage.h"
 #include "llviewertexture.h"
 #include "llviewertexturelist.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsuiimageprovider.h"
+#include "tinygltf/stb_image.h"
+#include <filesystem>
+#endif
 
 static void strip_alpha_channel(LLPointer<LLImageRaw>& img)
 {
@@ -61,26 +67,13 @@ static void copy_red_channel(const LLPointer<LLImageRaw>& src_img, LLPointer<LLI
     }
 }
 
-void LLTinyGLTFHelper::initFetchedTextures(tinygltf::Material& material,
-    LLPointer<LLImageRaw>& base_color_img,
-    LLPointer<LLImageRaw>& normal_img,
-    LLPointer<LLImageRaw>& mr_img,
-    LLPointer<LLImageRaw>& emissive_img,
-    LLPointer<LLImageRaw>& occlusion_img,
-    LLPointer<LLViewerFetchedTexture>& base_color_tex,
-    LLPointer<LLViewerFetchedTexture>& normal_tex,
-    LLPointer<LLViewerFetchedTexture>& mr_tex,
-    LLPointer<LLViewerFetchedTexture>& emissive_tex)
+static void prepare_material_images(tinygltf::Material& material,
+    LLPointer<LLImageRaw>& normal_img,LLPointer<LLImageRaw>& mr_img,
+    LLPointer<LLImageRaw>& emissive_img,LLPointer<LLImageRaw>& occlusion_img)
 {
-    if (base_color_img)
-    {
-        base_color_tex = LLViewerTextureManager::getFetchedTexture(base_color_img, FTType::FTT_LOCAL_FILE, true);
-    }
-
     if (normal_img)
     {
         strip_alpha_channel(normal_img);
-        normal_tex = LLViewerTextureManager::getFetchedTexture(normal_img, FTType::FTT_LOCAL_FILE, true);
     }
 
     if (mr_img)
@@ -123,16 +116,24 @@ void LLTinyGLTFHelper::initFetchedTextures(tinygltf::Material& material,
         copy_red_channel(occlusion_img, mr_img);
     }
 
-    if (mr_img)
-    {
-        mr_tex = LLViewerTextureManager::getFetchedTexture(mr_img, FTType::FTT_LOCAL_FILE, true);
-    }
-
-    if (emissive_img)
-    {
-        strip_alpha_channel(emissive_img);
-        emissive_tex = LLViewerTextureManager::getFetchedTexture(emissive_img, FTType::FTT_LOCAL_FILE, true);
-    }
+    if(emissive_img) strip_alpha_channel(emissive_img);
+}
+void LLTinyGLTFHelper::initFetchedTextures(tinygltf::Material& material,
+    LLPointer<LLImageRaw>& base_color_img,
+    LLPointer<LLImageRaw>& normal_img,
+    LLPointer<LLImageRaw>& mr_img,
+    LLPointer<LLImageRaw>& emissive_img,
+    LLPointer<LLImageRaw>& occlusion_img,
+    LLPointer<LLViewerFetchedTexture>& base_color_tex,
+    LLPointer<LLViewerFetchedTexture>& normal_tex,
+    LLPointer<LLViewerFetchedTexture>& mr_tex,
+    LLPointer<LLViewerFetchedTexture>& emissive_tex)
+{
+    prepare_material_images(material,normal_img,mr_img,emissive_img,occlusion_img);
+    if(base_color_img) base_color_tex=LLViewerTextureManager::getFetchedTexture(base_color_img,FTType::FTT_LOCAL_FILE,true);
+    if(normal_img) normal_tex=LLViewerTextureManager::getFetchedTexture(normal_img,FTType::FTT_LOCAL_FILE,true);
+    if(mr_img) mr_tex=LLViewerTextureManager::getFetchedTexture(mr_img,FTType::FTT_LOCAL_FILE,true);
+    if(emissive_img) emissive_tex=LLViewerTextureManager::getFetchedTexture(emissive_img,FTType::FTT_LOCAL_FILE,true);
 }
 
 LLColor4 LLTinyGLTFHelper::getColor(const std::vector<double>& in)
@@ -210,6 +211,31 @@ bool LLTinyGLTFHelper::loadModel(const std::string& filename, tinygltf::Model& m
     if (exten == "gltf" || exten == "glb")
     {
         tinygltf::TinyGLTF loader;
+#if VS_NATIVE_VULKAN
+        std::size_t nativeFileBytes=0,nativeImageBytes=0;
+        if(VSNativeSession::active())
+        {
+            loader.SetMaxExternalFileSize(16*1024*1024);
+            tinygltf::FsCallbacks fs{tinygltf::FileExists,tinygltf::ExpandFilePath,
+                [&nativeFileBytes](std::vector<unsigned char>* out,std::string* error,const std::string& path,void*) {
+                    std::size_t size=0;
+                    if(!tinygltf::GetFileSizeInBytes(&size,error,path,nullptr) || size>16*1024*1024 || size>64*1024*1024-nativeFileBytes) return false;
+                    if(!tinygltf::ReadWholeFile(out,error,path,nullptr) || out->size()!=size) return false;
+                    nativeFileBytes+=size;return true;
+                },tinygltf::WriteWholeFile,tinygltf::GetFileSizeInBytes,nullptr};
+            if(!loader.SetFsCallbacks(std::move(fs))) return false;
+            loader.SetImageLoader([&nativeImageBytes](tinygltf::Image* image,int index,std::string* error,std::string* warning,
+                int requestedWidth,int requestedHeight,const unsigned char* bytes,int size,void*) {
+                int width=0,height=0,components=0;
+                if(size<=0 || size>16*1024*1024 || !stbi_info_from_memory(bytes,size,&width,&height,&components) ||
+                    width<=0 || height<=0 || width>2048 || height>2048 || components<1 || components>4) return false;
+                const auto allocation=std::size_t(width)*height*8; // includes 16-bit source conversion
+                if(allocation>64*1024*1024-nativeImageBytes) return false;
+                nativeImageBytes+=allocation;
+                return tinygltf::LoadImageData(image,index,error,warning,requestedWidth,requestedHeight,bytes,size,nullptr);
+            },nullptr);
+        }
+#endif
         std::string        error_msg;
         std::string        warn_msg;
 
@@ -294,7 +320,7 @@ bool LLTinyGLTFHelper::getMaterialFromModel(
     S32 mat_index,
     LLFetchedGLTFMaterial* material,
     std::string& material_name,
-    bool flip)
+    bool flip,const std::array<LLUUID,4>* native_images)
 {
     llassert(material);
 
@@ -305,6 +331,32 @@ bool LLTinyGLTFHelper::getMaterialFromModel(
         return false;
     }
 
+#if VS_NATIVE_VULKAN
+    LLPointer<LLFetchedGLTFMaterial> native_candidate;
+    auto* destination=material;
+    std::filesystem::file_time_type stamp;
+    if(native_images)
+    {
+        if(mat_index<0) return false;
+        const auto& input=model_in.materials[mat_index];
+        const int textures[]{input.pbrMetallicRoughness.baseColorTexture.index,input.normalTexture.index,
+            input.pbrMetallicRoughness.metallicRoughnessTexture.index,input.emissiveTexture.index,input.occlusionTexture.index};
+        for(int texture:textures)
+        {
+            if(texture==-1) continue;
+            if(texture<0 || std::size_t(texture)>=model_in.textures.size()) return false;
+            const auto source=model_in.textures[texture].source;
+            if(source<0 || std::size_t(source)>=model_in.images.size()) return false;
+            const auto& image=model_in.images[source];
+            if(image.width<=0 || image.height<=0 || image.width>2048 || image.height>2048 || image.component<1 || image.component>4 ||
+                image.bits!=8 || image.image.size()!=std::size_t(image.width)*image.height*image.component) return false;
+        }
+        std::error_code ec;stamp=std::filesystem::last_write_time(filename,ec);if(ec) return false;
+        native_candidate=new LLFetchedGLTFMaterial;material=native_candidate;
+    }
+#else
+    if(native_images) return false;
+#endif
     material->setFromModel(model_in, mat_index);
 
     std::string folder = gDirUtilp->getDirName(filename);
@@ -327,6 +379,24 @@ bool LLTinyGLTFHelper::getMaterialFromModel(
         occlusion_img = LLTinyGLTFHelper::getTexture(folder, model_in, material_in.occlusionTexture.index, flip);
     }
 
+#if VS_NATIVE_VULKAN
+    if(native_images)
+    {
+        prepare_material_images(material_in,normal_img,mr_img,emissive_img,occlusion_img);
+        const std::array<LLPointer<LLImageRaw>,4> images{base_img,normal_img,mr_img,emissive_img};
+        std::vector<std::pair<LLUUID,LLPointer<LLImageRaw>>> publications;
+        for(unsigned index=0;index<images.size();++index)
+        {
+            material->mTextureId[index]=images[index]?(*native_images)[index]:LLUUID::null;
+            if(images[index]) publications.emplace_back((*native_images)[index],images[index]);
+        }
+        std::error_code ec;
+        if(std::filesystem::last_write_time(filename,ec)!=stamp || ec || !vs_publish_local_images(publications)) return false;
+        *destination=*material;
+        for(unsigned index=0;index<images.size();++index) if(!images[index]) vs_retire_local_image((*native_images)[index]);
+        return true;
+    }
+#endif
     LLPointer<LLViewerFetchedTexture> base_color_tex;
     LLPointer<LLViewerFetchedTexture> normal_tex;
     LLPointer<LLViewerFetchedTexture> mr_tex;

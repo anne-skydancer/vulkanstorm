@@ -26,6 +26,9 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfetchedgltfmaterial.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llviewertexturelist.h"
 #include "llavatarappearancedefines.h"
@@ -157,6 +160,9 @@ LLViewerFetchedTexture* fetch_texture(const LLUUID& id)
 
 bool LLFetchedGLTFMaterial::replaceLocalTexture(const LLUUID& tracking_id, const LLUUID& old_id, const LLUUID& new_id)
 {
+#if VS_NATIVE_VULKAN
+    if(VSNativeSession::active()) return LLGLTFMaterial::replaceLocalTexture(tracking_id,old_id,new_id);
+#endif
     bool res = false;
     if (mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR] == old_id)
     {

@@ -19,6 +19,7 @@ public:
     using PreparedImage=std::shared_ptr<const VSTextureUpload::Prepared>;
     static PreparedImage prepareImage(const LLImageRaw&,VSWorldContracts::ImageRole,bool compress);
     LLUIImagePtr publishPrepared(const std::string& key,const PreparedImage&);
+    std::vector<LLUIImagePtr> publishBatch(const std::vector<std::pair<std::string,PreparedImage>>&);
     bool supportsCompression() const;
     std::shared_ptr<const VSResourceBudget::Reservation> reserveImagePreparation(std::size_t);
     LLUIImagePtr region(const std::string& key,const std::string& name,const LLRectf& uv,

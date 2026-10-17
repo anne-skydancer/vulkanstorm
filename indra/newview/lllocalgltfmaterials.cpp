@@ -47,6 +47,10 @@
 #include "llscrolllistctrl.h"
 #include "lltextureentry.h"
 #include "lltinygltfhelper.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#include "vsuiimageprovider.h"
+#endif
 #include "llviewertexture.h"
 
 /*=======================================*/
@@ -60,7 +64,11 @@ static const S32 LL_LOCAL_UPDATE_RETRIES    = 5;
 /*  LLLocalGLTFMaterial: unit class            */
 /*=======================================*/
 LLLocalGLTFMaterial::LLLocalGLTFMaterial(std::string filename, S32 index)
+#if VS_NATIVE_VULKAN
+    : mNative(VSNativeSession::active()!=nullptr),mFilename(filename)
+#else
     : mFilename(filename)
+#endif
     , mShortName(gDirUtilp->getBaseFileName(filename, true))
     , mLastModified()
     , mLinkStatus(LS_ON)
@@ -68,6 +76,9 @@ LLLocalGLTFMaterial::LLLocalGLTFMaterial(std::string filename, S32 index)
     , mMaterialIndex(index)
 {
     mTrackingID.generate();
+#if VS_NATIVE_VULKAN
+    if(mNative) for(auto& id:mNativeImages) id.generate();
+#endif
 
     /* extension */
     std::string temp_exten = gDirUtilp->getExtension(mFilename);
@@ -90,6 +101,9 @@ LLLocalGLTFMaterial::LLLocalGLTFMaterial(std::string filename, S32 index)
 
 LLLocalGLTFMaterial::~LLLocalGLTFMaterial()
 {
+#if VS_NATIVE_VULKAN
+    if(mNative) for(const auto& id:mNativeImages) vs_retire_local_image(id);
+#endif
     // gGLTFMaterialList will clean itself
 }
 
@@ -253,7 +267,13 @@ bool LLLocalGLTFMaterial::loadMaterial()
                     model,
                     mMaterialIndex,
                     this,
-                    material_name);
+                    material_name,true,
+#if VS_NATIVE_VULKAN
+                    mNative?&mNativeImages:nullptr
+#else
+                    nullptr
+#endif
+                    );
             }
 
             if (!material_name.empty())
