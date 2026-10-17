@@ -153,7 +153,7 @@ struct LLVector3 {
 constexpr float F_PI=3.14159265358979323846f;
 float llclamp(float v,float a,float b){return std::clamp(v,a,b);}
 struct VSWorldRenderer {struct View{std::array<float,16> projection{};};};
-struct VSWorldScene {static VSWorldRenderer::View cameraView(const LLVector3&,const LLVector3&,const LLVector3&,unsigned,unsigned,float);};
+struct VSWorldScene {static VSWorldRenderer::View cameraView(const LLVector3&,const LLVector3&,const LLVector3&,unsigned,unsigned,float,float=F_PI/3);};
 '''+definitions+'''
 int main(){
  auto m=VSWorldScene::cameraView({10,20,30},{0,1,0},{0,0,1},800,400,128).projection;

@@ -140,6 +140,8 @@ struct Object {
  LLUUID id;U32 parent=0;int pcode=4,attachment=0;
  U64 generation=0,revision=0;U32 extendedMeshFlags=0;bool parentRetired=false,renderable=true,dirty=true;
  std::shared_ptr<const VSResourceBudget::Reservation> slot,primitiveResidency;
+ bool nameValuesPresent=false;std::string nameValues;LLUUID inventoryItem;
+ std::shared_ptr<const VSResourceBudget::Reservation> metadataResidency;
  std::shared_ptr<LLVolume> volume;Params params;
  struct Face {Material material;std::shared_ptr<int> surface;std::array<std::shared_ptr<int>,4> publishedChannels;std::shared_ptr<Mesh> mesh;int publishedMaterial=0;std::shared_ptr<int> publishedImage;bool published=false;U64 poseGeneration=0;};std::vector<Face> faces,admittedFaces;
  std::map<unsigned,std::shared_ptr<int>> media;RenderMaterials renderMaterials;
