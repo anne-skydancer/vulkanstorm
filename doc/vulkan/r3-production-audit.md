@@ -1093,3 +1093,19 @@ rejects any R3 listener left open or assigned to a later owner.
 
 The canonical rebuild, complete committed-runner matrix, independent archive
 validation, and all three graphics jobs on the final source remain required.
+
+
+The first committed-runner cold replay rejected two additional evidence errors.
+The threaded HTTP fixture appended a receipt, computed a large payload hash
+(which can release Python's GIL), then assigned the hash through requests[-1].
+A concurrent response could therefore receive another request's hash. Receipts
+are now completed before one append; a deterministic two-request regression
+holds the large hash while the smaller request finishes and verifies both IDs.
+
+The pressure comparison also exposed an incorrect oracle assumption: the shared
+fetcher reads calcDataSizeJ2C's bounded cached prefix, even when the disk entry
+contains a complete codestream. A full-file decode may have higher quality at
+the same discard. Pressure references now decode the shared policy's exact
+clamped byte window, as the earlier streaming cases already do. Viewer fetch,
+decode, residency behavior and pixel tolerances are unchanged. The failed run
+is retained; final runtime and three-platform acceptance remain required.

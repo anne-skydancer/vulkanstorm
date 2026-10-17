@@ -885,8 +885,9 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_error(404)
                 return
-            self.server.requests.append(dict(path=path, method='GET', query=query, bytes=len(data)))
-            if query.get('material_id'):self.server.requests[-1]['sha256']=hashlib.sha256(data).hexdigest()
+            receipt=dict(path=path, method='GET', query=query, bytes=len(data))
+            if query.get('material_id'):receipt['sha256']=hashlib.sha256(data).hexdigest()
+            self.server.requests.append(receipt)
             self.send_response(200)
             self.send_header('Content-Type', 'application/octet-stream')
             self.send_header('Content-Length', str(len(data)))
