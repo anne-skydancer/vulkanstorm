@@ -195,3 +195,13 @@ nearest when global anisotropy is enabled. An independent minified-image pixel
 chart and sampler descriptor check pass, along with the six headless production
 renderer/validation/negative modes. The corrected app source compiles; the staged
 viewer must be rebuilt and replayed before this correction has runtime acceptance.
+
+The rebuilt recorder correction removed the crash, but replay then exposed a
+channel-contract error: the native subscriber requested an auxiliary channel for
+ordinary four-channel J2C images. The shared decoder correctly rejected the
+nonexistent fifth channel, leaving the real inventory texture preview waiting.
+Native decode admission now derives the auxiliary request from the validated
+header (five channels only). The compiled production-block regression explicitly
+checks both RGBA and five-channel mask requests, alongside the existing bounds,
+budget and corrupt-header cases. The stalled automated replay was ended after
+its cause was established; its evidence remains a failure, not a qualification.
