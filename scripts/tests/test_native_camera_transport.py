@@ -171,6 +171,13 @@ int main(){
  auto beforeControls=owner.cameraState();
  owner.mCamera.controls(.1f,1,0,1,{0,1,0},1,gAgentCamera.offset,gAgentCamera.focus,gAgentCamera.scale);
  auto afterControls=owner.cameraState();assert(afterControls.at.mV[1]>beforeControls.at.mV[1]);
+ // Saving the current native eye/focus must reproduce the view after a reset,
+ // including non-default scale, pan, orbit and zoom.
+ const auto savedOffset=(afterControls.center-owner.mPosition-LLVector3(0,0,1))*(1.f/gAgentCamera.scale);
+ const auto savedFocus=afterControls.focus-owner.mPosition;
+ VSNativeCamera restored;const auto reloaded=restored.state(owner.mPosition,savedOffset,savedFocus,gAgentCamera.scale);
+ for(int i=0;i<3;++i){assert(close(reloaded.center.mV[i],afterControls.center.mV[i]));assert(close(reloaded.at.mV[i],afterControls.at.mV[i]));}
+
  assert(owner.mCamera.zoomFraction()> (8.f-1.f)/7.75f);
  owner.mCamera.resetView();assert(close(owner.cameraState().center.mV[0],beforeControls.center.mV[0]));
  owner.mCamera.setZoomFraction(0);assert(close(owner.mCamera.zoomFraction(),0));

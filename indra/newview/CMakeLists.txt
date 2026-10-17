@@ -2313,7 +2313,7 @@ if(USE_DILIGENTCORE)
           vsplainchat.cpp vsplainchat.h vsnativesession.cpp vsnativesession.h vsnativeim.cpp vsnativeim.h
           vsgroupsearch.cpp vsgroupsearch.h
           vsworldrenderer.cpp vsworldrenderer.h vsmaterial.cpp vsmaterial.h vsmaterialassets.cpp vsmaterialassets.h vsterrainassets.cpp vsterrainassets.h vsobjectmedia.cpp vsobjectmedia.h vsworldscene.cpp vsworldscene.h vsterrainpacket.h vsworldavatar.cpp vsworldavatar.h
-          vsworldassets.cpp vsworldassets.h vsworldgltf.cpp vsworldgltf.h vsresourcebudget.h vsnativecamera.h vsworldmotion.h
+          vsworldassets.cpp vsworldassets.h vsworldgltf.cpp vsworldgltf.h vsresourcebudget.h vsnativecamera.h vsparcelpermissions.h vsworldmotion.h
           vswearable.cpp vswearable.h
           vsnativeappearance.cpp vsnativeappearance.h
           vsnativecircuits.cpp vsworldcontracts.h)

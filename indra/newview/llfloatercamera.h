@@ -27,6 +27,7 @@
 #ifndef LLFLOATERCAMERA_H
 #define LLFLOATERCAMERA_H
 
+#include <boost/signals2/connection.hpp>
 #include "llfloater.h"
 #include "lliconctrl.h"
 #include "lltextbox.h"
@@ -143,6 +144,7 @@ private:
     LLPanel* mControls { nullptr };
     LLPanel* mViewerCameraInfo { nullptr };
     LLPanel* mAgentCameraInfo { nullptr };
+    boost::signals2::scoped_connection mPresetChanges;
     LLComboBox* mPresetCombo { nullptr };
     //LLTextBox* mPreciseCtrls { nullptr }; // <FS:Ansariel> Improved camera floater
 };

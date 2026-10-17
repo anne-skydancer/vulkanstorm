@@ -25,6 +25,7 @@
 #ifndef LLFLOATERCAMERAPRESETS_H
 #define LLFLOATERCAMERAPRESETS_H
 
+#include <boost/signals2/connection.hpp>
 #include "llfloater.h"
 #include "llflatlistview.h"
 
@@ -44,6 +45,7 @@ private:
     LLFloaterCameraPresets(const LLSD& key);
     ~LLFloaterCameraPresets();
 
+    boost::signals2::scoped_connection mPresetChanges;
     LLFlatListView* mPresetList;
 };
 

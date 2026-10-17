@@ -27,6 +27,7 @@
 #ifndef LL_LLPANELPRESETSCAMERAPULLDOWN_H
 #define LL_LLPANELPRESETSCAMERAPULLDOWN_H
 
+#include <boost/signals2/connection.hpp>
 #include "linden_common.h"
 
 #include "llpanelpulldown.h"
@@ -42,6 +43,7 @@ class LLPanelPresetsCameraPulldown : public LLPanelPulldown
     void onViewButtonClick(const LLSD& user_data);
     void onRowClick(const LLSD& user_data);
 
+    boost::signals2::scoped_connection mPresetChanges;
     std::list<std::string> mPresetNames;
     LOG_CLASS(LLPanelPresetsCameraPulldown);
 };

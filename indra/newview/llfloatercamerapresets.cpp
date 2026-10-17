@@ -43,7 +43,7 @@ bool LLFloaterCameraPresets::postBuild()
     mPresetList = getChild<LLFlatListView>("preset_list");
     mPresetList->setCommitCallback(boost::bind(&LLFloaterCameraPresets::onSelectionChange, this));
     mPresetList->setCommitOnSelectionChange(true);
-    LLPresetsManager::getInstance()->setPresetListChangeCameraCallback(boost::bind(&LLFloaterCameraPresets::populateList, this));
+    mPresetChanges = LLPresetsManager::getInstance()->setPresetListChangeCameraCallback(boost::bind(&LLFloaterCameraPresets::populateList, this));
 
     return true;
 }

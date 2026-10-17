@@ -64,7 +64,7 @@ bool LLFloaterSaveCameraPreset::postBuild()
 
     getChild<LLButton>("cancel")->setCommitCallback(boost::bind(&LLFloaterSaveCameraPreset::onBtnCancel, this));
 
-    LLPresetsManager::instance().setPresetListChangeCallback(boost::bind(&LLFloaterSaveCameraPreset::onPresetsListChange, this));
+    mPresetChanges = LLPresetsManager::instance().setPresetListChangeCallback(boost::bind(&LLFloaterSaveCameraPreset::onPresetsListChange, this));
 
     return true;
 }
