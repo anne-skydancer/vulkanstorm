@@ -1,5 +1,5 @@
 {
-  "source_commit": "92be4f6c9b1476ccf438b0f51ac0530f1ea909fd",
+  "source_commit": "07eec29f5e68d288d6e6b686329ed5f7b3d9cb41",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -25495,25 +25495,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 56,
       "end": 56,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 438,
-      "end": 452,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 439,
+      "end": 453,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 532,
-      "end": 532,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 533,
+      "end": 533,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28355,9 +28355,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 186,
-      "end": 189,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 187,
+      "end": 190,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28409,18 +28409,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 443,
-      "end": 448,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 444,
+      "end": 449,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 452,
-      "end": 452,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 453,
+      "end": 453,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28429,25 +28429,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 40,
       "end": 40,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 515,
-      "end": 525,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 516,
+      "end": 526,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 532,
-      "end": 532,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 533,
+      "end": 533,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28472,9 +28472,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 129,
-      "end": 129,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 130,
+      "end": 130,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28753,7 +28753,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 55,
       "end": 55,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28843,34 +28843,34 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 57,
       "end": 85,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 188,
-      "end": 188,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 189,
+      "end": 189,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 364,
-      "end": 366,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 365,
+      "end": 367,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 453,
-      "end": 465,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 454,
+      "end": 466,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -35330,9 +35330,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 164,
-      "end": 164,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 165,
+      "end": 165,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -35654,9 +35654,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 165,
-      "end": 165,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 166,
+      "end": 166,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36032,9 +36032,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 166,
-      "end": 166,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 167,
+      "end": 167,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36466,70 +36466,70 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 166,
-      "end": 166,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 167,
+      "end": 167,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 223,
-      "end": 223,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 224,
+      "end": 224,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 259,
-      "end": 259,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 260,
+      "end": 260,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 330,
-      "end": 330,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 331,
+      "end": 331,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 339,
-      "end": 339,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 340,
+      "end": 340,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 343,
-      "end": 343,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 344,
+      "end": 344,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 364,
-      "end": 364,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 365,
+      "end": 365,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37004,9 +37004,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 348,
-      "end": 348,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 349,
+      "end": 349,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37256,9 +37256,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 167,
-      "end": 167,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 168,
+      "end": 168,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37465,61 +37465,61 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 166,
-      "end": 166,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 167,
+      "end": 167,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 330,
-      "end": 330,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 331,
+      "end": 331,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 334,
-      "end": 334,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 335,
+      "end": 335,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 339,
-      "end": 339,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 340,
+      "end": 340,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 343,
-      "end": 343,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 344,
+      "end": 344,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 364,
-      "end": 364,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 365,
+      "end": 365,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37607,9 +37607,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 130,
-      "end": 130,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 131,
+      "end": 131,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and run actual native cache bridge against controlled complete/partial/corrupt/timeout/shutdown and late-callback states; retain encoded writer memory/budget until retirement. Add to existing source-evidence job. This fixture does not qualify real disk restart reuse or R3 as a whole."
@@ -38732,9 +38732,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 173,
-      "end": 173,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 174,
+      "end": 174,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -38885,9 +38885,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 177,
-      "end": 178,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 178,
+      "end": 179,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -39749,9 +39749,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 152,
-      "end": 152,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 153,
+      "end": 153,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40073,9 +40073,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 135,
-      "end": 135,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 136,
+      "end": 136,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40721,9 +40721,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 466,
-      "end": 482,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 467,
+      "end": 483,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40802,9 +40802,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 143,
-      "end": 151,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 144,
+      "end": 152,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -41315,9 +41315,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 137,
-      "end": 137,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 138,
+      "end": 138,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -42107,9 +42107,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 138,
-      "end": 138,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 139,
+      "end": 139,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -42458,9 +42458,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 139,
-      "end": 139,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 140,
+      "end": 140,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43007,9 +43007,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 140,
-      "end": 140,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 141,
+      "end": 141,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43196,9 +43196,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 144,
-      "end": 144,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 145,
+      "end": 145,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43448,18 +43448,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 150,
-      "end": 150,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 151,
+      "end": 151,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 483,
-      "end": 498,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 484,
+      "end": 499,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43682,9 +43682,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 146,
-      "end": 146,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 147,
+      "end": 147,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -43952,9 +43952,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 147,
-      "end": 147,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 148,
+      "end": 148,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44384,9 +44384,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 148,
-      "end": 148,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 149,
+      "end": 149,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44582,9 +44582,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 149,
-      "end": 149,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 150,
+      "end": 150,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44609,9 +44609,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 174,
-      "end": 176,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 175,
+      "end": 177,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44789,9 +44789,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 175,
-      "end": 175,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 176,
+      "end": 176,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -44996,9 +44996,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 131,
-      "end": 134,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 132,
+      "end": 135,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45365,9 +45365,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 132,
-      "end": 132,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 133,
+      "end": 133,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45410,9 +45410,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 133,
-      "end": 133,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 134,
+      "end": 134,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45599,9 +45599,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 141,
-      "end": 141,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 142,
+      "end": 142,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45761,9 +45761,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 142,
-      "end": 142,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 143,
+      "end": 143,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -45896,9 +45896,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 136,
-      "end": 136,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 137,
+      "end": 137,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -46319,9 +46319,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 465,
-      "end": 465,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 466,
+      "end": 466,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -47401,7 +47401,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 65,
       "end": 65,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -47518,7 +47518,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 60,
       "end": 60,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -47806,7 +47806,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 61,
       "end": 61,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -48407,9 +48407,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 145,
-      "end": 145,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 146,
+      "end": 146,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -49696,7 +49696,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 43,
       "end": 44,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -50837,36 +50837,36 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 472,
-      "end": 472,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 473,
+      "end": 473,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 475,
-      "end": 477,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 476,
+      "end": 478,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 479,
-      "end": 479,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 480,
+      "end": 480,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 483,
-      "end": 495,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 484,
+      "end": 496,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -52054,7 +52054,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 87,
       "end": 88,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -52062,8 +52062,8 @@
     {
       "path": ".github/workflows/software_vulkan.yml",
       "start": 89,
-      "end": 90,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "end": 91,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -52117,7 +52117,7 @@
       "path": "indra/newview/llcurrencyuimanager.cpp",
       "start": 28,
       "end": 29,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -52126,7 +52126,7 @@
       "path": "indra/newview/llcurrencyuimanager.cpp",
       "start": 64,
       "end": 65,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -52135,7 +52135,7 @@
       "path": "indra/newview/llcurrencyuimanager.cpp",
       "start": 153,
       "end": 153,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -52144,7 +52144,7 @@
       "path": "indra/newview/llcurrencyuimanager.cpp",
       "start": 159,
       "end": 159,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -52153,7 +52153,7 @@
       "path": "indra/newview/llcurrencyuimanager.cpp",
       "start": 231,
       "end": 231,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -52162,34 +52162,34 @@
       "path": "indra/newview/llcurrencyuimanager.cpp",
       "start": 292,
       "end": 292,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
     },
     {
       "path": "indra/newview/llcurrencyuimanager.cpp",
-      "start": 579,
-      "end": 579,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "start": 582,
+      "end": 582,
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
     },
     {
       "path": "indra/newview/llcurrencyuimanager.cpp",
-      "start": 596,
-      "end": 617,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "start": 599,
+      "end": 620,
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
     },
     {
       "path": "indra/newview/llcurrencyuimanager.cpp",
-      "start": 633,
-      "end": 633,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "start": 636,
+      "end": 636,
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -53213,9 +53213,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 91,
-      "end": 91,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 92,
+      "end": 92,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -53780,9 +53780,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 92,
-      "end": 126,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 93,
+      "end": 127,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -54653,9 +54653,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 93,
-      "end": 93,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 94,
+      "end": 94,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -54689,18 +54689,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 94,
-      "end": 124,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 95,
+      "end": 125,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 127,
-      "end": 127,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 128,
+      "end": 128,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -55589,9 +55589,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 359,
-      "end": 363,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 360,
+      "end": 364,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -55679,9 +55679,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 95,
-      "end": 95,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 96,
+      "end": 96,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -56129,9 +56129,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 96,
-      "end": 97,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 97,
+      "end": 98,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -56759,9 +56759,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 118,
-      "end": 118,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 119,
+      "end": 119,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -56849,9 +56849,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 119,
-      "end": 120,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 120,
+      "end": 121,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -56867,18 +56867,18 @@
     },
     {
       "path": "indra/newview/llcurrencyuimanager.cpp",
-      "start": 496,
-      "end": 498,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "start": 499,
+      "end": 501,
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
     },
     {
       "path": "indra/newview/llcurrencyuimanager.cpp",
-      "start": 500,
-      "end": 501,
-      "sha256": "f74e1873d86ca96c60789bf71a68408c1ed6a7e6fc7b25bb21e5cbd7873910c3",
+      "start": 503,
+      "end": 504,
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Local-only connected currency and utility UI integration: reuse shared quotes, purchase confirmation, profile, trusted browser, money reply and history controllers; guard lifetime, account, quote, authoritative balance and delayed name results; retire windows and requests before account models. Full UI qualification remains open. No real purchase is used in tests; no push before R3 evidence verification."
@@ -57066,8 +57066,8 @@
     {
       "path": "scripts/tests/test_connected_utility_xui.py",
       "start": 1,
-      "end": 64,
-      "sha256": "af014c06268e6f2e2304c1873bf317ca5c389f360125c5272b8d182ee514d63e",
+      "end": 97,
+      "sha256": "88c17b873437ac8a625047c5c337ea679c8f353646e251f2c01fae5ce690d762",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual native selection request/publication/retirement methods and check every shipped currency overlay plus controller field contracts. Preserve strict missing-widget log rejection. These checks do not substitute for full production frontend and cross-platform runtime qualification."
@@ -57083,9 +57083,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 121,
-      "end": 121,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 122,
+      "end": 122,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -57425,9 +57425,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 122,
-      "end": 123,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 123,
+      "end": 124,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -57794,18 +57794,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 98,
-      "end": 100,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 99,
+      "end": 101,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 125,
-      "end": 125,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 126,
+      "end": 126,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Keep native viewer headless while supplying Xvfb to actual Linux CEF children. Separate mandatory restart/cache and concurrent-instance stages with independent bounds, retaining all original per-process deadlines and complete artifact requirements."
@@ -58802,9 +58802,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 101,
-      "end": 117,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 102,
+      "end": 118,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Run permanent actual-source parcel, land, environment, estate, confirmation, native standing and camera-mode regressions; require actual presented Buy/Sell controller policy/cancel evidence in the staged connected replay. Keep full renderer qualification and uploaded artifact requirements unchanged."
@@ -59596,7 +59596,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 28,
       "end": 28,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59605,7 +59605,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 31,
       "end": 33,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59614,7 +59614,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 97,
       "end": 99,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59623,7 +59623,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 160,
       "end": 160,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59632,7 +59632,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 163,
       "end": 163,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59641,7 +59641,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 167,
       "end": 167,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59650,7 +59650,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 220,
       "end": 227,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59659,7 +59659,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 234,
       "end": 234,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59668,7 +59668,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 239,
       "end": 239,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59677,7 +59677,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 325,
       "end": 328,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59686,7 +59686,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 345,
       "end": 346,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59695,7 +59695,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 352,
       "end": 352,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59704,7 +59704,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 429,
       "end": 429,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59713,7 +59713,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 524,
       "end": 524,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59722,7 +59722,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 577,
       "end": 584,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59731,7 +59731,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 834,
       "end": 836,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59740,7 +59740,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 838,
       "end": 842,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59749,7 +59749,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 948,
       "end": 948,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59758,7 +59758,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 961,
       "end": 961,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59767,7 +59767,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 969,
       "end": 969,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59776,7 +59776,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 971,
       "end": 971,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59785,7 +59785,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 991,
       "end": 991,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59794,7 +59794,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 1312,
       "end": 1312,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59803,7 +59803,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 1363,
       "end": 1394,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59812,7 +59812,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 1399,
       "end": 1399,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -59821,7 +59821,7 @@
       "path": "indra/newview/llfloaterbuyland.cpp",
       "start": 1426,
       "end": 1430,
-      "sha256": "66cc416eb06fd210bcfcb55f33c36d50e17ae5f153998cb35fce4817cabafa03",
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Transpose actual shared parcel, land-transaction, covenant, estate, environment and region-limit controller/model logic through current native account/circuit contexts. Preserve reference wire parsers, permissions and confirmation ownership, retire deferred actions on account/selection changes, and retain CPU environment processing without GL publication. Independently ready Buy/Sell controllers are admitted with actual widgets; AboutLand, native visual feedback and complete UI runtime qualification remain open."
@@ -63761,9 +63761,9 @@
     },
     {
       "path": "scripts/tests/test_connected_utility_xui.py",
-      "start": 11,
-      "end": 29,
-      "sha256": "af014c06268e6f2e2304c1873bf317ca5c389f360125c5272b8d182ee514d63e",
+      "start": 44,
+      "end": 62,
+      "sha256": "88c17b873437ac8a625047c5c337ea679c8f353646e251f2c01fae5ce690d762",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute actual shared/native parcel, transaction, environment, estate, confirmation, avatar standing and camera-mode logic against deterministic permission, wire, lifecycle and retirement fixtures; check all shipped Buy/Sell XUI overlays. Preserve production readiness checks and strict actual-viewer evidence. Complete connected-UI acceptance remains open."
@@ -63995,18 +63995,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 103,
-      "end": 103,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 104,
+      "end": 104,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Run permanent actual-source parcel, land, environment, estate, confirmation, native standing and camera-mode regressions; require actual presented Buy/Sell controller policy/cancel evidence in the staged connected replay. Keep full renderer qualification and uploaded artifact requirements unchanged."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 110,
-      "end": 111,
-      "sha256": "298bc77cd1b75f400d17297e068a9003e4e0e28792e671d11f33bba9372d853d",
+      "start": 111,
+      "end": 112,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Run permanent actual-source parcel, land, environment, estate, confirmation, native standing and camera-mode regressions; require actual presented Buy/Sell controller policy/cancel evidence in the staged connected replay. Keep full renderer qualification and uploaded artifact requirements unchanged."
@@ -64604,10 +64604,442 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Serialize the actual shared default-day builder into a loopback settings asset and acquire it through normal ViewerAsset HTTP and shared environment parsing. Require accepted real day identity and exact HTTP byte/hash evidence before nominal UI/cursor checks; unknown assets still fail. Keep real load-error dialogs, capture checks and existing deadlines intact. Complete UI/runtime acceptance remains open."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 90,
+      "end": 90,
+      "sha256": "8510c8dd7a375ec4e082b3b2755d51ccdadd8c1bd55c42e9aecd4608022c35d9",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Run permanent actual-source parcel, land, environment, estate, confirmation, native standing and camera-mode regressions; require actual presented Buy/Sell controller policy/cancel evidence in the staged connected replay. Keep full renderer qualification and uploaded artifact requirements unchanged."
+    },
+    {
+      "path": "indra/newview/llcurrencyuimanager.cpp",
+      "start": 463,
+      "end": 465,
+      "sha256": "12a4d5af2d406d9118df63f1b519814d61871f1cd12c7bb8f3623121a406050b",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/llfloaterbuyland.cpp",
+      "start": 1273,
+      "end": 1273,
+      "sha256": "90a042a45f32da59a5fcdc0bc40f21fde08cfb351587ac239172bd213186371f",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/az/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "6a0f2e0f4c1122911526f64cd4c656ab90f73b442abac71618939ec95177051e",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/az/floater_buy_land.xml",
+      "start": 228,
+      "end": 228,
+      "sha256": "6a0f2e0f4c1122911526f64cd4c656ab90f73b442abac71618939ec95177051e",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/az/floater_buy_land.xml",
+      "start": 236,
+      "end": 245,
+      "sha256": "6a0f2e0f4c1122911526f64cd4c656ab90f73b442abac71618939ec95177051e",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/da/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "dc89ffb82945fea3664ad7c7eaad7b9ab18be216834d62ed680a9e89055b5d3a",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/da/floater_buy_land.xml",
+      "start": 231,
+      "end": 231,
+      "sha256": "dc89ffb82945fea3664ad7c7eaad7b9ab18be216834d62ed680a9e89055b5d3a",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/da/floater_buy_land.xml",
+      "start": 239,
+      "end": 242,
+      "sha256": "dc89ffb82945fea3664ad7c7eaad7b9ab18be216834d62ed680a9e89055b5d3a",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/de/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "432d88b235bd3a94c3c49c7bbae605f47ec00e387296c6586c1d5336bb3b8443",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/de/floater_buy_land.xml",
+      "start": 229,
+      "end": 229,
+      "sha256": "432d88b235bd3a94c3c49c7bbae605f47ec00e387296c6586c1d5336bb3b8443",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/de/floater_buy_land.xml",
+      "start": 237,
+      "end": 246,
+      "sha256": "432d88b235bd3a94c3c49c7bbae605f47ec00e387296c6586c1d5336bb3b8443",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/floater_buy_land.xml",
+      "start": 5,
+      "end": 5,
+      "sha256": "39bf052b0fcf6a603d7c2fb884fb262cdb094e252486173665b544a3b1b53eca",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/floater_buy_land.xml",
+      "start": 12,
+      "end": 14,
+      "sha256": "39bf052b0fcf6a603d7c2fb884fb262cdb094e252486173665b544a3b1b53eca",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/floater_buy_land.xml",
+      "start": 695,
+      "end": 695,
+      "sha256": "39bf052b0fcf6a603d7c2fb884fb262cdb094e252486173665b544a3b1b53eca",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/floater_buy_land.xml",
+      "start": 715,
+      "end": 715,
+      "sha256": "39bf052b0fcf6a603d7c2fb884fb262cdb094e252486173665b544a3b1b53eca",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/floater_buy_land.xml",
+      "start": 733,
+      "end": 733,
+      "sha256": "39bf052b0fcf6a603d7c2fb884fb262cdb094e252486173665b544a3b1b53eca",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/en/floater_buy_land.xml",
+      "start": 735,
+      "end": 743,
+      "sha256": "39bf052b0fcf6a603d7c2fb884fb262cdb094e252486173665b544a3b1b53eca",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/es/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "972a5b3da7e10c315a3d5a6bbb71182c7bb403debe1f8dade8d9c809cc8d0301",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/es/floater_buy_land.xml",
+      "start": 231,
+      "end": 231,
+      "sha256": "972a5b3da7e10c315a3d5a6bbb71182c7bb403debe1f8dade8d9c809cc8d0301",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/es/floater_buy_land.xml",
+      "start": 239,
+      "end": 242,
+      "sha256": "972a5b3da7e10c315a3d5a6bbb71182c7bb403debe1f8dade8d9c809cc8d0301",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/fr/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "22c3db2b596af0090b3d2cd4b5bb0f10bd5881b5922e55e759d94db3269c59a7",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/fr/floater_buy_land.xml",
+      "start": 104,
+      "end": 104,
+      "sha256": "22c3db2b596af0090b3d2cd4b5bb0f10bd5881b5922e55e759d94db3269c59a7",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/fr/floater_buy_land.xml",
+      "start": 109,
+      "end": 118,
+      "sha256": "22c3db2b596af0090b3d2cd4b5bb0f10bd5881b5922e55e759d94db3269c59a7",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/it/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "bd60a0a8615aabfc5e20c0729e180f0c15301bf8f174e40792973df69a3cc4bc",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/it/floater_buy_land.xml",
+      "start": 214,
+      "end": 214,
+      "sha256": "bd60a0a8615aabfc5e20c0729e180f0c15301bf8f174e40792973df69a3cc4bc",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/it/floater_buy_land.xml",
+      "start": 222,
+      "end": 231,
+      "sha256": "bd60a0a8615aabfc5e20c0729e180f0c15301bf8f174e40792973df69a3cc4bc",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/ja/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "f60e1dae69b5f1ff21313e99f062a24df14983e4f3a96269f5c76b91579cbd28",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/ja/floater_buy_land.xml",
+      "start": 223,
+      "end": 223,
+      "sha256": "f60e1dae69b5f1ff21313e99f062a24df14983e4f3a96269f5c76b91579cbd28",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/ja/floater_buy_land.xml",
+      "start": 231,
+      "end": 240,
+      "sha256": "f60e1dae69b5f1ff21313e99f062a24df14983e4f3a96269f5c76b91579cbd28",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/pl/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "dcbc22b9fad654e15531bbbe4a8a22665a1799e623d1ba61d472325387578347",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/pl/floater_buy_land.xml",
+      "start": 211,
+      "end": 211,
+      "sha256": "dcbc22b9fad654e15531bbbe4a8a22665a1799e623d1ba61d472325387578347",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/pl/floater_buy_land.xml",
+      "start": 219,
+      "end": 228,
+      "sha256": "dcbc22b9fad654e15531bbbe4a8a22665a1799e623d1ba61d472325387578347",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/pt/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "3ebd39422b8481098fdee29cde21f6e01f738ee94fda26c5ca353d4c2e8af7fc",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/pt/floater_buy_land.xml",
+      "start": 228,
+      "end": 228,
+      "sha256": "3ebd39422b8481098fdee29cde21f6e01f738ee94fda26c5ca353d4c2e8af7fc",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/pt/floater_buy_land.xml",
+      "start": 236,
+      "end": 239,
+      "sha256": "3ebd39422b8481098fdee29cde21f6e01f738ee94fda26c5ca353d4c2e8af7fc",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/ru/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "03d7b1c3807061bccd700b18ece6e67b61595f349ab18b6d2a3ed38b4581819f",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/ru/floater_buy_land.xml",
+      "start": 228,
+      "end": 228,
+      "sha256": "03d7b1c3807061bccd700b18ece6e67b61595f349ab18b6d2a3ed38b4581819f",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/ru/floater_buy_land.xml",
+      "start": 236,
+      "end": 245,
+      "sha256": "03d7b1c3807061bccd700b18ece6e67b61595f349ab18b6d2a3ed38b4581819f",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/tr/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "f311cd662f2b3c186187dd660a54a4826c17265f753b6f51a920c74913bb8e55",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/tr/floater_buy_land.xml",
+      "start": 228,
+      "end": 228,
+      "sha256": "f311cd662f2b3c186187dd660a54a4826c17265f753b6f51a920c74913bb8e55",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/tr/floater_buy_land.xml",
+      "start": 236,
+      "end": 239,
+      "sha256": "f311cd662f2b3c186187dd660a54a4826c17265f753b6f51a920c74913bb8e55",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/zh/floater_buy_land.xml",
+      "start": 3,
+      "end": 5,
+      "sha256": "4f6a8df4cf04fbadbd8227f49bcf3c374f7acc26b85505d0c47521a267d14c13",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/zh/floater_buy_land.xml",
+      "start": 229,
+      "end": 229,
+      "sha256": "4f6a8df4cf04fbadbd8227f49bcf3c374f7acc26b85505d0c47521a267d14c13",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "indra/newview/skins/default/xui/zh/floater_buy_land.xml",
+      "start": 237,
+      "end": 246,
+      "sha256": "4f6a8df4cf04fbadbd8227f49bcf3c374f7acc26b85505d0c47521a267d14c13",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Complete the real shared BuyLand/currency UI contract across every shipped localization: root-owned zero estimate, asynchronous estimate and billing controls, consistent amount substitution, and full component visibility retirement. Preserve actual quote, permission and purchase policy; runtime and complete UI acceptance remain open."
+    },
+    {
+      "path": "scripts/tests/native_currency_ui_contract_fixture.cpp",
+      "start": 1,
+      "end": 64,
+      "sha256": "8cfb1bd7c50f235118c9460202b1f3b82211eb6637c4fa30a6754ee0cefff6d2",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Check every shipped BuyLand overlay against actual controller-owned fields, root strings and substitutions; execute real currency update/setAmount code using both parsed host schemas for zero, nonzero, international and hidden states. These regressions do not substitute for full actual-viewer qualification."
+    },
+    {
+      "path": "scripts/tests/test_connected_utility_xui.py",
+      "start": 11,
+      "end": 43,
+      "sha256": "88c17b873437ac8a625047c5c337ea679c8f353646e251f2c01fae5ce690d762",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Check every shipped BuyLand overlay against actual controller-owned fields, root strings and substitutions; execute real currency update/setAmount code using both parsed host schemas for zero, nonzero, international and hidden states. These regressions do not substitute for full actual-viewer qualification."
+    },
+    {
+      "path": "scripts/tests/test_native_currency_ui_contract.py",
+      "start": 1,
+      "end": 27,
+      "sha256": "c3713f5cf87efa26652304131bc040d2e80393403bee5f7efe09f76a15aaa617",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Check every shipped BuyLand overlay against actual controller-owned fields, root strings and substitutions; execute real currency update/setAmount code using both parsed host schemas for zero, nonzero, international and hidden states. These regressions do not substitute for full actual-viewer qualification."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "2eec7370b5d7e338477ea20b055eb05898f27416",
+    "previous_source_commit": "2447cc87578dbe9f8c7801c4d8612b7f7a77691c",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
