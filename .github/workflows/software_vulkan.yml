@@ -325,6 +325,11 @@ jobs:
           cmake --build '${{ matrix.viewer_directory }}' --config RelWithDebInfo --parallel 3
           python scripts/vulkan_parity_provenance.py finish '${{ matrix.viewer_directory }}'
           python scripts/check_vulkan_ci_staging.py '${{ matrix.viewer_directory }}'
+      - name: Qualify shared CPU camera projection against native projection
+        timeout-minutes: 2
+        env:
+          VS_TEST_BUILD_DIRECTORY: ${{ matrix.viewer_directory }}
+        run: python scripts/tests/test_native_camera_projection.py
       - name: Qualify viewer CPU geometry producers
         timeout-minutes: 3
         run: python scripts/run_vulkan_geometry_tests.py --build-directory '${{ matrix.viewer_directory }}' --evidence .ci/geometry-evidence

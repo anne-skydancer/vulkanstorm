@@ -238,9 +238,15 @@ bool FSLSLBridge::lslToViewer(std::string_view message, const LLUUID& fromID, co
 #if VS_NATIVE_VULKAN
     if (auto owner = VSNativeSession::active())
     {
-        if (ownerID != owner->account().agent || !isBridgeValid() || !mNativeAdapter) return false;
-        const auto attachment = mNativeAdapter->attachment(getBridge()->getUUID());
-        if (!attachment || attachment->object.id != fromID) return false;
+        if (ownerID != owner->account().agent) return false;
+        bool own_attachment = false;
+        for (const auto& attachment : vs_avatar_attachments())
+        {
+            const auto* item = gInventory.getItem(attachment.item);
+            if (attachment.point == FS_BRIDGE_POINT && attachment.object == fromID && item && item->getName() == mCurrentFullName)
+            { own_attachment = true; break; }
+        }
+        if (!own_attachment) return false;
     }
 #endif
     LL_DEBUGS("FSLSLBridge") << message << LL_ENDL;

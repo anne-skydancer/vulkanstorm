@@ -420,9 +420,33 @@ void LLViewerCamera::setPerspective(bool for_selection,
 
 // Uses the last GL matrices set in set_perspective to project a point from
 // screen coordinates to the agent's region.
+namespace
+{
+glm::mat4 uiCameraModelview(const LLViewerCamera& camera)
+{
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        return glm::make_mat4(&camera.getModelview().mMatrix[0][0]);
+    return get_current_modelview();
+}
+glm::mat4 uiCameraProjection(const LLViewerCamera& camera)
+{
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+        return glm::make_mat4(&camera.getProjection().mMatrix[0][0]);
+    return get_current_projection();
+}
+}
+
 void LLViewerCamera::projectScreenToPosAgent(const S32 screen_x, const S32 screen_y, LLVector3* pos_agent) const
 {
-    glm::vec3 agent_coord = glm::unProject(glm::vec3(screen_x, screen_y, 0.f), get_current_modelview(), get_current_projection(), glm::make_vec4(gGLViewport));
+    if(!pos_agent)return;
+    glm::ivec4 viewport(gGLViewport[0],gGLViewport[1],gGLViewport[2],gGLViewport[3]);
+    if(gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto rect=gViewerWindow->getWorldViewRectRaw();
+        if(rect.getWidth()<=0 || rect.getHeight()<=0){*pos_agent=getOrigin();return;}
+        viewport=glm::ivec4(rect.mLeft,rect.mBottom,rect.getWidth(),rect.getHeight());
+    }
+    glm::vec3 agent_coord = glm::unProject(glm::vec3(screen_x, screen_y, 0.f), uiCameraModelview(*this), uiCameraProjection(*this), viewport);
     pos_agent->setVec( (F32)agent_coord.x, (F32)agent_coord.y, (F32)agent_coord.z );
 }
 
@@ -433,6 +457,9 @@ bool LLViewerCamera::projectPosAgentToScreen(const LLVector3 &pos_agent, LLCoord
 {
     bool in_front = true;
 
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() &&
+       (!pos_agent.isFinite() || (pos_agent-getOrigin()).magVecSquared()<1.e-12f ||
+        gViewerWindow->getWorldViewRectRaw().getWidth()<=0 || gViewerWindow->getWorldViewRectRaw().getHeight()<=0))return false;
     LLVector3 dir_to_point = pos_agent - getOrigin();
     dir_to_point /= dir_to_point.magVec();
 
@@ -450,7 +477,7 @@ bool LLViewerCamera::projectPosAgentToScreen(const LLVector3 &pos_agent, LLCoord
 
     LLRect world_view_rect = gViewerWindow->getWorldViewRectRaw();
     glm::ivec4 viewport(world_view_rect.mLeft, world_view_rect.mBottom, world_view_rect.getWidth(), world_view_rect.getHeight());
-    glm::vec3 win_coord = glm::project(glm::vec3(pos_agent), get_current_modelview(), get_current_projection(), viewport);
+    glm::vec3 win_coord = glm::project(glm::vec3(pos_agent), uiCameraModelview(*this), uiCameraProjection(*this), viewport);
 
     {
         // convert screen coordinates to virtual UI coordinates
@@ -532,6 +559,9 @@ bool LLViewerCamera::projectPosAgentToScreen(const LLVector3 &pos_agent, LLCoord
 bool LLViewerCamera::projectPosAgentToScreenEdge(const LLVector3 &pos_agent,
                                                 LLCoordGL &out_point) const
 {
+    if(gViewerWindow && gViewerWindow->isNativeVulkan() &&
+       (!pos_agent.isFinite() || (pos_agent-getOrigin()).magVecSquared()<1.e-12f ||
+        gViewerWindow->getWorldViewRectRaw().getWidth()<=0 || gViewerWindow->getWorldViewRectRaw().getHeight()<=0))return false;
     LLVector3 dir_to_point = pos_agent - getOrigin();
     dir_to_point /= dir_to_point.magVec();
 
@@ -544,7 +574,7 @@ bool LLViewerCamera::projectPosAgentToScreenEdge(const LLVector3 &pos_agent,
     LLRect world_view_rect = gViewerWindow->getWorldViewRectRaw();
 
     glm::ivec4 viewport(world_view_rect.mLeft, world_view_rect.mBottom, world_view_rect.getWidth(), world_view_rect.getHeight());
-    glm::vec3 win_coord = glm::project(glm::vec3(pos_agent), get_current_modelview(), get_current_projection(), viewport);
+    glm::vec3 win_coord = glm::project(glm::vec3(pos_agent), uiCameraModelview(*this), uiCameraProjection(*this), viewport);
 
     {
         win_coord.x /= gViewerWindow->getDisplayScale().mV[VX];
