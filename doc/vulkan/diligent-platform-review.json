@@ -1,5 +1,5 @@
 {
-  "source_commit": "58599f7b01ae98a799f366ab14eb0acd21764e94",
+  "source_commit": "216c9f3ce8ec21d62e437689a5139719851def33",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -1717,7 +1717,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2288,
       "end": 2288,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "New vs-owned production IM/group UI and development-only replay sources use existing Autobuild dependencies and Vulkan compile flags; no release baseline dependency or publishing behavior is added. Source review only; no expanded runtime acceptance claim. R1 mesh resource review: mainloop publication rechecks account/region/request/asset revision; same-account region changes retain immutable decoded data and cancel unfinished requests; bounded retries/LRU and last-owner CPU/GPU payload reservations preserve in-flight retirement. Mesh allocation refusal publishes no null packet. No whole R1 or runtime parity acceptance."
@@ -1726,7 +1726,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2302,
       "end": 2302,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "New vs-owned production IM/group UI and development-only replay sources use existing Autobuild dependencies and Vulkan compile flags; no release baseline dependency or publishing behavior is added. Source review only; no expanded runtime acceptance claim."
@@ -10519,7 +10519,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 31,
       "end": 31,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
@@ -10528,7 +10528,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 82,
       "end": 86,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
@@ -10537,34 +10537,34 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 88,
       "end": 97,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 204,
-      "end": 209,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 205,
+      "end": 210,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 229,
-      "end": 237,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 230,
+      "end": 238,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 394,
-      "end": 405,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 400,
+      "end": 411,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
@@ -10573,7 +10573,7 @@
       "path": "indra/newview/vsuiresources.h",
       "start": 26,
       "end": 26,
-      "sha256": "46509338115620a62f57ced12cbc4d37231366929b9d9a8fe01e314f8b08a307",
+      "sha256": "09535d6e210632bbb06cbd37179a6a6624c258b2e30d6eee6fedbfca330f5d4c",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification."
@@ -10996,7 +10996,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 87,
       "end": 87,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification. Plain-image physical extents round at fractional DPI like the GL image helper, while nonzero rotated extents remain unsnapped; nine-slice inner boundaries match GL translated physical rounding without changing outer bounds."
@@ -11005,7 +11005,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 99,
       "end": 99,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification. Plain-image physical extents round at fractional DPI like the GL image helper, while nonzero rotated extents remain unsnapped; nine-slice inner boundaries match GL translated physical rounding without changing outer bounds."
@@ -11014,7 +11014,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 124,
       "end": 132,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification. Plain-image physical extents round at fractional DPI like the GL image helper, while nonzero rotated extents remain unsnapped; nine-slice inner boundaries match GL translated physical rounding without changing outer bounds."
@@ -11023,7 +11023,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 157,
       "end": 166,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "CPU J2C images publish bounded current-generation facades with cancellation/replacement queue ownership, rotated primitives and raw exports. Source review is separate from actual decoded image/pixel qualification. Plain-image physical extents round at fractional DPI like the GL image helper, while nonzero rotated extents remain unsnapped; nine-slice inner boundaries match GL translated physical rounding without changing outer bounds."
@@ -16603,7 +16603,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 20,
       "end": 25,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Image, rectangle and non-font triangle producers now preserve exact legacy LLRender::color4f vertex representation: clamp normalized floats, multiply by 255, truncate U8, normalize. Font producers already use U8 and remain unchanged. Shared tabs, skin colors/assets, texture decoding and blend selection remain unchanged; native runtime parity still requires rebuilt readback."
@@ -16612,25 +16612,25 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 117,
       "end": 117,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Image, rectangle and non-font triangle producers now preserve exact legacy LLRender::color4f vertex representation: clamp normalized floats, multiply by 255, truncate U8, normalize. Font producers already use U8 and remain unchanged. Shared tabs, skin colors/assets, texture decoding and blend selection remain unchanged; native runtime parity still requires rebuilt readback."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 356,
-      "end": 356,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 362,
+      "end": 362,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Image, rectangle and non-font triangle producers now preserve exact legacy LLRender::color4f vertex representation: clamp normalized floats, multiply by 255, truncate U8, normalize. Font producers already use U8 and remain unchanged. Shared tabs, skin colors/assets, texture decoding and blend selection remain unchanged; native runtime parity still requires rebuilt readback."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 390,
-      "end": 390,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 396,
+      "end": 396,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Image, rectangle and non-font triangle producers now preserve exact legacy LLRender::color4f vertex representation: clamp normalized floats, multiply by 255, truncate U8, normalize. Font producers already use U8 and remain unchanged. Shared tabs, skin colors/assets, texture decoding and blend selection remain unchanged; native runtime parity still requires rebuilt readback."
@@ -17627,63 +17627,63 @@
     },
     {
       "path": "indra/newview/llviewermedia.cpp",
-      "start": 30,
-      "end": 30,
-      "sha256": "dd2b3465cd301c29060dd41554674521b2dcf948b2db50a8728fa5d5daa1a48b",
+      "start": 32,
+      "end": 32,
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
       "record": "I10",
       "disposition": "mapped",
       "reason": "Native connected parcel playback owns authenticated ParcelProperties, ParcelMediaUpdate and ParcelMediaCommandMessage decoding, rejects malformed scalars, negative/stale query sequences, unsupported URL schemes and retired host/account delivery. Current-parcel HTTP(S) music uses the existing nonspatial streaming audio/fade/volume engine; media uses the native LLMediaCtrl 2D plugin pixel path in web_content, preserving parcel MIME selection for CEF/VLC. Native status controls retain configured media/music enable settings, autoplay and explicit stop. First-use dialogs and actual single/two-stage filter XUI indices, domain/URL whitelist decisions, and filter-denial versus global-stop intent are preserved. Consent carries weak owner plus account/region/parcel/request/URL identity; browser closure, preference disable, teleport/region replacement and logout/reset retire playback. Account reset retires filter singleton before next account can reload its private medialist.xml. Filter singleton initialization in native mode cannot overwrite CPU transport handlers or instantiate scene parcel autoplay. Extracted production-body controller/transport regression and actual XUI/schema/MIME checks pass; existing source/runner replay tests pass. Codec playback, audible output and graphical runtime remain unqualified by these console tests; no world-object media surface or non-HTTP(S) protocol parity is claimed."
     },
     {
       "path": "indra/newview/llviewermedia.cpp",
-      "start": 961,
-      "end": 964,
-      "sha256": "dd2b3465cd301c29060dd41554674521b2dcf948b2db50a8728fa5d5daa1a48b",
+      "start": 963,
+      "end": 966,
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
       "record": "I10",
       "disposition": "mapped",
       "reason": "Native connected parcel playback owns authenticated ParcelProperties, ParcelMediaUpdate and ParcelMediaCommandMessage decoding, rejects malformed scalars, negative/stale query sequences, unsupported URL schemes and retired host/account delivery. Current-parcel HTTP(S) music uses the existing nonspatial streaming audio/fade/volume engine; media uses the native LLMediaCtrl 2D plugin pixel path in web_content, preserving parcel MIME selection for CEF/VLC. Native status controls retain configured media/music enable settings, autoplay and explicit stop. First-use dialogs and actual single/two-stage filter XUI indices, domain/URL whitelist decisions, and filter-denial versus global-stop intent are preserved. Consent carries weak owner plus account/region/parcel/request/URL identity; browser closure, preference disable, teleport/region replacement and logout/reset retire playback. Account reset retires filter singleton before next account can reload its private medialist.xml. Filter singleton initialization in native mode cannot overwrite CPU transport handlers or instantiate scene parcel autoplay. Extracted production-body controller/transport regression and actual XUI/schema/MIME checks pass; existing source/runner replay tests pass. Codec playback, audible output and graphical runtime remain unqualified by these console tests; no world-object media surface or non-HTTP(S) protocol parity is claimed."
     },
     {
       "path": "indra/newview/llviewermedia.cpp",
-      "start": 1024,
-      "end": 1025,
-      "sha256": "dd2b3465cd301c29060dd41554674521b2dcf948b2db50a8728fa5d5daa1a48b",
-      "record": "I10",
-      "disposition": "mapped",
-      "reason": "Native connected parcel playback owns authenticated ParcelProperties, ParcelMediaUpdate and ParcelMediaCommandMessage decoding, rejects malformed scalars, negative/stale query sequences, unsupported URL schemes and retired host/account delivery. Current-parcel HTTP(S) music uses the existing nonspatial streaming audio/fade/volume engine; media uses the native LLMediaCtrl 2D plugin pixel path in web_content, preserving parcel MIME selection for CEF/VLC. Native status controls retain configured media/music enable settings, autoplay and explicit stop. First-use dialogs and actual single/two-stage filter XUI indices, domain/URL whitelist decisions, and filter-denial versus global-stop intent are preserved. Consent carries weak owner plus account/region/parcel/request/URL identity; browser closure, preference disable, teleport/region replacement and logout/reset retire playback. Account reset retires filter singleton before next account can reload its private medialist.xml. Filter singleton initialization in native mode cannot overwrite CPU transport handlers or instantiate scene parcel autoplay. Extracted production-body controller/transport regression and actual XUI/schema/MIME checks pass; existing source/runner replay tests pass. Codec playback, audible output and graphical runtime remain unqualified by these console tests; no world-object media surface or non-HTTP(S) protocol parity is claimed."
-    },
-    {
-      "path": "indra/newview/llviewermedia.cpp",
-      "start": 1027,
+      "start": 1026,
       "end": 1027,
-      "sha256": "dd2b3465cd301c29060dd41554674521b2dcf948b2db50a8728fa5d5daa1a48b",
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
       "record": "I10",
       "disposition": "mapped",
       "reason": "Native connected parcel playback owns authenticated ParcelProperties, ParcelMediaUpdate and ParcelMediaCommandMessage decoding, rejects malformed scalars, negative/stale query sequences, unsupported URL schemes and retired host/account delivery. Current-parcel HTTP(S) music uses the existing nonspatial streaming audio/fade/volume engine; media uses the native LLMediaCtrl 2D plugin pixel path in web_content, preserving parcel MIME selection for CEF/VLC. Native status controls retain configured media/music enable settings, autoplay and explicit stop. First-use dialogs and actual single/two-stage filter XUI indices, domain/URL whitelist decisions, and filter-denial versus global-stop intent are preserved. Consent carries weak owner plus account/region/parcel/request/URL identity; browser closure, preference disable, teleport/region replacement and logout/reset retire playback. Account reset retires filter singleton before next account can reload its private medialist.xml. Filter singleton initialization in native mode cannot overwrite CPU transport handlers or instantiate scene parcel autoplay. Extracted production-body controller/transport regression and actual XUI/schema/MIME checks pass; existing source/runner replay tests pass. Codec playback, audible output and graphical runtime remain unqualified by these console tests; no world-object media surface or non-HTTP(S) protocol parity is claimed."
     },
     {
       "path": "indra/newview/llviewermedia.cpp",
-      "start": 1107,
-      "end": 1109,
-      "sha256": "dd2b3465cd301c29060dd41554674521b2dcf948b2db50a8728fa5d5daa1a48b",
+      "start": 1029,
+      "end": 1029,
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
       "record": "I10",
       "disposition": "mapped",
       "reason": "Native connected parcel playback owns authenticated ParcelProperties, ParcelMediaUpdate and ParcelMediaCommandMessage decoding, rejects malformed scalars, negative/stale query sequences, unsupported URL schemes and retired host/account delivery. Current-parcel HTTP(S) music uses the existing nonspatial streaming audio/fade/volume engine; media uses the native LLMediaCtrl 2D plugin pixel path in web_content, preserving parcel MIME selection for CEF/VLC. Native status controls retain configured media/music enable settings, autoplay and explicit stop. First-use dialogs and actual single/two-stage filter XUI indices, domain/URL whitelist decisions, and filter-denial versus global-stop intent are preserved. Consent carries weak owner plus account/region/parcel/request/URL identity; browser closure, preference disable, teleport/region replacement and logout/reset retire playback. Account reset retires filter singleton before next account can reload its private medialist.xml. Filter singleton initialization in native mode cannot overwrite CPU transport handlers or instantiate scene parcel autoplay. Extracted production-body controller/transport regression and actual XUI/schema/MIME checks pass; existing source/runner replay tests pass. Codec playback, audible output and graphical runtime remain unqualified by these console tests; no world-object media surface or non-HTTP(S) protocol parity is claimed."
     },
     {
       "path": "indra/newview/llviewermedia.cpp",
-      "start": 1602,
-      "end": 1604,
-      "sha256": "dd2b3465cd301c29060dd41554674521b2dcf948b2db50a8728fa5d5daa1a48b",
+      "start": 1109,
+      "end": 1111,
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
       "record": "I10",
       "disposition": "mapped",
       "reason": "Native connected parcel playback owns authenticated ParcelProperties, ParcelMediaUpdate and ParcelMediaCommandMessage decoding, rejects malformed scalars, negative/stale query sequences, unsupported URL schemes and retired host/account delivery. Current-parcel HTTP(S) music uses the existing nonspatial streaming audio/fade/volume engine; media uses the native LLMediaCtrl 2D plugin pixel path in web_content, preserving parcel MIME selection for CEF/VLC. Native status controls retain configured media/music enable settings, autoplay and explicit stop. First-use dialogs and actual single/two-stage filter XUI indices, domain/URL whitelist decisions, and filter-denial versus global-stop intent are preserved. Consent carries weak owner plus account/region/parcel/request/URL identity; browser closure, preference disable, teleport/region replacement and logout/reset retire playback. Account reset retires filter singleton before next account can reload its private medialist.xml. Filter singleton initialization in native mode cannot overwrite CPU transport handlers or instantiate scene parcel autoplay. Extracted production-body controller/transport regression and actual XUI/schema/MIME checks pass; existing source/runner replay tests pass. Codec playback, audible output and graphical runtime remain unqualified by these console tests; no world-object media surface or non-HTTP(S) protocol parity is claimed."
     },
     {
       "path": "indra/newview/llviewermedia.cpp",
-      "start": 1617,
-      "end": 1619,
-      "sha256": "dd2b3465cd301c29060dd41554674521b2dcf948b2db50a8728fa5d5daa1a48b",
+      "start": 1604,
+      "end": 1606,
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
+      "record": "I10",
+      "disposition": "mapped",
+      "reason": "Native connected parcel playback owns authenticated ParcelProperties, ParcelMediaUpdate and ParcelMediaCommandMessage decoding, rejects malformed scalars, negative/stale query sequences, unsupported URL schemes and retired host/account delivery. Current-parcel HTTP(S) music uses the existing nonspatial streaming audio/fade/volume engine; media uses the native LLMediaCtrl 2D plugin pixel path in web_content, preserving parcel MIME selection for CEF/VLC. Native status controls retain configured media/music enable settings, autoplay and explicit stop. First-use dialogs and actual single/two-stage filter XUI indices, domain/URL whitelist decisions, and filter-denial versus global-stop intent are preserved. Consent carries weak owner plus account/region/parcel/request/URL identity; browser closure, preference disable, teleport/region replacement and logout/reset retire playback. Account reset retires filter singleton before next account can reload its private medialist.xml. Filter singleton initialization in native mode cannot overwrite CPU transport handlers or instantiate scene parcel autoplay. Extracted production-body controller/transport regression and actual XUI/schema/MIME checks pass; existing source/runner replay tests pass. Codec playback, audible output and graphical runtime remain unqualified by these console tests; no world-object media surface or non-HTTP(S) protocol parity is claimed."
+    },
+    {
+      "path": "indra/newview/llviewermedia.cpp",
+      "start": 1619,
+      "end": 1621,
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
       "record": "I10",
       "disposition": "mapped",
       "reason": "Native connected parcel playback owns authenticated ParcelProperties, ParcelMediaUpdate and ParcelMediaCommandMessage decoding, rejects malformed scalars, negative/stale query sequences, unsupported URL schemes and retired host/account delivery. Current-parcel HTTP(S) music uses the existing nonspatial streaming audio/fade/volume engine; media uses the native LLMediaCtrl 2D plugin pixel path in web_content, preserving parcel MIME selection for CEF/VLC. Native status controls retain configured media/music enable settings, autoplay and explicit stop. First-use dialogs and actual single/two-stage filter XUI indices, domain/URL whitelist decisions, and filter-denial versus global-stop intent are preserved. Consent carries weak owner plus account/region/parcel/request/URL identity; browser closure, preference disable, teleport/region replacement and logout/reset retire playback. Account reset retires filter singleton before next account can reload its private medialist.xml. Filter singleton initialization in native mode cannot overwrite CPU transport handlers or instantiate scene parcel autoplay. Extracted production-body controller/transport regression and actual XUI/schema/MIME checks pass; existing source/runner replay tests pass. Codec playback, audible output and graphical runtime remain unqualified by these console tests; no world-object media surface or non-HTTP(S) protocol parity is claimed."
@@ -20309,9 +20309,9 @@
     },
     {
       "path": "indra/newview/llviewermedia.cpp",
-      "start": 1026,
-      "end": 1026,
-      "sha256": "dd2b3465cd301c29060dd41554674521b2dcf948b2db50a8728fa5d5daa1a48b",
+      "start": 1028,
+      "end": 1028,
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
       "record": "I10",
       "disposition": "mapped",
       "reason": "Native connected parcel playback owns authenticated ParcelProperties, ParcelMediaUpdate and ParcelMediaCommandMessage decoding, rejects malformed scalars, negative/stale query sequences, unsupported URL schemes and retired host/account delivery. Current-parcel HTTP(S) music uses the existing nonspatial streaming audio/fade/volume engine; media uses the native LLMediaCtrl 2D plugin pixel path in web_content, preserving parcel MIME selection for CEF/VLC. Native status controls retain configured media/music enable settings, autoplay and explicit stop. First-use dialogs and actual single/two-stage filter XUI indices, domain/URL whitelist decisions, and filter-denial versus global-stop intent are preserved. Consent carries weak owner plus account/region/parcel/request/URL identity; browser closure, preference disable, teleport/region replacement and logout/reset retire playback. Account reset retires filter singleton before next account can reload its private medialist.xml. Filter singleton initialization in native mode cannot overwrite CPU transport handlers or instantiate scene parcel autoplay. Extracted production-body controller/transport regression and actual XUI/schema/MIME checks pass; existing source/runner replay tests pass. Codec playback, audible output and graphical runtime remain unqualified by these console tests; no world-object media surface or non-HTTP(S) protocol parity is claimed. Native parcel plugin state now retains loop, pause and finite seek across consent/plugin startup, applies only to current connected parcel, and clears on explicit stop/account or region replacement. Trusted decoded parcel metadata validates booleans and bounded dimensions before mutation, configures real LLMediaCtrl fixed texture sizing versus autoscale, and preserves filtering/MIME plugin ownership. Global media pause retains the existing 2D media source rather than unloading. Real Nearby Media panel lists exactly current parcel media, bypassing scene priority/proximity/media-focus scans; real selected play/stop/pause/mute/volume/copy URL route CPU owner and plugin. Zoom/Unzoom remain unsupported, ordinary GL behavior unchanged. Four console regressions include compiled production transitions for startup deferral, loop, invalid seek, script/user stops, pause without close, unchanged metadata without replay, bounds and cleanup; no external media fetch or foreground viewer qualification claimed."
@@ -21130,7 +21130,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2289,
       "end": 2289,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -21524,9 +21524,9 @@
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 288,
-      "end": 292,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 294,
+      "end": 298,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -21535,7 +21535,7 @@
       "path": "indra/newview/vsuiresources.h",
       "start": 29,
       "end": 29,
-      "sha256": "46509338115620a62f57ced12cbc4d37231366929b9d9a8fe01e314f8b08a307",
+      "sha256": "09535d6e210632bbb06cbd37179a6a6624c258b2e30d6eee6fedbfca330f5d4c",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -22705,7 +22705,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2290,
       "end": 2291,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Builds native avatar/mesh producers with existing Autobuild viewer dependencies; canonical RelWithDebInfo build and full staging passed. Source review only; full scene, live service and rendering parity remain open under doc/vulkan/full-parity-roadmap.md."
@@ -23857,7 +23857,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2299,
       "end": 2299,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -24361,7 +24361,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2300,
       "end": 2300,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -25495,25 +25495,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 54,
       "end": 54,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 359,
-      "end": 373,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 360,
+      "end": 374,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 420,
-      "end": 420,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 421,
+      "end": 421,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -25639,7 +25639,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2291,
       "end": 2294,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -25648,7 +25648,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2297,
       "end": 2297,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -26827,7 +26827,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 10,
       "end": 11,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -26836,7 +26836,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 43,
       "end": 43,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -26845,7 +26845,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 182,
       "end": 182,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -26854,7 +26854,7 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 186,
       "end": 186,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -26862,26 +26862,17 @@
     {
       "path": "indra/newview/vsuiresources.cpp",
       "start": 190,
-      "end": 195,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "end": 196,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 241,
-      "end": 241,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
-      "record": "I08",
-      "disposition": "mapped",
-      "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
-    },
-    {
-      "path": "indra/newview/vsuiresources.cpp",
-      "start": 248,
-      "end": 248,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 242,
+      "end": 242,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -26889,53 +26880,62 @@
     {
       "path": "indra/newview/vsuiresources.cpp",
       "start": 249,
-      "end": 250,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "end": 249,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 252,
-      "end": 252,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 250,
+      "end": 251,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 318,
-      "end": 318,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 253,
+      "end": 253,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 318,
-      "end": 318,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 324,
+      "end": 324,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 403,
-      "end": 403,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 324,
+      "end": 324,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 406,
-      "end": 418,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 409,
+      "end": 409,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
+      "record": "I08",
+      "disposition": "mapped",
+      "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 412,
+      "end": 424,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -26944,7 +26944,7 @@
       "path": "indra/newview/vsuiresources.h",
       "start": 8,
       "end": 8,
-      "sha256": "46509338115620a62f57ced12cbc4d37231366929b9d9a8fe01e314f8b08a307",
+      "sha256": "09535d6e210632bbb06cbd37179a6a6624c258b2e30d6eee6fedbfca330f5d4c",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -26953,16 +26953,16 @@
       "path": "indra/newview/vsuiresources.h",
       "start": 21,
       "end": 21,
-      "sha256": "46509338115620a62f57ced12cbc4d37231366929b9d9a8fe01e314f8b08a307",
+      "sha256": "09535d6e210632bbb06cbd37179a6a6624c258b2e30d6eee6fedbfca330f5d4c",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
     },
     {
       "path": "indra/newview/vsuiresources.h",
-      "start": 30,
-      "end": 30,
-      "sha256": "46509338115620a62f57ced12cbc4d37231366929b9d9a8fe01e314f8b08a307",
+      "start": 31,
+      "end": 31,
+      "sha256": "09535d6e210632bbb06cbd37179a6a6624c258b2e30d6eee6fedbfca330f5d4c",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Generation-owned native image/CPU RGBA/mask/decode leases, finite dimensions/queues/retries and capability metadata; CPU worker decode posts guarded publication to mainloop. Failed replacement retains valid resources; cross-account/region/request deliveries expire and shader/UI semantics stay explicit."
@@ -28355,9 +28355,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 112,
-      "end": 115,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 113,
+      "end": 116,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28409,18 +28409,18 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 364,
-      "end": 369,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 365,
+      "end": 370,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 373,
-      "end": 373,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 374,
+      "end": 374,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28429,25 +28429,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 40,
       "end": 40,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 403,
-      "end": 413,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 404,
+      "end": 414,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 420,
-      "end": 420,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 421,
+      "end": 421,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28474,7 +28474,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 83,
       "end": 83,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28753,7 +28753,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 53,
       "end": 53,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28843,34 +28843,34 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 55,
       "end": 80,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 114,
-      "end": 114,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 115,
+      "end": 115,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 285,
-      "end": 287,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 286,
+      "end": 288,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 374,
-      "end": 386,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 375,
+      "end": 387,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -29104,7 +29104,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 327,
       "end": 331,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29113,7 +29113,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 1197,
       "end": 1209,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29122,7 +29122,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2291,
       "end": 2293,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29131,7 +29131,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2297,
       "end": 2298,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -29140,7 +29140,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 3262,
       "end": 3271,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -32172,8 +32172,8 @@
     {
       "path": "indra/newview/vsuiresources.cpp",
       "start": 190,
-      "end": 194,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "end": 195,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Role-specific bounded composite/image pools, immutable published masks/pixels and actual GPU image handles; native metadata decode/admission and scoped callback publication preserve prior resources and account ownership. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35332,7 +35332,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 96,
       "end": 96,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -35341,7 +35341,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 1203,
       "end": 1203,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35656,7 +35656,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 97,
       "end": 97,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -35665,34 +35665,25 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 79,
       "end": 79,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 257,
-      "end": 260,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 258,
+      "end": 261,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 309,
-      "end": 310,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
-      "record": "I05",
-      "disposition": "mapped",
-      "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
-    },
-    {
-      "path": "indra/newview/vsuiresources.cpp",
-      "start": 312,
-      "end": 318,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 315,
+      "end": 316,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35700,26 +35691,35 @@
     {
       "path": "indra/newview/vsuiresources.cpp",
       "start": 318,
-      "end": 318,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "end": 324,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 346,
-      "end": 352,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 324,
+      "end": 324,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 411,
-      "end": 411,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 352,
+      "end": 358,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 417,
+      "end": 417,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Font atlas and solid-fill publication refuse without committing an absent image or producer generation; visible batches retry after bounded-budget pressure, and immutable queued generations survive replacement. Per-frame deferred-draw evidence prevents incomplete capture acceptance. Initial/patch/resize/erase refusal and immutable retry regressions are distinct from full runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35827,43 +35827,43 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 52,
       "end": 76,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Local shared FreeType glyph packing and cache pages map to typed mutable Diligent font atlases; glyph additions coalesce before draws and update existing texture storage with immediate-context transitions. CPU oracle bytes follow the submitted atlas. Submitted reads/transfers retain page ownership through fences, while ordinary image generations remain immutable. Atlas allocation failure is explicit rather than omitted text; production-method and real-GPU identity/residency/readback regressions are separate from final runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 270,
-      "end": 284,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 271,
+      "end": 285,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Local shared FreeType glyph packing and cache pages map to typed mutable Diligent font atlases; glyph additions coalesce before draws and update existing texture storage with immediate-context transitions. CPU oracle bytes follow the submitted atlas. Submitted reads/transfers retain page ownership through fences, while ordinary image generations remain immutable. Atlas allocation failure is explicit rather than omitted text; production-method and real-GPU identity/residency/readback regressions are separate from final runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 309,
-      "end": 310,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 315,
+      "end": 316,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Local shared FreeType glyph packing and cache pages map to typed mutable Diligent font atlases; glyph additions coalesce before draws and update existing texture storage with immediate-context transitions. CPU oracle bytes follow the submitted atlas. Submitted reads/transfers retain page ownership through fences, while ordinary image generations remain immutable. Atlas allocation failure is explicit rather than omitted text; production-method and real-GPU identity/residency/readback regressions are separate from final runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 312,
-      "end": 318,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 318,
+      "end": 324,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Local shared FreeType glyph packing and cache pages map to typed mutable Diligent font atlases; glyph additions coalesce before draws and update existing texture storage with immediate-context transitions. CPU oracle bytes follow the submitted atlas. Submitted reads/transfers retain page ownership through fences, while ordinary image generations remain immutable. Atlas allocation failure is explicit rather than omitted text; production-method and real-GPU identity/residency/readback regressions are separate from final runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 320,
-      "end": 321,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 326,
+      "end": 327,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Local shared FreeType glyph packing and cache pages map to typed mutable Diligent font atlases; glyph additions coalesce before draws and update existing texture storage with immediate-context transitions. CPU oracle bytes follow the submitted atlas. Submitted reads/transfers retain page ownership through fences, while ordinary image generations remain immutable. Atlas allocation failure is explicit rather than omitted text; production-method and real-GPU identity/residency/readback regressions are separate from final runtime qualification. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -36034,7 +36034,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 98,
       "end": 98,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36466,7 +36466,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36475,61 +36475,61 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 98,
       "end": 98,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 149,
-      "end": 149,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 150,
+      "end": 150,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 185,
-      "end": 185,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 186,
+      "end": 186,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 256,
-      "end": 256,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 257,
+      "end": 257,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 265,
-      "end": 265,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 266,
+      "end": 266,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 269,
-      "end": 269,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 270,
+      "end": 270,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 285,
-      "end": 285,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 286,
+      "end": 286,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36952,7 +36952,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2321,
       "end": 2322,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -37004,9 +37004,9 @@
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 274,
-      "end": 274,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 275,
+      "end": 275,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37258,7 +37258,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 99,
       "end": 99,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37465,7 +37465,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37474,52 +37474,52 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 98,
       "end": 98,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 256,
-      "end": 256,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 257,
+      "end": 257,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 260,
-      "end": 260,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 261,
+      "end": 261,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 265,
-      "end": 265,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 266,
+      "end": 266,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 269,
-      "end": 269,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 270,
+      "end": 270,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 285,
-      "end": 285,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "start": 286,
+      "end": 286,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37609,7 +37609,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 84,
       "end": 84,
-      "sha256": "9d17a3bbffb51ad8d11ecbcbe1e645ebb039b1790ddb6a6bdfa38bb784b141d1",
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and run actual native cache bridge against controlled complete/partial/corrupt/timeout/shutdown and late-callback states; retain encoded writer memory/budget until retirement. Add to existing source-evidence job. This fixture does not qualify real disk restart reuse or R3 as a whole."
@@ -37816,16 +37816,16 @@
       "path": "indra/newview/vsuiresources.cpp",
       "start": 4,
       "end": 4,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Expose disk-hit/miss, write-start/pending and network-request counters in native image evidence, without changing resource publication or draw acceptance."
     },
     {
       "path": "indra/newview/vsuiresources.cpp",
-      "start": 410,
-      "end": 410,
-      "sha256": "32cb005f30b164a0a7c032677686e81efbebb41315ddc15b57c354bc9c2b17bf",
+      "start": 416,
+      "end": 416,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Expose disk-hit/miss, write-start/pending and network-request counters in native image evidence, without changing resource publication or draw acceptance."
@@ -37843,7 +37843,7 @@
       "path": "indra/newview/CMakeLists.txt",
       "start": 2290,
       "end": 2290,
-      "sha256": "691f1bac2600766a1868de89f69ffd6d22ce87ba263e58d120c9a01a2dac6e44",
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
@@ -38729,10 +38729,163 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute production material shaders with independent opaque, linear-factor, emissive and UV pixel charts; retain existing strict validation and negative controls. This does not qualify all R3 production paths."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 105,
+      "end": 105,
+      "sha256": "7d357c95f4505f8b73110d1e0a353f23479e26bff2428657119e6d3a4c57bb40",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
+    },
+    {
+      "path": "indra/newview/CMakeLists.txt",
+      "start": 2284,
+      "end": 2284,
+      "sha256": "d70e14c09ce2b225c487f1518285eb9771edbead695108c0df3784eed7bbd2ba",
+      "record": "I23",
+      "disposition": "mapped",
+      "reason": "Build native material snapshot and regional asset acquisition sources only in the existing native backend source list; retain peer OpenGL build and staging."
+    },
+    {
+      "path": "indra/newview/llmediactrl.cpp",
+      "start": 34,
+      "end": 34,
+      "sha256": "31b4aee3c00cf0af9ea344ffcbe5da22bb8c65761be24bf8de44626cb04e3dc5",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
+    },
+    {
+      "path": "indra/newview/llmediactrl.cpp",
+      "start": 864,
+      "end": 866,
+      "sha256": "31b4aee3c00cf0af9ea344ffcbe5da22bb8c65761be24bf8de44626cb04e3dc5",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
+    },
+    {
+      "path": "indra/newview/llmediactrl.cpp",
+      "start": 875,
+      "end": 876,
+      "sha256": "31b4aee3c00cf0af9ea344ffcbe5da22bb8c65761be24bf8de44626cb04e3dc5",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
+    },
+    {
+      "path": "indra/newview/llviewermedia.cpp",
+      "start": 30,
+      "end": 31,
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
+    },
+    {
+      "path": "indra/newview/llviewermedia.cpp",
+      "start": 1798,
+      "end": 1801,
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
+    },
+    {
+      "path": "indra/newview/llviewermedia.cpp",
+      "start": 3077,
+      "end": 3083,
+      "sha256": "655551cbe807e7732efc13f317182be8e08aa93ac22a56f76f6fc3bc757de16f",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Share existing media plugin lifecycle and immutable native pixel publication between viewer UI and world consumers; preserve dirty state on refusal, canonicalize plugin stride/origin, retire resources with plugin. OpenGL path unchanged."
+    },
+    {
+      "path": "indra/newview/vsmediaimage.cpp",
+      "start": 1,
+      "end": 52,
+      "sha256": "976468b172485a22f91576766658a714dc0a84e25985254995f7a00560e3d622",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsmediaimage.h",
+      "start": 1,
+      "end": 8,
+      "sha256": "688d2e4cd623ee675ac2a114755c662fee51ad914298332787a65dd8e255af5a",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsmediapixels.h",
+      "start": 4,
+      "end": 4,
+      "sha256": "5c793e22cb194a6d9c57f724a320cbf1f5dc23099ae7052e2f564edd23574898",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsmediapixels.h",
+      "start": 27,
+      "end": 58,
+      "sha256": "5c793e22cb194a6d9c57f724a320cbf1f5dc23099ae7052e2f564edd23574898",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 193,
+      "end": 193,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsuiresources.cpp",
+      "start": 289,
+      "end": 293,
+      "sha256": "3da79a96d43432a50b30d7285df8e3e39fcd435945cd36fa9b6c982e45c6e244",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "indra/newview/vsuiresources.h",
+      "start": 30,
+      "end": 30,
+      "sha256": "09535d6e210632bbb06cbd37179a6a6624c258b2e30d6eee6fedbfca330f5d4c",
+      "record": "I13",
+      "disposition": "mapped",
+      "reason": "Immutable native material/channel snapshots and shared LLMaterial/LLGLTFMaterial/LLViewerTextureAnim logic: regional legacy acquisition, PBR asset IDs and overrides, independent UV transforms, alpha, factor and encoded/linear contracts. Preserve whole-object publication on refusal and scoped resources through GPU completion. Headless material charts and native Windows compile checks pass; complete R3 runtime acceptance remains open."
+    },
+    {
+      "path": "scripts/tests/test_native_media_publication.py",
+      "start": 1,
+      "end": 83,
+      "sha256": "558d0722f443c93fc8014f19ebbfb3571bf2502488d6c7c2cdb2c3b74e8da3f4",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_media_pixels.py",
+      "start": 28,
+      "end": 37,
+      "sha256": "ba08209dd46f4221c4efb70d559f6c8dbe0b0acc24e2d35313402ae7a161d847",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "31acf4fa9b0d16039e0d5dcee3208d7f70b69dc8",
+    "previous_source_commit": "08b4e303ca8dcb7c77ad69330c32c21ac2a6be32",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
