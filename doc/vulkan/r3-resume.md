@@ -38,12 +38,26 @@ actual concurrent primary/sibling check. Independent archive validation accepted
 presentation and final three-platform qualification. The final UI-feedback
 follow-up must retain a fresh staged build and current runtime evidence.
 
-The earlier b5b89a08c9 Windows run completed runtime tests but failed packaging
-on its locked profile Vulkanstorm.exec_marker. Packaging now explicitly records
-that exact coordination-file exclusion; unreadable pixel/evidence files still
-fail. Do not call the incomplete uploaded archive qualified. Preserve the
-running Linux jobs and inspect their results; final qualification remains
-required at the final branch source, with complete uploaded manifests.
+Complete logs from b5b89a08c9 show that Windows passed all nine cache cases,
+then the combined cache/instance step reached its 15-minute deadline during the
+instance check. Packaging additionally failed on the locked profile
+Vulkanstorm.exec_marker. Both Linux jobs failed at the cold case: CEF was launched
+without an X11 display, exited before publication, and the replay timed out.
+The workflow now supplies Xvfb for the real CEF child while keeping the Vulkan
+viewer headless, and separates the restart matrix and concurrent-instance checks
+into independently bounded steps. Test oracles and per-process deadlines are
+unchanged. Packaging explicitly records the exact coordination-file exclusion;
+unreadable pixel/evidence files still fail. Final qualification remains required
+at the final branch source, with complete uploaded manifests.
+
+The camera follow-up preserves shared EnableMouselook/RLVa admission policy and
+keeps joystick feedback in its owning floater. The cursor regression fixture now
+provides the native pan interface and verifies Shift-drag pan independently of
+orbit; its prior missing declarations stopped source-only CI before graphics jobs.
+At 01a72b50f4 the canonical staged viewer passed connected UI/R1 (65.5 seconds),
+ordinary startup (30.3 seconds), and R2 plus terrain publication (162.1 seconds).
+The subsequent cursor-fixture/documentation correction changes no viewer source;
+retain exact build provenance and refresh final-source CI before qualification.
 
 The active task is gapless R3 with Windows SwiftShader, Linux SwiftShader and
 Linux Lavapipe all passing on the final source. Checkpoints are committed and
