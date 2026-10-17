@@ -552,6 +552,7 @@ private:
     e_write_to_cache_state mWriteToCacheState;
     LLTextureFetch* mFetcher;
     LLPointer<LLImageFormatted> mFormattedImage;
+    std::shared_ptr<const VSResourceBudget::Reservation> mNativeDecodeResidency;
     LLPointer<LLImageRaw>       mRawImage,
                                 mAuxImage;
     FTType mFTType;
@@ -1283,7 +1284,7 @@ bool LLTextureFetchWorker::doWork(S32 param)
                 mCacheReadHandle = mFetcher->mTextureCache->readFromCache(filename, mID, offset, size, responder);
 
             }
-            else if ((mUrl.empty() || mFTType==FTT_SERVER_BAKE) && mFetcher->canLoadFromCache())
+            else if ((mFetcher->mNativeConsumer || mUrl.empty() || mFTType==FTT_SERVER_BAKE) && mFetcher->canLoadFromCache())
             {
                 ++mCacheReadCount;
                 CacheReadResponder* responder = new CacheReadResponder(mFetcher, mID, mFormattedImage);
@@ -1371,6 +1372,13 @@ bool LLTextureFetchWorker::doWork(S32 param)
 
     if (mState == LOAD_FROM_NETWORK)
     {
+        // An explicit native URL belongs to the admitted circuit. A cache-only
+        // subscriber cannot fall through to the legacy LLWorld/UDP resolver.
+        if (mFetcher->mNativeConsumer && mUrl.empty())
+        {
+            setState(DONE);
+            return true;
+        }
         LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("tfwdw - LOAD_FROM_NETWORK"); //<FS:Beq/> fix incorrect category
         // Check for retries to previous server failures.
         F32 wait_seconds;
@@ -1446,7 +1454,7 @@ bool LLTextureFetchWorker::doWork(S32 param)
                 LL_INFOS_ONCE(LOG_TXT) << "Texture not available via HTTP: no region " << mUrl << LL_ENDL;
             }
         }
-        else if (mFTType == FTT_SERVER_BAKE)
+        else if (mFTType == FTT_SERVER_BAKE || mFetcher->mNativeConsumer)
         {
             mWriteToCacheState = CAN_WRITE;
         }
@@ -1704,6 +1712,13 @@ bool LLTextureFetchWorker::doWork(S32 param)
         // call releaseHttpSemaphore().
         if (mLoaded)
         {
+            if (mFetcher->mNativeConsumer &&
+                mGetStatus==LLCore::HttpStatus(LLCore::HttpStatus::LLCORE,LLCore::HE_RESPONSE_TOO_LARGE))
+            {
+                setState(DONE);
+                releaseHttpSemaphore();
+                return true;
+            }
             S32 cur_size = mFormattedImage.notNull() ? mFormattedImage->getDataSize() : 0;
             if (mRequestedSize < 0)
             {
@@ -1815,7 +1830,7 @@ bool LLTextureFetchWorker::doWork(S32 param)
             // Clear the url since we're done with the fetch
             // Note: mUrl is used to check is fetching is required so failure to clear it will force an http fetch
             // next time the texture is requested, even if the data have already been fetched.
-            if(mWriteToCacheState != NOT_WRITE && mFTType != FTT_SERVER_BAKE)
+            if(mWriteToCacheState != NOT_WRITE && mFTType != FTT_SERVER_BAKE && !mFetcher->mNativeConsumer)
             {
                 // Why do we want to keep url if NOT_WRITE - is this a proxy for map tiles?
                 mUrl.clear();
@@ -1861,6 +1876,13 @@ bool LLTextureFetchWorker::doWork(S32 param)
                 mRequestedOffset += src_offset;
             }
 
+            if (mFetcher->mNativeConsumer && (total_size<=0 || total_size>16*1024*1024))
+            {
+                mGetStatus=LLCore::HttpStatus(LLCore::HttpStatus::LLCORE,LLCore::HE_RESPONSE_TOO_LARGE);
+                setState(DONE);
+                releaseHttpSemaphore();
+                return true;
+            }
             U8 * buffer = (U8 *)ll_aligned_malloc_16(total_size);
             if (!buffer)
             {
@@ -1990,6 +2012,31 @@ bool LLTextureFetchWorker::doWork(S32 param)
             return true;
         }
 
+        if (mFetcher->mNativeConsumer)
+        {
+            if (!mFormattedImage->updateData() || mFormattedImage->getCodec()!=IMG_CODEC_J2C ||
+                mFormattedImage->getWidth()<=0 || mFormattedImage->getHeight()<=0 ||
+                mFormattedImage->getWidth()>4096 || mFormattedImage->getHeight()>4096 ||
+                mFormattedImage->getComponents()<=0 || mFormattedImage->getComponents()>5 ||
+                mFormattedImage->getDataSize()>16*1024*1024)
+            {
+                if(mCachedSize>0 && mRetryAttempt==0)
+                {
+                    mFetcher->mTextureCache->removeFromCache(mID);
+                    mFormattedImage=NULL;++mRetryAttempt;setState(INIT);
+                    return false;
+                }
+                setState(DONE);return true;
+            }
+            // The encoded response queue remains bounded by 32 x 16 MiB;
+            // decoded image/mask publication retains the previous native cap.
+            mRawImage=NULL;mAuxImage=NULL;mNativeDecodeResidency.reset();
+            const auto width=std::max(1,mFormattedImage->getWidth()>>discard);
+            const auto height=std::max(1,mFormattedImage->getHeight()>>discard);
+            const auto bytes=std::size_t(width)*height*(mNeedsAux?5:4)+mFormattedImage->getDataSize();
+            mNativeDecodeResidency=mFetcher->mNativeDecodeBytes.reserve(bytes);
+            if(!mNativeDecodeResidency) return false;
+        }
         mDecodeTimer.reset();
         mRawImage = NULL;
         mAuxImage = NULL;
@@ -2703,8 +2750,9 @@ std::string LLTextureFetch::getStateString(S32 state)
     return e_state_name[state];
 }
 
-LLTextureFetch::LLTextureFetch(LLTextureCache* cache, bool threaded, bool qa_mode)
+LLTextureFetch::LLTextureFetch(LLTextureCache* cache, bool threaded, bool qa_mode, bool native_consumer)
     : LLWorkerThread("TextureFetch", threaded, true),
+      mNativeConsumer(native_consumer),
       mDebugCount(0),
       mDebugPause(false),
       mPacketCount(0), // <FS:Ansariel> OpenSim compatibility
@@ -2738,6 +2786,15 @@ LLTextureFetch::LLTextureFetch(LLTextureCache* cache, bool threaded, bool qa_mod
     mHttpOptions  = std::make_shared<LLCore::HttpOptions>();
     mHttpOptionsWithHeaders = std::make_shared<LLCore::HttpOptions>();
     mHttpOptionsWithHeaders->setWantHeaders(true);
+    if (mNativeConsumer)
+    {
+        // Preserve the native transport ceiling when using the shared worker.
+        for (auto& options : {mHttpOptions, mHttpOptionsWithHeaders})
+        {
+            options->setMaximumResponseBodyBytes(16 * 1024 * 1024);
+            options->setTransferTimeout(15);
+        }
+    }
     mHttpHeaders = std::make_shared<LLCore::HttpHeaders>();
     mHttpHeaders->append(HTTP_OUT_HEADER_ACCEPT, HTTP_CONTENT_IMAGE_X_J2C);
     mHttpPolicyClass = app_core_http.getPolicy(LLAppCoreHttp::AP_TEXTURE);
@@ -2805,6 +2862,8 @@ S32 LLTextureFetch::createRequest(FTType f_type, const std::string& url, const L
         }
     }
 
+    if (mNativeConsumer && !worker && getNumRequests() >= 32)
+        return CREATE_REQUEST_ERROR_DEFAULT;
     S32 desired_size;
     std::string exten = gDirUtilp->getExtension(url);
     //if (f_type == FTT_SERVER_BAKE)
@@ -2849,6 +2908,8 @@ S32 LLTextureFetch::createRequest(FTType f_type, const std::string& url, const L
         desired_discard = MAX_DISCARD_LEVEL;
     }
 
+
+    if (mNativeConsumer) desired_size=llmin(desired_size,16*1024*1024);
 
     if (worker)
     {
@@ -3179,6 +3240,21 @@ bool LLTextureFetch::getRequestFinished(const LLUUID& id, S32& discard_level, S3
 }
 
 // Threads:  T*
+bool LLTextureFetch::getRequestDimensions(const LLUUID& id,S32& width,S32& height,S32& components)
+{
+    auto* worker=getWorker(id);
+    if(!worker) return false;
+    worker->lockWorkMutex();
+    const bool valid=worker->mFormattedImage.notNull() && worker->mFormattedImage->getWidth()>0;
+    if(valid)
+    {
+        width=worker->mFormattedImage->getWidth();height=worker->mFormattedImage->getHeight();
+        components=worker->mFormattedImage->getComponents();
+    }
+    worker->unlockWorkMutex();
+    return valid;
+}
+
 bool LLTextureFetch::updateRequestPriority(const LLUUID& id, F32 priority)
 {
     LL_PROFILE_ZONE_SCOPED;
@@ -3304,7 +3380,7 @@ size_t LLTextureFetch::update(F32 max_time_ms)
     size_t res = LLWorkerThread::update(max_time_ms);
 
     // <FS:Ansariel> OpenSim compatibility
-    if (!mDebugPause)
+    if (!mDebugPause && !mNativeConsumer)
     {
         // this is the startup state when send_complete_agent_movement() message is sent.
         // Before this, the RequestImages message sent by sendRequestListToSimulators

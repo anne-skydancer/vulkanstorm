@@ -35,6 +35,7 @@
 #include "lluuid.h"
 #include "llworkerthread.h"
 #include "lltextureinfo.h"
+#include "vsresourcebudget.h"
 #include "llimageworker.h"
 #include "httprequest.h"
 #include "httpoptions.h"
@@ -56,11 +57,13 @@ class LLTextureFetchTester;
 class LLTextureFetch : public LLWorkerThread
 {
     friend class LLTextureFetchWorker;
+    const bool mNativeConsumer;
+    VSResourceBudget mNativeDecodeBytes{256 * 1024 * 1024};
 
 public:
     static std::string getStateString(S32 state);
 
-    LLTextureFetch(LLTextureCache* cache, bool threaded, bool qa_mode);
+    LLTextureFetch(LLTextureCache* cache, bool threaded, bool qa_mode, bool native_consumer = false);
     ~LLTextureFetch();
 
     class TFRequest;
@@ -110,6 +113,7 @@ public:
 
     // Threads:  T*
     bool updateRequestPriority(const LLUUID& id, F32 priority);
+    bool getRequestDimensions(const LLUUID&, S32& width, S32& height, S32& components);
 
     // <FS:Ansariel> OpenSim compatibility
     // Threads:  T*

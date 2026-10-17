@@ -7,6 +7,7 @@ class LLImageRaw;
 class LLSD;
 LLSD vs_ui_texture_cache_evidence();
 void vs_pump_ui_images();
+LLPointer<LLUIImage> vs_request_world_image(const LLUUID&,unsigned dimension);
 void vs_refresh_ui_image(const LLUUID&);
 LLPointer<LLUIImage> vs_publish_ui_image(const std::string&, const LLImageRaw&);
 void vs_erase_ui_image(const std::string&);
@@ -24,6 +25,7 @@ class VSUIImageProvider : public LLImageProviderInterface
     void cleanUp() override;
     void resetAccount();
     void pumpImages();
+    LLPointer<LLUIImage> requestWorldImage(const LLUUID&,unsigned dimension);
     void refreshImage(const LLUUID&);
     LLPointer<LLUIImage> publishImage(const std::string&, const LLImageRaw&);
     void eraseImage(const std::string&);

@@ -122,11 +122,14 @@ int main(){
         texture = (ROOT / 'indra/newview/vsuiimageprovider.cpp').read_text()
         asset = (ROOT / 'indra/newview/llviewerassetstorage.cpp').read_text()
         self.assertIn('setMaximumResponseBodyBytes(wireLimit)', mesh)
-        self.assertIn('setMaximumResponseBodyBytes(16 * 1024 * 1024)', texture)
+        fetch = (ROOT / 'indra/newview/lltexturefetch.cpp').read_text()
+        self.assertIn('setMaximumResponseBodyBytes(16 * 1024 * 1024)', fetch)
         self.assertIn('setMaximumResponseBodyBytes(64 * 1024 * 1024)', asset)
         self.assertIn('LLCore::HE_RESPONSE_TOO_LARGE', texture)
         failure = texture[texture.index('LLCore::HE_RESPONSE_TOO_LARGE'):]
-        self.assertLess(failure.index('failedGeneration = generation'), failure.index('return;'))
+        self.assertLess(failure.index('failedGeneration=generation'), failure.index('entry.attempts=3'))
+        terminal = fetch[fetch.index('if (mState == WAIT_HTTP_REQ)'):]
+        self.assertLess(terminal.index('HE_RESPONSE_TOO_LARGE'), terminal.index('if (mRequestedSize < 0)'))
         curl = (ROOT / 'indra/llcorehttp/_httplibcurl.cpp').read_text()
         self.assertIn('if (op->mStatus)\n    {\n        op->mStatus = HttpStatus(HttpStatus::EXT_CURL_EASY, status);', curl)
         self.assertIn('op->mXLLURL.size() && op->mStatus != HttpStatus(HttpStatus::LLCORE, HE_RESPONSE_TOO_LARGE)', curl)
