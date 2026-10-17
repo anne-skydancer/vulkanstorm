@@ -490,3 +490,29 @@ before deleting it. Compilation and focused regressions pass; runtime acceptance
 of the new reclamation check is pending the next canonical build. The glTF
 publication fixture also now supplies the actual viewport argument introduced by
 the projected-demand integration.
+
+The source-qualified `075ab43575` canonical viewer passed the combined R2 and
+local/world R3 replay in 76.9 seconds. All nine persistent-cache restart cases
+passed with that executable, including the actual culled-face ownership check
+in the cold case. Archive completeness accepted the collected files and rejected
+an omitted world-bump GPU readback. This qualifies those paths on the local
+Windows software device; it does not establish full R3 or cross-platform parity.
+
+## Hidden UI image residency
+
+Remote image facades retained by hidden controls no longer pin GPU images and
+CPU snapshots indefinitely. Under pressure the cache may retire an inactive
+payload while retaining its facade, dimensions and subscription identity. A
+subsequent draw renews interest and the shared fetch/cache path reloads it.
+Hidden retained controls do not automatically restart evicted requests. Metadata
+capacity eviction remains separate: it must not remove a subscribed facade.
+Local images, recent draws, pending preparation/fetch work and externally held
+GPU generations remain protected. Core skin assets and font atlases are outside
+this remote-image policy.
+
+A regression executes the production eviction and pending-demand selection
+against hidden/recent controls, queued GPU owners, local images, active work and
+metadata capacity. It proves stable facade identity and payload retirement,
+followed by renewed demand when the control becomes visible. The existing local
+image publication regression also passes. Canonical runtime qualification of this
+new checkpoint remains pending its rebuild.
