@@ -313,6 +313,7 @@ struct Replay : public LLAvatarPropertiesObserver
     unsigned inventoryTabVisit = 0;
     bool savedPaymentConfirm = false;
     bool savedQuickBuyCurrency = false;
+    bool insufficientCurrencyShown = false;
     S32 savedPaymentThreshold = 0;
     boost::signals2::scoped_connection accountNotifications;
     void openResidentPay()
@@ -1692,19 +1693,29 @@ struct Replay : public LLAvatarPropertiesObserver
             openResidentPay(); payFloater.get()->getChild<LLButton>("fastpay 1")->onCommit();
             require(LLFloaterBuyCurrency::sPropertiesRequest != nullptr && outgoingPayments == 1,
                 "Insufficient funds did not enter the shared currency/payment-info controller");
-            sendBalance(owner, 100); ++step; return false;
+            ++step; return false;
         }
         if (step == 36)
         {
+            if (!insufficientCurrencyShown)
+            {
+                if (!owner.balanceKnown() || owner.balance() != 0) return false;
+                // The fixture's special account caption is treated as payment
+                // information by the shared profile policy, just as in OpenGL.
+                auto* currency = LLFloaterReg::findInstance("buy_currency");
+                if (!currency || !currency->isInVisibleChain()) return false;
+                require(LLFloaterBuyCurrency::sPropertiesRequest == nullptr && outgoingPayments == 1,
+                    "Shared insufficient-funds flow did not retire its request safely");
+                auto* target = currency->findChild<LLTextBox>("target_price");
+                require(target && target->getText().find('1') != std::string::npos,
+                    "Shared currency controller lost the unaffordable payment target");
+                evidence["connected_payment_insufficient_funds_shared_currency"] = true;
+                LLFloaterReg::destroyInstance("buy_currency");
+                insufficientCurrencyShown = true;
+                sendBalance(owner, 100);
+                return false;
+            }
             if (!owner.balanceKnown() || owner.balance() != 100) return false;
-            // The actual HTTP profile fixture reports no payment information.
-            // Wait for that shared observer to open its real payment-method UI.
-            auto* payment = LLFloaterReg::findInstance("add_payment_method");
-            if (!payment || !payment->isInVisibleChain()) return false;
-            require(LLFloaterBuyCurrency::sPropertiesRequest == nullptr && outgoingPayments == 1,
-                "Shared insufficient-funds flow did not retire its request safely");
-            evidence["connected_payment_insufficient_funds_shared_currency"] = true;
-            LLFloaterReg::destroyInstance("add_payment_method");
             payConfirmation.setNull(); openResidentPay(); payFloater.get()->getChild<LLButton>("fastpay 1")->onCommit();
             auto n = LLNotifications::instance().find(payConfirmation);
             require(n != nullptr, "Payment lifetime fixture lacks real confirmation");
