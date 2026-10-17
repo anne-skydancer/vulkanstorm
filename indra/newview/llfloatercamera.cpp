@@ -61,6 +61,21 @@ const F32 ORBIT_NUDGE_RATE = 0.05f; // fraction of normal speed
 #define ZOOM "zoom"
 #define CONTROLS "controls"
 
+void LLFloaterCamera::updateNativeControls()
+{
+    for (auto* camera : {LLFloaterCamera::findInstance(), LLFloaterCamera::findSmallInstance(), LLFloaterCamera::findPhototoolsInstance()})
+    {
+        if (!camera) continue;
+        camera->update();
+        if (camera->mRotate)
+            camera->mRotate->setToggleState(gAgentCamera.getOrbitRightKey() > 0,
+                gAgentCamera.getOrbitUpKey() > 0, gAgentCamera.getOrbitLeftKey() > 0, gAgentCamera.getOrbitDownKey() > 0);
+        if (camera->mTrack)
+            camera->mTrack->setToggleState(gAgentCamera.getPanLeftKey() > 0,
+                gAgentCamera.getPanUpKey() > 0, gAgentCamera.getPanRightKey() > 0, gAgentCamera.getPanDownKey() > 0);
+    }
+}
+
 bool LLFloaterCamera::sFreeCamera = false;
 bool LLFloaterCamera::sAppearanceEditing = false;
 
