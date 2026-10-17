@@ -1242,12 +1242,35 @@ bool LLViewerInput::handleGlobalBindsKeyDown(KEY key, MASK mask)
         // be interupted by LLSetKeyBindDialog, check manually
         return false;
     }
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        if (mNativeHeldGlobalBindings.count(key)) return true;
+        for (const auto& binding : mGlobalKeyBindings[getMode()])
+            if (binding.mKey == key && (binding.mMask & mask) == binding.mMask)
+            {
+                mNativeHeldGlobalBindings.emplace(key, binding);
+                return binding.mFunction(KEYSTATE_DOWN);
+            }
+        return false;
+    }
+#endif
     S32 mode = getMode();
     return scanKey(mGlobalKeyBindings[mode], static_cast<S32>(mGlobalKeyBindings[mode].size()), key, mask, true, false, false, false);
 }
 
 bool LLViewerInput::handleGlobalBindsKeyUp(KEY key, MASK mask)
 {
+#if VS_NATIVE_VULKAN
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        const auto held = mNativeHeldGlobalBindings.find(key);
+        if (held == mNativeHeldGlobalBindings.end()) return false;
+        const auto callback = held->second.mFunction;
+        mNativeHeldGlobalBindings.erase(held);
+        return callback(KEYSTATE_UP);
+    }
+#endif
     if (LLSetKeyBindDialog::isRecording())
     {
         // handleGlobalBindsKeyUp happens before view handling, so can't
@@ -1705,6 +1728,16 @@ bool LLViewerInput::scanKey(const std::vector<LLKeyboardBinding> &binding,
         }//if
     }//for
     return false;
+}
+
+void LLViewerInput::resetNativeGlobalKeys() const
+{
+    // Release the callbacks captured on press even if mode, modifiers, binding
+    // preferences or recording state changed while the physical key was held.
+    const auto held = std::move(mNativeHeldGlobalBindings);
+    mNativeHeldGlobalBindings.clear();
+    for (const auto& [key, binding] : held)
+        binding.mFunction(KEYSTATE_UP);
 }
 
 void LLViewerInput::resetNativeKeys() const

@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
 
 #include "llfloateraddpaymentmethod.h"
 #include "llnotificationsutil.h"
@@ -56,14 +57,16 @@ void LLFloaterAddPaymentMethod::onOpen(const LLSD& key)
 
 void LLFloaterAddPaymentMethod::onContinueBtn()
 {
+    const std::string url = getString("continue_url");
+    const auto current = vs_native_im_guard();
     closeFloater();
     LLNotificationsUtil::add("AddPaymentMethod", LLSD(), LLSD(),
-        [this](const LLSD&notif, const LLSD&resp)
+        [url, current](const LLSD&notif, const LLSD&resp)
     {
         S32 opt = LLNotificationsUtil::getSelectedOption(notif, resp);
-        if (opt == 0)
+        if (opt == 0 && current())
         {
-            LLWeb::loadURL(this->getString("continue_url"));
+            LLWeb::loadURL(url);
         }
     });
 }

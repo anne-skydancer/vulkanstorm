@@ -207,6 +207,8 @@ void incoming(VSNativeSession& owner, EInstantMessage dialog, const LLUUID& id, 
 struct Replay : public LLAvatarPropertiesObserver
 {
     unsigned step = 0;
+    unsigned utilityCheck = 0;
+    LLHandle<LLFloater> utilityFloater;
     bool keyboardChecked = false;
     unsigned cameraCheck = 0;
     unsigned landCheck = 0;
@@ -592,6 +594,36 @@ struct Replay : public LLAvatarPropertiesObserver
         if (step == 0)
         {
             require(owner.phase() == VSNativeSession::Phase::Connected && gIMMgr, "IM replay requires connected shared services");
+            static const char* utilityNames[] = {
+                "window_size", "fs_protectedfolders", "fs_streamtitle", "fs_streamtitlehistory",
+                "chat_mention_picker", "emoji_complete", "preview_trash", "new_feature_notification",
+                "fs_whitelist_floater", "settings_color", "fs_splash_screen_settings", "fs_volume_controls",
+                "font_test", "hud", "rlv_strings", "buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"
+            };
+            if (utilityCheck < std::size(utilityNames) * 2)
+            {
+                const char* name = utilityNames[utilityCheck / 2];
+                if (!(utilityCheck & 1))
+                {
+                    // Construct the actual shared XUI and allow a presented
+                    // frame before destruction. Do not submit quotes/purchases
+                    // or navigate a payment website in this fixture account.
+                    auto* floater = LLFloaterReg::getInstance(name);
+                    require(floater && !floater->getChildList()->empty(), "Actual shared utility/currency floater construction failed");
+                    utilityFloater = floater->getHandle();
+                    floater->setVisible(true);
+                }
+                else
+                {
+                    require(utilityFloater.get() != nullptr, "Shared utility/currency floater retired before drawing");
+                    LLFloaterReg::destroyInstance(name);
+                    require(utilityFloater.isDead(), "Shared utility/currency floater retained a stale owner");
+                    evidence["connected_utility_floater_names"].append(name);
+                }
+                ++utilityCheck;
+                return false;
+            }
+            evidence["connected_utility_floaters"] = true;
             if (!keyboardChecked)
             {
                 require(gKeyboard != nullptr, "Actual keyboard owner is missing");
@@ -604,10 +636,15 @@ struct Replay : public LLAvatarPropertiesObserver
                 // shared arbitration -> scan -> existing registered action chain.
                 gKeyboard->handleTranslatedKeyDown(KEY_LEFT, MASK_NONE);
                 gKeyboard->scanKeyboard();
+                const F32 turnRate = gAgentCamera.getYawKey();
+                require(turnRate > 0 && (gAgent.getControlFlags() & AGENT_CONTROL_YAW_POS),
+                    "Window keyboard callback did not publish reference turn intent");
                 owner.cameraControls(.1f);
                 const auto turned = owner.cameraState();
-                require((turned.at - before.at).magVecSquared() > .0001f,
-                    "Window keyboard callback did not apply configured turn action");
+                const LLVector3 expectedTurn = before.at * LLQuaternion(turnRate * .1f * F_PI_BY_TWO, LLVector3::z_axis);
+                require((turned.at - expectedTurn).magVecSquared() < .000001f &&
+                    (turned.at - before.at).magVecSquared() > .000001f,
+                    "Window keyboard callback did not apply reference nudge turn rate");
                 gKeyboard->handleTranslatedKeyUp(KEY_LEFT, MASK_NONE);
                 gKeyboard->scanKeyboard();
                 owner.cameraControls(.1f);

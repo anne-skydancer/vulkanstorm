@@ -25,6 +25,9 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llfloaterbuycurrency.h"
 #include "llbuycurrencyhtml.h"
@@ -47,6 +50,13 @@ public:
 
     bool handle(const LLSD& params, const LLSD& query_map, const std::string& grid, LLMediaCtrl* web)
     {
+#if VS_NATIVE_VULKAN
+        if (VSNativeSession::active())
+        {
+            auto* owner = LLFloaterReg::findTypedInstance<LLFloaterBuyCurrencyHTML>("buy_currency_html");
+            if (!owner || !owner->ownsCurrentBrowser(web)) return false;
+        }
+#endif
         std::string action( "" );
         if ( params.size() >= 1 )
         {
@@ -166,7 +176,7 @@ void LLBuyCurrencyHTML::showDialog( bool specific_sum_requested, const std::stri
 //
 void LLBuyCurrencyHTML::closeDialog()
 {
-    LLFloaterBuyCurrencyHTML* buy_currency_floater = dynamic_cast< LLFloaterBuyCurrencyHTML* >(LLFloaterReg::getInstance( "buy_currency_html" ) );
+    LLFloaterBuyCurrencyHTML* buy_currency_floater = LLFloaterReg::findTypedInstance<LLFloaterBuyCurrencyHTML>("buy_currency_html");
     if ( buy_currency_floater )
     {
         buy_currency_floater->closeFloater();

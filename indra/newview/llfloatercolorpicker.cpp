@@ -262,12 +262,7 @@ bool LLFloaterColorPicker::postBuild()
     childSetCommitCallback("hex_value", onTextCommit, (void*)this );
     // </FS:Zi>
 
-#if VS_NATIVE_VULKAN
-    if (VSNativeSession::active())
-        mPipetteBtn->setEnabled(false);
-    else
-#endif
-        LLToolPipette::getInstance()->setToolSelectCallback(boost::bind(&LLFloaterColorPicker::onColorSelect, this, _1));
+    LLToolPipette::getInstance()->setToolSelectCallback(boost::bind(&LLFloaterColorPicker::onColorSelect, this, _1));
 
     return true;
 }
@@ -465,7 +460,12 @@ void LLFloaterColorPicker::onClickSelect ( void* data )
 void LLFloaterColorPicker::onClickPipette( )
 {
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active()) return;
+    if (VSNativeSession::active())
+    {
+        auto* tool = LLToolPipette::getInstance();
+        tool->setNativeActive(!tool->nativeActive());
+        return;
+    }
 #endif
     bool pipette_active = mPipetteBtn->getToggleState();
     pipette_active = !pipette_active;
@@ -539,8 +539,8 @@ void LLFloaterColorPicker::draw()
 #if VS_NATIVE_VULKAN
     if (VSNativeSession::active())
     {
-        mPipetteBtn->setEnabled(false);
-        mPipetteBtn->setToggleState(false);
+        mPipetteBtn->setEnabled(mActive);
+        mPipetteBtn->setToggleState(LLToolPipette::getInstance()->nativeActive());
     }
     else
 #endif
@@ -1208,7 +1208,11 @@ void LLFloaterColorPicker::setActive(bool active)
 void LLFloaterColorPicker::stopUsingPipette()
 {
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active()) return;
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLToolPipette::getInstance()->setNativeActive(false);
+        return;
+    }
 #endif
     if (LLToolMgr::getInstance()->getCurrentTool() == LLToolPipette::getInstance())
     {

@@ -32,6 +32,7 @@
 #include "llemojihelper.h"
 #include "llfloateremojipicker.h"
 #include "llfloaterchatmentionpicker.h"
+#include "llfloaterbuycurrency.h"
 #include "fsfloaterstreamtitle.h"
 
 namespace
@@ -128,6 +129,9 @@ void vs_native_im_reset()
     } restoreDocking;
     if (LLNotificationsUI::LLChannelManager::instanceExists())
         LLNotificationsUI::LLChannelManager::instance().resetNativeAccount();
+    LLFloaterBuyCurrency::resetAccountRequests();
+    for (const char* name : {"buy_currency", "buy_currency_html", "add_payment_method", "money_tracker"})
+        LLFloaterReg::destroyInstance(name);
     LLUploadDialog::modalUploadFinished();
     sOfflineGeneration = 0;
     LLFloaterPermsDefault::setCapSent(false);

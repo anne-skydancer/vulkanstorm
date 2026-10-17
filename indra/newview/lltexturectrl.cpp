@@ -347,7 +347,11 @@ void LLFloaterTexturePicker::setCanApplyImmediately(bool b)
 void LLFloaterTexturePicker::stopUsingPipette()
 {
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active()) return;
+    if (gViewerWindow && gViewerWindow->isNativeVulkan())
+    {
+        LLToolPipette::getInstance()->setNativeActive(false);
+        return;
+    }
 #endif
 
     if (LLToolMgr::getInstance()->getCurrentTool() == LLToolPipette::getInstance())
@@ -749,10 +753,7 @@ bool LLFloaterTexturePicker::postBuild()
 
     mSavedFolderState.setApply(false);
 
-#if VS_NATIVE_VULKAN
-    if (!VSNativeSession::active())
-#endif
-        LLToolPipette::getInstance()->setToolSelectCallback(boost::bind(&LLFloaterTexturePicker::onTextureSelect, this, _1));
+    LLToolPipette::getInstance()->setToolSelectCallback(boost::bind(&LLFloaterTexturePicker::onTextureSelect, this, _1));
 
     getChild<LLComboBox>("l_bake_use_texture_combo_box")->setCommitCallback(onBakeTextureSelect, this);
 
@@ -767,8 +768,8 @@ void LLFloaterTexturePicker::draw()
     if (VSNativeSession::active())
     {
         mSelectBtn->setEnabled(mActive && mCanApply && updateImageStats() && !getTentative());
-        // World pipette selection belongs to the deferred scene renderer.
-        mPipetteBtn->setEnabled(false); mPipetteBtn->setValue(false);
+        mPipetteBtn->setEnabled(mActive);
+        mPipetteBtn->setValue(LLToolPipette::getInstance()->nativeActive());
         if (mTentativeLabel) mTentativeLabel->setVisible(getTentative() && !mViewModel->isDirty());
         mDefaultBtn->setEnabled(mImageAssetID != mDefaultImageAssetID || getTentative());
         mBlankBtn->setEnabled((mImageAssetID != mBlankImageAssetID && mBlankImageAssetID.notNull()) || getTentative());
@@ -1212,7 +1213,12 @@ void LLFloaterTexturePicker::onBtnSelect(void* userdata)
 void LLFloaterTexturePicker::onBtnPipette()
 {
 #if VS_NATIVE_VULKAN
-    if (VSNativeSession::active()) return;
+    if (VSNativeSession::active())
+    {
+        auto* tool = LLToolPipette::getInstance();
+        tool->setNativeActive(!tool->nativeActive());
+        return;
+    }
 #endif
 
     bool pipette_active = getChild<LLUICtrl>("Pipette")->getValue().asBoolean();

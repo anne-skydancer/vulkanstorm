@@ -1404,11 +1404,10 @@ void upload_done_callback(
                 // Charge the user for the upload.
                 LLViewerRegion* region = gAgent.getRegion();
                 LLHost destination = region ? region->getHost() : LLHost();
-                bool native = false, unknown_balance = false;
+                bool unknown_balance = false;
 #if VS_NATIVE_VULKAN
                 if (auto owner = VSNativeSession::active())
                 {
-                    native = true;
                     unknown_balance = expected_upload_cost > 0 && !owner->balanceKnown();
                     destination = owner->host();
                 }
@@ -1416,8 +1415,7 @@ void upload_done_callback(
 
                 if (unknown_balance || !can_afford_transaction(expected_upload_cost))
                 {
-                    if (native) LLNotificationsUtil::add(unknown_balance
-                        ? "NativePaymentBalanceUnavailable" : "NativePaymentInsufficientFunds");
+                    if (unknown_balance) LLNotificationsUtil::add("NativePaymentBalanceUnavailable");
                     else LLBuyCurrencyHTML::openCurrencyFloater("", expected_upload_cost);
                     is_balance_sufficient = false;
                 }
@@ -1555,7 +1553,7 @@ void upload_new_resource(
         }
         if (!can_afford_transaction(cost))
         {
-            LLNotificationsUtil::add("NativePaymentInsufficientFunds");
+            LLBuyCurrencyHTML::openCurrencyFloater("", cost);
             return;
         }
     }

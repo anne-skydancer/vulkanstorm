@@ -25,6 +25,10 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "vsnativeim.h"
+#if VS_NATIVE_VULKAN
+#include "vsnativesession.h"
+#endif
 
 #include "llfloaterbuycurrencyhtml.h"
 #include "llhttpconstants.h"
@@ -34,6 +38,7 @@
 //
 LLFloaterBuyCurrencyHTML::LLFloaterBuyCurrencyHTML( const LLSD& key ):
     LLFloater( key ),
+    mCurrent(vs_native_im_guard()),
     mSpecificSumRequested( false ),
     mMessage( "" ),
     mSum( 0 )
@@ -55,6 +60,16 @@ bool LLFloaterBuyCurrencyHTML::postBuild()
 //
 void LLFloaterBuyCurrencyHTML::navigateToFinalURL()
 {
+    if (!mCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active(); owner && !owner->balanceKnown())
+    {
+        mPendingNavigation = true;
+        LLStatusBar::sendMoneyBalanceRequest();
+        return;
+    }
+#endif
+    mPendingNavigation = false;
     // URL for actual currency buy contents is in XUI file
     std::string buy_currency_url = getString( "buy_currency_url" );
 
@@ -75,7 +90,11 @@ void LLFloaterBuyCurrencyHTML::navigateToFinalURL()
     // users' current balance
     codec.clear();
     codec.str( "" );
-    codec << gStatusBar->getBalance();
+    S32 balance = gStatusBar ? gStatusBar->getBalance() : 0;
+#if VS_NATIVE_VULKAN
+    if (auto owner = VSNativeSession::active()) balance = owner->balance();
+#endif
+    codec << balance;
     replace[ "[BAL]" ] = codec.str();
 
     // message - "This cost L$x,xxx for example
@@ -91,8 +110,19 @@ void LLFloaterBuyCurrencyHTML::navigateToFinalURL()
 
 ////////////////////////////////////////////////////////////////////////////////
 //
+void LLFloaterBuyCurrencyHTML::draw()
+{
+    if (!mCurrent()) return;
+#if VS_NATIVE_VULKAN
+    if (mPendingNavigation)
+        if (auto owner = VSNativeSession::active(); owner && owner->balanceKnown()) navigateToFinalURL();
+#endif
+    LLFloater::draw();
+}
+
 void LLFloaterBuyCurrencyHTML::handleMediaEvent( LLPluginClassMedia* self, EMediaEvent event )
 {
+    if (!mCurrent()) return;
     // placeholder for now - just in case we want to catch media events
     if ( LLPluginClassMediaOwner::MEDIA_EVENT_NAVIGATE_COMPLETE == event )
     {
@@ -106,8 +136,8 @@ void LLFloaterBuyCurrencyHTML::handleMediaEvent( LLPluginClassMedia* self, EMedi
 //
 void LLFloaterBuyCurrencyHTML::onClose( bool app_quitting )
 {
-    // Update L$ balance one more time
-    LLStatusBar::sendMoneyBalanceRequest();
+    // A retired browser must not request balance in a replacement login.
+    if (mCurrent()) LLStatusBar::sendMoneyBalanceRequest();
 
     destroy();
 }

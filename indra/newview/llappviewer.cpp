@@ -1700,6 +1700,11 @@ bool LLAppViewer::frameNativeVulkanLogin()
     gViewerWindow->getWindow()->processMiscNativeEvents();
     gViewerWindow->getWindow()->gatherInput();
     if (gKeyboard) gKeyboard->scanKeyboard();
+#if VS_NATIVE_VULKAN
+    if (mNativeSession && mNativeSession->regionReady() && gFocusMgr.getAppHasFocus() && !gFocusMgr.focusLocked() &&
+        gSavedPerAccountSettings.getBOOL("FSCrouchToggle") && gSavedPerAccountSettings.getBOOL("FSCrouchToggleStatus"))
+        gAgent.moveUp(-1);
+#endif
     LLEventPumps::instance().obtain("mainloop").post(LLSD());
     llcoro::suspend();
     LLCoros::instance().rethrow();

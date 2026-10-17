@@ -35,6 +35,7 @@
 #include "lltool.h"
 #include "lltextureentry.h"
 #include <boost/signals2.hpp>
+#include <functional>
 
 class LLViewerObject;
 class LLPickInfo;
@@ -50,6 +51,7 @@ public:
     virtual bool    handleMouseUp(S32 x, S32 y, MASK mask) override;
     virtual bool    handleHover(S32 x, S32 y, MASK mask) override;
     virtual bool    handleToolTip(S32 x, S32 y, MASK mask) override;
+    void onMouseCaptureLost() override;
 
     // Note: Don't return connection; use boost::bind + boost::signals2::trackable to disconnect slots
     typedef boost::signals2::signal<void (const LLTextureEntry& te)> signal_t;
@@ -57,9 +59,14 @@ public:
     void setResult(bool success, const std::string& msg);
 
     void setTextureEntry(const LLTextureEntry* entry);
+    void setNativeActive(bool);
+    bool nativeActive() const;
     static void pickCallback(const LLPickInfo& pick_info);
 
 protected:
+    bool nativeSample(S32 x, S32 y, MASK mask);
+    bool mNativeActive = false;
+    std::function<bool()> mNativeAccount;
     LLTextureEntry  mTextureEntry;
     signal_t        mSignal;
     bool            mSuccess;

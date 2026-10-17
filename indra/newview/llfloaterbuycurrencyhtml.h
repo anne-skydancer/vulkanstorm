@@ -29,6 +29,7 @@
 
 #include "llfloater.h"
 #include "llmediactrl.h"
+#include <functional>
 
 class LLFloaterBuyCurrencyHTML :
     public LLFloater,
@@ -38,6 +39,7 @@ class LLFloaterBuyCurrencyHTML :
         LLFloaterBuyCurrencyHTML( const LLSD& key );
 
         /*virtual*/ bool postBuild();
+        void draw() override;
         /*virtual*/ void onClose( bool app_quitting );
 
         // inherited from LLViewerMediaObserver
@@ -48,8 +50,11 @@ class LLFloaterBuyCurrencyHTML :
 
         // parse and construct URL and set browser to navigate there.
         void navigateToFinalURL();
+        bool ownsCurrentBrowser(const LLMediaCtrl* browser) const { return mCurrent() && browser == mBrowser; }
 
     private:
+        std::function<bool()> mCurrent;
+        bool mPendingNavigation = false;
         LLMediaCtrl* mBrowser;
         bool mSpecificSumRequested;
         std::string mMessage;

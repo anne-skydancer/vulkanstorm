@@ -27,7 +27,7 @@ class InventorySettingsControllerTest(unittest.TestCase):
         source = (root / 'indra/newview/llfloaterinventorysettings.cpp').read_text()
         methods = source[source.index('bool LLFloaterInventorySettings::postBuild()'):]
         reset = (root / 'indra/newview/vsnativeim.cpp').read_text()
-        loop = reset[reset.index('    for (const char* name : { "settings_debug"'):]
+        loop = reset[reset.index('    for (const char* name : {', reset.index('// Panels retain pointers')):]
         loop = loop[:loop.index('    // Retire conversation')]
         fixture = r'''
 #include <cassert>

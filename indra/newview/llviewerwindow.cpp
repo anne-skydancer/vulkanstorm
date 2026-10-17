@@ -67,6 +67,7 @@ void LLViewerWindow::nativeScroll(S32, bool) {}
 #include "llpanellogin.h"
 #include "llsetkeybinddialog.h"
 #include "llviewerinput.h"
+#include "lltoolpipette.h"
 #include "llviewermenu.h"
 //<FS:Beq> physics display changes
 #include "llphysicsshapebuilderutil.h"
@@ -1696,6 +1697,8 @@ void LLViewerWindow::handleFocusLost(LLWindow *window)
         if (gMenuBarView) gMenuBarView->resetMenuTrigger();
         if (gLoginMenuBarView) gLoginMenuBarView->resetMenuTrigger();
         gForegroundTime.pause();
+        gViewerInput.resetNativeGlobalKeys();
+        if (LLToolPipette::instanceExists()) LLToolPipette::instance().setNativeActive(false);
         mNativeCameraDrag = false;
 #if VS_NATIVE_VULKAN
         if (auto owner = VSNativeSession::active()) owner->releaseMovement();
@@ -3629,6 +3632,12 @@ bool LLViewerWindow::handleKey(KEY key, MASK mask)
         }
     }
 
+    if (mNativeVulkan && key == KEY_ESCAPE && LLToolPipette::instanceExists() && LLToolPipette::instance().nativeActive())
+    {
+        LLToolPipette::instance().setNativeActive(false);
+        return true;
+    }
+
     if (!mNativeVulkan && LLToolMgr::getInstance()->getCurrentTool()->handleKey(key, mask))
     {
         LL_DEBUGS() << "LLviewerWindow::handleKey toolbar handling?" << LL_ENDL;
@@ -3738,6 +3747,11 @@ bool LLViewerWindow::handleUnicodeChar(llwchar uni_char, MASK mask)
     {
         if (mask != MASK_ALT)
         {
+            // A control requesting physical Return (notably CEF) already
+            // received it on keydown. Its following character must not commit
+            // an underlying panel/default a second time.
+            if (mNativeVulkan)
+                if (auto* focus = gFocusMgr.getKeyboardFocus(); focus && focus->wantsReturnKey()) return true;
             // remaps, handles ignored cases and returns back to viewer window.
             return gViewerInput.handleKey(KEY_RETURN, mask, gKeyboard->getKeyRepeated(KEY_RETURN));
         }
