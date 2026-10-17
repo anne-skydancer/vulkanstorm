@@ -1,6 +1,8 @@
 // Native CPU session and nearby transport. LGPL-2.1, like the viewer.
 #include "llviewerprecompiledheaders.h"
 #include "llagentcamera.h"
+#include "llfloatercamera.h"
+#include "lljoystickbutton.h"
 #include "lleventnotifier.h"
 #include "lfsimfeaturehandler.h"
 #include "llviewergenericmessage.h"
@@ -1106,6 +1108,19 @@ void VSNativeSession::cameraControls(F32 dt)
                   gAgentCamera.getPanUpKey() - gAgentCamera.getPanDownKey()),
         gAgentCamera.getRollRightKey() - gAgentCamera.getRollLeftKey(),
         gAgentCamera.getCameraOffsetInitial(), LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
+    // The reference updateCamera also publishes input to the joystick artwork
+    // and camera mode selection. Do this before consuming the held UI keys.
+    for (auto* camera : {LLFloaterCamera::findInstance(), LLFloaterCamera::findSmallInstance(), LLFloaterCamera::findPhototoolsInstance()})
+    {
+        if (!camera) continue;
+        camera->update();
+        if (camera->mRotate)
+            camera->mRotate->setToggleState(gAgentCamera.getOrbitRightKey() > 0,
+                gAgentCamera.getOrbitUpKey() > 0, gAgentCamera.getOrbitLeftKey() > 0, gAgentCamera.getOrbitDownKey() > 0);
+        if (camera->mTrack)
+            camera->mTrack->setToggleState(gAgentCamera.getPanLeftKey() > 0,
+                gAgentCamera.getPanUpKey() > 0, gAgentCamera.getPanRightKey() > 0, gAgentCamera.getPanDownKey() > 0);
+    }
     // Floater held callbacks republish intent each frame, exactly as in updateCamera.
     gAgentCamera.clearOrbitKeys();
     gAgentCamera.clearPanKeys();
