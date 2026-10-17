@@ -8,7 +8,7 @@ import zipfile
 from run_vulkan_geometry_tests import required_checks
 from run_vulkan_session_replay import r2_contracts_passed, local_image_contracts_passed, local_material_contracts_passed, world_bump_contracts_passed, remote_material_contracts_passed, legacy_material_contracts_passed, media_contracts_passed, shared_settings_contracts_passed
 from run_software_vulkan_tests import MATERIAL_READBACKS
-from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests
+from run_vulkan_texture_cache_tests import CASES as TEXTURE_CACHE_CASES, validate_case as validate_texture_cache_case, texture_requests, validate_driver
 from run_vulkan_texture_cache_instances import validate_instances
 
 
@@ -76,7 +76,7 @@ def texture_cache_completeness(files, source, executable_digest):
             folder=prefix+'/'+relative
             if row.get('passed') is not True or row.get('source_commit')!=source:
                 raise ValueError('Unqualified R3 cache case: '+case)
-            for name in ('results.json','session-replay.xml','viewer.log','http-replay.json','vk_layer_settings.txt','r3/texture.j2c'):
+            for name in ('results.json','session-replay.xml','viewer.log','http-replay.json','vk_layer_settings.txt','r3/texture.j2c','driver.json','driver-output.log'):
                 if folder+'/'+name not in files:raise ValueError('Missing R3 cache artifact: '+folder+'/'+name)
             child=json.loads(files[folder+'/results.json'].read_text())
             traffic=json.loads(files[folder+'/http-replay.json'].read_text())
@@ -85,6 +85,7 @@ def texture_cache_completeness(files, source, executable_digest):
             if child.get('source_commit')!=source or child.get('viewer_executable_sha256')!=executable_digest:
                 raise ValueError('R3 cache source/executable differs from build: '+case)
             actual=files[folder+'/results.json'].parent
+            validate_driver(actual)
             cache=actual.parent/('shared-cache' if case in ('cold','warm') else 'cache-'+case)
             validate_texture_cache_case(child,traffic,actual,cache,case=='read-only')
             identity=child['texture_cache']['process_instance']

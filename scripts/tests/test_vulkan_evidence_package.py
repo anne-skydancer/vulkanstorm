@@ -47,11 +47,16 @@ class EvidencePackageTest(unittest.TestCase):
                 texture_cache=dict(process_instance='unit-process',images=[]),r3_texture_streaming=stages))
             for name in ('session-replay.xml','viewer.log','vk_layer_settings.txt','r3/texture.j2c'):put(folder+'/'+name,{})
             put(folder+'/http-replay.json',[dict(query=dict(texture_id=['unit-texture']))])
+            put(folder+'/driver.json',dict(return_code=0,timed_out=False,output_file='driver-output.log',output_errors=[]))
+            put(folder+'/driver-output.log','actual output')
             # Isolate archive membership from the independently tested pixel validator.
             with patch('package_vulkan_evidence.validate_texture_cache_case') as validate:
                 errors=texture_cache_completeness(files,'revision','digest')
                 validate.assert_called_once()
                 self.assertIn('omitted from archive',errors[0])
+            driver=files.pop(folder+'/driver-output.log')
+            self.assertIn('Missing R3 cache artifact',texture_cache_completeness(files,'revision','digest')[0])
+            files[folder+'/driver-output.log']=driver
 
     def test_regular_bytes_and_hashes_round_trip(self):
         with tempfile.TemporaryDirectory() as temp:

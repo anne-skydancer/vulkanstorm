@@ -285,6 +285,8 @@ static const char* e_state_name[] =
 
 // Log scope
 static const char * const LOG_TXT = "Texture";
+// Native subscribers may replace a worker while a disk completion is queued.
+static std::atomic<U64> sNativeCacheOperation{1};
 
 class LLTextureFetchWorker : public LLWorkerClass, public LLCore::HttpHandler
 
@@ -297,8 +299,8 @@ private:
     public:
 
         // Threads:  Ttf
-        CacheReadResponder(LLTextureFetch* fetcher, const LLUUID& id, LLImageFormatted* image)
-            : mFetcher(fetcher), mID(id)
+        CacheReadResponder(LLTextureFetch* fetcher, const LLUUID& id, LLImageFormatted* image, U64 operation=0)
+            : mFetcher(fetcher), mID(id), mOperation(operation)
         {
             setImage(image);
         }
@@ -310,12 +312,13 @@ private:
             LLTextureFetchWorker* worker = mFetcher->getWorker(mID);
             if (worker)
             {
-                worker->callbackCacheRead(success, mFormattedImage, mImageSize, mImageLocal);
+                worker->callbackCacheRead(success, mFormattedImage, mImageSize, mImageLocal, mOperation);
             }
         }
     private:
         LLTextureFetch* mFetcher;
         LLUUID mID;
+        U64 mOperation;
     };
 
     class CacheWriteResponder : public LLTextureCache::WriteResponder
@@ -323,8 +326,8 @@ private:
     public:
 
         // Threads:  Ttf
-        CacheWriteResponder(LLTextureFetch* fetcher, const LLUUID& id)
-            : mFetcher(fetcher), mID(id)
+        CacheWriteResponder(LLTextureFetch* fetcher, const LLUUID& id, U64 operation=0)
+            : mFetcher(fetcher), mID(id), mOperation(operation)
         {
         }
 
@@ -335,12 +338,13 @@ private:
             LLTextureFetchWorker* worker = mFetcher->getWorker(mID);
             if (worker)
             {
-                worker->callbackCacheWrite(success);
+                worker->callbackCacheWrite(success, mOperation);
             }
         }
     private:
         LLTextureFetch* mFetcher;
         LLUUID mID;
+        U64 mOperation;
     };
 
     class DecodeResponder : public LLImageDecodeThread::Responder
@@ -398,10 +402,10 @@ public:
 
     // Threads:  Ttc
     void callbackCacheRead(bool success, LLImageFormatted* image,
-                           S32 imagesize, bool islocal);
+                           S32 imagesize, bool islocal, U64 operation=0);
 
     // Threads:  Ttc
-    void callbackCacheWrite(bool success);
+    void callbackCacheWrite(bool success, U64 operation=0);
 
     // Threads:  Tid
     void callbackDecoded(bool success, const std::string& error_message, LLImageRaw* raw, LLImageRaw* aux, S32 decode_id);
@@ -551,6 +555,7 @@ private:
 
     e_write_to_cache_state mWriteToCacheState;
     LLTextureFetch* mFetcher;
+    U64 mNativeCacheReadOperation=0,mNativeCacheWriteOperation=0;
     LLPointer<LLImageFormatted> mFormattedImage;
     std::shared_ptr<const VSResourceBudget::Reservation> mNativeDecodeResidency;
     LLPointer<LLImageRaw>       mRawImage,
@@ -1273,13 +1278,14 @@ bool LLTextureFetchWorker::doWork(S32 param)
             mLoaded = false;
 
             add(LLTextureFetch::sCacheAttempt, 1.0);
+            mNativeCacheReadOperation=mFetcher->mNativeConsumer?sNativeCacheOperation.fetch_add(1):0;
 
             if (mUrl.compare(0, 7, "file://") == 0)
             {
                 // read file from local disk
                 ++mCacheReadCount;
                 std::string filename = mUrl.substr(7, std::string::npos);
-                CacheReadResponder* responder = new CacheReadResponder(mFetcher, mID, mFormattedImage);
+                CacheReadResponder* responder = new CacheReadResponder(mFetcher, mID, mFormattedImage, mNativeCacheReadOperation);
                 mCacheReadTimer.reset();
                 mCacheReadHandle = mFetcher->mTextureCache->readFromCache(filename, mID, offset, size, responder);
 
@@ -1287,7 +1293,7 @@ bool LLTextureFetchWorker::doWork(S32 param)
             else if ((mFetcher->mNativeConsumer || mUrl.empty() || mFTType==FTT_SERVER_BAKE) && mFetcher->canLoadFromCache())
             {
                 ++mCacheReadCount;
-                CacheReadResponder* responder = new CacheReadResponder(mFetcher, mID, mFormattedImage);
+                CacheReadResponder* responder = new CacheReadResponder(mFetcher, mID, mFormattedImage, mNativeCacheReadOperation);
                 mCacheReadTimer.reset();
                 mCacheReadHandle = mFetcher->mTextureCache->readFromCache(mID,
                                                                           offset, size, responder);;
@@ -2145,7 +2151,8 @@ bool LLTextureFetchWorker::doWork(S32 param)
         mWritten = false;
         setState(WAIT_ON_WRITE);
         ++mCacheWriteCount;
-        CacheWriteResponder* responder = new CacheWriteResponder(mFetcher, mID);
+        mNativeCacheWriteOperation=mFetcher->mNativeConsumer?sNativeCacheOperation.fetch_add(1):0;
+        CacheWriteResponder* responder = new CacheWriteResponder(mFetcher, mID, mNativeCacheWriteOperation);
         // This call might be under work mutex, but mRawImage is not nessesary safe here.
         // If something retrieves it via getRequestFinished() and modifies, image won't
         // be protected by work mutex and won't be safe to use here nor in cache worker.
@@ -2602,10 +2609,16 @@ S32 LLTextureFetchWorker::callbackHttpGet(LLCore::HttpResponse * response,
 
 // Threads:  Ttc
 void LLTextureFetchWorker::callbackCacheRead(bool success, LLImageFormatted* image,
-                                             S32 imagesize, bool islocal)
+                                             S32 imagesize, bool islocal, U64 operation)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     LLMutexLock lock(&mWorkMutex);                                      // +Mw
+    if (operation && operation!=mNativeCacheReadOperation)
+    {
+        LL_INFOS("NativeTextureCache") << mID << " ignored stale cache completion: operation=" << operation
+            << " current=" << mNativeCacheReadOperation << LL_ENDL;
+        return;
+    }
     if (mState != LOAD_FROM_TEXTURE_CACHE)
     {
 //      LL_WARNS(LOG_TXT) << "Read callback for " << mID << " with state = " << mState << LL_ENDL;
@@ -2627,9 +2640,15 @@ void LLTextureFetchWorker::callbackCacheRead(bool success, LLImageFormatted* ima
 }                                                                       // -Mw
 
 // Threads:  Ttc
-void LLTextureFetchWorker::callbackCacheWrite(bool success)
+void LLTextureFetchWorker::callbackCacheWrite(bool success, U64 operation)
 {
     LLMutexLock lock(&mWorkMutex);                                      // +Mw
+    if (operation && operation!=mNativeCacheWriteOperation)
+    {
+        LL_INFOS("NativeTextureCache") << mID << " ignored stale cache completion: operation=" << operation
+            << " current=" << mNativeCacheWriteOperation << LL_ENDL;
+        return;
+    }
     if (mState != WAIT_ON_WRITE)
     {
 //      LL_WARNS(LOG_TXT) << "Write callback for " << mID << " with state = " << mState << LL_ENDL;

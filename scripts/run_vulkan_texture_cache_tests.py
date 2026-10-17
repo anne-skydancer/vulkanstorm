@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+import threading
 from uuid import UUID, uuid4
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -131,6 +132,42 @@ def mutate_entry(cache_directory,kind):
     return dict(file=str(path.relative_to(root)),offset=offset,before_bytes=len(before),after_bytes=len(after),
                 before_sha256=hashlib.sha256(before).hexdigest(),after_sha256=hashlib.sha256(after).hexdigest())
 
+def run_driver(command,folder,timeout=540):
+    """Preserve driver failures even if Python exits before writing viewer results."""
+    folder=Path(folder);errors=[];timed_out=False
+    with (folder/'driver-output.log').open('w',encoding='utf-8') as output:
+        process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                                 text=True,encoding='utf-8',errors='replace')
+        def drain():
+            try:
+                for line in process.stdout:
+                    output.write(line);output.flush();print(line,end='',flush=True)
+            except (OSError,ValueError) as error:errors.append(str(error))
+            finally:process.stdout.close()
+        reader=threading.Thread(target=drain,daemon=True);reader.start()
+        try:code=process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out=True;process.kill();code=process.wait(timeout=10)
+        finally:
+            reader.join(timeout=10)
+        if reader.is_alive():errors.append('Replay driver output did not close')
+    (folder/'driver.json').write_text(json.dumps(dict(return_code=code,timed_out=timed_out,
+        output_file='driver-output.log',output_errors=errors),indent=2)+'\n')
+    if timed_out:raise subprocess.TimeoutExpired(command,timeout)
+    if errors:raise RuntimeError('Cannot preserve replay driver output: '+'; '.join(errors))
+    return code
+
+
+def validate_driver(folder):
+    folder=Path(folder);record=json.loads((folder/'driver.json').read_text())
+    if (record.get('return_code')!=0 or record.get('timed_out') is not False or
+        record.get('output_errors')!=[] or record.get('output_file')!='driver-output.log'):
+        raise ValueError('Unsuccessful or incomplete cache replay driver')
+    output=folder/'driver-output.log'
+    if output.is_symlink() or not output.is_file() or output.stat().st_size==0:
+        raise ValueError('Missing cache replay driver output')
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build-directory',type=Path,required=True)
@@ -172,7 +209,11 @@ def main():
                 command.extend(['--cache-size',str(512 if original==256 else 256)])
             if args.register_windows_manifests:command.append('--register-windows-manifests')
             print(f'RUN: R3 texture cache {case}',flush=True)
-            code=subprocess.run(command,timeout=540).returncode
+            code=run_driver(command,folder)
+            if code:raise RuntimeError(f'Replay driver exited with code {code}; see driver-output.log')
+            validate_driver(folder)
+            if not (folder/'results.json').is_file():
+                raise RuntimeError(f'Replay driver exited with code {code} without results.json; see driver-output.log')
             child=json.loads((folder/'results.json').read_text());requests=json.loads((folder/'http-replay.json').read_text())
             if code:raise RuntimeError(f'Viewer cache case returned {code}')
             rows=validate_case(child,requests,folder,cache,case=='read-only')
