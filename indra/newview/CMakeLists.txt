@@ -2320,6 +2320,7 @@ if(VS_VULKAN_DIAGNOSTICS)
       list(APPEND viewer_SOURCE_FILES vsvkdiag.cpp vsvulkandiagnostic.h vsr1replay.cpp vsr1replay.h vsr2replay.cpp vsr2replay.h
           vsr3replay.cpp vsr3replay.h
           vsr3mediareplay.cpp vsr3mediareplay.h
+          vsr3gltfreplay.cpp vsr3gltfreplay.h
          vsr2readback.cpp vsr2readback.h
          vsparitybaseline.cpp vsparitybaseline.h
          vsparityscene.cpp vsparityscene.h
