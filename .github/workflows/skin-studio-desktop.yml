@@ -1,0 +1,70 @@
+name: Skin Studio desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - vkstorm-tools
+    paths:
+      - tools/skin-editor/**
+      - .github/workflows/skin-studio-desktop.yml
+  pull_request:
+    paths:
+      - tools/skin-editor/**
+      - .github/workflows/skin-studio-desktop.yml
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            platform: windows-x86_64
+          - os: ubuntu-22.04
+            platform: linux-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Linux GUI build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libxdo-dev
+      - name: Editor regression tests
+        run: python -m unittest discover -s tools/skin-editor/tests -p "test_*.py" -v
+      - name: JavaScript checks
+        run: |
+          node --check tools/skin-editor/editor.js
+          node --test tools/skin-editor/desktop/bridge.test.cjs
+      - name: Rust formatting
+        working-directory: tools/skin-editor/desktop
+        run: cargo fmt --check
+      - name: Rust lint
+        working-directory: tools/skin-editor/desktop
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Rust tests
+        working-directory: tools/skin-editor/desktop
+        run: cargo test --locked
+      - name: Package standalone app and check bundled backend
+        working-directory: tools/skin-editor/desktop
+        run: python package.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skin-studio-${{ matrix.platform }}
+          path: |
+            tools/skin-editor/desktop/dist/*.zip
+            tools/skin-editor/desktop/dist/*.tar.gz
+          if-no-files-found: error

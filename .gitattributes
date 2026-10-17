@@ -1,0 +1,14 @@
+* text=auto eol=lf
+
+*.bmp binary
+*.BMP binary
+*.gif binary
+*.icns binary
+*.ico binary
+*.j2c binary
+*.j2k binary
+*.jpg binary
+*.png binary
+*.tga binary
+*.tif binary
+*.ttf binary

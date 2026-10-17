@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vulkanstorm Skin Studio</title>
+  <link rel="stylesheet" href="editor.css">
+  <script src="editor.js" defer></script>
+</head>
+<body>
+  <header><div><span class="eyebrow">VULKANSTORM / AUTHORING TOOLS</span>
+    <h1>Skin Studio</h1></div><span class="badge">LOCAL &middot; OFFLINE</span></header>
+  <main>
+    <section class="panel">
+      <h2>Project</h2>
+      <div class="fields">
+        <label>Source skin<select id="skin"></select></label>
+        <label>Source theme<select id="theme"></select></label>
+        <button id="load" disabled>Start from selection</button>
+        <label>Skin name<input id="name" maxlength="100" value="My Skin"></label>
+        <label>Folder name<input id="folder" pattern="[a-z][a-z0-9_]{0,63}" value="my_skin"></label>
+      </div>
+      <div class="actions">
+        <button id="save" disabled>Save project</button>
+        <label class="file-button">Open project<input type="file" id="open" accept=".json,application/json"></label>
+        <button id="export" class="primary" disabled>Export skin ZIP</button>
+      </div>
+      <p id="status" role="status">Loading skin library...</p>
+      <details id="warning-box" hidden><summary>Source asset warnings</summary><ul id="warnings"></ul></details>
+    </section>
+    <section class="panel">
+      <div class="section-heading"><h2>Colour workshop</h2><span class="badge">INTERACTIVE APPROXIMATION</span></div>
+      <p>Click a coloured sample to edit its viewer role. Names in chat and names above avatars are separate.
+        These are representative scenes, not live XUI rendering.</p>
+      <div class="preview-controls">
+        <label>Preview values<select id="preview-values"><option value="edited">Edited project</option><option value="loaded">As loaded (comparison)</option></select></label>
+        <label>World backdrop<select id="backdrop"><option value="night">Night</option><option value="day">Daylight</option><option value="neutral">Neutral</option></select></label>
+      </div>
+      <div class="studio-workspace">
+      <div id="preview">
+        <div class="viewer-menu" data-background="MenuBarBgColor" data-color="MenuItemEnabledColor">
+          Vulkanstorm &nbsp; Avatar &nbsp; Comm &nbsp; World &nbsp; Build &nbsp; Help
+        </div>
+        <div id="preview-left" class="preview-bar vertical"></div>
+        <div class="world">
+          <div class="name-tag-scene">
+            <div class="avatar-sample"><div class="name-tag" data-background="NameTagBackground"><span data-color="NameTagSelf">Your Display Name</span><small data-color="NameTagUsername">your.username</small></div><span class="avatar-shape"></span><small>You</small></div>
+            <div class="avatar-sample"><div class="name-tag" data-background="NameTagBackground"><span data-color="NameTagFriend">A Friend</span><small data-color="NameTagUsername">friend.username</small></div><span class="avatar-shape"></span><small>Friend colouring enabled</small></div>
+          </div>
+          <section class="sample-floater" data-background="FloaterFocusBackgroundColor" data-border="FloaterFocusBorderColor" data-color="LabelTextColor">
+            <div class="floater-title">Conversations <span>_ &nbsp; x</span></div>
+            <div class="sample-tabs" aria-label="Example floater tabs">
+              <button class="sample-tab selected" aria-pressed="true" data-color="ButtonLabelSelectedColor" data-tab-highlight>Nearby chat</button>
+              <button class="sample-tab" aria-pressed="false" data-color="ButtonLabelColor">Inventory</button>
+              <button class="sample-tab attention" aria-pressed="false" data-color="ButtonLabelColor" data-background="ButtonFlashBgColor">New message</button>
+            </div>
+            <div class="chat-scene" data-background="BackgroundChatColor">
+              <p><time data-color="ChatTimestampColor">[12:30]</time> <span data-color="UserChatColor">You: This is your chat colour.</span></p>
+              <p><time data-color="ChatTimestampColor">[12:31]</time> <span data-color="FriendsChatColor">A Friend: This is a friend's chat colour.</span></p>
+              <p><span data-color="AgentChatColor">Another resident: Visit </span><span class="sample-link" data-color="HTMLLinkColor">https://example.com</span></p>
+              <p data-color="SystemChatColor">Second Life: You have arrived at your destination.</p>
+              <p data-color="ObjectChatColor">Welcome sign: Hello, visitor!</p>
+              <p data-color="ScriptErrorColor">Script error: Stack-Heap Collision (12, 4)</p>
+              <p data-background="ChatMentionHighlight"><span data-color="ChatMentionFont">@YourName</span> <span data-color="AgentChatColor">You were mentioned.</span></p>
+              <p data-background="ChatSelfMentionHighlight" data-color="UserChatColor">Your own mention highlight.</p>
+            </div>
+            <div class="inventory-scene" hidden data-background="InventoryBackgroundColor">
+              <p data-color="InventoryItemEnabledColor">My Inventory</p>
+              <p data-background="InventoryItemHighlightBgColor" data-color="InventoryItemHighlightFgColor">Selected outfit</p>
+              <p data-background="InventoryMouseOverColor" data-color="InventoryItemEnabledColor">Hovered folder</p>
+              <p data-color="InventoryItemLibraryColor">Library item</p>
+            </div>
+            <div class="sample-input" data-background="TextBgWriteableColor" data-color="TextDefaultColor" data-border="FocusColor">Type here... <span data-background="TextBgHighlightColor">selected text</span></div>
+          </section>
+          <section class="sample-floater inactive" data-background="FloaterDefaultBackgroundColor" data-border="FloaterUnfocusBorderColor" data-color="LabelTextColor">
+            <div class="floater-title">Notifications &amp; menu states</div>
+            <p data-background="AlertCautionBoxColor" data-color="AlertCautionTextColor">Caution: This action cannot be undone.</p>
+            <p data-background="AlertBoxColor" data-color="AlertTextColor">An example viewer alert.</p>
+            <div class="sample-menu" data-background="MenuDefaultBgColor">
+              <p data-color="MenuItemEnabledColor">Normal menu item</p>
+              <p data-background="MenuItemHighlightBgColor" data-color="MenuItemHighlightFgColor">Highlighted menu item</p>
+              <p data-color="MenuItemDisabledColor">Disabled menu item</p>
+            </div>
+          </section>
+        </div>
+        <div id="preview-right" class="preview-bar vertical"></div>
+        <div id="preview-bottom" class="preview-bar"></div>
+      </div>
+      <aside class="role-inspector">
+        <h3>Edit by meaning</h3>
+        <label>Colour group<select id="color-group"></select></label>
+        <p id="role-help">Select a group or click a preview sample. Shift-click a sample to edit its background.</p>
+        <p class="channel-help">Colour picker &middot; R &middot; G &middot; B &middot; Alpha (0&ndash;1)</p>
+        <div id="role-colors"></div>
+        <div class="tab-override">
+          <label class="check-label"><input id="custom-tabs" type="checkbox"> Custom selected tab background</label>
+          <p>Opt-in flat colour replaces selected tab artwork in widget defaults. Other buttons are unchanged; floaters with explicit tab images can override this.</p>
+          <div id="tab-color"></div>
+        </div>
+      </aside>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Toolbar layout</h2>
+      <p>Move commands between edges; reorder with arrow controls. Commands can appear only once.</p>
+      <div id="toolbars" class="toolbar-grid"></div>
+    </section>
+    <section class="panel">
+      <details id="advanced-palette">
+      <summary>Full skin palette (advanced)</summary>
+      <label>Filter colors<input id="filter" type="search" placeholder="Background, text, accent..."></label>
+      <p>RGBA values range from 0 to 1. Export uses a resolved palette snapshot; color aliases become independent values.</p>
+      <div id="colors"></div>
+      </details>
+    </section>
+    <section class="panel">
+      <h2>Install and test</h2>
+      <p>The ZIP includes the new skin, a registration fragment, project JSON, and installation instructions.
+        Close the viewer, back up settings, copy the new skin into its skins directory, and merge the
+        registration entry into the existing skin registry. Select the new skin in Preferences and restart.</p>
+      <p>Existing account toolbar settings override skin defaults. Replace that account's toolbar XML only
+        after closing the viewer and making a backup. User color settings may also override skin colors.
+        This editor never writes to the viewer or account settings.</p>
+      <p>Friend name tags require the viewer's friend-colouring preference. Contact sets and per-avatar colours
+        may take priority. Chat colours and overhead name tags are edited separately. Selected tabs use images;
+        the custom tab option exports a flat replacement, while attention flash uses its own palette colour.</p>
+    </section>
+  </main>
+  <footer>Native assets. No upload. No external dependencies.</footer>
+</body>
+</html>

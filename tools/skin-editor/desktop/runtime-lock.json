@@ -1,0 +1,16 @@
+{
+  "release": "20261013",
+  "notices": {
+    "archive": "python-build-standalone-20261013.tar.gz",
+    "url": "https://codeload.github.com/astral-sh/python-build-standalone/tar.gz/refs/tags/20261013",
+    "sha256": "eab8c690a995df84494382a76db13ef0e8cabf1424e5b5261de7305d69a8b240"
+  },
+  "windows-x86_64": {
+    "archive": "cpython-3.13.16+20261013-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+    "sha256": "7aba3985d4cee1c7cacb963ca6aa08a5d3e695d7f9609d9fabc56f22ddcf5a06"
+  },
+  "linux-x86_64": {
+    "archive": "cpython-3.13.16+20261013-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+    "sha256": "d0080766b6b74aeb81e1949ef0d9a20e6c17f7b160fb295a69b936ccb17660be"
+  }
+}
