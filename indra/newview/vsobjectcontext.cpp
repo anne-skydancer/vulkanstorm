@@ -16,15 +16,10 @@
 
 bool VSObjectContext::ownedByAgent(U32 rootFlags)
 {
-#ifdef HACKED_GODLIKE_VIEWER
-    return true;
-#else
-#ifdef TOGGLE_HACKED_GODLIKE_VIEWER
-    if (LLGridManager::getInstance()->isInSLBeta() && gAgent.getGodLevel()>=GOD_MAINTENANCE)
-        return true;
-#endif
-    return (rootFlags & FLAGS_OBJECT_YOU_OWNER)!=0;
-#endif
+    return vs_object_you_owner((rootFlags & FLAGS_OBJECT_YOU_OWNER)!=0,[]
+    {
+        return LLGridManager::getInstance()->isInSLBeta() && gAgent.getGodLevel()>=GOD_MAINTENANCE;
+    });
 }
 
 VSObjectContext VSObjectContext::fromLegacy(const LLViewerObject* object)
