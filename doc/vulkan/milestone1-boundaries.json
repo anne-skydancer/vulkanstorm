@@ -1,5 +1,5 @@
 {
-  "source_commit": "f90614e9fa6adc1c737d6a16dff1036ea141226b",
+  "source_commit": "78441d6c4568feeb25a13204bf86cbf9462c1c98",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -196,7 +196,7 @@
       ]
     },
     "indra/newview/llviewercontrol.cpp": {
-      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
+      "sha256": "2eaea1c7e5f817dfda60ad182ad2b99735d90fa43b8e0e9c7628b2cc386f4588",
       "anchors": [
         "settings_setup_listeners()",
         "setting_setup_signal_listener",
@@ -401,7 +401,7 @@
       ]
     },
     "indra/newview/vsuirenderer.cpp": {
-      "sha256": "0278a45164822be765a58a9c9f248526f484d338f1a71e1a8c409be8aba358b5",
+      "sha256": "b53e435f11a450ac27857ab9574ce1344443ad3042444cbf639284fd60ca45c5",
       "anchors": [
         "VSUIRenderer::upload",
         "VSUIRenderer::draw",
@@ -410,7 +410,7 @@
       ]
     },
     "indra/newview/vsuirenderer.h": {
-      "sha256": "565a274623acba87148f0ba4ed1c41286fef8f5af9f9d855b4eaeafe913e6d3f",
+      "sha256": "3295814858918804a44125812ea6232bbb84709344a50c01e0c522cdbb71b9d3",
       "anchors": [
         "class VSUIRenderer",
         "struct Packet",
@@ -440,7 +440,7 @@
       ]
     },
     "indra/newview/vsuiresources.cpp": {
-      "sha256": "cbd85c181eea65bcb89afe9988ed56feb922ba423e82de23578d14694c160b0b",
+      "sha256": "93e80de51011b971531255efdc40f50002a9250b03058c29a85bdc61ecb3335b",
       "anchors": [
         "VSUIResources::publish",
         "VSUIResources::fontBatch",
@@ -448,7 +448,7 @@
       ]
     },
     "indra/newview/vsuiresources.h": {
-      "sha256": "bbdfdefafa50120bad3776fd0ecfe313bc3f46a6eccd732d67a12025d2ae2898",
+      "sha256": "a8118f127f908e2c166980191ed2619c852c110c23c5fa166196e1a839ae73d2",
       "anchors": [
         "class VSUIResources"
       ]
@@ -632,7 +632,7 @@
       ]
     },
     "indra/newview/vsuiimageprovider.cpp": {
-      "sha256": "64d49e9038fd0a2f14795218c6ddfece04195401699d77b6d61b4c484a463619",
+      "sha256": "6417807ba9a1b4295bebd2cd5bb89dc7c89ffaf7fa56b1ae1e2e73d5b6da7f53",
       "anchors": [
         "VSUIImageProvider::getUIImage",
         "VSUIImageProvider::getUIImageByID"
@@ -701,7 +701,7 @@
       ]
     },
     "indra/newview/vsvulkancontext.cpp": {
-      "sha256": "a760ad5a6e393df08d855b437914ff3caaa526b60284dc587ad715b4a1703757",
+      "sha256": "6f8c62009f115952bb54d8932fc73030e82e5cdc40334de34bc67be23c43d7bc",
       "anchors": [
         "VSVulkanContext::VSVulkanContext",
         "CreateDeviceAndContextsVk",
@@ -2292,1456 +2292,1456 @@
     ],
     "settings": [
       {
-        "line": 1384,
+        "line": 1385,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FirstPersonAvatarVisible\", handleRenderAvatarMouselookChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1385,
+        "line": 1386,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderFarClip\", handleRenderFarClipChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1386,
+        "line": 1387,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainScale\", handleTerrainScaleChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1387,
+        "line": 1388,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainPBRScale\", handlePBRTerrainScaleChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1388,
+        "line": 1389,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainPBRDetail\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1389,
+        "line": 1390,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainPBRPlanarSampleCount\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1390,
+        "line": 1391,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainPBRTriplanarBlendFactor\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1391,
+        "line": 1392,
         "call": "setting_setup_signal_listener(gSavedSettings, \"OctreeStaticObjectSizeFactor\", handleRepartition)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1392,
+        "line": 1393,
         "call": "setting_setup_signal_listener(gSavedSettings, \"OctreeDistanceFactor\", handleRepartition)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1393,
+        "line": 1394,
         "call": "setting_setup_signal_listener(gSavedSettings, \"OctreeMaxNodeCapacity\", handleRepartition)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1394,
+        "line": 1395,
         "call": "setting_setup_signal_listener(gSavedSettings, \"OctreeAlphaDistanceFactor\", handleRepartition)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1395,
+        "line": 1396,
         "call": "setting_setup_signal_listener(gSavedSettings, \"OctreeAttachmentSizeFactor\", handleRepartition)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1396,
+        "line": 1397,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderMaxTextureIndex\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1397,
+        "line": 1398,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderUIBuffer\", handleWindowResized)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1398,
+        "line": 1399,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDepthOfField\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1399,
+        "line": 1400,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderFSAAType\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1400,
+        "line": 1401,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderSpecularResX\", handleLUTBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1401,
+        "line": 1402,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderSpecularResY\", handleLUTBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1402,
+        "line": 1403,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderSpecularExponent\", handleLUTBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1403,
+        "line": 1404,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAnisotropic\", handleAnisotropicChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1404,
+        "line": 1405,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderShadowResolutionScale\", handleShadowsResized)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1405,
+        "line": 1406,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGlow\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1406,
+        "line": 1407,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGlow\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1407,
+        "line": 1408,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGlowResolutionPow\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1408,
+        "line": 1409,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGlowHDR\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1409,
+        "line": 1410,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderEnableEmissiveBuffer\", handleEnableEmissiveChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1410,
+        "line": 1411,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDisableVintageMode\", handleDisableVintageMode)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1411,
+        "line": 1412,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderHDREnabled\", handleEnableHDR)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1412,
+        "line": 1413,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGlowNoise\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1413,
+        "line": 1414,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGammaFull\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1414,
+        "line": 1415,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSOverrideVRAMDetection\", handleOverrideVRAMDetectionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1415,
+        "line": 1416,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderVolumeLODFactor\", handleVolumeLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1416,
+        "line": 1417,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAvatarComplexityMode\", handleUserImpostorByDistEnabledChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1417,
+        "line": 1418,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAvatarLODFactor\", handleAvatarLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1418,
+        "line": 1419,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAvatarPhysicsLODFactor\", handleAvatarPhysicsLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1419,
+        "line": 1420,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTerrainLODFactor\", handleTerrainLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1420,
+        "line": 1421,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTreeLODFactor\", handleTreeLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1421,
+        "line": 1422,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderFlexTimeFactor\", handleFlexLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1422,
+        "line": 1423,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderGamma\", handleGammaChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1423,
+        "line": 1424,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderFogRatio\", handleFogRatioChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1424,
+        "line": 1425,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderMaxPartCount\", handleMaxPartCountChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1425,
+        "line": 1426,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDynamicLOD\", handleRenderDynamicLODChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1426,
+        "line": 1427,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderVSyncEnable\", handleVSyncChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1427,
+        "line": 1428,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDeferredNoise\", handleReleaseGLBufferChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1428,
+        "line": 1429,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDebugPipeline\", handleRenderDebugPipelineChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1429,
+        "line": 1430,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderResolutionDivisor\", handleRenderResolutionDivisorChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1431,
+        "line": 1432,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderResolutionMultiplier\", handleRenderResolutionDivisorChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1433,
+        "line": 1434,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderReflectionProbeLevel\", handleReflectionProbeDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1434,
+        "line": 1435,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderReflectionProbeDetail\", handleReflectionProbeDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1435,
+        "line": 1436,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderReflectionProbeCount\", handleReflectionProbeCountChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1436,
+        "line": 1437,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderReflectionsEnabled\", handleReflectionProbeDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1438,
+        "line": 1439,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAppleUseMultGL\", handleAppleUseMultGLChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1440,
+        "line": 1441,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderScreenSpaceReflections\", handleReflectionProbeDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1441,
+        "line": 1442,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderMirrors\", handleReflectionProbeDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1442,
+        "line": 1443,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderHeroProbeResolution\", handleHeroProbeResolutionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1443,
+        "line": 1444,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderShadowDetail\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1444,
+        "line": 1445,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderDeferredSSAO\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1445,
+        "line": 1446,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderPerformanceTest\", handleRenderPerfTestChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1446,
+        "line": 1447,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAvatarCloth\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1447,
+        "line": 1448,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ChatConsoleFontSize\", handleChatFontSizeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1448,
+        "line": 1449,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ChatPersistTime\", handleChatPersistTimeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1449,
+        "line": 1450,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ConsoleMaxLines\", handleConsoleMaxLinesChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1450,
+        "line": 1451,
         "call": "setting_setup_signal_listener(gSavedSettings, \"UploadBakedTexOld\", handleUploadBakedTexOldChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1451,
+        "line": 1452,
         "call": "setting_setup_signal_listener(gSavedSettings, \"UseOcclusion\", handleUseOcclusionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1452,
+        "line": 1453,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelMaster\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1453,
+        "line": 1454,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelSFX\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1454,
+        "line": 1455,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelUI\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1455,
+        "line": 1456,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelAmbient\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1456,
+        "line": 1457,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelMusic\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1457,
+        "line": 1458,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelMedia\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1458,
+        "line": 1459,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelVoice\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1459,
+        "line": 1460,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteAudio\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1460,
+        "line": 1461,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteMusic\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1461,
+        "line": 1462,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteMedia\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1462,
+        "line": 1463,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteVoice\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1463,
+        "line": 1464,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteAmbient\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1464,
+        "line": 1465,
         "call": "setting_setup_signal_listener(gSavedSettings, \"MuteUI\", handleAudioVolumeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1465,
+        "line": 1466,
         "call": "setting_setup_signal_listener(gSavedSettings, \"WLSkyDetail\", handleWLSkyDetailChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1466,
+        "line": 1467,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1467,
+        "line": 1468,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1468,
+        "line": 1469,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1469,
+        "line": 1470,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1470,
+        "line": 1471,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1471,
+        "line": 1472,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1472,
+        "line": 1473,
         "call": "setting_setup_signal_listener(gSavedSettings, \"JoystickAxis6\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1473,
+        "line": 1474,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1474,
+        "line": 1475,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1475,
+        "line": 1476,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1476,
+        "line": 1477,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1477,
+        "line": 1478,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1478,
+        "line": 1479,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1479,
+        "line": 1480,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisScale6\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1480,
+        "line": 1481,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1481,
+        "line": 1482,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1482,
+        "line": 1483,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1483,
+        "line": 1484,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1484,
+        "line": 1485,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1485,
+        "line": 1486,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1486,
+        "line": 1487,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FlycamAxisDeadZone6\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1487,
+        "line": 1488,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1488,
+        "line": 1489,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1489,
+        "line": 1490,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1490,
+        "line": 1491,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1491,
+        "line": 1492,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1492,
+        "line": 1493,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisScale5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1493,
+        "line": 1494,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1494,
+        "line": 1495,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1495,
+        "line": 1496,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1496,
+        "line": 1497,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1497,
+        "line": 1498,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1498,
+        "line": 1499,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AvatarAxisDeadZone5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1499,
+        "line": 1500,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1500,
+        "line": 1501,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1501,
+        "line": 1502,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1502,
+        "line": 1503,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1503,
+        "line": 1504,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1504,
+        "line": 1505,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisScale5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1505,
+        "line": 1506,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone0\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1506,
+        "line": 1507,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone1\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1507,
+        "line": 1508,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone2\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1508,
+        "line": 1509,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone3\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1509,
+        "line": 1510,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone4\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1510,
+        "line": 1511,
         "call": "setting_setup_signal_listener(gSavedSettings, \"BuildAxisDeadZone5\", handleJoystickChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1511,
+        "line": 1512,
         "call": "setting_setup_signal_listener(gSavedSettings, \"DebugViews\", handleDebugViewsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1512,
+        "line": 1513,
         "call": "setting_setup_signal_listener(gSavedSettings, \"UserLogFile\", handleLogFileChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1513,
+        "line": 1514,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderHideGroupTitle\", handleHideGroupTitleChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1514,
+        "line": 1515,
         "call": "setting_setup_signal_listener(gSavedSettings, \"HighResSnapshot\", handleHighResSnapshotChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1515,
+        "line": 1516,
         "call": "setting_setup_signal_listener(gSavedSettings, \"EnableVoiceChat\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1516,
+        "line": 1517,
         "call": "setting_setup_signal_listener(gSavedSettings, \"PTTCurrentlyEnabled\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1517,
+        "line": 1518,
         "call": "setting_setup_signal_listener(gSavedSettings, \"PushToTalkButton\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1518,
+        "line": 1519,
         "call": "setting_setup_signal_listener(gSavedSettings, \"PushToTalkToggle\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1519,
+        "line": 1520,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceEarLocation\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1520,
+        "line": 1521,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceEchoCancellation\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1521,
+        "line": 1522,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceAutomaticGainControl\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1522,
+        "line": 1523,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceNoiseSuppressionLevel\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1523,
+        "line": 1524,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceInputAudioDevice\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1524,
+        "line": 1525,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VoiceOutputAudioDevice\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1525,
+        "line": 1526,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AudioLevelMic\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1526,
+        "line": 1527,
         "call": "setting_setup_signal_listener(gSavedSettings, \"LipSyncEnabled\", handleVoiceClientPrefsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1527,
+        "line": 1528,
         "call": "setting_setup_signal_listener(gSavedSettings, \"VelocityInterpolate\", handleVelocityInterpolate)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1528,
+        "line": 1529,
         "call": "setting_setup_signal_listener(gSavedSettings, \"QAMode\", show_debug_menus)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1529,
+        "line": 1530,
         "call": "setting_setup_signal_listener(gSavedSettings, \"UseDebugMenus\", show_debug_menus)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1530,
+        "line": 1531,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AgentPause\", toggle_agent_pause)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1537,
+        "line": 1538,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ShowMenuBarLocation\", toggle_show_menubar_location_panel)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1538,
+        "line": 1539,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ShowObjectRenderingCost\", toggle_show_object_render_cost)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1539,
+        "line": 1540,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ForceShowGrid\", handleForceShowGrid)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1541,
+        "line": 1542,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ShowStartLocation\", handleForceShowGrid)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1542,
+        "line": 1543,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderTransparentWater\", handleRenderTransparentWaterChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1543,
+        "line": 1544,
         "call": "setting_setup_signal_listener(gSavedSettings, \"SpellCheck\", handleSpellCheckChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1544,
+        "line": 1545,
         "call": "setting_setup_signal_listener(gSavedSettings, \"SpellCheckDictionary\", handleSpellCheckChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1545,
+        "line": 1546,
         "call": "setting_setup_signal_listener(gSavedSettings, \"LoginLocation\", handleLoginLocationChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1546,
+        "line": 1547,
         "call": "setting_setup_signal_listener(gSavedSettings, \"DebugAvatarJoints\", handleDebugAvatarJointsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1547,
+        "line": 1548,
         "call": "setting_setup_signal_listener(gSavedSettings, \"DebugQualityPerformance\", handleDebugQualityPerformanceChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1549,
+        "line": 1550,
         "call": "setting_setup_signal_listener(gSavedSettings, \"TargetFPS\", handleTargetFPSChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1550,
+        "line": 1551,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneFPS\", handleAutoTuneFPSChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1551,
+        "line": 1552,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneLock\", handleAutoTuneLockChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1552,
+        "line": 1553,
         "call": "setting_setup_signal_listener(gSavedSettings, \"RenderAvatarMaxART\", handleRenderAvatarMaxARTChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1553,
+        "line": 1554,
         "call": "setting_setup_signal_listener(gSavedSettings, \"PerfStatsCaptureEnabled\", handlePerformanceStatsEnabledChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1554,
+        "line": 1555,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneRenderFarClipTarget\", handleUserTargetDrawDistanceChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1555,
+        "line": 1556,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneRenderFarClipMin\", handleUserMinDrawDistanceChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1556,
+        "line": 1557,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneImpostorFarAwayDistance\", handleUserImpostorDistanceChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1557,
+        "line": 1558,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutoTuneImpostorByDistEnabled\", handleUserImpostorByDistEnabledChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1558,
+        "line": 1559,
         "call": "setting_setup_signal_listener(gSavedSettings, \"TuningFPSStrategy\", handleFPSTuningStrategyChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1560,
+        "line": 1561,
         "call": "setting_setup_signal_listener(gSavedSettings, \"LocalTerrainPaintEnabled\", handleLocalTerrainChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1571,
+        "line": 1572,
         "call": "setting_setup_signal_listener(gSavedSettings, asset_setting_name, handleLocalTerrainChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1575,
+        "line": 1576,
         "call": "setting_setup_signal_listener(gSavedSettings, transform_setting_name, handleLocalTerrainChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1579,
+        "line": 1580,
         "call": "setting_setup_signal_listener(gSavedSettings, \"TerrainPaintBitDepth\", handleSetShaderChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1581,
+        "line": 1582,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"AvatarHoverOffsetZ\", handleAvatarHoverOffsetChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1584,
+        "line": 1585,
         "call": "setting_setup_signal_listener(gSavedSettings, static_cast<std::string>(RlvSettingNames::Main), RlvSettings::onChangedSettingMain)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1587,
+        "line": 1588,
         "call": "setting_setup_signal_listener(gSavedSettings, \"_NACL_AntiSpamGlobalQueue\", handleNaclAntiSpamGlobalQueueChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1588,
+        "line": 1589,
         "call": "setting_setup_signal_listener(gSavedSettings, \"_NACL_AntiSpamTime\", handleNaclAntiSpamTimeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1589,
+        "line": 1590,
         "call": "setting_setup_signal_listener(gSavedSettings, \"_NACL_AntiSpamAmount\", handleNaclAntiSpamAmountChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1591,
+        "line": 1592,
         "call": "setting_setup_signal_listener(gSavedSettings, \"AutohideChatBar\", handleAutohideChatbarChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1594,
+        "line": 1595,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSUseStandaloneTeleportHistoryFloater\", handleUseStandaloneTeleportHistoryFloaterChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1597,
+        "line": 1598,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSPoseStandLock\", handleSetPoseStandLock)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1599,
+        "line": 1600,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"UseLSLFlightAssist\", handleFlightAssistOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1600,
+        "line": 1601,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"UseMoveLock\", handleMovelockOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1601,
+        "line": 1602,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"RelockMoveLockAfterMovement\", handleMovelockAfterMoveOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1602,
+        "line": 1603,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSBuildToolDecimalPrecision\", handleDecimalPrecisionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1605,
+        "line": 1606,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"BridgeIntegrationOC\", handleExternalIntegrationsOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1606,
+        "line": 1607,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"BridgeIntegrationLM\", handleExternalIntegrationsOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1608,
+        "line": 1609,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSNameTagShowLegacyUsernames\", handleUsernameFormatOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1609,
+        "line": 1610,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSTrimLegacyNames\", handleLegacyTrimOptionChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1612,
+        "line": 1613,
         "call": "setting_setup_signal_listener(gSavedSettings, \"PlainTextChatHistory\", FSFloaterIM::processChatHistoryStyleUpdate)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1613,
+        "line": 1614,
         "call": "setting_setup_signal_listener(gSavedSettings, \"PlainTextChatHistory\", FSFloaterNearbyChat::processChatHistoryStyleUpdate)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1614,
+        "line": 1615,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ChatFontSize\", FSFloaterIM::processChatHistoryStyleUpdate)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1615,
+        "line": 1616,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ChatFontSize\", FSFloaterNearbyChat::processChatHistoryStyleUpdate)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1616,
+        "line": 1617,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ChatFontSize\", LLViewerChat::signalChatFontChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1619,
+        "line": 1620,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"GlobalOnlineStatusToggle\", handleGlobalOnlineStatusChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1622,
+        "line": 1623,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSHudTextFadeDistance\", LLHUDText::onFadeSettingsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1623,
+        "line": 1624,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSHudTextFadeRange\", LLHUDText::onFadeSettingsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1626,
+        "line": 1627,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ThrottleBandwidthKBPS\", handleBandwidthChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1627,
+        "line": 1628,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSContactListShowSearch\", handleContactListShowSearchChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1630,
+        "line": 1631,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSEnableLogThrottle\", handleLogThrottleChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "retain-split"
       },
       {
-        "line": 1633,
+        "line": 1634,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSStaticEyesUUID\", handleStaticEyesChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1634,
+        "line": 1635,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"FSStaticEyes\", handleStaticEyesChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1638,
+        "line": 1639,
         "call": "setting_setup_signal_listener(gSavedPerAccountSettings, \"FSRenderFriendsOnly\", handleRenderFriendsOnlyChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1641,
+        "line": 1642,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ShowNavbarFavoritesPanel\", handleNavbarSettingsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1642,
+        "line": 1643,
         "call": "setting_setup_signal_listener(gSavedSettings, \"ShowNavbarNavigationPanel\", handleNavbarSettingsChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1646,
+        "line": 1647,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSStatisticsNoFocus\", handleFSStatisticsNoFocusChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1650,
+        "line": 1651,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSOutputDeviceUUID\", handleOutputDeviceChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1653,
+        "line": 1654,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSUseSmallCameraFloater\", handleSmallCameraFloaterChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1656,
+        "line": 1657,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSStatusBarTimeFormat\", handleStatusbarTimeformatChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1659,
+        "line": 1660,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSPlayDefaultBentoAnimation\", handlePlayBentoIdleAnimationChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1662,
+        "line": 1663,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSDiskCacheSize\", handleDiskCacheSizeChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1664,
+        "line": 1665,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSDiskCacheHighWaterPercent\", handleDiskCacheHighWaterPctChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1665,
+        "line": 1666,
         "call": "setting_setup_signal_listener(gSavedSettings, \"FSDiskCacheLowWaterPercent\", handleDiskCacheLowWaterPctChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
         "disposition": "defer"
       },
       {
-        "line": 1670,
+        "line": 1671,
         "call": "setting_setup_signal_listener(gSavedSettings, \"SDL2IMEEnabled\", handleSDL2IMEEnabledChanged)",
         "gate": "G-SETTINGS",
         "caller_route": "R10",
