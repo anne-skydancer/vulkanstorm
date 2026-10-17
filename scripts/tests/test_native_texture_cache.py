@@ -94,6 +94,10 @@ int main(){
 #include <algorithm>
 #include <cassert>
 #include <memory>
+#include <sstream>
+std::ostringstream nativeLog;
+#define LL_INFOS(...) nativeLog
+#define LL_ENDL std::endl
 constexpr int IMG_CODEC_J2C=1,INIT=1,DONE=2;
 struct Cache{unsigned removed=0;void removeFromCache(int){++removed;}};
 struct Fetcher{bool mNativeConsumer=true;VSResourceBudget mNativeDecodeBytes{128};Cache cache;Cache* mTextureCache=&cache;};
