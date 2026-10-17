@@ -7,6 +7,7 @@
 #include "vsuiresources.h"
 #include "llviewerwindow.h"
 #include "llviewercontrol.h"
+#include "llwindow.h"
 #include "llprimitive.h"
 #include "llvolumemessage.h"
 #include "llregionhandle.h"
@@ -30,7 +31,8 @@ constexpr unsigned colors[5][4][4]={
  {{210,210,210,255},{180,180,180,255},{150,150,150,255},{120,120,120,255}}};
 void require(bool value,const char* message){if(!value) throw std::runtime_error(message);}
 struct State {
- unsigned step=0;double deadline=0;
+ unsigned step=0,settleFrame=0;double deadline=0;
+ F32 minimizedTime=gSavedSettings.getF32("TextureDiscardMinimizedTime");
  U32 limit=gSavedSettings.getU32("RenderMaxTextureResolution");
  bool full=gSavedSettings.getBOOL("TextureLoadFullRes"),compression=gSavedSettings.getBOOL("RenderCompressTextures");
  bool anisotropy=gSavedSettings.getBOOL("RenderAnisotropic");
@@ -38,7 +40,8 @@ struct State {
  std::vector<VSUIRenderer::Image> retained;
  std::vector<std::vector<U8>> retainedPixels;
  std::vector<std::weak_ptr<const VSUIRenderer::Texture>> images;
- ~State(){gSavedSettings.setU32("RenderMaxTextureResolution",limit);gSavedSettings.setBOOL("TextureLoadFullRes",full);
+ ~State(){if(gViewerWindow && gViewerWindow->getWindow())gViewerWindow->getWindow()->restore();
+  gSavedSettings.setF32("TextureDiscardMinimizedTime",minimizedTime);gSavedSettings.setU32("RenderMaxTextureResolution",limit);gSavedSettings.setBOOL("TextureLoadFullRes",full);
   gSavedSettings.setBOOL("RenderCompressTextures",compression);gSavedSettings.setBOOL("RenderAnisotropic",anisotropy);}
 };
 std::unique_ptr<State> state;
@@ -111,23 +114,37 @@ bool vs_r3_gltf_images(LLSD& report){
  auto& s=*state;require(LLFrameTimer::getTotalSeconds()<s.deadline,"R3 imported image publication timed out");
  if(s.step==0){const auto object=world.object(objectID);if(!object)return false;
   require(world.loadGLTF(*object,(folder/"embedded.gltf").string()),"R3 embedded glTF scene load failed");++s.step;return false;}
- if(s.step==5){if(world.object(objectID))return false;
+ if(s.step==8){if(world.object(objectID))return false;
   for(const auto& image:s.images)if(!image.expired())return false;
   s.evidence["object_retired"]=true;s.evidence["immutable_generations"]=true;report["r3_gltf_images"]=s.evidence;return true;}
- const auto packets=world.packets(session->position(),128,4096,4096);
+ if(s.step==5) {
+  world.packets(session->position(),128,768,768);
+  if(!s.settleFrame)s.settleFrame=LLFrameTimer::getFrameCount();
+  if(LLFrameTimer::getFrameCount()-s.settleFrame<3)return false;
+  require(VSVulkanContext::headlessReplay(),"Imported minimized replay requires headless isolation");
+  gSavedSettings.setF32("TextureDiscardMinimizedTime",1.2f);
+  gViewerWindow->getWindow()->minimize();++s.step;return false;
+ }
+ if(s.step==6 && resources.textureMemoryPolicy().bias<3.9)return false;
+ const unsigned viewport=s.step==6?768:4096;
+ const auto packets=world.packets(session->position(),128,viewport,viewport);
  const VSWorldRenderer::Packet* selected=nullptr;
  for(const auto& packet:packets)if(std::equal(packet.objectIdentity.begin(),packet.objectIdentity.end(),objectID.mData) && packet.gltfNode>=0)selected=&packet;
  if(!selected || !selected->surface)return false;
- const unsigned width=s.step==2?1024:512;
+ const unsigned width=s.step==2?1024:s.step==6?VSUIRenderer::imageExtent(selected->image)[0]:512;
+ if(s.step==6 && (!width || width>=512))return false;
  for(const auto& image:std::array<VSUIRenderer::Image,5>{selected->image,selected->channels[0],selected->channels[1],selected->channels[2],selected->channels[3]})
   if(!image || VSUIRenderer::imageExtent(image)[0]!=width)return false;
  if(s.step==4 && VSUIRenderer::imagePixels(selected->image)[0]!=colors[0][1][0])return false;
- const std::string phase=s.step==1?"initial":s.step==2?"full-resolution":s.step==3?"limited-again":"replacement";
- s.evidence[phase]=observe(s,resources,*selected,phase,width,s.step==4?1:0);
+ const std::string phase=s.step==1?"initial":s.step==2?"full-resolution":s.step==3?"limited-again":s.step==4?"replacement":s.step==6?"minimized":"restored";
+ s.evidence[phase]=observe(s,resources,*selected,phase,width,s.step>=4?1:0);
+ if(s.step==6){s.evidence[phase]["bias"]=resources.textureMemoryPolicy().bias;gViewerWindow->getWindow()->restore();}
+ if(s.step==7)s.evidence[phase]["restored_window"]=!gViewerWindow->getWindow()->getMinimized();
  if(s.step==1)gSavedSettings.setBOOL("TextureLoadFullRes",true);
  else if(s.step==2){gSavedSettings.setBOOL("TextureLoadFullRes",false);gSavedSettings.setBOOL("RenderAnisotropic",true);}
  else if(s.step==3)require(world.loadGLTF(*world.object(objectID),(folder/"replacement.gltf").string()),"R3 embedded glTF replacement failed");
- else {s.retained.clear();s.retainedPixels.clear();LLMessageSystem* msg=gMessageSystem;msg->newMessage("KillObject");msg->nextBlock("ObjectData");msg->addU32("ID",localID);require(msg->sendReliable(session->host())>0,"R3 imported-image retirement transport failed");}
+ else if(s.step==4){s.retained.clear();s.retainedPixels.clear();}
+ else if(s.step==7){LLMessageSystem* msg=gMessageSystem;msg->newMessage("KillObject");msg->nextBlock("ObjectData");msg->addU32("ID",localID);require(msg->sendReliable(session->host())>0,"R3 imported-image retirement transport failed");}
  ++s.step;s.deadline=LLFrameTimer::getTotalSeconds()+30;return false;
 }
 void vs_r3_gltf_retired(LLSD& report){if(!state)return;for(const auto& image:state->images)require(image.expired(),"R3 imported image survived account retirement");report["r3_gltf_images"]["account_retired"]=true;}

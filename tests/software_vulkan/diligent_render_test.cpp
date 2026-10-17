@@ -650,6 +650,34 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
     pbrTerrain->blend=images.upload(1,1,{0,0,0,255});terrain.terrainMaterial=pbrTerrain;
     renderer.draw(rtv,8,8,view,{terrain});
     capture("terrain-pbr-paint-default.ppm",[](unsigned,unsigned){return Pixel{255,0,0,255};});
+    // A sloped normal sees distinct XY versus XZ/YZ slices of the same
+    // nearest-filtered image. Independent analytic weights make both planar
+    // selection and the live triplanar sharpness observable in actual pixels.
+    auto slopeVertices=scaleVertices;
+    for(auto& vertex:slopeVertices) {vertex.nx=.8f;vertex.ny=0;vertex.nz=.6f;}
+    terrain.mesh=renderer.upload(slopeVertices,{0,2,1,1,2,3});
+    pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+    for(unsigned layer=0;layer<4;++layer) {
+        pbrTerrain->layers[layer].uv[0].matrix={.1f,0,0,.1f};
+        pbrTerrain->layers[layer].uv[0].offset={.25f,.49f};
+        pbrTerrain->layers[layer].samplers[0].minification=VSWorldContracts::Filter::Nearest;
+        pbrTerrain->layers[layer].samplers[0].magnification=VSWorldContracts::Filter::Nearest;
+        pbrTerrain->images[layer][0]=images.upload(2,2,{255,0,0,255,255,0,0,255,0,0,255,255,0,0,255,255});
+    }
+    pbrTerrain->planar=1;terrain.terrainMaterial=pbrTerrain;
+    renderer.draw(rtv,8,8,view,{terrain});
+    capture("terrain-pbr-planar.ppm",[](unsigned,unsigned y){return y<4?Pixel{255,0,0,255}:Pixel{0,0,255,255};});
+    for(unsigned sharpness:{1u,8u}) {
+        pbrTerrain=std::make_shared<VSWorldRenderer::Terrain>(*pbrTerrain);
+        pbrTerrain->planar=3;pbrTerrain->sharpness=float(sharpness);terrain.terrainMaterial=pbrTerrain;
+        const double x=std::pow(.8,double(sharpness)),z=std::pow(.6,double(sharpness));
+        const double wx=(x/(x+z)-.01)/.98,wz=1-wx;
+        auto encode=[](double linear) {return static_cast<unsigned char>(std::lround(255*(1.055*std::pow(linear,1/2.4)-.055)));};
+        const Pixel upper{encode(wz),0,encode(wx),255};
+        renderer.draw(rtv,8,8,view,{terrain});
+        const auto name="terrain-pbr-triplanar-"+std::to_string(sharpness)+".ppm";
+        capture(name.c_str(),[upper](unsigned,unsigned y){return y<4?upper:Pixel{0,0,255,255};});
+    }
     std::array<std::weak_ptr<const VSUIRenderer::Texture>,4> terrainRetirement;
     for(unsigned layer=0;layer<4;++layer) terrainRetirement[layer]=pbrTerrain->images[layer][0];
     terrain.terrainMaterial.reset();pbrTerrain.reset();

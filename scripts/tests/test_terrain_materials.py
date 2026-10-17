@@ -43,16 +43,42 @@ class TerrainMaterials(unittest.TestCase):
                 relative=f'r3/terrain/paint-layer-{layer}.rgba'
                 (root/relative).write_bytes(bytes(color)*64*64)
                 record['layers'].append(dict(file=relative,layer=layer,pixels_verified=True))
+            relative='r3/terrain/regional-override.rgba'
+            (root/relative).write_bytes(bytes((137,0,0,255))*64*64)
+            record['regional_override']=dict(file=relative,pixels_verified=True,base_factor=.25)
+            requests=[dict(path='/r3-terrain-overrides',method='GET',base_factor=.25)]
             report={'r3_terrain':record}
-            self.assertTrue(r3_terrain_contracts_passed(report,root))
+            self.assertFalse(r3_terrain_contracts_passed(report,root,[]))
+            record['regional_override']['base_factor']=.75
+            self.assertFalse(r3_terrain_contracts_passed(report,root,requests))
+            record['regional_override']['base_factor']=.25
+            self.assertTrue(r3_terrain_contracts_passed(report,root,requests))
             record['paint_deleted']=False
-            self.assertFalse(r3_terrain_contracts_passed(report,root))
+            self.assertFalse(r3_terrain_contracts_passed(report,root,requests))
             record['paint_deleted']=True
             last=root/record['layers'][3]['file'];original=last.read_bytes()
             last.write_bytes(original[:-1]+b'\x00')
-            self.assertFalse(r3_terrain_contracts_passed(report,root))
+            self.assertFalse(r3_terrain_contracts_passed(report,root,requests))
             last.write_bytes(original);record['layers'].pop()
-            self.assertFalse(r3_terrain_contracts_passed(report,root))
+            self.assertFalse(r3_terrain_contracts_passed(report,root,requests))
+
+    def test_regional_material_capability_uses_real_llsd_http(self):
+        import sys,threading,http.client,xml.etree.ElementTree as ET
+        sys.path.insert(0,str(ROOT/'scripts'))
+        from run_vulkan_session_replay import SimulatorHTTP,read_llsd
+        with tempfile.TemporaryDirectory() as temporary,SimulatorHTTP() as server:
+            server.r3_directory=Path(temporary)
+            worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
+            try:
+                client=http.client.HTTPConnection(*server.server_address)
+                client.request('GET','/r3-terrain-overrides')
+                response=client.getresponse();body=read_llsd(ET.fromstring(response.read()))
+                self.assertEqual(response.status,200)
+                self.assertEqual(body,dict(success=True,overrides=[dict(bc=[.25,.25,.25,1.]) for _ in range(4)]))
+                client.close()
+                self.assertEqual(server.requests,[dict(path='/r3-terrain-overrides',method='GET',base_factor=.25)])
+            finally:
+                server.shutdown();worker.join()
 
     def test_composition_matches_reference_height_and_corner_policy(self):
         reference = (ROOT / 'indra/newview/llvlcomposition.cpp').read_text()

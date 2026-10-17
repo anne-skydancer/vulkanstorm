@@ -8,9 +8,11 @@ class GLTFImageEvidence(unittest.TestCase):
   with tempfile.TemporaryDirectory() as temp:
    root=Path(temp);fixture.write(root/'r3/gltf-images')
    data=dict(object_retired=True,immutable_generations=True,account_retired=True);generation=0
-   for phase in ('initial','full-resolution','limited-again','replacement'):
-    width=1024 if phase=='full-resolution' else 512;height=width//2;variant=int(phase=='replacement')
+   for phase in ('initial','full-resolution','limited-again','replacement','minimized','restored'):
+    width=256 if phase=='minimized' else 1024 if phase=='full-resolution' else 512;height=width//2;variant=int(phase in ('replacement','minimized','restored'))
     row=dict(material_contracts=True,width=width,height=height,variant=variant,images=[]);data[phase]=row
+    if phase=='minimized':row['bias']=4
+    if phase=='restored':row['restored_window']=True
     for channel,colors in enumerate(fixture.COLORS):
      pixels=bytearray()
      for y in range(height):
@@ -20,7 +22,7 @@ class GLTFImageEvidence(unittest.TestCase):
      row['images'].append(dict(channel=channel,file=name,generation=generation))
    record=dict(r3_gltf_images=data)
    self.assertTrue(fixture.contracts_passed(record,root))
-   self.assertEqual(len(fixture.required_files(record)),22)
+   self.assertEqual(len(fixture.required_files(record)),32)
    image=root/'r3/gltf-images/replacement-0.rgba';original=image.read_bytes();image.write_bytes(bytes([0])+original[1:])
    self.assertFalse(fixture.contracts_passed(record,root));image.write_bytes(original)
    original_generation=data['replacement']['images'][0]['generation'];data['replacement']['images'][0]['generation']=1

@@ -24,7 +24,8 @@ MATERIAL_READBACKS=('material-opaque.ppm','material-linear-factor.ppm','material
     'terrain-pbr-detail-emissive.ppm','terrain-pbr-occlusion.ppm','terrain-pbr-detail-occlusion.ppm',
     'terrain-pbr-normal.ppm','terrain-pbr-normal-rotation.ppm','terrain-pbr-detail-normal.ppm',
     *(f'terrain-pbr-layer-{index}.ppm' for index in range(7)),
-    'terrain-pbr-paint.ppm','terrain-pbr-paint-default.ppm')
+    'terrain-pbr-paint.ppm','terrain-pbr-paint-default.ppm','terrain-pbr-planar.ppm',
+    'terrain-pbr-triplanar-1.ppm','terrain-pbr-triplanar-8.ppm')
 
 
 @contextmanager

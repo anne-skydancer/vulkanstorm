@@ -432,7 +432,8 @@ void qualifyConnectedSkinGeometry(LLSD& report)
 LLSD response()
 {
     LLSD result;
-    result["agent_id"] = "10000000-0000-0000-0000-000000000001";
+    const char* account=std::getenv("VS_VULKAN_REPLAY_ACCOUNT_ID");
+    result["agent_id"] = account?account:"10000000-0000-0000-0000-000000000001";
     result["session_id"] = "20000000-0000-0000-0000-000000000002";
     result["sim_ip"] = "127.0.0.1";
     result["sim_port"] = LLSD::Integer(gMessageSystem->getListenPort());
@@ -894,6 +895,13 @@ struct Replay
                     gSavedSettings.setU32("RenderMaxTextureResolution",originalTextureLimit);
                     gSavedSettings.setBOOL("TextureLoadFullRes",originalFullRes);
                     textureCacheStep=6;
+                }
+                // The pressure object is a temporary smaller consumer. Restore
+                // the streaming probe's own demand before its final cache chart.
+                if(imEvidence["r3_pressure"]["complete"].asBoolean())
+                {
+                    vs_request_world_image(texture,4096);
+                    if(vs_ui_image_discard(texture)!=0) return;
                 }
                 if(!vs_r3_cache_restart_tick(imEvidence)) return;
                 if(imageWorkPending(vs_ui_texture_cache_evidence())) return;

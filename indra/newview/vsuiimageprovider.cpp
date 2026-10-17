@@ -2,6 +2,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "lluiimage.h"
 #include "vsuiimageprovider.h"
+#include "llviewernetwork.h"
 #include "lldir.h"
 #include "llimage.h"
 #include "indra_constants.h"
@@ -332,6 +333,8 @@ LLSD VSUIImageProvider::textureCacheEvidence(bool includePixels) const
     result["disk_read_attempts"]=ll_sd_from_U64(reads);
     result["disk_writes_started"]=ll_sd_from_U64(writes);
     result["cache_policy"]="shared_LLTextureFetch";
+    result["grid_identity"]=LLGridManager::getInstance()->getGrid();
+    if(const auto account=VSNativeSession::active()) result["account_identity"]=account->account().agent;
     result["cache_path"]=gDirUtilp->getExpandedFilename(LL_PATH_CACHE,"");
     result["startup_policy"]["LocalCacheVersion"]=gSavedSettings.getS32("LocalCacheVersion");
     result["startup_policy"]["DiskCacheVersion"]=gSavedSettings.getS32("DiskCacheVersion");

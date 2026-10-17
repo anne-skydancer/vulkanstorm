@@ -1018,3 +1018,32 @@ observer also has its own 30-second deadline, so missing prerequisites cannot
 wait for the viewer's global lifetime. The failed run is retained and is not
 qualification evidence. No viewer rendering assertion or pixel tolerance was
 relaxed for this repair.
+
+
+### Shared demand and expanded acceptance cases (2026-10-17)
+
+The first pressure replay exposed a production demand-order defect: a small
+first consumer could queue a coarse request before another consumer supplied
+the same frame's higher peak. Remote subscribers now retain the previous
+frame's maximum while accumulating current consumers, matching the rolling
+peak already used by imported images. A compiled regression executes the
+actual request method, including legitimate demand reduction and exact demand.
+The pressure watchdog runs before pending-image gates and archives the failed
+phase and cache counters if its existing deadline expires.
+
+The rebuilt canonical viewer at 75ccd98a09 passed actual pressure/full-resolution
+preference, minimized 256-pixel publication with prior scene-image retirement,
+restoration, and shutdown with a held HTTP request plus a completed cache write.
+The cold matrix then correctly rejected its final resident image: the temporary
+pressure object had lowered the streaming probe's demand. The probe now restores
+its own high demand before its final cache chart. This failed matrix is retained;
+it does not count as a completed cache qualification.
+
+Required terrain GPU charts now distinguish planar and triplanar coordinates
+and sharpness 1 versus 8 against independent analytic weights. All six standalone
+software test modes pass locally. The viewer replay additionally requires an
+actual ModifyRegion query, regional base-color override pixels after clearing
+local overrides, and imported-image minimize/restore readbacks. Warm cache reuse
+must change both synthetic account and built-in grid identities while retaining
+the shared UUID/version cache policy, exact pixels and zero texture HTTP.
+These expanded viewer cases and final three-platform qualification remain open.

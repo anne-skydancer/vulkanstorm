@@ -111,6 +111,19 @@ class TextureCacheEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Truncated'):
                 cache.validate_image(row,folder)
 
+    def test_cache_reuse_requires_actual_account_and_grid_transition(self):
+        import copy
+        cold=dict(texture_cache=dict(grid_identity='util.agni.lindenlab.com',
+            account_identity='10000000-0000-0000-0000-000000000001'))
+        warm=dict(texture_cache=dict(grid_identity='util.aditi.lindenlab.com',
+            account_identity='10000000-0000-0000-0000-000000000002'))
+        cache.validate_identity_transition(cold,warm)
+        for key in ('grid_identity','account_identity'):
+            for invalid in (None,cold['texture_cache'][key]):
+                changed=copy.deepcopy(warm);changed['texture_cache'][key]=invalid
+                with self.subTest(key=key,invalid=invalid),self.assertRaises(ValueError):
+                    cache.validate_identity_transition(cold,changed)
+
     def test_loopback_texture_ranges_are_real_partial_content(self):
         with tempfile.TemporaryDirectory() as temporary,SimulatorHTTP() as server:
             fixture=Path(temporary)/'texture.j2c';fixture.write_bytes(bytes(range(256))*5)
