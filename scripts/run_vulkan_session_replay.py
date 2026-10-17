@@ -162,10 +162,10 @@ def remote_material_contracts_passed(record,requests,directory):
     """Require actual asset HTTP bytes and successful/failed native publication."""
     try:
         data=record['r3_remote_materials'];root=Path(directory).resolve()
-        if data.get('actual_object_faces')!=6 or any(data.get(key) is not True for key in
-                ('object_retired','native_only','shared_parser_factors','account_retired')):return False
+        if data.get('actual_object_faces')!=6 or data.get('replacement_faces')!=6 or any(data.get(key) is not True for key in
+                ('object_retired','native_only','shared_parser_factors','account_retired','asset_recovered')):return False
         assets=data['assets']
-        if len(assets)!=3 or [row['loaded'] for row in assets]!=[True,False,False]:return False
+        if len(assets)!=4 or [row['loaded'] for row in assets]!=[True,False,False,True]:return False
         for index,row in enumerate(assets,1):
             identity=f'b3100000-0000-0000-0000-{index:012d}'
             if row['id']!=identity or row['file']!=f'r3/remote-materials/{identity}.asset':return False
@@ -173,15 +173,18 @@ def remote_material_contracts_passed(record,requests,directory):
             if original.is_symlink() or not path.is_relative_to(root) or not path.is_file():return False
             payload=path.read_bytes()
             received=[item for item in requests if item.get('query',{}).get('material_id')==[identity]]
-            if len(received)!=1 or received[0].get('bytes')!=len(payload) or received[0].get('sha256')!=hashlib.sha256(payload).hexdigest():return False
-            if index==1:
+            if len(received)!=(2 if index==4 else 1):return False
+            if received[-1].get('bytes')!=len(payload) or received[-1].get('sha256')!=hashlib.sha256(payload).hexdigest():return False
+            if index==4 and (received[0].get('bytes')!=len(bad_payload) or received[0].get('sha256')!=hashlib.sha256(bad_payload).hexdigest()):return False
+            if index in (1,4):
                 asset=read_llsd(ET.fromstring(payload))
                 material=json.loads(asset['data'])['materials'][0]
                 factors=material['pbrMetallicRoughness']
-                if factors['baseColorFactor']!=[.25,.5,.75,.625] or not material['doubleSided'] or material['alphaMode']!='MASK':return False
+                if factors['baseColorFactor']!=[.5 if index==4 else .25,.5,.75,.625] or not material['doubleSided'] or material['alphaMode']!='MASK':return False
                 if abs(factors['metallicFactor']-.3)>1.e-6 or abs(factors['roughnessFactor']-.6)>1.e-6:return False
             elif index==2:
                 if read_llsd(ET.fromstring(payload))['data']!='invalid native material fixture':return False
+                bad_payload=payload
             elif payload!=b' '*(1024*1024+1):return False
         return True
     except (OSError,ValueError,KeyError,TypeError,ET.ParseError):return False
@@ -661,13 +664,15 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_header('Content-Range',f'bytes {start}-{end}/{len(data)}')
                     self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return
             elif query.get('material_id') and getattr(self.server,'r3_directory',None):
-                identities=[f'b3100000-0000-0000-0000-{index:012d}' for index in range(1,4)]
+                identities=[f'b3100000-0000-0000-0000-{index:012d}' for index in range(1,5)]
                 if len(query['material_id'])!=1 or query['material_id'][0] not in identities:
                     self.send_error(404);return
                 fixture=self.server.r3_directory/'remote-materials'/(query['material_id'][0]+'.asset')
                 if not fixture.is_file() or fixture.stat().st_size>2*1024*1024:
                     self.send_error(404);return
                 data=fixture.read_bytes()
+                if query['material_id']==[identities[3]] and not any(item.get('query',{}).get('material_id')==[identities[3]] for item in self.server.requests):
+                    data=(fixture.parent/(identities[1]+'.asset')).read_bytes()
             elif query.get('landmark_id') == ['60000000-0000-0000-0000-000000000020']:
                 data = b'Landmark version 2\nregion_id 40000000-0000-0000-0000-000000000004\nlocal_pos 128 128 25\n'
             elif query.get('lsltext_id') == ['60000000-0000-0000-0000-000000000009']:

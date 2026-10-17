@@ -195,8 +195,9 @@ namespace
 const LLUUID bumpObject("b3000000-0000-0000-0000-000000000001");
 const LLUUID bumpSource("b3000000-0000-0000-0000-000000000002");
 const LLUUID remoteObject("b3200000-0000-0000-0000-000000000001");
-const std::array<LLUUID,3> remoteAssets{
-    LLUUID("b3100000-0000-0000-0000-000000000001"),LLUUID("b3100000-0000-0000-0000-000000000002"),LLUUID("b3100000-0000-0000-0000-000000000003")};
+const std::array<LLUUID,4> remoteAssets{
+    LLUUID("b3100000-0000-0000-0000-000000000001"),LLUUID("b3100000-0000-0000-0000-000000000002"),
+    LLUUID("b3100000-0000-0000-0000-000000000003"),LLUUID("b3100000-0000-0000-0000-000000000004")};
 struct WorldImages
 {
     unsigned step=0;
@@ -205,11 +206,11 @@ struct WorldImages
     bool source=false;
     LLSD evidence;
     std::vector<std::weak_ptr<const VSUIRenderer::Texture>> images;
-    std::array<LLPointer<LLFetchedGLTFMaterial>,3> remote;
-    bool remoteRetiring=false;
+    std::array<LLPointer<LLFetchedGLTFMaterial>,4> remote;
+    bool remoteRetiring=false,remoteReplacing=false;
 };
 std::unique_ptr<WorldImages> worldImages;
-void bumpObjectPacket(VSNativeSession& session,bool distant=false,bool pbr=false)
+void bumpObjectPacket(VSNativeSession& session,bool distant=false,bool pbr=false,bool recovered=false)
 {
     LLMessageSystem* msg=gMessageSystem;msg->newMessage("ObjectUpdate");msg->nextBlock("RegionData");
     msg->addU64("RegionHandle",to_region_handle(256,512));msg->addU16("TimeDilation",65535);
@@ -226,7 +227,7 @@ void bumpObjectPacket(VSNativeSession& session,bool distant=false,bool pbr=false
     for(const char* field:{"TextureAnim","NameValue","Data","Text","MediaURL","PSBlock"}) msg->addBinaryData(field,nullptr,0);
     if(pbr)
     {
-        LLRenderMaterialParams params;for(unsigned face=0;face<6;++face) params.setMaterial(U8(face),remoteAssets[0]);
+        LLRenderMaterialParams params;for(unsigned face=0;face<6;++face) params.setMaterial(U8(face),remoteAssets[recovered?3:0]);
         U8 packed[1024];LLDataPackerBinaryBuffer packer(packed,sizeof(packed));require(params.pack(packer),"R3 PBR extra parameters failed to pack");
         const U32 size=packer.getCurrentSize();const U16 type=LLNetworkData::PARAMS_RENDER_MATERIAL;
         std::vector<U8> extra{1,U8(type),U8(type>>8),U8(size),U8(size>>8),U8(size>>16),U8(size>>24)};
@@ -250,6 +251,7 @@ void startRemoteMaterials(WorldImages& state,VSNativeSession& session)
     for(auto& transform:material.mTextureTransform) {transform.mOffset.set(.1f,.2f);transform.mScale.set(2,3);transform.mRotation=.25f;}
     for(unsigned index=0;index<remoteAssets.size();++index)
     {
+        if(index==3) material.mBaseColor.mV[0]=.5f;
         const auto file=root/(remoteAssets[index].asString()+".asset");
         {
             std::ofstream output(file,std::ios::binary);
@@ -268,10 +270,16 @@ bool remoteMaterials(WorldImages& state,VSNativeSession& session,VSWorldScene& w
     if(report.has("r3_remote_materials")) return true;
     for(const auto& material:state.remote) if(material->isFetching()) return false;
     require(state.remote[0]->isLoaded() && !state.remote[1]->isLoaded() && !state.remote[2]->isLoaded(),"R3 valid/invalid/oversized remote material admission differs from policy");
+    if(!state.remote[3]->isLoaded())
+    {
+        state.remote[3]=gGLTFMaterialList.getMaterial(remoteAssets[3]);
+        return false;
+    }
     if(state.remoteRetiring)
     {
         if(world.object(remoteObject)) return false;
         LLSD result;result["actual_object_faces"]=6;result["object_retired"]=true;
+        result["replacement_faces"]=6;result["asset_recovered"]=true;
         result["native_only"]=!state.remote[0]->mBaseColorTexture && !state.remote[0]->mNormalTexture && !state.remote[0]->mMetallicRoughnessTexture && !state.remote[0]->mEmissiveTexture;
         result["shared_parser_factors"]=true;
         for(unsigned index=0;index<remoteAssets.size();++index)
@@ -284,13 +292,19 @@ bool remoteMaterials(WorldImages& state,VSNativeSession& session,VSWorldScene& w
         {
             const auto& surface=packet.surface;
             require(surface && surface->pbr && surface->doubleSided && surface->alpha==VSWorldContracts::AlphaMode::Mask,"R3 actual remote PBR face flags differ");
-            require(std::abs(surface->base[0]-.25f)<1.e-6f && std::abs(surface->base[3]-.625f)<1.e-6f &&
+            if(std::abs(surface->base[0]-(state.remoteReplacing?.5f:.25f))>=1.e-6f) return false;
+            require(std::abs(surface->base[3]-.625f)<1.e-6f &&
                 std::abs(surface->metallic-.3f)<1.e-6f && std::abs(surface->roughness-.6f)<1.e-6f && std::abs(surface->cutoff-.25f)<1.e-6f,
                 "R3 actual remote PBR factors differ from the shared parser");
             if(!packet.image || !packet.channels[0] || !packet.channels[1] || !packet.channels[2]) return false;
             ++faces;
         }
     if(faces!=6) return false;
+    if(!state.remoteReplacing)
+    {
+        bumpObjectPacket(session,false,true,true);
+        state.remoteReplacing=true;return false;
+    }
     LLMessageSystem* msg=gMessageSystem;msg->newMessage("KillObject");msg->nextBlock("ObjectData");msg->addU32("ID",991);
     require(msg->sendReliable(session.host())>0,"R3 PBR KillObject transport failed");state.remoteRetiring=true;return false;
 }
@@ -404,8 +418,11 @@ void vs_r3_replay_retired(LLSD& report)
     for(const auto& image:worldImages->images) require(image.expired(),"R3 derived world image survived account retirement");
     require(gViewerWindow->nativeContext()->resources().evidence()["cached_bump_generations"].asInteger()==0,"R3 world bump cache survived account reset");
     report["r3_world_bumps"]["account_retired"]=true;
-    const auto replacement=gGLTFMaterialList.getMaterial(remoteAssets[0]);
-    require(replacement && replacement!=worldImages->remote[0].get() && !replacement->isLoaded() && !replacement->isFetching(),"R3 remote material registry survived account retirement or fetched outside connection ownership");
+    for(const unsigned index:{0u,3u})
+    {
+        const auto replacement=gGLTFMaterialList.getMaterial(remoteAssets[index]);
+        require(replacement && replacement!=worldImages->remote[index].get() && !replacement->isLoaded() && !replacement->isFetching(),"R3 remote material registry survived account retirement or fetched outside connection ownership");
+    }
     report["r3_remote_materials"]["account_retired"]=true;
 }
 void vs_r3_replay_cleanup()

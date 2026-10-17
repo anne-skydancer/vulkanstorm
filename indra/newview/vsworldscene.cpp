@@ -266,6 +266,7 @@ struct VSWorldScene::Impl
                 face.mesh.reset();
                 face.publishedImage.reset();
                 face.publishedChannels = {};
+                face.pbrAsset=nullptr;
             }
             admittedFaces.clear();
             if (gltf) gltf->releaseRenderingResources();

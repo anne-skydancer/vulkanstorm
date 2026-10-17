@@ -26,6 +26,7 @@ class NativeRemoteMaterialTests(unittest.TestCase):
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <cerrno>
 #define LL_WARNS(x) std::cerr
 #define LL_ENDL std::endl
 #include <iostream>
@@ -43,14 +44,16 @@ template<class T>struct LLPointer {
  T* get()const{return value;}T* operator->()const{return value;}operator T*()const{return value;}
 };
 struct LLFetchedGLTFMaterial {
+ static bool throwPublication;
  int refs=0,writes=0,completions=0;bool fetching=false,loaded=false;
  int getNumRefs()const{return refs;}bool isFetching()const{return fetching;}bool isLoaded()const{return loaded;}
  void materialBegin(){assert(!fetching);fetching=true;}
  void materialComplete(bool success){assert(fetching);fetching=false;loaded=success;++completions;}
- void setFromModel(int,int){++writes;}
+ void setFromModel(int,int){if(throwPublication)throw std::runtime_error("publication refusal");++writes;}
 };
+bool LLFetchedGLTFMaterial::throwPublication=false;
 struct AssetLoadUserData {
- static int alive;int mModelIn=0;LLPointer<LLFetchedGLTFMaterial> mMaterial;std::function<bool()> current;
+ static int alive;int mModelIn=0;bool corrupt=false;LLPointer<LLFetchedGLTFMaterial> mMaterial;std::function<bool()> current;
  AssetLoadUserData(){++alive;}~AssetLoadUserData(){--alive;}
 };int AssetLoadUserData::alive=0;
 int epoch=1,activePhase=1;
@@ -70,10 +73,11 @@ struct WorkQueue {
  void run(){while(!jobs.empty()){auto job=std::move(jobs.front());jobs.pop_front();job();}}
 };
 }
-bool decodeResult=true,decodeThrows=false;
-bool decodeNativeMaterial(LLUUID,LLAssetType::EType,AssetLoadUserData&){if(decodeThrows)throw std::runtime_error("fixture refusal");return decodeResult;}
+bool decodeResult=true,decodeThrows=false,decodeMemoryThrows=false,corruptResult=false;
+struct LLFileSystem {static int removed;static void removeFile(LLUUID,LLAssetType::EType,int){++removed;}};int LLFileSystem::removed=0;
+bool decodeNativeMaterial(LLUUID,LLAssetType::EType,AssetLoadUserData& data){data.corrupt=corruptResult;if(decodeMemoryThrows)throw std::bad_alloc();if(decodeThrows)throw std::runtime_error("fixture refusal");return decodeResult;}
 struct LLGLTFMaterialList {
- struct NativeMaterial {LLFetchedGLTFMaterial* material=nullptr;unsigned attempts=0;double retryAt=0;};
+ struct NativeMaterial {LLPointer<LLFetchedGLTFMaterial> material;unsigned attempts=0;double retryAt=0;};
  std::map<LLUUID,LLPointer<LLFetchedGLTFMaterial>> mList;
  std::map<LLUUID,NativeMaterial> mNativeMaterials;
  static void onNativeAssetLoadComplete(const LLUUID&,LLAssetType::EType,void*,S32);
@@ -116,6 +120,7 @@ int main(){
  LL::WorkQueue::getInstance("mainloop")->refuse=false;
  LLTimer::now=115;list.getNativeMaterial({2});storage.deliver(42);
  assert(failed->completions==3 && !failed->isLoaded());
+ assert(!LLFileSystem::removed); // Parse/preparation refusal alone does not discard valid cache data.
  LLTimer::now=1000;list.getNativeMaterial({2});assert(storage.requests==5); // Three finite attempts.
  decodeThrows=true;
  LLPointer<LLFetchedGLTFMaterial> threw=list.getNativeMaterial({4});storage.deliver();pump();
@@ -124,6 +129,19 @@ int main(){
  const int requests=storage.requests;activePhase=2;
  auto disconnected=list.getNativeMaterial({8});assert(!disconnected->isFetching() && storage.requests==requests);
  activePhase=1;
+ decodeMemoryThrows=true;corruptResult=true;
+ LLPointer<LLFetchedGLTFMaterial> memory=list.getNativeMaterial({7});storage.deliver();pump();
+ assert(!memory->isLoaded() && !LLFileSystem::removed);
+ decodeMemoryThrows=false;corruptResult=false;decodeResult=true;
+ LLFetchedGLTFMaterial::throwPublication=true;
+ LLPointer<LLFetchedGLTFMaterial> publication=list.getNativeMaterial({6});storage.deliver();pump();
+ assert(!publication->isLoaded() && !publication->isFetching() && !LLFileSystem::removed);
+ LLFetchedGLTFMaterial::throwPublication=false;
+ decodeResult=false;corruptResult=true;
+ LLPointer<LLFetchedGLTFMaterial> corrupt=list.getNativeMaterial({5});storage.deliver();pump();
+ assert(!corrupt->isLoaded() && LLFileSystem::removed==1);
+ corruptResult=false;decodeResult=true;LLTimer::now+=5;
+ list.getNativeMaterial({5});storage.deliver();pump();assert(corrupt->isLoaded());
  // Registry replacement belongs to its local watcher, not the retired account.
  LLPointer<LLFetchedGLTFMaterial> local=new LLFetchedGLTFMaterial;local->loaded=true;list.mList[{2}]=local;
  assert(list.getNativeMaterial({2})==local.get());list.resetNativeMaterials();
