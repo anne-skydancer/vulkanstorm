@@ -1,5 +1,50 @@
 # R3 continuation state — 2026-10-17
 
+## Camera, land permissions and live-texture follow-up
+
+The user's interim requests require real camera controls, live land permissions
+behind the existing icons, and investigation of white terrain/missing avatar
+textures. Work remains on `vkstorm-vulkan` in the canonical worktree.
+
+Native session parcel delivery now retains ParcelFlags, optional SeeAVs and owner
+identity. The status bar, navigation bar and top-info bar consume the same
+region/parcel policy as the OpenGL reference. Updates are generation/circuit and
+request-sequence guarded; movement renews parcel interest. Native flight retains
+the reference owner/group exception and region prohibition. No icon assets were
+changed. All 8,192 combinations match the actual reference permission methods.
+
+The existing camera floaters (standard, compact and Phototools), toolbar and
+status-bar camera menu now drive native orbit, pan, zoom, roll, reset, mouselook,
+presets and mouse drag. Shared preset saving captures native eye/focus rather
+than dereferencing the absent legacy avatar. Optional XUI panels use optional
+lookups; the zoom-panel factory and exact widget/callback types are admitted.
+Preset subscriptions have scoped lifetimes. A final follow-up publishes the
+reference joystick/mode feedback before consuming held keys and retains the
+reference navigation-bar spacing.
+
+The native texture subscriber previously cancelled any fetch after 20 seconds
+and could discard a completed decoded image when bounded preparation was full.
+It now follows the shared worker's HTTP/cache/decode lifecycle and retains that
+worker while upload preparation is deferred. Resolution, image budgets, shader
+oracles, tolerances and test deadlines are unchanged. Compiled regressions prove
+that delayed work and refused preparation do not exhaust retries. This is a
+concrete defect capable of causing the reported symptoms; live-account recovery
+has not yet been confirmed.
+
+At aa0007cddd, the staged viewer passed connected UI/R1 (70.4 seconds), R2 plus
+actual terrain publication (152.3 seconds), all nine restart/cache cases and the
+actual concurrent primary/sibling check. Independent archive validation accepted
+7,458 collected files. These local headless results are distinct from native
+presentation and final three-platform qualification. The final UI-feedback
+follow-up must retain a fresh staged build and current runtime evidence.
+
+The earlier b5b89a08c9 Windows run completed runtime tests but failed packaging
+on its locked profile Vulkanstorm.exec_marker. Packaging now explicitly records
+that exact coordination-file exclusion; unreadable pixel/evidence files still
+fail. Do not call the incomplete uploaded archive qualified. Preserve the
+running Linux jobs and inspect their results; final qualification remains
+required at the final branch source, with complete uploaded manifests.
+
 The active task is gapless R3 with Windows SwiftShader, Linux SwiftShader and
 Linux Lavapipe all passing on the final source. Checkpoints are committed and
 pushed; they are not handoffs or milestone completion. Continue until the full
