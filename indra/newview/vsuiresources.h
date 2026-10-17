@@ -3,6 +3,7 @@
 #include "vsuirenderer.h"
 #include "lluiimage.h"
 #include "vsresourcebudget.h"
+#include "vstexturememory.h"
 #include <memory>
 
 class LLImageRaw;
@@ -21,6 +22,9 @@ public:
     LLUIImagePtr publishPrepared(const std::string& key,const PreparedImage&);
     std::vector<LLUIImagePtr> publishBatch(const std::vector<std::pair<std::string,PreparedImage>>&);
     bool supportsCompression() const;
+    void updateTextureMemory(const VSTextureMemory::Settings&,VSTextureMemory::Input);
+    const VSTextureMemory::Policy& textureMemoryPolicy() const;
+    unsigned worldImageDimension(unsigned requested,unsigned maxDiscard,bool exact=false) const;
     LLUUID standardBumpSource(unsigned code) const;
     VSUIRenderer::Image legacyBump(const LLUUID& source,unsigned code,float normalScale);
     void clearWorldDerivedImages();

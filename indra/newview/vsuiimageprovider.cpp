@@ -223,7 +223,18 @@ void VSUIImageProvider::pumpImages()
     for(auto& [id,entry]:mImpl->remote)
     {
         if(entry.local) continue;
-        if(entry.prepared)
+        const bool pressure=!entry.uiDemand && !entry.exactWorld && !gSavedSettings.getBOOL("TextureLoadFullRes") &&
+            mImpl->resources.textureMemoryPolicy().bias>1.9;
+        const unsigned pressureTarget=mImpl->resources.worldImageDimension(entry.target,MAX_DISCARD_LEVEL);
+        const bool refineCoarser=pressure && entry.prepared && entry.pendingDiscard<MAX_DISCARD_LEVEL &&
+            (entry.prepared->width>pressureTarget || entry.prepared->height>pressureTarget);
+        if(refineCoarser)
+        {
+            // Let the shared worker finish its encoded-cache write before a
+            // coarser request; keep the last published generation throughout.
+            if(!entry.fetching) {mImpl->cancelPreparation(entry);entry.attempts=0;entry.retryAt=0;}
+        }
+        else if(entry.prepared)
         {
             const bool wanted=mImpl->compressionWanted(entry);
             if(entry.prepared->compressionRequested!=wanted)
@@ -627,7 +638,8 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
     const bool fullRes=gSavedSettings.getBOOL("TextureLoadFullRes");
     const bool changedLimit=entry.resolutionLimit && (entry.resolutionLimit!=limit || entry.fullRes!=fullRes);
     entry.resolutionLimit=limit;entry.fullRes=fullRes;
-    const unsigned target=entry.uiDemand?4096u:std::min(limit,entry.target);
+    const bool pressure=!entry.uiDemand && !entry.exactWorld && !fullRes && mImpl->resources.textureMemoryPolicy().bias>1.9;
+    const unsigned target=entry.uiDemand?4096u:std::min(limit,mImpl->resources.worldImageDimension(entry.target,MAX_DISCARD_LEVEL,entry.exactWorld||fullRes));
     S32 desired=0;
     if(!entry.uiDemand && !fullRes)
     {
@@ -637,7 +649,7 @@ LLPointer<LLUIImage> VSUIImageProvider::getUIImageByID(const LLUUID &id, S32 pri
     // Keep a one-level hysteresis for projected demand; explicit preference
     // changes also replace an unnecessarily large resident image generation.
     if(!changedLimit && entry.readyGeneration==generation && entry.discard>=0 &&
-        (entry.discard==desired || desired==entry.discard+1)) return entry.facade;
+        (entry.discard==desired || (!pressure && desired==entry.discard+1))) return entry.facade;
     if(changedLimit) {entry.attempts=0;entry.failedGeneration=0;}
     if(entry.attempts>=3 || LLTimer::getTotalSeconds()<entry.retryAt) return entry.facade;
     const std::string capability=owner->capability("ViewerAsset").empty()?owner->capability("GetTexture"):owner->capability("ViewerAsset");

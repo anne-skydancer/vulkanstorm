@@ -84,6 +84,7 @@ jobs:
       - run: python scripts/tests/test_native_texture_cache.py
       - run: python scripts/tests/test_native_cache_operations.py
       - run: python scripts/tests/test_native_cache_demand.py
+      - run: python scripts/tests/test_native_texture_memory.py
       - run: python scripts/tests/test_vulkan_cache_driver.py
       - run: python scripts/tests/test_native_material_basis.py
       - run: python scripts/tests/test_native_texture_upload.py

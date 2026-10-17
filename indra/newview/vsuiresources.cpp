@@ -87,6 +87,9 @@ struct VSUIResources::Impl
     std::uint64_t bumpClock=0;
     std::map<std::pair<LLUUID,unsigned>,BumpEntry> bumps;
     VSUIRenderer& renderer;
+    VSTextureMemory::Policy textureMemory;
+    U64 lastRemoteRefusals=0;bool remotePressure=false;
+    double remotePressureReleaseBytes=0;
     VSResourceBudget imagePreparationBytes{640 * 1024 * 1024};
     std::map<std::string,Entry> assets;
     std::vector<VSUIRenderer::Packet> packets;
@@ -538,11 +541,42 @@ LLPointer<LLImageRaw> VSUIResources::rawImage(const std::string& key) const
         std::copy_n(VSUIRenderer::imagePixels(asset.image).data() + y * stride, stride, raw->getData() + (asset.height - 1 - y) * stride);
     return raw;
 }
+void VSUIResources::updateTextureMemory(const VSTextureMemory::Settings& settings,VSTextureMemory::Input input)
+{
+    const auto stats=mImpl->renderer.statistics();
+    input.gpuBytes=stats.residentGPUImageBytes;
+    const double limit=double(stats.remoteImageBudgetBytes);
+    const bool refused=stats.remoteImageAllocationRefusals!=mImpl->lastRemoteRefusals;
+    if(refused)
+    {
+        mImpl->remotePressure=true;
+        mImpl->remotePressureReleaseBytes=double(stats.remoteImagePayloadBytes)*.8;
+    }
+    mImpl->lastRemoteRefusals=stats.remoteImageAllocationRefusals;
+    if(!refused && (!stats.remoteImagePayloadBytes || (limit>0 &&
+        double(stats.remoteImagePayloadBytes)<std::min(limit*.7,mImpl->remotePressureReleaseBytes))))
+        mImpl->remotePressure=false;
+    // Preserve existing admission bounds as a distinct native pressure signal;
+    // neither CPU snapshots nor leased uploads become invented VRAM usage.
+    input.admissionOver=limit>0?(double(stats.remoteImagePayloadBytes)-limit*.8)/(limit*.8):-1;
+    if(mImpl->remotePressure) input.admissionOver=std::max(input.admissionOver,.05);
+    mImpl->textureMemory.update(settings,input);
+}
+const VSTextureMemory::Policy& VSUIResources::textureMemoryPolicy() const {return mImpl->textureMemory;}
+unsigned VSUIResources::worldImageDimension(unsigned requested,unsigned maxDiscard,bool exact) const
+{return exact?requested:mImpl->textureMemory.dimension(requested,maxDiscard);}
+
 LLSD VSUIResources::evidence() const
 {
     const auto stats=mImpl->renderer.statistics();const auto caps=mImpl->renderer.capabilities();
     LLSD result;result["image_generations"]=S32(mImpl->assets.size());
     result["texture_cache"] = vs_ui_texture_cache_evidence();
+    const auto& memory=mImpl->textureMemory;
+    result["texture_memory"]["budget_mb"]=memory.budgetMiB;result["texture_memory"]["target_mb"]=memory.targetMiB;
+    result["texture_memory"]["estimated_used_mb"]=memory.usedMiB;result["texture_memory"]["free_mb"]=memory.freeMiB;
+    result["texture_memory"]["discard_bias"]=memory.bias;
+    result["remote_image_payload_bytes"]=ll_sd_from_U64(stats.remoteImagePayloadBytes);
+    result["remote_image_payload_budget_bytes"]=ll_sd_from_U64(stats.remoteImageBudgetBytes);
     result["deferred_draw_batches"]                                                            = S32(mImpl->deferred_draw_batches);
     result["resident_image_payload_bytes"]=ll_sd_from_U64(stats.residentImageBytes);
     result["resident_gpu_image_payload_bytes"]=ll_sd_from_U64(stats.residentGPUImageBytes);

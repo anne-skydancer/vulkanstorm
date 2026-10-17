@@ -13,6 +13,10 @@
 #include "vsworldscene.h"
 #include "vsnativesession.h"
 #include "llagentcamera.h"
+#include "llviewertexture.h"
+#include "llframetimer.h"
+#include "llmemory.h"
+#include "llfocusmgr.h"
 #pragma push_macro("Bool")
 #pragma push_macro("False")
 #pragma push_macro("True")
@@ -154,6 +158,7 @@ struct VSVulkanContext::Impl
     std::unique_ptr<VSWorldScene>                     worldScene;
     std::string                                       adapter;
     LLSD renderer_info;
+    double lastTextureMemoryUpdate=0;
     FrameObserver observer;
     SceneObserver sceneObserver;
 #if !LL_WINDOWS
@@ -298,9 +303,37 @@ struct VSVulkanContext::Impl
         device->CreateTexture(desc,nullptr,&replayTarget);
         require(replayTarget!=nullptr,"Headless native replay target allocation failed");
     }
+    void updateTextureMemory()
+    {
+        VSTextureMemory::Settings settings;
+        settings.detectedMiB=renderer_info["GRAPHICS_CARD_MEMORY_DETECTED"].asReal();
+        settings.overrideMiB=gSavedSettings.getBOOL("FSOverrideVRAMDetection")?gSavedSettings.getU32("FSForcedVideoMemory"):0;
+        settings.divisor=gSavedSettings.getU32("RenderTextureVRAMDivisor");
+        settings.manual=gSavedSettings.getBOOL("FSLimitTextureVRAMUsage");
+        settings.manualMiB=gSavedSettings.getU32("RenderMaxVRAMBudget");
+        settings.minimumTargetMiB=MIN_VRAM_BUDGET;
+        settings.lowIncrement=gSavedSettings.getF32("RenderLowMemMinDiscardIncrement");
+        settings.highDecrement=gSavedSettings.getF32("RenderHighMemMinDiscardDecrement");
+        settings.minimumFreeSystemMiB=gSavedSettings.getU32("RenderMinFreeMainMemoryThreshold");
+        settings.minimizedSeconds=gSavedSettings.getF32("TextureDiscardMinimizedTime");
+        settings.backgroundSeconds=gSavedSettings.getF32("TextureDiscardBackgroundedTime");
+        VSTextureMemory::Input input;
+        input.now=LLFrameTimer::getTotalSeconds();input.seconds=lastTextureMemoryUpdate?std::max(input.now-lastTextureMemoryUpdate,0.0):0;
+        lastTextureMemoryUpdate=input.now;
+        input.geometryBytes=worldRenderer->statistics().residentMeshBytes;
+        input.systemLow=LLViewerTexture::isSystemMemoryLow();
+        input.systemFactor=LLViewerTexture::getSystemMemoryBudgetFactor();
+        input.freeSystemMiB=LLMemory::getAvailableMemKB().valueInUnits<LLUnits::Megabytes>();
+        // A headless diagnostic emulates an active view, not a minimized viewer.
+        input.background=!VSVulkanContext::headlessReplay() && (!window.getVisible() || !gFocusMgr.getAppHasFocus());
+        input.minimized=window.getMinimized() && input.background;
+        resources->updateTextureMemory(settings,input);
+    }
+
     bool present(float dpi, const std::function<void()>& draw)
     {
         using namespace Diligent;
+        updateTextureMemory();
         LLCoordWindow size;
         require(window.getSize(&size), "Cannot query native viewer extent");
         if (size.mX <= 0 || size.mY <= 0 || window.getMinimized())

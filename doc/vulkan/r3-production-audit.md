@@ -812,3 +812,32 @@ The actual production `CACHE_POST` block is executed by a C++ regression coverin
 all those transitions and final full-cache completion. This corrects an observed
 state-machine defect; attribution of the historical intermittent misses remains
 unproven. Full R3 runtime and platform qualification remain open.
+
+
+## Native texture-pressure controller
+
+Native presentation now polls the same VRAM budget/override, system-memory,
+manual-limit and background/minimized settings used by the reference texture
+policy. The CPU policy is a transposition of `LLViewerTexture::updateClass`,
+including its conservative GPU allocation estimate, delayed pressure ramp,
+recovery headroom and discard-area scaling. Actual GPU image and geometry
+allocations feed that estimate; decoded snapshots and preparation leases stay
+separately reported. The existing native payload admission bound supplies a
+separate pressure signal, latched through allocation refusal until residency
+falls, rather than misreporting those CPU bytes as GPU memory.
+
+Ordinary world subscribers send coarser pressure demand through the existing
+fetch/cache decoder; UI, exact-channel and forced-full-resolution demand retain
+their existing treatment. A queued over-detailed world publication can yield
+to a coarser decode after the shared worker finishes its cache write; the last
+published generation remains intact. The override notification uses the audited
+shared CPU callback while the native controller polls its rendering effect.
+
+The regression executes 1,000 frames of the actual extracted OpenGL memory
+calculation against the native policy, covering pressure, manual budgets,
+system-memory pressure and recovery. It also executes the actual native
+resource controller against allocation refusal/recovery and verifies override
+and background policy. Changed translation units compile. This checkpoint is
+not full pressure acceptance: minimized scene-owner rebinding/retirement,
+actual viewer pressure readbacks and imported glTF/terrain consumers remain
+open and must be completed before R3 qualification.

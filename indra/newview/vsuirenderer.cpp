@@ -89,7 +89,7 @@ struct VSUIRenderer::Impl
             return remoteImages;
         return coreImages;
     }
-    std::uint64_t imageAllocationRefusals=0;
+    std::uint64_t imageAllocationRefusals=0,remoteImageAllocationRefusals=0;
     Impl(IRenderDevice* d, IDeviceContext* c) : device(d), context(c)
     {
         check(d && c, "UI renderer requires a native device and context");
@@ -213,7 +213,11 @@ VSUIRenderer::FontAtlas VSUIRenderer::uploadPreparedTexture(const VSTextureUploa
     // Charge both the GPU payload and the retained independent CPU snapshot.
     const auto gpuBytes=prepared.gpuBytes;
     auto residency=budget.reserve(rgba.size()+gpuBytes);
-    if (!residency) {++mImpl->imageAllocationRefusals;return {};}
+    if (!residency) {
+        ++mImpl->imageAllocationRefusals;
+        if(role==VSWorldContracts::ImageRole::RemoteAsset || role==VSWorldContracts::ImageRole::Media) ++mImpl->remoteImageAllocationRefusals;
+        return {};
+    }
     auto image = std::make_shared<Texture>();
     image->residency=std::move(residency);
     image->owner=mImpl->device;
@@ -386,7 +390,11 @@ VSUIRenderer::Image VSUIRenderer::replace(const Image& old,unsigned x,unsigned y
     }
     auto& budget   = mImpl->imageBudget(old->description.role);
     auto residency=budget.reserve(old->pixels.size()*2);
-    if (!residency) {++mImpl->imageAllocationRefusals;return {};}
+    if (!residency) {
+        ++mImpl->imageAllocationRefusals;
+        if(old->description.role==VSWorldContracts::ImageRole::RemoteAsset || old->description.role==VSWorldContracts::ImageRole::Media) ++mImpl->remoteImageAllocationRefusals;
+        return {};
+    }
     auto image=std::make_shared<Texture>(); image->owner=mImpl->device;image->residency=std::move(residency);
     image->pixels=old->pixels;
     for (unsigned row=0;row<height;++row)
@@ -537,6 +545,8 @@ VSUIRenderer::Statistics VSUIRenderer::statistics() const
     result.imageBudgetBytes       = mImpl->coreImages.limit() + mImpl->remoteImages.limit() + mImpl->compositeImages.limit();
     result.residentGPUImageBytes=mImpl->imageUsage->gpu.load();
     result.residentImageSnapshotBytes=mImpl->imageUsage->snapshot.load();
+    result.remoteImagePayloadBytes=mImpl->remoteImages.used();result.remoteImageBudgetBytes=mImpl->remoteImages.limit();
+    result.remoteImageAllocationRefusals=mImpl->remoteImageAllocationRefusals;
     result.imageAllocationRefusals=mImpl->imageAllocationRefusals;return result;
 }
 VSWorldContracts::Image VSUIRenderer::imageDescription(const Image& image)
