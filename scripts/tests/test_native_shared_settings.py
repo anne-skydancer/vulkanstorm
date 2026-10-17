@@ -44,7 +44,8 @@ int main(){
   VSNativeSession::running=native;LLControlGroup group;int values=0,empty=0;
   setting_setup_signal_listener(group,name,std::function<void(const LLSD&)>([&](const LLSD& value){assert(value.value==2);++values;}));
   setting_setup_signal_listener(group,name,std::function<void()>([&](){++empty;}));
-  group.controls.at(name).fire();
+  VSNativeSession::running=false; // Account retirement cannot admit a deferred GL callback.
+  setting_get_control(group,name)->fire();
   bool render=std::string(name)=="RenderAnisotropic"||std::string(name)=="RenderShadowDetail"||std::string(name)=="OctreeDistanceFactor"||std::string(name)=="UnknownFutureSetting";
   assert(values==int(!native||!render)&&empty==values);
  }

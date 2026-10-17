@@ -1355,24 +1355,26 @@ bool native_shared_setting_callback(const std::string& setting)
 
 void setting_setup_signal_listener(LLControlGroup& group, const std::string& setting, std::function<void(const LLSD& newvalue)> callback)
 {
+#if VS_NATIVE_VULKAN
+    // Admit at registration time. A native session must never acquire a legacy
+    // GL callback merely because its singleton has already retired at teardown.
+    if (VSNativeSession::active() && !native_shared_setting_callback(setting)) return;
+#endif
     setting_get_control(group, setting)->getSignal()->connect([callback](LLControlVariable* control, const LLSD& new_val, const LLSD& old_val)
     {
-#if VS_NATIVE_VULKAN
-        // Native owners observe admitted settings themselves. Preserve saved values
-        // without activating a legacy GL/world/optional listener, including cascades.
-        if (VSNativeSession::active() && !native_shared_setting_callback(control->getName())) return;
-#endif
         callback(new_val);
     });
 }
 
 void setting_setup_signal_listener(LLControlGroup& group, const std::string& setting, std::function<void()> callback)
 {
+#if VS_NATIVE_VULKAN
+    // Admit at registration time. A native session must never acquire a legacy
+    // GL callback merely because its singleton has already retired at teardown.
+    if (VSNativeSession::active() && !native_shared_setting_callback(setting)) return;
+#endif
     setting_get_control(group, setting)->getSignal()->connect([callback](LLControlVariable* control, const LLSD& new_val, const LLSD& old_val)
     {
-#if VS_NATIVE_VULKAN
-        if (VSNativeSession::active() && !native_shared_setting_callback(control->getName())) return;
-#endif
         callback();
     });
 }

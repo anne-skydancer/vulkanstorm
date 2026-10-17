@@ -1655,6 +1655,9 @@ bool LLAppViewer::initNativeVulkanLogin()
     LLAgent::parseTeleportMessages("teleport_strings.xml");
     LLEmojiDictionary::initClass();
     gIMMgr = LLIMMgr::getInstance();
+    // Register the reviewed shared CPU/UI callbacks after their native owners
+    // exist. The wrappers omit legacy GL/scene callbacks for this backend.
+    settings_setup_listeners();
     gSavedSettings.setString("LastRunVersion", LLVersionInfo::instance().getChannelAndVersion());
     mNumSessions = gSavedSettings.getS32("NumSessions") + 1;
     gSavedSettings.setS32("NumSessions", mNumSessions);
