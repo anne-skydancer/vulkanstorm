@@ -1,4 +1,4 @@
-# R3 continuation state � 2026-10-17
+# R3 continuation state — 2026-10-17
 
 The active task is gapless R3 with Windows SwiftShader, Linux SwiftShader and
 Linux Lavapipe all passing on the final source. Checkpoints are committed and
@@ -47,9 +47,16 @@ Final BRDF/probe/HDR appearance belongs to the later roadmap stages.
   planar/triplanar terrain sharpness charts (`.tmp/r3-terrain-triplanar-gpu-v1`).
 - 100 local source scripts passed. The local token denies CreateWindowStationW;
   no foreground fallback is permitted. Hosted Windows retains that check.
-- The current edits normalize terrain HTTP receipts, shorten readback filenames
-  without shortening hashes, add independent pressure-codec references and
-  require all new evidence in the final archive. Test these before acceptance.
+- The final committed runner at `54fa455f68` passed all 9 cache cases in
+  476.8 seconds (`.tmp/r3g`), real concurrent ownership (`.tmp/r3gc`), R1 in
+  60.8 seconds and R2 plus received terrain in 122.7 seconds. Independent
+  archive validation accepted 7,359 files and rejected omitted regional,
+  pressure and shutdown artifacts (`.tmp/r3-final-archive-check.json`).
+- The pressure oracle decodes the exact shared-policy cached byte window;
+  parallel material HTTP receipts are completed before publication. The race
+  regression also rejects the old implementation deterministically.
+- All production code is committed/pushed. Cross-platform graphics CI and
+  uploaded archive verification at the final checkpoint remain required.
 
 ## Required completion
 
@@ -81,7 +88,7 @@ startup/camera context. Their R3 open-work statements are superseded by the
 current state above. Startup UI, snapshots and full camera parity must still be
 assessed against their own roadmap stages; R3 qualification does not close them.
 
-## R3 reboot checkpoint — 17 October 2026
+## R3 reboot checkpoint â€” 17 October 2026
 
 Work continues on `vkstorm-vulkan` in
 `C:\Dev\vulkanstorm\worktrees\vkstorm-vulkan`. R3 is **not complete**.
