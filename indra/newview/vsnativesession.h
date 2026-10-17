@@ -85,12 +85,16 @@ public:
         U8 access=0;
         F32 waterHeight=0;
         bool waterKnown=false,current=false;
+        bool estateManager=false,estateManagerKnown=false;
+        U32 objectCapacity=0;
+        bool objectCapacityKnown=false;
         std::vector<VSCoarseSample<LLUUID>> coarse;
         VSParcelOverlay::Snapshot parcelOverlay;
     };
     std::vector<RegionSnapshot> regionSnapshots() const;
     std::vector<VSCoarseSample<LLUUID>> coarseAvatarLocations() const;
     bool receiveParcelOverlay(const LLHost&,U64 account,U64 circuit,S32 sequence,const std::vector<U8>&);
+    bool applyRegionStats(const LLHost&,U64 account,U64 circuit,U64 flags,U32 capacity);
     bool receiveCoarse(const LLSD&, const LLHost&, U64 account, U64 circuit, bool legacyUDP=false);
     U64 circuitGeneration(const LLHost&) const;
     bool regionEvent(const std::string&, const LLSD&, const LLHost&, U64 account, U64 circuit);
@@ -212,6 +216,9 @@ private:
         U8 access=0;
         F32 waterHeight=0;
         bool waterKnown=false;
+        bool estateManager=false,estateManagerKnown=false;
+        U32 objectCapacity=0;
+        bool objectCapacityKnown=false;
         VSCoarseSnapshot<LLUUID> coarse;
         VSParcelOverlay::Snapshot parcelOverlay;
         LLSD capabilities;

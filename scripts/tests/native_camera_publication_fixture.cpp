@@ -11,7 +11,7 @@ struct Window{Rect rect;Rect getWindowRectRaw(){return rect;}};Window window;Win
 struct Settings{float getF32(const char*){return 128;}}gSavedSettings;
 struct Agent{LLVector3 forward;int resets=0;void resetAxes(LLVector3 v){forward=v;++resets;}}gAgent;
 struct LLViewerCamera{
- inline static LLViewerCamera* value=nullptr;LLVector3 eye,at,left,up;float view=0,nearClip=0,farClip=0,aspect=0;int height=0;
+ inline static LLViewerCamera* value=nullptr;LLVector3 eye,at,left,up;float view=.73f,nearClip=0,farClip=0,aspect=0;int height=0;
  static bool instanceExists(){return value;}static void createInstance(){value=new LLViewerCamera;}static auto getInstance(){return value;}
  void setOrigin(LLVector3 v){eye=v;}void setAxes(LLVector3 a,LLVector3 l,LLVector3 u){at=a;left=l;up=u;}
  void setViewNoBroadcast(float v){view=v;}void setNear(float v){nearClip=v;}void setFar(float v){farClip=v;}void setAspect(float v){aspect=v;}void setViewHeightInPixels(int v){height=v;}
@@ -23,7 +23,7 @@ METHOD
 int main(){
  VSNativeSession owner;assert(owner.publishCamera());auto camera=LLViewerCamera::value;assert(camera);
  assert(camera->eye.x==10 && camera->at.x==1 && camera->left.y==1 && camera->up.z==1 && gAgent.resets==1);
- assert(std::abs(camera->view-F_PI/3)<1e-6f && camera->nearClip==.1f && camera->farClip==128 && camera->height==768);
+ assert(camera->view==.73f && camera->nearClip==.1f && camera->farClip==128 && camera->height==768);
  window.rect={800,400};owner.state.center.x=11;assert(owner.publishCamera());assert(camera->aspect==2 && camera->eye.x==11);
  owner.mChangingRegion=true;owner.state.center.x=12;assert(!owner.publishCamera() && camera->eye.x==11);owner.mChangingRegion=false;
  owner.mPhase=VSNativeSession::Phase::Login;assert(!owner.publishCamera());owner.mPhase=VSNativeSession::Phase::Connected;

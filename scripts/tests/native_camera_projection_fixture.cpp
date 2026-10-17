@@ -45,13 +45,14 @@ struct LLViewerCamera {
  void projectScreenToPosAgent(S32,S32,LLVector3*)const;bool projectPosAgentToScreen(const LLVector3&,LLCoordGL&,bool)const;bool projectPosAgentToScreenEdge(const LLVector3&,LLCoordGL&)const;
 };
 struct VSWorldRenderer{struct View{std::array<float,16> projection{};};};
-struct VSWorldScene{static VSWorldRenderer::View cameraView(const LLVector3&,const LLVector3&,const LLVector3&,unsigned,unsigned,float);};
+struct VSWorldScene{static VSWorldRenderer::View cameraView(const LLVector3&,const LLVector3&,const LLVector3&,unsigned,unsigned,float,float);};
 CAMERA_METHODS
 NATIVE_VIEW
 PROJECTION_METHODS
 int main(){
  LLViewerCamera camera;
- for(float scale:{1.f,1.5f,2.f})for(int direction=0;direction<4;++direction){
+ for(float fov:{.65f,F_PI/3,1.4f})for(float scale:{1.f,1.5f,2.f})for(int direction=0;direction<4;++direction){
+  camera.view=fov;
   window.raw={0,600,800,0};window.scale.mV[0]=window.scale.mV[1]=scale;
   if(direction==0){camera.mXAxis={1,0,0};camera.mYAxis={0,1,0};camera.mZAxis={0,0,1};}
   else if(direction==1){camera.mXAxis={0,1,0};camera.mYAxis={-1,0,0};camera.mZAxis={0,0,1};}
@@ -60,7 +61,7 @@ int main(){
    camera.mYAxis=LLVector3(0,0,1)%camera.mXAxis;camera.mYAxis.normalize();camera.mZAxis=camera.mXAxis%camera.mYAxis;
    if(direction==3){camera.mYAxis=camera.mYAxis*std::cos(.2f)+camera.mZAxis*std::sin(.2f);camera.mZAxis=camera.mXAxis%camera.mYAxis;}
   }
-  const auto native=VSWorldScene::cameraView(camera.mOrigin,camera.mXAxis,camera.mZAxis,800,600,128);
+  const auto native=VSWorldScene::cameraView(camera.mOrigin,camera.mXAxis,camera.mZAxis,800,600,128,camera.view);
   for(auto offset:std::array<LLVector3,5>{{{0,0,0},{2,0,0},{-2,0,0},{0,2,0},{0,-2,0}}}){
    auto point=camera.mOrigin+camera.mXAxis*20+camera.mYAxis*offset.mV[0]+camera.mZAxis*offset.mV[1];
    LLCoordGL screen;assert(camera.projectPosAgentToScreen(point,screen,true));
