@@ -30,6 +30,7 @@ using namespace LL::GLTF;
 namespace
 {
 constexpr std::size_t maximumBytes = 64 * 1024 * 1024;
+VSResourceBudget gltfEncodedImageBytes{64*1024*1024},gltfDecodedImageBytes{256*1024*1024};
 // JSON text length does not bound its DOM allocation. Charge each actual
 // parser allocation before materializing it, and retain charges to deallocation.
 class BudgetJSONResource final : public boost::container::pmr::memory_resource
@@ -469,9 +470,14 @@ struct VSWorldGLTF::Impl : std::enable_shared_from_this<Impl>
     std::map<unsigned, std::string>                      images;
     struct ImageUpdate
     {
-        bool preparing=false,known=false,wanted=false;
+        bool preparing=false,decoding=false,known=false,wanted=false,fullRes=false;
         VSUIResources::PreparedImage prepared;
-        std::shared_ptr<const VSResourceBudget::Reservation> residency;
+        LLPointer<LLImageRaw> decoded;
+        std::shared_ptr<const VSResourceBudget::Reservation> residency,decodedResidency;
+        unsigned fullWidth=0,fullHeight=0,target=0,frameDemand=0,resolutionLimit=0;
+        U64 demandFrame=0;
+        S32 decodedDiscard=-1,pendingDiscard=-1,publishedDiscard=-1;
+        double retryAt=0;
     };
     std::map<unsigned,ImageUpdate> imageUpdates;
     U64 imageEpoch=1;
@@ -628,115 +634,173 @@ struct VSWorldGLTF::Impl : std::enable_shared_from_this<Impl>
         asset->updateTransforms();
         ready = true;
     }
+        struct DecodeResult
+    {
+        LLPointer<LLImageRaw> raw;
+        std::shared_ptr<const VSResourceBudget::Reservation> residency;
+        std::string error;
+        unsigned width=0,height=0;
+        S32 discard=-1;
+    };
+    static S32 imageDiscard(unsigned width,unsigned height,unsigned target)
+    {
+        S32 discard=0;
+        while(discard<MAX_DISCARD_LEVEL && ((width>>discard)>target || (height>>discard)>target)) ++discard;
+        return discard;
+    }
+    bool decodeImage(unsigned index,unsigned target)
+    {
+        // Encoded admission is separate from decoded and upload preparation:
+        // waiting encoded work must not consume the pool needed to finish it.
+        const auto& image=asset->mImages[index];
+        const std::size_t estimate=image.mBufferView!=INVALID_INDEX?
+            std::size_t(asset->mBufferViews[image.mBufferView].mByteLength):
+            (image.mUri.starts_with("data:")?image.mUri.size():16*1024*1024);
+        if(!estimate || estimate>16*1024*1024) {error="Invalid or oversized glTF encoded image";return false;}
+        auto admission=gltfEncodedImageBytes.reserve(estimate*3+65536);
+        if(!admission) return false;
+        std::shared_ptr<const Asset> input=asset;
+        auto& update=imageUpdates[index];update.decoding=true;
+        const auto weak=weak_from_this();const auto epoch=imageEpoch;
+        LL::WorkQueue::ptr_t main=LL::WorkQueue::getInstance("mainloop"),general=LL::WorkQueue::getInstance("General");
+        const bool posted=main->postTo(general,[input,index,target,admission] {
+            try {
+                const auto& source=input->mImages[index];
+                std::vector<U8> bytes;
+                std::string     mime = source.mMimeType;
+                if (source.mBufferView != INVALID_INDEX)
+                {
+                    const auto& view = input->mBufferViews[source.mBufferView];
+                    const auto& data = input->mBuffers[view.mBuffer].mData;
+                    if (view.mByteLength > 16 * 1024 * 1024)
+                    {
+                        throw std::runtime_error("glTF encoded image exceeds admission limit");
+                    }
+                    bytes.assign(data.begin() + view.mByteOffset, data.begin() + view.mByteOffset + view.mByteLength);
+                }
+                else if (source.mUri.starts_with("data:"))
+                {
+                    const auto comma     = source.mUri.find(',');
+                    const auto delimiter = source.mUri.find(";base64,");
+                    if (comma == std::string::npos || delimiter == std::string::npos || source.mUri.size() > 16 * 1024 * 1024)
+                    {
+                        throw std::runtime_error("Invalid glTF image data URI");
+                    }
+                    mime               = source.mUri.substr(5, delimiter - 5);
+                    const auto decoded = LLBase64::decodeAsString(source.mUri.substr(comma + 1));
+                    bytes.assign(decoded.begin(), decoded.end());
+                }
+                else if (!input->mFilename.empty() && !source.mUri.empty())
+                {
+                    const auto path = gDirUtilp->getDirName(input->mFilename) + gDirUtilp->getDirDelimiter() + LLURI::unescape(source.mUri);
+                    llifstream file(path.c_str(), std::ios::binary | std::ios::ate);
+                    const auto size = file.tellg();
+                    if (!file || size <= 0 || size > 16 * 1024 * 1024)
+                    {
+                        throw std::runtime_error("Invalid local glTF image file");
+                    }
+                    bytes.resize(std::size_t(size));
+                    file.seekg(0);
+                    file.read(reinterpret_cast<char*>(bytes.data()), size);
+                    if (!file)
+                    {
+                        throw std::runtime_error("Local glTF image read failed");
+                    }
+                    if (mime.empty())
+                        mime = gDirUtilp->getExtension(path) == "png" ? "image/png" : "image/jpeg";
+                }
+                if (bytes.empty())
+                {
+                    throw std::runtime_error("Missing glTF encoded image");
+                }
+                LLPointer<LLImageFormatted> encoded = LLImageFormatted::loadFromMemory(bytes.data(), U32(bytes.size()), mime);
+                if (!encoded || encoded->getWidth() <= 0 || encoded->getHeight() <= 0 || encoded->getWidth() > 4096 || encoded->getHeight() > 4096 ||
+                    encoded->getComponents()<1 || encoded->getComponents()>4)
+                {
+                    throw std::runtime_error("Invalid or oversized glTF image dimensions");
+                }
+                const unsigned fullWidth=encoded->getWidth(),fullHeight=encoded->getHeight();
+                auto residency=gltfDecodedImageBytes.reserve(std::size_t(fullWidth)*fullHeight*12+bytes.size()*2+65536);
+                if(!residency) return DecodeResult{};
+                LLPointer<LLImageRaw> raw = new LLImageRaw;
+                if (!encoded->decode(raw, 0))
+                {
+                    throw std::runtime_error("glTF image decode failed");
+                }
+                const S32 discard=imageDiscard(fullWidth,fullHeight,target);
+                if(discard && !raw->scale(std::max(1u,fullWidth>>discard),std::max(1u,fullHeight>>discard)))
+                    throw std::runtime_error("glTF image discard scaling failed");
+                return DecodeResult{raw,std::move(residency),{},fullWidth,fullHeight,discard};
+            } catch(const std::exception& failure) {DecodeResult result;result.error=failure.what();return result;}
+        },[weak,index,epoch](DecodeResult result) {
+            const auto owner=weak.lock();
+            if(!owner || !owner->current() || !owner->error.empty() || owner->imageEpoch!=epoch) return;
+            auto& state=owner->imageUpdates[index];state.decoding=false;
+            if(!result.error.empty()) {owner->error="glTF image decode failed: "+result.error;return;}
+            if(!result.raw) {state.retryAt=LLFrameTimer::getTotalSeconds()+.05;return;}
+            state.decoded=std::move(result.raw);state.decodedResidency=std::move(result.residency);
+            state.fullWidth=result.width;state.fullHeight=result.height;state.decodedDiscard=result.discard;
+        });
+        if(!posted) update.decoding=false;
+        return posted;
+    }
+
     VSUIRenderer::Image image(unsigned index,unsigned demand)
     {
-        const auto& source = asset->mImages[index];
-        LLUUID      uuid;
-        if (LLUUID::parseUUID(source.mUri, &uuid) && uuid.notNull())
+        const auto& source=asset->mImages[index];
+        LLUUID uuid;
+        if(LLUUID::parseUUID(source.mUri,&uuid) && uuid.notNull())
         {
             vs_request_world_image(uuid,demand);
-            return resources.image("remote:" + vs_native_image_id(uuid).asString());
+            return resources.image("remote:"+vs_native_image_id(uuid).asString());
         }
         const auto key="gltf-scene-image:"+imageOwner.asString()+":"+std::to_string(index);
         const auto previous=resources.image(key);
         const bool wanted=gSavedSettings.getBOOL("RenderCompressTextures") && resources.supportsCompression();
+        const bool fullRes=gSavedSettings.getBOOL("TextureLoadFullRes");
+        const unsigned limit=llclamp(gSavedSettings.getU32("RenderMaxTextureResolution"),512u,4096u);
         auto& update=imageUpdates[index];
-        if(update.preparing) return previous;
+        const auto frame=LLFrameTimer::getFrameCount();
+        if(update.demandFrame!=frame) {update.target=update.frameDemand;update.frameDemand=0;update.demandFrame=frame;}
+        update.frameDemand=std::max(update.frameDemand,std::clamp(demand,1u,4096u));
+        const unsigned requested=std::max(update.target,update.frameDemand);
+        const unsigned target=fullRes?4096u:std::min(limit,resources.worldImageDimension(requested,MAX_DISCARD_LEVEL));
+        const S32 desired=imageDiscard(update.fullWidth,update.fullHeight,target);
+        const bool changedLimit=update.resolutionLimit && (update.resolutionLimit!=limit || update.fullRes!=fullRes);
+        update.resolutionLimit=limit;update.fullRes=fullRes;
+        if(update.decoding || update.preparing) return previous;
         if(update.prepared)
         {
-            if(update.prepared->compressionRequested==wanted)
+            if(update.pendingDiscard==desired && update.prepared->compressionRequested==wanted)
             {
                 if(!resources.publishPrepared(key,update.prepared)) return previous;
-                images[index]=key;update.known=true;update.wanted=wanted;
+                images[index]=key;update.known=true;update.wanted=wanted;update.publishedDiscard=update.pendingDiscard;
                 update.prepared.reset();update.residency.reset();return resources.image(key);
             }
-            // A preference may change while CPU preparation is in flight. Reuse
-            // the prepared CPU pixels, preserving the last published generation.
-            const auto payload=update.prepared;
-            LLPointer<LLImageRaw> raw=new LLImageRaw(payload->width,payload->height,4);
-            const auto stride=payload->width*4;
-            for(unsigned row=0;row<payload->height;++row)
-                std::copy_n(payload->pixels.data()+std::size_t(row)*stride,stride,
-                    raw->getData()+std::size_t(payload->height-1-row)*stride);
-            if(prepareImage(index,raw,wanted)) {update.prepared.reset();update.residency.reset();}
-            return previous;
+            // A queued preference or demand change cannot publish obsolete
+            // quality. Retain the previous generation while the worker retries.
+            update.prepared.reset();update.residency.reset();
         }
-        if(previous)
+        if(update.decoded)
         {
-            if(update.known && update.wanted==wanted) return previous;
-            const auto raw=resources.rawImage(key);
-            if(raw) prepareImage(index,raw,wanted);
-            return previous;
-        }
-        auto working = budget.reserve(64 * 1024 * 1024);
-        if (!working)
-            return {};
-        std::vector<U8> bytes;
-        std::string     mime = source.mMimeType;
-        if (source.mBufferView != INVALID_INDEX)
-        {
-            const auto& view = asset->mBufferViews[source.mBufferView];
-            const auto& data = asset->mBuffers[view.mBuffer].mData;
-            if (view.mByteLength > 16 * 1024 * 1024)
+            if(update.decodedDiscard==desired)
             {
-                error = "glTF encoded image exceeds admission limit";
-                return {};
+                if(prepareImage(index,update.decoded,wanted))
+                {
+                    update.pendingDiscard=update.decodedDiscard;
+                    update.decoded=nullptr;update.decodedResidency.reset();
+                }
+                return previous;
             }
-            bytes.assign(data.begin() + view.mByteOffset, data.begin() + view.mByteOffset + view.mByteLength);
+            update.decoded=nullptr;update.decodedResidency.reset();
         }
-        else if (source.mUri.starts_with("data:"))
-        {
-            const auto comma     = source.mUri.find(',');
-            const auto delimiter = source.mUri.find(";base64,");
-            if (comma == std::string::npos || delimiter == std::string::npos || source.mUri.size() > 16 * 1024 * 1024)
-            {
-                error = "Invalid glTF image data URI";
-                return {};
-            }
-            mime               = source.mUri.substr(5, delimiter - 5);
-            const auto decoded = LLBase64::decodeAsString(source.mUri.substr(comma + 1));
-            bytes.assign(decoded.begin(), decoded.end());
-        }
-        else if (!asset->mFilename.empty() && !source.mUri.empty())
-        {
-            const auto path = gDirUtilp->getDirName(asset->mFilename) + gDirUtilp->getDirDelimiter() + LLURI::unescape(source.mUri);
-            llifstream file(path.c_str(), std::ios::binary | std::ios::ate);
-            const auto size = file.tellg();
-            if (!file || size <= 0 || size > 16 * 1024 * 1024)
-            {
-                error = "Invalid local glTF image file";
-                return {};
-            }
-            bytes.resize(std::size_t(size));
-            file.seekg(0);
-            file.read(reinterpret_cast<char*>(bytes.data()), size);
-            if (!file)
-            {
-                error = "Local glTF image read failed";
-                return {};
-            }
-            if (mime.empty())
-                mime = gDirUtilp->getExtension(path) == "png" ? "image/png" : "image/jpeg";
-        }
-        if (bytes.empty())
-        {
-            error = "Missing glTF encoded image";
-            return {};
-        }
-        LLPointer<LLImageFormatted> encoded = LLImageFormatted::loadFromMemory(bytes.data(), U32(bytes.size()), mime);
-        if (!encoded || encoded->getWidth() <= 0 || encoded->getHeight() <= 0 || encoded->getWidth() > 2048 || encoded->getHeight() > 2048)
-        {
-            error = "Invalid or oversized glTF image dimensions";
-            return {};
-        }
-        LLPointer<LLImageRaw> raw = new LLImageRaw;
-        if (!encoded->decode(raw, 0))
-        {
-            error = "glTF image decode failed";
-            return {};
-        }
-        prepareImage(index,raw,wanted);
-        return {};
+        const bool pressure=resources.textureMemoryPolicy().bias>1.9;
+        const auto extent=VSUIRenderer::imageExtent(previous);
+        const bool overLimit=!fullRes && (extent[0]>limit || extent[1]>limit);
+        if(previous && update.known && update.wanted==wanted &&
+            (update.publishedDiscard==desired || (!changedLimit && !overLimit && !pressure && desired==update.publishedDiscard+1))) return previous;
+        if(LLFrameTimer::getTotalSeconds()>=update.retryAt) decodeImage(index,target);
+        return previous;
     }
     static void delivered(const LLUUID& id, LLAssetType::EType type, void* data, S32 status, LLExtStat)
     {
@@ -1196,8 +1260,10 @@ LLSD VSWorldGLTF::evidence() const
     result["error"]                = mImpl->error;
     result["pending_buffers"]      = S32(mImpl->pendingBuffers.size());
     unsigned pendingImages=0;
-    for(const auto& [index,update]:mImpl->imageUpdates) if(update.preparing || update.prepared) ++pendingImages;
+    for(const auto& [index,update]:mImpl->imageUpdates) if(update.decoding || update.decoded || update.preparing || update.prepared) ++pendingImages;
     result["pending_image_uploads"]=S32(pendingImages);
+    result["encoded_image_bytes"]=ll_sd_from_U64(gltfEncodedImageBytes.used());
+    result["decoded_image_bytes"]=ll_sd_from_U64(gltfDecodedImageBytes.used());
     result["published_primitives"] = S32(mImpl->publications.size());
     result["resident_bytes"] =
         ll_sd_from_U64((mImpl->residency ? mImpl->residency->bytes() : 0) + (mImpl->typedResidency ? mImpl->typedResidency->bytes() : 0));

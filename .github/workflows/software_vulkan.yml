@@ -91,6 +91,7 @@ jobs:
       - run: python scripts/tests/test_native_image_batch.py
       - run: python scripts/tests/test_native_image_usage.py
       - run: python scripts/tests/test_native_gltf_image_lifecycle.py
+      - run: python scripts/tests/test_native_gltf_decode.py
       - run: python scripts/tests/test_native_local_images.py
       - run: python scripts/tests/test_native_image_eviction.py
       - run: python scripts/tests/test_native_remote_materials.py

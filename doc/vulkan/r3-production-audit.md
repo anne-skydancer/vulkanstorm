@@ -841,3 +841,34 @@ and background policy. Changed translation units compile. This checkpoint is
 not full pressure acceptance: minimized scene-owner rebinding/retirement,
 actual viewer pressure readbacks and imported glTF/terrain consumers remain
 open and must be completed before R3 qualification.
+
+
+The canonical staged source `a3ddce4148` passed all nine cache cases in 170.1
+seconds (`.tmp/r3-pressure-cache-matrix`), including zero-network warm,
+read-only and resize cases. Actual concurrent primary/read-only sibling
+ownership also passed (`.tmp/r3-pressure-cache-instances`). The cold case
+includes the media, local/remote material and shared-settings contracts.
+These results qualify those checkpoints; they do not certify the remaining
+terrain, imported-image, pressure-transition or pending-I/O requirements.
+
+## Imported glTF worker decoding and progressive publication
+
+Imported embedded/local images previously performed file reads, data-URI
+expansion and full decode on the frame thread, independently of native texture
+resolution preferences. These now run on the existing General work queue with
+separate global encoded (64 MiB), decoded (256 MiB) and existing preparation
+(640 MiB) admission. Actual dimensions/components are validated before decoded
+allocation; transient admission refusal retries without discarding the visible
+publication. Existing image decoders and `LLImageRaw::scale` implement the
+selected discard; a new resampling algorithm is not introduced.
+
+The native image owner polls resolution/full-resolution/compression preferences
+and the shared pressure policy, aggregates projected demand per image and frame,
+and retains immutable generations through queued preference changes. Worker
+results hold their budget until preparation takes ownership; epoch checks reject
+late completions after scene retirement or index reuse. Decoded working memory
+is separately reported from GPU residency. The actual asynchronous decode and
+retirement methods pass regressions covering discard, queued retirement/reuse,
+refused decoded admission and oversized headers, alongside the previous
+preparation-lifecycle test. Viewer translation-unit compilation passes. Actual
+five-channel imported-scene GPU qualification is the next required checkpoint.
