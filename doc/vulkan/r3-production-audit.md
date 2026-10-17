@@ -516,3 +516,17 @@ metadata capacity. It proves stable facade identity and payload retirement,
 followed by renewed demand when the control becomes visible. The existing local
 image publication regression also passes. Canonical runtime qualification of this
 new checkpoint remains pending its rebuild.
+
+The source-qualified `88182641c7` viewer passed the combined R2 and R3 replay in
+75.8 seconds after the hidden-control policy change.
+
+The same audit found retained world publications behind hidden attachment/HUD,
+invalid-parent and disabled-vegetation routes. They now use the same rendering
+resource release as distance culling, while preserving CPU geometry/material
+state for return. A production-method regression verifies that queued image
+owners survive, idle face/channel/mesh owners retire, both glTF publications
+release, and CPU geometry remains intact. Vegetation now renews projected world
+texture demand every visible frame and accepts replacement texture generations
+without rebuilding an unchanged mesh; it no longer requests its texture as a
+full-resolution UI image. Focused regressions and viewer compilation pass;
+canonical runtime qualification of these additional world paths is pending.

@@ -259,6 +259,19 @@ struct VSWorldScene::Impl
         LLVector3                                      geometryPosition;
         LLQuaternion                                   geometryRotation;
         bool                                           geometryPoseKnown = false;
+        void releaseRenderingResources()
+        {
+            for (auto& face : faces)
+            {
+                face.mesh.reset();
+                face.publishedImage.reset();
+                face.publishedChannels = {};
+            }
+            admittedFaces.clear();
+            if (gltf) gltf->releaseRenderingResources();
+            if (pendingGLTF) pendingGLTF->releaseRenderingResources();
+            dirty = true;
+        }
     };
     VSWorldRenderer& renderer;VSUIResources& resources;
     std::shared_ptr<VSWorldAssets> assets;
@@ -2450,7 +2463,12 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
     }
     for (auto& [id,o]:mImpl->objects)
     {
-        if ((o.pcode == LL_PCODE_LEGACY_AVATAR && !o.gltf && !o.pendingGLTF) || !o.renderable)
+        if (!o.renderable)
+        {
+            o.releaseRenderingResources();
+            continue;
+        }
+        if (o.pcode == LL_PCODE_LEGACY_AVATAR && !o.gltf && !o.pendingGLTF)
             continue;
         bool hud = false, attachmentVisible = true;
         {
@@ -2478,8 +2496,15 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         }
         LLVector3 position;LLQuaternion rotation;std::set<U32> visited;
         if (!attachmentVisible || (hud && !LLPipeline::sShowHUDAttachments))
+        {
+            o.releaseRenderingResources();
             continue;
-        if (!mImpl->transform(id,position,rotation,visited)) continue;
+        }
+        if (!mImpl->transform(id,position,rotation,visited))
+        {
+            o.releaseRenderingResources();
+            continue;
+        }
         if (!o.geometryPoseKnown || o.geometryPosition != position || o.geometryRotation != rotation)
         {
             o.geometryPosition  = position;
@@ -2490,13 +2515,8 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
         const float limit=llclamp(farClip,16.f,1024.f)+o.scale.length()*2.f;
         if (!hud && (position - eye).lengthSquared() > limit * limit)
         {
-            for (auto& face:o.faces) {
-                face.mesh.reset();face.publishedImage.reset();face.publishedChannels={};
-            }
-            o.admittedFaces.clear();
-            if(o.gltf) o.gltf->releaseRenderingResources();
-            if(o.pendingGLTF) o.pendingGLTF->releaseRenderingResources();
-            o.dirty=true;continue;
+            o.releaseRenderingResources();
+            continue;
         }
         if (o.pcode == LL_PCODE_LEGACY_TREE || o.pcode == LL_PCODE_TREE_NEW || o.pcode == LL_PCODE_LEGACY_GRASS)
         {
@@ -2506,10 +2526,8 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             const F32   treeFactor = llclamp(gSavedSettings.getF32("RenderTreeLODFactor"), 0.f, 16.f);
             if (vs_vegetation_stopped(treeFactor))
             {
-                o.faces.front().mesh.reset();
-                o.admittedFaces.clear();
+                o.releaseRenderingResources();
                 o.vegetationLOD = -1;
-                o.dirty         = true;
                 continue;
             }
             if (o.pcode == LL_PCODE_LEGACY_GRASS)
@@ -2550,19 +2568,18 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                                                      species->second->mBillboardRatio, 1.f - volumeFactor * .1f);
                 if (detail == 4)
                 {
-                    o.faces.front().mesh.reset();
-                    o.admittedFaces.clear();
-                    o.dirty = true;
+                    o.releaseRenderingResources();
                     continue;
                 }
             }
             auto& face = o.faces.front();
+            const unsigned demand = unsigned(std::clamp(o.scale.length()*std::max(viewportHeight,1u)/distance,1.f,4096.f));
+            vs_request_world_image(texture,demand);
+            auto image = mImpl->resources.image("remote:" + vs_native_image_id(texture).asString());
             if (o.dirty || !face.mesh || o.vegetationLOD != detail)
             {
                 auto publishVegetation = [&]
                 {
-                    LLUI::getUIImageByID(texture);
-                    auto image = mImpl->resources.image("remote:" + vs_native_image_id(texture).asString());
                     if (!image)
                         return;
                     auto working = mImpl->budgets->primitiveBytes.reserve(8 * 1024 * 1024);
@@ -2599,7 +2616,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                         o.dirty         = false;
                         face.material.setID(texture);
                         face.publishedMaterial = face.material;
-                        face.publishedImage    = std::move(image);
+                        face.publishedImage    = image;
                         face.published         = true;
                     }
                 };
@@ -2618,6 +2635,9 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                     o.dirty = false;
                 }
             }
+            // Texture discard/compression generations can change while the
+            // admitted vegetation mesh and its LOD remain identical.
+            if (face.mesh && image) face.publishedImage = std::move(image);
             if (face.mesh && face.published)
             {
                 VSWorldRenderer::Packet packet;

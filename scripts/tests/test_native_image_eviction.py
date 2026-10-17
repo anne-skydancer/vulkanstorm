@@ -10,6 +10,47 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class NativeImageEvictionTests(unittest.TestCase):
+    def test_inactive_world_publications_release_all_image_owners(self):
+        text = (ROOT / 'indra/newview/vsworldscene.cpp').read_text()
+        release = method(text, 'void releaseRenderingResources()')
+        source = r'''
+#include <array>
+#include <cassert>
+#include <memory>
+#include <vector>
+struct Face {
+ std::shared_ptr<int> mesh,publishedImage;
+ std::array<std::shared_ptr<int>,4> publishedChannels;
+ int material=17;
+};
+struct GLTF {int calls=0;void releaseRenderingResources(){++calls;}};
+struct Object {
+ std::vector<Face> faces,admittedFaces;
+ std::shared_ptr<GLTF> gltf=std::make_shared<GLTF>(),pendingGLTF=std::make_shared<GLTF>();
+ std::shared_ptr<int> cpuGeometry=std::make_shared<int>(23);
+ bool dirty=false;
+ RELEASE
+};
+int main(){
+ Object object;Face face;
+ face.mesh=std::make_shared<int>(1);face.publishedImage=std::make_shared<int>(2);
+ for(auto& channel:face.publishedChannels)channel=std::make_shared<int>(3);
+ object.faces.push_back(face);object.admittedFaces.push_back(face);
+ const auto cpu=object.cpuGeometry;
+ auto queued=face.publishedImage;std::weak_ptr<int> mesh=face.mesh,base=queued,normal=face.publishedChannels[0];
+ face={};object.releaseRenderingResources();
+ assert(object.dirty && object.admittedFaces.empty());
+ assert(mesh.expired() && normal.expired() && !base.expired());
+ assert(!object.faces[0].mesh && !object.faces[0].publishedImage);
+ for(const auto& channel:object.faces[0].publishedChannels)assert(!channel);
+ assert(object.faces[0].material==17 && object.cpuGeometry==cpu && *cpu==23);
+ assert(object.gltf->calls==1 && object.pendingGLTF->calls==1);
+ queued.reset();assert(base.expired()); // The submission owns its real lifetime.
+ object.releaseRenderingResources();assert(object.gltf->calls==2);
+}
+'''.replace('RELEASE', release)
+        self.compile_and_run(source)
+
     def test_hidden_controls_release_payload_without_losing_facades(self):
         text = (ROOT / 'indra/newview/vsuiimageprovider.cpp').read_text()
         eviction = method(text, 'bool evict(const LLUUID& preserve,bool metadata=false)')
@@ -83,6 +124,9 @@ int main(){
  assert(impl.evict({99},true) && impl.remote.empty()); // Metadata capacity is distinct.
 }
 '''.replace('EVICTION', eviction).replace('PENDING', pending)
+        self.compile_and_run(source)
+
+    def compile_and_run(self, source):
         compiler = shutil.which('clang++') or shutil.which('g++')
         self.assertIsNotNone(compiler)
         with tempfile.TemporaryDirectory() as temporary:
