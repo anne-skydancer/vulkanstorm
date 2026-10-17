@@ -1,5 +1,5 @@
 {
-  "source_commit": "b9b3e2d252ad4c4bb1f402c5876b3c767b9ec087",
+  "source_commit": "8439f5582ed842ab8b44646d9d964da58305c41a",
   "scope": "Windows/Linux viewer; SDL2 default, SDL1 conditional; OpenGL/Zink reference retained. DiligentCore selected. Site mapping does not alone certify source completeness.",
   "records": [
     {
@@ -2708,25 +2708,25 @@
       "path": "indra/newview/llviewercontrol.cpp",
       "start": 29,
       "end": 31,
-      "sha256": "28646e6839f1cd98b92d0557bed343df8532c874bbf0047a60c56eadf054c788",
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llviewercontrol.cpp",
-      "start": 1360,
-      "end": 1364,
-      "sha256": "28646e6839f1cd98b92d0557bed343df8532c874bbf0047a60c56eadf054c788",
+      "start": 1365,
+      "end": 1365,
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llviewercontrol.cpp",
-      "start": 1373,
-      "end": 1375,
-      "sha256": "28646e6839f1cd98b92d0557bed343df8532c874bbf0047a60c56eadf054c788",
+      "start": 1378,
+      "end": 1378,
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -2969,7 +2969,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 34,
       "end": 37,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md. Reviewed native RLVa cleanup before account owner, UI and application fiber teardown, matching the reference subsystem cleanup and making the global destructor inert. The real enabled cleanup/destructor and native entry prefix are exercised together; no startup feature disabling or weakened exit acceptance."
@@ -2978,7 +2978,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 45,
       "end": 45,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -2987,88 +2987,88 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1589,
       "end": 1591,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1717,
-      "end": 1725,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1720,
+      "end": 1728,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1732,
-      "end": 1732,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1735,
+      "end": 1735,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1736,
-      "end": 1736,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1739,
+      "end": 1739,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1751,
-      "end": 1780,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1754,
+      "end": 1783,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1814,
-      "end": 1819,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1817,
+      "end": 1822,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 5348,
-      "end": 5350,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 5351,
+      "end": 5353,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 5915,
-      "end": 5917,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 5918,
+      "end": 5920,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 7008,
-      "end": 7010,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 7011,
+      "end": 7013,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 7321,
-      "end": 7322,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 7324,
+      "end": 7325,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -3368,43 +3368,43 @@
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md.",
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55"
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 2746,
-      "end": 2832,
+      "start": 2749,
+      "end": 2835,
       "record": "I02",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md.",
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55"
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4062,
-      "end": 4209,
+      "start": 4065,
+      "end": 4212,
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md.",
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55"
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4393,
-      "end": 4506,
+      "start": 4396,
+      "end": 4509,
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md.",
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55"
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7"
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 7149,
-      "end": 7179,
+      "start": 7152,
+      "end": 7182,
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md.",
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55"
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7"
     },
     {
       "path": "indra/newview/llviewerwindow.cpp",
@@ -8225,7 +8225,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 41,
       "end": 42,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -8234,7 +8234,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 572,
       "end": 572,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -8243,25 +8243,16 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 582,
       "end": 582,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 3962,
-      "end": 3967,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
-      "record": "I01",
-      "disposition": "mapped",
-      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
-    },
-    {
-      "path": "indra/newview/llappviewer.cpp",
-      "start": 4079,
-      "end": 4080,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 3965,
+      "end": 3970,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -8269,17 +8260,26 @@
     {
       "path": "indra/newview/llappviewer.cpp",
       "start": 4082,
-      "end": 4082,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "end": 4083,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4125,
-      "end": 4133,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 4085,
+      "end": 4085,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
+      "record": "I01",
+      "disposition": "mapped",
+      "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4128,
+      "end": 4136,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -10097,7 +10097,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1067,
       "end": 1073,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -10106,7 +10106,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1585,
       "end": 1592,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -10115,7 +10115,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1594,
       "end": 1621,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -10124,97 +10124,97 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1625,
       "end": 1651,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1658,
-      "end": 1664,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1661,
+      "end": 1667,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1681,
-      "end": 1682,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1684,
+      "end": 1685,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1686,
-      "end": 1707,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1689,
+      "end": 1710,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1715,
-      "end": 1725,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1718,
+      "end": 1728,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1732,
-      "end": 1782,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1735,
+      "end": 1785,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1791,
-      "end": 1793,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1794,
+      "end": 1796,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1795,
-      "end": 1798,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1798,
+      "end": 1801,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1803,
-      "end": 1843,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1806,
+      "end": 1846,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1851,
-      "end": 1851,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1854,
+      "end": 1854,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 2328,
-      "end": 2328,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 2331,
+      "end": 2331,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -10689,9 +10689,9 @@
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1694,
-      "end": 1694,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1697,
+      "end": 1697,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "V4 source review: ordinary native startup enters an owned CPU session before legacy world initialization. Shared default-deny UDP/HTTP admission preserves reliable transport and reviewed handshake/chat/name/mute/alert/logout messages. Weak owners and session generations protect seed, event-poll, name, translation and transfer callbacks; bounded reset/logout paths release partial initialization. Native settings and URL admission prevent deferred world/optional producers; native chat/resources remain on Diligent. Diagnostic replay injects protocol fixtures through the production owner and compares actual connected UI readback with the independent CPU oracle. No LLWorld/LLViewerRegion or scene resources are admitted. Live-server and world parity are unqualified; runtime results are recorded separately in viewer-connected-session.md."
@@ -11744,70 +11744,70 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 36,
       "end": 36,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4417,
-      "end": 4439,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
-      "record": "I01",
-      "disposition": "mapped-gate",
-      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
-    },
-    {
-      "path": "indra/newview/llappviewer.cpp",
-      "start": 4442,
+      "start": 4420,
       "end": 4442,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4444,
-      "end": 4477,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 4445,
+      "end": 4445,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4610,
-      "end": 4610,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 4447,
+      "end": 4480,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4612,
-      "end": 4612,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 4613,
+      "end": 4613,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4727,
-      "end": 4727,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 4615,
+      "end": 4615,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 4729,
-      "end": 4729,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 4730,
+      "end": 4730,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
+      "record": "I01",
+      "disposition": "mapped-gate",
+      "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 4732,
+      "end": 4732,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped-gate",
       "reason": "About and external info consumers select the running window backend, retain native identity after teardown, and query GL strings/WMI only for initialized OpenGL. Mesa/Zink remains OpenGL; Vulkan uses cached selected-device facts and never claims the GL texture budget. Disk-cache reporting checks instanceExists before accessing the parameter singleton, supporting early-startup/crash reports."
@@ -13121,7 +13121,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 32,
       "end": 33,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -13130,7 +13130,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 257,
       "end": 258,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -13139,7 +13139,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1593,
       "end": 1593,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -13148,7 +13148,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1622,
       "end": 1624,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -13157,52 +13157,52 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1652,
       "end": 1657,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1708,
-      "end": 1714,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1711,
+      "end": 1717,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1727,
-      "end": 1731,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1730,
+      "end": 1734,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1783,
-      "end": 1790,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1786,
+      "end": 1793,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1794,
-      "end": 1794,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1797,
+      "end": 1797,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1799,
-      "end": 1799,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1802,
+      "end": 1802,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Native ordinary startup installs CPU help/URL, folder/emoji/account services and inverse cleanup. Agent capabilities, group/account identity and HTTP callbacks retain generation ownership and complete maturity failures. Source review only; actual login/runtime evidence is separate. Native connected frame pumps shared CPU idle callbacks so actual inventory tree construction and filter callbacks execute; native connected audio initializes/pumps with neutral listener and shared volume policy, without scene camera/wind owners."
@@ -28068,9 +28068,9 @@
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1683,
-      "end": 1685,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1686,
+      "end": 1688,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I08",
       "disposition": "mapped",
       "reason": " Native CPU frame-period/jitter sampling and current-circuit ping/loss/bandwidth are generation and host scoped, reset on account change, and never construct scene owners. Actual shared Statistics/Lag Meter/FPS controllers are admitted and retired; empty recordings remain unavailable, native history triangles retain shared geometry, and trusted SimStats uses the existing CPU decoder. Real floater, sample and shrink/restore replay is added; runtime qualification remains pending. About VRAM_BUDGET and VRAM_BUDGET_ENGLISH now retain the identical shared FSLimitTextureVRAMUsage/RenderMaxVRAMBudget formatting on OpenGL and Vulkan, including localized Unlimited. This reports the configured viewer limit, not Vulkan driver heap availability or newly qualified allocator enforcement; compiled production formatting is tested for both renderer selections."
@@ -31983,18 +31983,18 @@
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1665,
-      "end": 1680,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1668,
+      "end": 1683,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1726,
-      "end": 1726,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1729,
+      "end": 1729,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I08",
       "disposition": "mapped",
       "reason": "Experimental world progress branch: explicit native primitive geometry/submission and authenticated account service seams reviewed. CPU full/compressed/terse update parsing, finite geometry, parent cycles, bounded full-update requests, per-generation fence retirement and scene reset are implemented for the first primitive slice. Shared SimulatorFeatures parser and marketplace service pump preserve legacy behavior with native ownership guards. World shader is a first geometry contract, not legacy/PBR, streamed-world, avatar, lighting, water, post-processing or full service parity. Runtime evidence is bounded to the standalone production renderer on Windows SwiftShader; connected native-world and live service qualification remain open. See doc/vulkan/world-feature-parity.md."
@@ -34568,7 +34568,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 28,
       "end": 29,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -34577,16 +34577,16 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 31,
       "end": 31,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1847,
-      "end": 1847,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1850,
+      "end": 1850,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Development-only R0 normal peer viewer startup capture and metadata reviewed: production frame hooks guarded by VS_VULKAN_DIAGNOSTICS, top-left GL/Vulkan readback, fixed UI-only draw clock with live service clock restored, no foreground process fallback and no credentials exported. Canonical RelWithDebInfo build/staging passed; local runtime attempts failed private-window-station creation. Connected fixed-clock world replay, complete stage measurements and R0 acceptance remain open. No full world or vendor-driver runtime acceptance is conferred."
@@ -35072,16 +35072,16 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 30,
       "end": 30,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1849,
-      "end": 1849,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1852,
+      "end": 1852,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Development-only R0 production peer frame captures and fixed loopback ObjectUpdate replay reviewed, with shared OpenGL world class initialization, valid host-qualified region and volume draw masks. Clock state restores before service work, counters observe actual submissions, visible red/green fixture pixels and exact build/artifact identities are required. Source inventory allocates all surveyed requirements without accepting runtime/full feature parity. Headless Linux execution is required; local private-window-station launch is unavailable. No avatar, authenticated-account, GPU-time or physical-vendor qualification is conferred."
@@ -35963,7 +35963,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1601,
       "end": 1607,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Production startup/account/circuit/capability/progress ownership and worker shutdown sequencing reviewed. Reliable/HTTP/event callbacks check account/circuit/region/request identity on mainloop; real authenticated operations retained without GL-only scene initialization."
@@ -35972,52 +35972,52 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1617,
       "end": 1617,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Production startup/account/circuit/capability/progress ownership and worker shutdown sequencing reviewed. Reliable/HTTP/event callbacks check account/circuit/region/request identity on mainloop; real authenticated operations retained without GL-only scene initialization."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1704,
-      "end": 1705,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1707,
+      "end": 1708,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Production startup/account/circuit/capability/progress ownership and worker shutdown sequencing reviewed. Reliable/HTTP/event callbacks check account/circuit/region/request identity on mainloop; real authenticated operations retained without GL-only scene initialization."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1742,
-      "end": 1744,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1745,
+      "end": 1747,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Production startup/account/circuit/capability/progress ownership and worker shutdown sequencing reviewed. Reliable/HTTP/event callbacks check account/circuit/region/request identity on mainloop; real authenticated operations retained without GL-only scene initialization."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1756,
-      "end": 1779,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1759,
+      "end": 1782,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Production startup/account/circuit/capability/progress ownership and worker shutdown sequencing reviewed. Reliable/HTTP/event callbacks check account/circuit/region/request identity on mainloop; real authenticated operations retained without GL-only scene initialization."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1800,
-      "end": 1802,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1803,
+      "end": 1805,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Production startup/account/circuit/capability/progress ownership and worker shutdown sequencing reviewed. Reliable/HTTP/event callbacks check account/circuit/region/request identity on mainloop; real authenticated operations retained without GL-only scene initialization."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1831,
-      "end": 1831,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1834,
+      "end": 1834,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Production startup/account/circuit/capability/progress ownership and worker shutdown sequencing reviewed. Reliable/HTTP/event callbacks check account/circuit/region/request identity on mainloop; real authenticated operations retained without GL-only scene initialization."
@@ -40470,9 +40470,9 @@
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1744,
-      "end": 1747,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1747,
+      "end": 1750,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Connected startup/circuit/camera/agent/appearance/control routes preserve account/region/request guards; native avatar ownership replaces legacy GL avatar dependencies and explicit logout retires retained work. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -47825,7 +47825,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1616,
       "end": 1616,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Compile the headless replay context query only when the native Vulkan backend is built. Ordinary OpenGL builds retain their existing startup path; native replay behavior is unchanged."
@@ -47834,7 +47834,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1618,
       "end": 1618,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I01",
       "disposition": "mapped",
       "reason": "Compile the headless replay context query only when the native Vulkan backend is built. Ordinary OpenGL builds retain their existing startup path; native replay behavior is unchanged."
@@ -49409,7 +49409,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1597,
       "end": 1601,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -49418,7 +49418,7 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1606,
       "end": 1606,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -49427,34 +49427,34 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1608,
       "end": 1611,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1706,
-      "end": 1706,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1709,
+      "end": 1709,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1756,
-      "end": 1777,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1759,
+      "end": 1780,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 5839,
-      "end": 5841,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 5842,
+      "end": 5844,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -49632,18 +49632,18 @@
     },
     {
       "path": "indra/newview/llviewercontrol.cpp",
-      "start": 1363,
-      "end": 1363,
-      "sha256": "28646e6839f1cd98b92d0557bed343df8532c874bbf0047a60c56eadf054c788",
+      "start": 1365,
+      "end": 1365,
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/llviewercontrol.cpp",
-      "start": 1374,
-      "end": 1374,
-      "sha256": "28646e6839f1cd98b92d0557bed343df8532c874bbf0047a60c56eadf054c788",
+      "start": 1378,
+      "end": 1378,
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -49976,16 +49976,16 @@
       "path": "indra/newview/llappviewer.cpp",
       "start": 1609,
       "end": 1609,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1778,
-      "end": 1778,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1781,
+      "end": 1781,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -50055,9 +50055,9 @@
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 5578,
-      "end": 5583,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 5581,
+      "end": 5586,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -53169,9 +53169,9 @@
     },
     {
       "path": "indra/newview/llappviewer.cpp",
-      "start": 1746,
-      "end": 1746,
-      "sha256": "160fe270d033cc70638a7613b686df5c3355713ead100bbf23504898c79e1d55",
+      "start": 1749,
+      "end": 1749,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -55097,25 +55097,25 @@
       "path": "indra/newview/llviewercontrol.cpp",
       "start": 1288,
       "end": 1355,
-      "sha256": "28646e6839f1cd98b92d0557bed343df8532c874bbf0047a60c56eadf054c788",
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/llviewercontrol.cpp",
-      "start": 1363,
-      "end": 1363,
-      "sha256": "28646e6839f1cd98b92d0557bed343df8532c874bbf0047a60c56eadf054c788",
+      "start": 1365,
+      "end": 1365,
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
     },
     {
       "path": "indra/newview/llviewercontrol.cpp",
-      "start": 1374,
-      "end": 1374,
-      "sha256": "28646e6839f1cd98b92d0557bed343df8532c874bbf0047a60c56eadf054c788",
+      "start": 1378,
+      "end": 1378,
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
       "record": "I05",
       "disposition": "mapped",
       "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
@@ -55186,8 +55186,8 @@
     {
       "path": "scripts/tests/test_native_shared_settings.py",
       "start": 1,
-      "end": 58,
-      "sha256": "9e8b1b91bb293638fb0336b83c04f1f1ff1b8d5b1391133ead4a0810b1304ce8",
+      "end": 59,
+      "sha256": "6b8087697263bd9591858c521fd5cd1a3260e9390ec2e495aa337b08c0ae97b6",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -55206,6 +55206,60 @@
       "start": 27,
       "end": 40,
       "sha256": "d4d05d26acb324c51eb50a92e7534f0d7391f9504fb8fb8e691172e632a1f75d",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "indra/newview/llappviewer.cpp",
+      "start": 1658,
+      "end": 1660,
+      "sha256": "0c41fbe7c5fbbc2545fe634e5adb866da11531dc033373bce32c770f16edd9a7",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/llviewercontrol.cpp",
+      "start": 1358,
+      "end": 1362,
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/llviewercontrol.cpp",
+      "start": 1365,
+      "end": 1365,
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/llviewercontrol.cpp",
+      "start": 1371,
+      "end": 1375,
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "indra/newview/llviewercontrol.cpp",
+      "start": 1378,
+      "end": 1378,
+      "sha256": "913dd4ff3ae54301e4ffee400cf6aaffc3a5da9422102fe45704ed5cbf508249",
+      "record": "I05",
+      "disposition": "mapped",
+      "reason": "Reuse the existing CPU texture fetch/cache/discard state machine, lifecycle and startup cache policy for native subscribers. Bound native-only transport/decode resources and admit only audited CPU disk-cache setting listeners; retain OpenGL defaults and callbacks."
+    },
+    {
+      "path": "scripts/tests/test_native_shared_settings.py",
+      "start": 47,
+      "end": 48,
+      "sha256": "6b8087697263bd9591858c521fd5cd1a3260e9390ec2e495aa337b08c0ae97b6",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
