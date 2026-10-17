@@ -695,6 +695,9 @@ struct Replay
         else if (step == 1)
         {
             if (owner.phase() != VSNativeSession::Phase::Connected) return;
+            // The shared startup fade intentionally covers connected controls.
+            // Exercise hover/click oracles only after it releases input.
+            if (gViewerWindow->getShowProgress()) return;
             if (!muteRequest) return;
             if (!muteReplyQueued)
             {
@@ -912,6 +915,7 @@ struct Replay
                 require(!navigationStarted, "Navigation lost its connected account while awaiting encoded replies");
                 return;
             }
+            if (gViewerWindow->getShowProgress()) return;
             if (!navigationStarted)
             {
                 // Relogin installs production handlers again. Reattach only the
