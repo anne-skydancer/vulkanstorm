@@ -80,6 +80,13 @@ class TerrainMaterials(unittest.TestCase):
             finally:
                 server.shutdown();worker.join()
 
+    def test_embedded_shader_is_identical_under_both_python_encoding_modes(self):
+        import os,sys
+        for mode in ('0','1'):
+            run=subprocess.run([sys.executable,str(ROOT/'scripts/generate_vulkan_terrain_shader.py'),'--check'],
+                env=dict(os.environ,PYTHONUTF8=mode),capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+
     def test_composition_matches_reference_height_and_corner_policy(self):
         reference = (ROOT / 'indra/newview/llvlcomposition.cpp').read_text()
         bilinear = method(reference, 'F32 bilinear(')

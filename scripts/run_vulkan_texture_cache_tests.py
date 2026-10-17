@@ -159,14 +159,23 @@ def validate_case(record,requests,folder,cache_directory,readonly=False):
     limited=stages['resolution_limit']
     if (limited['width'],limited['height'],limited['discard'])!=(512,512,1):raise ValueError('Native maximum-resolution preference was inert')
     if rows[STREAM]['gpu_rgba_sha256']!=full_pattern_sha256():raise ValueError('Final resident texture differs from the expected full-resolution pixels')
+    validate_retirement(record,requests,validate_shutdown(record,folder,requests) if 'r3_shutdown' in record else 0)
+    return rows
+
+def validate_retirement(record,requests,extra=0):
+    cache=record['texture_cache']
     retired=record['retired_texture_cache']
     if retired['images'] or retired['pending_fetches']!=0 or retired.get('pending_uploads')!=0:raise ValueError('Retired account retained cached GPU images or fetches')
     if retired['process_instance']!=cache['process_instance']:raise ValueError('Cache lifecycle evidence changed process identity')
     # Account-retirement counters precede the final diagnostic shutdown probe.
     # Keep those time points distinct rather than rewriting the retired snapshot.
-    extra=validate_shutdown(record,folder,requests) if 'r3_shutdown' in record else 0
-    if u64(retired['network_requests'])+extra!=len(texture_requests(requests)):raise ValueError('Texture HTTP evidence disagrees with the worker counter')
-    return rows
+    final=record['final_texture_cache']
+    if final['images'] or final['pending_fetches']!=0 or final.get('pending_uploads')!=0:
+        raise ValueError('Final account retirement retained cached GPU images or fetches')
+    if final['process_instance']!=cache['process_instance'] or u64(final['network_requests'])<u64(retired['network_requests']):
+        raise ValueError('Final cache counters do not follow first-account retirement')
+    if u64(final['network_requests'])+extra!=len(texture_requests(requests)):raise ValueError('Texture HTTP evidence disagrees with the worker counter')
+
 
 def snapshot(cache_directory):
     root=cache_directory/'texturecache'
