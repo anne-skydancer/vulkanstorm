@@ -1,5 +1,5 @@
 {
-  "source_commit": "45569f4283c1956a2b2a846d98dcd9221ee4b43f",
+  "source_commit": "e6951c83166c77aa1ffe7d593fab7e56c794b50c",
   "reviewer": "root",
   "scope": "Only listed source ranges reviewed; unlisted source is not certified by this file. Insertion ownership, not runtime qualification.",
   "reviewed_ranges": [
@@ -25495,7 +25495,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 54,
       "end": 54,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -25504,16 +25504,16 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 364,
       "end": 378,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 425,
-      "end": 425,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "start": 438,
+      "end": 438,
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28357,7 +28357,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 117,
       "end": 120,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28411,7 +28411,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 369,
       "end": 374,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28420,7 +28420,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 378,
       "end": 378,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28429,25 +28429,25 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 40,
       "end": 40,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 408,
-      "end": 418,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "start": 421,
+      "end": 431,
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
     },
     {
       "path": ".github/workflows/software_vulkan.yml",
-      "start": 425,
-      "end": 425,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "start": 438,
+      "end": 438,
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28455,8 +28455,8 @@
     {
       "path": "scripts/package_vulkan_evidence.py",
       "start": 1,
-      "end": 253,
-      "sha256": "41580b561e759281eb3689cfe16f3c67e47819f043d02dc723ce25ab87b2687b",
+      "end": 304,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28464,8 +28464,8 @@
     {
       "path": "scripts/tests/test_vulkan_evidence_package.py",
       "start": 1,
-      "end": 181,
-      "sha256": "5497488e1e6a11a820c82c44b38f0a43144c668a42a0f023062361471665f712",
+      "end": 219,
+      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -28474,7 +28474,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 83,
       "end": 83,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28661,9 +28661,9 @@
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 113,
-      "end": 126,
-      "sha256": "41580b561e759281eb3689cfe16f3c67e47819f043d02dc723ce25ab87b2687b",
+      "start": 162,
+      "end": 175,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Existing Autobuild dependencies and canonical stage retained; bounded independent headless resource/session qualification and artifact collection added. Normal native-presentation prerequisites remain decisive; no release publication or latest update."
@@ -28681,16 +28681,16 @@
       "path": "scripts/tests/test_vulkan_evidence_package.py",
       "start": 13,
       "end": 13,
-      "sha256": "5497488e1e6a11a820c82c44b38f0a43144c668a42a0f023062361471665f712",
+      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
     },
     {
       "path": "scripts/tests/test_vulkan_evidence_package.py",
-      "start": 67,
-      "end": 92,
-      "sha256": "5497488e1e6a11a820c82c44b38f0a43144c668a42a0f023062361471665f712",
+      "start": 105,
+      "end": 130,
+      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Diagnostic-only production message/HTTP/resource replay and independently expected numerical/readback witnesses; missing owners, unchanged payloads, leaks, unsupported presentation and stale callbacks fail. No release hooks or physical/live-grid qualification."
@@ -28753,7 +28753,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 53,
       "end": 53,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28843,7 +28843,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 55,
       "end": 80,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28852,7 +28852,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 119,
       "end": 119,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28861,7 +28861,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 290,
       "end": 292,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -28870,7 +28870,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 379,
       "end": 391,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -34333,61 +34333,61 @@
       "path": "scripts/package_vulkan_evidence.py",
       "start": 8,
       "end": 9,
-      "sha256": "41580b561e759281eb3689cfe16f3c67e47819f043d02dc723ce25ab87b2687b",
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 13,
-      "end": 14,
-      "sha256": "41580b561e759281eb3689cfe16f3c67e47819f043d02dc723ce25ab87b2687b",
+      "start": 15,
+      "end": 16,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 24,
-      "end": 24,
-      "sha256": "41580b561e759281eb3689cfe16f3c67e47819f043d02dc723ce25ab87b2687b",
+      "start": 72,
+      "end": 72,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 81,
-      "end": 108,
-      "sha256": "41580b561e759281eb3689cfe16f3c67e47819f043d02dc723ce25ab87b2687b",
+      "start": 129,
+      "end": 157,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 158,
-      "end": 158,
-      "sha256": "41580b561e759281eb3689cfe16f3c67e47819f043d02dc723ce25ab87b2687b",
+      "start": 209,
+      "end": 209,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 164,
-      "end": 166,
-      "sha256": "41580b561e759281eb3689cfe16f3c67e47819f043d02dc723ce25ab87b2687b",
+      "start": 215,
+      "end": 217,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/package_vulkan_evidence.py",
-      "start": 179,
-      "end": 202,
-      "sha256": "41580b561e759281eb3689cfe16f3c67e47819f043d02dc723ce25ab87b2687b",
+      "start": 230,
+      "end": 253,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -34880,27 +34880,27 @@
     },
     {
       "path": "scripts/tests/test_vulkan_evidence_package.py",
-      "start": 14,
-      "end": 14,
-      "sha256": "5497488e1e6a11a820c82c44b38f0a43144c668a42a0f023062361471665f712",
+      "start": 15,
+      "end": 15,
+      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_vulkan_evidence_package.py",
-      "start": 93,
-      "end": 119,
-      "sha256": "5497488e1e6a11a820c82c44b38f0a43144c668a42a0f023062361471665f712",
+      "start": 131,
+      "end": 157,
+      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
     },
     {
       "path": "scripts/tests/test_vulkan_evidence_package.py",
-      "start": 127,
-      "end": 178,
-      "sha256": "5497488e1e6a11a820c82c44b38f0a43144c668a42a0f023062361471665f712",
+      "start": 165,
+      "end": 216,
+      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Dedicated bounded R2 replay, viewer-linked geometry tools, strict readback/transport/artifact/provenance checks; existing Autobuild dependencies and complete stage preserved. No release/latest publication. Source responsibility review only; final R2 committed-source qualification is pending. Materials, shadows, presentation, live-grid content and physical-device performance are not certified."
@@ -35332,7 +35332,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 98,
       "end": 98,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -35656,7 +35656,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 99,
       "end": 99,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36034,7 +36034,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 100,
       "end": 100,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36466,7 +36466,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36475,7 +36475,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 100,
       "end": 100,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36484,7 +36484,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 154,
       "end": 154,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36493,7 +36493,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 190,
       "end": 190,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36502,7 +36502,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 261,
       "end": 261,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36511,7 +36511,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 270,
       "end": 270,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36520,7 +36520,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 274,
       "end": 274,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -36529,7 +36529,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 290,
       "end": 290,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37006,7 +37006,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 279,
       "end": 279,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37258,7 +37258,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 101,
       "end": 101,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37465,7 +37465,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 12,
       "end": 12,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37474,7 +37474,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 100,
       "end": 100,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37483,7 +37483,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 261,
       "end": 261,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37492,7 +37492,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 265,
       "end": 265,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37501,7 +37501,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 270,
       "end": 270,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37510,7 +37510,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 274,
       "end": 274,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37519,7 +37519,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 290,
       "end": 290,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I23",
       "disposition": "mapped",
       "reason": "Restore the release CI build baseline: native Visual Studio/MSBuild, precompiled headers and normal debug information; retire the experimental compiler-object cache and overrides. Preserve dedicated pinned Vulkan dependencies, runtime qualification, staging, evidence and publication guards. No viewer source changes. Build timing remains unqualified until measured."
@@ -37609,7 +37609,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 84,
       "end": 84,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Compile and run actual native cache bridge against controlled complete/partial/corrupt/timeout/shutdown and late-callback states; retain encoded writer memory/budget until retirement. Add to existing source-evidence job. This fixture does not qualify real disk restart reuse or R3 as a whole."
@@ -38734,7 +38734,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 107,
       "end": 107,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -38887,7 +38887,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 108,
       "end": 109,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -39751,7 +39751,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 86,
       "end": 86,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40029,8 +40029,8 @@
     {
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 1,
-      "end": 207,
-      "sha256": "be89c25d133bada2e87610ffe633d04e5927f02b2fcabe9da3a674d3405a23d6",
+      "end": 208,
+      "sha256": "95bde9f0a4274af3f93e010d2e4fd28f1ec8da276517ee9f7af34ebe92f0c0a5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40075,7 +40075,7 @@
       "path": ".github/workflows/software_vulkan.yml",
       "start": 85,
       "end": 85,
-      "sha256": "0978317cd3f1125f1c1968d2900bf2d2167a7c59ae72645289ab92725fbb3987",
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
@@ -40624,7 +40624,7 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 72,
       "end": 72,
-      "sha256": "be89c25d133bada2e87610ffe633d04e5927f02b2fcabe9da3a674d3405a23d6",
+      "sha256": "95bde9f0a4274af3f93e010d2e4fd28f1ec8da276517ee9f7af34ebe92f0c0a5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40633,7 +40633,7 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 74,
       "end": 81,
-      "sha256": "be89c25d133bada2e87610ffe633d04e5927f02b2fcabe9da3a674d3405a23d6",
+      "sha256": "95bde9f0a4274af3f93e010d2e4fd28f1ec8da276517ee9f7af34ebe92f0c0a5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40642,7 +40642,7 @@
       "path": "scripts/run_vulkan_texture_cache_tests.py",
       "start": 89,
       "end": 92,
-      "sha256": "be89c25d133bada2e87610ffe633d04e5927f02b2fcabe9da3a674d3405a23d6",
+      "sha256": "95bde9f0a4274af3f93e010d2e4fd28f1ec8da276517ee9f7af34ebe92f0c0a5",
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
@@ -40718,10 +40718,91 @@
       "record": "I25",
       "disposition": "test-only",
       "reason": "Execute production material shaders with independent opaque, linear-factor, emissive and UV pixel charts; retain existing strict validation and negative controls. This does not qualify all R3 production paths."
+    },
+    {
+      "path": ".github/workflows/software_vulkan.yml",
+      "start": 392,
+      "end": 404,
+      "sha256": "abae5be27df877cf6c2460e1c74d47bf0628a4c5373d811aab5355378971e677",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native media publication and dirty-region regression checks in source CI, including refused uploads and shared-consumer generation reuse. Complete R3 viewer/media qualification remains open."
+    },
+    {
+      "path": "scripts/package_vulkan_evidence.py",
+      "start": 10,
+      "end": 11,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/package_vulkan_evidence.py",
+      "start": 16,
+      "end": 62,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/package_vulkan_evidence.py",
+      "start": 132,
+      "end": 132,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/package_vulkan_evidence.py",
+      "start": 190,
+      "end": 191,
+      "sha256": "ee7c057147d43706a9b0cec7adf468a86255d6226c865bd4c6fcf9202399ce3e",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/run_vulkan_texture_cache_tests.py",
+      "start": 142,
+      "end": 142,
+      "sha256": "95bde9f0a4274af3f93e010d2e4fd28f1ec8da276517ee9f7af34ebe92f0c0a5",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/run_vulkan_texture_cache_tests.py",
+      "start": 154,
+      "end": 154,
+      "sha256": "95bde9f0a4274af3f93e010d2e4fd28f1ec8da276517ee9f7af34ebe92f0c0a5",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_evidence_package.py",
+      "start": 13,
+      "end": 14,
+      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
+    },
+    {
+      "path": "scripts/tests/test_vulkan_evidence_package.py",
+      "start": 19,
+      "end": 55,
+      "sha256": "e4966f2d0c22f681c5984ce4e6c7bc93c4394b9634bb12e6a38427af1a253fea",
+      "record": "I25",
+      "disposition": "test-only",
+      "reason": "Execute native shared-fetch bounds and cache/discard policy regressions; keep staged viewer replay cache relocation settings isolated and consistent. Actual cold/warm durability and complete R3 runtime acceptance remain required."
     }
   ],
   "source_review_reconciliation": {
-    "previous_source_commit": "1a28168cd5f61b6659c92b4d120e2f578d0f7e48",
+    "previous_source_commit": "9c90683b5fae15c8630fa43db3f71374e93f0c0f",
     "invalid_prior_hash_witnesses": 0,
     "basis": "Existing R2 witnesses already pin the qualified parent source by file hash. Remap only the new R3 deltas from that parent; retain previous responsibility reasons. Complete R3 production and runtime acceptance remain open; see r3-production-audit.md."
   }
