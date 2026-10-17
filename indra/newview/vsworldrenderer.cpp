@@ -34,10 +34,10 @@ struct alignas(16) Constants
     std::array<float,16> projection;
     std::array<float,4> sun,ambient,color,material,regionOffset;
     std::array<float,4> surfaceFlags{}, surfaceParams{}, emissive{}, specular{};
-    std::array<float,4> channelSets{}, normalOcclusion{};
-    std::array<std::array<float,4>,8> uv{};
+    std::array<float,4> channelSets{}, normalOcclusion{}, normalTangent{};
+    std::array<std::array<float,4>,VSMaterial::ChannelCount*2> uv{};
 };
-static_assert(sizeof(Constants)==368);
+static_assert(sizeof(Constants)==416);
 static_assert(sizeof(VSWorldRenderer::Vertex)==72);
 void checkWorldABI(IShader& shader)
 {
@@ -47,10 +47,10 @@ void checkWorldABI(IShader& shader)
         ShaderResourceDesc resource{};shader.GetResourceDesc(i,resource);
         if (!resource.Name || std::strcmp(resource.Name,"WorldView")) continue;
         const auto* buffer=shader.GetConstantBufferDesc(i);
-        requireWorld(buffer && buffer->Size==sizeof(Constants) && buffer->NumVariables==13,"World uniform block ABI mismatch");
-        const char* names[]{"projection","sun","ambient","tint","material","regionOffset","surfaceFlags","surfaceParams","emissive","specular","channelSets","normalOcclusion","uvTransform"};
-        const std::size_t offsets[]{offsetof(Constants,projection),offsetof(Constants,sun),offsetof(Constants,ambient),offsetof(Constants,color),offsetof(Constants,material),offsetof(Constants,regionOffset),offsetof(Constants,surfaceFlags),offsetof(Constants,surfaceParams),offsetof(Constants,emissive),offsetof(Constants,specular),offsetof(Constants,channelSets),offsetof(Constants,normalOcclusion),offsetof(Constants,uv)};
-        for (unsigned v=0;v<13;++v)
+        requireWorld(buffer && buffer->Size==sizeof(Constants) && buffer->NumVariables==14,"World uniform block ABI mismatch");
+        const char* names[]{"projection","sun","ambient","tint","material","regionOffset","surfaceFlags","surfaceParams","emissive","specular","channelSets","normalOcclusion","normalTangent","uvTransform"};
+        const std::size_t offsets[]{offsetof(Constants,projection),offsetof(Constants,sun),offsetof(Constants,ambient),offsetof(Constants,color),offsetof(Constants,material),offsetof(Constants,regionOffset),offsetof(Constants,surfaceFlags),offsetof(Constants,surfaceParams),offsetof(Constants,emissive),offsetof(Constants,specular),offsetof(Constants,channelSets),offsetof(Constants,normalOcclusion),offsetof(Constants,normalTangent),offsetof(Constants,uv)};
+        for (unsigned v=0;v<14;++v)
         {
             const auto& variable=buffer->pVariables[v];
             requireWorld(variable.Name && !std::strcmp(variable.Name,names[v]) && variable.Offset==offsets[v],"World uniform member ABI mismatch");
@@ -135,7 +135,7 @@ layout(location=2) in vec2 uv;
 layout(location=3) in vec2 uv1;
 layout(location=4) in vec4 tangent;
 layout(location=5) in vec4 vertexColor;
-layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; vec4 surfaceFlags; vec4 surfaceParams; vec4 emissive; vec4 specular; vec4 channelSets; vec4 normalOcclusion; vec4 uvTransform[8]; };
+layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; vec4 surfaceFlags; vec4 surfaceParams; vec4 emissive; vec4 specular; vec4 channelSets; vec4 normalOcclusion; vec4 normalTangent; vec4 uvTransform[10]; };
 layout(location=0) out vec2 texUV;
 layout(location=1) out vec3 light;
 layout(location=2) out vec3 worldNormal;
@@ -147,6 +147,11 @@ void main() {
     vec4 p=material.w>0.5 ? vec4(position,1) : projection*vec4(position+regionOffset.xyz,1);
     p.z=(p.z+p.w)*0.5;
     gl_Position=p; texUV=uv; texUV1=uv1; worldTangent=tangent; faceColor=vertexColor; worldNormal=normal; worldPosition=position+regionOffset.xyz;
+    if(surfaceFlags.x>.5 && dot(tangent.xyz,tangent.xyz)>1e-20) {
+        // Match the reference vertex stage before raster interpolation.
+        vec3 n=normalize(normal),t=normalize(tangent.xyz),b=tangent.w*cross(n,t);
+        worldTangent=vec4(normalize(normalTangent.x*t+normalTangent.y*b),tangent.w*normalTangent.z);
+    }
     gl_PointSize=1.0;
     light=material.x>0.5 ? vec3(1) : ambient.rgb+(vec3(1)-ambient.rgb)*max(dot(normalize(normal),normalize(sun.xyz)),0.0);
 }
@@ -160,13 +165,15 @@ layout(location=4) in vec2 texUV1;
 layout(location=5) in vec4 worldTangent;
 layout(location=6) in vec4 faceColor;
 layout(location=0) out vec4 result;
-layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; vec4 surfaceFlags; vec4 surfaceParams; vec4 emissive; vec4 specular; vec4 channelSets; vec4 normalOcclusion; vec4 uvTransform[8]; };
+layout(std140) uniform WorldView { mat4 projection; vec4 sun; vec4 ambient; vec4 tint; vec4 material; vec4 regionOffset; vec4 surfaceFlags; vec4 surfaceParams; vec4 emissive; vec4 specular; vec4 channelSets; vec4 normalOcclusion; vec4 normalTangent; vec4 uvTransform[10]; };
 uniform sampler2D g_Texture;
 uniform sampler2D g_Normal;
 uniform sampler2D g_ORM;
 uniform sampler2D g_Emissive;
+uniform sampler2D g_Occlusion;
 vec2 channelUV(int i) {
-    vec2 rawUV=channelSets[i]>.5?texUV1:texUV;
+    float set=i==4 ? normalOcclusion.z : channelSets[i];
+    vec2 rawUV=set>.5?texUV1:texUV;
     vec2 uv=vec2(rawUV.x,1.0-rawUV.y);
     vec4 m=uvTransform[2*i];
     vec2 p=vec2(m.x*uv.x+m.z*uv.y,m.y*uv.x+m.w*uv.y)+uvTransform[2*i+1].xy;
@@ -177,6 +184,14 @@ vec3 toSRGB(vec3 c) { c=max(c,vec3(0)); return mix(c*12.92,1.055*pow(c,vec3(1.0/
 vec3 mappedNormal(vec2 uv) {
     vec3 n=normalize(worldNormal);
     if (surfaceFlags.z<0.5) return n;
+    vec3 value=texture(g_Normal,uv).xyz*2.0-1.0;
+    value.xy*=normalOcclusion.x;
+    if (dot(worldTangent.xyz,worldTangent.xyz)>1e-20) {
+        // LLFace/rigged and imported glTF producers retain the reference
+        // tangent, handedness and normal-transform contracts.
+        vec3 t=normalize(worldTangent.xyz),b=worldTangent.w*cross(n,t);
+        return normalize(mat3(t,b,n)*value);
+    }
     vec3 dp1=dFdx(worldPosition),dp2=dFdy(worldPosition);
     vec2 duv1=dFdx(uv),duv2=dFdy(uv);
     vec3 p2=cross(dp2,n),p1=cross(n,dp1);
@@ -184,8 +199,6 @@ vec3 mappedNormal(vec2 uv) {
     float scale=max(dot(t,t),dot(b,b));
     if (scale<1e-20) return n;
     // Sampling coordinates are top-left, whereas tangent-space Y is +V.
-    vec3 value=texture(g_Normal,uv).xyz*2.0-1.0;
-    value.xy*=normalOcclusion.x;
     // Derivatives include per-channel UV rotation and mirror handedness, as
     // textureUtilV.glsl's tangent-space transform does in the reference path.
     return normalize(mat3(t*inversesqrt(scale),-b*inversesqrt(scale),n)*value);
@@ -209,7 +222,7 @@ void main() {
     if (surfaceParams.w>0.5) emission+=base*sampleColor.a;
     // ORM channels and legacy specular/gloss remain material inputs for R5/R6,
     // rather than inventing a replacement BRDF in this forward foundation.
-    float occlusion=surfaceFlags.y>0.5 ? mix(1.0,texture(g_ORM,channelUV(2)).r,normalOcclusion.y) : 1.0;
+    float occlusion=surfaceFlags.y>0.5 ? mix(1.0,(normalOcclusion.w>.5?texture(g_Occlusion,channelUV(4)).r:texture(g_ORM,channelUV(2)).r),normalOcclusion.y) : 1.0;
     result=vec4(toSRGB(base*illumination*occlusion+emission),c.a);
 }
 )";
@@ -248,7 +261,8 @@ void main() {
 };
 VSWorldRenderer::VSWorldRenderer(IRenderDevice* d,IDeviceContext* c,std::size_t meshBudgetBytes):mImpl(std::make_unique<Impl>(d,c,meshBudgetBytes)) {}
 VSWorldRenderer::~VSWorldRenderer()=default;
-VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, Topology topology)
+VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, Topology topology,
+                                             unsigned attributes)
 {
     const unsigned group = topology == Topology::Triangles ? 3 : topology == Topology::Lines ? 2 : 1;
     const auto     reject = [&]() -> Mesh
@@ -256,6 +270,9 @@ VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertice
         ++mImpl->meshInputRejections;
         return {};
     };
+    constexpr unsigned required=VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0;
+    constexpr unsigned supported=required|VSWorldContracts::UV1|VSWorldContracts::Tangent|VSWorldContracts::Color;
+    if((attributes&required)!=required || (attributes&~supported)) return reject();
     if (vertices.empty() || vertices.size() > 1048576 || indices.empty() || indices.size() > 3145728 || indices.size() % group)
         return reject();
     for (const auto& v:vertices)
@@ -278,6 +295,7 @@ VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertice
     mesh->description.vertices=vertices.size();mesh->description.indices=indices.size();
     mesh->description.generation=mImpl->nextGeometryGeneration++;
     mesh->description.stride=sizeof(Vertex);
+    mesh->description.attributes=attributes;
     mesh->residency=std::move(residency);
     mesh->snapshotResidency                                             = std::move(snapshotResidency);
     mesh->cpuVertices                                                   = vertices;
@@ -304,9 +322,9 @@ VSWorldRenderer::Mesh VSWorldRenderer::upload(const std::vector<Vertex>& vertice
     return mesh;
 }
 bool VSWorldRenderer::publishMesh(Mesh& current, const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices,
-                                  Topology topology)
+                                  Topology topology,unsigned attributes)
 {
-    auto replacement = upload(vertices, indices, topology);
+    auto replacement = upload(vertices, indices, topology,attributes);
     if (!replacement) return false;
     current = std::move(replacement);
     return true;
@@ -323,10 +341,13 @@ void VSWorldRenderer::retire()
             {
                 // A cached SRB owns its bound texture independently of Packet.image.
                 // Remove that reference while the charged packet owner still lives.
-                auto* texture = draw.binding->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture");
-                requireWorld(texture != nullptr, "Retired world texture binding missing");
-                texture->Set(mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
-                             SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+                for(const char* name:{"g_Texture","g_Normal","g_ORM","g_Emissive","g_Occlusion"})
+                {
+                    auto* texture=draw.binding->GetVariableByName(SHADER_TYPE_PIXEL,name);
+                    requireWorld(texture!=nullptr,"Retired world texture binding missing");
+                    texture->Set(mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
+                                 SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
+                }
                 mImpl->available[draw.pipeline].push_back(std::move(draw));
                 ++mImpl->availableCount;
             }
@@ -568,9 +589,10 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
             constants.surfaceParams={surface.metallic,surface.roughness,surface.glow,surface.emissiveAlpha?1.f:0.f};
             std::copy(surface.emissive.begin(),surface.emissive.end(),constants.emissive.begin());
             constants.specular=surface.specular;
+            constants.normalTangent=surface.normalTangent;
             for(unsigned i=0;i<4;++i) constants.channelSets[i]=float(surface.uvSet[i]);
-            constants.normalOcclusion={surface.normalScale,surface.occlusionStrength,0,0};
-            for (unsigned i=0;i<4;++i)
+            constants.normalOcclusion={surface.normalScale,surface.occlusionStrength,float(surface.uvSet[VSMaterial::Occlusion]),surface.independentOcclusion?1.f:0.f};
+            for (unsigned i=0;i<VSMaterial::ChannelCount;++i)
             {
                 constants.uv[2*i]=surface.uv[i].matrix;
                 constants.uv[2*i+1]={surface.uv[i].offset[0],surface.uv[i].offset[1],0,0};
@@ -613,8 +635,8 @@ void VSWorldRenderer::draw(ITextureView* target,unsigned width,unsigned height,c
         requireWorld(texture!=nullptr,"World texture binding missing");
         texture->Set(p.image ? VSUIRenderer::imageView(p.image,p.surface?p.surface->samplers[0]:VSWorldContracts::Sampler{}) : mImpl->white->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE),
                      SET_SHADER_RESOURCE_FLAG_ALLOW_OVERWRITE);
-        const char* channels[]{"g_Normal","g_ORM","g_Emissive"};
-        for (unsigned channel=0;channel<3;++channel)
+        const char* channels[]{"g_Normal","g_ORM","g_Emissive","g_Occlusion"};
+        for (unsigned channel=0;channel<VSMaterial::ChannelCount-1;++channel)
         {
             auto* variable=resources.binding->GetVariableByName(SHADER_TYPE_PIXEL,channels[channel]);
             requireWorld(variable!=nullptr,"World material channel binding missing");

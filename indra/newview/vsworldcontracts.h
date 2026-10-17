@@ -48,7 +48,7 @@ struct Image
 // Existing producers publish indexed region-local position/normal/UV0.
 // Optional channels are explicit schema requirements for later producers;
 // a missing requested channel is not silently synthesized by this contract.
-enum Attribute : unsigned { Position=1,Normal=2,UV0=4,Tangent=8,Color=16,JointIndices=32,JointWeights=64 };
+enum Attribute : unsigned { Position=1,Normal=2,UV0=4,Tangent=8,Color=16,JointIndices=32,JointWeights=64,UV1=128 };
 struct Geometry
 {
     unsigned attributes=Position|Normal|UV0;

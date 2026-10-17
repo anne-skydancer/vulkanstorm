@@ -8,7 +8,7 @@ class LLTextureEntry;
 class LLGLTFMaterial;
 namespace VSMaterial
 {
-enum Channel : unsigned { BaseColor, Normal, ORMOrSpecular, Emissive, ChannelCount };
+enum Channel : unsigned { BaseColor, Normal, ORMOrSpecular, Emissive, Occlusion, ChannelCount };
 struct Transform
 {
     // Affine transform of bottom-left source UV. Images are canonical top-left;
@@ -22,6 +22,8 @@ struct State
     std::array<std::array<std::uint8_t, 16>, ChannelCount> textures{};
     std::array<Transform, ChannelCount> uv;
     std::array<unsigned, ChannelCount> uvSet{};
+    // Reference tangent-space rotation/mirror weights, independent of UV offsets.
+    std::array<float,4> normalTangent{1,0,1,0};
     std::array<VSWorldContracts::Sampler, ChannelCount> samplers;
     float normalScale=1, occlusionStrength=1;
     std::array<float, 4> base{1, 1, 1, 1}, specular{1, 1, 1, 0};
@@ -29,11 +31,12 @@ struct State
     float metallic = 0, roughness = 1, cutoff = .5f, glow = 0;
     unsigned bump = 0, shiny = 0;
     VSWorldContracts::AlphaMode alpha = VSWorldContracts::AlphaMode::Opaque;
+    bool independentOcclusion = false;
     bool pbr = false, fullbright = false, doubleSided = false, emissiveAlpha = false;
     bool operator==(const State& rhs) const
     {
-        return std::tie(textures,uv,uvSet,samplers,normalScale,occlusionStrength,base,specular,emissive,metallic,roughness,cutoff,glow,bump,shiny,alpha,pbr,fullbright,doubleSided,emissiveAlpha)==
-            std::tie(rhs.textures,rhs.uv,rhs.uvSet,rhs.samplers,rhs.normalScale,rhs.occlusionStrength,rhs.base,rhs.specular,rhs.emissive,rhs.metallic,rhs.roughness,rhs.cutoff,rhs.glow,rhs.bump,rhs.shiny,rhs.alpha,rhs.pbr,rhs.fullbright,rhs.doubleSided,rhs.emissiveAlpha);
+        return std::tie(textures,independentOcclusion,uv,uvSet,normalTangent,samplers,normalScale,occlusionStrength,base,specular,emissive,metallic,roughness,cutoff,glow,bump,shiny,alpha,pbr,fullbright,doubleSided,emissiveAlpha)==
+            std::tie(rhs.textures,rhs.independentOcclusion,rhs.uv,rhs.uvSet,rhs.normalTangent,rhs.samplers,rhs.normalScale,rhs.occlusionStrength,rhs.base,rhs.specular,rhs.emissive,rhs.metallic,rhs.roughness,rhs.cutoff,rhs.glow,rhs.bump,rhs.shiny,rhs.alpha,rhs.pbr,rhs.fullbright,rhs.doubleSided,rhs.emissiveAlpha);
     }
 };
 Transform legacyUV(float scaleS, float scaleT, float offsetS, float offsetT, float rotation);

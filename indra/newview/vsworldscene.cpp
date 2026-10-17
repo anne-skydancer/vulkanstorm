@@ -9,6 +9,7 @@
 #include "vsworldavatar.h"
 #include "vsworldassets.h"
 #include "vsworldgltf.h"
+#include "vsnormalbasis.h"
 #include "vsflexiblepath.h"
 #include "vswindfield.h"
 #include "vsvegetation.h"
@@ -205,7 +206,7 @@ struct VSWorldScene::Impl
         LLTextureEntry                            material;
         LLPointer<LLFetchedGLTFMaterial>            pbrAsset;
         std::shared_ptr<const VSMaterial::State> surface;
-        std::array<VSUIRenderer::Image,3> publishedChannels;
+        std::array<VSUIRenderer::Image,VSMaterial::ChannelCount-1> publishedChannels;
         U64                                       poseGeneration = 0;
         LLTextureEntry                            publishedMaterial;
         VSUIRenderer::Image                       publishedImage;
@@ -1396,6 +1397,8 @@ std::optional<VSWorldContracts::Material> VSWorldScene::material(const FaceHandl
     {
         result.diffuse=face.surface->base;result.alpha=face.surface->alpha;
         result.fullbright=face.surface->fullbright;result.doubleSided=face.surface->doubleSided;
+          result.sampler=face.surface->samplers[0];
+          result.diffuseEncoding=face.surface->pbr?VSWorldContracts::ColorEncoding::Linear:VSWorldContracts::ColorEncoding::EncodedSRGB;
         result.diffuseImageKnown=bool(face.publishedImage) || face.surface->textures[0]==std::array<std::uint8_t,16>{};
         result.generation=token.generation;return result;
     }
@@ -2326,6 +2329,11 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
             classification.alpha             = packets[index].alpha    ? VSWorldContracts::AlphaMode::Blend
                                                : packets[index].masked ? VSWorldContracts::AlphaMode::Mask
                                                                        : VSWorldContracts::AlphaMode::Opaque;
+            if(packets[index].surface)
+            {
+                classification.sampler=packets[index].surface->samplers[0];
+                classification.diffuseEncoding=packets[index].surface->pbr?VSWorldContracts::ColorEncoding::Linear:VSWorldContracts::ColorEncoding::EncodedSRGB;
+            }
             classification.generation        = owner->revision;
             owner->faces[face].sceneMaterial = classification;
         }
@@ -2675,6 +2683,11 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 classification.alpha                       = published.alpha    ? VSWorldContracts::AlphaMode::Blend
                                                              : published.masked ? VSWorldContracts::AlphaMode::Mask
                                                                                 : VSWorldContracts::AlphaMode::Opaque;
+                if(published.surface)
+                {
+                    classification.sampler=published.surface->samplers[0];
+                    classification.diffuseEncoding=published.surface->pbr?VSWorldContracts::ColorEncoding::Linear:VSWorldContracts::ColorEncoding::EncodedSRGB;
+                }
                 classification.generation                  = o.revision;
                 o.faces[published.faceIndex].sceneMaterial = classification;
             }
@@ -2903,10 +2916,11 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                                a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3]};
                     uv.offset=VSMaterial::transform(base,animated.offset[0],animated.offset[1]);
                 }
+                if(surface.pbr) surface.normalTangent=VSNormalBasis::animate(surface.normalTangent,animated.matrix);
             }
-            std::array<VSUIRenderer::Image,4> channelImages;
+            std::array<VSUIRenderer::Image,VSMaterial::ChannelCount> channelImages;
             bool channelsReady=true;
-            for(unsigned channel=0;channel<4;++channel)
+            for(unsigned channel=0;channel<VSMaterial::ChannelCount;++channel)
             {
                 LLUUID texture;std::copy_n(surface.textures[channel].begin(),16,texture.mData);
                 if(texture.isNull()) continue;
@@ -2927,7 +2941,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                     // color and emissive images with the active media texture.
                     if(surface.pbr) channelImages[3]=mediaImage;
                     channelsReady=true;
-                    for(unsigned channel=1;channel<4;++channel)
+                    for(unsigned channel=1;channel<VSMaterial::ChannelCount;++channel)
                         if(surface.textures[channel]!=std::array<std::uint8_t,16>{} && !channelImages[channel]) channelsReady=false;
                 }
             }
@@ -2937,7 +2951,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                 surface.alpha=VSUIRenderer::imageDescription(image).alpha;
             for(auto& sampler:surface.samplers) sampler.anisotropy=gSavedSettings.getBOOL("RenderAnisotropic")?16u:1u;
             if(!face.surface || !(*face.surface==surface)) face.surface=std::make_shared<VSMaterial::State>(surface);
-            std::copy_n(channelImages.begin()+1,3,face.publishedChannels.begin());
+            std::copy_n(channelImages.begin()+1,VSMaterial::ChannelCount-1,face.publishedChannels.begin());
             const U64 poseGeneration = riggedOwner ? riggedOwner->poseGeneration() : 0;
             if (o.dirty || (riggedOwner && face.poseGeneration != poseGeneration) || !face.mesh)
             {
@@ -2948,6 +2962,7 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                     uploadDeferred = true;
                     continue;
                 }
+                o.volume->genTangents(f);
                 std::vector<VSWorldRenderer::Vertex> vertices;vertices.reserve(geometry.mNumVertices);
                 if (riggedOwner && geometry.mWeights)
                 {
@@ -2962,10 +2977,20 @@ std::vector<VSWorldRenderer::Packet> VSWorldScene::packets(const LLVector3& eye,
                     LLVector3 normal=LLVector3(n[0]/scale.mV[0],n[1]/scale.mV[1],n[2]/scale.mV[2])*rotation;
                     normal.normalize();
                     const auto& uv=geometry.mTexCoords[v];
-                    vertices.push_back({point.mV[0],point.mV[1],point.mV[2],normal.mV[0],normal.mV[1],normal.mV[2],uv.mV[0],1-uv.mV[1]});
+                    VSWorldRenderer::Vertex vertex{point.mV[0],point.mV[1],point.mV[2],normal.mV[0],normal.mV[1],normal.mV[2],uv.mV[0],1-uv.mV[1]};
+                    if(geometry.mTangents)
+                    {
+                        const auto* tangent=geometry.mTangents[v].getF32ptr();
+                        // LLFace::getGeometryVolume applies mat_normal to tangents.
+                        LLVector3 t=LLVector3(tangent[0]/scale.mV[0],tangent[1]/scale.mV[1],tangent[2]/scale.mV[2])*rotation;
+                        t.normalize();vertex.tx=t.mV[0];vertex.ty=t.mV[1];vertex.tz=t.mV[2];vertex.tw=tangent[3];
+                    }
+                    vertices.push_back(vertex);
                 }
                 std::vector<unsigned> indices(geometry.mIndices,geometry.mIndices+geometry.mNumIndices);
-                if (!mImpl->renderer.publishMesh(face.mesh, vertices, indices)) uploadDeferred = true;
+                unsigned attributes=VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0;
+                if(geometry.mTangents) attributes|=VSWorldContracts::Tangent;
+                if (!mImpl->renderer.publishMesh(face.mesh, vertices, indices,VSWorldRenderer::Topology::Triangles,attributes)) uploadDeferred = true;
                 else
                     face.poseGeneration = poseGeneration;
             }

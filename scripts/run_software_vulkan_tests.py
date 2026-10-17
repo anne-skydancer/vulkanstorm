@@ -12,6 +12,10 @@ import subprocess
 from vulkan_viewer_process import run_viewer_process, run_headless_graphics_process, process_isolation_evidence
 
 ROOT = Path(__file__).resolve().parents[1]
+MATERIAL_READBACKS=('material-opaque.ppm','material-linear-factor.ppm','material-emissive.ppm',
+    'material-transform.ppm','normal-tangent.ppm','normal-rotated-tangent.ppm','normal-mirrored-tangent.ppm',
+    'material-independent-occlusion.ppm','material-occlusion-transform.ppm','sampler-repeat.ppm',
+    'sampler-clamp.ppm','sampler-mirror.ppm','sampler-mipmaps.ppm','ui-base-level.ppm')
 
 
 @contextmanager
@@ -219,6 +223,7 @@ def main():
             if mode in ('offscreen', 'world', 'present'):
                 passed &= all((directory / name).is_file() for name in ('first.ppm', 'replacement.ppm'))
             if mode == 'world':
+                passed &= all((directory/name).is_file() for name in MATERIAL_READBACKS)
                 passed &= all((directory / name).is_file() for name in ('near-clip.ppm', 'sky.ppm', 'water-depth.ppm', 'resource-reuse.ppm', 'ui-batch.ppm', 'budget-retained.ppm', 'budget-replacement.ppm', 'ui-blend-precision.ppm', 'ui-blend-precision-expected.ppm', 'ui-blend-precision-expected-products.ppm', *(f'texture-{i}.ppm' for i in range(4))))
             result['tests'].append({'mode': mode, 'passed': passed, 'exit_code': code,
                                     'loaded_library_sha256': mapped_libraries,

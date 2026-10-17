@@ -557,7 +557,47 @@ static void worldContract(IRenderDevice* device, IDeviceContext* context, ITextu
         {-1,-1,0,0,0,1,.25f,.25f},{1,-1,0,0,0,1,.25f,.25f}},{0,2,1,1,2,3});
     renderer.draw(rtv,8,8,view,{materialPacket});
     capture("material-transform.ppm",[](unsigned,unsigned){return Pixel{0,255,0,255};});
+    // Constant UVs make a derivative-only normal basis degenerate. These pixels
+    // must come from the actual uploaded tangent, rotation and handedness.
+    std::vector<VSWorldRenderer::Vertex> tangentVertices{{-1,1,0,0,0,1,.25f,.25f},
+        {1,1,0,0,0,1,.25f,.25f},{-1,-1,0,0,0,1,.25f,.25f},{1,-1,0,0,0,1,.25f,.25f}};
+    for(auto& v:tangentVertices) {v.tx=1;v.tw=1;}
+    materialPacket.mesh=renderer.upload(tangentVertices,{0,1,2,1,3,2},VSWorldRenderer::Topology::Triangles,
+        VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0|VSWorldContracts::Tangent);
+    require((VSWorldRenderer::geometryDescription(materialPacket.mesh).attributes&VSWorldContracts::Tangent)!=0,
+        "Published tangent attribute was omitted from the shared geometry contract");
     surface=std::make_shared<VSMaterial::State>();materialPacket.surface=surface;
+    materialPacket.image=images.upload(1,1,{255,255,255,255});
+    materialPacket.channels[0]=images.upload(1,1,{255,128,128,255});
+    materialPacket.fullbright=false;auto normalView=view;normalView.ambient={0,0,0,0};normalView.sun={1,0,0,0};
+    renderer.draw(rtv,8,8,normalView,{materialPacket});
+    capture("normal-tangent.ppm",[](unsigned,unsigned){return Pixel{255,255,255,255};});
+    surface=std::make_shared<VSMaterial::State>(*surface);surface->normalTangent={0,-1,1,0};
+    materialPacket.surface=surface;renderer.draw(rtv,8,8,normalView,{materialPacket});
+    capture("normal-rotated-tangent.ppm",[](unsigned,unsigned){return Pixel{13,13,13,255};});
+    surface=std::make_shared<VSMaterial::State>(*surface);surface->normalTangent={1,0,-1,0};
+    materialPacket.surface=surface;materialPacket.channels[0]=images.upload(1,1,{128,255,128,255});
+    normalView.sun={0,1,0,0};renderer.draw(rtv,8,8,normalView,{materialPacket});
+    capture("normal-mirrored-tangent.ppm",[](unsigned,unsigned){return Pixel{0,0,0,255};});
+    // Imported glTF permits occlusion to differ from metallic/roughness in
+    // texture identity, UV set and KHR transform. It cannot alias ORM red.
+    surface=std::make_shared<VSMaterial::State>();surface->pbr=true;surface->independentOcclusion=true;
+    surface->uvSet[VSMaterial::Occlusion]=1;
+    for(auto& v:tangentVertices) {v.u1=.75f;v.v1=.25f;}
+    materialPacket.mesh=renderer.upload(tangentVertices,{0,1,2,1,3,2},VSWorldRenderer::Topology::Triangles,
+        VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0|VSWorldContracts::UV1|VSWorldContracts::Tangent);
+    materialPacket.surface=surface;materialPacket.fullbright=true;materialPacket.channels={};
+    materialPacket.channels[1]=images.upload(1,1,{255,255,255,255});
+    materialPacket.channels[3]=images.upload(2,2,{255,255,255,255,0,0,0,255,255,255,255,255,0,0,0,255});
+    surface->samplers[VSMaterial::Occlusion].minification=surface->samplers[VSMaterial::Occlusion].magnification=VSWorldContracts::Filter::Nearest;
+    renderer.draw(rtv,8,8,view,{materialPacket});
+    capture("material-independent-occlusion.ppm",[](unsigned,unsigned){return Pixel{0,0,0,255};});
+    surface=std::make_shared<VSMaterial::State>(*surface);surface->uv[VSMaterial::Occlusion].offset={-.5f,0};
+    materialPacket.surface=surface;renderer.draw(rtv,8,8,view,{materialPacket});
+    capture("material-occlusion-transform.ppm",[](unsigned,unsigned){return Pixel{255,255,255,255};});
+    surface=std::make_shared<VSMaterial::State>();materialPacket.surface=surface;
+    materialPacket.channels={};
+    materialPacket.image=images.upload(2,2,texels);
     surface->samplers[0].minification=surface->samplers[0].magnification=VSWorldContracts::Filter::Nearest;
     materialPacket.mesh=renderer.upload({{-1,1,0,0,0,1,1.25f,.25f},{1,1,0,0,0,1,1.25f,.25f},
         {-1,-1,0,0,0,1,1.25f,.25f},{1,-1,0,0,0,1,1.25f,.25f}},{0,2,1,1,2,3});

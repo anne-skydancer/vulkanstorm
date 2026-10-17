@@ -238,3 +238,41 @@ existing codec/size policy. Legacy callers retain their previous behavior. The
 compiled request regression includes dotted hosts, dotted parent paths, query
 suffixes and actual PNG/J2C extensions. Restart acceptance remains pending the
 corrected staged executable; the failed cold-run evidence is retained.
+
+The URL correction was rebuilt/staged at `1a28168cd5`. Connected replay passed in
+14.6 seconds, with actual 600-byte initial and overlapping continuation requests.
+The cache validator then correctly rejected incomplete evidence: the final
+snapshot followed logout/relogin, after account image retirement. Connected image
+evidence is now captured before logout, and a separate retired snapshot must
+show zero image generations and pending fetches. Partial J2C quality can improve
+without changing discard, so the coarse stages compare against independent
+reference-codec decodes of their exact partial or complete codestream windows.
+Full-resolution pixels still compare against the original lossless pattern.
+
+## Reference tangent basis and separate imported occlusion
+
+Primitive normal bases transpose `textureUtilV.glsl`, including KHR rotation and
+scale signs followed by normalized SL texture-animation rotation/scale. Imported
+glTF uses its distinct rotation-only reference tangent transform. The native
+vertex shader applies these transforms before interpolation. Static primitives
+use `LLVolume::genTangents` and the reference normal matrix; rigged geometry
+skins tangent vectors through the same bind/palette matrices as the reference
+path. The shared geometry description now records actual optional tangent,
+UV1 and color channels instead of silently dropping their presence.
+
+Imported glTF occlusion has its own image, UV set, transform and sampler. Ordinary
+prim PBR retains packed ORM semantics. Native publication validates all imported
+material-channel references and finite factors/transforms, and unbound texture
+slots do not require nonexistent UV1 data. Recycled descriptor bindings release
+every material image after completion. Shared face classifications expose the
+actual sampler and tint encoding.
+
+Production shader pixel charts pass for a constant-UV tangent basis, rotation,
+mirroring, independent UV1 occlusion and its transform. Constant UVs prevent a
+derivative-only implementation from passing these tangent tests. All six local
+headless renderer/validation/negative modes pass; the runner requires the new
+material readback artifacts. Selected production sources compile, and basis,
+publication, R2 fixture and evidence regressions pass. Full rebuilt-viewer cache
+restarts and real production material transport/override acceptance remain
+required, alongside the remaining R3 terrain, compression, reload, settings and
+lifecycle work. This checkpoint is not complete R3 qualification.

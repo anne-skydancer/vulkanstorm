@@ -1,6 +1,7 @@
 // Transpose material values; keep shared LLMaterial/LLGLTFMaterial decoding. LGPL-2.1.
 #include "llviewerprecompiledheaders.h"
 #include "vsmaterial.h"
+#include "vsnormalbasis.h"
 #include "llmaterial.h"
 #include "llgltfmaterial.h"
 #include "lltextureentry.h"
@@ -70,11 +71,13 @@ State pbr(const LLGLTFMaterial& asset, const LLGLTFMaterial* overrides)
     if (overrides) value.applyOverride(*overrides);
     State out; out.pbr = true;
     for(auto& sampler:out.samplers) sampler.mipmaps=true;
-    for (unsigned i = 0; i < ChannelCount; ++i)
+    for (unsigned i = 0; i < LLGLTFMaterial::GLTF_TEXTURE_INFO_COUNT; ++i)
     {
         std::copy_n(value.mTextureId[i].mData, 16, out.textures[i].begin());
         out.uv[i] = pbrUV(value.mTextureTransform[i]);
     }
+    const auto& normal=value.mTextureTransform[Normal];
+    out.normalTangent=VSNormalBasis::primitive(normal.mScale.mV[0],normal.mScale.mV[1],normal.mRotation);
     std::copy_n(value.mBaseColor.mV, 4, out.base.begin());
     std::copy_n(value.mEmissiveColor.mV, 3, out.emissive.begin());
     out.metallic = value.mMetallicFactor; out.roughness = value.mRoughnessFactor;

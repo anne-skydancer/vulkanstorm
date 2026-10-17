@@ -29,7 +29,7 @@ public:
     {
         Mesh mesh;
         VSUIRenderer::Image image;
-        std::array<VSUIRenderer::Image, 3> channels;
+        std::array<VSUIRenderer::Image, VSMaterial::ChannelCount-1> channels;
         std::shared_ptr<const VSMaterial::State> surface;
         std::array<float,4> color{1,1,1,1};
         bool fullbright = false;
@@ -76,9 +76,11 @@ public:
     };
     VSWorldRenderer(Diligent::IRenderDevice*, Diligent::IDeviceContext*, std::size_t meshBudgetBytes = 256 * 1024 * 1024);
     ~VSWorldRenderer();
-    Mesh upload(const std::vector<Vertex>&, const std::vector<unsigned>&, Topology = Topology::Triangles);
+    Mesh upload(const std::vector<Vertex>&, const std::vector<unsigned>&, Topology = Topology::Triangles,
+                unsigned attributes=VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0);
     // Refusal leaves the currently published generation intact.
-    bool       publishMesh(Mesh&, const std::vector<Vertex>&, const std::vector<unsigned>&, Topology = Topology::Triangles);
+    bool       publishMesh(Mesh&, const std::vector<Vertex>&, const std::vector<unsigned>&, Topology = Topology::Triangles,
+                           unsigned attributes=VSWorldContracts::Position|VSWorldContracts::Normal|VSWorldContracts::UV0);
     void draw(Diligent::ITextureView*, unsigned width, unsigned height,
               const View&, const std::vector<Packet>&);
     void retire();

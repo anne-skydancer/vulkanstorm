@@ -1578,7 +1578,17 @@ bool VSWorldAvatar::skinRiggedFace(const LLVolumeFace& face,const LLSD& metadata
         skin.mBindShapeMatrix.rotate(face.mNormals[v],normalBound);blend.rotate(normalBound,normal);
         const auto* p=point.getF32ptr();LLVector3 n(normal.getF32ptr());n.normalize();
         if (!std::isfinite(p[0]) || !std::isfinite(p[1]) || !std::isfinite(p[2]) || !finite(n)) return false;
-        const auto& uv=face.mTexCoords[v];vertices.push_back({p[0],p[1],p[2],n.mV[0],n.mV[1],n.mV[2],uv.mV[0],1-uv.mV[1]});
+        const auto& uv=face.mTexCoords[v];
+        VSWorldRenderer::Vertex vertex{p[0],p[1],p[2],n.mV[0],n.mV[1],n.mV[2],uv.mV[0],1-uv.mV[1]};
+        if(face.mTangents)
+        {
+            LLVector4a tangentBound,tangent;
+            skin.mBindShapeMatrix.rotate(face.mTangents[v],tangentBound);blend.rotate(tangentBound,tangent);
+            LLVector3 t(tangent.getF32ptr());t.normalize();
+            if(!finite(t)) return false;
+            vertex.tx=t.mV[0];vertex.ty=t.mV[1];vertex.tz=t.mV[2];vertex.tw=face.mTangents[v].getF32ptr()[3];
+        }
+        vertices.push_back(vertex);
     }
     return true;
 }
