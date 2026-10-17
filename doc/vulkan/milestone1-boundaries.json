@@ -1,5 +1,5 @@
 {
-  "source_commit": "6449d68badd524e1f4b9e41b9c58cbc5af473dc3",
+  "source_commit": "15eac231edb01e4702ff240137de94c173ff38ff",
   "acceptance": "source-analysis-only",
   "gates_implemented": false,
   "policy": "Source analysis only. V4 CPU connected-session and native admission are implemented; software replay and live-server qualification are recorded separately.",
@@ -632,14 +632,14 @@
       ]
     },
     "indra/newview/vsuiimageprovider.cpp": {
-      "sha256": "7ed8cd61df2d0fb91ccc86978581dcab5fa7855ec5cf71fb921057a717cb0940",
+      "sha256": "f299374966c4868e0eb4b93735dee514c1555f78718beda4d2ca843027a78773",
       "anchors": [
         "VSUIImageProvider::getUIImage",
         "VSUIImageProvider::getUIImageByID"
       ]
     },
     "indra/newview/vsuiimageprovider.h": {
-      "sha256": "a1d49d2758727afa1ced0b10facebf386dca56f7f09a07a12ed913c85388a611",
+      "sha256": "d94fcc7870d65cc613f3cf8adb642d31752c72a6706d95d4cc95b331d4db2191",
       "anchors": [
         "class VSUIImageProvider"
       ]
@@ -784,7 +784,7 @@
       ]
     },
     "indra/newview/vsnativesession.cpp": {
-      "sha256": "0bdce0caec7e77f9aa62da9c1cfd8ee47a368a0176f4477b5f254220d2cd0a76",
+      "sha256": "1e1ef6e38942ec543d4165e4d41e4c6d31749e7c972175ea57db94dc5d5052f8",
       "anchors": [
         "VSNativeSession::begin()",
         "VSNativeSession::admit(",
@@ -827,7 +827,7 @@
       ]
     },
     "indra/newview/llcommandhandler.cpp": {
-      "sha256": "fe50059f65545f77cd9e539e4f33c09c9b8e9c3f938a7283ee5a5ad6f722e92b",
+      "sha256": "f786be433221b97e2ec18723835ab3ee9477cd09b3bd8adb09c34338a5200d3b",
       "anchors": [
         "VSNativeSession::active()",
         "LLCommandDispatcher::dispatch("
@@ -867,7 +867,7 @@
       ]
     },
     "indra/newview/vsnativeimreplay.cpp": {
-      "sha256": "74207446be37a7722bfb2b1561493b6ff922163dd64777bcfefb327a076dd1ae",
+      "sha256": "41e5ada1ef6963a798fc614db67f46f41a12fb99c49584aaffcfe7befcea2570",
       "anchors": [
         "vs_native_im_replay_tick",
         "vs_native_im_replay_expired",
