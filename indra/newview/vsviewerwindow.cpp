@@ -277,6 +277,7 @@ void LLViewerWindow::drawNativeUI()
     require(mVulkanContext && mRootView, "Native viewer drawing requires initialized ownership");
     if (mDisplayScale.mV[VX] != llclamp(gSavedSettings.getF32("UIScaleFactor") * mNativeSystemScale, .75f, 4.f))
         reshapeNative(mWindowRectRaw.getWidth(), mWindowRectRaw.getHeight());
+    if(auto owner=VSNativeSession::active())owner->publishCamera();
     updateUI(); // Native branch updates layout and real focus/edit-menu ownership.
     LLConsole::updateClass();
     if (gConsole) gConsole->setShape(getChatConsoleRect());

@@ -218,7 +218,12 @@ struct VSWorldScene::Impl
     struct Object
     {
         LLUUID id;U32 parent=0;U8 pcode=LL_PCODE_VOLUME,attachment=0;LLVector3 position,scale,velocity,acceleration,angularVelocity;LLQuaternion rotation;
-        LLUUID inventoryItem;
+        LLUUID inventoryItem,reportedOwner;
+        bool reportedOwnerKnown=false;
+        U32 updateFlags=0;
+        std::string nameValues;
+        bool nameValuesPresent=false;
+        std::shared_ptr<const VSResourceBudget::Reservation> metadataResidency;
         std::string mediaVersion;
         std::shared_ptr<VSObjectMedia> media;
         LLRenderMaterialParams renderMaterials;
@@ -934,6 +939,10 @@ struct VSWorldScene::Impl
         const auto previous=objects.find(id);
         const bool sameOwner=previous!=objects.end() && previous->second.id==object.id &&
             previous->second.pcode==object.pcode && kind(previous->second)==kind(object);
+        if(sameOwner && !object.nameValuesPresent)
+        {object.nameValues=previous->second.nameValues;object.inventoryItem=previous->second.inventoryItem;}
+        object.metadataResidency=budgets->primitiveBytes.reserve(sizeof(U32)+sizeof(LLUUID)+object.nameValues.size()+1);
+        if(!object.metadataResidency){request(id);return false;}
         object.slot=previous!=objects.end()?previous->second.slot:budgets->objects.reserve(1);
         if (!object.slot) {request(id);return false;}
         if (object.volume && object.params.getSculptID().isNull())
@@ -1017,7 +1026,7 @@ struct VSWorldScene::Impl
         objects[id]=std::move(object);pending.erase(id);dirtyChildren(id);
         return true;
     }
-    bool compressed(std::vector<U8>& bytes)
+    bool compressed(std::vector<U8>& bytes,U32 updateFlags)
     {
         LLDataPackerBinaryBuffer dp(bytes.data(),S32(bytes.size()));
         Object object;U32 id,ignored,flags;U8 pcode,state,value;LLVector3 rotation,unused;LLUUID owner;
@@ -1028,6 +1037,7 @@ struct VSWorldScene::Impl
             !dp.unpackVector3(object.scale,"Scale") || !dp.unpackVector3(object.position,"Pos") ||
             !dp.unpackVector3(rotation,"Rot") || !dp.unpackU32(flags,"SpecialCode") || !dp.unpackUUID(owner,"Owner")) return false;
         object.rotation.unpackFromVector3(rotation);object.attachment=state;
+        object.updateFlags=updateFlags;object.reportedOwner=owner;object.reportedOwnerKnown=true;
         if (flags&0x80) if (!dp.unpackVector3(object.angularVelocity,"Omega") || !finiteVector(object.angularVelocity)) return false;
         if (flags&0x20) if (!dp.unpackU32(object.parent,"ParentID")) return false;
         U8 scratch[4096];S32 length;std::string text;float number;
@@ -1102,7 +1112,7 @@ struct VSWorldScene::Impl
         {
             if (!string("NV"))
                 return false;
-            object.inventoryItem = attachmentItem(text);
+            object.inventoryItem = attachmentItem(text);object.nameValues=text;object.nameValuesPresent=true;
         }
         if (!id || object.id.isNull() || object.parent==id || !finiteVector(object.position) || !finiteVector(object.scale) ||
             !object.rotation.isFinite() || object.scale.mV[0]<=0 || object.scale.mV[1]<=0 || object.scale.mV[2]<=0 ||
@@ -1412,6 +1422,51 @@ std::optional<VSWorldScene::FaceHandle> VSWorldScene::face(const ObjectHandle& t
         return std::nullopt;
     return FaceHandle{token,index,object.revision};
 }
+std::shared_ptr<const VSResourceBudget::Reservation> VSWorldScene::reserveSpatialBytes(std::size_t bytes)
+{
+    if(mImpl->retired)return {};
+    return mImpl->budgets->terrainBytes.reserve(bytes);
+}
+std::optional<VSWorldScene::ObjectSnapshot> VSWorldScene::objectSnapshot(const ObjectHandle& token) const
+{
+    if(!current(token))return {};
+    if(token.host!=mImpl->host)return mNeighbours.at(token.host)->objectSnapshot(token);
+    const auto& source=mImpl->objects.at(token.local);
+    LLVector3 position;LLQuaternion rotation;std::set<U32> visited;
+    if(!mImpl->transform(token.local,position,rotation,visited))return {};
+    ObjectSnapshot row;
+    row.object=token;row.owner=source.reportedOwner;row.ownerKnown=source.reportedOwnerKnown;
+    row.nameValues=source.nameValues;row.mediaVersion=source.mediaVersion;row.updateFlags=source.updateFlags;row.rootUpdateFlags=source.updateFlags;
+    row.pcode=source.pcode;row.position=from_region_handle(mImpl->handle)+LLVector3d(position);row.scale=source.scale;
+    const Impl::Object* ancestor=&source;
+    std::set<U32> ancestors;
+    while(ancestor->parent && ancestors.insert(ancestor->parent).second && ancestors.size()<=256)
+    {
+        const auto parent=mImpl->objects.find(ancestor->parent);
+        if(parent==mImpl->objects.end())break;
+        if(parent->second.pcode==LL_PCODE_LEGACY_AVATAR){row.attachment=true;break;}
+        ancestor=&parent->second;row.rootUpdateFlags=ancestor->updateFlags;
+    }
+    return row;
+}
+std::vector<VSWorldScene::ObjectSnapshot> VSWorldScene::objectSnapshots() const
+{
+    std::vector<ObjectSnapshot> result;
+    if(mImpl->retired)return result;
+    for(const auto& [local,source]:mImpl->objects)
+    {
+        if(!mImpl->linksCurrent(source))continue;
+        auto handle=object(mImpl->host,local);if(!handle)continue;
+        if(auto row=objectSnapshot(*handle))result.push_back(std::move(*row));
+    }
+    for(const auto& [host,region]:mNeighbours)
+    {
+        auto nearby=region->objectSnapshots();
+        result.insert(result.end(),std::make_move_iterator(nearby.begin()),std::make_move_iterator(nearby.end()));
+    }
+    return result;
+}
+
 std::vector<VSWorldScene::AvatarLocation> VSWorldScene::avatarLocations() const
 {
     std::vector<AvatarLocation> result;
@@ -2053,7 +2108,12 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
             const S32 minimumSize=name=="ObjectUpdateCompressed" ? 20 : 44;
             if (size<minimumSize || size>4096) { ++state.rejected;continue; }
             std::vector<U8> bytes(size);msg.getBinaryData("ObjectData","Data",bytes.data(),size,i,size);
-            if (name=="ObjectUpdateCompressed") { if (!state.compressed(bytes)) ++state.rejected;continue; }
+            if (name=="ObjectUpdateCompressed")
+            {
+                U32 flags;msg.getU32("ObjectData","UpdateFlags",flags,i);
+                if(!state.compressed(bytes,flags))++state.rejected;
+                continue;
+            }
             // Improved terse: ID, state, avatar flag, position, quantized
             // velocity/acceleration, quaternion, angular velocity.
             if (size<(bytes[5]?60:44)) { ++state.rejected;continue; }
@@ -2097,6 +2157,11 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
         object.rotation.unpackFromVector3(vectorAt(bytes.data()+offset+36));
         msg.getVector3("ObjectData","Scale",object.scale,i);msg.getUUID("ObjectData","FullID",object.id,i);
         msg.getU32("ObjectData","ParentID",object.parent,i);
+        msg.getU32("ObjectData","UpdateFlags",object.updateFlags,i);
+        // The full message's OwnerID is only guaranteed for sounding objects;
+        // a null value is unknown ownership, never evidence of public/edit rights.
+        msg.getUUID("ObjectData","OwnerID",object.reportedOwner,i);
+        object.reportedOwnerKnown=object.reportedOwner.notNull();
         const S32 mediaSize=msg.getSize("ObjectData",i,"MediaURL");
         if(mediaSize<0 || mediaSize>4096) {++state.rejected;continue;}
         if(mediaSize) msg.getString("ObjectData","MediaURL",object.mediaVersion,i);
@@ -2110,7 +2175,7 @@ bool VSWorldScene::receive(LLMessageSystem& msg,U64 regionHandle,const LLUUID& a
         {
             std::string values;
             msg.getString("ObjectData", "NameValue", values, i);
-            object.inventoryItem = attachmentItem(values);
+            object.inventoryItem = attachmentItem(values);object.nameValues=std::move(values);object.nameValuesPresent=true;
         }
         if (!finiteVector(object.position) || !finiteVector(object.scale) || !finiteVector(object.velocity) ||
             !finiteVector(object.acceleration) || !finiteVector(object.angularVelocity) || !object.rotation.isFinite() ||

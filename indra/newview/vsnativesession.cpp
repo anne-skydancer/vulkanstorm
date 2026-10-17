@@ -75,6 +75,7 @@
 #include "llpluginclassmedia.h"
 #include "llviewermessage.h"
 #include "llworldmap.h"
+#include "llviewercamera.h"
 #include "lltracker.h"
 #include "llworldmapview.h"
 #include "llworldmapmessage.h"
@@ -357,7 +358,7 @@ void VSNativeSession::install(LLMessageSystem& msg)
     for (const auto& name : worldMessages) msg.setHandlerFunc(name.c_str(), receiveMessage);
     msg.setHandlerFunc("AgentWearablesUpdate",receiveMessage);
     msg.setHandlerFunc("EnableSimulator",receiveMessage);
-    for (const char* name : {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
+    for (const char* name : {"SimStats", "ParcelProperties", "ParcelMediaUpdate", "ParcelMediaCommandMessage", "RegionIDAndHandleReply", "MapBlockReply", "MapItemReply", "ParcelOverlay", "CoarseLocationUpdate", "RegionHandshake", "AgentMovementComplete", "ChatFromSimulator", "LogoutReply",
          "KickUser", "AlertMessage", "AgentAlertMessage", "Error", "ViewerFrozenMessage", "FeatureDisabled", "MoneyBalanceReply", "TeleportStart", "TeleportFinish", "TeleportLocal", "TeleportProgress", "TeleportFailed", "CrossedRegion", "CloseCircuit", "DisableSimulator"})
         msg.setHandlerFunc(name, receiveMessage);
     LLAvatarTracker::instance().registerCallbacks(&msg);
@@ -1054,6 +1055,28 @@ void VSNativeSession::parcelMediaCommand(U32 flags, U32 command, F32 time)
     }
 }
 
+// Publish one native camera into the existing backend-neutral CPU frame.
+bool VSNativeSession::publishCamera()
+{
+    if(mShutdown || mPhase!=Phase::Connected || mChangingRegion || !gViewerWindow)return false;
+    const auto state=cameraState();
+    const auto viewport=gViewerWindow->getWindowRectRaw();
+    if(viewport.getWidth()<=0 || viewport.getHeight()<=0 || !state.center.isFinite() ||
+       !state.at.isFinite() || !state.left.isFinite() || !state.up.isFinite() || !state.bodyRotation.isFinite())return false;
+    if(!LLViewerCamera::instanceExists())LLViewerCamera::createInstance();
+    auto* camera=LLViewerCamera::getInstance();
+    camera->setOrigin(state.center);camera->setAxes(state.at,state.left,state.up);
+    // Exactly match VSWorldScene::cameraView and nativePick's current lens.
+    // Publishing CameraAngle here before native projection supports it would lie.
+    camera->setViewNoBroadcast(F_PI/3.f);
+    camera->setNear(.1f);camera->setFar(llclamp(gSavedSettings.getF32("RenderFarClip"),16.f,1024.f));
+    camera->setAspect(F32(viewport.getWidth())/viewport.getHeight());
+    camera->setViewHeightInPixels(viewport.getHeight());
+    const auto forward=LLVector3::x_axis*state.bodyRotation;
+    if(forward.isFinite() && !forward.isNull())gAgent.resetAxes(forward);
+    return true;
+}
+
 VSNativeCamera::State VSNativeSession::cameraState() const
 {
     return mCamera.state(mPosition, gAgentCamera.getCameraOffsetInitial(),
@@ -1305,7 +1328,7 @@ bool VSNativeSession::admit(const std::string& name, const LLHost& sender)
     const bool known=sender==mHost || peer!=mCircuits.end();
     if (transport.count(name)) return mHost.isOk() && known && mPhase != Phase::Disconnected;
     if (name=="LayerData") return mHost.isOk() && known && (mPhase==Phase::Connecting || mPhase==Phase::Connected);
-    if (name=="CoarseLocationUpdate") return mPhase==Phase::Connected && peer!=mCircuits.end() &&
+    if (name=="ParcelOverlay" || name=="CoarseLocationUpdate") return mPhase==Phase::Connected && peer!=mCircuits.end() &&
         peer->second.acknowledged && peer->second.handshake;
     if (worldMessages.count(name)) return (mPhase==Phase::Connecting || mPhase==Phase::Connected) &&
         (sender==mHost || (peer!=mCircuits.end() && peer->second.acknowledged && peer->second.handshake));
@@ -1342,6 +1365,15 @@ void VSNativeSession::receive(LLMessageSystem* msg)
         return;
     }
     LLSD body = LLSD::emptyMap();
+    if(name=="ParcelOverlay")
+    {
+        const S32 size=msg->getSize("ParcelData","Data");
+        if(size!=1024){++mRejected;return;}
+        S32 sequence;msg->getS32("ParcelData","SequenceID",sequence);
+        std::vector<U8> bytes(1024);msg->getBinaryData("ParcelData","Data",bytes.data(),1024,0,1024);
+        if(!receiveParcelOverlay(msg->getSender(),mGeneration,circuitGeneration(msg->getSender()),sequence,bytes))++mRejected;
+        return;
+    }
     if(name=="CoarseLocationUpdate")
     {
         const S32 count=msg->getNumberOfBlocks("Location"),identities=msg->getNumberOfBlocks("AgentData");
@@ -1812,6 +1844,7 @@ void VSNativeSession::connected()
         publishProgress();
         LLTeleportHistory::instance().updateNativeLocation(gAgent.getPositionGlobal());
         requestParcel();
+        if (gSavedSettings.getBOOL("UseLSLBridge")) FSLSLBridge::instance().initBridge();
         return;
     }
     mPhase = Phase::Connected; mDeadline = now() + 1;
@@ -2045,6 +2078,10 @@ void VSNativeSession::appendChat(LLSD chat, U64 generation)
     const auto kind = chat["kind"].asInteger(), type = chat["type"].asInteger();
     if (kind < CHAT_SOURCE_SYSTEM || kind > CHAT_SOURCE_OBJECT || type < CHAT_TYPE_WHISPER || type > CHAT_TYPE_OWNER || type == CHAT_TYPE_START || type == CHAT_TYPE_STOP) return;
     if (chat["audible"].asInteger() != CHAT_AUDIBLE_FULLY) return;
+    // The reference bridge protocol is object owner-chat, consumed before
+    // ordinary chat history/translation. Its controller validates the actual attachment.
+    if (kind == CHAT_SOURCE_OBJECT && owner == mAgent &&
+        FSLSLBridge::instance().lslToViewer(chat["text"].asString(), source, owner)) return;
     if (LLMuteList::getInstance()->isMuted(source, chat["from"].asString(), LLMute::flagTextChat)
         || LLMuteList::getInstance()->isMuted(owner, LLMute::flagTextChat)) return;
     if (gSavedSettings.getBOOL("UseAntiSpam") && NACLAntiSpamRegistry::instance().checkQueue(
@@ -2233,6 +2270,7 @@ void VSNativeSession::tick()
             mCamera.step(F32(cameraTime - mCameraTime), gAgent.rotateGrabbed(),
                 gAgentCamera.getCameraOffsetInitial(), LLVector3(gAgentCamera.getFocusOffsetInitial()), gAgentCamera.getCameraOffsetScale());
         cameraControls(mCameraTime > 0 ? F32(cameraTime - mCameraTime) : 0.f);
+        publishCamera();
         if (cameraTime - mParcelQueryTime >= 1 &&
             (S32(mPosition.mV[VX] / 4) != mParcelCellX || S32(mPosition.mV[VY] / 4) != mParcelCellY))
         {

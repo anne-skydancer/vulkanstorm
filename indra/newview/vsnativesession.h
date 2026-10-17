@@ -86,9 +86,11 @@ public:
         F32 waterHeight=0;
         bool waterKnown=false,current=false;
         std::vector<VSCoarseSample<LLUUID>> coarse;
+        VSParcelOverlay::Snapshot parcelOverlay;
     };
     std::vector<RegionSnapshot> regionSnapshots() const;
     std::vector<VSCoarseSample<LLUUID>> coarseAvatarLocations() const;
+    bool receiveParcelOverlay(const LLHost&,U64 account,U64 circuit,S32 sequence,const std::vector<U8>&);
     bool receiveCoarse(const LLSD&, const LLHost&, U64 account, U64 circuit, bool legacyUDP=false);
     U64 circuitGeneration(const LLHost&) const;
     bool regionEvent(const std::string&, const LLSD&, const LLHost&, U64 account, U64 circuit);
@@ -97,6 +99,7 @@ public:
     U64 regionEpoch() const { return mRegionEpoch; }
     bool regionReady() const { return mPhase == Phase::Connected && !mChangingRegion && mSeedReady && mHandshake && mCircuitAck; }
     VSNativeCamera::State cameraState() const;
+    bool publishCamera();
     bool movementAction(U32 key, const std::string& action, bool down, bool repeated = false);
     void releaseMovement();
     void                  setFlying(bool);
@@ -210,6 +213,7 @@ private:
         F32 waterHeight=0;
         bool waterKnown=false;
         VSCoarseSnapshot<LLUUID> coarse;
+        VSParcelOverlay::Snapshot parcelOverlay;
         LLSD capabilities;
         std::function<void()> cancel;
         std::unique_ptr<LLEventPoll> poll;

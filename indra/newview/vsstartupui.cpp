@@ -401,6 +401,7 @@ std::unique_ptr<VSUIAdmission> vs_startup_ui_admission()
         },
         [](std::string_view name, const LLSD& parameter)
         {
+            if (name == "RecreateLSLBridge") return true;
             if (LLPanelMainInventory::isNativeCallback(name, parameter) ||
                 LLPanelPeople::isNativeCallback(std::string(name), parameter) || FSChatHistory::isNativeCallback(std::string(name), parameter)) return true;
             if (name == "BuyCurrency") return true;
